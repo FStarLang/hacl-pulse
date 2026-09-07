@@ -9,9 +9,9 @@ port: where HACL\* had to work around the absence of a language feature, this
 library uses the feature.  `design/` records what HACL\* does and
 `design/changes.md` the four commitments this reimplementation starts from.
 
-Status: the SHA-2 family (SHA-224/256/384/512) and HMAC over it are specified,
-implemented, verified, extracted, and tested against the FIPS 180-4 and
-RFC 4231 vectors.
+Status: the SHA-2 family (SHA-224/256/384/512), HMAC over it, and HKDF over
+that are specified, implemented, verified, extracted, and tested against the
+FIPS 180-4, RFC 4231 and RFC 5869 vectors.
 
 ```
 make            verify, extract, compile, test
@@ -32,7 +32,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization |
-| `spec/` | pure specifications: `Spec.SHA2`, its constants and lemmas, `Spec.HMAC` |
+| `spec/` | pure specifications: `Spec.SHA2`, its constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
@@ -157,6 +157,29 @@ one scratch block that holds `K0 ^ ipad` and later `K0 ^ opad`, and one digest
 HMAC of a byte, with no state machine.  The same generalization is what a
 streaming interface will be built on.
 
+### HKDF's one scratch buffer
+
+`expand` hashes `T(i-1) || info || i` once per round.  `Hacl.HKDF.Core` lays
+that out in a single buffer
+
+```
+[ T(i-1) |   info   | i ]
+   hb       |info|    1
+```
+
+writes `info` into it exactly once, and then each round overwrites only the
+leading digest and the trailing counter byte.  Round 1 is the exception --
+`T(0)` is empty -- and is handled by hashing the `info || i` *subslice*, using
+`Pulse.Lib.Slice.subslice` and giving the permission back with two `join`s.
+
+The loop invariant never mentions `expand_all` at the round count reached so
+far; it is stated against the *final* count, so that on exit it is literally
+the postcondition.  `Spec.HKDF.expand_all_index_le` -- `expand_all` at `n`
+agrees with `expand_all` at any `m <= n` on the first `m` digests -- is what
+lets a round establish it.  The loop measure is the round counter, not the
+bytes remaining: the last round overshoots the requested length, so
+`len - base` is not a `nat`.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -191,12 +214,20 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   `Seq.index (Seq.append pre s) (base + k)`, however obviously the two indices
   are equal.  `Spec.SHA2.Lemmas.append_index_at` takes the absolute offset as
   its own argument for exactly this reason.
+* **A `while` invariant must carry the non-`pts_to` resources too.**  A slice
+  obtained from a stack array owns an `is_from_array`; leaving it out of an
+  invariant (or out of an explicit `if ... ensures`) fails with "leftover
+  resources" at the end of the function, far from the cause.
+* **A `decreases` expression has to be a `nat` at every iteration.**  A loop
+  that advances by a fixed stride past a limit cannot measure `limit - i`;
+  measure the iteration count instead.  The symptom is a timeout on
+  `... << meas`, which looks like a crowding problem and is not.
 * **A unit is a whole program.**  Two extracted units each contain everything
   their entry points reach, including a `custard_init_globals` of their own, so
   they cannot be linked into one binary.  One test binary per unit.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: HKDF on top of
-HMAC, the streaming functor, SHA-3, BLAKE2, ChaCha20-Poly1305, Curve25519,
-Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: the streaming
+functor, SHA-3, BLAKE2, ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the
+DRBG.
