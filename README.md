@@ -9,8 +9,9 @@ port: where HACL\* had to work around the absence of a language feature, this
 library uses the feature.  `design/` records what HACL\* does and
 `design/changes.md` the four commitments this reimplementation starts from.
 
-Status: the SHA-2 family (SHA-224/256/384/512) is specified, implemented,
-verified, extracted and tested against the FIPS 180-4 vectors.
+Status: the SHA-2 family (SHA-224/256/384/512) and HMAC over it are specified,
+implemented, verified, extracted, and tested against the FIPS 180-4 and
+RFC 4231 vectors.
 
 ```
 make            verify, extract, compile, test
@@ -31,7 +32,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization |
-| `spec/` | pure specifications: `Spec.SHA2`, its constants and its lemmas |
+| `spec/` | pure specifications: `Spec.SHA2`, its constants and lemmas, `Spec.HMAC` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
@@ -140,6 +141,22 @@ The cost is sixty-four (eighty) stores per call, a few percent of one block and
 nothing on a long message.  When the backend learns about constant globals the
 `fill_*` functions can be deleted without touching anything else.
 
+### HMAC without copying the message
+
+HMAC hashes `K0 ^ ipad || msg`.  Building that concatenation would mean either
+a copy of the whole message or a streaming interface, and HACL\* does the
+latter.  Here the hash is instead generalized once: `hash_blocks` and
+`tail_and_finish` take a *ghost* block-aligned prefix `pre` and compute over
+`Seq.append pre vin` while touching only `vin`, and `hash_prefixed` absorbs one
+real prefix block and then reads the caller's buffer directly.  `hash_impl` is
+the instance where `pre` is empty.
+
+`Hacl.HMAC.Core` then allocates exactly three small buffers — the padded key,
+one scratch block that holds `K0 ^ ipad` and later `K0 ^ opad`, and one digest
+— and calls `hash_prefixed` twice.  HMAC of a gigabyte costs the same memory as
+HMAC of a byte, with no state machine.  The same generalization is what a
+streaming interface will be built on.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -168,9 +185,18 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 * **Class methods with no explicit argument need the dictionary written out.**
   `nbytes #t` is a partial application of a monomorphized binder and Custard
   rejects it; write `nbytes #t #w`.
+* **Give a lemma the offset the caller is looking at.**  E-matching is
+  syntactic: a hypothesis triggered on `Seq.index (Seq.append pre s)
+  (Seq.length pre + k)` will not fire on a goal about
+  `Seq.index (Seq.append pre s) (base + k)`, however obviously the two indices
+  are equal.  `Spec.SHA2.Lemmas.append_index_at` takes the absolute offset as
+  its own argument for exactly this reason.
+* **A unit is a whole program.**  Two extracted units each contain everything
+  their entry points reach, including a `custard_init_globals` of their own, so
+  they cannot be linked into one binary.  One test binary per unit.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: HMAC and HKDF
-on top of the hashes, the streaming functor, SHA-3, BLAKE2, ChaCha20-Poly1305,
-Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: HKDF on top of
+HMAC, the streaming functor, SHA-3, BLAKE2, ChaCha20-Poly1305, Curve25519,
+Ed25519, P-256, and the DRBG.

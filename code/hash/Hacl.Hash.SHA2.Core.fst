@@ -290,9 +290,7 @@ fn build_tail (#t: Type0) {| w: word t |}
 requires S.pts_to tl vt0 ** S.pts_to input #pin vin **
          pure (Seq.length vt0 == 2 * block_len #t /\
                (forall (k: nat). k < 2 * block_len #t ==> Seq.index vt0 k == S8.classify 0uy) /\
-               Seq.length vin == SZ.v len /\ 8 * SZ.v len < pow2 64 /\
-               SZ.v rem == SZ.v len % block_len #t /\
-               SZ.v base + SZ.v rem == SZ.v len /\
+               Seq.length vin == SZ.v base + SZ.v rem /\ 8 * SZ.v len < pow2 64 /\
                SZ.v rem + 1 + len_len #t <= SZ.v ntail)
 ensures exists* vt.
   S.pts_to tl vt ** S.pts_to input #pin vin **
@@ -412,7 +410,9 @@ ensures S.pts_to out (finish p vst) ** S.pts_to st #pst vst
 fn tail_and_finish (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                    (kt: S.slice t) (wsb: S.slice t) (st: S.slice t)
                    (out: S.slice S8.t) (input: S.slice S8.t)
-                   (len: SZ.t) (nfull: SZ.t) (rem: (r: SZ.t { SZ.v r < block_len #t }))
+                   (len: SZ.t) (nblocks: SZ.t) (base_in: SZ.t)
+                   (rem: (r: SZ.t { SZ.v r < block_len #t }))
+                   (pre: erased (Seq.seq S8.t))
                    (#pk: perm) (#vk: erased (Seq.seq t))
                    (#vw0: erased (Seq.seq t)) (#vst0: erased (Seq.lseq t 8))
                    (#vout: erased (Seq.seq S8.t)) (#pin: perm) (#vin: erased (Seq.seq S8.t))
@@ -420,21 +420,27 @@ requires S.pts_to kt #pk vk ** S.pts_to wsb vw0 ** S.pts_to st vst0 **
          S.pts_to out vout ** S.pts_to input #pin vin **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ Seq.length vw0 == (rounds p) /\
                Seq.length vout == (hash_bytes p) /\
-               Seq.length vin == SZ.v len /\ SZ.v len < pow2 61 /\ SZ.v len < max_input #t /\
-               SZ.v nfull == SZ.v len / block_len #t /\ SZ.v rem == SZ.v len % block_len #t /\
-               reveal vst0 == repeati_g (SZ.v nfull) (update_step p (padded #t vin)) (reveal p.iv))
+               Seq.length pre + Seq.length vin == SZ.v len /\
+               Seq.length vin == SZ.v base_in + SZ.v rem /\
+               SZ.v len < pow2 61 /\ SZ.v len < max_input #t /\
+               SZ.v rem == SZ.v len % block_len #t /\
+               SZ.v len - SZ.v rem == SZ.v nblocks * block_len #t /\
+               reveal vst0 == repeati_g (SZ.v nblocks)
+                                (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
 ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
   S.pts_to kt #pk vk ** S.pts_to wsb vw ** S.pts_to st vst **
   S.pts_to out vout' ** S.pts_to input #pin vin **
   pure (Seq.length vw == (rounds p) /\
-        Seq.length vin < max_input #t /\ vout' == hash p vin)
+        Seq.length pre + Seq.length vin < max_input #t /\
+        vout' == hash p (Seq.append pre vin))
 {
   S.pts_to_len input;
   S.pts_to_len out;
   S.pts_to_len st;
   S.pts_to_len wsb;
   let bl = block_len_sz #t #w;
-  padded_shape #t vin;
+  Seq.lemma_len_append (reveal pre) (reveal vin);
+  padded_shape #t (Seq.append pre vin);
   let ntail = tail_len #t #w rem;
   let bl2 = SZ.mul 2sz bl;
   let base = SZ.sub len rem;
@@ -445,10 +451,11 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
   S.pts_to_len tl;
   len_fits (SZ.v len);
   Math.euclidean_division_definition (SZ.v len) (block_len #t);
-  build_tail #t tl input len base rem ntail;
+  build_tail #t tl input len base_in rem ntail;
   with vt. assert (S.pts_to tl vt);
   pad_zeros_alt #t (SZ.v len);
-  tail_bytes #t vin vt (SZ.v ntail) (SZ.v base);
+  append_index_at (reveal pre) (reveal vin) (SZ.v base) (SZ.v base_in) (SZ.v rem);
+  tail_bytes #t (Seq.append pre vin) vt (SZ.v ntail) (SZ.v base);
   Math.multiple_division_lemma (SZ.v ntail / block_len #t) (block_len #t);
   Math.multiply_fractions (SZ.v ntail) (block_len #t);
   let ntb = SZ.div ntail bl;
@@ -460,11 +467,12 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
     S.pts_to tl vt ** S.is_from_array tarr tl **
     pure (SZ.v vj <= SZ.v ntb /\ Seq.length vw == (rounds p) /\
           SZ.v ntb * block_len #t <= SZ.v ntail /\
-          SZ.v base == SZ.v nfull * block_len #t /\
-          Seq.length (padded #t vin) == SZ.v base + SZ.v ntail /\
+          SZ.v base == SZ.v nblocks * block_len #t /\
+          Seq.length (padded #t (Seq.append pre vin)) == SZ.v base + SZ.v ntail /\
           (forall (o: nat). o + block_len #t <= SZ.v ntail ==>
-             block_at #t (padded #t vin) (SZ.v base + o) == block_at #t vt o) /\
-          vst == repeati_g (SZ.v nfull + SZ.v vj) (update_step p (padded #t vin)) (reveal p.iv))
+             block_at #t (padded #t (Seq.append pre vin)) (SZ.v base + o) == block_at #t vt o) /\
+          vst == repeati_g (SZ.v nblocks + SZ.v vj)
+                   (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
   decreases (SZ.v ntb - SZ.v (!j))
   {
     let vj = !j;
@@ -472,12 +480,15 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
     small_fits (SZ.v vj * block_len #t);
     Math.lemma_mult_le_right (block_len #t) (SZ.v vj + 1) (SZ.v ntb);
     Math.distributivity_add_left (SZ.v vj) 1 (block_len #t);
-    Math.distributivity_add_left (SZ.v nfull) (SZ.v vj) (block_len #t);
-    Math.distributivity_add_left (SZ.v nfull + SZ.v vj) 1 (block_len #t);
-    unfold_repeati_g (SZ.v nfull + SZ.v vj) (update_step p (padded #t vin)) (reveal p.iv);
-    assert (pure (block_at #t (padded #t vin) ((SZ.v nfull + SZ.v vj) * block_len #t) ==
+    Math.distributivity_add_left (SZ.v nblocks) (SZ.v vj) (block_len #t);
+    Math.distributivity_add_left (SZ.v nblocks + SZ.v vj) 1 (block_len #t);
+    unfold_repeati_g (SZ.v nblocks + SZ.v vj)
+      (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv);
+    assert (pure (block_at #t (padded #t (Seq.append pre vin))
+                    ((SZ.v nblocks + SZ.v vj) * block_len #t) ==
                   block_at #t vt (SZ.v vj * block_len #t)));
-    assert (pure ((SZ.v nfull + SZ.v vj + 1) * block_len #t <= Seq.length (padded #t vin)));
+    assert (pure ((SZ.v nblocks + SZ.v vj + 1) * block_len #t <=
+                  Seq.length (padded #t (Seq.append pre vin))));
     update_block_impl p kt wsb st tl (SZ.mul vj bl);
     j := SZ.add vj 1sz;
   };
@@ -485,11 +496,13 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
   Math.multiple_modulo_lemma 2 (block_len #t);
   Math.euclidean_division_definition (SZ.v ntail) (block_len #t);
   assert (pure (SZ.v ntb * block_len #t == SZ.v ntail));
-  Math.distributivity_add_left (SZ.v nfull) (SZ.v ntb) (block_len #t);
-  Math.multiple_division_lemma (SZ.v nfull + SZ.v ntb) (block_len #t);
-  assert (pure (Seq.length (padded #t vin) / block_len #t == SZ.v nfull + SZ.v ntb));
-  assert (pure (update_all p (padded #t vin) (reveal p.iv) ==
-                repeati_g (SZ.v nfull + SZ.v ntb) (update_step p (padded #t vin)) (reveal p.iv)));
+  Math.distributivity_add_left (SZ.v nblocks) (SZ.v ntb) (block_len #t);
+  Math.multiple_division_lemma (SZ.v nblocks + SZ.v ntb) (block_len #t);
+  assert (pure (Seq.length (padded #t (Seq.append pre vin)) / block_len #t ==
+                SZ.v nblocks + SZ.v ntb));
+  assert (pure (update_all p (padded #t (Seq.append pre vin)) (reveal p.iv) ==
+                repeati_g (SZ.v nblocks + SZ.v ntb)
+                  (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv)));
   write_digest p out st;
   S.to_array tl;
 }
@@ -503,36 +516,50 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
 
 fn hash_blocks (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: S.slice t) (wsb: S.slice t) (st: S.slice t) (input: S.slice S8.t)
-               (bl: (b: SZ.t { SZ.v b == block_len #t })) (nfull: SZ.t)
+               (bl: (b: SZ.t { SZ.v b == block_len #t })) (nprev: SZ.t) (nfull: SZ.t)
+               (pre: erased (Seq.seq S8.t))
                (#pk: perm) (#vk: erased (Seq.seq t))
                (#vw0: erased (Seq.seq t)) (#vst0: erased (Seq.lseq t 8))
                (#pin: perm) (#vin: erased (Seq.seq S8.t))
 requires S.pts_to kt #pk vk ** S.pts_to wsb vw0 ** S.pts_to st vst0 ** S.pts_to input #pin vin **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ Seq.length vw0 == (rounds p) /\
-               reveal vst0 == (reveal p.iv <: Seq.lseq t 8) /\
-               Seq.length vin < max_input #t /\
-               SZ.v nfull == Seq.length vin / block_len #t)
+               Seq.length pre == SZ.v nprev * block_len #t /\
+               Seq.length pre + Seq.length vin < max_input #t /\
+               SZ.v nfull == Seq.length vin / block_len #t /\
+               reveal vst0 == repeati_g (SZ.v nprev)
+                                (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
 ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
   S.pts_to kt #pk vk ** S.pts_to wsb vw ** S.pts_to st vst ** S.pts_to input #pin vin **
-  pure (Seq.length vin < max_input #t /\ Seq.length vw == (rounds p) /\
-        vst == repeati_g (SZ.v nfull) (update_step p (padded #t vin)) (reveal p.iv))
+  pure (Seq.length pre + Seq.length vin < max_input #t /\ Seq.length vw == (rounds p) /\
+        vst == repeati_g (SZ.v nprev + SZ.v nfull)
+                 (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
 {
   S.pts_to_len input;
-  padded_shape #t vin;
+  Seq.lemma_len_append (reveal pre) (reveal vin);
+  padded_shape #t (Seq.append pre vin);
   let mut i = 0sz;
   while (let vi2 = !i; SZ.lt vi2 nfull)
   invariant exists* (vi2: SZ.t) (vw: Seq.seq t) (vst: Seq.lseq t 8).
     pts_to i vi2 ** S.pts_to kt #pk vk ** S.pts_to wsb vw ** S.pts_to st vst **
     S.pts_to input #pin vin **
     pure (SZ.v vi2 <= SZ.v nfull /\ Seq.length vw == (rounds p) /\
-          vst == repeati_g (SZ.v vi2) (update_step p (padded #t vin)) (reveal p.iv))
+          vst == repeati_g (SZ.v nprev + SZ.v vi2)
+                   (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
   decreases (SZ.v nfull - SZ.v (!i))
   {
     let vi2 = !i;
     Math.lemma_mult_le_right (block_len #t) (SZ.v vi2 + 1) (SZ.v nfull);
     Math.lemma_mult_le_right (block_len #t) (SZ.v nfull) (Seq.length vin / block_len #t);
-    padded_index_block #t vin (SZ.v vi2 * block_len #t);
-    unfold_repeati_g (SZ.v vi2) (update_step p (padded #t vin)) (reveal p.iv);
+    padded_index_block_shift #t (reveal pre) (reveal vin) (SZ.v vi2 * block_len #t);
+    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2) (block_len #t);
+    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2 + 1) (block_len #t);
+    unfold_repeati_g (SZ.v nprev + SZ.v vi2)
+      (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv);
+    assert (pure (block_at #t (padded #t (Seq.append pre vin))
+                    ((SZ.v nprev + SZ.v vi2) * block_len #t) ==
+                  block_at #t vin (SZ.v vi2 * block_len #t)));
+    assert (pure ((SZ.v nprev + SZ.v vi2 + 1) * block_len #t <=
+                  Seq.length (padded #t (Seq.append pre vin))));
     update_block_impl p kt wsb st input (SZ.mul vi2 bl);
     i := SZ.add vi2 1sz;
   };
@@ -591,13 +618,118 @@ ensures exists* vout'.
   let wsb = S.from_array wsarr p.nrounds;
   S.pts_to_len wsb;
 
-  hash_blocks p kt wsb st input bl nfull;
-  tail_and_finish p kt wsb st out input len nfull rem;
+  let empty : erased (Seq.seq S8.t) = hide (Seq.empty #S8.t);
+  Seq.lemma_eq_elim (Seq.append (reveal empty) (reveal vin)) (reveal vin);
+  Math.euclidean_division_definition (SZ.v len) (block_len #t);
+  hash_blocks p kt wsb st input bl 0sz nfull empty;
+  tail_and_finish p kt wsb st out input len nfull (SZ.sub len rem) rem empty;
 
   S.to_array wsb;
   S.to_array st;
 }
 
 #pop-options
+
+#pop-options
+
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+
+(** {2 Hashing a message with a one-block prefix}
+
+    [hash p (blk || input)] where [blk] is exactly one block, computed without
+    ever building the concatenation: the prefix block is absorbed first and
+    the rest of the message is read straight out of the caller's buffer.
+
+    This is what HMAC's inner hash needs -- the prefix is [K0 ^ ipad] -- and it
+    is the same generalization an incremental interface would use, which is
+    why [hash_blocks] and [tail_and_finish] are stated for a ghost
+    block-aligned prefix rather than for this special case. *)
+
+fn hash_prefixed (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+                 (kt: S.slice t) (ivt: S.slice t) (out: S.slice S8.t)
+                 (blk: S.slice S8.t) (input: S.slice S8.t)
+                 (#pk: perm) (#vk: erased (Seq.seq t))
+                 (#pi: perm) (#vi: erased (Seq.seq t))
+                 (#vout: erased (Seq.seq S8.t))
+                 (#pb: perm) (#vb: erased (Seq.seq S8.t))
+                 (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout **
+         S.pts_to blk #pb vb ** S.pts_to input #pin vin **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+               Seq.length vout == (hash_bytes p) /\
+               Seq.length vb == block_len #t /\
+               SZ.fits (block_len #t + Seq.length vin) /\
+               block_len #t + Seq.length vin < pow2 61 /\
+               block_len #t + Seq.length vin < max_input #t)
+ensures exists* vout'.
+  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout' **
+  S.pts_to blk #pb vb ** S.pts_to input #pin vin **
+  pure (Seq.length vb + Seq.length vin < max_input #t /\
+        vout' == hash p (Seq.append vb vin))
+{
+  S.pts_to_len kt;
+  S.pts_to_len ivt;
+  S.pts_to_len out;
+  S.pts_to_len blk;
+  S.pts_to_len input;
+  let bl = block_len_sz #t #w;
+  let lin = S.len input;
+  let len = SZ.add bl lin;
+  let nfull = SZ.div lin bl;
+  let rem = SZ.rem lin bl;
+  let z0: t = zero #t #w;
+
+  let mut starr = [| z0; 8sz |];
+  A.pts_to_len starr;
+  let st = S.from_array starr 8sz;
+  S.pts_to_len st;
+  let mut c = 0sz;
+  while (let vc = !c; SZ.lt vc 8sz)
+  invariant exists* (vc: SZ.t) (vst: Seq.seq t).
+    pts_to c vc ** S.pts_to st vst ** S.pts_to ivt #pi vi ** S.is_from_array starr st **
+    pure (SZ.v vc <= 8 /\ Seq.length vst == 8 /\
+          (forall (j: nat). j < SZ.v vc ==> Seq.index vst j == Seq.index (reveal p.iv <: Seq.seq t) j))
+  decreases (8 - SZ.v (!c))
+  {
+    let vc = !c;
+    let x = S.(ivt.(vc));
+    S.((st.(vc) <- x));
+    c := SZ.add vc 1sz;
+  };
+  with vst_init. assert (S.pts_to st vst_init);
+  Seq.lemma_eq_intro vst_init (reveal p.iv <: Seq.seq t);
+  Seq.lemma_eq_elim vst_init (reveal p.iv <: Seq.seq t);
+
+  let mut wsarr = [| z0; p.nrounds |];
+  A.pts_to_len wsarr;
+  let wsb = S.from_array wsarr p.nrounds;
+  S.pts_to_len wsb;
+
+  Seq.lemma_len_append (reveal vb) (reveal vin);
+  padded_shape #t (Seq.append vb vin);
+  padded_index_block #t (Seq.append vb vin) 0;
+  append_first_block #t (reveal vb) (reveal vin);
+  update_block_impl p kt wsb st blk 0sz;
+  repeati_g_zero (update_step p (padded #t (Seq.append vb vin))) (reveal p.iv);
+  unfold_repeati_g 0 (update_step p (padded #t (Seq.append vb vin))) (reveal p.iv);
+
+  Math.lemma_mod_plus (SZ.v lin) 1 (block_len #t);
+  assert (pure (SZ.v rem == SZ.v len % block_len #t));
+  Math.euclidean_division_definition (SZ.v lin) (block_len #t);
+  Math.distributivity_add_left 1 (SZ.v nfull) (block_len #t);
+  assert (pure (SZ.v len - SZ.v rem == (1 + SZ.v nfull) * block_len #t));
+  Math.multiply_fractions (SZ.v lin) (block_len #t);
+  Math.lemma_mult_le_left (SZ.v nfull) 1 (block_len #t);
+  SZ.fits_lte (1 + SZ.v nfull) (block_len #t + SZ.v lin);
+
+  hash_blocks p kt wsb st input bl 1sz nfull vb;
+  let nb = SZ.add 1sz nfull;
+  let base_in = SZ.sub lin rem;
+  tail_and_finish p kt wsb st out input len nb base_in rem vb;
+
+  S.to_array wsb;
+  S.to_array st;
+}
 
 #pop-options

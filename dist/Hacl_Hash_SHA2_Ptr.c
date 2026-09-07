@@ -41,7 +41,7 @@ static uint64_t Spec_SHA2__Ch__t(uint64_t x, uint64_t y, uint64_t z);
 static uint64_t Spec_SHA2__Sigma0__t(uint64_t x);
 static uint64_t Spec_SHA2__Maj__t(uint64_t x, uint64_t y, uint64_t z);
 static void Hacl_Hash_SHA2_Core_update_block_impl__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 block, size_t off);
-static void Hacl_Hash_SHA2_Core_hash_blocks__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull);
+static void Hacl_Hash_SHA2_Core_hash_blocks__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull);
 static size_t Hacl_Secret_Word_nbytes__t_1 = 8;
 static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_1;
 static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_1;
@@ -60,7 +60,7 @@ static uint8_t Hacl_Secret_Cast_u64_to_u8(uint64_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t(uint64_t x);
 static void Hacl_Impl_Bytes_store_be__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint64_t x);
 static void Hacl_Hash_SHA2_Core_write_digest__t(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint64 st);
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem);
 static void Hacl_Hash_SHA2_Core_hash_impl__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_Hash_SHA2_sha512(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_Hash_SHA2_fill_iv384(Pulse_Lib_Slice_slice__uint64 b);
@@ -70,9 +70,9 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_2(Pulse_Lib_Slice_slice__uint64 wsb
 static uint64_t Spec_SHA2__Sigma1__t_1(uint64_t x);
 static uint64_t Spec_SHA2__Sigma0__t_1(uint64_t x);
 static void Hacl_Hash_SHA2_Core_update_block_impl__t_2(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 block, size_t off);
-static void Hacl_Hash_SHA2_Core_hash_blocks__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull);
+static void Hacl_Hash_SHA2_Core_hash_blocks__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull);
 static void Hacl_Hash_SHA2_Core_write_digest__t_1(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint64 st);
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_Hash_SHA2_sha384(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static Pulse_Lib_Slice_slice__uint32 Pulse_Lib_Slice_from_array__t_2(uint32_t *a, size_t alen);
@@ -113,13 +113,13 @@ static uint32_t Spec_SHA2__Ch__t_1(uint32_t x, uint32_t y, uint32_t z);
 static uint32_t Spec_SHA2__Sigma0__t_2(uint32_t x);
 static uint32_t Spec_SHA2__Maj__t_1(uint32_t x, uint32_t y, uint32_t z);
 static void Hacl_Hash_SHA2_Core_update_block_impl__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 block, size_t off);
-static void Hacl_Hash_SHA2_Core_hash_blocks__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull);
+static void Hacl_Hash_SHA2_Core_hash_blocks__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull);
 static void Hacl_Hash_SHA2_Core_build_tail__t_1(Pulse_Lib_Slice_slice__uint8 tl, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t base, size_t rem, size_t ntail);
 static uint8_t Hacl_Secret_Cast_u32_to_u8(uint32_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t_1(uint32_t x);
 static void Hacl_Impl_Bytes_store_be__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint32_t x);
 static void Hacl_Hash_SHA2_Core_write_digest__t_2(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint32 st);
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_Hash_SHA2_sha256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_Hash_SHA2_fill_iv224(Pulse_Lib_Slice_slice__uint32 b);
@@ -129,9 +129,9 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_4(Pulse_Lib_Slice_slice__uint32 wsb
 static uint32_t Spec_SHA2__Sigma1__t_3(uint32_t x);
 static uint32_t Spec_SHA2__Sigma0__t_3(uint32_t x);
 static void Hacl_Hash_SHA2_Core_update_block_impl__t_4(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 block, size_t off);
-static void Hacl_Hash_SHA2_Core_hash_blocks__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull);
+static void Hacl_Hash_SHA2_Core_hash_blocks__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull);
 static void Hacl_Hash_SHA2_Core_write_digest__t_3(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint32 st);
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_Hash_SHA2_sha224(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input);
 
@@ -446,7 +446,8 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t(Pulse_Lib_Slice_slice__uint
   Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
 }
 
-static void Hacl_Hash_SHA2_Core_hash_blocks__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull) {
+static void Hacl_Hash_SHA2_Core_hash_blocks__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull) {
+  (void)nprev;
   size_t i = 0;
   while (i < nfull) {
     size_t vi2 = i;
@@ -642,8 +643,8 @@ static void Hacl_Hash_SHA2_Core_write_digest__t(Pulse_Lib_Slice_slice__uint8 out
   }
 }
 
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem) {
-  (void)nfull;
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+  (void)nblocks;
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t ll = Hacl_Hash_SHA2_Core_len_len_sz__t_1;
@@ -651,7 +652,6 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64
   if ((rem + (1 + ll)) <= bl1) ntail = bl1;
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
-  size_t base = (len - rem);
   uint8_t z8 = 0;
   uint8_t *tarr;
   uint8_t _cbuf1[bl2];
@@ -660,7 +660,7 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64
   }
   tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
-  Hacl_Hash_SHA2_Core_build_tail__t(tl, input, len, base, rem, ntail);
+  Hacl_Hash_SHA2_Core_build_tail__t(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
   size_t j = 0;
   while (j < ntb) {
@@ -698,8 +698,8 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t(Pulse_Lib_Slice_slice__uint64 kt, P
   }
   wsarr = _cbuf4;
   Pulse_Lib_Slice_slice__uint64 wsb = Pulse_Lib_Slice_from_array__t(wsarr, 80);
-  Hacl_Hash_SHA2_Core_hash_blocks__t(kt, wsb, st, input, bl, nfull);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t(kt, wsb, st, out, input, len, nfull, rem);
+  Hacl_Hash_SHA2_Core_hash_blocks__t(kt, wsb, st, input, bl, 0, nfull);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t(kt, wsb, st, out, input, len, nfull, (len - rem), rem);
 }
 
 static void Hacl_Hash_SHA2_sha512(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input) {
@@ -831,7 +831,8 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_2(Pulse_Lib_Slice_slice__ui
   Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
 }
 
-static void Hacl_Hash_SHA2_Core_hash_blocks__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull) {
+static void Hacl_Hash_SHA2_Core_hash_blocks__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull) {
+  (void)nprev;
   size_t i = 0;
   while (i < nfull) {
     size_t vi2 = i;
@@ -868,8 +869,8 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_1(Pulse_Lib_Slice_slice__uint8 o
   }
 }
 
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem) {
-  (void)nfull;
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+  (void)nblocks;
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t ll = Hacl_Hash_SHA2_Core_len_len_sz__t_1;
@@ -877,7 +878,6 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint
   if ((rem + (1 + ll)) <= bl1) ntail = bl1;
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
-  size_t base = (len - rem);
   uint8_t z8 = 0;
   uint8_t *tarr;
   uint8_t _cbuf1[bl2];
@@ -886,7 +886,7 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint
   }
   tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
-  Hacl_Hash_SHA2_Core_build_tail__t(tl, input, len, base, rem, ntail);
+  Hacl_Hash_SHA2_Core_build_tail__t(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
   size_t j = 0;
   while (j < ntb) {
@@ -924,8 +924,8 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_1(Pulse_Lib_Slice_slice__uint64 kt,
   }
   wsarr = _cbuf4;
   Pulse_Lib_Slice_slice__uint64 wsb = Pulse_Lib_Slice_from_array__t(wsarr, 80);
-  Hacl_Hash_SHA2_Core_hash_blocks__t_1(kt, wsb, st, input, bl, nfull);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_1(kt, wsb, st, out, input, len, nfull, rem);
+  Hacl_Hash_SHA2_Core_hash_blocks__t_1(kt, wsb, st, input, bl, 0, nfull);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_1(kt, wsb, st, out, input, len, nfull, (len - rem), rem);
 }
 
 static void Hacl_Hash_SHA2_sha384(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input) {
@@ -1238,7 +1238,8 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_3(Pulse_Lib_Slice_slice__ui
   Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(st, 7, Hacl_Secret_Word_add_mod__t_1(h0, h1));
 }
 
-static void Hacl_Hash_SHA2_Core_hash_blocks__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull) {
+static void Hacl_Hash_SHA2_Core_hash_blocks__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull) {
+  (void)nprev;
   size_t i = 0;
   while (i < nfull) {
     size_t vi2 = i;
@@ -1310,8 +1311,8 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_2(Pulse_Lib_Slice_slice__uint8 o
   }
 }
 
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem) {
-  (void)nfull;
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+  (void)nblocks;
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_2;
   size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_2;
   size_t ll = Hacl_Hash_SHA2_Core_len_len_sz__t_2;
@@ -1319,7 +1320,6 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint
   if ((rem + (1 + ll)) <= bl1) ntail = bl1;
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
-  size_t base = (len - rem);
   uint8_t z8 = 0;
   uint8_t *tarr;
   uint8_t _cbuf1[bl2];
@@ -1328,7 +1328,7 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint
   }
   tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
-  Hacl_Hash_SHA2_Core_build_tail__t_1(tl, input, len, base, rem, ntail);
+  Hacl_Hash_SHA2_Core_build_tail__t_1(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
   size_t j = 0;
   while (j < ntb) {
@@ -1366,8 +1366,8 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_2(Pulse_Lib_Slice_slice__uint32 kt,
   }
   wsarr = _cbuf4;
   Pulse_Lib_Slice_slice__uint32 wsb = Pulse_Lib_Slice_from_array__t_2(wsarr, 64);
-  Hacl_Hash_SHA2_Core_hash_blocks__t_2(kt, wsb, st, input, bl, nfull);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_2(kt, wsb, st, out, input, len, nfull, rem);
+  Hacl_Hash_SHA2_Core_hash_blocks__t_2(kt, wsb, st, input, bl, 0, nfull);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_2(kt, wsb, st, out, input, len, nfull, (len - rem), rem);
 }
 
 static void Hacl_Hash_SHA2_sha256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input) {
@@ -1499,7 +1499,8 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_4(Pulse_Lib_Slice_slice__ui
   Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(st, 7, Hacl_Secret_Word_add_mod__t_1(h0, h1));
 }
 
-static void Hacl_Hash_SHA2_Core_hash_blocks__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nfull) {
+static void Hacl_Hash_SHA2_Core_hash_blocks__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull) {
+  (void)nprev;
   size_t i = 0;
   while (i < nfull) {
     size_t vi2 = i;
@@ -1536,8 +1537,8 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_3(Pulse_Lib_Slice_slice__uint8 o
   }
 }
 
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nfull, size_t rem) {
-  (void)nfull;
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+  (void)nblocks;
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_2;
   size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_2;
   size_t ll = Hacl_Hash_SHA2_Core_len_len_sz__t_2;
@@ -1545,7 +1546,6 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint
   if ((rem + (1 + ll)) <= bl1) ntail = bl1;
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
-  size_t base = (len - rem);
   uint8_t z8 = 0;
   uint8_t *tarr;
   uint8_t _cbuf1[bl2];
@@ -1554,7 +1554,7 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint
   }
   tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
-  Hacl_Hash_SHA2_Core_build_tail__t_1(tl, input, len, base, rem, ntail);
+  Hacl_Hash_SHA2_Core_build_tail__t_1(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
   size_t j = 0;
   while (j < ntb) {
@@ -1592,8 +1592,8 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_3(Pulse_Lib_Slice_slice__uint32 kt,
   }
   wsarr = _cbuf4;
   Pulse_Lib_Slice_slice__uint32 wsb = Pulse_Lib_Slice_from_array__t_2(wsarr, 64);
-  Hacl_Hash_SHA2_Core_hash_blocks__t_3(kt, wsb, st, input, bl, nfull);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsb, st, out, input, len, nfull, rem);
+  Hacl_Hash_SHA2_Core_hash_blocks__t_3(kt, wsb, st, input, bl, 0, nfull);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsb, st, out, input, len, nfull, (len - rem), rem);
 }
 
 static void Hacl_Hash_SHA2_sha224(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 input) {
