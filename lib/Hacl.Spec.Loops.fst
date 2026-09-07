@@ -47,3 +47,7 @@ let rec repeati_g_split (#a: Type) (m: nat) (n: nat { m <= n }) (f: (i: nat -> a
   : Lemma (ensures repeati_g n f acc == repeati_g (n - m) (fun i x -> f (m + i) x) (repeati_g m f acc))
           (decreases (n - m))
   = if n = m then () else repeati_g_split m (n - 1) f acc
+
+let repeati_g_zero (#a: Type) (f: (i: nat -> a -> GTot a)) (acc: a)
+  : Lemma (repeati_g 0 f acc == acc)
+  = ()

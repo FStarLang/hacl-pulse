@@ -233,3 +233,63 @@ let tail_bytes (#t: Type0) {| word t |} (msg: Seq.seq S8.t { Seq.length msg < ma
     FStar.Classical.forall_intro blk
 
 #pop-options
+
+(** {2 Messages with a prefix}
+
+    HMAC, and any incremental interface, hashes a message that is presented in
+    two pieces: some bytes already consumed and a buffer still to read.  The
+    implementation never materializes the concatenation, so what it needs are
+    the two facts that let it talk about [Seq.append pre msg] while touching
+    only [msg]. *)
+
+(** Reading the second half of a concatenation. *)
+let append_index_right (s1 s2: Seq.seq S8.t)
+  : Lemma (forall (k: nat). k < Seq.length s2 ==>
+             Seq.index (Seq.append s1 s2) (Seq.length s1 + k) == Seq.index s2 k)
+  = let aux (k: nat { k < Seq.length s2 })
+      : Lemma (Seq.index (Seq.append s1 s2) (Seq.length s1 + k) == Seq.index s2 k)
+      = Seq.lemma_index_app2 s1 s2 (Seq.length s1 + k)
+    in
+    FStar.Classical.forall_intro aux
+
+(** A block of the second half is a block of the padded whole. *)
+let padded_index_block_shift (#t: Type0) {| word t |} (pre: Seq.seq S8.t) (msg: Seq.seq S8.t)
+                             (o: nat)
+  : Lemma (requires Seq.length pre + Seq.length msg < max_input #t /\
+                    o + block_len #t <= Seq.length msg)
+          (ensures block_at #t (padded #t (Seq.append pre msg)) (Seq.length pre + o) ==
+                   block_at #t msg o)
+  = let m = Seq.append pre msg in
+    Seq.lemma_len_append pre msg;
+    padded_index_block #t m (Seq.length pre + o);
+    append_index_right pre msg;
+    block_at_pointwise #t m msg (Seq.length pre + o) o
+
+(** Reading the second half of a concatenation at an absolute offset.  Stated
+    with the offset [btot] into the concatenation as its own argument so that
+    the conclusion's trigger is literally the term the caller is looking at:
+    the E-matching pattern is [Seq.index (Seq.append pre s) (btot + k)], not
+    [... (Seq.length pre + base + k)], which would never fire. *)
+let append_index_at (pre: Seq.seq S8.t) (s: Seq.seq S8.t)
+                    (btot: nat) (base: nat) (n: nat)
+  : Lemma (requires btot == Seq.length pre + base /\ base + n <= Seq.length s)
+          (ensures forall (k: nat). k < n ==>
+             Seq.index (Seq.append pre s) (btot + k) == Seq.index s (base + k))
+  = let aux (k: nat { k < n })
+      : Lemma (Seq.index (Seq.append pre s) (btot + k) == Seq.index s (base + k))
+      = Seq.lemma_index_app2 pre s (btot + k)
+    in
+    FStar.Classical.forall_intro aux
+
+(** The first block of a concatenation whose left half is exactly one block --
+    the [K0 ^ ipad] block of HMAC. *)
+let append_first_block (#t: Type0) {| word t |} (pre: Seq.seq S8.t) (s: Seq.seq S8.t)
+  : Lemma (requires Seq.length pre == block_len #t)
+          (ensures block_at #t (Seq.append pre s) 0 == block_at #t pre 0)
+  = Seq.lemma_len_append pre s;
+    let aux (k: nat { k < block_len #t })
+      : Lemma (Seq.index (Seq.append pre s) (0 + k) == Seq.index pre (0 + k))
+      = Seq.lemma_index_app1 pre s k
+    in
+    FStar.Classical.forall_intro aux;
+    block_at_pointwise #t (Seq.append pre s) pre 0 0
