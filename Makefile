@@ -20,9 +20,15 @@ CUSTARD_ENTRIES_Hacl.Hash.SHA2.Ptr := sha224 sha256 sha384 sha512
 C_UNITS += Hacl.HMAC.Ptr
 CUSTARD_ENTRIES_Hacl.HMAC.Ptr := hmac_sha224 hmac_sha256 hmac_sha384 hmac_sha512
 
+C_UNITS += Hacl.HKDF.Ptr
+CUSTARD_ENTRIES_Hacl.HKDF.Ptr := \
+  extract_sha224 extract_sha256 extract_sha384 extract_sha512 \
+  expand_sha224 expand_sha256 expand_sha384 expand_sha512
+
 # Which unit each C test links against; see mk/test.mk.
 TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
+TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 
 include mk/extract.mk
 

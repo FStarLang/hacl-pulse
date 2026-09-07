@@ -163,3 +163,39 @@ let round_msg_pointwise (#t: Type0) {| word t |}
     in
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro m r
+
+(** One unfolding of [expand_t], stated as a lemma so that the implementation
+    does not have to rely on fuel. *)
+let expand_t_unfold (#t: Type0) {| word t |} (p: params t)
+                    (prk: Seq.seq S8.t { prk_ok p prk })
+                    (info: Seq.seq S8.t { info_ok p info })
+                    (i: nat { 0 < i /\ i < 256 })
+  : Lemma (expand_t p prk info i ==
+             hmac p prk (Seq.append (Seq.append (expand_t p prk info (i - 1)) info)
+                                    (counter i)))
+  = ()
+
+let mult_lt_cancel (a b c: nat)
+  : Lemma (requires 0 < c /\ a * c < b * c) (ensures a < b)
+  = if a >= b then Math.lemma_mult_le_right c b a
+
+(** [expand_all] is monotone: the first [m] digests of [n] rounds are the
+    result of [m] rounds.  This is what lets the loop state its invariant
+    against a fixed final round count while producing one digest at a time. *)
+let rec expand_all_index_le (#t: Type0) {| word t |} (p: params t)
+                            (prk: Seq.seq S8.t { prk_ok p prk })
+                            (info: Seq.seq S8.t { info_ok p info })
+                            (m: nat) (n: nat { m <= n /\ n < 256 })
+  : Lemma (ensures forall (k: nat). k < m * (hash_bytes p) ==>
+             k < n * (hash_bytes p) /\
+             Seq.index (expand_all p prk info n) k ==
+             Seq.index (expand_all p prk info m) k)
+          (decreases n - m)
+  = Math.lemma_mult_le_right (hash_bytes p) m n;
+    if m = n
+    then ()
+    else begin
+      Math.lemma_mult_le_right (hash_bytes p) m (n - 1);
+      expand_all_index_prev p prk info n;
+      expand_all_index_le p prk info m (n - 1)
+    end
