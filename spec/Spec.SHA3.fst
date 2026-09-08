@@ -368,3 +368,78 @@ let nblocks_eq (r: rate_t) (msg: Seq.seq S8.t)
     Math.euclidean_division_definition n r;
     Math.distributivity_add_left (n / r) 1 r;
     Math.multiple_division_lemma (n / r + 1) r
+
+(** {2 Blocks of the padded message}
+
+    The implementation absorbs whole message blocks straight out of the
+    caller's buffer and builds only the last block, so it needs to know that
+    block [i] of [padded] is a slice of [msg] for every [i] but the last, and
+    what the last one contains. *)
+
+let block_at_full (r: rate_t) (suffix: U8.t) (msg: Seq.seq S8.t) (i: nat)
+  : Lemma (requires i * r + r <= Seq.length msg)
+          (ensures block_at r (padded r suffix msg) i ==
+                   Seq.slice msg (i * r) (i * r + r))
+  = padded_len r suffix msg;
+    let p = padded r suffix msg in
+    let aux (k: nat { k < r }) : Lemma
+      (Seq.index (block_at r p i) k == Seq.index (Seq.slice msg (i * r) (i * r + r)) k)
+      = block_at_index r p i k;
+        padded_index r suffix msg (i * r + k)
+    in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro (block_at r p i) (Seq.slice msg (i * r) (i * r + r))
+
+let block_at_last (r: rate_t) (suffix: U8.t) (msg: Seq.seq S8.t) (blk: Seq.seq S8.t)
+  : Lemma (requires (let n = Seq.length msg in
+                     Seq.length blk == r /\
+                     (forall (k: nat). k < n % r ==>
+                        Seq.index blk k == Seq.index msg (n - n % r + k)) /\
+                     (forall (k: nat). n % r <= k /\ k < r ==>
+                        Seq.index blk k == pad_byte suffix (r - n % r) (k - n % r))))
+          (ensures block_at r (padded r suffix msg) (Seq.length msg / r) == blk)
+  = padded_len r suffix msg;
+    let n = Seq.length msg in
+    let q = n / r in
+    let m = n % r in
+    Math.euclidean_division_definition n r;
+    let p = padded r suffix msg in
+    let aux (k: nat { k < r }) : Lemma (Seq.index (block_at r p q) k == Seq.index blk k)
+      = block_at_index r p q k;
+        if q * r + k < n then () else padded_index r suffix msg (q * r + k)
+    in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro (block_at r p q) blk
+
+(** {2 Squeezing one block at a time} *)
+
+let squeeze_byte_eq (r: rate_t) (s: state) (outlen: nat) (j: nat) (u: nat)
+  : Lemma (requires u < r /\ j * r + u < outlen)
+          (ensures Seq.index (squeeze r s outlen) (j * r + u) ==
+                   state_byte (squeeze_state j s) u)
+  = Math.lemma_div_plus u j r;
+    Math.lemma_mod_plus u j r;
+    Math.small_div u r;
+    Math.small_mod u r;
+    squeeze_index r s outlen (j * r + u)
+
+let squeeze_bytes_eq (r: rate_t) (s: state) (outlen: nat) (j: nat) (cnt: nat)
+  : Lemma (requires cnt <= r /\ j * r + cnt <= outlen)
+          (ensures forall (u: nat). u < cnt ==>
+                     Seq.index (squeeze r s outlen) (j * r + u) ==
+                     state_byte (squeeze_state j s) u)
+  = let aux (u: nat { u < cnt }) : Lemma
+      (Seq.index (squeeze r s outlen) (j * r + u) == state_byte (squeeze_state j s) u)
+      = squeeze_byte_eq r s outlen j u
+    in
+    Classical.forall_intro aux
+
+(** The same, indexed absolutely, which is the shape the implementation's
+    output buffer invariant has. *)
+let squeeze_range_eq (r: rate_t) (s: state) (outlen: nat) (base: nat) (cnt: nat)
+  : Lemma (requires base % r == 0 /\ cnt <= r /\ base + cnt <= outlen)
+          (ensures forall (k: nat). base <= k /\ k < base + cnt ==>
+                     Seq.index (squeeze r s outlen) k ==
+                     state_byte (squeeze_state (base / r) s) (k - base))
+  = Math.euclidean_division_definition base r;
+    squeeze_bytes_eq r s outlen (base / r) cnt
