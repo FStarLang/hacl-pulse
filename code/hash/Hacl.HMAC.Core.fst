@@ -32,6 +32,7 @@ open Spec.SHA2
 open Spec.SHA2.Lemmas
 open Spec.HMAC
 open Hacl.Hash.SHA2.Core
+open Hacl.Impl.Copy
 
 module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
@@ -53,36 +54,6 @@ let sizes (#t: Type0) {| word t |} (p: params t)
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
 (** {2 Building blocks} *)
-
-fn copy_prefix (dst: S.slice S8.t) (src: S.slice S8.t) (n: SZ.t)
-               (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
-         pure (SZ.v n <= Seq.length vd /\ SZ.v n <= Seq.length vs)
-ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
-        pure (Seq.length vd' == Seq.length vd /\
-              SZ.v n <= Seq.length vd' /\ SZ.v n <= Seq.length vs /\
-              (forall (k: nat). k < SZ.v n ==> Seq.index vd' k == Seq.index vs k) /\
-              (forall (k: nat). SZ.v n <= k /\ k < Seq.length vd ==>
-                 Seq.index vd' k == Seq.index vd k))
-{
-  S.pts_to_len dst;
-  S.pts_to_len src;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to dst vd' ** S.pts_to src #ps vs **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == Seq.length vd /\
-          (forall (k: nat). k < SZ.v vi ==> Seq.index vd' k == Seq.index vs k) /\
-          (forall (k: nat). SZ.v vi <= k /\ k < Seq.length vd ==>
-             Seq.index vd' k == Seq.index vd k))
-  decreases (SZ.v n - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = S.(src.(vi));
-    S.((dst.(vi) <- x));
-    i := SZ.add vi 1sz;
-  };
-}
 
 (** [pad <- k0 ^ c] over a whole block. *)
 fn fill_xor (#t: Type0) {| w: word t |} (pad: S.slice S8.t) (k0: S.slice S8.t) (c: U8.t)
