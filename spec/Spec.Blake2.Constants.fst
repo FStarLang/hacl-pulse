@@ -67,187 +67,181 @@ let iv32 : Seq.lseq S32.t 8 =
 
 (** {2 The message schedule}
 
-    Written as a function rather than as a sequence because it is looked up
-    with two indices and never manipulated as a whole; a nested [Seq] would
-    only add a projection to every query.  The result carries its own bound,
-    so [sigma r i] can be used directly as a subscript into the sixteen-word
-    message block. *)
-let sigma (r: nat { r < 10 }) (i: nat { i < 16 }) : n: nat { n < 16 } =
-  if r = 0 then (
-    if i = 0 then 0 else
-    if i = 1 then 1 else
-    if i = 2 then 2 else
-    if i = 3 then 3 else
-    if i = 4 then 4 else
-    if i = 5 then 5 else
-    if i = 6 then 6 else
-    if i = 7 then 7 else
-    if i = 8 then 8 else
-    if i = 9 then 9 else
-    if i = 10 then 10 else
-    if i = 11 then 11 else
-    if i = 12 then 12 else
-    if i = 13 then 13 else
-    if i = 14 then 14 else
-    15)
-  else
-  if r = 1 then (
-    if i = 0 then 14 else
-    if i = 1 then 10 else
-    if i = 2 then 4 else
-    if i = 3 then 8 else
-    if i = 4 then 9 else
-    if i = 5 then 15 else
-    if i = 6 then 13 else
-    if i = 7 then 6 else
-    if i = 8 then 1 else
-    if i = 9 then 12 else
-    if i = 10 then 0 else
-    if i = 11 then 2 else
-    if i = 12 then 11 else
-    if i = 13 then 7 else
-    if i = 14 then 5 else
-    3)
-  else
-  if r = 2 then (
-    if i = 0 then 11 else
-    if i = 1 then 8 else
-    if i = 2 then 12 else
-    if i = 3 then 0 else
-    if i = 4 then 5 else
-    if i = 5 then 2 else
-    if i = 6 then 15 else
-    if i = 7 then 13 else
-    if i = 8 then 10 else
-    if i = 9 then 14 else
-    if i = 10 then 3 else
-    if i = 11 then 6 else
-    if i = 12 then 7 else
-    if i = 13 then 1 else
-    if i = 14 then 9 else
-    4)
-  else
-  if r = 3 then (
-    if i = 0 then 7 else
-    if i = 1 then 9 else
-    if i = 2 then 3 else
-    if i = 3 then 1 else
-    if i = 4 then 13 else
-    if i = 5 then 12 else
-    if i = 6 then 11 else
-    if i = 7 then 14 else
-    if i = 8 then 2 else
-    if i = 9 then 6 else
-    if i = 10 then 5 else
-    if i = 11 then 10 else
-    if i = 12 then 4 else
-    if i = 13 then 0 else
-    if i = 14 then 15 else
-    8)
-  else
-  if r = 4 then (
-    if i = 0 then 9 else
-    if i = 1 then 0 else
-    if i = 2 then 5 else
-    if i = 3 then 7 else
-    if i = 4 then 2 else
-    if i = 5 then 4 else
-    if i = 6 then 10 else
-    if i = 7 then 15 else
-    if i = 8 then 14 else
-    if i = 9 then 1 else
-    if i = 10 then 11 else
-    if i = 11 then 12 else
-    if i = 12 then 6 else
-    if i = 13 then 8 else
-    if i = 14 then 3 else
-    13)
-  else
-  if r = 5 then (
-    if i = 0 then 2 else
-    if i = 1 then 12 else
-    if i = 2 then 6 else
-    if i = 3 then 10 else
-    if i = 4 then 0 else
-    if i = 5 then 11 else
-    if i = 6 then 8 else
-    if i = 7 then 3 else
-    if i = 8 then 4 else
-    if i = 9 then 13 else
-    if i = 10 then 7 else
-    if i = 11 then 5 else
-    if i = 12 then 15 else
-    if i = 13 then 14 else
-    if i = 14 then 1 else
-    9)
-  else
-  if r = 6 then (
-    if i = 0 then 12 else
-    if i = 1 then 5 else
-    if i = 2 then 1 else
-    if i = 3 then 15 else
-    if i = 4 then 14 else
-    if i = 5 then 13 else
-    if i = 6 then 4 else
-    if i = 7 then 10 else
-    if i = 8 then 0 else
-    if i = 9 then 7 else
-    if i = 10 then 6 else
-    if i = 11 then 3 else
-    if i = 12 then 9 else
-    if i = 13 then 2 else
-    if i = 14 then 8 else
-    11)
-  else
-  if r = 7 then (
-    if i = 0 then 13 else
-    if i = 1 then 11 else
-    if i = 2 then 7 else
-    if i = 3 then 14 else
-    if i = 4 then 12 else
-    if i = 5 then 1 else
-    if i = 6 then 3 else
-    if i = 7 then 9 else
-    if i = 8 then 5 else
-    if i = 9 then 0 else
-    if i = 10 then 15 else
-    if i = 11 then 4 else
-    if i = 12 then 8 else
-    if i = 13 then 6 else
-    if i = 14 then 2 else
-    10)
-  else
-  if r = 8 then (
-    if i = 0 then 6 else
-    if i = 1 then 15 else
-    if i = 2 then 14 else
-    if i = 3 then 9 else
-    if i = 4 then 11 else
-    if i = 5 then 3 else
-    if i = 6 then 0 else
-    if i = 7 then 8 else
-    if i = 8 then 12 else
-    if i = 9 then 2 else
-    if i = 10 then 13 else
-    if i = 11 then 7 else
-    if i = 12 then 1 else
-    if i = 13 then 4 else
-    if i = 14 then 10 else
-    5)
-  else (
-    if i = 0 then 10 else
-    if i = 1 then 2 else
-    if i = 2 then 8 else
-    if i = 3 then 4 else
-    if i = 4 then 7 else
-    if i = 5 then 6 else
-    if i = 6 then 1 else
-    if i = 7 then 5 else
-    if i = 8 then 15 else
-    if i = 9 then 11 else
-    if i = 10 then 9 else
-    if i = 11 then 14 else
-    if i = 12 then 3 else
-    if i = 13 then 12 else
-    if i = 14 then 13 else
-    0)
+    [sigma_at] is the ten rows of sixteen laid out end to end, as a function of
+    a single index rather than as a [Seq].  A function because it is only ever
+    looked up, never manipulated as a whole, and flat because that is the shape
+    the implementation's table has: filling it is a loop over [sigma_at], and
+    each of the hundred and sixty proof obligations that produces is the
+    if-chain evaluated at a literal, which is cheap.  A nested lookup would put
+    a division and a remainder in every one of them.
+
+    The result carries its own bound, so it can be used directly as a subscript
+    into the sixteen-word message block.  These are public indices -- which
+    message word a round mixes in is not a secret -- so this is ordinary
+    arithmetic, not a constant-time selection. *)
+[@@"opaque_to_smt"]
+let sigma_at (k: nat { k < 160 }) : n: nat { n < 16 } =
+  if k = 0 then 0 else
+  if k = 1 then 1 else
+  if k = 2 then 2 else
+  if k = 3 then 3 else
+  if k = 4 then 4 else
+  if k = 5 then 5 else
+  if k = 6 then 6 else
+  if k = 7 then 7 else
+  if k = 8 then 8 else
+  if k = 9 then 9 else
+  if k = 10 then 10 else
+  if k = 11 then 11 else
+  if k = 12 then 12 else
+  if k = 13 then 13 else
+  if k = 14 then 14 else
+  if k = 15 then 15 else
+  if k = 16 then 14 else
+  if k = 17 then 10 else
+  if k = 18 then 4 else
+  if k = 19 then 8 else
+  if k = 20 then 9 else
+  if k = 21 then 15 else
+  if k = 22 then 13 else
+  if k = 23 then 6 else
+  if k = 24 then 1 else
+  if k = 25 then 12 else
+  if k = 26 then 0 else
+  if k = 27 then 2 else
+  if k = 28 then 11 else
+  if k = 29 then 7 else
+  if k = 30 then 5 else
+  if k = 31 then 3 else
+  if k = 32 then 11 else
+  if k = 33 then 8 else
+  if k = 34 then 12 else
+  if k = 35 then 0 else
+  if k = 36 then 5 else
+  if k = 37 then 2 else
+  if k = 38 then 15 else
+  if k = 39 then 13 else
+  if k = 40 then 10 else
+  if k = 41 then 14 else
+  if k = 42 then 3 else
+  if k = 43 then 6 else
+  if k = 44 then 7 else
+  if k = 45 then 1 else
+  if k = 46 then 9 else
+  if k = 47 then 4 else
+  if k = 48 then 7 else
+  if k = 49 then 9 else
+  if k = 50 then 3 else
+  if k = 51 then 1 else
+  if k = 52 then 13 else
+  if k = 53 then 12 else
+  if k = 54 then 11 else
+  if k = 55 then 14 else
+  if k = 56 then 2 else
+  if k = 57 then 6 else
+  if k = 58 then 5 else
+  if k = 59 then 10 else
+  if k = 60 then 4 else
+  if k = 61 then 0 else
+  if k = 62 then 15 else
+  if k = 63 then 8 else
+  if k = 64 then 9 else
+  if k = 65 then 0 else
+  if k = 66 then 5 else
+  if k = 67 then 7 else
+  if k = 68 then 2 else
+  if k = 69 then 4 else
+  if k = 70 then 10 else
+  if k = 71 then 15 else
+  if k = 72 then 14 else
+  if k = 73 then 1 else
+  if k = 74 then 11 else
+  if k = 75 then 12 else
+  if k = 76 then 6 else
+  if k = 77 then 8 else
+  if k = 78 then 3 else
+  if k = 79 then 13 else
+  if k = 80 then 2 else
+  if k = 81 then 12 else
+  if k = 82 then 6 else
+  if k = 83 then 10 else
+  if k = 84 then 0 else
+  if k = 85 then 11 else
+  if k = 86 then 8 else
+  if k = 87 then 3 else
+  if k = 88 then 4 else
+  if k = 89 then 13 else
+  if k = 90 then 7 else
+  if k = 91 then 5 else
+  if k = 92 then 15 else
+  if k = 93 then 14 else
+  if k = 94 then 1 else
+  if k = 95 then 9 else
+  if k = 96 then 12 else
+  if k = 97 then 5 else
+  if k = 98 then 1 else
+  if k = 99 then 15 else
+  if k = 100 then 14 else
+  if k = 101 then 13 else
+  if k = 102 then 4 else
+  if k = 103 then 10 else
+  if k = 104 then 0 else
+  if k = 105 then 7 else
+  if k = 106 then 6 else
+  if k = 107 then 3 else
+  if k = 108 then 9 else
+  if k = 109 then 2 else
+  if k = 110 then 8 else
+  if k = 111 then 11 else
+  if k = 112 then 13 else
+  if k = 113 then 11 else
+  if k = 114 then 7 else
+  if k = 115 then 14 else
+  if k = 116 then 12 else
+  if k = 117 then 1 else
+  if k = 118 then 3 else
+  if k = 119 then 9 else
+  if k = 120 then 5 else
+  if k = 121 then 0 else
+  if k = 122 then 15 else
+  if k = 123 then 4 else
+  if k = 124 then 8 else
+  if k = 125 then 6 else
+  if k = 126 then 2 else
+  if k = 127 then 10 else
+  if k = 128 then 6 else
+  if k = 129 then 15 else
+  if k = 130 then 14 else
+  if k = 131 then 9 else
+  if k = 132 then 11 else
+  if k = 133 then 3 else
+  if k = 134 then 0 else
+  if k = 135 then 8 else
+  if k = 136 then 12 else
+  if k = 137 then 2 else
+  if k = 138 then 13 else
+  if k = 139 then 7 else
+  if k = 140 then 1 else
+  if k = 141 then 4 else
+  if k = 142 then 10 else
+  if k = 143 then 5 else
+  if k = 144 then 10 else
+  if k = 145 then 2 else
+  if k = 146 then 8 else
+  if k = 147 then 4 else
+  if k = 148 then 7 else
+  if k = 149 then 6 else
+  if k = 150 then 1 else
+  if k = 151 then 5 else
+  if k = 152 then 15 else
+  if k = 153 then 11 else
+  if k = 154 then 9 else
+  if k = 155 then 14 else
+  if k = 156 then 3 else
+  if k = 157 then 12 else
+  if k = 158 then 13 else
+  0
+
+(** Position [i] of round [r]. *)
+unfold let sigma (r: nat { r < 10 }) (i: nat { i < 16 }) : n: nat { n < 16 } =
+  sigma_at (16 * r + i)
