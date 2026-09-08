@@ -180,6 +180,50 @@ lets a round establish it.  The loop measure is the round counter, not the
 bytes remaining: the last round overshoots the requested length, so
 `len - base` is not a `nat`.
 
+### The incremental hash
+
+The streaming state is not a heap-allocated object with a constructor, a
+destructor and an error code.  It is three flat pieces of memory that the
+caller owns:
+
+```c
+uint32_t acc[8];    /* the accumulator */
+uint8_t  buf[64];   /* one block of buffered bytes */
+size_t   total;     /* how many bytes have been absorbed */
+```
+
+plus, ghostly, the message `seen` so far.  A caller who wants a struct can put
+the three in one; the library does not need to know.  There is no `malloc`, so
+there is no allocation failure to report, and no `free` to forget.
+
+The invariant, `Hacl.Hash.SHA2.Streaming.stream_ok`, says three things: the
+accumulator is `absorb p seen (|seen| / bl)`, the first `|seen| % bl` bytes of
+the buffer are the bytes of `seen` past its last whole block, and `total` is
+`|seen|`.  The buffer is therefore always *strictly* partial: `update` absorbs
+it the moment it fills, rather than leaving a full buffer for the next call to
+deal with, which is what makes the invariant a single equation instead of a
+disjunction.
+
+`update` fills the buffer, and if that filled it, absorbs it and then absorbs
+whatever whole blocks follow *directly out of the caller's data* -- no copy --
+keeping only the trailing partial block.  That is the same ghost-prefix trick
+HMAC uses: `absorb_blocks` hands `hash_blocks` a prefix length and a subslice,
+and `Spec.SHA2.Streaming.absorb_congr` -- absorbing `n` blocks only looks at
+the first `n * bl` bytes, so two messages that agree that far absorb alike --
+is what bridges "the bytes in this slice" to "the bytes of `seen`".
+
+`digest` copies the accumulator to the stack and finishes there, so the state
+survives: digesting twice gives the same answer, and updating after a digest
+continues the same message.  `tests/test_streaming.c` checks both, and checks
+the FIPS 180-4 messages fed in nine different chunk sizes chosen to straddle
+the block boundary from both sides.
+
+`Hacl.Streaming.SHA2` names the four algorithms and `Hacl.Streaming.SHA2.Ptr`
+is the C ABI.  One wart: `total` is a `size_t`, so on a 32-bit target a single
+state tops out at four gigabytes.  That follows from using `FStar.SizeT` for
+every length (see `design/changes.md`); the one-shot interface has the same
+limit, and HACL* does not.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -222,12 +266,15 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   that advances by a fixed stride past a limit cannot measure `limit - i`;
   measure the iteration count instead.  The symptom is a timeout on
   `... << meas`, which looks like a crowding problem and is not.
+* **Split, do not raise the rlimit.**  Every "the SMT query timed out" in
+  `update_impl` was on a goal like `nb + 1 <= |seen| + |data|`.  Moving the
+  block-full case out into `update_full` made all of them go away at once; no
+  amount of rlimit would have.
 * **A unit is a whole program.**  Two extracted units each contain everything
   their entry points reach, including a `custard_init_globals` of their own, so
   they cannot be linked into one binary.  One test binary per unit.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: the streaming
-functor, SHA-3, BLAKE2, ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the
-DRBG.
+Following `design/reimplementation.md` §9, in dependency order: SHA-3, BLAKE2,
+ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
