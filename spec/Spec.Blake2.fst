@@ -118,20 +118,34 @@ let g (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
 
 (** One round: the four columns, then the four diagonals, with the message
     words picked out by row [r] of [sigma].  [r] is the round number modulo
-    ten, since BLAKE2b runs twelve rounds over a ten-row table. *)
+    ten, since BLAKE2b runs twelve rounds over a ten-row table.
+
+    The two halves are named because the implementation is split at the same
+    seam: eight mixes in one Pulse function produce a postcondition that no
+    rlimit discharges, and four do. *)
+
+let columns (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+            (m: Seq.lseq t 16) (v0: Seq.lseq t 16) (r: nat { r < 10 })
+  : Seq.lseq t 16
+  = let s (i: nat { i < 16 }) : t = Seq.index m (sigma r i) in
+    let v1 = g p v0 0 4  8 12 (s 0) (s 1) in
+    let v2 = g p v1 1 5  9 13 (s 2) (s 3) in
+    let v3 = g p v2 2 6 10 14 (s 4) (s 5) in
+    g p v3 3 7 11 15 (s 6) (s 7)
+
+let diagonals (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+              (m: Seq.lseq t 16) (v0: Seq.lseq t 16) (r: nat { r < 10 })
+  : Seq.lseq t 16
+  = let s (i: nat { i < 16 }) : t = Seq.index m (sigma r i) in
+    let v1 = g p v0 0 5 10 15 (s  8) (s  9) in
+    let v2 = g p v1 1 6 11 12 (s 10) (s 11) in
+    let v3 = g p v2 2 7  8 13 (s 12) (s 13) in
+    g p v3 3 4  9 14 (s 14) (s 15)
+
 let round (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
           (m: Seq.lseq t 16) (v0: Seq.lseq t 16) (r: nat { r < 10 })
   : Seq.lseq t 16
-  = let s (i: nat { i < 16 }) : t = Seq.index m (sigma r i) in
-    let v1 = g p v0 0 4  8 12 (s  0) (s  1) in
-    let v2 = g p v1 1 5  9 13 (s  2) (s  3) in
-    let v3 = g p v2 2 6 10 14 (s  4) (s  5) in
-    let v4 = g p v3 3 7 11 15 (s  6) (s  7) in
-    let v5 = g p v4 0 5 10 15 (s  8) (s  9) in
-    let v6 = g p v5 1 6 11 12 (s 10) (s 11) in
-    let v7 = g p v6 2 7  8 13 (s 12) (s 13) in
-    let v8 = g p v7 3 4  9 14 (s 14) (s 15) in
-    v8
+  = diagonals p m (columns p m v0 r) r
 
 (** The state after the first [n] rounds.  Defined this way round -- the [n]th
     round applied to the result of the first [n-1] -- so that it is exactly a
