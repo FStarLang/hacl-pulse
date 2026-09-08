@@ -85,6 +85,7 @@ let shiftr (x: S64.t) (k: nat { k < 64 }) : S64.t =
 (** theta.  [c x] is the parity of column [x]; [d x] is what gets folded back
     into every lane of that column. *)
 
+[@@"opaque_to_smt"]
 let theta_c (s: state) (x: nat { x < 5 }) : S64.t =
   S64.logxor (S64.logxor (S64.logxor (S64.logxor (get s x 0) (get s x 1)) (get s x 2))
                          (get s x 3))
@@ -93,6 +94,7 @@ let theta_c (s: state) (x: nat { x < 5 }) : S64.t =
 let theta_d (s: state) (x: nat { x < 5 }) : S64.t =
   S64.logxor (theta_c s ((x + 4) % 5)) (rotl (theta_c s ((x + 1) % 5)) 1)
 
+[@@"opaque_to_smt"]
 let theta (s: state) : state =
   Seq.init 25 (fun i -> S64.logxor (Seq.index s i) (theta_d s (i % 5)))
 
@@ -105,6 +107,7 @@ let rho_pi_src (i: nat { i < 25 }) : n: nat { n < 25 } =
   let y' = i / 5 in
   idx ((x' + 3 * y') % 5) x'
 
+[@@"opaque_to_smt"]
 let rho_pi (s: state) : state =
   Seq.init 25 (fun i ->
     let j = rho_pi_src i in
@@ -112,6 +115,7 @@ let rho_pi (s: state) : state =
 
 (** chi, the only nonlinear step. *)
 
+[@@"opaque_to_smt"]
 let chi (s: state) : state =
   Seq.init 25 (fun i ->
     let x = i % 5 in
@@ -257,3 +261,110 @@ let shake128 (msg: Seq.seq S8.t) (outlen: nat) : Seq.lseq S8.t outlen =
   keccak 168 shake_suffix msg outlen
 let shake256 (msg: Seq.seq S8.t) (outlen: nat) : Seq.lseq S8.t outlen =
   keccak 136 shake_suffix msg outlen
+
+
+(** {2 Index lemmas}
+
+    Everything above is defined with [Seq.init], and [Seq.init_index_] needs
+    the contents function written out.  These lemmas do that once, so that the
+    implementation can talk about one entry at a time. *)
+
+let theta_index (s: state) (i: nat { i < 25 })
+  : Lemma (Seq.index (theta s) i == S64.logxor (Seq.index s i) (theta_d s (i % 5)))
+  = reveal_opaque (`%theta) theta;
+    Seq.init_index_ 25 (fun j -> S64.logxor (Seq.index s j) (theta_d s (j % 5))) i
+
+(** [theta_c] spelled out with flat indices. *)
+let theta_c_eq (s: state) (x: nat { x < 5 })
+  : Lemma (theta_c s x ==
+           S64.logxor (S64.logxor (S64.logxor (S64.logxor
+             (Seq.index s x) (Seq.index s (x + 5))) (Seq.index s (x + 10)))
+             (Seq.index s (x + 15))) (Seq.index s (x + 20)))
+  = reveal_opaque (`%theta_c) theta_c
+
+(** The whole of one theta lane in terms of the parity buffer, so that the
+    implementation never has to unfold [theta_c] inside a Pulse context. *)
+let theta_step (s: state) (cs: Seq.seq S64.t) (i: nat { i < 25 })
+  : Lemma (requires Seq.length cs == 5 /\
+                    (forall (x: nat). x < 5 ==> Seq.index cs x == theta_c s x))
+          (ensures Seq.index (theta s) i ==
+                   S64.logxor (Seq.index s i)
+                     (S64.logxor (Seq.index cs ((i % 5 + 4) % 5))
+                                 (rotl (Seq.index cs ((i % 5 + 1) % 5)) 1)))
+  = reveal_opaque (`%theta_c) theta_c;
+    theta_index s i
+
+let rho_pi_index (s: state) (i: nat { i < 25 })
+  : Lemma (Seq.index (rho_pi s) i ==
+           rotl (Seq.index s (rho_pi_src i)) (rotc (rho_pi_src i)))
+  = reveal_opaque (`%rho_pi) rho_pi;
+    Seq.init_index_ 25 (fun j ->
+      let k = rho_pi_src j in
+      rotl (Seq.index s k) (rotc k)) i
+
+let chi_index (s: state) (i: nat { i < 25 })
+  : Lemma (Seq.index (chi s) i ==
+           S64.logxor (Seq.index s i)
+             (S64.logand (S64.lognot (Seq.index s (idx ((i % 5 + 1) % 5) (i / 5))))
+                         (Seq.index s (idx ((i % 5 + 2) % 5) (i / 5)))))
+  = reveal_opaque (`%chi) chi;
+    Math.lemma_div_lt_nat i 5 1;
+    Seq.init_index_ 25 (fun j ->
+      let x = j % 5 in
+      let y = j / 5 in
+      Math.lemma_div_lt_nat j 5 1;
+      S64.logxor (get s x y)
+                 (S64.logand (S64.lognot (get s ((x + 1) % 5) y))
+                             (get s ((x + 2) % 5) y))) i
+
+let xor_block_index (r: rate_t) (block: Seq.lseq S8.t r) (s: state) (i: nat { i < 25 })
+  : Lemma (Seq.index (xor_block r block s) i ==
+           (if i < rate_lanes r
+            then S64.logxor (Seq.index s i) (lane_of (Seq.slice block (8 * i) (8 * i + 8)))
+            else Seq.index s i))
+  = Seq.init_index_ 25 (fun j ->
+      if j < rate_lanes r
+      then S64.logxor (Seq.index s j) (lane_of (Seq.slice block (8 * j) (8 * j + 8)))
+      else Seq.index s j) i
+
+let block_at_index (r: rate_t) (s: Seq.seq S8.t) (i: nat) (k: nat { k < r })
+  : Lemma (Seq.index (block_at r s i) k ==
+           (if i * r + k < Seq.length s then Seq.index s (i * r + k) else S8.classify 0uy))
+  = Seq.init_index_ r (fun j -> if i * r + j < Seq.length s
+                             then Seq.index s (i * r + j)
+                             else S8.classify 0uy) k
+
+let padding_index (r: rate_t) (suffix: U8.t) (n: nat) (i: nat { i < pad_len r n })
+  : Lemma (Seq.index (padding r suffix n) i == pad_byte suffix (pad_len r n) i)
+  = Seq.init_index_ (pad_len r n) (pad_byte suffix (pad_len r n)) i
+
+let squeeze_index (r: rate_t) (s: state) (outlen: nat) (i: nat { i < outlen })
+  : Lemma (Seq.index (squeeze r s outlen) i ==
+           state_byte (squeeze_state (i / r) s) (i % r))
+  = Seq.init_index_ outlen (fun j ->
+      Math.lemma_mod_lt j r;
+      state_byte (squeeze_state (j / r) s) (j % r)) i
+
+(** [padded] is [msg] then the padding, spelled out one byte at a time. *)
+let padded_index (r: rate_t) (suffix: U8.t) (msg: Seq.seq S8.t)
+                 (i: nat { i < Seq.length msg + pad_len r (Seq.length msg) })
+  : Lemma (padded_len r suffix msg;
+           Seq.index (padded r suffix msg) i ==
+           (if i < Seq.length msg then Seq.index msg i
+            else pad_byte suffix (pad_len r (Seq.length msg)) (i - Seq.length msg)))
+  = padded_len r suffix msg;
+    let p = padding r suffix (Seq.length msg) in
+    if i < Seq.length msg
+    then Seq.lemma_index_app1 msg p i
+    else (Seq.lemma_index_app2 msg p i;
+          padding_index r suffix (Seq.length msg) (i - Seq.length msg))
+
+(** The number of blocks is one more than the number of whole message blocks:
+    the padding is never empty, and never spills into a second block. *)
+let nblocks_eq (r: rate_t) (msg: Seq.seq S8.t)
+  : Lemma (nblocks r msg == Seq.length msg / r + 1)
+  = let n = Seq.length msg in
+    Math.lemma_mod_lt n r;
+    Math.euclidean_division_definition n r;
+    Math.distributivity_add_left (n / r) 1 r;
+    Math.multiple_division_lemma (n / r + 1) r
