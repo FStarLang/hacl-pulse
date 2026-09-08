@@ -37,6 +37,7 @@ open Spec.HMAC
 open Spec.HKDF
 open Hacl.Hash.SHA2.Core
 open Hacl.HMAC.Core
+open Hacl.Impl.Copy
 
 module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
@@ -48,72 +49,11 @@ module S8 = Hacl.Secret.UInt8
 
 (** {2 Small helpers} *)
 
-inline_for_extraction
-let szmin (a b: SZ.t) : r: SZ.t { SZ.v r == (if SZ.v a <= SZ.v b then SZ.v a else SZ.v b) } =
-  if SZ.lte a b then a else b
-
 (** The scratch buffer never exceeds a couple of hundred bytes plus [info]. *)
 let round_sizes (#t: Type0) {| word t |} (p: params t)
   : Lemma (255 * (hash_bytes p) < pow2 16 /\ hash_bytes p <= 8 * bytes #t)
   = assert_norm (255 * 128 < pow2 16)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
-
-(** [dst[base .. base+n) <- src[0 .. n)]. *)
-fn copy_at (dst: S.slice S8.t) (base: SZ.t) (src: S.slice S8.t) (n: SZ.t)
-           (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
-         pure (SZ.v base + SZ.v n <= Seq.length vd /\ SZ.v n <= Seq.length vs)
-ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
-        pure (Seq.length vd' == Seq.length vd /\
-              SZ.v base + SZ.v n <= Seq.length vd' /\ SZ.v n <= Seq.length vs /\
-              (forall (k: nat). k < SZ.v n ==>
-                 Seq.index vd' (SZ.v base + k) == Seq.index vs k) /\
-              (forall (k: nat). k < Seq.length vd /\ (k < SZ.v base \/ SZ.v base + SZ.v n <= k) ==>
-                 Seq.index vd' k == Seq.index vd k))
-{
-  S.pts_to_len dst;
-  S.pts_to_len src;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to dst vd' ** S.pts_to src #ps vs **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == Seq.length vd /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index vd' (SZ.v base + k) == Seq.index vs k) /\
-          (forall (k: nat). k < Seq.length vd /\ (k < SZ.v base \/ SZ.v base + SZ.v vi <= k) ==>
-             Seq.index vd' k == Seq.index vd k))
-  decreases (SZ.v n - SZ.v (!i))
-  {
-    let vi = !i;
-    SZ.fits_lte (SZ.v base + SZ.v vi) (Seq.length vd);
-    let x = S.(src.(vi));
-    S.((dst.(SZ.add base vi) <- x));
-    i := SZ.add vi 1sz;
-  };
-}
-
-(** Write as much of the digest [dg] into [out] at offset [base] as fits. *)
-fn write_chunk (out: S.slice S8.t) (base: SZ.t) (dg: S.slice S8.t)
-               (#vout: erased (Seq.seq S8.t)) (#pd: perm) (#vdg: erased (Seq.seq S8.t))
-requires S.pts_to out vout ** S.pts_to dg #pd vdg **
-         pure (SZ.v base <= Seq.length vout)
-ensures exists* vout'. S.pts_to out vout' ** S.pts_to dg #pd vdg **
-        pure (Seq.length vout' == Seq.length vout /\
-              SZ.v base <= Seq.length vout' /\
-              (forall (k: nat). k < SZ.v base ==> Seq.index vout' k == Seq.index vout k) /\
-              (forall (k: nat). k < Seq.length vdg /\ SZ.v base + k < Seq.length vout ==>
-                 Seq.index vout' (SZ.v base + k) == Seq.index vdg k))
-{
-  S.pts_to_len out;
-  S.pts_to_len dg;
-  let ol = S.len out;
-  let dl = S.len dg;
-  let cnt = szmin dl (SZ.sub ol base);
-  copy_at out base dg cnt;
-}
-
-#pop-options
 
 (** {2 One round} *)
 
