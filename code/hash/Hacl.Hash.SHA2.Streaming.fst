@@ -39,6 +39,7 @@ open Spec.SHA2
 open Spec.SHA2.Streaming
 open Hacl.Hash.SHA2.Core
 open Hacl.Impl.Copy
+open Hacl.Spec.Chunks
 
 module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
@@ -103,69 +104,6 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
     [hash_blocks] states its contract against the padding of the whole
     message; [absorb_congr] says that is the same thing as the [n]-block fold
     of [seen], since the two agree on the bytes that have been absorbed. *)
-
-(** Splitting a sequence in three and re-appending is the identity.  Stated as a
-    standalone lemma so that the (extensional) proof is not attempted inside the
-    large context of a Pulse function. *)
-let split3 (#a: Type) (s: Seq.seq a) (i: nat) (j: nat)
-  : Lemma (requires i <= j /\ j <= Seq.length s)
-          (ensures Seq.append (Seq.slice s 0 i)
-                     (Seq.append (Seq.slice s i j) (Seq.slice s j (Seq.length s))) == s)
-  = Seq.lemma_eq_elim (Seq.append (Seq.slice s 0 i)
-                        (Seq.append (Seq.slice s i j) (Seq.slice s j (Seq.length s)))) s
-
-(** The pointwise facts that relate the buffer and the caller's data to the
-    message seen so far.  They are stated over plain sequences, outside Pulse,
-    because the E-matching needed for [Seq.append] and the multiplication by the
-    block length does not survive the size of a Pulse context. *)
-
-let index_append_agrees (#a: Type) (s1 s2: Seq.seq a) (i: nat)
-  : Lemma (requires i < Seq.length s1 + Seq.length s2)
-          (ensures Seq.index (Seq.append s1 s2) i ==
-                   (if i < Seq.length s1 then Seq.index s1 i
-                    else Seq.index s2 (i - Seq.length s1)))
-  = if i < Seq.length s1 then Seq.lemma_index_app1 s1 s2 i
-    else Seq.lemma_index_app2 s1 s2 i
-
-(** After copying [fill] bytes of [vdata] into [vbuf] at offset [blen], the
-    first [blen + fill] bytes of the buffer are block [nb0] of [seen ++ vdata]. *)
-let buf_agrees (bl: pos) (seen vdata vbuf vbuf': Seq.seq S8.t)
-               (nb0 blen fill: nat)
-  : Lemma (requires
-      Seq.length seen == nb0 * bl + blen /\
-      blen + fill <= Seq.length vbuf' /\ blen <= Seq.length vbuf /\ fill <= Seq.length vdata /\
-      (forall (k: nat). k < blen ==> Seq.index vbuf' k == Seq.index vbuf k) /\
-      (forall (k: nat). k < fill ==> Seq.index vbuf' (blen + k) == Seq.index vdata k) /\
-      (forall (k: nat). k < blen ==> Seq.index vbuf k == Seq.index seen (nb0 * bl + k)))
-    (ensures forall (k: nat). k < blen + fill ==>
-       Seq.index vbuf' k == Seq.index (Seq.append seen vdata) (nb0 * bl + k))
-  = let aux (k: nat{k < blen + fill})
-      : Lemma (Seq.index vbuf' k == Seq.index (Seq.append seen vdata) (nb0 * bl + k))
-      = index_append_agrees seen vdata (nb0 * bl + k)
-    in Classical.forall_intro aux
-
-(** The buffer holds exactly the bytes of [seen] past its last whole block. *)
-let buf_is_tail (bl: pos) (seen vbuf: Seq.seq S8.t) (nb0 blen: nat)
-  : Lemma (requires Seq.length seen == nb0 * bl + blen /\ blen <= Seq.length vbuf /\
-                    (forall (k: nat). k < blen ==>
-                       Seq.index vbuf k == Seq.index seen (nb0 * bl + k)))
-          (ensures Seq.append (Seq.slice seen 0 (nb0 * bl)) (Seq.slice vbuf 0 blen) == seen)
-  = Seq.lemma_eq_elim
-      (Seq.append (Seq.slice seen 0 (nb0 * bl)) (Seq.slice vbuf 0 blen)) seen
-
-(** Block [nb1] of [seen ++ vdata] onwards lives at offset [off] of [vdata],
-    provided the first [nb1] blocks are exactly [seen] followed by [off] bytes. *)
-let tail_agrees (bl: pos) (seen vdata: Seq.seq S8.t) (nb1 off n: nat)
-  : Lemma (requires nb1 * bl == Seq.length seen + off /\ off + n <= Seq.length vdata)
-          (ensures forall (k: nat). k < n ==>
-             Seq.index vdata (off + k) ==
-             Seq.index (Seq.append seen vdata) (nb1 * bl + k))
-  = let aux (k: nat{k < n})
-      : Lemma (Seq.index vdata (off + k) ==
-               Seq.index (Seq.append seen vdata) (nb1 * bl + k))
-      = index_append_agrees seen vdata (nb1 * bl + k)
-    in Classical.forall_intro aux
-
 
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 

@@ -11,8 +11,9 @@ library uses the feature.  `design/` records what HACL\* does and
 
 Status: the SHA-2 family (SHA-224/256/384/512) one-shot and incremental, HMAC
 over it, HKDF over that, and the SHA-3 family (SHA3-224/256/384/512 and
-SHAKE128/256) are specified, implemented, verified, extracted, and tested
-against the FIPS 180-4, FIPS 202, RFC 4231 and RFC 5869 vectors.
+SHAKE128/256) one-shot and incremental, are specified, implemented, verified,
+extracted, and tested against the FIPS 180-4, FIPS 202, RFC 4231 and RFC 5869
+vectors.
 
 ```
 make            verify, extract, compile, test
@@ -270,6 +271,44 @@ beyond Z3 in a Pulse context, though the `rc` table's 24 straight-line writes
 are fine, because there the postcondition is the same chain of updates and the
 match is syntactic.
 
+### The incremental sponge
+
+The streaming interface to SHA-3 is the same shape as the one to SHA-2 --
+three flat pieces of memory, no allocation, no error code -- with the rate
+where the block length was:
+
+```c
+uint64_t acc[25];   /* the Keccak state, as lanes */
+uint8_t  buf[168];  /* one rate's worth of buffered bytes; 144, 136, 104 or 72
+                       for the four SHA-3s, 168 for SHAKE128 */
+size_t   total;
+```
+
+`Spec.SHA3.Streaming.state_ok` says the lanes are `sabsorb r seen (|seen| / r)`
+-- `seen`'s whole blocks, absorbed and permuted -- and that the first
+`|seen| % r` bytes of the buffer are the rest.  As in SHA-2 the buffer is kept
+strictly partial, and `update` xors whole blocks straight out of the caller's
+data.
+
+`digest` is where the sponge differs.  It copies the 25 lanes to the stack,
+builds the padded final block there out of the buffered tail (the same
+`last_block` the one-shot uses), absorbs it into the copy and squeezes from
+the copy, so the real state is untouched.  That is what lets a SHAKE state be
+squeezed at 16 bytes and then at 200 and get the same stream twice, and lets
+an `update` after a `digest` carry on with the same message.
+`tests/test_sha3_streaming.c` checks all three, plus the FIPS 202 messages fed
+in nineteen chunk sizes that straddle every one of the five rates from both
+sides.
+
+One copy of the code serves all six algorithms, since the rate and the
+domain-separation byte are ordinary runtime arguments; `Hacl.Streaming.SHA3`
+names the six and `Hacl.Streaming.SHA3.Ptr` is the C ABI.  The cost is that
+`update` writes the round-constant and rotation tables into stack arrays on
+every call, forty-nine stores whatever the call absorbs, because the
+direct-to-C backend cannot yet emit a constant global.  That is a backend
+limitation, not an interface one.
+
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -343,8 +382,24 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   never past the limit, and recover the index with `SZ.div` where it is needed.
   For the same reason, hoist `SZ.div`/`SZ.rem` into real `let`s: even
   `SZ.v b / SZ.v r >= 0` times out as an inline argument in a large context.
+* **Shape the lemma like the loop, not like the spec.**  When the goal indexes
+  at `base + i*r + k` and the hypothesis at `Seq.index msg (base + k)`,
+  no amount of rewriting will make E-matching bridge the two.  What works is a
+  spec lemma that takes the whole run -- the number of blocks, the block index
+  and the base offset -- as arguments and does the instantiation in a small
+  context, ending in the caller's exact syntactic shape
+  (`Spec.SHA3.Streaming.block_eq_slice_at`).
+* **`unfold S.subslice_rest` is ambiguous when two subslices are live.**
+  `subslice_rest` is a plain `let`, so it can be unfolded at explicit
+  arguments: `unfold (S.subslice_rest tail buf 1.0R 0sz blen vbuf);`.  Full
+  permission is written `1.0R`.
+* **A callee's `ensures` is all you get.**  `squeeze_impl` does not promise
+  anything about the length of the scratch buffers it was handed, so a caller
+  whose own postcondition mentions them has to re-establish it -- one
+  `S.pts_to_len` at each end of the function, since a slice's length never
+  changes.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: streaming
-SHA-3, BLAKE2, ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: BLAKE2,
+ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
