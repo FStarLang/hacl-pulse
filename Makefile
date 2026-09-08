@@ -24,6 +24,10 @@ CUSTARD_ENTRIES_Hacl.Streaming.SHA2.Ptr := \
   sha384_init sha384_update sha384_digest \
   sha512_init sha512_update sha512_digest
 
+C_UNITS += Hacl.Hash.SHA3.Ptr
+CUSTARD_ENTRIES_Hacl.Hash.SHA3.Ptr := \
+  sha3_224 sha3_256 sha3_384 sha3_512 shake128 shake256
+
 C_UNITS += Hacl.HMAC.Ptr
 CUSTARD_ENTRIES_Hacl.HMAC.Ptr := hmac_sha224 hmac_sha256 hmac_sha384 hmac_sha512
 
@@ -35,6 +39,7 @@ CUSTARD_ENTRIES_Hacl.HKDF.Ptr := \
 # Which unit each C test links against; see mk/test.mk.
 TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
+TEST_UNITS_test_sha3 := Hacl.Hash.SHA3.Ptr
 TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
 TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 
