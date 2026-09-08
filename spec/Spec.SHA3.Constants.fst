@@ -27,6 +27,7 @@ module Spec.SHA3.Constants
 module S64 = Hacl.Secret.UInt64
 module U64 = FStar.UInt64
 module Seq = FStar.Seq
+module U32 = FStar.UInt32
 
 unfold let up (#a: Type) (#n: nat) (s: Seq.lseq a n) (i: nat { i < n }) (x: a) : Seq.lseq a n =
   Seq.upd s i x
@@ -91,3 +92,38 @@ let rotc (i: nat { i < 25 }) : n: nat { n < 64 } =
   | 22 -> 61
   | 23 -> 56
   | _  -> 14
+
+(** Twenty-five concrete offsets imply the pointwise characterisation.  This
+    is proved here, where nothing else is in scope; asking a Pulse function's
+    verification condition to case-split on [rotc] does not go through. *)
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+let rotc_ok (v: Seq.seq U32.t)
+  : Lemma (requires Seq.length v == 25 /\
+                    Seq.index v  0 ==  0ul /\
+                    Seq.index v  1 ==  1ul /\
+                    Seq.index v  2 == 62ul /\
+                    Seq.index v  3 == 28ul /\
+                    Seq.index v  4 == 27ul /\
+                    Seq.index v  5 == 36ul /\
+                    Seq.index v  6 == 44ul /\
+                    Seq.index v  7 ==  6ul /\
+                    Seq.index v  8 == 55ul /\
+                    Seq.index v  9 == 20ul /\
+                    Seq.index v 10 ==  3ul /\
+                    Seq.index v 11 == 10ul /\
+                    Seq.index v 12 == 43ul /\
+                    Seq.index v 13 == 25ul /\
+                    Seq.index v 14 == 39ul /\
+                    Seq.index v 15 == 41ul /\
+                    Seq.index v 16 == 45ul /\
+                    Seq.index v 17 == 15ul /\
+                    Seq.index v 18 == 21ul /\
+                    Seq.index v 19 ==  8ul /\
+                    Seq.index v 20 == 18ul /\
+                    Seq.index v 21 ==  2ul /\
+                    Seq.index v 22 == 61ul /\
+                    Seq.index v 23 == 56ul /\
+                    Seq.index v 24 == 14ul)
+          (ensures forall (j: nat). j < 25 ==> U32.v (Seq.index v j) == rotc j)
+  = ()
+#pop-options

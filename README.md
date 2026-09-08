@@ -9,9 +9,10 @@ port: where HACL\* had to work around the absence of a language feature, this
 library uses the feature.  `design/` records what HACL\* does and
 `design/changes.md` the four commitments this reimplementation starts from.
 
-Status: the SHA-2 family (SHA-224/256/384/512), HMAC over it, and HKDF over
-that are specified, implemented, verified, extracted, and tested against the
-FIPS 180-4, RFC 4231 and RFC 5869 vectors.
+Status: the SHA-2 family (SHA-224/256/384/512) one-shot and incremental, HMAC
+over it, HKDF over that, and the SHA-3 family (SHA3-224/256/384/512 and
+SHAKE128/256) are specified, implemented, verified, extracted, and tested
+against the FIPS 180-4, FIPS 202, RFC 4231 and RFC 5869 vectors.
 
 ```
 make            verify, extract, compile, test
@@ -32,7 +33,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization |
-| `spec/` | pure specifications: `Spec.SHA2`, its constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
@@ -224,6 +225,51 @@ state tops out at four gigabytes.  That follows from using `FStar.SizeT` for
 every length (see `design/changes.md`); the one-shot interface has the same
 limit, and HACL* does not.
 
+### The sponge
+
+SHA-3 shares almost nothing with SHA-2, so it gets its own stack:
+`Spec.SHA3.Constants` (the round constants and rotation offsets),
+`Spec.SHA3` (the spec), `Hacl.Hash.SHA3.Core` (Keccak-f[1600]),
+`Hacl.Hash.SHA3.Sponge` (absorb and squeeze), `Hacl.Hash.SHA3` (the six named
+algorithms) and `Hacl.Hash.SHA3.Ptr` (the C ABI).
+
+Two things are different from the SHA-2 stack.
+
+*The spec is written over secret words, not `nat`.*  Everywhere else the spec
+speaks in mathematical integers and the implementation refines them, because
+everywhere else the algorithm is arithmetic.  Keccak is purely bitwise:
+rotate, xor, and-not.  A `nat`-level description would say nothing the word
+level does not, and the refinement proof would be pure noise, so `Spec.SHA3`
+is stated directly over `Hacl.Secret.UInt64.t` and the implementation's
+correctness argument is an indexwise equality of `Seq`s.
+
+*The rate is a runtime value.*  SHA3-224/256/384/512 and SHAKE128/256 differ
+only in the rate, the domain-separation byte and the output length, so there
+is one copy of the sponge, taking all three as arguments, and six thin
+wrappers.  The state is a 25-lane `S.slice S64.t` indexed `x + 5*y`, matching
+the spec's flattening; scratch is 25 lanes for the pi/rho result and 5 for the
+theta parities.
+
+Absorb xors whole message blocks straight out of the caller's buffer, and
+stages only the last, padded, block in a 200-byte stack buffer — 200 rather
+than the rate because the rate is not known at compile time.  Squeeze emits
+`min(rate, remaining)` bytes per permutation, so a SHAKE call shorter than the
+rate does exactly one permutation and a long one does not overrun.
+
+The proof needed three things that the SHA-2 proof did not.  The round steps
+(`theta_c`, `theta`, `rho_pi`, `chi`) are `[@@"opaque_to_smt"]`, because a
+transparent 25-element `Seq.init` in the context times out every query in the
+same function; each has an index lemma that `reveal_opaque`s it.  Those index
+lemmas are stated in the shape the *code* has — `theta_c_eq` in flat indices,
+`theta_step` in terms of the parity buffer, `squeeze_range_eq` in absolute
+output offsets — because a lemma one rewriting step away from the goal is a
+lemma that does not fire.  And the rotation table is filled by a loop over a
+25-way `if`-chain rather than by 25 straight-line writes: proving
+`Seq.index (upd (upd ...) 24 x) 5 == 5` through a 25-deep chain of updates is
+beyond Z3 in a Pulse context, though the `rc` table's 24 straight-line writes
+are fine, because there the postcondition is the same chain of updates and the
+match is syntactic.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -273,8 +319,32 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 * **A unit is a whole program.**  Two extracted units each contain everything
   their entry points reach, including a `custard_init_globals` of their own, so
   they cannot be linked into one binary.  One test binary per unit.
+* **Mark big `Seq.init` definitions `opaque_to_smt`.**  A spec function that
+  builds a 25-element sequence is, unfolded, 25 copies of its body in every
+  query that mentions it.  Make it opaque and give it an index lemma that
+  `reveal_opaque`s it; that one change is what made Keccak provable.
+* **A trailing `Seq.lemma_eq_elim` does not discharge a Pulse `ensures`.**  The
+  idiom that works is to name the witness and assert the goal:
+  `with v. assert (S.pts_to x v); assert (pure (reveal v \`Seq.equal\` rhs));`.
+  More generally, a lemma call whose conclusion the postcondition needs must be
+  followed by an `assert (pure ...)` restating that conclusion.
+* **`let ... in` is a syntax error inside a Pulse block**, and so is
+  `let ghost x = ...`.  A lemma that wants a local definition has to be hoisted
+  to module level — which is why `squeeze_bytes_eq` and `squeeze_range_eq` live
+  in `Spec.SHA3` rather than next to the loop that uses them.
+* **Bind the initial value of a stack array first.**
+  `let mut a = [| S8.classify 0uy; 200sz |]` gives the array the *refined*
+  element type `x:S8.t{S8.v x == 0}`, and the slice taken from it then fails to
+  match `S.slice S8.t` with an unreadable error.  `let z8 = S8.classify 0uy;`
+  first, then `[| z8; 200sz |]`.
+* **Do not multiply in a loop guard.**  `SZ.mul i r` carries a
+  `SZ.fits (v i * v r)` obligation that is not provable from the invariant.
+  Carry the product as its own variable, advanced by `r` each iteration and
+  never past the limit, and recover the index with `SZ.div` where it is needed.
+  For the same reason, hoist `SZ.div`/`SZ.rem` into real `let`s: even
+  `SZ.v b / SZ.v r >= 0` times out as an inline argument in a large context.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: SHA-3, BLAKE2,
-ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: streaming
+SHA-3, BLAKE2, ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
