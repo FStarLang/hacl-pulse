@@ -161,3 +161,96 @@ let digest_step (#t: Type0) {| w: word t |} (n: nat) (ws: Seq.lseq t n) (j: nat 
     FStar.Classical.forall_intro aux
 
 #pop-options
+
+(** {2 The same, little end first}
+
+    BLAKE2 reads and writes its words little-endian.  Rather than reuse the
+    big-endian machinery over a reversed sequence -- which would put a
+    reversal in every trigger -- the four definitions are repeated with the
+    byte order flipped.  They are short, and keeping them separate means a
+    goal about one never wakes up a lemma about the other.
+
+    The recursion peels the *first* byte, because that is the step a machine
+    loop takes: it reads the bytes from the top down, so after reading indices
+    [n-1] down to [j] the accumulator holds [le_nat (Seq.slice s j n)], and one
+    more iteration multiplies by 256 and adds byte [j-1]. *)
+
+let rec le_nat (s: Seq.seq S8.t) : GTot nat (decreases Seq.length s) =
+  let n = Seq.length s in
+  if n = 0 then 0
+  else S8.v (Seq.index s 0) + 256 * le_nat (Seq.slice s 1 n)
+
+let rec le_nat_bound (s: Seq.seq S8.t)
+  : Lemma (ensures le_nat s < pow2 (8 * Seq.length s)) (decreases Seq.length s)
+  = let n = Seq.length s in
+    if n = 0 then ()
+    else begin
+      le_nat_bound (Seq.slice s 1 n);
+      Math.pow2_plus 8 (8 * (n - 1))
+    end
+
+(** One step of a top-down accumulation: the suffix from [j] is the byte at
+    [j] plus 256 times the suffix from [j + 1]. *)
+let le_nat_cons (s: Seq.seq S8.t) (j: nat { j < Seq.length s })
+  : Lemma (le_nat (Seq.slice s j (Seq.length s)) ==
+           S8.v (Seq.index s j) + 256 * le_nat (Seq.slice s (j + 1) (Seq.length s)))
+  = let n = Seq.length s in
+    Seq.lemma_eq_intro (Seq.slice (Seq.slice s j n) 1 (n - j)) (Seq.slice s (j + 1) n)
+
+let byte_of_nat_le (n: nat) (x: nat) (i: nat { i < n }) : S8.t =
+  S8.classify (U8.uint_to_t ((x / pow2 (8 * i)) % 256))
+
+let nat_to_le (n: nat) (x: nat) : Seq.lseq S8.t n =
+  Seq.init n (byte_of_nat_le n x)
+
+let nat_to_le_index (n: nat) (x: nat) (i: nat { i < n })
+  : Lemma (S8.v (Seq.index (nat_to_le n x) i) == (x / pow2 (8 * i)) % 256)
+  = ()
+
+let word_from_le (#t: Type0) {| word t |} (s: Seq.lseq S8.t (bytes #t)) : GTot t =
+  le_nat_bound s;
+  of_v (le_nat s)
+
+let word_to_le (#t: Type0) {| word t |} (x: t) : GTot (Seq.lseq S8.t (bytes #t)) =
+  nat_to_le (bytes #t) (v x)
+
+let words_from_le (#t: Type0) {| word t |} (n: nat) (s: Seq.lseq S8.t (n * bytes #t))
+  : GTot (Seq.lseq t n)
+  = Seq.init_ghost n (fun i -> word_from_le (sub_block n s i))
+
+let words_to_le (#t: Type0) {| word t |} (n: nat) (ws: Seq.lseq t n)
+  : GTot (Seq.lseq S8.t (n * bytes #t))
+  = Seq.init_ghost (n * bytes #t)
+      (fun i -> Seq.index (word_to_le (Seq.index ws (i / bytes #t))) (i % bytes #t))
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
+
+let digest_step_le (#t: Type0) {| w: word t |} (n: nat) (ws: Seq.lseq t n) (j: nat { j < n })
+                   (o: nat) (vd: Seq.seq S8.t)
+  : Lemma
+      (requires
+        o == j * bytes #t /\ Seq.length vd == n * bytes #t /\
+        o + bytes #t <= Seq.length vd /\
+        (forall (i: nat). i < o ==> Seq.index vd i == Seq.index (words_to_le n ws) i) /\
+        (forall (k: nat). k < bytes #t ==>
+           S8.v (Seq.index vd (o + k)) == (v (Seq.index ws j) / pow2 (8 * k)) % 256))
+      (ensures
+        (forall (i: nat). i < o + bytes #t ==> Seq.index vd i == Seq.index (words_to_le n ws) i))
+  = let nb = bytes #t in
+    let aux (i: nat { i < o + nb })
+      : Lemma (Seq.index vd i == Seq.index (words_to_le n ws) i)
+      = if i < o then ()
+        else begin
+          let k : nat = i - o in
+          Math.lemma_div_plus k j nb;
+          Math.small_div k nb;
+          Math.lemma_mod_plus k j nb;
+          Math.small_mod k nb;
+          assert (i / nb == j);
+          assert (i % nb == k);
+          nat_to_le_index nb (v (Seq.index ws j)) k
+        end
+    in
+    FStar.Classical.forall_intro aux
+
+#pop-options
