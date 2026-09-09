@@ -297,3 +297,156 @@ let blake2s_with (nn: (n: SZ.t { 0 < SZ.v n /\ SZ.v n <= 32 })) : params S32.t =
   nrounds = 10sz; iv = G.hide iv32; nhash_bytes = nn;
   rot1 = 16ul; rot2 = 12ul; rot3 = 8ul; rot4 = 7ul;
 }
+
+(** {2 The blocks of [data], without building [data]}
+
+    The implementation must not materialize [data key msg]: it would mean
+    copying the whole message.  Instead it reads block [i] straight out of the
+    key or the message, zero-filling past the end.  [block_of] is that view,
+    and [block_at_data] is the proof that it is the same view. *)
+
+(** The [block_len] bytes of [s] at [off], zero beyond the end of [s].  Total
+    at any offset, which is what makes it usable as a loop invariant. *)
+let pad_block (#t: Type0) {| word t |} (s: Seq.seq S8.t) (off: nat)
+  : Seq.lseq S8.t (block_len #t)
+  = Seq.init (block_len #t)
+      (fun j -> if off + j < Seq.length s then Seq.index s (off + j) else S8.classify 0uy)
+
+(** One if a key was given, and so occupies the first block; zero otherwise. *)
+let koff (#t: Type0) {| word t |} (key: Seq.seq S8.t) : nat =
+  if Seq.length key = 0 then 0 else 1
+
+let block_of (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (i: nat)
+  : Seq.lseq S8.t (block_len #t)
+  = if i < koff #t key then pad_block #t key 0
+    else pad_block #t msg ((i - koff #t key) * block_len #t)
+
+let nblocks (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) : nat =
+  Seq.length (data #t key msg) / block_len #t
+
+(** [pad_to_block] rounds the length up to a multiple of the block length. *)
+let pad_to_block_len (#t: Type0) {| word t |} (s: Seq.seq S8.t)
+  : Lemma (Seq.length (pad_to_block #t s) % block_len #t == 0 /\
+           Seq.length s <= Seq.length (pad_to_block #t s) /\
+           Seq.length (pad_to_block #t s) < Seq.length s + block_len #t)
+  = Math.lemma_mod_lt (Seq.length s) (block_len #t);
+    Math.lemma_mod_plus_distr_l (Seq.length s) (block_len #t - Seq.length s % block_len #t)
+                                (block_len #t);
+    Math.lemma_mod_add_distr (Seq.length s % block_len #t)
+                             (block_len #t - Seq.length s % block_len #t) (block_len #t)
+
+let pad_to_block_block (#t: Type0) {| word t |} (s: Seq.seq S8.t) (j: nat)
+  : Lemma (requires (j + 1) * block_len #t <= Seq.length (pad_to_block #t s))
+          (ensures block_at #t (pad_to_block #t s) (j * block_len #t)
+                   == pad_block #t s (j * block_len #t))
+  = let bl = block_len #t in
+    let p = pad_to_block #t s in
+    Math.lemma_mult_le_right bl j (j + 1);
+    assert (Seq.equal (Seq.slice p (j * bl) (j * bl + bl)) (pad_block #t s (j * bl)))
+
+(** The key, if there is one, fills exactly one block. *)
+let key_block (#t: Type0) {| word t |} (key: Seq.seq S8.t)
+  : Lemma (requires 0 < Seq.length key /\ Seq.length key <= max_key_len #t)
+          (ensures Seq.length (pad_to_block #t key) == block_len #t /\
+                   pad_to_block #t key == pad_block #t key 0)
+  = pad_to_block_len #t key;
+    assert (Seq.equal (pad_to_block #t key) (pad_block #t key 0))
+
+let data_len (#t: Type0) {| word t |} (key msg: Seq.seq S8.t)
+  : Lemma (requires Seq.length key <= max_key_len #t)
+          (ensures Seq.length (data #t key msg) % block_len #t == 0 /\
+                   0 < Seq.length (data #t key msg))
+  = let bl = block_len #t in
+    if Seq.length key = 0 then begin
+      if Seq.length msg = 0 then Math.cancel_mul_mod 1 bl
+      else pad_to_block_len #t msg
+    end else begin
+      key_block #t key;
+      pad_to_block_len #t msg;
+      Math.lemma_mod_add_distr (Seq.length (pad_to_block #t msg)) bl bl;
+      Math.cancel_mul_mod 1 bl
+    end
+
+let nblocks_bound (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (i: nat)
+  : Lemma (requires Seq.length key <= max_key_len #t /\ i < nblocks #t key msg)
+          (ensures (i + 1) * block_len #t <= Seq.length (data #t key msg))
+  = let bl = block_len #t in
+    data_len #t key msg;
+    Math.lemma_mult_le_right bl (i + 1) (nblocks #t key msg);
+    Math.lemma_div_exact (Seq.length (data #t key msg)) bl
+
+(** There is always at least one block, and if the key is the only data there
+    is exactly one. *)
+let nblocks_pos (#t: Type0) {| word t |} (key msg: Seq.seq S8.t)
+  : Lemma (requires Seq.length key <= max_key_len #t)
+          (ensures 0 < nblocks #t key msg)
+  = data_len #t key msg;
+    Math.lemma_div_exact (Seq.length (data #t key msg)) (block_len #t)
+
+let block_at_data (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (i: nat)
+  : Lemma (requires Seq.length key <= max_key_len #t /\ i < nblocks #t key msg)
+          (ensures block_at #t (data #t key msg) (i * block_len #t)
+                   == block_of #t key msg i)
+  = let bl = block_len #t in
+    let d = data #t key msg in
+    nblocks_bound #t key msg i;
+    Math.distributivity_add_left i 1 bl;
+    if Seq.length key = 0 then begin
+      if Seq.length msg = 0 then begin
+        Math.multiple_division_lemma 1 bl;
+        assert (Seq.equal (Seq.slice d (i * bl) (i * bl + bl)) (pad_block #t msg (i * bl)))
+      end else begin
+        pad_to_block_len #t msg;
+        Seq.lemma_eq_elim d (pad_to_block #t msg);
+        pad_to_block_block #t msg i
+      end
+    end else begin
+      key_block #t key;
+      pad_to_block_len #t msg;
+      let mb = pad_to_block #t msg in
+      if i = 0 then
+        assert (Seq.equal (Seq.slice d 0 bl) (pad_block #t key 0))
+      else begin
+        Math.distributivity_sub_left i 1 bl;
+        assert (Seq.equal (Seq.slice d (i * bl) (i * bl + bl))
+                          (Seq.slice mb ((i - 1) * bl) ((i - 1) * bl + bl)));
+        pad_to_block_block #t msg (i - 1)
+      end
+    end
+
+(** How many blocks there are, in the form the implementation computes it: a
+    division and a remainder on the message length, plus one for the key
+    block, with the empty unkeyed hash still compressing a block of zeros. *)
+let pad_to_block_nblocks (#t: Type0) {| word t |} (s: Seq.seq S8.t)
+  : Lemma (Seq.length (pad_to_block #t s) / block_len #t ==
+           (if Seq.length s % block_len #t = 0
+            then Seq.length s / block_len #t
+            else Seq.length s / block_len #t + 1))
+  = let bl = block_len #t in
+    let n = Seq.length s in
+    Math.euclidean_division_definition n bl;
+    if n % bl = 0 then Math.multiple_division_lemma (n / bl) bl
+    else begin
+      Math.distributivity_add_left (n / bl) 1 bl;
+      Math.multiple_division_lemma (n / bl + 1) bl
+    end
+
+let nblocks_eq (#t: Type0) {| word t |} (key msg: Seq.seq S8.t)
+  : Lemma (requires Seq.length key <= max_key_len #t)
+          (ensures nblocks #t key msg ==
+                   (if Seq.length key = 0 && Seq.length msg = 0 then 1
+                    else koff #t key +
+                         (if Seq.length msg % block_len #t = 0
+                          then Seq.length msg / block_len #t
+                          else Seq.length msg / block_len #t + 1)))
+  = let bl = block_len #t in
+    pad_to_block_nblocks #t msg;
+    if Seq.length key = 0 then begin
+      if Seq.length msg = 0 then Math.multiple_division_lemma 1 bl
+      else Seq.lemma_eq_elim (data #t key msg) (pad_to_block #t msg)
+    end else begin
+      key_block #t key;
+      pad_to_block_len #t msg;
+      Seq.lemma_len_append (pad_to_block #t key) (pad_to_block #t msg);
+      Math.lemma_div_plus (Seq.length (pad_to_block #t msg)) 1 bl
+    end
