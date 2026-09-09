@@ -2,20 +2,19 @@
 #include "Hacl_HMAC_Ptr.h"
 
 static Pulse_Lib_Slice_slice__uint8 Pulse_Lib_Slice_arrayptr_to_slice_intro__t(uint8_t *a, size_t alen);
+static const uint64_t Hacl_Hash_SHA2_Tables_k512_arr[80] = { 0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL, 0x3956c25bf348b538ULL, 0x59f111f1b605d019ULL, 0x923f82a4af194f9bULL, 0xab1c5ed5da6d8118ULL, 0xd807aa98a3030242ULL, 0x12835b0145706fbeULL, 0x243185be4ee4b28cULL, 0x550c7dc3d5ffb4e2ULL, 0x72be5d74f27b896fULL, 0x80deb1fe3b1696b1ULL, 0x9bdc06a725c71235ULL, 0xc19bf174cf692694ULL, 0xe49b69c19ef14ad2ULL, 0xefbe4786384f25e3ULL, 0xfc19dc68b8cd5b5ULL, 0x240ca1cc77ac9c65ULL, 0x2de92c6f592b0275ULL, 0x4a7484aa6ea6e483ULL, 0x5cb0a9dcbd41fbd4ULL, 0x76f988da831153b5ULL, 0x983e5152ee66dfabULL, 0xa831c66d2db43210ULL, 0xb00327c898fb213fULL, 0xbf597fc7beef0ee4ULL, 0xc6e00bf33da88fc2ULL, 0xd5a79147930aa725ULL, 0x6ca6351e003826fULL, 0x142929670a0e6e70ULL, 0x27b70a8546d22ffcULL, 0x2e1b21385c26c926ULL, 0x4d2c6dfc5ac42aedULL, 0x53380d139d95b3dfULL, 0x650a73548baf63deULL, 0x766a0abb3c77b2a8ULL, 0x81c2c92e47edaee6ULL, 0x92722c851482353bULL, 0xa2bfe8a14cf10364ULL, 0xa81a664bbc423001ULL, 0xc24b8b70d0f89791ULL, 0xc76c51a30654be30ULL, 0xd192e819d6ef5218ULL, 0xd69906245565a910ULL, 0xf40e35855771202aULL, 0x106aa07032bbd1b8ULL, 0x19a4c116b8d2d0c8ULL, 0x1e376c085141ab53ULL, 0x2748774cdf8eeb99ULL, 0x34b0bcb5e19b48a8ULL, 0x391c0cb3c5c95a63ULL, 0x4ed8aa4ae3418acbULL, 0x5b9cca4f7763e373ULL, 0x682e6ff3d6b2b8a3ULL, 0x748f82ee5defb2fcULL, 0x78a5636f43172f60ULL, 0x84c87814a1f0ab72ULL, 0x8cc702081a6439ecULL, 0x90befffa23631e28ULL, 0xa4506cebde82bde9ULL, 0xbef9a3f7b2c67915ULL, 0xc67178f2e372532bULL, 0xca273eceea26619cULL, 0xd186b8c721c0c207ULL, 0xeada7dd6cde0eb1eULL, 0xf57d4f7fee6ed178ULL, 0x6f067aa72176fbaULL, 0xa637dc5a2c898a6ULL, 0x113f9804bef90daeULL, 0x1b710b35131c471bULL, 0x28db77f523047d84ULL, 0x32caab7b40c72493ULL, 0x3c9ebe0a15c9bebcULL, 0x431d67c49c100d4cULL, 0x4cc5d4becb3e42b6ULL, 0x597f299cfc657e2aULL, 0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL };
 static Pulse_Lib_Slice_slice__uint64 Pulse_Lib_Slice_from_array__t(uint64_t *a, size_t alen);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v);
-static void Hacl_Hash_SHA2_fill_k512(Pulse_Lib_Slice_slice__uint64 b);
-static void Hacl_Hash_SHA2_fill_iv512(Pulse_Lib_Slice_slice__uint64 b);
+static const uint64_t Hacl_Hash_SHA2_Tables_iv512_arr[8] = { 0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL, 0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL, 0x510e527fade682d1ULL, 0x9b05688c2b3e6c1fULL, 0x1f83d9abfb41bd6bULL, 0x5be0cd19137e2179ULL };
 static size_t Hacl_Secret_Word_nbytes__t = 8;
-static size_t Hacl_Hash_SHA2_Core_block_len_sz__t;
+static size_t Hacl_Hash_SHA2_Core_block_len_sz__t = (((size_t)16ULL) * ((size_t)8ULL));
 static Pulse_Lib_Slice_slice__uint8 Pulse_Lib_Slice_from_array__t_1(uint8_t *a, size_t alen);
 static size_t Pulse_Lib_Slice_len__t(Pulse_Lib_Slice_slice__uint8 s);
 static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(Pulse_Lib_Slice_slice__uint8 a, size_t i);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v);
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v);
 static void Hacl_Impl_Copy_copy_prefix(Pulse_Lib_Slice_slice__uint8 dst, Pulse_Lib_Slice_slice__uint8 src, size_t n);
-static uint64_t Hacl_Secret_UInt64_zero = 0;
-static uint64_t Hacl_Secret_Word_zero__t;
+static uint64_t Hacl_Secret_Word_zero__t = 0;
 static uint64_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(Pulse_Lib_Slice_slice__uint64 a, size_t i);
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v);
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t eta);
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s);
@@ -46,11 +45,11 @@ static uint64_t Spec_SHA2__Maj__t(uint64_t x, uint64_t y, uint64_t z);
 static void Hacl_Hash_SHA2_Core_update_block_impl__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 block, size_t off);
 static void Hacl_Hash_SHA2_Core_hash_blocks__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull);
 static size_t Hacl_Secret_Word_nbytes__t_1 = 8;
-static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_1;
-static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_1;
+static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_1 = (((size_t)16ULL) * ((size_t)8ULL));
+static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_1 = (((size_t)2ULL) * ((size_t)8ULL));
 static void Hacl_Hash_SHA2_Core_write_len_be(Pulse_Lib_Slice_slice__uint8 b, size_t off, size_t len);
 static void Hacl_Hash_SHA2_Core_build_tail__t(Pulse_Lib_Slice_slice__uint8 tl, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t base, size_t rem, size_t ntail);
-static uint64_t Hacl_Secret_Word_zero__t_1;
+static uint64_t Hacl_Secret_Word_zero__t_1 = 0;
 static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t eta);
 static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t eta);
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
@@ -70,7 +69,7 @@ static void Hacl_Hash_SHA2_Core_hash_blocks__t_1(Pulse_Lib_Slice_slice__uint64 k
 static void Hacl_Hash_SHA2_Core_hash_prefixed__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_HMAC_Core_hmac_impl__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
 static void Hacl_HMAC_hmac_sha512(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
-static void Hacl_Hash_SHA2_fill_iv384(Pulse_Lib_Slice_slice__uint64 b);
+static const uint64_t Hacl_Hash_SHA2_Tables_iv384_arr[8] = { 0xcbbb9d5dc1059ed8ULL, 0x629a292a367cd507ULL, 0x9159015a3070dd17ULL, 0x152fecd8f70e5939ULL, 0x67332667ffc00b31ULL, 0x8eb44a8768581511ULL, 0xdb0c2e0d64f98fa7ULL, 0x47b5481dbefa4fa4ULL };
 static uint64_t Spec_SHA2__sigma1__t_1(uint64_t x);
 static uint64_t Spec_SHA2__sigma0__t_1(uint64_t x);
 static void Hacl_Hash_SHA2_Core_ws_expand__t_2(Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint8 block, size_t off);
@@ -85,16 +84,15 @@ static void Hacl_HMAC_Core_key_block_impl__t_1(Pulse_Lib_Slice_slice__uint64 kt,
 static void Hacl_Hash_SHA2_Core_hash_prefixed__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_HMAC_Core_hmac_impl__t_1(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
 static void Hacl_HMAC_hmac_sha384(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
+static const uint32_t Hacl_Hash_SHA2_Tables_k256_arr[64] = { 0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU, 0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U, 0xd807aa98U, 0x12835b01U, 0x243185beU, 0x550c7dc3U, 0x72be5d74U, 0x80deb1feU, 0x9bdc06a7U, 0xc19bf174U, 0xe49b69c1U, 0xefbe4786U, 0xfc19dc6U, 0x240ca1ccU, 0x2de92c6fU, 0x4a7484aaU, 0x5cb0a9dcU, 0x76f988daU, 0x983e5152U, 0xa831c66dU, 0xb00327c8U, 0xbf597fc7U, 0xc6e00bf3U, 0xd5a79147U, 0x6ca6351U, 0x14292967U, 0x27b70a85U, 0x2e1b2138U, 0x4d2c6dfcU, 0x53380d13U, 0x650a7354U, 0x766a0abbU, 0x81c2c92eU, 0x92722c85U, 0xa2bfe8a1U, 0xa81a664bU, 0xc24b8b70U, 0xc76c51a3U, 0xd192e819U, 0xd6990624U, 0xf40e3585U, 0x106aa070U, 0x19a4c116U, 0x1e376c08U, 0x2748774cU, 0x34b0bcb5U, 0x391c0cb3U, 0x4ed8aa4aU, 0x5b9cca4fU, 0x682e6ff3U, 0x748f82eeU, 0x78a5636fU, 0x84c87814U, 0x8cc70208U, 0x90befffaU, 0xa4506cebU, 0xbef9a3f7U, 0xc67178f2U };
 static Pulse_Lib_Slice_slice__uint32 Pulse_Lib_Slice_from_array__t_2(uint32_t *a, size_t alen);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v);
-static void Hacl_Hash_SHA2_fill_k256(Pulse_Lib_Slice_slice__uint32 b);
-static void Hacl_Hash_SHA2_fill_iv256(Pulse_Lib_Slice_slice__uint32 b);
+static const uint32_t Hacl_Hash_SHA2_Tables_iv256_arr[8] = { 0x6a09e667U, 0xbb67ae85U, 0x3c6ef372U, 0xa54ff53aU, 0x510e527fU, 0x9b05688cU, 0x1f83d9abU, 0x5be0cd19U };
 static size_t Hacl_Secret_Word_nbytes__t_2 = 4;
-static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_2;
-static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_2;
-static uint32_t Hacl_Secret_UInt32_zero = 0;
-static uint32_t Hacl_Secret_Word_zero__t_2;
+static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_2 = (((size_t)16ULL) * ((size_t)4ULL));
+static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_2 = (((size_t)2ULL) * ((size_t)4ULL));
+static uint32_t Hacl_Secret_Word_zero__t_2 = 0;
 static uint32_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_2(Pulse_Lib_Slice_slice__uint32 a, size_t i);
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v);
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_Word_logor__t_2(uint32_t x, uint32_t eta);
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s);
@@ -136,7 +134,7 @@ static void Hacl_HMAC_Core_fill_xor__t_1(Pulse_Lib_Slice_slice__uint8 pad, Pulse
 static void Hacl_Hash_SHA2_Core_hash_prefixed__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 input);
 static void Hacl_HMAC_Core_hmac_impl__t_2(Pulse_Lib_Slice_slice__uint32 kt, Pulse_Lib_Slice_slice__uint32 ivt, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
 static void Hacl_HMAC_hmac_sha256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
-static void Hacl_Hash_SHA2_fill_iv224(Pulse_Lib_Slice_slice__uint32 b);
+static const uint32_t Hacl_Hash_SHA2_Tables_iv224_arr[8] = { 0xc1059ed8U, 0x367cd507U, 0x3070dd17U, 0xf70e5939U, 0xffc00b31U, 0x68581511U, 0x64f98fa7U, 0xbefa4fa4U };
 static uint32_t Spec_SHA2__sigma1__t_3(uint32_t x);
 static uint32_t Spec_SHA2__sigma0__t_3(uint32_t x);
 static void Hacl_Hash_SHA2_Core_ws_expand__t_4(Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint8 block, size_t off);
@@ -160,104 +158,6 @@ static Pulse_Lib_Slice_slice__uint64 Pulse_Lib_Slice_from_array__t(uint64_t *a, 
   return (Pulse_Lib_Slice_slice__uint64){ .elt = a, .len = alen };
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v) {
-  a.elt[i] = v;
-}
-
-static void Hacl_Hash_SHA2_fill_k512(Pulse_Lib_Slice_slice__uint64 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 0, 0x428a2f98d728ae22ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 1, 0x7137449123ef65cdULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 2, 0xb5c0fbcfec4d3b2fULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 3, 0xe9b5dba58189dbbcULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 4, 0x3956c25bf348b538ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 5, 0x59f111f1b605d019ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 6, 0x923f82a4af194f9bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 7, 0xab1c5ed5da6d8118ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 8, 0xd807aa98a3030242ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 9, 0x12835b0145706fbeULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 10, 0x243185be4ee4b28cULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 11, 0x550c7dc3d5ffb4e2ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 12, 0x72be5d74f27b896fULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 13, 0x80deb1fe3b1696b1ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 14, 0x9bdc06a725c71235ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 15, 0xc19bf174cf692694ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 16, 0xe49b69c19ef14ad2ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 17, 0xefbe4786384f25e3ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 18, 0xfc19dc68b8cd5b5ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 19, 0x240ca1cc77ac9c65ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 20, 0x2de92c6f592b0275ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 21, 0x4a7484aa6ea6e483ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 22, 0x5cb0a9dcbd41fbd4ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 23, 0x76f988da831153b5ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 24, 0x983e5152ee66dfabULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 25, 0xa831c66d2db43210ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 26, 0xb00327c898fb213fULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 27, 0xbf597fc7beef0ee4ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 28, 0xc6e00bf33da88fc2ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 29, 0xd5a79147930aa725ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 30, 0x6ca6351e003826fULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 31, 0x142929670a0e6e70ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 32, 0x27b70a8546d22ffcULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 33, 0x2e1b21385c26c926ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 34, 0x4d2c6dfc5ac42aedULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 35, 0x53380d139d95b3dfULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 36, 0x650a73548baf63deULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 37, 0x766a0abb3c77b2a8ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 38, 0x81c2c92e47edaee6ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 39, 0x92722c851482353bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 40, 0xa2bfe8a14cf10364ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 41, 0xa81a664bbc423001ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 42, 0xc24b8b70d0f89791ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 43, 0xc76c51a30654be30ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 44, 0xd192e819d6ef5218ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 45, 0xd69906245565a910ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 46, 0xf40e35855771202aULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 47, 0x106aa07032bbd1b8ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 48, 0x19a4c116b8d2d0c8ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 49, 0x1e376c085141ab53ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 50, 0x2748774cdf8eeb99ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 51, 0x34b0bcb5e19b48a8ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 52, 0x391c0cb3c5c95a63ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 53, 0x4ed8aa4ae3418acbULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 54, 0x5b9cca4f7763e373ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 55, 0x682e6ff3d6b2b8a3ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 56, 0x748f82ee5defb2fcULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 57, 0x78a5636f43172f60ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 58, 0x84c87814a1f0ab72ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 59, 0x8cc702081a6439ecULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 60, 0x90befffa23631e28ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 61, 0xa4506cebde82bde9ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 62, 0xbef9a3f7b2c67915ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 63, 0xc67178f2e372532bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 64, 0xca273eceea26619cULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 65, 0xd186b8c721c0c207ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 66, 0xeada7dd6cde0eb1eULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 67, 0xf57d4f7fee6ed178ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 68, 0x6f067aa72176fbaULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 69, 0xa637dc5a2c898a6ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 70, 0x113f9804bef90daeULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 71, 0x1b710b35131c471bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 72, 0x28db77f523047d84ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 73, 0x32caab7b40c72493ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 74, 0x3c9ebe0a15c9bebcULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 75, 0x431d67c49c100d4cULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 76, 0x4cc5d4becb3e42b6ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 77, 0x597f299cfc657e2aULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 78, 0x5fcb6fab3ad6faecULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 79, 0x6c44198c4a475817ULL);
-}
-
-static void Hacl_Hash_SHA2_fill_iv512(Pulse_Lib_Slice_slice__uint64 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 0, 0x6a09e667f3bcc908ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 1, 0xbb67ae8584caa73bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 2, 0x3c6ef372fe94f82bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 3, 0xa54ff53a5f1d36f1ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 4, 0x510e527fade682d1ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 5, 0x9b05688c2b3e6c1fULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 6, 0x1f83d9abfb41bd6bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 7, 0x5be0cd19137e2179ULL);
-}
-
 static Pulse_Lib_Slice_slice__uint8 Pulse_Lib_Slice_from_array__t_1(uint8_t *a, size_t alen) {
   return (Pulse_Lib_Slice_slice__uint8){ .elt = a, .len = alen };
 }
@@ -270,7 +170,7 @@ static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(Pulse_Lib_Slice_slice__ui
   return a.elt[i];
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v) {
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v) {
   a.elt[i] = v;
 }
 
@@ -279,13 +179,17 @@ static void Hacl_Impl_Copy_copy_prefix(Pulse_Lib_Slice_slice__uint8 dst, Pulse_L
   while (i < n) {
     size_t vi = i;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(src, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(dst, vi, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(dst, vi, x);
     i = (vi + 1);
   }
 }
 
 static uint64_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(Pulse_Lib_Slice_slice__uint64 a, size_t i) {
   return a.elt[i];
+}
+
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v) {
+  a.elt[i] = v;
 }
 
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
@@ -380,7 +284,7 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t(Pulse_Lib_Slice_slice__uint64 wsb, 
   while (i < 16) {
     size_t vi = i;
     uint64_t x = Hacl_Impl_Bytes_load_be__t(block, (off + (vi * nb)));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(wsb, vi, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(wsb, vi, x);
     i = (vi + 1);
   }
   size_t j = 16;
@@ -391,7 +295,7 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t(Pulse_Lib_Slice_slice__uint64 wsb, 
     uint64_t a15 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, (vj - 15));
     uint64_t a16 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, (vj - 16));
     uint64_t x_1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Spec_SHA2__sigma1__t(a2), a7), Spec_SHA2__sigma0__t(a15)), a16);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(wsb, vj, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(wsb, vj, x_1);
     j = (vj + 1);
   }
 }
@@ -453,14 +357,14 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t(Pulse_Lib_Slice_slice__uint
     uint64_t wi = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, vi);
     uint64_t t1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(hh, Spec_SHA2__Sigma1__t(e)), Spec_SHA2__Ch__t(e, f, g)), ki), wi);
     uint64_t t2 = Hacl_Secret_Word_add_mod__t(Spec_SHA2__Sigma0__t(a), Spec_SHA2__Maj__t(a, b, c));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 0, Hacl_Secret_Word_add_mod__t(t1, t2));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 1, a);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 2, b);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 3, c);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 4, Hacl_Secret_Word_add_mod__t(d, t1));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 5, e);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 6, f);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, g);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 0, Hacl_Secret_Word_add_mod__t(t1, t2));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 1, a);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 2, b);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 3, c);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 4, Hacl_Secret_Word_add_mod__t(d, t1));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 5, e);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 6, f);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 7, g);
     i = (vi + 1);
   }
   uint64_t a1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 0);
@@ -471,14 +375,14 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t(Pulse_Lib_Slice_slice__uint
   uint64_t f1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 5);
   uint64_t g1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 6);
   uint64_t h1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 7);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 0, Hacl_Secret_Word_add_mod__t(a0, a1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 1, Hacl_Secret_Word_add_mod__t(b0, b1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 2, Hacl_Secret_Word_add_mod__t(c0, c1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 3, Hacl_Secret_Word_add_mod__t(d0, d1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 4, Hacl_Secret_Word_add_mod__t(e0, e1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 5, Hacl_Secret_Word_add_mod__t(f0, f1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 6, Hacl_Secret_Word_add_mod__t(g0, g1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 0, Hacl_Secret_Word_add_mod__t(a0, a1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 1, Hacl_Secret_Word_add_mod__t(b0, b1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 2, Hacl_Secret_Word_add_mod__t(c0, c1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 3, Hacl_Secret_Word_add_mod__t(d0, d1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 4, Hacl_Secret_Word_add_mod__t(e0, e1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 5, Hacl_Secret_Word_add_mod__t(f0, f1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 6, Hacl_Secret_Word_add_mod__t(g0, g1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
 }
 
 static void Hacl_Hash_SHA2_Core_hash_blocks__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull) {
@@ -499,7 +403,7 @@ static void Hacl_Hash_SHA2_Core_write_len_be(Pulse_Lib_Slice_slice__uint8 b, siz
     size_t vd = d;
     uint32_t vsh = sh;
     uint8_t c = (uint8_t)(bits8 >> vsh);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(b, (off + (7 - vd)), c);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, (off + (7 - vd)), c);
     d = (vd + 1);
     sh = (vsh + 8);
   }
@@ -510,11 +414,11 @@ static void Hacl_Hash_SHA2_Core_build_tail__t(Pulse_Lib_Slice_slice__uint8 tl, P
   while (c < rem) {
     size_t vc = c;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(input, (base + vc));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(tl, vc, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(tl, vc, x);
     c = (vc + 1);
   }
   uint8_t x80 = 0x80;
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(tl, rem, x80);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(tl, rem, x80);
   Hacl_Hash_SHA2_Core_write_len_be(tl, (ntail - 8), len);
 }
 
@@ -551,7 +455,7 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_1(Pulse_Lib_Slice_slice__uint64 wsb
   while (i < 16) {
     size_t vi = i;
     uint64_t x = Hacl_Impl_Bytes_load_be__t_1(block, (off + (vi * nb)));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(wsb, vi, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(wsb, vi, x);
     i = (vi + 1);
   }
   size_t j = 16;
@@ -562,7 +466,7 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_1(Pulse_Lib_Slice_slice__uint64 wsb
     uint64_t a15 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, (vj - 15));
     uint64_t a16 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, (vj - 16));
     uint64_t x_1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Spec_SHA2__sigma1__t(a2), a7), Spec_SHA2__sigma0__t(a15)), a16);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(wsb, vj, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(wsb, vj, x_1);
     j = (vj + 1);
   }
 }
@@ -592,14 +496,14 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_1(Pulse_Lib_Slice_slice__ui
     uint64_t wi = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, vi);
     uint64_t t1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(hh, Spec_SHA2__Sigma1__t(e)), Spec_SHA2__Ch__t(e, f, g)), ki), wi);
     uint64_t t2 = Hacl_Secret_Word_add_mod__t(Spec_SHA2__Sigma0__t(a), Spec_SHA2__Maj__t(a, b, c));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 0, Hacl_Secret_Word_add_mod__t(t1, t2));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 1, a);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 2, b);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 3, c);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 4, Hacl_Secret_Word_add_mod__t(d, t1));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 5, e);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 6, f);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, g);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 0, Hacl_Secret_Word_add_mod__t(t1, t2));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 1, a);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 2, b);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 3, c);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 4, Hacl_Secret_Word_add_mod__t(d, t1));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 5, e);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 6, f);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 7, g);
     i = (vi + 1);
   }
   uint64_t a1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 0);
@@ -610,14 +514,14 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_1(Pulse_Lib_Slice_slice__ui
   uint64_t f1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 5);
   uint64_t g1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 6);
   uint64_t h1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 7);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 0, Hacl_Secret_Word_add_mod__t(a0, a1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 1, Hacl_Secret_Word_add_mod__t(b0, b1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 2, Hacl_Secret_Word_add_mod__t(c0, c1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 3, Hacl_Secret_Word_add_mod__t(d0, d1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 4, Hacl_Secret_Word_add_mod__t(e0, e1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 5, Hacl_Secret_Word_add_mod__t(f0, f1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 6, Hacl_Secret_Word_add_mod__t(g0, g1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 0, Hacl_Secret_Word_add_mod__t(a0, a1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 1, Hacl_Secret_Word_add_mod__t(b0, b1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 2, Hacl_Secret_Word_add_mod__t(c0, c1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 3, Hacl_Secret_Word_add_mod__t(d0, d1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 4, Hacl_Secret_Word_add_mod__t(e0, e1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 5, Hacl_Secret_Word_add_mod__t(f0, f1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 6, Hacl_Secret_Word_add_mod__t(g0, g1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
 }
 
 static uint8_t Hacl_Secret_Cast_u64_to_u8(uint64_t x) {
@@ -636,7 +540,7 @@ static void Hacl_Impl_Bytes_store_be__t(Pulse_Lib_Slice_slice__uint8 b, size_t o
     size_t vj = j;
     uint64_t c = cur;
     size_t pos = ((off + n) - (vj + 1));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(b, pos, Hacl_Secret_Word_to_byte__t(c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, pos, Hacl_Secret_Word_to_byte__t(c));
     cur = Hacl_Secret_Word_shift_right__t(c, 8);
     j = (vj + 1);
   }
@@ -665,7 +569,7 @@ static void Hacl_Hash_SHA2_Core_write_digest__t(Pulse_Lib_Slice_slice__uint8 out
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -715,7 +619,7 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t(Pulse_Lib_Slice_slice__uint64 kt, P
   while (c < 8) {
     size_t vc = c;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(ivt, vc);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, vc, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, vc, x);
     c = (vc + 1);
   }
   uint64_t *wsarr;
@@ -749,7 +653,7 @@ static void Hacl_HMAC_Core_fill_xor__t(Pulse_Lib_Slice_slice__uint8 pad, Pulse_L
   while (i < bl) {
     size_t vi = i;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(k0, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(pad, vi, Hacl_Secret_UInt8_logxor(x, c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(pad, vi, Hacl_Secret_UInt8_logxor(x, c));
     i = (vi + 1);
   }
 }
@@ -782,7 +686,7 @@ static void Hacl_Hash_SHA2_Core_hash_prefixed__t(Pulse_Lib_Slice_slice__uint64 k
   while (c < 8) {
     size_t vc = c;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(ivt, vc);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, vc, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, vc, x);
     c = (vc + 1);
   }
   uint64_t *wsarr;
@@ -831,23 +735,10 @@ static void Hacl_HMAC_Core_hmac_impl__t(Pulse_Lib_Slice_slice__uint64 kt, Pulse_
 }
 
 static void Hacl_HMAC_hmac_sha512(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint64_t z = 0;
-  uint64_t *karr;
-  uint64_t _cbuf1[80];
-  for (size_t _ci2 = 0; _ci2 < 80; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  karr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(karr, 80);
-  Hacl_Hash_SHA2_fill_k512(kt);
-  uint64_t *ivarr;
-  uint64_t _cbuf3[8];
-  for (size_t _ci4 = 0; _ci4 < 8; _ci4++) {
-    _cbuf3[_ci4] = z;
-  }
-  ivarr = _cbuf3;
-  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t(ivarr, 8);
-  Hacl_Hash_SHA2_fill_iv512(ivt);
+  uint64_t *arr = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
+  Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(arr, 80);
+  uint64_t *arr1 = (uint64_t *)Hacl_Hash_SHA2_Tables_iv512_arr;
+  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t(arr1, 8);
   Hacl_HMAC_Core_hmac_impl__t(kt, ivt, out, key, msg);
 }
 
@@ -856,17 +747,6 @@ void Hacl_HMAC_Ptr_hmac_sha512(uint8_t *out, uint8_t *key, size_t key_len, uint8
   Pulse_Lib_Slice_slice__uint8 sk = Pulse_Lib_Slice_arrayptr_to_slice_intro__t(key, key_len);
   Pulse_Lib_Slice_slice__uint8 sm = Pulse_Lib_Slice_arrayptr_to_slice_intro__t(msg, msg_len);
   Hacl_HMAC_hmac_sha512(so, sk, sm);
-}
-
-static void Hacl_Hash_SHA2_fill_iv384(Pulse_Lib_Slice_slice__uint64 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 0, 0xcbbb9d5dc1059ed8ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 1, 0x629a292a367cd507ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 2, 0x9159015a3070dd17ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 3, 0x152fecd8f70e5939ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 4, 0x67332667ffc00b31ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 5, 0x8eb44a8768581511ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 6, 0xdb0c2e0d64f98fa7ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 7, 0x47b5481dbefa4fa4ULL);
 }
 
 static uint64_t Spec_SHA2__sigma1__t_1(uint64_t x) {
@@ -883,7 +763,7 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_2(Pulse_Lib_Slice_slice__uint64 wsb
   while (i < 16) {
     size_t vi = i;
     uint64_t x = Hacl_Impl_Bytes_load_be__t_1(block, (off + (vi * nb)));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(wsb, vi, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(wsb, vi, x);
     i = (vi + 1);
   }
   size_t j = 16;
@@ -894,7 +774,7 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_2(Pulse_Lib_Slice_slice__uint64 wsb
     uint64_t a15 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, (vj - 15));
     uint64_t a16 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, (vj - 16));
     uint64_t x_1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Spec_SHA2__sigma1__t_1(a2), a7), Spec_SHA2__sigma0__t_1(a15)), a16);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(wsb, vj, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(wsb, vj, x_1);
     j = (vj + 1);
   }
 }
@@ -932,14 +812,14 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_2(Pulse_Lib_Slice_slice__ui
     uint64_t wi = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(wsb, vi);
     uint64_t t1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(hh, Spec_SHA2__Sigma1__t_1(e)), Spec_SHA2__Ch__t(e, f, g)), ki), wi);
     uint64_t t2 = Hacl_Secret_Word_add_mod__t(Spec_SHA2__Sigma0__t_1(a), Spec_SHA2__Maj__t(a, b, c));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 0, Hacl_Secret_Word_add_mod__t(t1, t2));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 1, a);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 2, b);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 3, c);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 4, Hacl_Secret_Word_add_mod__t(d, t1));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 5, e);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 6, f);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, g);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 0, Hacl_Secret_Word_add_mod__t(t1, t2));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 1, a);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 2, b);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 3, c);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 4, Hacl_Secret_Word_add_mod__t(d, t1));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 5, e);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 6, f);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 7, g);
     i = (vi + 1);
   }
   uint64_t a1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 0);
@@ -950,14 +830,14 @@ static void Hacl_Hash_SHA2_Core_update_block_impl__t_2(Pulse_Lib_Slice_slice__ui
   uint64_t f1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 5);
   uint64_t g1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 6);
   uint64_t h1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(st, 7);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 0, Hacl_Secret_Word_add_mod__t(a0, a1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 1, Hacl_Secret_Word_add_mod__t(b0, b1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 2, Hacl_Secret_Word_add_mod__t(c0, c1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 3, Hacl_Secret_Word_add_mod__t(d0, d1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 4, Hacl_Secret_Word_add_mod__t(e0, e1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 5, Hacl_Secret_Word_add_mod__t(f0, f1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 6, Hacl_Secret_Word_add_mod__t(g0, g1));
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 0, Hacl_Secret_Word_add_mod__t(a0, a1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 1, Hacl_Secret_Word_add_mod__t(b0, b1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 2, Hacl_Secret_Word_add_mod__t(c0, c1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 3, Hacl_Secret_Word_add_mod__t(d0, d1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 4, Hacl_Secret_Word_add_mod__t(e0, e1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 5, Hacl_Secret_Word_add_mod__t(f0, f1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 6, Hacl_Secret_Word_add_mod__t(g0, g1));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, 7, Hacl_Secret_Word_add_mod__t(h0, h1));
 }
 
 static void Hacl_Hash_SHA2_Core_hash_blocks__t_2(Pulse_Lib_Slice_slice__uint64 kt, Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 input, size_t bl, size_t nprev, size_t nfull) {
@@ -993,7 +873,7 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_1(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1043,7 +923,7 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_1(Pulse_Lib_Slice_slice__uint64 kt,
   while (c < 8) {
     size_t vc = c;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(ivt, vc);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, vc, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, vc, x);
     c = (vc + 1);
   }
   uint64_t *wsarr;
@@ -1085,7 +965,7 @@ static void Hacl_Hash_SHA2_Core_hash_prefixed__t_1(Pulse_Lib_Slice_slice__uint64
   while (c < 8) {
     size_t vc = c;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(ivt, vc);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(st, vc, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(st, vc, x);
     c = (vc + 1);
   }
   uint64_t *wsarr;
@@ -1134,23 +1014,10 @@ static void Hacl_HMAC_Core_hmac_impl__t_1(Pulse_Lib_Slice_slice__uint64 kt, Puls
 }
 
 static void Hacl_HMAC_hmac_sha384(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint64_t z = 0;
-  uint64_t *karr;
-  uint64_t _cbuf1[80];
-  for (size_t _ci2 = 0; _ci2 < 80; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  karr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(karr, 80);
-  Hacl_Hash_SHA2_fill_k512(kt);
-  uint64_t *ivarr;
-  uint64_t _cbuf3[8];
-  for (size_t _ci4 = 0; _ci4 < 8; _ci4++) {
-    _cbuf3[_ci4] = z;
-  }
-  ivarr = _cbuf3;
-  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t(ivarr, 8);
-  Hacl_Hash_SHA2_fill_iv384(ivt);
+  uint64_t *arr = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
+  Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(arr, 80);
+  uint64_t *arr1 = (uint64_t *)Hacl_Hash_SHA2_Tables_iv384_arr;
+  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t(arr1, 8);
   Hacl_HMAC_Core_hmac_impl__t_1(kt, ivt, out, key, msg);
 }
 
@@ -1165,90 +1032,12 @@ static Pulse_Lib_Slice_slice__uint32 Pulse_Lib_Slice_from_array__t_2(uint32_t *a
   return (Pulse_Lib_Slice_slice__uint32){ .elt = a, .len = alen };
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v) {
-  a.elt[i] = v;
-}
-
-static void Hacl_Hash_SHA2_fill_k256(Pulse_Lib_Slice_slice__uint32 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 0, 0x428a2f98U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 1, 0x71374491U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 2, 0xb5c0fbcfU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 3, 0xe9b5dba5U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 4, 0x3956c25bU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 5, 0x59f111f1U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 6, 0x923f82a4U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 7, 0xab1c5ed5U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 8, 0xd807aa98U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 9, 0x12835b01U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 10, 0x243185beU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 11, 0x550c7dc3U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 12, 0x72be5d74U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 13, 0x80deb1feU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 14, 0x9bdc06a7U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 15, 0xc19bf174U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 16, 0xe49b69c1U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 17, 0xefbe4786U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 18, 0xfc19dc6U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 19, 0x240ca1ccU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 20, 0x2de92c6fU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 21, 0x4a7484aaU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 22, 0x5cb0a9dcU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 23, 0x76f988daU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 24, 0x983e5152U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 25, 0xa831c66dU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 26, 0xb00327c8U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 27, 0xbf597fc7U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 28, 0xc6e00bf3U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 29, 0xd5a79147U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 30, 0x6ca6351U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 31, 0x14292967U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 32, 0x27b70a85U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 33, 0x2e1b2138U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 34, 0x4d2c6dfcU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 35, 0x53380d13U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 36, 0x650a7354U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 37, 0x766a0abbU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 38, 0x81c2c92eU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 39, 0x92722c85U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 40, 0xa2bfe8a1U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 41, 0xa81a664bU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 42, 0xc24b8b70U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 43, 0xc76c51a3U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 44, 0xd192e819U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 45, 0xd6990624U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 46, 0xf40e3585U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 47, 0x106aa070U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 48, 0x19a4c116U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 49, 0x1e376c08U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 50, 0x2748774cU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 51, 0x34b0bcb5U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 52, 0x391c0cb3U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 53, 0x4ed8aa4aU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 54, 0x5b9cca4fU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 55, 0x682e6ff3U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 56, 0x748f82eeU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 57, 0x78a5636fU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 58, 0x84c87814U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 59, 0x8cc70208U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 60, 0x90befffaU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 61, 0xa4506cebU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 62, 0xbef9a3f7U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 63, 0xc67178f2U);
-}
-
-static void Hacl_Hash_SHA2_fill_iv256(Pulse_Lib_Slice_slice__uint32 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 0, 0x6a09e667U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 1, 0xbb67ae85U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 2, 0x3c6ef372U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 3, 0xa54ff53aU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 4, 0x510e527fU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 5, 0x9b05688cU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 6, 0x1f83d9abU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 7, 0x5be0cd19U);
-}
-
 static uint32_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_2(Pulse_Lib_Slice_slice__uint32 a, size_t i) {
   return a.elt[i];
+}
+
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v) {
+  a.elt[i] = v;
 }
 
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y) {
@@ -1459,11 +1248,11 @@ static void Hacl_Hash_SHA2_Core_build_tail__t_1(Pulse_Lib_Slice_slice__uint8 tl,
   while (c < rem) {
     size_t vc = c;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(input, (base + vc));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(tl, vc, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(tl, vc, x);
     c = (vc + 1);
   }
   uint8_t x80 = 0x80;
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(tl, rem, x80);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(tl, rem, x80);
   Hacl_Hash_SHA2_Core_write_len_be(tl, (ntail - 8), len);
 }
 
@@ -1483,7 +1272,7 @@ static void Hacl_Impl_Bytes_store_be__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t
     size_t vj = j;
     uint32_t c = cur;
     size_t pos = ((off + n) - (vj + 1));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(b, pos, Hacl_Secret_Word_to_byte__t_1(c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, pos, Hacl_Secret_Word_to_byte__t_1(c));
     cur = Hacl_Secret_Word_shift_right__t_1(c, 8);
     j = (vj + 1);
   }
@@ -1512,7 +1301,7 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_2(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1592,7 +1381,7 @@ static void Hacl_HMAC_Core_fill_xor__t_1(Pulse_Lib_Slice_slice__uint8 pad, Pulse
   while (i < bl) {
     size_t vi = i;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(k0, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(pad, vi, Hacl_Secret_UInt8_logxor(x, c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(pad, vi, Hacl_Secret_UInt8_logxor(x, c));
     i = (vi + 1);
   }
 }
@@ -1664,23 +1453,10 @@ static void Hacl_HMAC_Core_hmac_impl__t_2(Pulse_Lib_Slice_slice__uint32 kt, Puls
 }
 
 static void Hacl_HMAC_hmac_sha256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint32_t z = 0;
-  uint32_t *karr;
-  uint32_t _cbuf1[64];
-  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  karr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(karr, 64);
-  Hacl_Hash_SHA2_fill_k256(kt);
-  uint32_t *ivarr;
-  uint32_t _cbuf3[8];
-  for (size_t _ci4 = 0; _ci4 < 8; _ci4++) {
-    _cbuf3[_ci4] = z;
-  }
-  ivarr = _cbuf3;
-  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t_2(ivarr, 8);
-  Hacl_Hash_SHA2_fill_iv256(ivt);
+  uint32_t *arr = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
+  Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(arr, 64);
+  uint32_t *arr1 = (uint32_t *)Hacl_Hash_SHA2_Tables_iv256_arr;
+  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t_2(arr1, 8);
   Hacl_HMAC_Core_hmac_impl__t_2(kt, ivt, out, key, msg);
 }
 
@@ -1689,17 +1465,6 @@ void Hacl_HMAC_Ptr_hmac_sha256(uint8_t *out, uint8_t *key, size_t key_len, uint8
   Pulse_Lib_Slice_slice__uint8 sk = Pulse_Lib_Slice_arrayptr_to_slice_intro__t(key, key_len);
   Pulse_Lib_Slice_slice__uint8 sm = Pulse_Lib_Slice_arrayptr_to_slice_intro__t(msg, msg_len);
   Hacl_HMAC_hmac_sha256(so, sk, sm);
-}
-
-static void Hacl_Hash_SHA2_fill_iv224(Pulse_Lib_Slice_slice__uint32 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 0, 0xc1059ed8U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 1, 0x367cd507U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 2, 0x3070dd17U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 3, 0xf70e5939U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 4, 0xffc00b31U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 5, 0x68581511U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 6, 0x64f98fa7U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, 7, 0xbefa4fa4U);
 }
 
 static uint32_t Spec_SHA2__sigma1__t_3(uint32_t x) {
@@ -1826,7 +1591,7 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_3(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1967,23 +1732,10 @@ static void Hacl_HMAC_Core_hmac_impl__t_3(Pulse_Lib_Slice_slice__uint32 kt, Puls
 }
 
 static void Hacl_HMAC_hmac_sha224(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint32_t z = 0;
-  uint32_t *karr;
-  uint32_t _cbuf1[64];
-  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  karr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(karr, 64);
-  Hacl_Hash_SHA2_fill_k256(kt);
-  uint32_t *ivarr;
-  uint32_t _cbuf3[8];
-  for (size_t _ci4 = 0; _ci4 < 8; _ci4++) {
-    _cbuf3[_ci4] = z;
-  }
-  ivarr = _cbuf3;
-  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t_2(ivarr, 8);
-  Hacl_Hash_SHA2_fill_iv224(ivt);
+  uint32_t *arr = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
+  Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(arr, 64);
+  uint32_t *arr1 = (uint32_t *)Hacl_Hash_SHA2_Tables_iv224_arr;
+  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t_2(arr1, 8);
   Hacl_HMAC_Core_hmac_impl__t_3(kt, ivt, out, key, msg);
 }
 
@@ -1994,14 +1746,4 @@ void Hacl_HMAC_Ptr_hmac_sha224(uint8_t *out, uint8_t *key, size_t key_len, uint8
   Hacl_HMAC_hmac_sha224(so, sk, sm);
 }
 
-void custard_init_globals(void) {
-  Hacl_Hash_SHA2_Core_block_len_sz__t = (16 * Hacl_Secret_Word_nbytes__t);
-  Hacl_Secret_Word_zero__t = Hacl_Secret_UInt64_zero;
-  Hacl_Hash_SHA2_Core_block_len_sz__t_1 = (16 * Hacl_Secret_Word_nbytes__t_1);
-  Hacl_Hash_SHA2_Core_len_len_sz__t_1 = (2 * Hacl_Secret_Word_nbytes__t_1);
-  Hacl_Secret_Word_zero__t_1 = Hacl_Secret_UInt64_zero;
-  Hacl_Hash_SHA2_Core_block_len_sz__t_2 = (16 * Hacl_Secret_Word_nbytes__t_2);
-  Hacl_Hash_SHA2_Core_len_len_sz__t_2 = (2 * Hacl_Secret_Word_nbytes__t_2);
-  Hacl_Secret_Word_zero__t_2 = Hacl_Secret_UInt32_zero;
-}
 

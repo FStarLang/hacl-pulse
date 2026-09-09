@@ -208,8 +208,6 @@ static void check_lifecycle(void) {
 }
 
 int main(void) {
-  custard_init_globals();
-
   /* S448 is 55 bytes, one short of a block; S896 is 112, one short of two. */
   check_all_chunks("empty", (const uint8_t *)"", 0, empty_d);
   check_all_chunks("abc", (const uint8_t *)ABC, strlen(ABC), abc_d);

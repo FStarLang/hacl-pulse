@@ -16,7 +16,6 @@ so two spellings of it are the same spelling. */
 #define CUSTARD_UNIT_DEFINED
 typedef uint8_t custard_unit;
 #endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,8 +34,6 @@ struct Pulse_Lib_Slice_slice__uint32_s {
 
 void Hacl_Chacha20_Ptr_decrypt(uint8_t *out, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *nonce, uint32_t ctr);
 void Hacl_Chacha20_Ptr_encrypt(uint8_t *out, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *nonce, uint32_t ctr);
-
-void custard_init_globals(void);
 
 
 #ifdef __cplusplus

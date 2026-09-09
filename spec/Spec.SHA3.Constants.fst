@@ -29,38 +29,26 @@ module U64 = FStar.UInt64
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
 
-unfold let up (#a: Type) (#n: nat) (s: Seq.lseq a n) (i: nat { i < n }) (x: a) : Seq.lseq a n =
-  Seq.upd s i x
+(** The twenty-four iota constants, RC[0] through RC[23], as a list: this is
+    the spine that reaches the C array initializer in [Hacl.Hash.SHA3]. *)
+let rc_list : list S64.t = [
+  S64.classify 0x0000000000000001uL; S64.classify 0x0000000000008082uL; S64.classify 0x800000000000808auL;
+  S64.classify 0x8000000080008000uL; S64.classify 0x000000000000808buL; S64.classify 0x0000000080000001uL;
+  S64.classify 0x8000000080008081uL; S64.classify 0x8000000000008009uL; S64.classify 0x000000000000008auL;
+  S64.classify 0x0000000000000088uL; S64.classify 0x0000000080008009uL; S64.classify 0x000000008000000auL;
+  S64.classify 0x000000008000808buL; S64.classify 0x800000000000008buL; S64.classify 0x8000000000008089uL;
+  S64.classify 0x8000000000008003uL; S64.classify 0x8000000000008002uL; S64.classify 0x8000000000000080uL;
+  S64.classify 0x000000000000800auL; S64.classify 0x800000008000000auL; S64.classify 0x8000000080008081uL;
+  S64.classify 0x8000000000008080uL; S64.classify 0x0000000080000001uL; S64.classify 0x8000000080008008uL
+]
 
-(** The twenty-four iota constants, RC[0] through RC[23]. *)
+(** The same table as a sequence.  [Seq.seq_of_list] of the list above is
+    definitionally what a [Pulse.Lib.GlobalArray] holding it contains, so the
+    implementation's table and this one need no lemma to relate. *)
 [@@FStar.Custard.no_specialize]
 let rc : Seq.lseq S64.t 24 =
-  let s = Seq.create 24 (S64.classify 0uL) in
-  let s = up s  0 (S64.classify 0x0000000000000001uL) in
-  let s = up s  1 (S64.classify 0x0000000000008082uL) in
-  let s = up s  2 (S64.classify 0x800000000000808auL) in
-  let s = up s  3 (S64.classify 0x8000000080008000uL) in
-  let s = up s  4 (S64.classify 0x000000000000808buL) in
-  let s = up s  5 (S64.classify 0x0000000080000001uL) in
-  let s = up s  6 (S64.classify 0x8000000080008081uL) in
-  let s = up s  7 (S64.classify 0x8000000000008009uL) in
-  let s = up s  8 (S64.classify 0x000000000000008auL) in
-  let s = up s  9 (S64.classify 0x0000000000000088uL) in
-  let s = up s 10 (S64.classify 0x0000000080008009uL) in
-  let s = up s 11 (S64.classify 0x000000008000000auL) in
-  let s = up s 12 (S64.classify 0x000000008000808buL) in
-  let s = up s 13 (S64.classify 0x800000000000008buL) in
-  let s = up s 14 (S64.classify 0x8000000000008089uL) in
-  let s = up s 15 (S64.classify 0x8000000000008003uL) in
-  let s = up s 16 (S64.classify 0x8000000000008002uL) in
-  let s = up s 17 (S64.classify 0x8000000000000080uL) in
-  let s = up s 18 (S64.classify 0x000000000000800auL) in
-  let s = up s 19 (S64.classify 0x800000008000000auL) in
-  let s = up s 20 (S64.classify 0x8000000080008081uL) in
-  let s = up s 21 (S64.classify 0x8000000000008080uL) in
-  let s = up s 22 (S64.classify 0x0000000080000001uL) in
-  let s = up s 23 (S64.classify 0x8000000080008008uL) in
-  s
+  assert_norm (List.Tot.length rc_list == 24);
+  Seq.seq_of_list rc_list
 
 (** The rho offsets, in the [x + 5 * y] order the state is flattened in.  Note
     [rotc 0] is zero, which is why the specification rotates through
@@ -127,3 +115,90 @@ let rotc_ok (v: Seq.seq U32.t)
           (ensures forall (j: nat). j < 25 ==> U32.v (Seq.index v j) == rotc j)
   = ()
 #pop-options
+
+(** The same twenty-five offsets as a list, for the compile-time table.
+
+    Written out a second time rather than derived from [rotc], because a
+    [static_array]'s contents have to reduce to a literal spine and
+    [Seq.init 25 rotc] is a call, not a list.  {!rotc_seq_ok} is what makes
+    the duplication safe: it is a machine-checked cross-check of one table
+    against the other, and it is the reason [rotc] can stay the readable
+    [match] that the specification wants. *)
+let rotc_list : list U32.t = [
+   0ul;  1ul; 62ul; 28ul; 27ul;
+  36ul; 44ul;  6ul; 55ul; 20ul;
+   3ul; 10ul; 43ul; 25ul; 39ul;
+  41ul; 45ul; 15ul; 21ul;  8ul;
+  18ul;  2ul; 61ul; 56ul; 14ul
+]
+
+let rotc_seq : Seq.lseq U32.t 25 =
+  assert_norm (List.Tot.length rotc_list == 25);
+  Seq.seq_of_list rotc_list
+
+(** The two tables agree.
+
+    [Seq.index] does not reduce through [Seq.seq_of_list] -- a sequence is
+    abstract, so the normalizer cannot look inside one -- which is why this
+    goes through [Seq.lemma_seq_of_list_index] first and only then normalizes.
+    [List.Tot.index] on a literal spine does reduce.  {!rotc_ok} turns the
+    twenty-five equalities into the pointwise statement the sponge uses; it
+    lives next to [rotc] because a twenty-five-way case split is not something
+    to ask of a Pulse verification condition. *)
+let rotc_seq_ok (_: unit)
+  : Lemma (forall (j: nat). j < 25 ==> U32.v (Seq.index rotc_seq j) == rotc j)
+  = let ix (i: nat { i < 25 })
+      : Lemma (Seq.index rotc_seq i == List.Tot.index rotc_list i)
+      = assert_norm (List.Tot.length rotc_list == 25);
+        Seq.lemma_seq_of_list_index rotc_list i in
+    ix  0;
+    ix  1;
+    ix  2;
+    ix  3;
+    ix  4;
+    ix  5;
+    ix  6;
+    ix  7;
+    ix  8;
+    ix  9;
+    ix 10;
+    ix 11;
+    ix 12;
+    ix 13;
+    ix 14;
+    ix 15;
+    ix 16;
+    ix 17;
+    ix 18;
+    ix 19;
+    ix 20;
+    ix 21;
+    ix 22;
+    ix 23;
+    ix 24;
+    assert_norm (List.Tot.index rotc_list  0 ==  0ul /\
+                 List.Tot.index rotc_list  1 ==  1ul /\
+                 List.Tot.index rotc_list  2 == 62ul /\
+                 List.Tot.index rotc_list  3 == 28ul /\
+                 List.Tot.index rotc_list  4 == 27ul /\
+                 List.Tot.index rotc_list  5 == 36ul /\
+                 List.Tot.index rotc_list  6 == 44ul /\
+                 List.Tot.index rotc_list  7 ==  6ul /\
+                 List.Tot.index rotc_list  8 == 55ul /\
+                 List.Tot.index rotc_list  9 == 20ul /\
+                 List.Tot.index rotc_list 10 ==  3ul /\
+                 List.Tot.index rotc_list 11 == 10ul /\
+                 List.Tot.index rotc_list 12 == 43ul /\
+                 List.Tot.index rotc_list 13 == 25ul /\
+                 List.Tot.index rotc_list 14 == 39ul /\
+                 List.Tot.index rotc_list 15 == 41ul /\
+                 List.Tot.index rotc_list 16 == 45ul /\
+                 List.Tot.index rotc_list 17 == 15ul /\
+                 List.Tot.index rotc_list 18 == 21ul /\
+                 List.Tot.index rotc_list 19 ==  8ul /\
+                 List.Tot.index rotc_list 20 == 18ul /\
+                 List.Tot.index rotc_list 21 ==  2ul /\
+                 List.Tot.index rotc_list 22 == 61ul /\
+                 List.Tot.index rotc_list 23 == 56ul /\
+                 List.Tot.index rotc_list 24 == 14ul);
+    rotc_ok rotc_seq

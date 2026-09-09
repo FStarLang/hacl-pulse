@@ -36,6 +36,7 @@ open Hacl.Secret.Word.Instances
 open Spec.Blake2
 open Spec.Blake2.Constants
 open Hacl.Hash.Blake2
+open Hacl.Impl.Table
 
 module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
@@ -44,39 +45,19 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
-module G = FStar.Ghost
+module G = Pulse.Lib.GlobalArray
 
-(** The two initialization vectors, written into a slice because the
-    direct-to-C backend has no constant globals. *)
-fn fill_iv64 (b: S.slice S64.t) (#v0: erased (Seq.seq S64.t))
-requires S.pts_to b v0 ** pure (reveal v0 == Seq.create 8 (S64.classify 0uL))
-ensures S.pts_to b iv64
-{
-  S.pts_to_len b;
-  S.((b.(0sz) <- S64.classify 0x6a09e667f3bcc908uL)); S.pts_to_len b;
-  S.((b.(1sz) <- S64.classify 0xbb67ae8584caa73buL)); S.pts_to_len b;
-  S.((b.(2sz) <- S64.classify 0x3c6ef372fe94f82buL)); S.pts_to_len b;
-  S.((b.(3sz) <- S64.classify 0xa54ff53a5f1d36f1uL)); S.pts_to_len b;
-  S.((b.(4sz) <- S64.classify 0x510e527fade682d1uL)); S.pts_to_len b;
-  S.((b.(5sz) <- S64.classify 0x9b05688c2b3e6c1fuL)); S.pts_to_len b;
-  S.((b.(6sz) <- S64.classify 0x1f83d9abfb41bd6buL)); S.pts_to_len b;
-  S.((b.(7sz) <- S64.classify 0x5be0cd19137e2179uL)); S.pts_to_len b;
-}
+(** The two initialization vectors, as [static const] arrays in the program
+    image; see [Hacl.Impl.Table]. *)
 
-fn fill_iv32 (b: S.slice S32.t) (#v0: erased (Seq.seq S32.t))
-requires S.pts_to b v0 ** pure (reveal v0 == Seq.create 8 (S32.classify 0ul))
-ensures S.pts_to b iv32
-{
-  S.pts_to_len b;
-  S.((b.(0sz) <- S32.classify 0x6a09e667ul)); S.pts_to_len b;
-  S.((b.(1sz) <- S32.classify 0xbb67ae85ul)); S.pts_to_len b;
-  S.((b.(2sz) <- S32.classify 0x3c6ef372ul)); S.pts_to_len b;
-  S.((b.(3sz) <- S32.classify 0xa54ff53aul)); S.pts_to_len b;
-  S.((b.(4sz) <- S32.classify 0x510e527ful)); S.pts_to_len b;
-  S.((b.(5sz) <- S32.classify 0x9b05688cul)); S.pts_to_len b;
-  S.((b.(6sz) <- S32.classify 0x1f83d9abul)); S.pts_to_len b;
-  S.((b.(7sz) <- S32.classify 0x5be0cd19ul)); S.pts_to_len b;
-}
+let iv64_arr : G.static_array S64.t = G.mk_static_array iv64_list
+let iv32_arr : G.static_array S32.t = G.mk_static_array iv32_list
+
+let table_lens (_: unit)
+  : Lemma (Seq.length (G.static_array_elems iv64_arr) == 8 /\
+           Seq.length (G.static_array_elems iv32_arr) == 8)
+  = assert_norm (List.Tot.length iv64_list == 8);
+    assert_norm (List.Tot.length iv32_list == 8)
 
 
 (** BLAKE2B with a 512-bit digest. *)
@@ -97,13 +78,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S64.classify 0uL;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv64 ivt;
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
   blake2_impl blake2b_512_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2B with a 384-bit digest. *)
@@ -124,13 +102,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S64.classify 0uL;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv64 ivt;
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
   blake2_impl blake2b_384_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2B with a 256-bit digest. *)
@@ -151,13 +126,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S64.classify 0uL;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv64 ivt;
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
   blake2_impl blake2b_256_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2B with a 160-bit digest. *)
@@ -178,13 +150,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S64.classify 0uL;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv64 ivt;
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
   blake2_impl blake2b_160_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2S with a 256-bit digest. *)
@@ -205,13 +174,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S32.classify 0ul;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv32 ivt;
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
   blake2_impl blake2s_256_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2S with a 224-bit digest. *)
@@ -232,13 +198,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S32.classify 0ul;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv32 ivt;
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
   blake2_impl blake2s_224_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2S with a 160-bit digest. *)
@@ -259,13 +222,10 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S32.classify 0ul;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv32 ivt;
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
   blake2_impl blake2s_160_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** BLAKE2S with a 128-bit digest. *)
@@ -286,11 +246,8 @@ ensures exists* (vout': Seq.seq S8.t).
   S.pts_to_len out;
   S.pts_to_len key;
   S.pts_to_len msg;
-  let z = S32.classify 0ul;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv32 ivt;
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
   blake2_impl blake2s_128_p ivt out key msg;
-  S.to_array ivt;
+  drop_table ivt;
 }

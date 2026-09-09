@@ -30,6 +30,8 @@ open Spec.SHA2
 open Spec.SHA2.Constants
 open Spec.HKDF
 open Hacl.Hash.SHA2
+open Hacl.Hash.SHA2.Tables
+open Hacl.Impl.Table
 open Hacl.HKDF.Core
 
 module S = Pulse.Lib.Slice
@@ -78,19 +80,12 @@ ensures exists* vout'.
   S.pts_to_len out;
   S.pts_to_len prk;
   S.pts_to_len info;
-  let z = S32.classify 0ul;
-  let mut karr = [| z; 64sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 64sz;
-  fill_k256 kt;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv224 ivt;
+  let kt = table k256_arr 64sz;
+  let ivt = table iv224_arr 8sz;
   max_input_bound ();
   expand_impl sha2_224 kt ivt out prk info;
-  S.to_array ivt;
-  S.to_array kt;
+  drop_table ivt;
+  drop_table kt;
 }
 
 
@@ -131,23 +126,21 @@ ensures exists* vout'.
   S.pts_to_len out;
   S.pts_to_len prk;
   S.pts_to_len info;
-  let z = S32.classify 0ul;
-  let mut karr = [| z; 64sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 64sz;
-  fill_k256 kt;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv256 ivt;
+  let kt = table k256_arr 64sz;
+  let ivt = table iv256_arr 8sz;
   max_input_bound ();
   expand_impl sha2_256 kt ivt out prk info;
-  S.to_array ivt;
-  S.to_array kt;
+  drop_table ivt;
+  drop_table kt;
 }
 
 
 (** HKDF-Extract with sha384.  [out] must have room for 48 bytes. *)
+(* The eighty-entry [k512] is enough bigger than the sixty-four-entry [k256]
+   that relating the array to [params512_with]'s [k] field no longer fits in
+   the default budget. *)
+#push-options "--z3rlimit 40"
+
 fn extract_sha384 (out: S.slice S8.t) (salt: S.slice S8.t) (ikm: S.slice S8.t)
     (#vout: erased (Seq.seq S8.t)) (#ps: perm) (#vsalt: erased (Seq.seq S8.t))
     (#pi: perm) (#vikm: erased (Seq.seq S8.t))
@@ -184,19 +177,12 @@ ensures exists* vout'.
   S.pts_to_len out;
   S.pts_to_len prk;
   S.pts_to_len info;
-  let z = S64.classify 0uL;
-  let mut karr = [| z; 80sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 80sz;
-  fill_k512 kt;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv384 ivt;
+  let kt = table k512_arr 80sz;
+  let ivt = table iv384_arr 8sz;
   max_input_bound ();
   expand_impl sha2_384 kt ivt out prk info;
-  S.to_array ivt;
-  S.to_array kt;
+  drop_table ivt;
+  drop_table kt;
 }
 
 
@@ -237,18 +223,12 @@ ensures exists* vout'.
   S.pts_to_len out;
   S.pts_to_len prk;
   S.pts_to_len info;
-  let z = S64.classify 0uL;
-  let mut karr = [| z; 80sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 80sz;
-  fill_k512 kt;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv512 ivt;
+  let kt = table k512_arr 80sz;
+  let ivt = table iv512_arr 8sz;
   max_input_bound ();
   expand_impl sha2_512 kt ivt out prk info;
-  S.to_array ivt;
-  S.to_array kt;
+  drop_table ivt;
+  drop_table kt;
 }
 
+#pop-options

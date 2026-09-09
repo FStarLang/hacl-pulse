@@ -11,7 +11,7 @@ static uint32_t Spec_Chacha20_c1 = 0x3320646eU;
 static uint32_t Spec_Chacha20_c2 = 0x79622d32U;
 static uint32_t Spec_Chacha20_c3 = 0x6b206574U;
 static size_t Hacl_Secret_Word_nbytes__t = 4;
-static uint32_t Hacl_Secret_Word_zero__t;
+static uint32_t Hacl_Secret_Word_zero__t = 0;
 static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(Pulse_Lib_Slice_slice__uint8 a, size_t i);
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t eta);
@@ -21,7 +21,7 @@ static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x);
 static uint32_t Hacl_Secret_Word_of_byte__t(uint8_t b);
 static uint32_t Hacl_Impl_Bytes_load_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static size_t Hacl_Secret_Word_nbytes__t_1 = 4;
-static uint32_t Hacl_Secret_Word_zero__t_1;
+static uint32_t Hacl_Secret_Word_zero__t_1 = 0;
 static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t eta);
 static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t eta);
 static uint32_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
@@ -370,8 +370,4 @@ void Hacl_Chacha20_Ptr_encrypt(uint8_t *out, uint8_t *msg, size_t msg_len, uint8
   Hacl_Chacha20_chacha20_impl(so, sm, sk, sn, ctr);
 }
 
-void custard_init_globals(void) {
-  Hacl_Secret_Word_zero__t = Hacl_Secret_UInt32_zero;
-  Hacl_Secret_Word_zero__t_1 = Hacl_Secret_UInt32_zero;
-}
 

@@ -21,12 +21,10 @@
     four rotation distances and the round count folded to literals.
 
     The message schedule arrives as a slice of a hundred and sixty [size_t],
-    filled by [fill_sigma], for the same reason the SHA-3 round constants do:
-    the direct-to-C backend cannot emit a constant global, so a table has to be
-    written into memory by somebody.  Filling it once per hash and passing it
-    down costs a hundred and sixty stores; evaluating the if-chain at each of
-    the hundred and ninety-two lookups a twelve-round compression makes would
-    cost a great deal more. *)
+    which is [sigma_arr], a [static const] array in the program image.  It is
+    passed down rather than recomputed because [sigma_at] is a
+    hundred-and-sixty-way if-chain, and a twelve-round compression looks the
+    schedule up a hundred and ninety-two times. *)
 module Hacl.Hash.Blake2.Core
 
 #lang-pulse
@@ -46,203 +44,22 @@ module S8 = Hacl.Secret.UInt8
 module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
 module G = FStar.Ghost
+module GA = Pulse.Lib.GlobalArray
 
 (** {2 The message schedule as a table} *)
-
-(** [sigma_at] as a machine function: a hundred and sixty way switch on a
-    public index.
-
-    Both this and [sigma_at] itself are [opaque_to_smt].  A transparent
-    hundred-and-sixty-way if-chain is a hundred and sixty copies of itself in
-    every query that so much as mentions the table, which is enough on its own
-    to time out the loop's termination check.  The refined return type says
-    everything a caller needs. *)
-[@@"opaque_to_smt"]
-inline_for_extraction
-let sigma_sz (k: SZ.t { SZ.v k < 160 }) : (x: SZ.t { SZ.v x == sigma_at (SZ.v k) }) =
-  reveal_opaque (`%sigma_at) sigma_at;
-  if SZ.eq k 0sz then 0sz else
-  if SZ.eq k 1sz then 1sz else
-  if SZ.eq k 2sz then 2sz else
-  if SZ.eq k 3sz then 3sz else
-  if SZ.eq k 4sz then 4sz else
-  if SZ.eq k 5sz then 5sz else
-  if SZ.eq k 6sz then 6sz else
-  if SZ.eq k 7sz then 7sz else
-  if SZ.eq k 8sz then 8sz else
-  if SZ.eq k 9sz then 9sz else
-  if SZ.eq k 10sz then 10sz else
-  if SZ.eq k 11sz then 11sz else
-  if SZ.eq k 12sz then 12sz else
-  if SZ.eq k 13sz then 13sz else
-  if SZ.eq k 14sz then 14sz else
-  if SZ.eq k 15sz then 15sz else
-  if SZ.eq k 16sz then 14sz else
-  if SZ.eq k 17sz then 10sz else
-  if SZ.eq k 18sz then 4sz else
-  if SZ.eq k 19sz then 8sz else
-  if SZ.eq k 20sz then 9sz else
-  if SZ.eq k 21sz then 15sz else
-  if SZ.eq k 22sz then 13sz else
-  if SZ.eq k 23sz then 6sz else
-  if SZ.eq k 24sz then 1sz else
-  if SZ.eq k 25sz then 12sz else
-  if SZ.eq k 26sz then 0sz else
-  if SZ.eq k 27sz then 2sz else
-  if SZ.eq k 28sz then 11sz else
-  if SZ.eq k 29sz then 7sz else
-  if SZ.eq k 30sz then 5sz else
-  if SZ.eq k 31sz then 3sz else
-  if SZ.eq k 32sz then 11sz else
-  if SZ.eq k 33sz then 8sz else
-  if SZ.eq k 34sz then 12sz else
-  if SZ.eq k 35sz then 0sz else
-  if SZ.eq k 36sz then 5sz else
-  if SZ.eq k 37sz then 2sz else
-  if SZ.eq k 38sz then 15sz else
-  if SZ.eq k 39sz then 13sz else
-  if SZ.eq k 40sz then 10sz else
-  if SZ.eq k 41sz then 14sz else
-  if SZ.eq k 42sz then 3sz else
-  if SZ.eq k 43sz then 6sz else
-  if SZ.eq k 44sz then 7sz else
-  if SZ.eq k 45sz then 1sz else
-  if SZ.eq k 46sz then 9sz else
-  if SZ.eq k 47sz then 4sz else
-  if SZ.eq k 48sz then 7sz else
-  if SZ.eq k 49sz then 9sz else
-  if SZ.eq k 50sz then 3sz else
-  if SZ.eq k 51sz then 1sz else
-  if SZ.eq k 52sz then 13sz else
-  if SZ.eq k 53sz then 12sz else
-  if SZ.eq k 54sz then 11sz else
-  if SZ.eq k 55sz then 14sz else
-  if SZ.eq k 56sz then 2sz else
-  if SZ.eq k 57sz then 6sz else
-  if SZ.eq k 58sz then 5sz else
-  if SZ.eq k 59sz then 10sz else
-  if SZ.eq k 60sz then 4sz else
-  if SZ.eq k 61sz then 0sz else
-  if SZ.eq k 62sz then 15sz else
-  if SZ.eq k 63sz then 8sz else
-  if SZ.eq k 64sz then 9sz else
-  if SZ.eq k 65sz then 0sz else
-  if SZ.eq k 66sz then 5sz else
-  if SZ.eq k 67sz then 7sz else
-  if SZ.eq k 68sz then 2sz else
-  if SZ.eq k 69sz then 4sz else
-  if SZ.eq k 70sz then 10sz else
-  if SZ.eq k 71sz then 15sz else
-  if SZ.eq k 72sz then 14sz else
-  if SZ.eq k 73sz then 1sz else
-  if SZ.eq k 74sz then 11sz else
-  if SZ.eq k 75sz then 12sz else
-  if SZ.eq k 76sz then 6sz else
-  if SZ.eq k 77sz then 8sz else
-  if SZ.eq k 78sz then 3sz else
-  if SZ.eq k 79sz then 13sz else
-  if SZ.eq k 80sz then 2sz else
-  if SZ.eq k 81sz then 12sz else
-  if SZ.eq k 82sz then 6sz else
-  if SZ.eq k 83sz then 10sz else
-  if SZ.eq k 84sz then 0sz else
-  if SZ.eq k 85sz then 11sz else
-  if SZ.eq k 86sz then 8sz else
-  if SZ.eq k 87sz then 3sz else
-  if SZ.eq k 88sz then 4sz else
-  if SZ.eq k 89sz then 13sz else
-  if SZ.eq k 90sz then 7sz else
-  if SZ.eq k 91sz then 5sz else
-  if SZ.eq k 92sz then 15sz else
-  if SZ.eq k 93sz then 14sz else
-  if SZ.eq k 94sz then 1sz else
-  if SZ.eq k 95sz then 9sz else
-  if SZ.eq k 96sz then 12sz else
-  if SZ.eq k 97sz then 5sz else
-  if SZ.eq k 98sz then 1sz else
-  if SZ.eq k 99sz then 15sz else
-  if SZ.eq k 100sz then 14sz else
-  if SZ.eq k 101sz then 13sz else
-  if SZ.eq k 102sz then 4sz else
-  if SZ.eq k 103sz then 10sz else
-  if SZ.eq k 104sz then 0sz else
-  if SZ.eq k 105sz then 7sz else
-  if SZ.eq k 106sz then 6sz else
-  if SZ.eq k 107sz then 3sz else
-  if SZ.eq k 108sz then 9sz else
-  if SZ.eq k 109sz then 2sz else
-  if SZ.eq k 110sz then 8sz else
-  if SZ.eq k 111sz then 11sz else
-  if SZ.eq k 112sz then 13sz else
-  if SZ.eq k 113sz then 11sz else
-  if SZ.eq k 114sz then 7sz else
-  if SZ.eq k 115sz then 14sz else
-  if SZ.eq k 116sz then 12sz else
-  if SZ.eq k 117sz then 1sz else
-  if SZ.eq k 118sz then 3sz else
-  if SZ.eq k 119sz then 9sz else
-  if SZ.eq k 120sz then 5sz else
-  if SZ.eq k 121sz then 0sz else
-  if SZ.eq k 122sz then 15sz else
-  if SZ.eq k 123sz then 4sz else
-  if SZ.eq k 124sz then 8sz else
-  if SZ.eq k 125sz then 6sz else
-  if SZ.eq k 126sz then 2sz else
-  if SZ.eq k 127sz then 10sz else
-  if SZ.eq k 128sz then 6sz else
-  if SZ.eq k 129sz then 15sz else
-  if SZ.eq k 130sz then 14sz else
-  if SZ.eq k 131sz then 9sz else
-  if SZ.eq k 132sz then 11sz else
-  if SZ.eq k 133sz then 3sz else
-  if SZ.eq k 134sz then 0sz else
-  if SZ.eq k 135sz then 8sz else
-  if SZ.eq k 136sz then 12sz else
-  if SZ.eq k 137sz then 2sz else
-  if SZ.eq k 138sz then 13sz else
-  if SZ.eq k 139sz then 7sz else
-  if SZ.eq k 140sz then 1sz else
-  if SZ.eq k 141sz then 4sz else
-  if SZ.eq k 142sz then 10sz else
-  if SZ.eq k 143sz then 5sz else
-  if SZ.eq k 144sz then 10sz else
-  if SZ.eq k 145sz then 2sz else
-  if SZ.eq k 146sz then 8sz else
-  if SZ.eq k 147sz then 4sz else
-  if SZ.eq k 148sz then 7sz else
-  if SZ.eq k 149sz then 6sz else
-  if SZ.eq k 150sz then 1sz else
-  if SZ.eq k 151sz then 5sz else
-  if SZ.eq k 152sz then 15sz else
-  if SZ.eq k 153sz then 11sz else
-  if SZ.eq k 154sz then 9sz else
-  if SZ.eq k 155sz then 14sz else
-  if SZ.eq k 156sz then 3sz else
-  if SZ.eq k 157sz then 12sz else
-  if SZ.eq k 158sz then 13sz else
-  0sz
 
 (** What it means for a slice to hold the schedule. *)
 let sigma_ok (s: Seq.seq SZ.t) : prop =
   Seq.length s == 160 /\ (forall (j: nat). j < 160 ==> SZ.v (Seq.index s j) == sigma_at j)
 
-fn fill_sigma (b: S.slice SZ.t) (#v0: erased (Seq.seq SZ.t))
-requires S.pts_to b v0 ** pure (Seq.length v0 == 160)
-ensures exists* (v1: Seq.seq SZ.t). S.pts_to b v1 ** pure (sigma_ok v1)
-{
-  S.pts_to_len b;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 160sz)
-  invariant exists* (vi: SZ.t) (v1: Seq.seq SZ.t).
-    pts_to i vi ** S.pts_to b v1 **
-    pure (SZ.v vi <= 160 /\ Seq.length v1 == 160 /\ (forall (j: nat). j < SZ.v vi ==> SZ.v (Seq.index v1 j) == sigma_at j))
-  decreases (160 - SZ.v (!i))
-  {
-    let vi = !i;
-    S.((b.(vi) <- sigma_sz vi));
-    i := SZ.add vi 1sz;
-  };
-}
+(** The schedule as a [static const] array in the program image; see
+    [Hacl.Impl.Table].  Filling it used to be a hundred and sixty stores per
+    hash. *)
+let sigma_arr : GA.static_array SZ.t = GA.mk_static_array sigma_list
+
+let sigma_len (_: unit)
+  : Lemma (Seq.length (GA.static_array_elems sigma_arr) == 160)
+  = assert_norm (List.Tot.length sigma_list == 160)
 
 
 (** {2 The mixing function}

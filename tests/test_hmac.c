@@ -299,7 +299,6 @@ static uint8_t sha512_7[64] = {
 
 int main(void) {
   int rc = 0;
-  custard_init_globals();
   CASE(1);
   CASE(2);
   CASE(3);

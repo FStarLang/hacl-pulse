@@ -52,8 +52,6 @@ static void check_str(const char *name, hash_fn f, size_t digest_len,
   "lmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"
 
 int main(void) {
-  custard_init_globals();
-
   printf("SHA-224\n");
   check_str("empty", Hacl_Hash_SHA2_Ptr_sha224, 28, "",
             "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");

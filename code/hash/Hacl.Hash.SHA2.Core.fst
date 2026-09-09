@@ -22,9 +22,10 @@
     branches on which algorithm is running.
 
     The round constants and the initial state arrive as slices rather than as
-    fields of [p]: a record field would have to be materialized in C, and C has
-    no way to write a compile-time array into a value.  The caller fills them
-    and proves them equal to [p.k] and [p.iv]; see [Hacl.Hash.SHA2]. *)
+    fields of [p], which is erased: a record field would have to be
+    materialized in C.  The caller passes the tables and proves them equal to
+    [p.k] and [p.iv]; see [Hacl.Hash.SHA2].  The permission is fractional, so
+    a caller may hand over the [static const] array itself. *)
 module Hacl.Hash.SHA2.Core
 
 #lang-pulse

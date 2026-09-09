@@ -50,7 +50,6 @@ static void check(const char *name, blake2_fn f, size_t digest_len,
 }
 
 int main(void) {
-  custard_init_globals();
   for (size_t i = 0; i < sizeof buf; i++)
     buf[i] = (uint8_t)((i * 7 + 11) & 0xff);
   for (size_t i = 0; i < sizeof keybuf; i++)

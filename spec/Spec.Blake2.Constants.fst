@@ -31,6 +31,7 @@
 module Spec.Blake2.Constants
 
 module Seq = FStar.Seq
+module SZ = FStar.SizeT
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 
@@ -39,31 +40,29 @@ unfold let up (#a: Type) (#n: nat) (s: Seq.lseq a n) (i: nat { i < n }) (x: a) :
 
 (** {2 The initialization vectors} *)
 
+let iv64_list : list S64.t = [
+  S64.classify 0x6a09e667f3bcc908uL; S64.classify 0xbb67ae8584caa73buL;
+  S64.classify 0x3c6ef372fe94f82buL; S64.classify 0xa54ff53a5f1d36f1uL;
+  S64.classify 0x510e527fade682d1uL; S64.classify 0x9b05688c2b3e6c1fuL;
+  S64.classify 0x1f83d9abfb41bd6buL; S64.classify 0x5be0cd19137e2179uL
+]
+
 [@@FStar.Custard.no_specialize]
 let iv64 : Seq.lseq S64.t 8 =
-  let s = Seq.create 8 (S64.classify 0uL) in
-  let s = up s 0 (S64.classify 0x6a09e667f3bcc908uL) in
-  let s = up s 1 (S64.classify 0xbb67ae8584caa73buL) in
-  let s = up s 2 (S64.classify 0x3c6ef372fe94f82buL) in
-  let s = up s 3 (S64.classify 0xa54ff53a5f1d36f1uL) in
-  let s = up s 4 (S64.classify 0x510e527fade682d1uL) in
-  let s = up s 5 (S64.classify 0x9b05688c2b3e6c1fuL) in
-  let s = up s 6 (S64.classify 0x1f83d9abfb41bd6buL) in
-  let s = up s 7 (S64.classify 0x5be0cd19137e2179uL) in
-  s
+  assert_norm (List.Tot.length iv64_list == 8);
+  Seq.seq_of_list iv64_list
+
+let iv32_list : list S32.t = [
+  S32.classify 0x6a09e667ul; S32.classify 0xbb67ae85ul;
+  S32.classify 0x3c6ef372ul; S32.classify 0xa54ff53aul;
+  S32.classify 0x510e527ful; S32.classify 0x9b05688cul;
+  S32.classify 0x1f83d9abul; S32.classify 0x5be0cd19ul
+]
 
 [@@FStar.Custard.no_specialize]
 let iv32 : Seq.lseq S32.t 8 =
-  let s = Seq.create 8 (S32.classify 0ul) in
-  let s = up s 0 (S32.classify 0x6a09e667ul) in
-  let s = up s 1 (S32.classify 0xbb67ae85ul) in
-  let s = up s 2 (S32.classify 0x3c6ef372ul) in
-  let s = up s 3 (S32.classify 0xa54ff53aul) in
-  let s = up s 4 (S32.classify 0x510e527ful) in
-  let s = up s 5 (S32.classify 0x9b05688cul) in
-  let s = up s 6 (S32.classify 0x1f83d9abul) in
-  let s = up s 7 (S32.classify 0x5be0cd19ul) in
-  s
+  assert_norm (List.Tot.length iv32_list == 8);
+  Seq.seq_of_list iv32_list
 
 (** {2 The message schedule}
 
@@ -245,3 +244,67 @@ let sigma_at (k: nat { k < 160 }) : n: nat { n < 16 } =
 (** Position [i] of round [r]. *)
 unfold let sigma (r: nat { r < 10 }) (i: nat { i < 16 }) : n: nat { n < 16 } =
   sigma_at (16 * r + i)
+
+
+(** {2 The schedule as a compile-time table}
+
+    The same hundred and sixty entries as [sigma_at], as a [size_t] list, so
+    that [Hacl.Hash.Blake2] can hand the compression function a [static const]
+    array instead of filling one on every hash.
+
+    Written out a second time rather than derived, for the reason
+    [Spec.SHA3.Constants.rotc_list] is: a [static_array]'s contents have to
+    reduce to a literal spine, and [Seq.init 160 sigma_at] is a call.
+    {!sigma_seq_ok} is the machine-checked cross-check that makes the second
+    copy safe. *)
+let sigma_list0 : list SZ.t = [
+  0sz; 1sz; 2sz; 3sz; 4sz; 5sz; 6sz; 7sz; 8sz; 9sz; 10sz; 11sz; 12sz; 13sz; 14sz; 15sz;
+  14sz; 10sz; 4sz; 8sz; 9sz; 15sz; 13sz; 6sz; 1sz; 12sz; 0sz; 2sz; 11sz; 7sz; 5sz; 3sz;
+  11sz; 8sz; 12sz; 0sz; 5sz; 2sz; 15sz; 13sz; 10sz; 14sz; 3sz; 6sz; 7sz; 1sz; 9sz; 4sz;
+  7sz; 9sz; 3sz; 1sz; 13sz; 12sz; 11sz; 14sz; 2sz; 6sz; 5sz; 10sz; 4sz; 0sz; 15sz; 8sz;
+  9sz; 0sz; 5sz; 7sz; 2sz; 4sz; 10sz; 15sz; 14sz; 1sz; 11sz; 12sz; 6sz; 8sz; 3sz; 13sz;
+  2sz; 12sz; 6sz; 10sz; 0sz; 11sz; 8sz; 3sz; 4sz; 13sz; 7sz; 5sz; 15sz; 14sz; 1sz; 9sz;
+  12sz; 5sz; 1sz; 15sz; 14sz; 13sz; 4sz; 10sz; 0sz; 7sz; 6sz; 3sz; 9sz; 2sz; 8sz; 11sz;
+  13sz; 11sz; 7sz; 14sz; 12sz; 1sz; 3sz; 9sz; 5sz; 0sz; 15sz; 4sz; 8sz; 6sz; 2sz; 10sz;
+  6sz; 15sz; 14sz; 9sz; 11sz; 3sz; 0sz; 8sz; 12sz; 2sz; 13sz; 7sz; 1sz; 4sz; 10sz; 5sz;
+  10sz; 2sz; 8sz; 4sz; 7sz; 6sz; 1sz; 5sz; 15sz; 11sz; 9sz; 14sz; 3sz; 12sz; 13sz; 0sz
+]
+
+(** The length in the type, so that [List.Tot.index] typechecks below without
+    an [assert_norm] at every use. *)
+let sigma_list : l: list SZ.t { List.Tot.length l == 160 } =
+  assert_norm (List.Tot.length sigma_list0 == 160);
+  sigma_list0
+
+let sigma_seq : Seq.lseq SZ.t 160 = Seq.seq_of_list sigma_list
+
+(** A hundred and sixty ground facts do not give a bounded [forall] cheaply:
+    the solver has to case-split on the index, and at this size it does not.
+    So the check is a [bool] computed by recursion and [assert_norm]ed once --
+    a normalizer job, not an SMT one -- and turned into the [forall] by an
+    induction that unfolds [sigma_chk] exactly once per step.
+
+    Two things make it work.  [SZ.v] is [Pure], not [GTot], so the comparison
+    can be a [bool] at all.  And the recursion is over [List.Tot.index] rather
+    than [Seq.index]: a sequence is abstract, so the normalizer cannot look
+    inside one, and it is [Seq.lemma_seq_of_list_index] that bridges the two
+    at the end. *)
+let rec sigma_chk (k: nat { k <= 160 }) : bool =
+  if k = 0 then true
+  else sigma_chk (k - 1) && (SZ.v (List.Tot.index sigma_list (k - 1)) = sigma_at (k - 1))
+
+let rec sigma_chk_ok (k: nat { k <= 160 })
+  : Lemma (requires sigma_chk k)
+          (ensures forall (j: nat). j < k ==> SZ.v (List.Tot.index sigma_list j) == sigma_at j)
+          (decreases k)
+  = if k = 0 then () else sigma_chk_ok (k - 1)
+
+let sigma_seq_ok (_: unit)
+  : Lemma (Seq.length sigma_seq == 160 /\
+           (forall (j: nat). j < 160 ==> SZ.v (Seq.index sigma_seq j) == sigma_at j))
+  = assert_norm (sigma_chk 160);
+    sigma_chk_ok 160;
+    let bridge (j: nat { j < 160 })
+      : Lemma (Seq.index sigma_seq j == List.Tot.index sigma_list j)
+      = Seq.lemma_seq_of_list_index sigma_list j in
+    FStar.Classical.forall_intro bridge

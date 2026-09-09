@@ -2,19 +2,16 @@
 #include "Hacl_Hash_Blake2_Ptr.h"
 
 static Pulse_Lib_Slice_slice__uint8 Pulse_Lib_Slice_arrayptr_to_slice_intro__t(uint8_t *a, size_t alen);
+static const uint32_t Hacl_Hash_Blake2_Named_iv32_arr[8] = { 0x6a09e667U, 0xbb67ae85U, 0x3c6ef372U, 0xa54ff53aU, 0x510e527fU, 0x9b05688cU, 0x1f83d9abU, 0x5be0cd19U };
 static Pulse_Lib_Slice_slice__uint32 Pulse_Lib_Slice_from_array__t(uint32_t *a, size_t alen);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v);
-static void Hacl_Hash_Blake2_Named_fill_iv32(Pulse_Lib_Slice_slice__uint32 b);
-static size_t Hacl_Secret_Word_nbytes__t = 4;
-static size_t Hacl_Hash_Blake2_block_len_sz__t;
-static uint32_t Hacl_Secret_UInt32_zero = 0;
-static uint32_t Hacl_Secret_Word_zero__t;
+static size_t Hacl_Hash_Blake2_block_len_sz__t = (((size_t)16ULL) * ((size_t)4ULL));
+static uint32_t Hacl_Secret_Word_zero__t = 0;
 static Pulse_Lib_Slice_slice__uint8 Pulse_Lib_Slice_from_array__t_1(uint8_t *a, size_t alen);
+static const size_t Hacl_Hash_Blake2_Core_sigma_arr[160] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3, 11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4, 7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8, 9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13, 2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9, 12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11, 13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10, 6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5, 10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0 };
 static Pulse_Lib_Slice_slice__uintsize Pulse_Lib_Slice_from_array__t_2(size_t *a, size_t alen);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uintsize a, size_t i, size_t v);
-static void Hacl_Hash_Blake2_Core_fill_sigma(Pulse_Lib_Slice_slice__uintsize b);
 static size_t Pulse_Lib_Slice_len__t(Pulse_Lib_Slice_slice__uint8 s);
 static uint32_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(Pulse_Lib_Slice_slice__uint32 a, size_t i);
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v);
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x);
 static uint64_t Hacl_Secret_Word_Instances_sz64(size_t x);
 static uint32_t Hacl_Secret_Word_Instances_sz_lo_32(size_t x);
@@ -30,13 +27,13 @@ static void Hacl_Hash_Blake2_init_state__t(Pulse_Lib_Slice_slice__uint32 h, Puls
 static size_t Hacl_Hash_Blake2_koff_sz(size_t klen);
 static size_t Hacl_Hash_Blake2_nblocks_sz(size_t klen, size_t mlen, size_t bl);
 static size_t Hacl_Secret_Word_nbytes__t_1 = 4;
-static size_t Hacl_Hash_Blake2_block_len_sz__t_1;
+static size_t Hacl_Hash_Blake2_block_len_sz__t_1 = (((size_t)16ULL) * ((size_t)4ULL));
 static size_t Hacl_Hash_Blake2_block_avail(size_t off, size_t len, size_t bl);
 static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v);
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v);
 static void Hacl_Hash_Blake2_read_block__t(Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 s, size_t off);
 static void Hacl_Hash_Blake2_read_block_of__t(Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg, bool usekey, size_t off);
-static uint32_t Hacl_Secret_Word_zero__t_1;
+static uint32_t Hacl_Secret_Word_zero__t_1 = 0;
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t eta);
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x);
@@ -109,14 +106,14 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_3(Pulse_Lib_Slice_slice__uint32 h,
 static void Hacl_Hash_Blake2_write_digest_le__t_3(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint32 st);
 static void Hacl_Hash_Blake2_blake2_impl__t_3(Pulse_Lib_Slice_slice__uint32 ivs, Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
 static void Hacl_Hash_Blake2_Named_blake2s_256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg);
+static const uint64_t Hacl_Hash_Blake2_Named_iv64_arr[8] = { 0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL, 0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL, 0x510e527fade682d1ULL, 0x9b05688c2b3e6c1fULL, 0x1f83d9abfb41bd6bULL, 0x5be0cd19137e2179ULL };
 static Pulse_Lib_Slice_slice__uint64 Pulse_Lib_Slice_from_array__t_3(uint64_t *a, size_t alen);
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v);
-static void Hacl_Hash_Blake2_Named_fill_iv64(Pulse_Lib_Slice_slice__uint64 b);
 static size_t Hacl_Secret_Word_nbytes__t_2 = 8;
-static size_t Hacl_Hash_Blake2_block_len_sz__t_2;
+static size_t Hacl_Hash_Blake2_block_len_sz__t_2 = (((size_t)16ULL) * ((size_t)8ULL));
 static uint64_t Hacl_Secret_UInt64_zero = 0;
-static uint64_t Hacl_Secret_Word_zero__t_2;
+static uint64_t Hacl_Secret_Word_zero__t_2 = 0;
 static uint64_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(Pulse_Lib_Slice_slice__uint64 a, size_t i);
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v);
 static uint64_t Hacl_Secret_Word_Instances_sz_lo_64(size_t x);
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t_2(size_t x);
 static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y);
@@ -203,21 +200,6 @@ static Pulse_Lib_Slice_slice__uint32 Pulse_Lib_Slice_from_array__t(uint32_t *a, 
   return (Pulse_Lib_Slice_slice__uint32){ .elt = a, .len = alen };
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v) {
-  a.elt[i] = v;
-}
-
-static void Hacl_Hash_Blake2_Named_fill_iv32(Pulse_Lib_Slice_slice__uint32 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 0, 0x6a09e667U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 1, 0xbb67ae85U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 2, 0x3c6ef372U);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 3, 0xa54ff53aU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 4, 0x510e527fU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 5, 0x9b05688cU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 6, 0x1f83d9abU);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(b, 7, 0x5be0cd19U);
-}
-
 static Pulse_Lib_Slice_slice__uint8 Pulse_Lib_Slice_from_array__t_1(uint8_t *a, size_t alen) {
   return (Pulse_Lib_Slice_slice__uint8){ .elt = a, .len = alen };
 }
@@ -226,502 +208,16 @@ static Pulse_Lib_Slice_slice__uintsize Pulse_Lib_Slice_from_array__t_2(size_t *a
   return (Pulse_Lib_Slice_slice__uintsize){ .elt = a, .len = alen };
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uintsize a, size_t i, size_t v) {
-  a.elt[i] = v;
-}
-
-static void Hacl_Hash_Blake2_Core_fill_sigma(Pulse_Lib_Slice_slice__uintsize b) {
-  size_t i = 0;
-  while (i < 160) {
-    size_t vi = i;
-    size_t _ct2;
-    if (vi == 0) _ct2 = 0;
-    else {
-      if (vi == 1) _ct2 = 1;
-      else {
-        if (vi == 2) _ct2 = 2;
-        else {
-          if (vi == 3) _ct2 = 3;
-          else {
-            if (vi == 4) _ct2 = 4;
-            else {
-              if (vi == 5) _ct2 = 5;
-              else {
-                if (vi == 6) _ct2 = 6;
-                else {
-                  if (vi == 7) _ct2 = 7;
-                  else {
-                    if (vi == 8) _ct2 = 8;
-                    else {
-                      if (vi == 9) _ct2 = 9;
-                      else {
-                        if (vi == 10) _ct2 = 10;
-                        else {
-                          if (vi == 11) _ct2 = 11;
-                          else {
-                            if (vi == 12) _ct2 = 12;
-                            else {
-                              if (vi == 13) _ct2 = 13;
-                              else {
-                                if (vi == 14) _ct2 = 14;
-                                else {
-                                  if (vi == 15) _ct2 = 15;
-                                  else {
-                                    if (vi == 16) _ct2 = 14;
-                                    else {
-                                      if (vi == 17) _ct2 = 10;
-                                      else {
-                                        if (vi == 18) _ct2 = 4;
-                                        else {
-                                          if (vi == 19) _ct2 = 8;
-                                          else {
-                                            if (vi == 20) _ct2 = 9;
-                                            else {
-                                              if (vi == 21) _ct2 = 15;
-                                              else {
-                                                if (vi == 22) _ct2 = 13;
-                                                else {
-                                                  if (vi == 23) _ct2 = 6;
-                                                  else {
-                                                    if (vi == 24) _ct2 = 1;
-                                                    else {
-                                                      if (vi == 25) _ct2 = 12;
-                                                      else {
-                                                        if (vi == 26) _ct2 = 0;
-                                                        else {
-                                                          if (vi == 27) _ct2 = 2;
-                                                          else {
-                                                            if (vi == 28) _ct2 = 11;
-                                                            else {
-                                                              if (vi == 29) _ct2 = 7;
-                                                              else {
-                                                                if (vi == 30) _ct2 = 5;
-                                                                else {
-                                                                  if (vi == 31) _ct2 = 3;
-                                                                  else {
-                                                                    if (vi == 32) _ct2 = 11;
-                                                                    else {
-                                                                      if (vi == 33) _ct2 = 8;
-                                                                      else {
-                                                                        if (vi == 34) _ct2 = 12;
-                                                                        else {
-                                                                          if (vi == 35) _ct2 = 0;
-                                                                          else {
-                                                                            if (vi == 36) _ct2 = 5;
-                                                                            else {
-                                                                              if (vi == 37) _ct2 = 2;
-                                                                              else {
-                                                                                if (vi == 38) _ct2 = 15;
-                                                                                else {
-                                                                                  if (vi == 39) _ct2 = 13;
-                                                                                  else {
-                                                                                    if (vi == 40) _ct2 = 10;
-                                                                                    else {
-                                                                                      if (vi == 41) _ct2 = 14;
-                                                                                      else {
-                                                                                        if (vi == 42) _ct2 = 3;
-                                                                                        else {
-                                                                                          if (vi == 43) _ct2 = 6;
-                                                                                          else {
-                                                                                            if (vi == 44) _ct2 = 7;
-                                                                                            else {
-                                                                                              if (vi == 45) _ct2 = 1;
-                                                                                              else {
-                                                                                                if (vi == 46) _ct2 = 9;
-                                                                                                else {
-                                                                                                  if (vi == 47) _ct2 = 4;
-                                                                                                  else {
-                                                                                                    if (vi == 48) _ct2 = 7;
-                                                                                                    else {
-                                                                                                      if (vi == 49) _ct2 = 9;
-                                                                                                      else {
-                                                                                                        if (vi == 50) _ct2 = 3;
-                                                                                                        else {
-                                                                                                          if (vi == 51) _ct2 = 1;
-                                                                                                          else {
-                                                                                                            if (vi == 52) _ct2 = 13;
-                                                                                                            else {
-                                                                                                              if (vi == 53) _ct2 = 12;
-                                                                                                              else {
-                                                                                                                if (vi == 54) _ct2 = 11;
-                                                                                                                else {
-                                                                                                                  if (vi == 55) _ct2 = 14;
-                                                                                                                  else {
-                                                                                                                    if (vi == 56) _ct2 = 2;
-                                                                                                                    else {
-                                                                                                                      if (vi == 57) _ct2 = 6;
-                                                                                                                      else {
-                                                                                                                        if (vi == 58) _ct2 = 5;
-                                                                                                                        else {
-                                                                                                                          if (vi == 59) _ct2 = 10;
-                                                                                                                          else {
-                                                                                                                            if (vi == 60) _ct2 = 4;
-                                                                                                                            else {
-                                                                                                                              if (vi == 61) _ct2 = 0;
-                                                                                                                              else {
-                                                                                                                                if (vi == 62) _ct2 = 15;
-                                                                                                                                else {
-                                                                                                                                  if (vi == 63) _ct2 = 8;
-                                                                                                                                  else {
-                                                                                                                                    if (vi == 64) _ct2 = 9;
-                                                                                                                                    else {
-                                                                                                                                      if (vi == 65) _ct2 = 0;
-                                                                                                                                      else {
-                                                                                                                                        if (vi == 66) _ct2 = 5;
-                                                                                                                                        else {
-                                                                                                                                          if (vi == 67) _ct2 = 7;
-                                                                                                                                          else {
-                                                                                                                                            if (vi == 68) _ct2 = 2;
-                                                                                                                                            else {
-                                                                                                                                              if (vi == 69) _ct2 = 4;
-                                                                                                                                              else {
-                                                                                                                                                if (vi == 70) _ct2 = 10;
-                                                                                                                                                else {
-                                                                                                                                                  if (vi == 71) _ct2 = 15;
-                                                                                                                                                  else {
-                                                                                                                                                    if (vi == 72) _ct2 = 14;
-                                                                                                                                                    else {
-                                                                                                                                                      if (vi == 73) _ct2 = 1;
-                                                                                                                                                      else {
-                                                                                                                                                        if (vi == 74) _ct2 = 11;
-                                                                                                                                                        else {
-                                                                                                                                                          if (vi == 75) _ct2 = 12;
-                                                                                                                                                          else {
-                                                                                                                                                            if (vi == 76) _ct2 = 6;
-                                                                                                                                                            else {
-                                                                                                                                                              if (vi == 77) _ct2 = 8;
-                                                                                                                                                              else {
-                                                                                                                                                                if (vi == 78) _ct2 = 3;
-                                                                                                                                                                else {
-                                                                                                                                                                  if (vi == 79) _ct2 = 13;
-                                                                                                                                                                  else {
-                                                                                                                                                                    if (vi == 80) _ct2 = 2;
-                                                                                                                                                                    else {
-                                                                                                                                                                      if (vi == 81) _ct2 = 12;
-                                                                                                                                                                      else {
-                                                                                                                                                                        if (vi == 82) _ct2 = 6;
-                                                                                                                                                                        else {
-                                                                                                                                                                          if (vi == 83) _ct2 = 10;
-                                                                                                                                                                          else {
-                                                                                                                                                                            if (vi == 84) _ct2 = 0;
-                                                                                                                                                                            else {
-                                                                                                                                                                              if (vi == 85) _ct2 = 11;
-                                                                                                                                                                              else {
-                                                                                                                                                                                if (vi == 86) _ct2 = 8;
-                                                                                                                                                                                else {
-                                                                                                                                                                                  if (vi == 87) _ct2 = 3;
-                                                                                                                                                                                  else {
-                                                                                                                                                                                    if (vi == 88) _ct2 = 4;
-                                                                                                                                                                                    else {
-                                                                                                                                                                                      if (vi == 89) _ct2 = 13;
-                                                                                                                                                                                      else {
-                                                                                                                                                                                        if (vi == 90) _ct2 = 7;
-                                                                                                                                                                                        else {
-                                                                                                                                                                                          if (vi == 91) _ct2 = 5;
-                                                                                                                                                                                          else {
-                                                                                                                                                                                            if (vi == 92) _ct2 = 15;
-                                                                                                                                                                                            else {
-                                                                                                                                                                                              if (vi == 93) _ct2 = 14;
-                                                                                                                                                                                              else {
-                                                                                                                                                                                                if (vi == 94) _ct2 = 1;
-                                                                                                                                                                                                else {
-                                                                                                                                                                                                  if (vi == 95) _ct2 = 9;
-                                                                                                                                                                                                  else {
-                                                                                                                                                                                                    if (vi == 96) _ct2 = 12;
-                                                                                                                                                                                                    else {
-                                                                                                                                                                                                      if (vi == 97) _ct2 = 5;
-                                                                                                                                                                                                      else {
-                                                                                                                                                                                                        if (vi == 98) _ct2 = 1;
-                                                                                                                                                                                                        else {
-                                                                                                                                                                                                          if (vi == 99) _ct2 = 15;
-                                                                                                                                                                                                          else {
-                                                                                                                                                                                                            if (vi == 100) _ct2 = 14;
-                                                                                                                                                                                                            else {
-                                                                                                                                                                                                              if (vi == 101) _ct2 = 13;
-                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                if (vi == 102) _ct2 = 4;
-                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                  if (vi == 103) _ct2 = 10;
-                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                    if (vi == 104) _ct2 = 0;
-                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                      if (vi == 105) _ct2 = 7;
-                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                        if (vi == 106) _ct2 = 6;
-                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                          if (vi == 107) _ct2 = 3;
-                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                            if (vi == 108) _ct2 = 9;
-                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                              if (vi == 109) _ct2 = 2;
-                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                if (vi == 110) _ct2 = 8;
-                                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                                  if (vi == 111) _ct2 = 11;
-                                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                                    if (vi == 112) _ct2 = 13;
-                                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                                      if (vi == 113) _ct2 = 11;
-                                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                                        if (vi == 114) _ct2 = 7;
-                                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                                          if (vi == 115) _ct2 = 14;
-                                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                                            if (vi == 116) _ct2 = 12;
-                                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                                              if (vi == 117) _ct2 = 1;
-                                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                                if (vi == 118) _ct2 = 3;
-                                                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                                                  if (vi == 119) _ct2 = 9;
-                                                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                                                    if (vi == 120) _ct2 = 5;
-                                                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                                                      if (vi == 121) _ct2 = 0;
-                                                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                                                        if (vi == 122) _ct2 = 15;
-                                                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                                                          if (vi == 123) _ct2 = 4;
-                                                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                                                            if (vi == 124) _ct2 = 8;
-                                                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                                                              if (vi == 125) _ct2 = 6;
-                                                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                                                if (vi == 126) _ct2 = 2;
-                                                                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                                                                  if (vi == 127) _ct2 = 10;
-                                                                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                                                                    if (vi == 128) _ct2 = 6;
-                                                                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                                                                      if (vi == 129) _ct2 = 15;
-                                                                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                                                                        if (vi == 130) _ct2 = 14;
-                                                                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                                                                          if (vi == 131) _ct2 = 9;
-                                                                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                                                                            if (vi == 132) _ct2 = 11;
-                                                                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                                                                              if (vi == 133) _ct2 = 3;
-                                                                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                                                                if (vi == 134) _ct2 = 0;
-                                                                                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                                                                                  if (vi == 135) _ct2 = 8;
-                                                                                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                                                                                    if (vi == 136) _ct2 = 12;
-                                                                                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                                                                                      if (vi == 137) _ct2 = 2;
-                                                                                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                                                                                        if (vi == 138) _ct2 = 13;
-                                                                                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                                                                                          if (vi == 139) _ct2 = 7;
-                                                                                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                                                                                            if (vi == 140) _ct2 = 1;
-                                                                                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                                                                                              if (vi == 141) _ct2 = 4;
-                                                                                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                                                                                if (vi == 142) _ct2 = 10;
-                                                                                                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                                                                                                  if (vi == 143) _ct2 = 5;
-                                                                                                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                                                                                                    if (vi == 144) _ct2 = 10;
-                                                                                                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                                                                                                      if (vi == 145) _ct2 = 2;
-                                                                                                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                                                                                                        if (vi == 146) _ct2 = 8;
-                                                                                                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                                                                                                          if (vi == 147) _ct2 = 4;
-                                                                                                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                                                                                                            if (vi == 148) _ct2 = 7;
-                                                                                                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                                                                                                              if (vi == 149) _ct2 = 6;
-                                                                                                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                                                                                                if (vi == 150) _ct2 = 1;
-                                                                                                                                                                                                                                                                                                                else {
-                                                                                                                                                                                                                                                                                                                  if (vi == 151) _ct2 = 5;
-                                                                                                                                                                                                                                                                                                                  else {
-                                                                                                                                                                                                                                                                                                                    if (vi == 152) _ct2 = 15;
-                                                                                                                                                                                                                                                                                                                    else {
-                                                                                                                                                                                                                                                                                                                      if (vi == 153) _ct2 = 11;
-                                                                                                                                                                                                                                                                                                                      else {
-                                                                                                                                                                                                                                                                                                                        if (vi == 154) _ct2 = 9;
-                                                                                                                                                                                                                                                                                                                        else {
-                                                                                                                                                                                                                                                                                                                          if (vi == 155) _ct2 = 14;
-                                                                                                                                                                                                                                                                                                                          else {
-                                                                                                                                                                                                                                                                                                                            if (vi == 156) _ct2 = 3;
-                                                                                                                                                                                                                                                                                                                            else {
-                                                                                                                                                                                                                                                                                                                              if (vi == 157) _ct2 = 12;
-                                                                                                                                                                                                                                                                                                                              else {
-                                                                                                                                                                                                                                                                                                                                if (vi == 158) _ct2 = 13;
-                                                                                                                                                                                                                                                                                                                                else _ct2 = 0;
-                                                                                                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                              }
-                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                          }
-                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                      }
-                                                                                                                                                                                                                    }
-                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                }
-                                                                                                                                                                                                              }
-                                                                                                                                                                                                            }
-                                                                                                                                                                                                          }
-                                                                                                                                                                                                        }
-                                                                                                                                                                                                      }
-                                                                                                                                                                                                    }
-                                                                                                                                                                                                  }
-                                                                                                                                                                                                }
-                                                                                                                                                                                              }
-                                                                                                                                                                                            }
-                                                                                                                                                                                          }
-                                                                                                                                                                                        }
-                                                                                                                                                                                      }
-                                                                                                                                                                                    }
-                                                                                                                                                                                  }
-                                                                                                                                                                                }
-                                                                                                                                                                              }
-                                                                                                                                                                            }
-                                                                                                                                                                          }
-                                                                                                                                                                        }
-                                                                                                                                                                      }
-                                                                                                                                                                    }
-                                                                                                                                                                  }
-                                                                                                                                                                }
-                                                                                                                                                              }
-                                                                                                                                                            }
-                                                                                                                                                          }
-                                                                                                                                                        }
-                                                                                                                                                      }
-                                                                                                                                                    }
-                                                                                                                                                  }
-                                                                                                                                                }
-                                                                                                                                              }
-                                                                                                                                            }
-                                                                                                                                          }
-                                                                                                                                        }
-                                                                                                                                      }
-                                                                                                                                    }
-                                                                                                                                  }
-                                                                                                                                }
-                                                                                                                              }
-                                                                                                                            }
-                                                                                                                          }
-                                                                                                                        }
-                                                                                                                      }
-                                                                                                                    }
-                                                                                                                  }
-                                                                                                                }
-                                                                                                              }
-                                                                                                            }
-                                                                                                          }
-                                                                                                        }
-                                                                                                      }
-                                                                                                    }
-                                                                                                  }
-                                                                                                }
-                                                                                              }
-                                                                                            }
-                                                                                          }
-                                                                                        }
-                                                                                      }
-                                                                                    }
-                                                                                  }
-                                                                                }
-                                                                              }
-                                                                            }
-                                                                          }
-                                                                        }
-                                                                      }
-                                                                    }
-                                                                  }
-                                                                }
-                                                              }
-                                                            }
-                                                          }
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(b, vi, _ct2);
-    i = (vi + 1);
-  }
-}
-
 static size_t Pulse_Lib_Slice_len__t(Pulse_Lib_Slice_slice__uint8 s) {
   return s.len;
 }
 
 static uint32_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(Pulse_Lib_Slice_slice__uint32 a, size_t i) {
   return a.elt[i];
+}
+
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(Pulse_Lib_Slice_slice__uint32 a, size_t i, uint32_t v) {
+  a.elt[i] = v;
 }
 
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x) {
@@ -817,7 +313,7 @@ static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(Pulse_Lib_Slice_slice__
   return a.elt[i];
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v) {
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v) {
   a.elt[i] = v;
 }
 
@@ -830,13 +326,13 @@ static void Hacl_Hash_Blake2_read_block__t(Pulse_Lib_Slice_slice__uint8 blk, Pul
   while (k < n) {
     size_t vk = k;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(s, (off + vk));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(blk, vk, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(blk, vk, x);
     k = (vk + 1);
   }
   size_t k2 = n;
   while (k2 < bl) {
     size_t vk_1 = k2;
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(blk, vk_1, z8);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(blk, vk_1, z8);
     k2 = (vk_1 + 1);
   }
 }
@@ -1135,7 +631,7 @@ static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t o
   while (j < n) {
     size_t vj = j;
     uint32_t c = cur;
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, (off + vj), Hacl_Secret_Word_to_byte__t(c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(b, (off + vj), Hacl_Secret_Word_to_byte__t(c));
     cur = Hacl_Secret_Word_shift_right__t(c, 8);
     j = (vj + 1);
   }
@@ -1164,7 +660,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t(Pulse_Lib_Slice_slice__uint8 out
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1201,14 +697,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t(Pulse_Lib_Slice_slice__uint32 ivs, P
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t(h, ivs, klen);
@@ -1226,15 +716,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t(Pulse_Lib_Slice_slice__uint32 ivs, P
 }
 
 static void Hacl_Hash_Blake2_Named_blake2s_128(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint32_t z = 0;
-  uint32_t *ivarr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv32(ivt);
+  uint32_t *arr = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
+  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t(ivt, out, key, msg);
 }
 
@@ -1407,7 +890,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_1(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1444,14 +927,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_1(Pulse_Lib_Slice_slice__uint32 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_1(h, ivs, klen);
@@ -1469,15 +946,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_1(Pulse_Lib_Slice_slice__uint32 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2s_160(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint32_t z = 0;
-  uint32_t *ivarr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv32(ivt);
+  uint32_t *arr = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
+  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_1(ivt, out, key, msg);
 }
 
@@ -1650,7 +1120,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_2(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1687,14 +1157,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_2(Pulse_Lib_Slice_slice__uint32 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_2(h, ivs, klen);
@@ -1712,15 +1176,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_2(Pulse_Lib_Slice_slice__uint32 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2s_224(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint32_t z = 0;
-  uint32_t *ivarr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv32(ivt);
+  uint32_t *arr = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
+  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_2(ivt, out, key, msg);
 }
 
@@ -1893,7 +1350,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_3(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -1930,14 +1387,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_3(Pulse_Lib_Slice_slice__uint32 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_3(h, ivs, klen);
@@ -1955,15 +1406,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_3(Pulse_Lib_Slice_slice__uint32 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2s_256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint32_t z = 0;
-  uint32_t *ivarr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv32(ivt);
+  uint32_t *arr = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
+  Pulse_Lib_Slice_slice__uint32 ivt = Pulse_Lib_Slice_from_array__t(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_3(ivt, out, key, msg);
 }
 
@@ -1978,23 +1422,12 @@ static Pulse_Lib_Slice_slice__uint64 Pulse_Lib_Slice_from_array__t_3(uint64_t *a
   return (Pulse_Lib_Slice_slice__uint64){ .elt = a, .len = alen };
 }
 
-static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v) {
-  a.elt[i] = v;
-}
-
-static void Hacl_Hash_Blake2_Named_fill_iv64(Pulse_Lib_Slice_slice__uint64 b) {
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 0, 0x6a09e667f3bcc908ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 1, 0xbb67ae8584caa73bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 2, 0x3c6ef372fe94f82bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 3, 0xa54ff53a5f1d36f1ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 4, 0x510e527fade682d1ULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 5, 0x9b05688c2b3e6c1fULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 6, 0x1f83d9abfb41bd6bULL);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(b, 7, 0x5be0cd19137e2179ULL);
-}
-
 static uint64_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(Pulse_Lib_Slice_slice__uint64 a, size_t i) {
   return a.elt[i];
+}
+
+static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v) {
+  a.elt[i] = v;
 }
 
 static uint64_t Hacl_Secret_Word_Instances_sz_lo_64(size_t x) {
@@ -2034,7 +1467,7 @@ static void Hacl_Hash_Blake2_init_state__t_4(Pulse_Lib_Slice_slice__uint64 h, Pu
   while (i < 8) {
     size_t vi2 = i;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, vi2);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, vi2, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, vi2, x);
     i = (vi2 + 1);
   }
   uint64_t one = Hacl_Secret_Word_of_sizet_lo__t_2(1);
@@ -2043,7 +1476,7 @@ static void Hacl_Hash_Blake2_init_state__t_4(Pulse_Lib_Slice_slice__uint64 h, Pu
   uint64_t hi = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(one, 24), Hacl_Secret_Word_shift_left__t_1(one, 16));
   uint64_t pw = Hacl_Secret_Word_add_mod__t_1(hi, Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(kw, 8), nw));
   uint64_t x0 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 0);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
 }
 
 static void Hacl_Hash_Blake2_read_block__t_1(Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 s, size_t off) {
@@ -2055,13 +1488,13 @@ static void Hacl_Hash_Blake2_read_block__t_1(Pulse_Lib_Slice_slice__uint8 blk, P
   while (k < n) {
     size_t vk = k;
     uint8_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(s, (off + vk));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(blk, vk, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(blk, vk, x);
     k = (vk + 1);
   }
   size_t k2 = n;
   while (k2 < bl) {
     size_t vk_1 = k2;
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(blk, vk_1, z8);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(blk, vk_1, z8);
     k2 = (vk_1 + 1);
   }
 }
@@ -2109,44 +1542,44 @@ static void Hacl_Hash_Blake2_load_block__t_1(Pulse_Lib_Slice_slice__uint64 mw, P
   while (i < 16) {
     size_t vi = i;
     uint64_t x = Hacl_Impl_Bytes_load_le__t_1(blk, (vi * nb));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(mw, vi, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(mw, vi, x);
     i = (vi + 1);
   }
 }
 
 static void Hacl_Hash_Blake2_Core_load_vector__t_1(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs) {
   uint64_t __anf0 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 0);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 0, __anf0);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 0, __anf0);
   uint64_t __anf01 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 1);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 1, __anf01);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 1, __anf01);
   uint64_t __anf02 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 2, __anf02);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 2, __anf02);
   uint64_t __anf03 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 3);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 3, __anf03);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 3, __anf03);
   uint64_t __anf04 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 4);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 4, __anf04);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 4, __anf04);
   uint64_t __anf05 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 5);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 5, __anf05);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 5, __anf05);
   uint64_t __anf06 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 6);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 6, __anf06);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 6, __anf06);
   uint64_t __anf07 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 7);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 7, __anf07);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 7, __anf07);
   uint64_t __anf08 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 0);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 8, __anf08);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 8, __anf08);
   uint64_t __anf09 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 1);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 9, __anf09);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 9, __anf09);
   uint64_t __anf010 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 10, __anf010);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 10, __anf010);
   uint64_t __anf011 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 3);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 11, __anf011);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 11, __anf011);
   uint64_t __anf012 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 4);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 12, __anf012);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 12, __anf012);
   uint64_t __anf013 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 5);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 13, __anf013);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 13, __anf013);
   uint64_t __anf014 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 6);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 14, __anf014);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 14, __anf014);
   uint64_t __anf015 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, 7);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 15, __anf015);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 15, __anf015);
 }
 
 static uint64_t Hacl_Secret_Word_Instances_sz_hi_64(size_t x) {
@@ -2169,12 +1602,12 @@ static uint64_t Hacl_Secret_Word_lognot__t_1(uint64_t x) {
 static void Hacl_Hash_Blake2_Core_init_vector_impl__t_4(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs, size_t ctr, bool last) {
   Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
   uint64_t x12 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 12);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
   uint64_t x13 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 13);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
   if (last) {
     uint64_t x14 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 14);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
   }
 }
 
@@ -2206,10 +1639,10 @@ static void Hacl_Hash_Blake2_Core_g_impl__t_4(Pulse_Lib_Slice_slice__uint64 vv, 
   uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
   uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
   uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, a, a2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, b, b2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, c, c2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, d, d2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, a, a2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, b, b2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, c, c2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, d, d2);
 }
 
 static void Hacl_Hash_Blake2_Core_mix_columns__t_4(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base) {
@@ -2285,7 +1718,7 @@ static void Hacl_Hash_Blake2_Core_mix_state_impl__t_1(Pulse_Lib_Slice_slice__uin
     uint64_t a = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, vi);
     uint64_t b = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, vi);
     uint64_t c = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, (vi + 8));
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, vi, Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, vi, Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c));
     i = (vi + 1);
   }
 }
@@ -2334,7 +1767,7 @@ static void Hacl_Impl_Bytes_store_le__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t
   while (j < n) {
     size_t vj = j;
     uint64_t c = cur;
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(b, (off + vj), Hacl_Secret_Word_to_byte__t_1(c));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(b, (off + vj), Hacl_Secret_Word_to_byte__t_1(c));
     cur = Hacl_Secret_Word_shift_right__t_1(c, 8);
     j = (vj + 1);
   }
@@ -2363,7 +1796,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_4(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -2400,14 +1833,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_4(Pulse_Lib_Slice_slice__uint64 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_4(h, ivs, klen);
@@ -2425,15 +1852,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_4(Pulse_Lib_Slice_slice__uint64 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2b_160(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint64_t z = 0;
-  uint64_t *ivarr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv64(ivt);
+  uint64_t *arr = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
+  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_4(ivt, out, key, msg);
 }
 
@@ -2449,7 +1869,7 @@ static void Hacl_Hash_Blake2_init_state__t_5(Pulse_Lib_Slice_slice__uint64 h, Pu
   while (i < 8) {
     size_t vi2 = i;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, vi2);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, vi2, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, vi2, x);
     i = (vi2 + 1);
   }
   uint64_t one = Hacl_Secret_Word_of_sizet_lo__t_2(1);
@@ -2458,18 +1878,18 @@ static void Hacl_Hash_Blake2_init_state__t_5(Pulse_Lib_Slice_slice__uint64 h, Pu
   uint64_t hi = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(one, 24), Hacl_Secret_Word_shift_left__t_1(one, 16));
   uint64_t pw = Hacl_Secret_Word_add_mod__t_1(hi, Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(kw, 8), nw));
   uint64_t x0 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 0);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
 }
 
 static void Hacl_Hash_Blake2_Core_init_vector_impl__t_5(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs, size_t ctr, bool last) {
   Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
   uint64_t x12 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 12);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
   uint64_t x13 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 13);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
   if (last) {
     uint64_t x14 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 14);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
   }
 }
 
@@ -2486,10 +1906,10 @@ static void Hacl_Hash_Blake2_Core_g_impl__t_5(Pulse_Lib_Slice_slice__uint64 vv, 
   uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
   uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
   uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, a, a2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, b, b2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, c, c2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, d, d2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, a, a2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, b, b2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, c, c2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, d, d2);
 }
 
 static void Hacl_Hash_Blake2_Core_mix_columns__t_5(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base) {
@@ -2606,7 +2026,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_5(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -2643,14 +2063,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_5(Pulse_Lib_Slice_slice__uint64 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_5(h, ivs, klen);
@@ -2668,15 +2082,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_5(Pulse_Lib_Slice_slice__uint64 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2b_256(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint64_t z = 0;
-  uint64_t *ivarr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv64(ivt);
+  uint64_t *arr = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
+  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_5(ivt, out, key, msg);
 }
 
@@ -2692,7 +2099,7 @@ static void Hacl_Hash_Blake2_init_state__t_6(Pulse_Lib_Slice_slice__uint64 h, Pu
   while (i < 8) {
     size_t vi2 = i;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, vi2);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, vi2, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, vi2, x);
     i = (vi2 + 1);
   }
   uint64_t one = Hacl_Secret_Word_of_sizet_lo__t_2(1);
@@ -2701,18 +2108,18 @@ static void Hacl_Hash_Blake2_init_state__t_6(Pulse_Lib_Slice_slice__uint64 h, Pu
   uint64_t hi = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(one, 24), Hacl_Secret_Word_shift_left__t_1(one, 16));
   uint64_t pw = Hacl_Secret_Word_add_mod__t_1(hi, Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(kw, 8), nw));
   uint64_t x0 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 0);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
 }
 
 static void Hacl_Hash_Blake2_Core_init_vector_impl__t_6(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs, size_t ctr, bool last) {
   Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
   uint64_t x12 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 12);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
   uint64_t x13 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 13);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
   if (last) {
     uint64_t x14 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 14);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
   }
 }
 
@@ -2729,10 +2136,10 @@ static void Hacl_Hash_Blake2_Core_g_impl__t_6(Pulse_Lib_Slice_slice__uint64 vv, 
   uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
   uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
   uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, a, a2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, b, b2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, c, c2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, d, d2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, a, a2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, b, b2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, c, c2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, d, d2);
 }
 
 static void Hacl_Hash_Blake2_Core_mix_columns__t_6(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base) {
@@ -2849,7 +2256,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_6(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -2886,14 +2293,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_6(Pulse_Lib_Slice_slice__uint64 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_6(h, ivs, klen);
@@ -2911,15 +2312,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_6(Pulse_Lib_Slice_slice__uint64 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2b_384(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint64_t z = 0;
-  uint64_t *ivarr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv64(ivt);
+  uint64_t *arr = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
+  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_6(ivt, out, key, msg);
 }
 
@@ -2935,7 +2329,7 @@ static void Hacl_Hash_Blake2_init_state__t_7(Pulse_Lib_Slice_slice__uint64 h, Pu
   while (i < 8) {
     size_t vi2 = i;
     uint64_t x = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(ivs, vi2);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, vi2, x);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, vi2, x);
     i = (vi2 + 1);
   }
   uint64_t one = Hacl_Secret_Word_of_sizet_lo__t_2(1);
@@ -2944,18 +2338,18 @@ static void Hacl_Hash_Blake2_init_state__t_7(Pulse_Lib_Slice_slice__uint64 h, Pu
   uint64_t hi = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(one, 24), Hacl_Secret_Word_shift_left__t_1(one, 16));
   uint64_t pw = Hacl_Secret_Word_add_mod__t_1(hi, Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_shift_left__t_1(kw, 8), nw));
   uint64_t x0 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(h, 0);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(h, 0, Hacl_Secret_Word_logxor__t_1(x0, pw));
 }
 
 static void Hacl_Hash_Blake2_Core_init_vector_impl__t_7(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs, size_t ctr, bool last) {
   Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
   uint64_t x12 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 12);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 12, Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr)));
   uint64_t x13 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 13);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 13, Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr)));
   if (last) {
     uint64_t x14 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_3(vv, 14);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, 14, Hacl_Secret_Word_lognot__t_1(x14));
   }
 }
 
@@ -2972,10 +2366,10 @@ static void Hacl_Hash_Blake2_Core_g_impl__t_7(Pulse_Lib_Slice_slice__uint64 vv, 
   uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
   uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
   uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, a, a2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, b, b2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, c, c2);
-  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(vv, d, d2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, a, a2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, b, b2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, c, c2);
+  Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(vv, d, d2);
 }
 
 static void Hacl_Hash_Blake2_Core_mix_columns__t_7(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base) {
@@ -3092,7 +2486,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_7(Pulse_Lib_Slice_slice__uint8 o
   while (i < hb) {
     size_t vi = i;
     uint8_t x_1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(dig, vi);
-    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_2(out, vi, x_1);
+    Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(out, vi, x_1);
     i = (vi + 1);
   }
 }
@@ -3129,14 +2523,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_7(Pulse_Lib_Slice_slice__uint64 ivs,
   }
   barr = _cbuf7;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
-  size_t *sarr;
-  size_t _cbuf9[160];
-  for (size_t _ci10 = 0; _ci10 < 160; _ci10++) {
-    _cbuf9[_ci10] = 0;
-  }
-  sarr = _cbuf9;
-  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(sarr, 160);
-  Hacl_Hash_Blake2_Core_fill_sigma(sg);
+  size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
+  Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
   size_t klen = Pulse_Lib_Slice_len__t(key);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);
   Hacl_Hash_Blake2_init_state__t_7(h, ivs, klen);
@@ -3154,15 +2542,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_7(Pulse_Lib_Slice_slice__uint64 ivs,
 }
 
 static void Hacl_Hash_Blake2_Named_blake2b_512(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 msg) {
-  uint64_t z = 0;
-  uint64_t *ivarr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z;
-  }
-  ivarr = _cbuf1;
-  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(ivarr, 8);
-  Hacl_Hash_Blake2_Named_fill_iv64(ivt);
+  uint64_t *arr = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
+  Pulse_Lib_Slice_slice__uint64 ivt = Pulse_Lib_Slice_from_array__t_3(arr, 8);
   Hacl_Hash_Blake2_blake2_impl__t_7(ivt, out, key, msg);
 }
 
@@ -3173,12 +2554,4 @@ void Hacl_Hash_Blake2_Ptr_blake2b_512(uint8_t *out, uint8_t *key, size_t key_len
   Hacl_Hash_Blake2_Named_blake2b_512(so, sk, sm);
 }
 
-void custard_init_globals(void) {
-  Hacl_Hash_Blake2_block_len_sz__t = (16 * Hacl_Secret_Word_nbytes__t);
-  Hacl_Secret_Word_zero__t = Hacl_Secret_UInt32_zero;
-  Hacl_Hash_Blake2_block_len_sz__t_1 = (16 * Hacl_Secret_Word_nbytes__t_1);
-  Hacl_Secret_Word_zero__t_1 = Hacl_Secret_UInt32_zero;
-  Hacl_Hash_Blake2_block_len_sz__t_2 = (16 * Hacl_Secret_Word_nbytes__t_2);
-  Hacl_Secret_Word_zero__t_2 = Hacl_Secret_UInt64_zero;
-}
 

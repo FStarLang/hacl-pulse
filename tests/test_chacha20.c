@@ -58,7 +58,6 @@ static void check(const char *name, const uint8_t *k, const uint8_t *n,
 }
 
 int main(void) {
-  custard_init_globals();
   for (size_t i = 0; i < sizeof buf; i++)
     buf[i] = (uint8_t)((i * 7 + 11) & 0xff);
   for (size_t i = 0; i < sizeof key; i++)

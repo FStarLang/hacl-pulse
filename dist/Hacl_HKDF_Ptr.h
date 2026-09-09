@@ -16,7 +16,6 @@ so two spellings of it are the same spelling. */
 #define CUSTARD_UNIT_DEFINED
 typedef uint8_t custard_unit;
 #endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,8 +45,6 @@ void Hacl_HKDF_Ptr_extract_sha512(uint8_t *out, uint8_t *salt, size_t salt_len, 
 void Hacl_HKDF_Ptr_extract_sha384(uint8_t *out, uint8_t *salt, size_t salt_len, uint8_t *ikm, size_t ikm_len);
 void Hacl_HKDF_Ptr_extract_sha256(uint8_t *out, uint8_t *salt, size_t salt_len, uint8_t *ikm, size_t ikm_len);
 void Hacl_HKDF_Ptr_extract_sha224(uint8_t *out, uint8_t *salt, size_t salt_len, uint8_t *ikm, size_t ikm_len);
-
-void custard_init_globals(void);
 
 
 #ifdef __cplusplus
