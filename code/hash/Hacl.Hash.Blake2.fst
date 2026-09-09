@@ -465,3 +465,126 @@ ensures exists* (vh: Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq 
 }
 
 #pop-options
+
+let koff_sz (klen: SZ.t) : (n: SZ.t { SZ.v n == (if SZ.v klen = 0 then 0 else 1) }) =
+  if SZ.eq klen 0sz then 0sz else 1sz
+
+(** Where in the message the last block starts.  Zero if the last block is the
+    key block, which happens exactly when a keyed hash is taken of the empty
+    message. *)
+let final_off (nlast koffsz bl: SZ.t)
+  : Pure SZ.t
+      (requires SZ.v koffsz <= SZ.v nlast ==>
+                SZ.fits ((SZ.v nlast - SZ.v koffsz) * SZ.v bl))
+      (ensures fun o -> SZ.v o == (if SZ.v nlast < SZ.v koffsz then 0
+                                   else (SZ.v nlast - SZ.v koffsz) * SZ.v bl))
+  = if SZ.lt nlast koffsz then 0sz else SZ.mul (SZ.sub nlast koffsz) bl
+
+(** [Spec.Blake2.last_counter]. *)
+let last_ctr (klen mlen bl: SZ.t)
+  : Pure SZ.t (requires SZ.fits (SZ.v mlen + SZ.v bl))
+              (ensures fun c -> SZ.v c == (if SZ.v klen = 0
+                                           then SZ.v mlen else SZ.v mlen + SZ.v bl))
+  = if SZ.eq klen 0sz then mlen else SZ.add mlen bl
+
+(** [msg_blocks_bound], guarded: the last block need not be a message block,
+    and if it is not then [nlast - koff] is not a natural number. *)
+let msg_blocks_bound_opt (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (nlast koffs: nat)
+  : Lemma (requires Seq.length key <= max_key_len #t /\
+                    nlast + 1 == nblocks #t key msg /\ koffs == koff #t key)
+          (ensures koffs <= nlast ==> (nlast - koffs) * block_len #t <= Seq.length msg)
+  = if koffs <= nlast then msg_blocks_bound #t key msg (nlast - koffs)
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+
+(** {2 The hash}
+
+    The initialization vector arrives as a slice, filled by the named layer;
+    everything else is scratch this function allocates and gives back. *)
+fn blake2_impl (#t: Type0) {| w: word t |}
+               ([@@@FStar.Attributes.monomorphize] p: params t)
+               (ivs: S.slice t) (out: S.slice S8.t)
+               (key: S.slice S8.t) (msg: S.slice S8.t)
+               (#pi: perm) (#vi: erased (Seq.seq t))
+               (#vout: erased (Seq.seq S8.t))
+               (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+               (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
+requires S.pts_to ivs #pi vi ** S.pts_to out vout **
+         S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+         pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
+               Seq.length vout == (hash_bytes p) /\
+               Seq.length vkey <= max_key_len #t /\
+               Seq.length vmsg + 2 * block_len #t < pow2 64 /\
+               SZ.fits (Seq.length vmsg + 2 * block_len #t))
+ensures exists* (vout': Seq.seq S8.t).
+  S.pts_to ivs #pi vi ** S.pts_to out vout' **
+  S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+  pure (Seq.length vkey <= max_key_len #t /\ vout' == blake2 p (reveal vkey) (reveal vmsg))
+{
+  S.pts_to_len ivs;
+  S.pts_to_len out;
+  S.pts_to_len key;
+  S.pts_to_len msg;
+
+  let bl = block_len_sz #t #w;
+  let z0: t = zero #t #w;
+  let z8 = S8.classify 0uy;
+
+  let mut harr = [| z0; 8sz |];
+  A.pts_to_len harr;
+  let h = S.from_array harr 8sz;
+  let mut varr = [| z0; 16sz |];
+  A.pts_to_len varr;
+  let vv = S.from_array varr 16sz;
+  let mut marr = [| z0; 16sz |];
+  A.pts_to_len marr;
+  let mw = S.from_array marr 16sz;
+  let mut barr = [| z8; bl |];
+  A.pts_to_len barr;
+  let blk = S.from_array barr bl;
+  let mut sarr = [| 0sz; 160sz |];
+  A.pts_to_len sarr;
+  let sg = S.from_array sarr 160sz;
+  S.pts_to_len h;
+  S.pts_to_len vv;
+  S.pts_to_len mw;
+  S.pts_to_len blk;
+  S.pts_to_len sg;
+
+  fill_sigma sg;
+
+  let klen = S.len key;
+  let mlen = S.len msg;
+  init_state p h ivs klen;
+
+  nblocks_eq #t (reveal vkey) (reveal vmsg);
+  nblocks_pos #t (reveal vkey) (reveal vmsg);
+  nblocks_exact #t (reveal vkey) (reveal vmsg);
+  data_len_bound #t (reveal vkey) (reveal vmsg);
+
+  let koffsz = koff_sz klen;
+  let nb = nblocks_sz klen mlen bl;
+  let nlast = SZ.sub nb 1sz;
+
+  blake2_blocks p h vv mw blk ivs sg key msg koffsz nlast;
+
+  msg_blocks_bound_opt #t (reveal vkey) (reveal vmsg) (SZ.v nlast) (SZ.v koffsz);
+  block_at_data #t (reveal vkey) (reveal vmsg) (SZ.v nlast);
+
+  let foff = final_off nlast koffsz bl;
+  let usekey = SZ.lt nlast koffsz;
+  read_block_of #t blk key msg usekey foff;
+  load_block #t mw blk;
+
+  let lastc = last_ctr klen mlen bl;
+  compress_impl p h mw vv ivs sg lastc true;
+  write_digest_le p out h;
+
+  S.to_array h;
+  S.to_array vv;
+  S.to_array mw;
+  S.to_array blk;
+  S.to_array sg;
+}
+
+#pop-options
