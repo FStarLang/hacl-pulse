@@ -42,6 +42,9 @@ CUSTARD_ENTRIES_Hacl.Hash.Blake2.Ptr := \
   blake2b_512 blake2b_384 blake2b_256 blake2b_160 \
   blake2s_256 blake2s_224 blake2s_160 blake2s_128
 
+C_UNITS += Hacl.Chacha20.Ptr
+CUSTARD_ENTRIES_Hacl.Chacha20.Ptr := encrypt decrypt
+
 C_UNITS += Hacl.HMAC.Ptr
 CUSTARD_ENTRIES_Hacl.HMAC.Ptr := hmac_sha224 hmac_sha256 hmac_sha384 hmac_sha512
 
@@ -56,6 +59,7 @@ TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
 TEST_UNITS_test_sha3 := Hacl.Hash.SHA3.Ptr
 TEST_UNITS_test_sha3_streaming := Hacl.Streaming.SHA3.Ptr
 TEST_UNITS_test_blake2 := Hacl.Hash.Blake2.Ptr
+TEST_UNITS_test_chacha20 := Hacl.Chacha20.Ptr
 TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
 TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 

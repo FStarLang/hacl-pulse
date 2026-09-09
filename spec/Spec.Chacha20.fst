@@ -111,17 +111,25 @@ let quarter_round (a b c d: idx) (m: state) : state =
   let m = line c d b 7ul m in
   m
 
-(** A double round is four column rounds followed by four diagonal rounds. *)
-let double_round (m: state) : state =
+(** A double round is four column rounds followed by four diagonal rounds.
+    The two halves are named separately because the implementation proves them
+    separately: eight quarter rounds in one postcondition is a query no rlimit
+    discharges, four is routine. *)
+let column_round (m: state) : state =
   let m = quarter_round 0 4  8 12 m in
   let m = quarter_round 1 5  9 13 m in
   let m = quarter_round 2 6 10 14 m in
   let m = quarter_round 3 7 11 15 m in
+  m
+
+let diagonal_round (m: state) : state =
   let m = quarter_round 0 5 10 15 m in
   let m = quarter_round 1 6 11 12 m in
   let m = quarter_round 2 7  8 13 m in
   let m = quarter_round 3 4  9 14 m in
   m
+
+let double_round (m: state) : state = diagonal_round (column_round m)
 
 let rounds (m: state) : state =
   repeati 10 (fun _ m -> double_round m) m
@@ -135,10 +143,11 @@ let rounds (m: state) : state =
 let with_counter (st: state) (ctr: U32.t) : state =
   Seq.upd st 12 (S32.classify ctr)
 
-let core (st: state) (ctr: U32.t) : state =
-  let s0 = with_counter st ctr in
+let core_of (s0: state) : state =
   let s1 = rounds s0 in
   Seq.init size_state (fun i -> S32.add_mod (Seq.index s1 i) (Seq.index s0 i))
+
+let core (st: state) (ctr: U32.t) : state = core_of (with_counter st ctr)
 
 (** The keystream block, little-endian as everything in ChaCha20 is. *)
 let keystream (st: state) (ctr: U32.t) : GTot block =
