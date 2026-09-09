@@ -621,3 +621,44 @@ let chain_fits (e0 e1 e2 e3 e4: nat)
     add_bound (5 * (f4 / radix)) (e0 % radix) 37 26
 
 #pop-options
+
+(** {2 A block as limbs}
+
+    Sixteen little-endian bytes arrive as two sixty-four-bit words, and the
+    limb boundaries do not line up with the word boundary: limb 2 straddles
+    it, taking its low twelve bits from the top of [lo] and its high fourteen
+    from the bottom of [hi].  [c] is the bit a block contributes above its
+    top byte -- one for a full block, and zero for a padded short one, where
+    the pad byte has already put the bit where it belongs.
+
+    The proof is entirely linear once the powers of two are literals, so it
+    is left to the solver with the powers spelled out; the only lemma is the
+    one that says dividing twice is dividing once. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let load_limbs (lo hi c: nat)
+  : Lemma (requires lo < pow2 64 /\ hi < pow2 64 /\ (c == 0 \/ c == 1))
+          (ensures (let a0 = lo % pow2 26 in
+                    let a1 = (lo / pow2 26) % pow2 26 in
+                    let a2 = lo / pow2 52 + (hi % pow2 14) * pow2 12 in
+                    let a3 = (hi / pow2 14) % pow2 26 in
+                    let a4 = hi / pow2 40 + c * pow2 24 in
+                    as_nat5 a0 a1 a2 a3 a4 == lo + pow2 64 * hi + c * pow2 128 /\
+                    bounded5 a0 a1 a2 a3 a4 26))
+  = assert_norm (pow2 12 == 4096);
+    assert_norm (pow2 14 == 16384);
+    assert_norm (pow2 24 == 16777216);
+    assert_norm (pow2 26 == 67108864);
+    assert_norm (pow2 40 == 1099511627776);
+    assert_norm (pow2 52 == 4503599627370496);
+    assert_norm (pow2 64 == 18446744073709551616);
+    assert_norm (pow2 78 == 302231454903657293676544);
+    assert_norm (pow2 104 == 20282409603651670423947251286016);
+    assert_norm (pow2 128 == 340282366920938463463374607431768211456);
+    Math.pow2_plus 26 26;
+    Math.pow2_plus 14 26;
+    Math.division_multiplication_lemma lo (pow2 26) (pow2 26);
+    Math.division_multiplication_lemma hi (pow2 14) (pow2 26)
+
+#pop-options

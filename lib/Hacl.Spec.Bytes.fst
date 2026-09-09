@@ -197,6 +197,51 @@ let le_nat_cons (s: Seq.seq S8.t) (j: nat { j < Seq.length s })
   = let n = Seq.length s in
     Seq.lemma_eq_intro (Seq.slice (Seq.slice s j n) 1 (n - j)) (Seq.slice s (j + 1) n)
 
+(** Cutting a little-endian number in two.  The low [k] bytes are the low
+    [8k] bits, so the value is the prefix plus [2^(8k)] times the suffix.
+    This is what turns two sixty-four-bit loads into one hundred-and-twenty-
+    eight-bit number, and what says a zero-padded block with a one byte
+    appended is worth [le_nat] of the block plus [2^(8*len)]. *)
+let rec le_nat_split (s: Seq.seq S8.t) (k: nat { k <= Seq.length s })
+  : Lemma (ensures le_nat s == le_nat (Seq.slice s 0 k) +
+                               pow2 (8 * k) * le_nat (Seq.slice s k (Seq.length s)))
+          (decreases k)
+  = let n = Seq.length s in
+    if k = 0 then Seq.lemma_eq_intro (Seq.slice s 0 n) s
+    else begin
+      let t = Seq.slice s 1 n in
+      let p = Seq.slice s 0 k in
+      le_nat_split t (k - 1);
+      Seq.lemma_eq_intro (Seq.slice t 0 (k - 1)) (Seq.slice p 1 k);
+      Seq.lemma_eq_intro (Seq.slice t (k - 1) (n - 1)) (Seq.slice s k n);
+      assert (le_nat p == S8.v (Seq.index s 0) + 256 * le_nat (Seq.slice t 0 (k - 1)));
+      assert (le_nat s == S8.v (Seq.index s 0) + 256 * le_nat t);
+      Math.pow2_plus 8 (8 * (k - 1));
+      Math.paren_mul_right 256 (pow2 (8 * (k - 1))) (le_nat (Seq.slice s k n))
+    end
+
+(** An all-zero sequence is zero. *)
+let rec le_nat_zeros (s: Seq.seq S8.t)
+  : Lemma (requires forall (i: nat). i < Seq.length s ==> S8.v (Seq.index s i) == 0)
+          (ensures le_nat s == 0)
+          (decreases Seq.length s)
+  = let n = Seq.length s in
+    if n = 0 then ()
+    else begin
+      assert (forall (i: nat). i < n - 1 ==> Seq.index (Seq.slice s 1 n) i == Seq.index s (i + 1));
+      le_nat_zeros (Seq.slice s 1 n)
+    end
+
+(** A one followed by zeros is one: the pad byte a short Poly1305 block gets. *)
+let le_nat_one_zeros (s: Seq.seq S8.t)
+  : Lemma (requires 0 < Seq.length s /\ S8.v (Seq.index s 0) == 1 /\
+                    (forall (i: nat). 0 < i /\ i < Seq.length s ==>
+                       S8.v (Seq.index s i) == 0))
+          (ensures le_nat s == 1)
+  = let n = Seq.length s in
+    assert (forall (i: nat). i < n - 1 ==> Seq.index (Seq.slice s 1 n) i == Seq.index s (i + 1));
+    le_nat_zeros (Seq.slice s 1 n)
+
 let byte_of_nat_le (n: nat) (x: nat) (i: nat { i < n }) : S8.t =
   S8.classify (U8.uint_to_t ((x / pow2 (8 * i)) % 256))
 
