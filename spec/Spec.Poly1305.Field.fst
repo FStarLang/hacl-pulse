@@ -478,3 +478,116 @@ let mul_no_overflow (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4: nat)
     assert_norm (pow2 5 == 32)
 
 #pop-options
+
+(** {2 Multiply, carry, and the bounds that hold afterwards}
+
+    [mul_reduce_ok] is the whole of [Hacl.Poly1305.Field.fmul] as one
+    statement about natural numbers.  Rather than have the Pulse code apply
+    [mul_mod] and the six carry lemmas itself -- each application dragging the
+    entire separation-logic context along with it -- the implementation only
+    has to exhibit its five results as the expressions below, and this lemma
+    supplies both the congruence and the bounds.
+
+    It comes in three parts, and the split is not cosmetic: stated as one
+    lemma, with the ten hypotheses defining the carry chain in scope for every
+    sub-query, it does not finish.  [carry_chain_cong] knows nothing about
+    where its inputs came from, [carry_chain_bounds] knows nothing about the
+    prime, and only [mul_reduce_ok] mentions both. *)
+
+(** The carry chain, named once so the three lemmas agree on it. *)
+unfold let chain (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat) : prop =
+  let f1 = e1 + e0 / radix in
+  let f2 = e2 + f1 / radix in
+  let f3 = e3 + f2 / radix in
+  let f4 = e4 + f3 / radix in
+  let g0 = e0 % radix + 5 * (f4 / radix) in
+  t0 == g0 % radix /\
+  t1 == f1 % radix + g0 / radix /\
+  t2 == f2 % radix /\
+  t3 == f3 % radix /\
+  t4 == f4 % radix
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let carry_chain_cong (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
+  : Lemma (requires chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
+          (ensures as_nat5 t0 t1 t2 t3 t4 % prime == as_nat5 e0 e1 e2 e3 e4 % prime)
+  = let f1 = e1 + e0 / radix in
+    let f2 = e2 + f1 / radix in
+    let f3 = e3 + f2 / radix in
+    let f4 = e4 + f3 / radix in
+    let g0 = e0 % radix + 5 * (f4 / radix) in
+    carry0 e0 e1 e2 e3 e4;
+    carry1 (e0 % radix) f1 e2 e3 e4;
+    carry2 (e0 % radix) (f1 % radix) f2 e3 e4;
+    carry3 (e0 % radix) (f1 % radix) (f2 % radix) f3 e4;
+    carry_top (e0 % radix) (f1 % radix) (f2 % radix) (f3 % radix) f4;
+    carry0 g0 (f1 % radix) (f2 % radix) (f3 % radix) (f4 % radix)
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let div_bound (x: nat) (n m: nat)
+  : Lemma (requires x < pow2 n /\ m <= n) (ensures x / pow2 m < pow2 (n - m))
+  = Math.lemma_div_lt x n m
+
+let add_bound (a b: nat) (n m: nat)
+  : Lemma (requires a < pow2 n /\ b < pow2 m /\ m <= n)
+          (ensures a + b < pow2 (n + 1))
+  = Math.pow2_le_compat n m;
+    Math.pow2_double_sum n
+
+let carry_chain_bounds (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
+  : Lemma (requires bounded5 e0 e1 e2 e3 e4 58 /\ chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
+          (ensures bounded5 t0 t1 t2 t3 t4 27)
+  = let f1 = e1 + e0 / radix in
+    let f2 = e2 + f1 / radix in
+    let f3 = e3 + f2 / radix in
+    let f4 = e4 + f3 / radix in
+    let g0 = e0 % radix + 5 * (f4 / radix) in
+    div_bound e0 58 26;
+    add_bound e1 (e0 / radix) 58 32;
+    div_bound f1 59 26;
+    add_bound e2 (f1 / radix) 58 33;
+    div_bound f2 59 26;
+    add_bound e3 (f2 / radix) 58 33;
+    div_bound f3 59 26;
+    add_bound e4 (f3 / radix) 58 33;
+    div_bound f4 59 26;
+    assert_norm (5 * pow2 33 < pow2 36);
+    add_bound (5 * (f4 / radix)) (e0 % radix) 36 26;
+    div_bound g0 37 26;
+    Math.pow2_lt_compat 27 26;
+    Math.pow2_lt_compat 26 11;
+    Math.pow2_double_sum 26
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let mul_reduce_ok (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 t0 t1 t2 t3 t4: nat)
+  : Lemma
+      (requires
+         bounded5 h0 h1 h2 h3 h4 27 /\ bounded5 r0 r1 r2 r3 r4 26 /\
+         chain (d0 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+               (d1 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+               (d2 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+               (d3 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+               (d4 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+               t0 t1 t2 t3 t4)
+      (ensures
+         bounded5 t0 t1 t2 t3 t4 27 /\
+         as_nat5 t0 t1 t2 t3 t4 % prime ==
+         (as_nat5 h0 h1 h2 h3 h4 * as_nat5 r0 r1 r2 r3 r4) % prime)
+  = let e0 = d0 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 in
+    let e1 = d1 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 in
+    let e2 = d2 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 in
+    let e3 = d3 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 in
+    let e4 = d4 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 in
+    mul_no_overflow h0 h1 h2 h3 h4 r0 r1 r2 r3 r4;
+    carry_chain_bounds e0 e1 e2 e3 e4 t0 t1 t2 t3 t4;
+    carry_chain_cong e0 e1 e2 e3 e4 t0 t1 t2 t3 t4;
+    mul_mod h0 h1 h2 h3 h4 r0 r1 r2 r3 r4
+
+#pop-options
