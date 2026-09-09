@@ -13,7 +13,8 @@ Status: the SHA-2 family (SHA-224/256/384/512) one-shot and incremental, HMAC
 over it, HKDF over that, and the SHA-3 family (SHA3-224/256/384/512 and
 SHAKE128/256) one-shot and incremental, are specified, implemented, verified,
 extracted, and tested against the FIPS 180-4, FIPS 202, RFC 4231 and RFC 5869
-vectors.
+vectors.  BLAKE2b and BLAKE2s are specified, implemented, verified, extracted
+and tested at all eight standard digest lengths, keyed and unkeyed.
 
 ```
 make            verify, extract, compile, test
@@ -309,6 +310,49 @@ direct-to-C backend cannot yet emit a constant global.  That is a backend
 limitation, not an interface one.
 
 
+### BLAKE2, where the digest length is part of the algorithm
+
+BLAKE2 is written once for both widths, like everything else here, over a
+`Spec.Blake2.params` record holding the round count, the initialization
+vector, the digest length and the four rotation distances.  Three things about
+it are unlike SHA-2.
+
+The **digest length is a parameter, not a truncation**: it is mixed into the
+first state word before anything is compressed, so BLAKE2b-256 is not
+BLAKE2b-512 cut in half.  It therefore has to be part of the record, and the
+record has to be a compile-time constant for Custard to fold the rotation
+distances into literals, so there is one entry point per length --
+`blake2b_512`, `blake2b_384`, `blake2b_256`, `blake2b_160`, `blake2s_256`,
+`blake2s_224`, `blake2s_160`, `blake2s_128` -- rather than one that takes a
+length.  Another length is four lines.
+
+The **key is data, not a separate mechanism**: a keyed BLAKE2 is the unkeyed
+one over the key zero-padded to a whole block, followed by the message.  The
+specification says exactly that, in `Spec.Blake2.data`.  The implementation
+must not build it -- that would mean copying the message -- so it reads block
+*i* straight out of the key or the message, zero-filling past the end, and
+`Spec.Blake2.block_at_data` is the proof that the two views agree.  Naming that
+view (`block_of`) and proving one lemma about it is much less work than
+threading `Seq.append` through a loop invariant.
+
+The **block counter is two words wide** -- 128 bits for BLAKE2b, 64 for
+BLAKE2s -- and it counts message bytes, not padded bytes, which is what makes
+the padding unambiguous without a length field.  The implementation carries it
+as a `size_t` and splits it with two new `word` class methods, `of_sizet_lo`
+and `of_sizet_hi`.  Their specifications are stated modulo 2^64, because
+`FStar.SizeT.fits` is abstract: nothing in the standard library says a
+`size_t` is only sixty-four bits, and the only conversion it offers truncates
+to that width.  A caller that needs the split to be exact carries
+`SZ.v x < pow2 64` itself.  That obligation surfaces in the C header as "the
+message must be shorter than 2^64 minus two blocks", which is vacuous
+everywhere and unprovable in general.
+
+Two empty-input cases are worth stating because they are the ones an
+implementation gets wrong: an *unkeyed* hash of the empty string still
+compresses one block, of zeros, with counter zero; a *keyed* hash of the empty
+string compresses only the key block, with counter one block.  Both are in the
+test vectors.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -398,8 +442,25 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   whose own postcondition mentions them has to re-establish it -- one
   `S.pts_to_len` at each end of the function, since a slice's length never
   changes.
+* **Give a branch a written-down postcondition.**  Pulse will check both arms
+  of an `if` against an annotated goal, but it will not invent the join: an
+  `if` whose two arms leave different values in the same slice fails with
+  "cannot prove `match ... with`".  Lifting the branch into its own function
+  whose `ensures` is itself an `if` -- `read_block_of` -- makes it go through.
+  For branches that only choose a *value*, use an ordinary F\* function
+  (`step_of`, `final_off`, `koff_sz`) and keep the Pulse code straight-line.
+* **A `while` needs a `decreases`.**  Without one the loop is `stt_div`, and
+  the error surfaces far away as "cannot compose computations in this divergent
+  block", naming the effect rather than the missing clause.
+* **`--split_queries` is not a pragma.**  When a four-conjunct postcondition
+  times out, the lever available is `--fuel`/`--ifuel` and splitting the
+  function, not splitting the query.
+* **Guard a lemma call, do not case-split the caller.**  `nlast - koff` is not
+  a natural number when the last block is the key block.  Wrapping the lemma in
+  another whose conclusion is an implication (`msg_blocks_bound_opt`) keeps the
+  Pulse code free of ghost branches.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: BLAKE2,
-ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: incremental
+BLAKE2, ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.

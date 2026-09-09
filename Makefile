@@ -37,6 +37,11 @@ CUSTARD_ENTRIES_Hacl.Streaming.SHA3.Ptr := \
   shake128_init shake128_update shake128_digest \
   shake256_init shake256_update shake256_digest
 
+C_UNITS += Hacl.Hash.Blake2.Ptr
+CUSTARD_ENTRIES_Hacl.Hash.Blake2.Ptr := \
+  blake2b_512 blake2b_384 blake2b_256 blake2b_160 \
+  blake2s_256 blake2s_224 blake2s_160 blake2s_128
+
 C_UNITS += Hacl.HMAC.Ptr
 CUSTARD_ENTRIES_Hacl.HMAC.Ptr := hmac_sha224 hmac_sha256 hmac_sha384 hmac_sha512
 
@@ -50,6 +55,7 @@ TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
 TEST_UNITS_test_sha3 := Hacl.Hash.SHA3.Ptr
 TEST_UNITS_test_sha3_streaming := Hacl.Streaming.SHA3.Ptr
+TEST_UNITS_test_blake2 := Hacl.Hash.Blake2.Ptr
 TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
 TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 
