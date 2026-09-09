@@ -495,7 +495,7 @@ let mul_no_overflow (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4: nat)
     prime, and only [mul_reduce_ok] mentions both. *)
 
 (** The carry chain, named once so the three lemmas agree on it. *)
-unfold let chain (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat) : prop =
+let chain (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat) : prop =
   let f1 = e1 + e0 / radix in
   let f2 = e2 + f1 / radix in
   let f3 = e3 + f2 / radix in
@@ -589,5 +589,35 @@ let mul_reduce_ok (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 t0 t1 t2 t3 t4: nat)
     carry_chain_bounds e0 e1 e2 e3 e4 t0 t1 t2 t3 t4;
     carry_chain_cong e0 e1 e2 e3 e4 t0 t1 t2 t3 t4;
     mul_mod h0 h1 h2 h3 h4 r0 r1 r2 r3 r4
+
+#pop-options
+
+(** The intermediates of the carry chain, for the implementation: it has to
+    know each one fits in sixty-four bits before it may add into it. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let chain_fits (e0 e1 e2 e3 e4: nat)
+  : Lemma (requires bounded5 e0 e1 e2 e3 e4 58)
+          (ensures (let f1 = e1 + e0 / radix in
+                    let f2 = e2 + f1 / radix in
+                    let f3 = e3 + f2 / radix in
+                    let f4 = e4 + f3 / radix in
+                    e0 % radix + 5 * (f4 / radix) < pow2 37 /\
+                    f1 < pow2 59 /\ f2 < pow2 59 /\ f3 < pow2 59 /\ f4 < pow2 59))
+  = let f1 = e1 + e0 / radix in
+    let f2 = e2 + f1 / radix in
+    let f3 = e3 + f2 / radix in
+    let f4 = e4 + f3 / radix in
+    div_bound e0 58 26;
+    add_bound e1 (e0 / radix) 58 32;
+    div_bound f1 59 26;
+    add_bound e2 (f1 / radix) 58 33;
+    div_bound f2 59 26;
+    add_bound e3 (f2 / radix) 58 33;
+    div_bound f3 59 26;
+    add_bound e4 (f3 / radix) 58 33;
+    div_bound f4 59 26;
+    assert_norm (5 * pow2 33 < pow2 36);
+    add_bound (5 * (f4 / radix)) (e0 % radix) 36 26
 
 #pop-options
