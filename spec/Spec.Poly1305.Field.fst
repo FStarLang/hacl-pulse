@@ -269,3 +269,123 @@ let mul_mod (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4: nat)
     Math.lemma_mod_plus dd c prime
 
 #pop-options
+
+(** {2 Carrying}
+
+    After [mul_mod] the limbs are wide — up to about [2^59] — and have to be
+    brought back under [2^26] before anything else can be done with them.
+    The implementation walks up the number moving the high bits of each limb
+    into the next one, and then wraps the overflow of the top limb round to
+    the bottom, multiplied by five.
+
+    Only the last of these six steps changes the number: the first five are
+    equalities, and [carry_top] is a congruence modulo [prime].  Keeping the
+    two kinds apart is what lets the implementation's loop invariant say
+    "equal to the accumulator" for as long as possible and only weaken to
+    "congruent" once. *)
+
+let radix : pos = pow2 26
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let carry0 (d0 d1 d2 d3 d4: nat)
+  : Lemma (as_nat5 (d0 % radix) (d1 + d0 / radix) d2 d3 d4 ==
+           as_nat5 d0 d1 d2 d3 d4)
+  = Math.euclidean_division_definition d0 radix;
+    Math.distributivity_add_left d1 (d0 / radix) radix
+
+let carry1 (d0 d1 d2 d3 d4: nat)
+  : Lemma (as_nat5 d0 (d1 % radix) (d2 + d1 / radix) d3 d4 ==
+           as_nat5 d0 d1 d2 d3 d4)
+  = Math.euclidean_division_definition d1 radix;
+    Math.distributivity_add_left d2 (d1 / radix) (pow2 52);
+    Math.pow2_plus 26 26;
+    Math.paren_mul_right (d1 / radix) radix radix;
+    Math.distributivity_add_left (d1 % radix) ((d1 / radix) * radix) radix
+
+let carry2 (d0 d1 d2 d3 d4: nat)
+  : Lemma (as_nat5 d0 d1 (d2 % radix) (d3 + d2 / radix) d4 ==
+           as_nat5 d0 d1 d2 d3 d4)
+  = Math.euclidean_division_definition d2 radix;
+    Math.distributivity_add_left d3 (d2 / radix) (pow2 78);
+    Math.pow2_plus 52 26;
+    Math.paren_mul_right (d2 / radix) radix (pow2 52);
+    Math.distributivity_add_left (d2 % radix) ((d2 / radix) * radix) (pow2 52)
+
+let carry3 (d0 d1 d2 d3 d4: nat)
+  : Lemma (as_nat5 d0 d1 d2 (d3 % radix) (d4 + d3 / radix) ==
+           as_nat5 d0 d1 d2 d3 d4)
+  = Math.euclidean_division_definition d3 radix;
+    Math.distributivity_add_left d4 (d3 / radix) (pow2 104);
+    Math.pow2_plus 78 26;
+    Math.paren_mul_right (d3 / radix) radix (pow2 78);
+    Math.distributivity_add_left (d3 % radix) ((d3 / radix) * radix) (pow2 78)
+
+(** The one step that is only a congruence: [2^130] is [prime + 5], so the
+    bits that fall off the top come back at the bottom multiplied by five. *)
+let carry_top (d0 d1 d2 d3 d4: nat)
+  : Lemma ((as_nat5 (d0 + 5 * (d4 / radix)) d1 d2 d3 (d4 % radix)) % prime ==
+           (as_nat5 d0 d1 d2 d3 d4) % prime)
+  = let c = d4 / radix in
+    Math.euclidean_division_definition d4 radix;
+    Math.distributivity_add_left (d4 % radix) (c * radix) (pow2 104);
+    Math.paren_mul_right c radix (pow2 104);
+    Math.pow2_plus 104 26;
+    Math.distributivity_sub_left (pow2 130) 5 c;
+    assert (as_nat5 d0 d1 d2 d3 d4 ==
+            as_nat5 (d0 + 5 * c) d1 d2 d3 (d4 % radix) + c * prime);
+    Math.lemma_mod_plus (as_nat5 (d0 + 5 * c) d1 d2 d3 (d4 % radix)) c prime
+
+#pop-options
+
+(** {2 Addition and bounds} *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let add5_eval (a0 a1 a2 a3 a4 c0 c1 c2 c3 c4: nat)
+  : Lemma (as_nat5 (a0 + c0) (a1 + c1) (a2 + c2) (a3 + c3) (a4 + c4) ==
+           as_nat5 a0 a1 a2 a3 a4 + as_nat5 c0 c1 c2 c3 c4)
+  = Math.distributivity_add_left a1 c1 (pow2 26);
+    Math.distributivity_add_left a2 c2 (pow2 52);
+    Math.distributivity_add_left a3 c3 (pow2 78);
+    Math.distributivity_add_left a4 c4 (pow2 104)
+
+(** Five limbs under the radix make a number under [2^130]: the bound the
+    final reduction needs, and the invariant the carry chain restores. *)
+let as_nat5_bound (a0 a1 a2 a3 a4: nat)
+  : Lemma (requires a0 < radix /\ a1 < radix /\ a2 < radix /\ a3 < radix /\ a4 < radix)
+          (ensures as_nat5 a0 a1 a2 a3 a4 < pow2 130)
+  = Math.lemma_mult_le_right (pow2 26) a1 (radix - 1);
+    Math.lemma_mult_le_right (pow2 52) a2 (radix - 1);
+    Math.lemma_mult_le_right (pow2 78) a3 (radix - 1);
+    Math.lemma_mult_le_right (pow2 104) a4 (radix - 1);
+    Math.pow2_plus 26 26;
+    Math.pow2_plus 52 26;
+    Math.pow2_plus 78 26;
+    Math.pow2_plus 104 26
+
+#pop-options
+
+(** {2 The last reduction}
+
+    A fully carried accumulator is below [2^130], which is only a little more
+    than [prime], so at most one subtraction is needed.  Rather than compare
+    against [prime] — which would need a borrow chain to be constant time —
+    add five and look at whether bit 130 came out: that is the same test, and
+    the sum is the answer when it does. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let reduce_final (h: nat)
+  : Lemma (requires h < pow2 130)
+          (ensures h % prime == (if h + 5 >= pow2 130 then h + 5 - pow2 130 else h))
+  = Math.pow2_le_compat 130 4;
+    assert_norm (pow2 4 == 16);
+    if h + 5 >= pow2 130 then begin
+      assert (h >= prime /\ h - prime < prime);
+      Math.lemma_mod_sub h prime 1;
+      Math.small_mod (h - prime) prime
+    end else
+      Math.small_mod h prime
+
+#pop-options
