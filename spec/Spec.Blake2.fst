@@ -168,16 +168,30 @@ let low_word (#t: Type0) {| word t |} (n: nat) : GTot t =
   Math.lemma_mod_lt n (pow2 (bits #t));
   of_v (n % pow2 (bits #t))
 
-let compress (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-             (h: Seq.lseq t 8) (m: Seq.lseq t 16) (ctr: nat) (last: bool)
-  : GTot (Seq.lseq t 8)
+(** The working vector a compression starts from: the state on top of the
+    initialization vector, with the block counter mixed into words twelve and
+    thirteen and word fourteen inverted if this is the last block.
+
+    Named, rather than inlined into [compress], because the implementation is
+    split at the same seam. *)
+let init_vector (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+                (h: Seq.lseq t 8) (ctr: nat) (last: bool)
+  : GTot (Seq.lseq t 16)
   = let v0 : Seq.lseq t 16 = Seq.append h (G.reveal p.iv) in
     let v1 = Seq.upd v0 12 (logxor #t (Seq.index v0 12) (low_word #t ctr)) in
     let v2 = Seq.upd v1 13 (logxor #t (Seq.index v1 13) (low_word #t (ctr / pow2 (bits #t)))) in
-    let v3 = if last then Seq.upd v2 14 (lognot #t (Seq.index v2 14)) else v2 in
-    let v4 = rounds_upto p m v3 (rounds p) in
-    Seq.init 8 (fun i -> logxor #t (logxor #t (Seq.index h i) (Seq.index v4 i))
-                                   (Seq.index v4 (i + 8)))
+    if last then Seq.upd v2 14 (lognot #t (Seq.index v2 14)) else v2
+
+(** The feedforward: each half of the working vector is xored back into the
+    state. *)
+let mix_state (#t: Type0) {| word t |} (h: Seq.lseq t 8) (v4: Seq.lseq t 16) : Seq.lseq t 8 =
+  Seq.init 8 (fun i -> logxor #t (logxor #t (Seq.index h i) (Seq.index v4 i))
+                                 (Seq.index v4 (i + 8)))
+
+let compress (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+             (h: Seq.lseq t 8) (m: Seq.lseq t 16) (ctr: nat) (last: bool)
+  : GTot (Seq.lseq t 8)
+  = mix_state h (rounds_upto p m (init_vector p h ctr last) (rounds p))
 
 (** {2 The data a hash is taken over}
 

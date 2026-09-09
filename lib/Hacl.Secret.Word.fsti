@@ -78,6 +78,22 @@ class word (t: Type0) = {
   rotate_right: (x: t) -> (s: U32.t { 0 < U32.v s /\ U32.v s < bits }) ->
     (r: t { v r == v x / pow2 (U32.v s) + (v x % pow2 (U32.v s)) * pow2 (bits - U32.v s) });
 
+  (** A public byte count, split into the low [bits] and the next [bits].
+      Every length in this library is a [size_t]; BLAKE2's block counter is two
+      words wide, which at 32 bits means splitting one.  There is no way to
+      write that generically -- it is exactly a width-specific truncation -- so
+      it is a method rather than a function over the others.
+
+      The [% pow2 64] is not noise: [FStar.SizeT.fits] is abstract, so nothing
+      says a [size_t] is only sixty-four bits, and the only conversion the
+      standard library offers truncates to that width.  A caller that needs the
+      split to be exact says so, by carrying [SZ.v x < pow2 64] -- which on
+      every platform anyone compiles for is a tautology, and which the type
+      system will not let us assume. *)
+  of_sizet_lo: (x: FStar.SizeT.t) -> (r: t { v r == (FStar.SizeT.v x % pow2 64) % pow2 bits });
+  of_sizet_hi: (x: FStar.SizeT.t) ->
+    (r: t { v r == ((FStar.SizeT.v x % pow2 64) / pow2 bits) % pow2 bits });
+
   (** Widening and truncating conversions to bytes, which is all that generic
       big-endian (de)serialization needs. *)
   of_byte: (b: S8.t) -> (r: t { v r == S8.v b });

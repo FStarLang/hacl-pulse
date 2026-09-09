@@ -32,6 +32,30 @@ module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
 
+(** {2 Splitting a [size_t] into words}
+
+    A [size_t] is sixty-four bits wide, so at 64 bits the low half is the whole
+    of it and the high half is zero, and at 32 bits both halves are real. *)
+
+let sz64 (x: SZ.t) : (r: S64.t { S64.v r == SZ.v x % pow2 64 }) =
+  S64.classify (SZ.sizet_to_uint64 x)
+
+let sz_lo_32 (x: SZ.t) : (r: S32.t { S32.v r == (SZ.v x % pow2 64) % pow2 32 }) =
+  Cast.u64_to_u32 (sz64 x)
+
+let sz_hi_32 (x: SZ.t) : (r: S32.t { S32.v r == ((SZ.v x % pow2 64) / pow2 32) % pow2 32 }) =
+  FStar.Math.Lemmas.lemma_mod_mod ((SZ.v x % pow2 64) / pow2 32) ((SZ.v x % pow2 64) / pow2 32) (pow2 32);
+  Cast.u64_to_u32 (S64.shift_right (sz64 x) 32ul)
+
+let sz_lo_64 (x: SZ.t) : (r: S64.t { S64.v r == (SZ.v x % pow2 64) % pow2 64 }) =
+  FStar.Math.Lemmas.lemma_mod_mod (SZ.v x % pow2 64) (SZ.v x) (pow2 64);
+  sz64 x
+
+let sz_hi_64 (x: SZ.t) : (r: S64.t { S64.v r == ((SZ.v x % pow2 64) / pow2 64) % pow2 64 }) =
+  FStar.Math.Lemmas.lemma_mod_lt (SZ.v x) (pow2 64);
+  FStar.Math.Lemmas.small_div (SZ.v x % pow2 64) (pow2 64);
+  S64.zero
+
 instance word_u32 : word S32.t = {
   bits = 32;
   nbytes = 4sz;
@@ -47,6 +71,8 @@ instance word_u32 : word S32.t = {
   shift_left = S32.shift_left;
   shift_right = S32.shift_right;
   rotate_right = S32.rotate_right;
+  of_sizet_lo = sz_lo_32;
+  of_sizet_hi = sz_hi_32;
   of_byte = Cast.u8_to_u32;
   to_byte = Cast.u32_to_u8;
 }
@@ -66,6 +92,8 @@ instance word_u64 : word S64.t = {
   shift_left = S64.shift_left;
   shift_right = S64.shift_right;
   rotate_right = S64.rotate_right;
+  of_sizet_lo = sz_lo_64;
+  of_sizet_hi = sz_hi_64;
   of_byte = Cast.u8_to_u64;
   to_byte = Cast.u64_to_u8;
 }
