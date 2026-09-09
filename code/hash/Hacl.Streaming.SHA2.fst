@@ -28,11 +28,10 @@
     [digest] promise [Spec.SHA2.hash p seen].
 
     As in [Hacl.Hash.SHA2], the round constants and the initial state are
-    written into stack arrays on entry, since the direct-to-C backend cannot
-    emit a constant global.  For [update] that is sixty-four stores per call
-    regardless of how much data the call absorbs, so callers that feed the hash
-    in very small pieces pay for it; the fix is a backend change, not an
-    interface change. *)
+    [static const] arrays in the program image, so [update] does no work
+    proportional to the table however little data the call absorbs.  That
+    matters here more than it does for the one-shot hashes: a caller that
+    feeds the hash a byte at a time makes one [update] call per byte. *)
 module Hacl.Streaming.SHA2
 
 #lang-pulse
@@ -44,6 +43,8 @@ open Spec.SHA2
 open Spec.SHA2.Constants
 open Spec.SHA2.Streaming
 open Hacl.Hash.SHA2
+open Hacl.Hash.SHA2.Tables
+open Hacl.Impl.Table
 open Hacl.Hash.SHA2.Streaming
 
 module S = Pulse.Lib.Slice
@@ -78,13 +79,9 @@ ensures exists* (vacc': Seq.seq S32.t) (vtot': Seq.seq SZ.t).
   pure (stream_ok sha2_224 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_32 ();
-  let z = S32.classify 0ul;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv224 ivt;
+  let ivt = table iv224_arr 8sz;
   init_impl sha2_224 ivt acc buf tot;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** Absorb [data]. *)
@@ -106,16 +103,13 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_32 ();
   max_input_bound ();
   let z = S32.classify 0ul;
-  let mut karr = [| z; 64sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 64sz;
-  fill_k256 kt;
+  let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 64sz;
   update_impl sha2_224 kt wsb acc buf tot data seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
@@ -134,16 +128,13 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
 {
   block_len_32 ();
   let z = S32.classify 0ul;
-  let mut karr = [| z; 64sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 64sz;
-  fill_k256 kt;
+  let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 64sz;
   digest_impl sha2_224 kt wsb acc buf tot out seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 
@@ -160,13 +151,9 @@ ensures exists* (vacc': Seq.seq S32.t) (vtot': Seq.seq SZ.t).
   pure (stream_ok sha2_256 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_32 ();
-  let z = S32.classify 0ul;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv256 ivt;
+  let ivt = table iv256_arr 8sz;
   init_impl sha2_256 ivt acc buf tot;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** Absorb [data]. *)
@@ -188,16 +175,13 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_32 ();
   max_input_bound ();
   let z = S32.classify 0ul;
-  let mut karr = [| z; 64sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 64sz;
-  fill_k256 kt;
+  let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 64sz;
   update_impl sha2_256 kt wsb acc buf tot data seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
@@ -216,22 +200,24 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
 {
   block_len_32 ();
   let z = S32.classify 0ul;
-  let mut karr = [| z; 64sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 64sz;
-  fill_k256 kt;
+  let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 64sz;
   digest_impl sha2_256 kt wsb acc buf tot out seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 
 (** {2 SHA384} *)
 
 (** Reset the state to the empty message. *)
+(* The eighty-entry [k512] is enough bigger than the sixty-four-entry [k256]
+   that relating the array to [params512_with]'s [k] field no longer fits in
+   the default budget. *)
+#push-options "--z3rlimit 40"
+
 fn sha384_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
               (#vacc: erased (Seq.seq S64.t)) (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
@@ -242,13 +228,9 @@ ensures exists* (vacc': Seq.seq S64.t) (vtot': Seq.seq SZ.t).
   pure (stream_ok sha2_384 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_64 ();
-  let z = S64.classify 0uL;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv384 ivt;
+  let ivt = table iv384_arr 8sz;
   init_impl sha2_384 ivt acc buf tot;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** Absorb [data]. *)
@@ -270,16 +252,13 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_64 ();
   max_input_bound ();
   let z = S64.classify 0uL;
-  let mut karr = [| z; 80sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 80sz;
-  fill_k512 kt;
+  let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 80sz;
   update_impl sha2_384 kt wsb acc buf tot data seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
@@ -298,16 +277,13 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
 {
   block_len_64 ();
   let z = S64.classify 0uL;
-  let mut karr = [| z; 80sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 80sz;
-  fill_k512 kt;
+  let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 80sz;
   digest_impl sha2_384 kt wsb acc buf tot out seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 
@@ -324,13 +300,9 @@ ensures exists* (vacc': Seq.seq S64.t) (vtot': Seq.seq SZ.t).
   pure (stream_ok sha2_512 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_64 ();
-  let z = S64.classify 0uL;
-  let mut ivarr = [| z; 8sz |];
-  A.pts_to_len ivarr;
-  let ivt = S.from_array ivarr 8sz;
-  fill_iv512 ivt;
+  let ivt = table iv512_arr 8sz;
   init_impl sha2_512 ivt acc buf tot;
-  S.to_array ivt;
+  drop_table ivt;
 }
 
 (** Absorb [data]. *)
@@ -352,16 +324,13 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_64 ();
   max_input_bound ();
   let z = S64.classify 0uL;
-  let mut karr = [| z; 80sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 80sz;
-  fill_k512 kt;
+  let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 80sz;
   update_impl sha2_512 kt wsb acc buf tot data seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
@@ -380,15 +349,13 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
 {
   block_len_64 ();
   let z = S64.classify 0uL;
-  let mut karr = [| z; 80sz |];
-  A.pts_to_len karr;
-  let kt = S.from_array karr 80sz;
-  fill_k512 kt;
+  let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
   let wsb = S.from_array wsarr 80sz;
   digest_impl sha2_512 kt wsb acc buf tot out seen;
   S.to_array wsb;
-  S.to_array kt;
+  drop_table kt;
 }
 
+#pop-options

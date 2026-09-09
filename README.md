@@ -34,7 +34,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 
 | directory | contents |
 | --- | --- |
-| `lib/` | the secret-integer layer, the `word` type class, generic byte serialization |
+| `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
 | `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`) |
 | `tests/` | C test harnesses |
@@ -133,16 +133,58 @@ The conversion is free at run time.
 ### The constant tables
 
 `params.k` and `params.iv` are erased: they exist only in specifications.  At
-run time each entry point allocates a stack array and stores the literals into
-it.  The reason is that Custard has no compile-time array initializers — a
-compound literal is not a constant expression at file scope — and the reason it
-is cheap to *prove* is that a Pulse store yields `Seq.upd`, so the tables in
-`Spec.SHA2.Constants` are written as chains of `Seq.upd`; the fill is equal to
-the specification by unfolding rather than by a sixty-four-way case analysis.
+run time the tables are `static const` arrays in the program image,
 
-The cost is sixty-four (eighty) stores per call, a few percent of one block and
-nothing on a long message.  When the backend learns about constant globals the
-`fill_*` functions can be deleted without touching anything else.
+```c
+static const uint32_t Hacl_Hash_SHA2_Tables_k256_arr[64] = { 0x428a2f98U, ... };
+```
+
+which is `Pulse.Lib.GlobalArray`: `mk_static_array` takes a list that has to
+reduce to a literal, and the elements become the C initializer directly.  The
+one thing the axiomatization does *not* hand out is write permission — the
+postcondition of `array_of_static_array` gives an existential fraction and
+never a full one — which is what licenses the `const`, and which means a table
+is acquired and never released.  `Hacl.Impl.Table` is the three lines that
+turn one into a slice, and `drop_table` is the counterpart of the `S.to_array`
+a stack buffer needs.
+
+`table` is `inline_for_extraction`, and has to be.  A `static_array` is
+represented as a plain `t *`, and the `const`-discarding cast is emitted at the
+`array_of_static_array` call; inside an out-of-line generic helper that call
+sees a parameter, by which point the `const` is already gone and the *caller*
+is the one that trips `-Werror=discarded-qualifiers`.  Inlining puts the cast
+on the named global, where it belongs.
+
+Each table is written once, as a list, in the spec module; the sequence the
+specification uses is `Seq.seq_of_list` of it, which is definitionally what
+the global array contains.  So the table the linker lays out and the table the
+proof is about are the same literals, and no lemma relates them.
+
+That identity lives in the array's *type*:
+
+```fstar
+let k256_arr : (a: G.static_array S32.t
+                  { G.static_array_elems a == (k256 <: Seq.seq S32.t) })
+  = G.mk_static_array k256_list
+```
+
+and not in a lemma, because a lemma with one conjunct per table puts six
+sixty-four-element lists into a verification condition that already carries a
+heap.  In the type each fact arrives on its own; the length comes with it,
+since `k256` is an `lseq`.  Even so, `k512` at eighty entries needs
+`--z3rlimit 40` at the four call sites where the equation has to be seen
+through `params512_with`'s record projection; `k256` at sixty-four does not.
+
+Keccak's rho offsets are the one place the list is a second copy: `rotc` is a
+readable twenty-five-way `match` returning a `nat`, and `Seq.init 25 rotc` is
+a call rather than a literal spine.  `rotc_seq_ok` is a machine-checked
+cross-check of the list against the `match`, which is what makes writing the
+offsets twice safe rather than merely convenient.
+
+The previous revision of this library filled the tables at run time, sixty-four
+stores per call, because Custard had no array-literal node: `BufCreate` fills a
+run uniformly, and a compound literal is not a constant expression at file
+scope.  Deleting the `fill_*` functions took nothing with it, as predicted.
 
 ### HMAC without copying the message
 
@@ -400,8 +442,8 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   block-full case out into `update_full` made all of them go away at once; no
   amount of rlimit would have.
 * **A unit is a whole program.**  Two extracted units each contain everything
-  their entry points reach, including a `custard_init_globals` of their own, so
-  they cannot be linked into one binary.  One test binary per unit.
+  their entry points reach, and each defines it, so they cannot be linked into
+  one binary.  One test binary per unit.
 * **Mark big `Seq.init` definitions `opaque_to_smt`.**  A spec function that
   builds a 25-element sequence is, unfolded, 25 copies of its body in every
   query that mentions it.  Make it opaque and give it an index lemma that
@@ -500,10 +542,30 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 * **`assert_norm` the small powers.**  At `--fuel 0` the solver cannot see
   that twenty-one times `2^53` is under `2^58` from `pow2_plus 5 53` alone --
   it also has to be told that `pow2 5` is thirty-two.
-* **`custard_init_globals()` is mandatory.**  A test that omits it gets
-  zero-valued globals; for BLAKE2 that meant a block length of zero and a
-  division by zero at the first `nblocks`.  Every `tests/*.c` `main` calls it
-  first.
+* **A type-class value method used to cost a startup pass.**  `word.zero` and
+  `word.nbytes` specialize to a parameterless definition per instance, and one
+  global naming another is not a constant expression in C, so the whole chain
+  was assigned in a `custard_init_globals` that every `main` had to call
+  first — and a test that forgot got a BLAKE2 block length of zero and a
+  division by zero.  Custard now folds a constant global into the initializer
+  of the global that reads it, so no unit here emits that function at all.
+  Recorded because the failure mode was so quiet.
+* **`Seq.index` does not reduce through `Seq.seq_of_list`.**  The sequence
+  type is abstract, so `assert_norm (Seq.index (seq_of_list l) i == ...)`
+  fails.  Bridge with `Seq.lemma_seq_of_list_index`; `List.Tot.index` on a
+  literal spine does reduce.
+* **A bounded `forall` over 160 ground facts is not an SMT job.**  At
+  twenty-five entries (Keccak's rho offsets) a case split at `--z3rlimit 200
+  --fuel 1 --ifuel 1` still closes.  At a hundred and sixty (BLAKE2's message
+  schedule) it does not, at any budget.  What works is to make the check
+  *computational*: a recursive `bool` over `List.Tot.index`, one
+  `assert_norm` that it is `true` -- a normalizer job, not a solver one --
+  and a recursive lemma that unfolds it exactly once per step to produce the
+  quantified form.  Thirteen seconds.  `FStar.SizeT.v` is `Pure nat` and not
+  `GTot`, which is what lets the check be a `bool` at all.
+* **Put a list's length in its type.**  `let l : m: list t {List.Tot.length m
+  == 160} = assert_norm (...); l0` costs one `assert_norm` once, instead of
+  one at every use.
 * **Custard eta-renames trivial wrappers.**  A Pulse `fn` whose body is just
   a call to another `fn` extracts with its parameters named `eta`, `eta1`,
   ...  Inline the body instead; that is why `Hacl.Chacha20.Ptr.decrypt`

@@ -255,8 +255,6 @@ int main(void) {
   int rc = 0;
   uint8_t prk[64];
   uint8_t okm[128];
-  custard_init_globals();
-
   Hacl_HKDF_Ptr_extract_sha224(prk, SALT(1), ikm1, sizeof ikm1);
   rc |= check("HKDF-SHA224 extract rfc5869/1", prk, prk_sha224_1, 28);
   Hacl_HKDF_Ptr_expand_sha224(okm, 42, prk, 28, INFO(1));

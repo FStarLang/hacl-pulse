@@ -28,11 +28,10 @@
     costs nothing at runtime, and it is what lets [digest] promise the one-shot
     hash of exactly those bytes.
 
-    The two constant tables are written into stack arrays on entry, since the
-    direct-to-C backend cannot emit a constant global.  For [update] that is
-    forty-nine stores per call whatever the call absorbs, so a caller that
-    feeds the sponge in very small pieces pays for it; the fix is a backend
-    change, not an interface change. *)
+    The two constant tables are [static const] arrays in the program image,
+    so [update] does no work proportional to them whatever the call absorbs --
+    which matters here, since a caller may feed the sponge a byte at a
+    time. *)
 module Hacl.Streaming.SHA3
 
 #lang-pulse
@@ -42,6 +41,7 @@ open Spec.SHA3.Constants
 open Spec.SHA3
 open Spec.SHA3.Streaming
 open Hacl.Hash.SHA3
+open Hacl.Impl.Table
 open Hacl.Hash.SHA3.Streaming
 
 module S = Pulse.Lib.Slice
@@ -85,22 +85,15 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
   let cc = S.from_array carr 5sz;
   S.pts_to_len cc;
 
-  let mut rcarr = [| z64; 24sz |];
-  A.pts_to_len rcarr;
-  let rc_tbl = S.from_array rcarr 24sz;
-  S.pts_to_len rc_tbl;
-  fill_rc rc_tbl;
-
-  let mut rotarr = [| 0ul; 25sz |];
-  A.pts_to_len rotarr;
-  let rotc_tbl = S.from_array rotarr 25sz;
-  S.pts_to_len rotc_tbl;
-  fill_rotc rotc_tbl;
+  table_lens ();
+  let rc_tbl = table rc_arr 24sz;
+  let rotc_tbl = table rotc_arr 25sz;
+  rotc_seq_ok ();
 
   update_impl st bb cc rotc_tbl rc_tbl buf tot data r seen;
 
-  S.to_array rotc_tbl;
-  S.to_array rc_tbl;
+  drop_table rotc_tbl;
+  drop_table rc_tbl;
   S.to_array cc;
   S.to_array bb;
 }
@@ -132,22 +125,15 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
   let cc = S.from_array carr 5sz;
   S.pts_to_len cc;
 
-  let mut rcarr = [| z64; 24sz |];
-  A.pts_to_len rcarr;
-  let rc_tbl = S.from_array rcarr 24sz;
-  S.pts_to_len rc_tbl;
-  fill_rc rc_tbl;
-
-  let mut rotarr = [| 0ul; 25sz |];
-  A.pts_to_len rotarr;
-  let rotc_tbl = S.from_array rotarr 25sz;
-  S.pts_to_len rotc_tbl;
-  fill_rotc rotc_tbl;
+  table_lens ();
+  let rc_tbl = table rc_arr 24sz;
+  let rotc_tbl = table rotc_arr 25sz;
+  rotc_seq_ok ();
 
   digest_impl st bb cc rotc_tbl rc_tbl buf tot out r suffix seen;
 
-  S.to_array rotc_tbl;
-  S.to_array rc_tbl;
+  drop_table rotc_tbl;
+  drop_table rc_tbl;
   S.to_array cc;
   S.to_array bb;
 }

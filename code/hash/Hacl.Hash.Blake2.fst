@@ -38,6 +38,7 @@ open Hacl.Spec.Loops
 open Spec.Blake2
 open Spec.Blake2.Constants
 open Hacl.Hash.Blake2.Core
+open Hacl.Impl.Table
 
 module S = Pulse.Lib.Slice
 module SZ = FStar.SizeT
@@ -542,16 +543,14 @@ ensures exists* (vout': Seq.seq S8.t).
   let mut barr = [| z8; bl |];
   A.pts_to_len barr;
   let blk = S.from_array barr bl;
-  let mut sarr = [| 0sz; 160sz |];
-  A.pts_to_len sarr;
-  let sg = S.from_array sarr 160sz;
+  sigma_len ();
+  let sg = table sigma_arr 160sz;
+  sigma_seq_ok ();
   S.pts_to_len h;
   S.pts_to_len vv;
   S.pts_to_len mw;
   S.pts_to_len blk;
   S.pts_to_len sg;
-
-  fill_sigma sg;
 
   let klen = S.len key;
   let mlen = S.len msg;
@@ -584,7 +583,7 @@ ensures exists* (vout': Seq.seq S8.t).
   S.to_array vv;
   S.to_array mw;
   S.to_array blk;
-  S.to_array sg;
+  drop_table sg;
 }
 
 #pop-options
