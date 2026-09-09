@@ -444,37 +444,37 @@ let decompose (n: nat)
     a [d] limb, and it stays well under [2^64], so no part of Poly1305 needs a
     hundred-and-twenty-eight-bit type.
 
-    The accumulator limbs are allowed one bit of slack over the radix --
-    [carry_top] leaves [h0] a little wide, and adding a block adds another bit
-    -- so they are bounded by [2^27] rather than [2^26]. *)
+    The accumulator limbs are allowed two bits of slack over the radix: the
+    carry chain leaves [h1] a shade over [2^26], and then a block is added,
+    so what goes into the next multiplication is bounded by [2^28]. *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
 let prod_bound (a b: nat)
-  : Lemma (requires a < pow2 27 /\ b < pow2 26) (ensures a * b < pow2 53)
-  = Math.pow2_plus 27 26;
-    Math.lemma_mult_le_right b a (pow2 27 - 1);
-    Math.lemma_mult_le_left (pow2 27 - 1) b (pow2 26 - 1)
+  : Lemma (requires a < pow2 28 /\ b < pow2 26) (ensures a * b < pow2 54)
+  = Math.pow2_plus 28 26;
+    Math.lemma_mult_le_right b a (pow2 28 - 1);
+    Math.lemma_mult_le_left (pow2 28 - 1) b (pow2 26 - 1)
 
 unfold let bounded5 (a0 a1 a2 a3 a4: nat) (n: nat) : prop =
   a0 < pow2 n /\ a1 < pow2 n /\ a2 < pow2 n /\ a3 < pow2 n /\ a4 < pow2 n
 
 let mul_no_overflow (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4: nat)
-  : Lemma (requires bounded5 h0 h1 h2 h3 h4 27 /\ bounded5 r0 r1 r2 r3 r4 26)
+  : Lemma (requires bounded5 h0 h1 h2 h3 h4 28 /\ bounded5 r0 r1 r2 r3 r4 26)
           (ensures bounded5 (d0 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
                             (d1 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
                             (d2 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
                             (d3 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
-                            (d4 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4) 58)
-  = let bound (h r: nat) : Lemma (requires h < pow2 27 /\ r < pow2 26)
-                                 (ensures h * r < pow2 53) = prod_bound h r in
+                            (d4 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4) 59)
+  = let bound (h r: nat) : Lemma (requires h < pow2 28 /\ r < pow2 26)
+                                 (ensures h * r < pow2 54) = prod_bound h r in
     bound h0 r0; bound h0 r1; bound h0 r2; bound h0 r3; bound h0 r4;
     bound h1 r0; bound h1 r1; bound h1 r2; bound h1 r3; bound h1 r4;
     bound h2 r0; bound h2 r1; bound h2 r2; bound h2 r3; bound h2 r4;
     bound h3 r0; bound h3 r1; bound h3 r2; bound h3 r3; bound h3 r4;
     bound h4 r0; bound h4 r1; bound h4 r2; bound h4 r3; bound h4 r4;
-    (* twenty-one times [2^53] is under [2^58]. *)
-    Math.pow2_plus 5 53;
+    (* twenty-one times [2^54] is under [2^59]. *)
+    Math.pow2_plus 5 54;
     assert_norm (pow2 5 == 32)
 
 #pop-options
@@ -539,27 +539,27 @@ let add_bound (a b: nat) (n m: nat)
     Math.pow2_double_sum n
 
 let carry_chain_bounds (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
-  : Lemma (requires bounded5 e0 e1 e2 e3 e4 58 /\ chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
+  : Lemma (requires bounded5 e0 e1 e2 e3 e4 59 /\ chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
           (ensures bounded5 t0 t1 t2 t3 t4 27)
   = let f1 = e1 + e0 / radix in
     let f2 = e2 + f1 / radix in
     let f3 = e3 + f2 / radix in
     let f4 = e4 + f3 / radix in
     let g0 = e0 % radix + 5 * (f4 / radix) in
-    div_bound e0 58 26;
-    add_bound e1 (e0 / radix) 58 32;
-    div_bound f1 59 26;
-    add_bound e2 (f1 / radix) 58 33;
-    div_bound f2 59 26;
-    add_bound e3 (f2 / radix) 58 33;
-    div_bound f3 59 26;
-    add_bound e4 (f3 / radix) 58 33;
-    div_bound f4 59 26;
-    assert_norm (5 * pow2 33 < pow2 36);
-    add_bound (5 * (f4 / radix)) (e0 % radix) 36 26;
-    div_bound g0 37 26;
+    div_bound e0 59 26;
+    add_bound e1 (e0 / radix) 59 33;
+    div_bound f1 60 26;
+    add_bound e2 (f1 / radix) 59 34;
+    div_bound f2 60 26;
+    add_bound e3 (f2 / radix) 59 34;
+    div_bound f3 60 26;
+    add_bound e4 (f3 / radix) 59 34;
+    div_bound f4 60 26;
+    assert_norm (5 * pow2 34 < pow2 37);
+    add_bound (5 * (f4 / radix)) (e0 % radix) 37 26;
+    div_bound g0 38 26;
     Math.pow2_lt_compat 27 26;
-    Math.pow2_lt_compat 26 11;
+    Math.pow2_lt_compat 26 12;
     Math.pow2_double_sum 26
 
 #pop-options
@@ -569,7 +569,7 @@ let carry_chain_bounds (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
 let mul_reduce_ok (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 t0 t1 t2 t3 t4: nat)
   : Lemma
       (requires
-         bounded5 h0 h1 h2 h3 h4 27 /\ bounded5 r0 r1 r2 r3 r4 26 /\
+         bounded5 h0 h1 h2 h3 h4 28 /\ bounded5 r0 r1 r2 r3 r4 26 /\
          chain (d0 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
                (d1 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
                (d2 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
@@ -597,27 +597,27 @@ let mul_reduce_ok (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 t0 t1 t2 t3 t4: nat)
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
 let chain_fits (e0 e1 e2 e3 e4: nat)
-  : Lemma (requires bounded5 e0 e1 e2 e3 e4 58)
+  : Lemma (requires bounded5 e0 e1 e2 e3 e4 59)
           (ensures (let f1 = e1 + e0 / radix in
                     let f2 = e2 + f1 / radix in
                     let f3 = e3 + f2 / radix in
                     let f4 = e4 + f3 / radix in
-                    e0 % radix + 5 * (f4 / radix) < pow2 37 /\
-                    f1 < pow2 59 /\ f2 < pow2 59 /\ f3 < pow2 59 /\ f4 < pow2 59))
+                    e0 % radix + 5 * (f4 / radix) < pow2 38 /\
+                    f1 < pow2 60 /\ f2 < pow2 60 /\ f3 < pow2 60 /\ f4 < pow2 60))
   = let f1 = e1 + e0 / radix in
     let f2 = e2 + f1 / radix in
     let f3 = e3 + f2 / radix in
     let f4 = e4 + f3 / radix in
-    div_bound e0 58 26;
-    add_bound e1 (e0 / radix) 58 32;
-    div_bound f1 59 26;
-    add_bound e2 (f1 / radix) 58 33;
-    div_bound f2 59 26;
-    add_bound e3 (f2 / radix) 58 33;
-    div_bound f3 59 26;
-    add_bound e4 (f3 / radix) 58 33;
-    div_bound f4 59 26;
-    assert_norm (5 * pow2 33 < pow2 36);
-    add_bound (5 * (f4 / radix)) (e0 % radix) 36 26
+    div_bound e0 59 26;
+    add_bound e1 (e0 / radix) 59 33;
+    div_bound f1 60 26;
+    add_bound e2 (f1 / radix) 59 34;
+    div_bound f2 60 26;
+    add_bound e3 (f2 / radix) 59 34;
+    div_bound f3 60 26;
+    add_bound e4 (f3 / radix) 59 34;
+    div_bound f4 60 26;
+    assert_norm (5 * pow2 34 < pow2 37);
+    add_bound (5 * (f4 / radix)) (e0 % radix) 37 26
 
 #pop-options
