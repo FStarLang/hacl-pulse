@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`) |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -460,7 +460,57 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   another whose conclusion is an implication (`msg_blocks_bound_opt`) keeps the
   Pulse code free of ghost branches.
 
+* **Keep a hypothesis set small, everywhere.**  This is the single most
+  expensive lesson in the repository, and it recurred at three different
+  levels.  In `Spec.SHA2.Lemmas`, `tail_generic` timed out not because any
+  one step was hard but because its ten-conjunct `requires` was in scope for
+  every sub-query; extracting the last step into `slices_of_bytes`, with the
+  three hypotheses it actually needs, fixed it instantly.  In
+  `Spec.Poly1305.Field`, the multiply-and-carry lemma stated in one piece ran
+  for over twenty minutes without an answer, and split into a congruence
+  half and a bounds half -- neither of which mentions what the other is
+  about -- the whole module verifies in seventy-seven seconds.  In
+  `Hacl.Poly1305.Field`, the twenty-five products and the carry chain in one
+  Pulse `fn` did not finish, and split in two, with a scratch slice between
+  them, each half takes seconds.  Prefer many small lemmas to one big one,
+  always.
+* **Name a postcondition that mentions arithmetic.**  A contract written out
+  in full is in scope for every query in the caller.  `fmul`'s
+  postcondition, written as `feval vh' % prime == ...`, made the solver
+  unfold five `as_nat5` limbs and `pow2 130` in a query that also carried the
+  heap, and timed out; named `fmul_post`, the match between the lemma's
+  conclusion and the function's contract is syntactic and the query is
+  trivial.  The same applies to `is_product`, and it is why `chain` is a
+  plain `let` and not an `unfold`.
+* **A Pulse `fn` must not end with a lemma call.**  The function's `ensures`
+  is checked at the last statement, and a trailing lemma's conclusion is not
+  yet in scope there.  The failure is not a clean "could not prove" either --
+  the solver flails and reports a timeout on a goal that is syntactically one
+  of its own hypotheses.  Any statement after the lemma will do; `fmul` ends
+  with a redundant `S.pts_to_len`.
+* **`canon_semiring` has three sharp edges.**  It does not scale: the
+  twenty-five-term Poly1305 identity does not finish, though each of the five
+  per-limb identities it decomposes into closes in under a second.  It does
+  not unfold: an `unfold` definition still appears in the goal the tactic
+  receives, and an application it does not recognise is treated as an opaque
+  atom, whereupon the tactic gives up quietly and hands the whole goal to Z3.
+  Norm the definitions away first.  And it will not distribute a subtraction
+  that sits inside a product, so `(b^5 - 5) * c` stays stuck; state the
+  lemmas additively and do the one subtraction by hand.
+* **`assert_norm` the small powers.**  At `--fuel 0` the solver cannot see
+  that twenty-one times `2^53` is under `2^58` from `pow2_plus 5 53` alone --
+  it also has to be told that `pow2 5` is thirty-two.
+* **`custard_init_globals()` is mandatory.**  A test that omits it gets
+  zero-valued globals; for BLAKE2 that meant a block length of zero and a
+  division by zero at the first `nblocks`.  Every `tests/*.c` `main` calls it
+  first.
+* **Custard eta-renames trivial wrappers.**  A Pulse `fn` whose body is just
+  a call to another `fn` extracts with its parameters named `eta`, `eta1`,
+  ...  Inline the body instead; that is why `Hacl.Chacha20.Ptr.decrypt`
+  repeats `encrypt`'s body rather than calling it.
+
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: incremental
-BLAKE2, ChaCha20-Poly1305, Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: the rest of
+Poly1305 (block loading, the final reduction, the tag), ChaCha20-Poly1305,
+incremental BLAKE2, Curve25519, Ed25519, P-256, and the DRBG.
