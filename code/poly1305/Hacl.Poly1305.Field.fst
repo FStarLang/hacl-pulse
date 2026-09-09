@@ -18,8 +18,8 @@
 
     A field element is a five-element slice; limb [i] carries bits [26i] to
     [26i+26].  Twenty-six is the size that makes the widest intermediate of
-    the multiplication -- twenty-one products of a twenty-seven-bit limb by a
-    twenty-six-bit one -- land under [2^58], so the whole of Poly1305 fits in
+    the multiplication -- twenty-one products of a twenty-eight-bit limb by a
+    twenty-six-bit one -- land under [2^59], so the whole of Poly1305 fits in
     [uint64] and the extracted C needs no compiler-specific
     hundred-and-twenty-eight-bit type.
 
@@ -89,7 +89,7 @@ let fmul_post (vh vr vh': Seq.seq S64.t) : GTot prop =
 (** [mul_reduce_ok] at the sequences, so that the Pulse code applies one
     lemma to one hypothesis and never sees the arithmetic. *)
 let fmul_ok (vh vr vd vh': Seq.seq S64.t)
-  : Lemma (requires bounded vh 27 /\ bounded vr 26 /\ is_product vd vh vr /\
+  : Lemma (requires bounded vh 28 /\ bounded vr 26 /\ is_product vd vh vr /\
                     chain (vv vd 0) (vv vd 1) (vv vd 2) (vv vd 3) (vv vd 4)
                           (vv vh' 0) (vv vh' 1) (vv vh' 2) (vv vh' 3) (vv vh' 4))
           (ensures fmul_post vh vr vh')
@@ -127,10 +127,10 @@ let add2 (x y: S64.t)
 
 inline_for_extraction
 let mul26 (x y: S64.t)
-  : Pure S64.t (requires S64.v x < pow2 27 /\ S64.v y < pow2 26)
-               (ensures fun z -> S64.v z == S64.v x * S64.v y /\ S64.v z < pow2 53)
+  : Pure S64.t (requires S64.v x < pow2 28 /\ S64.v y < pow2 26)
+               (ensures fun z -> S64.v z == S64.v x * S64.v y /\ S64.v z < pow2 54)
   = prod_bound (S64.v x) (S64.v y);
-    Math.pow2_lt_compat 64 53;
+    Math.pow2_lt_compat 64 54;
     Math.small_mod (S64.v x * S64.v y) (pow2 64);
     S64.mul_mod x y
 
@@ -141,22 +141,22 @@ let times5 (x: S64.t)
   = Math.small_mod (5 * S64.v x) (pow2 64);
     S64.mul_mod (S64.classify 5uL) x
 
-let five_fits (x: nat) : Lemma (requires x < pow2 53) (ensures 5 * x < pow2 64)
-  = assert_norm (5 * pow2 53 < pow2 64)
+let five_fits (x: nat) : Lemma (requires x < pow2 54) (ensures 5 * x < pow2 64)
+  = assert_norm (5 * pow2 54 < pow2 64)
 
-(** Twenty-one products of at most [2^53] fit under [2^58]; the solver needs
-    telling that [2^58] is thirty-two times [2^53] to see it. *)
-let sum21 (_: unit) : Lemma (32 * pow2 53 == pow2 58)
-  = Math.pow2_plus 5 53;
+(** Twenty-one products of at most [2^54] fit under [2^59]; the solver needs
+    telling that [2^59] is thirty-two times [2^54] to see it. *)
+let sum21 (_: unit) : Lemma (32 * pow2 54 == pow2 59)
+  = Math.pow2_plus 5 54;
     assert_norm (pow2 5 == 32)
 
 inline_for_extraction
 let add5w (a b c d e: S64.t)
   : Pure S64.t
-      (requires S64.v a + S64.v b + S64.v c + S64.v d + S64.v e < pow2 58)
+      (requires S64.v a + S64.v b + S64.v c + S64.v d + S64.v e < pow2 59)
       (ensures fun z -> S64.v z == S64.v a + S64.v b + S64.v c + S64.v d + S64.v e /\
-                     S64.v z < pow2 58)
-  = Math.pow2_lt_compat 64 58;
+                     S64.v z < pow2 59)
+  = Math.pow2_lt_compat 64 59;
     let s1 = add2 a b in
     let s2 = add2 s1 c in
     let s3 = add2 s2 d in
@@ -186,12 +186,12 @@ fn mul_limbs (d: S.slice S64.t) (h: S.slice S64.t) (r: S.slice S64.t)
              (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
 requires S.pts_to d vd ** S.pts_to h vh ** S.pts_to r vr **
          pure (Seq.length vd == 5 /\ Seq.length vh == 5 /\ Seq.length vr == 5 /\
-               bounded vh 27 /\ bounded vr 26)
+               bounded vh 28 /\ bounded vr 26)
 ensures exists* (vd': Seq.seq S64.t).
   S.pts_to d vd' ** S.pts_to h vh ** S.pts_to r vr **
   pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\
-        bounded vh 27 /\ bounded vr 26 /\
-        Seq.length vd' == 5 /\ bounded vd' 58 /\ is_product vd' vh vr)
+        bounded vh 28 /\ bounded vr 26 /\
+        Seq.length vd' == 5 /\ bounded vd' 59 /\ is_product vd' vh vr)
 {
   S.pts_to_len d;
   S.pts_to_len h;
@@ -265,9 +265,9 @@ ensures exists* (vd': Seq.seq S64.t).
 fn carry_chain_impl (h: S.slice S64.t) (d: S.slice S64.t)
                     (#vh: erased (Seq.seq S64.t)) (#vd: erased (Seq.seq S64.t))
 requires S.pts_to h vh ** S.pts_to d vd **
-         pure (Seq.length vh == 5 /\ Seq.length vd == 5 /\ bounded vd 58)
+         pure (Seq.length vh == 5 /\ Seq.length vd == 5 /\ bounded vd 59)
 ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' ** S.pts_to d vd **
-  pure (Seq.length vd == 5 /\ bounded vd 58 /\ Seq.length vh' == 5 /\
+  pure (Seq.length vd == 5 /\ bounded vd 59 /\ Seq.length vh' == 5 /\
         chain (vv vd 0) (vv vd 1) (vv vd 2) (vv vd 3) (vv vd 4)
               (vv vh' 0) (vv vh' 1) (vv vh' 2) (vv vh' 3) (vv vh' 4))
 {
@@ -280,15 +280,15 @@ ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' ** S.pts_to d vd **
   let e4 = S.(d.(4sz));
 
   chain_fits (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4);
-  Math.pow2_lt_compat 64 59;
-  Math.pow2_lt_compat 64 37;
+  Math.pow2_lt_compat 64 60;
+  Math.pow2_lt_compat 64 38;
 
   let f1 = add2 e1 (hi26 e0);
   let f2 = add2 e2 (hi26 f1);
   let f3 = add2 e3 (hi26 f2);
   let f4 = add2 e4 (hi26 f3);
-  div_bound (S64.v f4) 59 26;
-  Math.pow2_le_compat 53 33;
+  div_bound (S64.v f4) 60 26;
+  Math.pow2_le_compat 54 34;
   five_fits (S64.v (hi26 f4));
   let g0 = add2 (lo26 e0) (times5 (hi26 f4));
 
@@ -304,11 +304,11 @@ fn fmul (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
         (#vd: erased (Seq.seq S64.t))
 requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd **
          pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
-               bounded vh 27 /\ bounded vr 26)
+               bounded vh 28 /\ bounded vr 26)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' **
   pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\
-        bounded vh 27 /\ bounded vr 26 /\
+        bounded vh 28 /\ bounded vr 26 /\
         Seq.length vd' == 5 /\
         Seq.length vh' == 5 /\ fmul_post vh vr vh')
 {
@@ -321,6 +321,67 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
      checked at the last statement, and a trailing lemma's conclusion is not
      yet in scope there.  Any statement after it will do. *)
   S.pts_to_len h;
+}
+
+#pop-options
+
+(** {2 Addition}
+
+    Limbwise, with no carrying at all: the accumulator comes out of [fmul]
+    under [2^27] and a block's limbs are under [2^26], so the sum is under
+    [2^28], which is exactly what [fmul] accepts.  That is the whole reason
+    the multiplication was given two bits of slack rather than one -- it
+    means the block loop is a multiply and five adds, with no carry chain
+    between them. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
+
+fn fadd (h: S.slice S64.t) (b: S.slice S64.t)
+        (#vh: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to h vh ** S.pts_to b vb **
+         pure (Seq.length vh == 5 /\ Seq.length vb == 5 /\
+               bounded vh 27 /\ bounded vb 26)
+ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' ** S.pts_to b vb **
+  pure (Seq.length vh == 5 /\ Seq.length vb == 5 /\
+        Seq.length vh' == 5 /\ bounded vh' 28 /\
+        feval vh' == feval vh + feval vb)
+{
+  S.pts_to_len h;
+  S.pts_to_len b;
+  Math.pow2_lt_compat 27 26;
+  Math.pow2_double_sum 27;
+  Math.pow2_lt_compat 64 28;
+  add5_eval (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
+            (vv vb 0) (vv vb 1) (vv vb 2) (vv vb 3) (vv vb 4);
+  let a0 = S.(h.(0sz));
+  let a1 = S.(h.(1sz));
+  let a2 = S.(h.(2sz));
+  let a3 = S.(h.(3sz));
+  let a4 = S.(h.(4sz));
+  let b0 = S.(b.(0sz));
+  let b1 = S.(b.(1sz));
+  let b2 = S.(b.(2sz));
+  let b3 = S.(b.(3sz));
+  let b4 = S.(b.(4sz));
+  S.((h.(0sz) <- add2 a0 b0));
+  S.((h.(1sz) <- add2 a1 b1));
+  S.((h.(2sz) <- add2 a2 b2));
+  S.((h.(3sz) <- add2 a3 b3));
+  S.((h.(4sz) <- add2 a4 b4));
+}
+
+(** The accumulator starts at zero. *)
+fn set_zero (h: S.slice S64.t) (#vh: erased (Seq.seq S64.t))
+requires S.pts_to h vh ** pure (Seq.length vh == 5)
+ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' **
+  pure (Seq.length vh' == 5 /\ bounded vh' 26 /\ feval vh' == 0)
+{
+  S.pts_to_len h;
+  S.((h.(0sz) <- S64.zero));
+  S.((h.(1sz) <- S64.zero));
+  S.((h.(2sz) <- S64.zero));
+  S.((h.(3sz) <- S64.zero));
+  S.((h.(4sz) <- S64.zero));
 }
 
 #pop-options
