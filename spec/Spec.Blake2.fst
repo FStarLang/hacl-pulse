@@ -450,3 +450,35 @@ let nblocks_eq (#t: Type0) {| word t |} (key msg: Seq.seq S8.t)
       Seq.lemma_len_append (pad_to_block #t key) (pad_to_block #t msg);
       Math.lemma_div_plus (Seq.length (pad_to_block #t msg)) 1 bl
     end
+
+(** The message offset of block [koff + j] never runs past the message. *)
+let msg_blocks_bound (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (j: nat)
+  : Lemma (requires Seq.length key <= max_key_len #t /\
+                    koff #t key + j < nblocks #t key msg)
+          (ensures j * block_len #t <= Seq.length msg)
+  = let bl = block_len #t in
+    let n = Seq.length msg in
+    nblocks_eq #t key msg;
+    Math.euclidean_division_definition n bl;
+    if n % bl = 0 then Math.lemma_mult_le_right bl j (n / bl)
+    else Math.lemma_mult_le_right bl j (n / bl)
+
+(** [data] is the message plus at most two blocks: one for the key and one for
+    the padding. *)
+let data_len_bound (#t: Type0) {| word t |} (key msg: Seq.seq S8.t)
+  : Lemma (requires Seq.length key <= max_key_len #t)
+          (ensures Seq.length (data #t key msg) <= Seq.length msg + 2 * block_len #t)
+  = if Seq.length key = 0 then begin
+      if Seq.length msg = 0 then () else pad_to_block_len #t msg
+    end else begin
+      key_block #t key;
+      pad_to_block_len #t msg;
+      Seq.lemma_len_append (pad_to_block #t key) (pad_to_block #t msg)
+    end
+
+(** [nblocks] blocks is exactly the length of [data]. *)
+let nblocks_exact (#t: Type0) {| word t |} (key msg: Seq.seq S8.t)
+  : Lemma (requires Seq.length key <= max_key_len #t)
+          (ensures nblocks #t key msg * block_len #t == Seq.length (data #t key msg))
+  = data_len #t key msg;
+    Math.lemma_div_exact (Seq.length (data #t key msg)) (block_len #t)
