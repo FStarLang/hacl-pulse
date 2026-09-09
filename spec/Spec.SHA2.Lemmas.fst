@@ -121,13 +121,41 @@ let padded_index_block (#t: Type0) {| word t |} (msg: Seq.seq S8.t { Seq.length 
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
 
+(** Pointwise agreement lifts to agreement of every aligned slice.  This is
+    stated on its own so that the (very large) hypothesis set of
+    [tail_generic] is not in scope while it is proved. *)
+let slices_of_bytes (bl: pos) (ntail base: nat) (vt ps: Seq.seq S8.t)
+  : Lemma
+      (requires
+        Seq.length ps == base + ntail /\ ntail <= Seq.length vt /\
+        (forall (k: nat). k < ntail ==> Seq.index vt k == Seq.index ps (base + k)))
+      (ensures
+        (forall (o: nat). o + bl <= ntail ==>
+           Seq.equal (Seq.slice ps (base + o) (base + o + bl)) (Seq.slice vt o (o + bl))))
+  = let blk (o: nat { o + bl <= ntail })
+      : Lemma (Seq.equal (Seq.slice ps (base + o) (base + o + bl)) (Seq.slice vt o (o + bl)))
+      = let aux (i: nat { i < bl })
+          : Lemma (Seq.index (Seq.slice ps (base + o) (base + o + bl)) i ==
+                   Seq.index (Seq.slice vt o (o + bl)) i)
+          = Seq.lemma_index_slice ps (base + o) (base + o + bl) i;
+            Seq.lemma_index_slice vt o (o + bl) i
+        in
+        FStar.Classical.forall_intro aux
+    in
+    FStar.Classical.forall_intro blk
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+
 (** The heart of the tail argument, stated without the [word] class: the
     algorithm-dependent quantities appear as ordinary naturals, which keeps the
     arithmetic linear and the proof cheap. *)
-let tail_generic (bl ll len ntail base: nat) (msg vt ps: Seq.seq S8.t)
+let tail_generic (bl: pos) (ll len ntail: nat) (base: nat { base + len % bl == len })
+                 (msg vt ps: Seq.seq S8.t)
   : Lemma
       (requires
-        0 < bl /\ 8 <= ll /\
+        8 <= ll /\
         Seq.length msg == len /\ 8 * len < pow2 64 /\
         len % bl + 1 + ll <= 2 * bl /\ base == len / bl * bl /\
         ntail == (if len % bl + 1 + ll <= bl then bl else 2 * bl) /\
@@ -172,21 +200,7 @@ let tail_generic (bl ll len ntail base: nat) (msg vt ps: Seq.seq S8.t)
         end
     in
     FStar.Classical.forall_intro byte;
-    let blk (o: nat { o + bl <= ntail })
-      : Lemma (Seq.equal (Seq.slice ps (base + o) (base + o + bl)) (Seq.slice vt o (o + bl)))
-      = let aux (i: nat { i < bl })
-          : Lemma (Seq.index (Seq.slice ps (base + o) (base + o + bl)) i ==
-                   Seq.index (Seq.slice vt o (o + bl)) i)
-          = Seq.lemma_index_slice ps (base + o) (base + o + bl) i;
-            Seq.lemma_index_slice vt o (o + bl) i;
-            byte (o + i);
-            assert (Seq.index (Seq.slice ps (base + o) (base + o + bl)) i ==
-                    Seq.index ps (base + (o + i)));
-            assert (Seq.index (Seq.slice vt o (o + bl)) i == Seq.index vt (o + i))
-        in
-        FStar.Classical.forall_intro aux
-    in
-    FStar.Classical.forall_intro blk
+    slices_of_bytes bl ntail base vt ps
 
 #pop-options
 
@@ -225,6 +239,7 @@ let tail_bytes (#t: Type0) {| word t |} (msg: Seq.seq S8.t { Seq.length msg < ma
     pad_zeros_alt #t len;
     padded_shape #t msg;
     FStar.Classical.forall_intro (padded_index #t msg);
+    Math.euclidean_division_definition len bl;
     tail_generic bl ll len ntail base msg vt ps;
     let blk (o: nat { o + bl <= ntail })
       : Lemma (block_at #t ps (base + o) == block_at #t vt o)
