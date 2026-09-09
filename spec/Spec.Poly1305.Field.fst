@@ -389,3 +389,92 @@ let reduce_final (h: nat)
       Math.small_mod h prime
 
 #pop-options
+
+(** {2 Splitting a number into limbs}
+
+    The implementation gets a block as bytes and has to turn it into five
+    limbs.  It is tempting to specify that with shifts and masks, but then
+    every proof about it is a bit-level proof.  Instead the limbs are
+    specified as [(n / 2^(26 i)) mod 2^26] and the implementation shows its
+    shifts and masks compute {i that}, which the secret-integer layer already
+    knows how to do.  [decompose] is the only thing anyone needs to know
+    about the split: it puts the number back together. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let decompose (n: nat)
+  : Lemma (requires n < pow2 130)
+          (ensures as_nat5 (n % radix)
+                           ((n / pow2 26) % radix)
+                           ((n / pow2 52) % radix)
+                           ((n / pow2 78) % radix)
+                           (n / pow2 104) == n)
+  = let a1 = n / pow2 26 in
+    let a2 = n / pow2 52 in
+    let a3 = n / pow2 78 in
+    let a4 = n / pow2 104 in
+    Math.pow2_plus 26 26;
+    Math.pow2_plus 52 26;
+    Math.pow2_plus 78 26;
+    Math.pow2_plus 104 26;
+    Math.division_multiplication_lemma n (pow2 26) (pow2 26);
+    Math.division_multiplication_lemma n (pow2 52) (pow2 26);
+    Math.division_multiplication_lemma n (pow2 78) (pow2 26);
+    Math.lemma_div_lt n 130 104;
+    Math.small_mod a4 radix;
+    Math.euclidean_division_definition n radix;
+    Math.euclidean_division_definition a1 radix;
+    Math.euclidean_division_definition a2 radix;
+    Math.euclidean_division_definition a3 radix;
+    (* [n = n % b + a1 b], and each [ai] splits the same way; the products
+       have to be reassociated one power at a time. *)
+    Math.distributivity_add_left (a1 % radix) (a2 * radix) (pow2 26);
+    Math.paren_mul_right a2 radix (pow2 26);
+    Math.distributivity_add_left (a2 % radix) (a3 * radix) (pow2 52);
+    Math.paren_mul_right a3 radix (pow2 52);
+    Math.distributivity_add_left (a3 % radix) (a4 * radix) (pow2 78);
+    Math.paren_mul_right a4 radix (pow2 78)
+
+#pop-options
+
+(** {2 Overflow}
+
+    The reason five twenty-six-bit limbs is the right choice for a
+    sixty-four-bit machine: the widest thing the multiplication ever forms is
+    a [d] limb, and it stays well under [2^64], so no part of Poly1305 needs a
+    hundred-and-twenty-eight-bit type.
+
+    The accumulator limbs are allowed one bit of slack over the radix --
+    [carry_top] leaves [h0] a little wide, and adding a block adds another bit
+    -- so they are bounded by [2^27] rather than [2^26]. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let prod_bound (a b: nat)
+  : Lemma (requires a < pow2 27 /\ b < pow2 26) (ensures a * b < pow2 53)
+  = Math.pow2_plus 27 26;
+    Math.lemma_mult_le_right b a (pow2 27 - 1);
+    Math.lemma_mult_le_left (pow2 27 - 1) b (pow2 26 - 1)
+
+unfold let bounded5 (a0 a1 a2 a3 a4: nat) (n: nat) : prop =
+  a0 < pow2 n /\ a1 < pow2 n /\ a2 < pow2 n /\ a3 < pow2 n /\ a4 < pow2 n
+
+let mul_no_overflow (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4: nat)
+  : Lemma (requires bounded5 h0 h1 h2 h3 h4 27 /\ bounded5 r0 r1 r2 r3 r4 26)
+          (ensures bounded5 (d0 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+                            (d1 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+                            (d2 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+                            (d3 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4)
+                            (d4 h0 h1 h2 h3 h4 r0 r1 r2 r3 r4) 58)
+  = let bound (h r: nat) : Lemma (requires h < pow2 27 /\ r < pow2 26)
+                                 (ensures h * r < pow2 53) = prod_bound h r in
+    bound h0 r0; bound h0 r1; bound h0 r2; bound h0 r3; bound h0 r4;
+    bound h1 r0; bound h1 r1; bound h1 r2; bound h1 r3; bound h1 r4;
+    bound h2 r0; bound h2 r1; bound h2 r2; bound h2 r3; bound h2 r4;
+    bound h3 r0; bound h3 r1; bound h3 r2; bound h3 r3; bound h3 r4;
+    bound h4 r0; bound h4 r1; bound h4 r2; bound h4 r3; bound h4 r4;
+    (* twenty-one times [2^53] is under [2^58]. *)
+    Math.pow2_plus 5 53;
+    assert_norm (pow2 5 == 32)
+
+#pop-options
