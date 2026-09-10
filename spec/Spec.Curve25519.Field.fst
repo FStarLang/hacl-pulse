@@ -261,6 +261,12 @@ let ble (s: Seq.seq nat) (c: nat) : prop =
 let vat_ble (s: Seq.seq nat) (c: nat) (i: nat)
   : Lemma (requires ble s c) (ensures vat s i <= c) = ()
 
+let scale_ble (c: nat) (x: Seq.seq nat) (cx: nat)
+  : Lemma (requires ble x cx) (ensures ble (scale c x) (c * cx))
+  = let aux (i: nat { i < Seq.length x }) : Lemma (Seq.index (scale c x) i <= c * cx) =
+      Math.lemma_mult_le_left c (Seq.index x i) cx in
+    Classical.forall_intro aux
+
 let rowj_ble (a b: Seq.seq nat) (ca cb: nat) (i j: nat)
   : Lemma (requires ble a ca /\ ble b cb) (ensures ble (rowj a b i j) (ca * cb))
   = let aux (k: nat { k < nw }) : Lemma (Seq.index (rowj a b i j) k <= ca * cb) =
@@ -923,6 +929,23 @@ let fstep_ok (s: Seq.seq nat) (c d: nat)
     carry_split_bnd s c d;
     Math.lemma_mult_le_right 38 (carry_out s) d
 
+(** A pass leaves a shaped number: every limb but the lowest is a proper
+    base-[2^16] digit, and the lowest has absorbed the wrap-around. *)
+let carry_pass_shaped (s: Seq.seq nat) (c d: nat)
+  : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1))
+          (ensures shaped (carry_pass s) (base - 1 + 38 * ((c + d) / base)))
+  = carry_run_chained s c d (nl - 1);
+    carry_run_len s (nl - 1);
+    Math.lemma_div_le (Seq.index (carry_run s (nl - 1)) (nl - 1)) (c + d) base
+
+(** [fstep] is nothing but [carry_pass] written the other way round: the
+    wrap-around of the top limb and the fold of the overflow are the same
+    multiplication by [38]. *)
+let fstep_is_pass (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl) (ensures fstep s == carry_pass s)
+  = carry_run_len s (nl - 1);
+    Seq.lemma_eq_intro (fstep s) (carry_pass s)
+
 (** The last step lands inside base [2^16]: either nothing overflowed, or
     the overflow was one and what remained was tiny. *)
 let fstep_last (s: Seq.seq nat)
@@ -975,6 +998,39 @@ let freeze_a_ok (s: Seq.seq nat)
     shaped_ble x2 65573;
     fstep_ok x2 65573 1;
     fstep_last (fstep x2)
+
+(** Four passes, which is what the implementation actually runs, together
+    with the bound each one has to be given. *)
+let freeze_a_alt (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl)
+          (ensures freeze_a s == carry_pass (carry_pass (carry_pass (carry_pass s))))
+  = fstep_is_pass s;
+    carry_pass_len s;
+    fstep_is_pass (carry_pass s);
+    carry_pass_len (carry_pass s);
+    fstep_is_pass (carry_pass (carry_pass s));
+    carry_pass_len (carry_pass (carry_pass s));
+    fstep_is_pass (carry_pass (carry_pass (carry_pass s)))
+
+let freeze_a_bounds (s: Seq.seq nat)
+  : Lemma (requires felem s)
+          (ensures (let x1 = carry_pass s in
+                    let x2 = carry_pass x1 in
+                    let x3 = carry_pass x2 in
+                    Seq.length x1 == nl /\ ble x1 65611 /\
+                    Seq.length x2 == nl /\ ble x2 65573 /\
+                    Seq.length x3 == nl /\ ble x3 65573))
+  = assert_norm (lim + 2 < base * 3);
+    assert_norm (base - 1 + 38 * ((lim + 2) / base) == 65611);
+    pass s lim 2 65611;
+    let x1 = carry_pass s in
+    assert_norm (65611 + 1 < base * 2);
+    assert_norm (base - 1 + 38 * ((65611 + 1) / base) == 65573);
+    pass x1 65611 1 65573;
+    let x2 = carry_pass x1 in
+    assert_norm (65573 + 1 < base * 2);
+    assert_norm (base - 1 + 38 * ((65573 + 1) / base) == 65573);
+    pass x2 65573 1 65573
 
 (** {3 Subtracting the prime once} *)
 
@@ -1049,10 +1105,31 @@ let freeze_b_ok (s: Seq.seq nat)
 let add19 (s: Seq.seq nat) : Seq.seq nat =
   if Seq.length s = nl then Seq.upd s 0 (vat s 0 + 19) else s
 
+let freeze_w (y: Seq.seq nat) : Seq.seq nat = carry_low (add19 y)
+
 let freeze_spec (s: Seq.seq nat) : Seq.seq nat =
   let y = freeze_b (freeze_a s) in
-  let w = carry_low (add19 y) in
+  let w = freeze_w y in
   if hi255 w = 1 then mask255 w else y
+
+let freeze_w_ok (y: Seq.seq nat)
+  : Lemma (requires Seq.length y == nl /\ bnd y base /\ eval y < pow2 255)
+          (ensures Seq.length (freeze_w y) == nl /\ bnd (freeze_w y) base /\
+                   hi255 (freeze_w y) <= 1)
+  = let a = add19 y in
+    assert (ble a (base + 18));
+    assert_norm (base + 18 + 1 < base * 2);
+    assert_norm (pow2 255 == prime + 19);
+    assert_norm (pow2 256 == 2 * pow2 255);
+    eval_upd y 0 (Seq.index y 0 + 19);
+    assert_norm (pow2 (rad * 0) == 1);
+    carry_out_zero a;
+    carry_split_ok a;
+    carry_split_bnd a (base + 18) 1;
+    carry_low_len a;
+    hi255_bit (carry_low a);
+    Math.lemma_div_lt_nat (eval (carry_low a)) 256 255;
+    assert_norm (pow2 1 == 2)
 
 let freeze_spec_ok (s: Seq.seq nat)
   : Lemma (requires felem s)
@@ -1073,7 +1150,7 @@ let freeze_spec_ok (s: Seq.seq nat)
     carry_split_ok a;
     carry_split_bnd a (base + 18) 1;
     carry_low_len a;
-    let w = carry_low a in
+    let w = freeze_w y in
     hi255_bit w;
     Math.lemma_div_lt_nat (eval w) 256 255;
     if hi255 w = 1 then begin
