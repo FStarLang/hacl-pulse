@@ -395,6 +395,75 @@ compresses one block, of zeros, with counter zero; a *keyed* hash of the empty
 string compresses only the key block, with counter one block.  Both are in the
 test vectors.
 
+### ChaCha20, a keystream and nothing else
+
+ChaCha20 is a block function, `Spec.Chacha20.chacha20_block`, applied at a
+counter and exclusive-ored into the message.  It needs no state and no
+padding, so the implementation is one loop over whole blocks and one short
+tail, and the only thing worth saying about it is what is *not* there: the
+sixteen-word working state is a stack array that the rounds permute in place,
+the column and diagonal rounds are the same four-argument quarter-round at
+different indices, and the final feed-forward add is the only place the
+original state is read again.  Encryption and decryption are the same
+function, exported twice so that callers read the way they mean.
+
+The counter is thirty-two bits and it is the caller's, which is why the
+specification carries `max_len ctr` -- the number of bytes that can be
+encrypted before it wraps -- as a precondition rather than silently
+truncating.
+
+### Poly1305, five limbs of twenty-six bits
+
+A field element modulo 2^130 - 5 is five 64-bit words holding twenty-six bits
+each.  Twenty-six is what makes the schoolbook product fit: five products of
+two 28-bit limbs, times five for the `2^130 == prime + 5` wraparound, is under
+2^59, so nothing overflows and no carry is needed *inside* the multiplication.
+The carry chain runs once afterwards, and it leaves limbs under 2^27; `fadd`
+takes a 27-bounded accumulator and a 26-bounded block to a 28-bounded result,
+which is exactly what `fmul` accepts.  So the main loop is a load, five adds
+and a multiply, with no carry propagation between them.
+
+**A block is loaded as two words, not five bytes at a time.**  Two
+`load_le #uint64` calls give the low and high halves; four of the five limbs
+are a shift and a mask of one of them, and limb two is the only one that
+straddles the boundary -- twelve bits from the low word, fourteen from the
+high.  There is no `logor` anywhere: the operands are disjoint by size, so a
+plain addition is equal to the disjunction and avoids `logor_disjoint`
+entirely.
+
+**A short block is padded, not shifted.**  The specification's value of a
+block of *n* bytes is `le_nat b + 2^(8n)`, and for a full block the `2^128`
+falls exactly on the top of limb four.  For a short one the implementation
+copies into a zeroed sixteen-byte scratch, writes `1` at index *n*, and loads
+with the top bit off; `le_nat_split` and `le_nat_one_zeros` say that this is
+the same number.  That is one branch in the whole algorithm.
+
+**The final reduction is three ripple carries and a mask.**  A *ripple* is the
+plain positional carry with nothing wrapped round: `as_nat5 t + c * 2^130 ==
+as_nat5 e`.  Ripple the accumulator and fold five times its carry into limb
+zero -- sound because `2^130 == prime + 5` -- to get a number congruent to it
+and below twice the prime.  Ripple that, and ripple that plus five; the carry
+out of the second is exactly the test "is it at or above the prime", because
+`prime + 5 == 2^130`.  Select on `eq_mask` of that carry.  The bound that
+makes it work is not on the limbs but on the value: a ripple of something
+below 2^131 carries at most one.
+
+**The tag** is the canonical limbs repacked into two 64-bit words.  The top
+two bits fall off the end, which is sound precisely because the tag is taken
+modulo 2^128, and then `s` is added with a two-word constant-time add whose
+carry is `lt_mask` of the low word.  Clamping is seven byte masks on a copy of
+the key's first sixteen bytes, written to match `Spec.Poly1305.clamp_byte`
+byte for byte.
+
+**The driver's loop invariant is a congruence, not an equation.**  `fmul`
+wraps the top of the number round to the bottom, so all that survives it is
+`feval h % prime == <the specification's accumulator>`; it becomes an equation
+once, at the end, in `reduce`.  The loop runs over `len / 16` whole blocks and
+the short one is handled outside it, in a function of its own -- a Pulse `if`
+has to be the last statement of something for its two branches to be checked
+against one written-down postcondition, so the `if` is that function's body
+and the postcondition is itself an `if` on the length.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -571,8 +640,41 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   ...  Inline the body instead; that is why `Hacl.Chacha20.Ptr.decrypt`
   repeats `encrypt`'s body rather than calling it.
 
+* **Spell powers of two out as decimal literals.**  An identity about limbs
+  that mentions `pow2 26`, `pow2 12` and `pow2 64` looks nonlinear and stays
+  stuck; four `assert_norm (pow2 26 == 67108864)` lines turn it into linear
+  arithmetic that Z3 closes with no further help.  Used for both the block
+  load and the tag repack.
+* **Trivia does not always close inside a Pulse verification condition.**
+  `assert (as_nat5 x 0 0 0 0 == x)` is immediate on its own and fails inside a
+  separation-logic query, where the context is a few hundred hypotheses.  Give
+  it a name at the top level and call it.
+* **Keep divisions out of separation-logic queries.**  Poly1305's `block_at`
+  unfolds to `(len + 15) / 16`; instantiating a lemma stated in terms of it,
+  inside a loop body, times out at any budget.  Stated instead over `16 * i`
+  and `len % 16`, with the division discharged once in a lemma that holds
+  nothing else, the same proof is instant.
+* **Where a lemma sits in a file can break an unrelated one.**  Inserting
+  three lemmas in the middle of `Hacl.Spec.Bytes` made a later, untouched
+  lemma time out; appending them at the end fixed it.  The solver sees earlier
+  definitions of the same module as ambient facts.
+* **`Pulse.Lib.Slice.len` shadows a parameter named `len`** inside an
+  `S.(...)` block, and the error is the baffling "Expected expression of type
+  `FStar.SizeT.t`, got `Pulse.Lib.Slice.len`".
+* **A Pulse `ensures` does not see the `requires`.**  Any refinement a
+  postcondition needs in order to typecheck -- a length, a bound -- has to be
+  restated as one of its own earlier conjuncts.
+* **A Pulse `if` needs a written-down postcondition.**  Two branches that
+  leave the heap in the same shape still do not join; make the `if` the last
+  statement of a function whose `ensures` covers both cases, and let that
+  `ensures` be an `if` too.
+* **`repeati_g n f acc` does not identify `f` with an eta-expansion of it.**
+  A specification that writes its step as a lambda and an implementation whose
+  invariant names it are different arguments to the same fold, and only a
+  pointwise-extensionality lemma proved by induction relates them.
+
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: the rest of
-Poly1305 (block loading, the final reduction, the tag), ChaCha20-Poly1305,
-incremental BLAKE2, Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order:
+ChaCha20-Poly1305, incremental BLAKE2, Curve25519, Ed25519, P-256, and the
+DRBG.
