@@ -66,6 +66,7 @@ SOURCE_DIRS += spec
 SOURCE_DIRS += code/hash
 SOURCE_DIRS += code/chacha
 SOURCE_DIRS += code/poly1305
+SOURCE_DIRS += code/aead
 SOURCE_DIRS += code/curve25519
 SOURCE_DIRS += tests
 
