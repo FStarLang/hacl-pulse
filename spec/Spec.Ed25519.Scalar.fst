@@ -330,3 +330,95 @@ let qmul_ok (a: Seq.seq nat) (n: nat)
     assert_norm (pow2 0 == 1)
 
 #pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 120"
+
+(** {2 Reading a bit out of a representation}
+
+    Two facts the implementation needs and nothing else does: bit [i] of a
+    limb sequence is bit [i mod rad] of limb [i / rad], and bit [i] of a
+    byte string is bit [i mod 8] of byte [i / 8].  Both are the same
+    argument -- [eval_digit] or its little-endian twin, then a division of
+    a residue. *)
+
+(** [(y / 2^j) mod 2] does not change when [y] is first cut down to [w]
+    bits, as long as [j < w]. *)
+let bit_of_residue (y: nat) (j: nat) (w: nat)
+  : Lemma (requires j < w) (ensures bit_of ((y % pow2 w) / pow2 j) 0 == bit_of y j)
+  = Math.pow2_modulo_division_lemma_1 y j w;
+    assert_norm (pow2 1 == 2);
+    Math.pow2_modulo_modulo_lemma_1 (y / pow2 j) 1 (w - j)
+
+let eval_bit (s: Seq.seq nat) (i: nat)
+  : Lemma (requires F.bnd s F.base /\ i < F.rad * Seq.length s)
+          (ensures bit_of (F.eval s) i ==
+                   bit_of (Seq.index s (i / F.rad) / pow2 (i % F.rad)) 0)
+  = let k = i / F.rad in
+    let j = i % F.rad in
+    Math.lemma_div_mod i F.rad;
+    F.div_le_of_lt i F.rad (Seq.length s - 1);
+    assert (k < Seq.length s);
+    assert (i == F.rad * k + j);
+    F.eval_digit s k;
+    Math.pow2_plus (F.rad * k) j;
+    Math.division_multiplication_lemma (F.eval s) (pow2 (F.rad * k)) (pow2 j);
+    assert (F.base == pow2 F.rad);
+    bit_of_residue (F.eval s / pow2 (F.rad * k)) j F.rad
+
+let le_nat_digit (b: Seq.seq S8.t) (k: nat { k < Seq.length b })
+  : Lemma ((le_nat b / pow2 (8 * k)) % 256 == S8.v (Seq.index b k))
+  = let n = Seq.length b in
+    le_nat_split b k;
+    le_nat_bound (Seq.slice b 0 k);
+    Math.lemma_div_plus (le_nat (Seq.slice b 0 k)) (le_nat (Seq.slice b k n)) (pow2 (8 * k));
+    Math.small_div (le_nat (Seq.slice b 0 k)) (pow2 (8 * k));
+    le_nat_cons b k;
+    Math.lemma_mod_plus (S8.v (Seq.index b k)) (le_nat (Seq.slice b (k + 1) n)) 256;
+    Math.small_mod (S8.v (Seq.index b k)) 256
+
+let le_nat_bit (b: Seq.seq S8.t) (i: nat)
+  : Lemma (requires i < 8 * Seq.length b)
+          (ensures bit_of (le_nat b) i ==
+                   bit_of (S8.v (Seq.index b (i / 8)) / pow2 (i % 8)) 0)
+  = let k = i / 8 in
+    let j = i % 8 in
+    Math.lemma_div_mod i 8;
+    F.div_le_of_lt i 8 (Seq.length b - 1);
+    assert (k < Seq.length b);
+    le_nat_digit b k;
+    Math.pow2_plus (8 * k) j;
+    Math.division_multiplication_lemma (le_nat b) (pow2 (8 * k)) (pow2 j);
+    assert_norm (pow2 8 == 256);
+    bit_of_residue (le_nat b / pow2 (8 * k)) j 8
+
+#pop-options
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+
+(** {2 Two facts for the implementation}
+
+    A proper limb sequence is *determined* by its value, so an
+    implementation never has to produce [limbs_of x] structurally: it is
+    enough to produce sixteen limbs below the base that evaluate to [x].
+    And the limbs of [2^256 - q] are named, so that a table of literals can
+    be checked against them one entry at a time rather than by evaluating
+    [eval] on a sixteen-element spine. *)
+
+let limbs_unique (s: Seq.seq nat) (x: nat)
+  : Lemma (requires Seq.length s == F.nl /\ F.bnd s F.base /\ F.eval s == x)
+          (ensures s == limbs_of x)
+  = let aux (k: nat { k < F.nl }) : Lemma (Seq.index s k == Seq.index (limbs_of x) k) =
+      F.eval_digit s k;
+      Seq.init_index F.nl (fun i -> x / pow2 (F.rad * i) % F.base) in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro s (limbs_of x)
+
+let qc_index (k: nat { k < F.nl })
+  : Lemma (Seq.index qc k == (pow2 256 - q) / pow2 (F.rad * k) % F.base)
+  = q_bound ();
+    Seq.init_index F.nl (fun i -> (pow2 256 - q) / pow2 (F.rad * i) % F.base)
+
+let zero_index (k: nat { k < F.nl }) : Lemma (Seq.index zero k == 0) =
+  Seq.init_index F.nl (fun i -> 0 / pow2 (F.rad * i) % F.base)
+
+#pop-options
