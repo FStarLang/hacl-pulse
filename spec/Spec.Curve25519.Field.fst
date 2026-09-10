@@ -682,3 +682,407 @@ let eightp_ok (_: unit)
     Math.paren_mul_right 4 2 prime
 
 #pop-options
+
+(** {2 The operations, as the implementation performs them}
+
+    Everything from here down is stated so that a Pulse function can build a
+    sequence and then apply exactly one lemma.  The bounds are the concrete
+    ones: a field element in this library has every limb below [2^17], and
+    each operation restores that with a fixed number of carry passes -- one
+    for an addition or a subtraction, two for a multiplication by a small
+    constant, three for a full multiplication. *)
+
+module C = Spec.Curve25519
+
+let lim : pos = pow2 17 - 1
+
+let felem (s: Seq.seq nat) : prop = Seq.length s == nl /\ ble s lim
+
+let fev (s: Seq.seq nat) : GTot C.elem = C.prime_gt_one (); eval s % prime
+
+let ble_mono (s: Seq.seq nat) (c c': nat)
+  : Lemma (requires ble s c /\ c <= c') (ensures ble s c') = ()
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 120"
+
+(** {3 Addition} *)
+
+let fadd_spec (a b: Seq.seq nat) : Seq.seq nat = carry_pass (addw a b)
+
+let fadd_spec_ok (a b: Seq.seq nat)
+  : Lemma (requires felem a /\ felem b)
+          (ensures felem (fadd_spec a b) /\ fev (fadd_spec a b) == C.fadd (fev a) (fev b))
+  = addw_ble a b lim lim;
+    addw_len a b;
+    carry_pass_len (addw a b);
+    carry_pass_ble (addw a b) (2 * lim) 4;
+    assert_norm (2 * lim + 4 < base * 5);
+    assert_norm (base - 1 + 38 * ((2 * lim + 4) / base) <= lim);
+    ble_mono (carry_pass (addw a b)) (base - 1 + 38 * ((2 * lim + 4) / base)) lim;
+    carry_pass_mod (addw a b);
+    eval_addw a b;
+    Math.lemma_mod_add_distr (eval a % prime) (eval b) prime;
+    Math.lemma_mod_add_distr (eval b) (eval a) prime
+
+let cancel (x y v: nat)
+  : Lemma (requires x < prime /\ y < prime /\ v < prime /\
+                    (x + v) % prime == (y + v) % prime)
+          (ensures x == y)
+  = Math.lemma_div_mod (x + v) prime;
+    Math.lemma_div_mod (y + v) prime;
+    div_le_of_lt (x + v) prime 1;
+    div_le_of_lt (y + v) prime 1
+
+let sub_mod_lemma (x a b: nat)
+  : Lemma (requires x + b == a + 8 * prime)
+          (ensures x % prime == C.fsub (a % prime) (b % prime))
+  = C.prime_gt_one ();
+    let u = a % prime in
+    let v = b % prime in
+    let y = C.fsub u v in
+    Math.lemma_mod_plus a 8 prime;
+    Math.lemma_mod_add_distr b x prime;
+    Math.lemma_mod_add_distr (x % prime) b prime;
+    assert ((x % prime + v) % prime == u);
+    Math.lemma_mod_add_distr v (u + prime - v) prime;
+    Math.lemma_mod_plus u 1 prime;
+    assert ((y + v) % prime == u);
+    cancel (x % prime) y v
+
+(** {3 Subtraction}
+
+    [eightp] dominates every limb of the subtrahend, so the difference is
+    taken limb by limb without a borrow and without leaving the naturals. *)
+
+let subw (a b: Seq.seq nat) : Seq.seq nat =
+  Seq.init #nat nl (fun k -> if vat b k <= vat eightp k then vat a k + vat eightp k - vat b k else 0)
+
+let subw_ok (a b: Seq.seq nat)
+  : Lemma (requires Seq.length a == nl /\ ble a lim /\ Seq.length b == nl /\ ble b lim)
+          (ensures eval (subw a b) + eval b == eval a + 8 * prime /\
+                   ble (subw a b) (lim + 4 * (base - 1)))
+  = eightp_ok ();
+    assert (ble twop (base - 1));
+    assert (forall (i: nat). i < nl ==> Seq.index eightp i == 4 * Seq.index twop i);
+    Seq.lemma_eq_intro (addw (subw a b) b) (addw a eightp);
+    eval_addw (subw a b) b;
+    eval_addw a eightp
+
+let fsub_spec (a b: Seq.seq nat) : Seq.seq nat = carry_pass (subw a b)
+
+let fsub_spec_ok (a b: Seq.seq nat)
+  : Lemma (requires felem a /\ felem b)
+          (ensures felem (fsub_spec a b) /\ fev (fsub_spec a b) == C.fsub (fev a) (fev b))
+  = subw_ok a b;
+    carry_pass_len (subw a b);
+    carry_pass_ble (subw a b) (lim + 4 * (base - 1)) 6;
+    assert_norm (lim + 4 * (base - 1) + 6 < base * 7);
+    assert_norm (base - 1 + 38 * ((lim + 4 * (base - 1) + 6) / base) <= lim);
+    ble_mono (carry_pass (subw a b)) (base - 1 + 38 * ((lim + 4 * (base - 1) + 6) / base)) lim;
+    carry_pass_mod (subw a b);
+    sub_mod_lemma (eval (subw a b)) (eval a) (eval b)
+
+(** {3 One carry pass, packaged}
+
+    Every operation below is a few applications of this: from a bound [c] on
+    the limbs, one pass leaves them under [c'], and the value is unchanged
+    modulo the prime.  The witness [d] is the carry bound; the caller picks
+    it, and [assert_norm] checks the two arithmetic side conditions. *)
+let pass (s: Seq.seq nat) (c d c': nat)
+  : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1) /\
+                    base - 1 + 38 * ((c + d) / base) <= c')
+          (ensures Seq.length (carry_pass s) == nl /\ ble (carry_pass s) c' /\
+                   eval (carry_pass s) % prime == eval s % prime)
+  = carry_pass_len s;
+    carry_pass_ble s c d;
+    carry_pass_mod s
+
+(** {3 Multiplication} *)
+
+let fmul_spec (a b: Seq.seq nat) : Seq.seq nat =
+  carry_pass (carry_pass (carry_pass (fold38 (part a b nl))))
+
+let fold_mod (c: Seq.seq nat)
+  : Lemma (requires Seq.length c == nw)
+          (ensures eval (fold38 c) % prime == eval c % prime)
+  = fold_ok c;
+    Math.paren_mul_right 2 prime (eval (Seq.slice c nl nw));
+    Math.swap_mul 2 prime;
+    Math.paren_mul_right 2 (eval (Seq.slice c nl nw)) prime;
+    Math.lemma_mod_plus (eval (fold38 c)) (2 * eval (Seq.slice c nl nw)) prime
+
+let fmul_spec_ok (a b: Seq.seq nat)
+  : Lemma (requires felem a /\ felem b)
+          (ensures felem (fmul_spec a b) /\ fev (fmul_spec a b) == C.fmul (fev a) (fev b))
+  = part_ble a b lim lim nl;
+    part_len a b nl;
+    let p = part a b nl in
+    assert_norm (39 * (nl * (lim * lim)) <= pow2 44);
+    fold_ble p (nl * (lim * lim));
+    ble_mono (fold38 p) (39 * (nl * (lim * lim))) (pow2 44);
+    let f = fold38 p in
+    assert_norm (pow2 44 + (pow2 28 + pow2 13) < base * (pow2 28 + pow2 13 + 1));
+    assert_norm (base - 1 + 38 * ((pow2 44 + (pow2 28 + pow2 13)) / base) <= pow2 34);
+    pass f (pow2 44) (pow2 28 + pow2 13) (pow2 34);
+    let g = carry_pass f in
+    assert_norm (pow2 34 + (pow2 18 + pow2 4) < base * (pow2 18 + pow2 4 + 1));
+    assert_norm (base - 1 + 38 * ((pow2 34 + (pow2 18 + pow2 4)) / base) <= pow2 24);
+    pass g (pow2 34) (pow2 18 + pow2 4) (pow2 24);
+    let h = carry_pass g in
+    assert_norm (pow2 24 + 257 < base * 258);
+    assert_norm (base - 1 + 38 * ((pow2 24 + 257) / base) <= lim);
+    pass h (pow2 24) 257 lim;
+    fold_mod p;
+    mul_ok a b;
+    Math.lemma_mod_mul_distr_l (eval a) (eval b) prime;
+    Math.lemma_mod_mul_distr_r (eval a % prime) (eval b) prime
+
+(** {3 Multiplication by a small constant} *)
+
+let fscale_spec (m: nat) (a: Seq.seq nat) : Seq.seq nat =
+  carry_pass (carry_pass (scale m a))
+
+let fscale_spec_ok (m: nat) (a: Seq.seq nat)
+  : Lemma (requires felem a /\ m <= 121665)
+          (ensures felem (fscale_spec m a) /\
+                   fev (fscale_spec m a) == (m * eval a) % prime)
+  = let s = scale m a in
+    let aux (i: nat { i < nl }) : Lemma (Seq.index s i <= 121665 * lim) =
+      Math.lemma_mult_le_left m (Seq.index a i) lim;
+      Math.lemma_mult_le_right lim m 121665 in
+    Classical.forall_intro aux;
+    assert (ble s (121665 * lim));
+    assert_norm (121665 * lim <= pow2 34);
+    ble_mono s (121665 * lim) (pow2 34);
+    assert_norm (pow2 34 + (pow2 18 + pow2 4) < base * (pow2 18 + pow2 4 + 1));
+    assert_norm (base - 1 + 38 * ((pow2 34 + (pow2 18 + pow2 4)) / base) <= pow2 24);
+    pass s (pow2 34) (pow2 18 + pow2 4) (pow2 24);
+    let g = carry_pass s in
+    assert_norm (pow2 24 + 257 < base * 258);
+    assert_norm (base - 1 + 38 * ((pow2 24 + 257) / base) <= lim);
+    pass g (pow2 24) 257 lim;
+    eval_scale m a
+
+
+(** {3 Freezing}
+
+    Reducing to the unique representative below the prime, which is what
+    the caller sees on the way out.  The shape of the argument shrinks in
+    four steps: from limbs under [2^17] to a genuine base-[2^16] number
+    below [2^256], then two subtractions of the prime bring it below
+    [2^255], and one conditional subtraction finishes. *)
+
+let shaped (s: Seq.seq nat) (c0: nat) : prop =
+  Seq.length s == nl /\ vat s 0 <= c0 /\
+  (forall (k: nat). 0 < k /\ k < nl ==> vat s k < base)
+
+let shaped_ble (s: Seq.seq nat) (c0: nat)
+  : Lemma (requires shaped s c0 /\ base - 1 <= c0) (ensures ble s c0) = ()
+
+let eval_shaped (s: Seq.seq nat) (c0: nat)
+  : Lemma (requires shaped s c0) (ensures eval s <= c0 + pow2 256 - base)
+  = let t = Seq.slice s 1 nl in
+    let aux (i: nat { i < nl - 1 }) : Lemma (Seq.index t i < base) =
+      Seq.lemma_index_slice s 1 nl i;
+      assert (vat s (i + 1) < base) in
+    Classical.forall_intro aux;
+    assert (bnd t base);
+    eval_bnd t;
+    assert_norm (rad * (nl - 1) == 240);
+    Math.lemma_mult_le_left base (eval t + 1) (pow2 240);
+    Math.pow2_plus rad 240
+
+(** One step: carry the whole number, then fold the overflow back in with
+    the reduction constant, since [2^256 = 2 * prime + 38]. *)
+let fstep (s: Seq.seq nat) : Seq.seq nat =
+  let r = carry_low s in
+  if Seq.length r = nl then Seq.upd r 0 (vat r 0 + 38 * carry_out s) else r
+
+let fstep_val (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl)
+          (ensures eval (fstep s) == eval (carry_low s) + 38 * carry_out s /\
+                   eval (fstep s) % prime == eval s % prime)
+  = carry_low_len s;
+    carry_split_ok s;
+    let r = carry_low s in
+    let t = carry_out s in
+    eval_upd r 0 (Seq.index r 0 + 38 * t);
+    assert_norm (pow2 256 == 2 * prime + 38);
+    Math.distributivity_add_left (2 * prime) 38 t;
+    Math.paren_mul_right 2 prime t;
+    Math.swap_mul 2 prime;
+    Math.paren_mul_right 2 t prime;
+    Math.lemma_mod_plus (eval (fstep s)) (2 * t) prime
+
+let fstep_ok (s: Seq.seq nat) (c d: nat)
+  : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1))
+          (ensures shaped (fstep s) (base - 1 + 38 * d) /\
+                   eval (fstep s) % prime == eval s % prime)
+  = fstep_val s;
+    carry_low_len s;
+    carry_split_bnd s c d;
+    Math.lemma_mult_le_right 38 (carry_out s) d
+
+(** The last step lands inside base [2^16]: either nothing overflowed, or
+    the overflow was one and what remained was tiny. *)
+let fstep_last (s: Seq.seq nat)
+  : Lemma (requires shaped s 65573)
+          (ensures Seq.length (fstep s) == nl /\ bnd (fstep s) base /\
+                   eval (fstep s) < pow2 256 /\
+                   eval (fstep s) % prime == eval s % prime)
+  = shaped_ble s 65573;
+    assert_norm (65573 + 1 < base * 2);
+    fstep_val s;
+    carry_low_len s;
+    carry_split_bnd s 65573 1;
+    carry_split_ok s;
+    eval_shaped s 65573;
+    assert_norm (65573 + pow2 256 - base == pow2 256 + 37);
+    let r = carry_low s in
+    if carry_out s = 0 then begin
+      Seq.lemma_eq_intro (fstep s) r;
+      eval_bnd r;
+      assert_norm (rad * nl == 256)
+    end else begin
+      assert (carry_out s == 1);
+      assert (eval s == eval r + pow2 256);
+      assert (eval r <= 37);
+      assert (Seq.index r 0 <= eval r);
+      assert (eval (fstep s) == eval r + 38);
+      Math.pow2_lt_compat 256 7;
+      assert_norm (pow2 7 == 128);
+      assert (eval (fstep s) < pow2 256);
+      assert (bnd (fstep s) base);
+      ()
+    end
+
+let freeze_a (s: Seq.seq nat) : Seq.seq nat = fstep (fstep (fstep (fstep s)))
+
+let freeze_a_ok (s: Seq.seq nat)
+  : Lemma (requires felem s)
+          (ensures Seq.length (freeze_a s) == nl /\ bnd (freeze_a s) base /\
+                   eval (freeze_a s) < pow2 256 /\
+                   eval (freeze_a s) % prime == eval s % prime)
+  = assert_norm (lim + 2 < base * 3);
+    fstep_ok s lim 2;
+    let x1 = fstep s in
+    assert_norm (base - 1 + 38 * 2 == 65611);
+    shaped_ble x1 65611;
+    assert_norm (65611 + 1 < base * 2);
+    fstep_ok x1 65611 1;
+    let x2 = fstep x1 in
+    assert_norm (base - 1 + 38 * 1 == 65573);
+    shaped_ble x2 65573;
+    fstep_ok x2 65573 1;
+    fstep_last (fstep x2)
+
+(** {3 Subtracting the prime once} *)
+
+let red255 (s: Seq.seq nat) : Seq.seq nat = carry_low (fold255 s)
+
+let hi255_bit (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl /\ bnd s base)
+          (ensures hi255 s == eval s / pow2 255)
+  = eval_bnd s;
+    assert_norm (rad * nl == 256);
+    assert_norm (rad * (nl - 1) == 240);
+    Math.lemma_div_lt (eval s) 256 240;
+    eval_digit s (nl - 1);
+    Math.small_mod (eval s / pow2 240) base;
+    Math.division_multiplication_lemma (eval s) (pow2 240) (pow2 15);
+    Math.pow2_plus 240 15
+
+let red255_ok (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl /\ bnd s base)
+          (ensures Seq.length (red255 s) == nl /\ bnd (red255 s) base /\
+                   eval (red255 s) == eval s - prime * (eval s / pow2 255))
+  = hi255_bit s;
+    fold255_ok s;
+    let f = fold255 s in
+    assert (Seq.length f == nl);
+    assert (ble f (base + 18));
+    assert_norm (base + 18 + 1 < base * 2);
+    eval_bnd s;
+    assert_norm (rad * nl == 256);
+    carry_out_zero f;
+    carry_split_ok f;
+    carry_split_bnd f (base + 18) 1;
+    carry_low_len f
+
+let freeze_b (s: Seq.seq nat) : Seq.seq nat = red255 (red255 s)
+
+let freeze_b_ok (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl /\ bnd s base /\ eval s < pow2 256)
+          (ensures Seq.length (freeze_b s) == nl /\ bnd (freeze_b s) base /\
+                   eval (freeze_b s) < pow2 255 /\
+                   eval (freeze_b s) % prime == eval s % prime)
+  = red255_ok s;
+    let y = red255 s in
+    red255_ok y;
+    assert_norm (pow2 255 == prime + 19);
+    assert_norm (pow2 256 == 2 * pow2 255);
+    assert_norm (pow2 1 == 2);
+    Math.pow2_lt_compat 255 6;
+    assert_norm (pow2 6 == 64);
+    let q0 = eval s / pow2 255 in
+    let q1 = eval y / pow2 255 in
+    Math.lemma_div_lt_nat (eval s) 256 255;
+    Math.lemma_div_mod (eval s) (pow2 255);
+    if q0 = 0 then assert (eval y == eval s) else assert (eval y == eval s - prime);
+    assert (eval y < pow2 255 + 19);
+    Math.lemma_div_lt_nat (eval y) 256 255;
+    Math.lemma_div_mod (eval y) (pow2 255);
+    Math.swap_mul prime q0;
+    Math.swap_mul prime q1;
+    Math.lemma_mod_sub (eval s) prime q0;
+    Math.lemma_mod_sub (eval y) prime q1;
+    if q1 = 0 then begin
+      assert (eval (freeze_b s) == eval y);
+      assert (eval (freeze_b s) < pow2 255)
+    end else begin
+      assert (eval (freeze_b s) == eval y - prime);
+      assert (eval (freeze_b s) < pow2 255)
+    end
+
+(** {3 The conditional last subtraction} *)
+
+let add19 (s: Seq.seq nat) : Seq.seq nat =
+  if Seq.length s = nl then Seq.upd s 0 (vat s 0 + 19) else s
+
+let freeze_spec (s: Seq.seq nat) : Seq.seq nat =
+  let y = freeze_b (freeze_a s) in
+  let w = carry_low (add19 y) in
+  if hi255 w = 1 then mask255 w else y
+
+let freeze_spec_ok (s: Seq.seq nat)
+  : Lemma (requires felem s)
+          (ensures Seq.length (freeze_spec s) == nl /\ bnd (freeze_spec s) base /\
+                   eval (freeze_spec s) == eval s % prime)
+  = freeze_a_ok s;
+    freeze_b_ok (freeze_a s);
+    let y = freeze_b (freeze_a s) in
+    let a = add19 y in
+    assert (Seq.length a == nl);
+    assert (ble a (base + 18));
+    assert_norm (base + 18 + 1 < base * 2);
+    eval_upd y 0 (Seq.index y 0 + 19);
+    assert_norm (pow2 (rad * 0) == 1);
+    assert_norm (pow2 255 == prime + 19);
+    assert_norm (pow2 256 == 2 * pow2 255);
+    carry_out_zero a;
+    carry_split_ok a;
+    carry_split_bnd a (base + 18) 1;
+    carry_low_len a;
+    let w = carry_low a in
+    hi255_bit w;
+    Math.lemma_div_lt_nat (eval w) 256 255;
+    if hi255 w = 1 then begin
+      mask255_ok w;
+      Math.lemma_mod_sub (eval w) (pow2 255) 1;
+      Math.small_mod (eval w - pow2 255) (pow2 255);
+      Math.lemma_mod_sub (eval y) prime 1;
+      Math.small_mod (eval y - prime) prime
+    end else
+      Math.small_mod (eval y) prime
+
+#pop-options
