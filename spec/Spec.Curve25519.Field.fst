@@ -49,6 +49,9 @@ module Spec.Curve25519.Field
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Loops = Hacl.Spec.Loops
+module S8 = Hacl.Secret.UInt8
+
+open Hacl.Spec.Bytes
 
 let prime : pos = Spec.Curve25519.prime
 
@@ -465,5 +468,217 @@ let eval_digit (s: Seq.seq nat) (k: nat { k < Seq.length s })
     Math.small_div (eval p) (pow2 (rad * k));
     Math.lemma_mod_plus (Seq.index s k) (eval (Seq.slice s (k + 1) n)) base;
     Math.small_mod (Seq.index s k) base
+
+(** {2 Splitting off the top carry}
+
+    [carry_pass] folds the carry out of the top limb back down, which is what
+    an arithmetic operation wants.  The final reduction wants the carry
+    itself, so that it can decide how many primes to subtract. *)
+
+let carry_low (s: Seq.seq nat) : Seq.seq nat =
+  let r = carry_run s (nl - 1) in
+  if Seq.length r = nl then Seq.upd r (nl - 1) (vat r (nl - 1) % base) else r
+
+let carry_out (s: Seq.seq nat) : nat =
+  vat (carry_run s (nl - 1)) (nl - 1) / base
+
+let carry_low_len (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl) (ensures Seq.length (carry_low s) == nl)
+  = carry_run_len s (nl - 1)
+
+let carry_split_ok (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl)
+          (ensures eval s == eval (carry_low s) + pow2 256 * carry_out s)
+  = carry_run_len s (nl - 1);
+    carry_run_ok s (nl - 1);
+    let r = carry_run s (nl - 1) in
+    eval_upd r (nl - 1) (Seq.index r (nl - 1) % base);
+    Math.euclidean_division_definition (Seq.index r (nl - 1)) base;
+    Math.pow2_plus (rad * (nl - 1)) rad;
+    Math.distributivity_add_right (pow2 (rad * (nl - 1)))
+      (Seq.index r (nl - 1) % base) (base * (Seq.index r (nl - 1) / base));
+    Math.paren_mul_right (pow2 (rad * (nl - 1))) base (Seq.index r (nl - 1) / base);
+    assert (rad * nl == 256)
+
+let carry_split_bnd (s: Seq.seq nat) (c d: nat)
+  : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1))
+          (ensures bnd (carry_low s) base /\ carry_out s <= d)
+  = carry_run_chained s c d (nl - 1);
+    carry_run_len s (nl - 1);
+    Math.lemma_div_le (Seq.index (carry_run s (nl - 1)) (nl - 1)) (c + d) base;
+    div_le_of_lt (c + d) base d
+
+let carry_out_zero (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl /\ eval s < pow2 256)
+          (ensures carry_out s == 0)
+  = carry_split_ok s
+
+(** {2 Subtracting the prime}
+
+    [2^255 = prime + 19], so clearing bit 255 and adding [19] subtracts one
+    prime.  Applied twice to a number below [2^256] it lands below [2^255],
+    and a third application decides the last conditional subtraction. *)
+
+let hi255 (s: Seq.seq nat) : nat = vat s (nl - 1) / pow2 15
+
+let fold255 (s: Seq.seq nat) : Seq.seq nat =
+  if Seq.length s = nl then
+    Seq.upd (Seq.upd s (nl - 1) (vat s (nl - 1) % pow2 15)) 0 (vat s 0 + 19 * hi255 s)
+  else s
+
+let fold255_len (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl) (ensures Seq.length (fold255 s) == nl) = ()
+
+let fold255_ok (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl)
+          (ensures eval (fold255 s) + prime * hi255 s == eval s)
+  = let q = hi255 s in
+    let s1 = Seq.upd s (nl - 1) (Seq.index s (nl - 1) % pow2 15) in
+    eval_upd s (nl - 1) (Seq.index s (nl - 1) % pow2 15);
+    eval_upd s1 0 (Seq.index s 0 + 19 * q);
+    Math.euclidean_division_definition (Seq.index s (nl - 1)) (pow2 15);
+    Math.pow2_plus (rad * (nl - 1)) 15;
+    Math.distributivity_add_right (pow2 (rad * (nl - 1)))
+      (Seq.index s (nl - 1) % pow2 15) (pow2 15 * q);
+    Math.paren_mul_right (pow2 (rad * (nl - 1))) (pow2 15) q;
+    assert (rad * (nl - 1) + 15 == 255);
+    assert_norm (pow2 255 == prime + 19)
+
+(** Masking off bit 255 is a reduction modulo [2^255], which is what
+    decoding a public key asks for. *)
+let mask255 (s: Seq.seq nat) : Seq.seq nat =
+  if Seq.length s = nl then Seq.upd s (nl - 1) (vat s (nl - 1) % pow2 15) else s
+
+let mask255_ok (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl /\ bnd s base)
+          (ensures eval (mask255 s) == eval s % pow2 255 /\ bnd (mask255 s) base)
+  = let q = Seq.index s (nl - 1) / pow2 15 in
+    eval_upd s (nl - 1) (Seq.index s (nl - 1) % pow2 15);
+    Math.euclidean_division_definition (Seq.index s (nl - 1)) (pow2 15);
+    Math.pow2_plus (rad * (nl - 1)) 15;
+    Math.distributivity_add_right (pow2 (rad * (nl - 1)))
+      (Seq.index s (nl - 1) % pow2 15) (pow2 15 * q);
+    Math.paren_mul_right (pow2 (rad * (nl - 1))) (pow2 15) q;
+    assert (rad * (nl - 1) + 15 == 255);
+    eval_at (mask255 s) (nl - 1);
+    eval_bnd (Seq.slice (mask255 s) 0 (nl - 1));
+    eval_zeros (Seq.slice (mask255 s) nl nl);
+    Math.pow2_plus (rad * (nl - 1)) 15;
+    Math.lemma_mult_le_left (pow2 (rad * (nl - 1)))
+      (Seq.index s (nl - 1) % pow2 15 + 1) (pow2 15);
+    Math.lemma_mod_plus (eval (mask255 s)) q (pow2 255);
+    Math.small_mod (eval (mask255 s)) (pow2 255)
+
+(** {2 Bytes}
+
+    A limb is exactly two bytes, so both directions are stated relationally
+    on whatever the loop happens to have built. *)
+
+#push-options "--fuel 4"
+let rec eval_bytes (b: Seq.seq S8.t) (s: Seq.seq nat)
+  : Lemma (requires Seq.length b == 2 * Seq.length s /\
+                    (forall (k: nat). k < Seq.length s ==>
+                       Seq.index s k == S8.v (Seq.index b (2 * k)) +
+                                        256 * S8.v (Seq.index b (2 * k + 1))))
+          (ensures eval s == le_nat b)
+          (decreases Seq.length s)
+  = let n = Seq.length s in
+    if n = 0 then ()
+    else begin
+      le_nat_split b 2;
+      let hd = Seq.slice b 0 2 in
+      let tl = Seq.slice b 2 (2 * n) in
+      assert (le_nat hd == S8.v (Seq.index b 0) + 256 * S8.v (Seq.index b 1));
+      eval_bytes tl (Seq.slice s 1 n)
+    end
+#pop-options
+
+let store_ok (s: Seq.seq nat) (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\ bnd s base /\
+                    (forall (k: nat). k < nl ==>
+                       S8.v (Seq.index b (2 * k)) == Seq.index s k % 256 /\
+                       S8.v (Seq.index b (2 * k + 1)) == Seq.index s k / 256))
+          (ensures b == nat_to_le 32 (eval s))
+  = let v = eval s in
+    let aux (i: nat { i < 32 }) : Lemma (Seq.index b i == Seq.index (nat_to_le 32 v) i) =
+      let k = i / 2 in
+      eval_digit s k;
+      nat_to_le_index 32 v i;
+      Math.pow2_plus (rad * k) 8;
+      if i % 2 = 0 then begin
+        assert (8 * i == rad * k);
+        Math.pow2_modulo_modulo_lemma_1 (v / pow2 (rad * k)) 8 rad
+      end else begin
+        assert (8 * i == rad * k + 8);
+        Math.pow2_modulo_division_lemma_1 (v / pow2 (rad * k)) 8 rad;
+        Math.division_multiplication_lemma v (pow2 (rad * k)) (pow2 8)
+      end;
+      S8.v_extensional (Seq.index b i) (Seq.index (nat_to_le 32 v) i) in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro b (nat_to_le 32 v)
+
+(** {2 What the loops need}
+
+    Three small lemmas stated in exactly the shape the implementation's
+    invariants take, so that no arithmetic happens inside a Pulse block. *)
+
+let addw_ble (x y: Seq.seq nat) (cx cy: nat)
+  : Lemma (requires ble x cx /\ ble y cy) (ensures ble (addw x y) (cx + cy)) = ()
+
+let addw_len (x y: Seq.seq nat)
+  : Lemma (Seq.length (addw x y) == Seq.length x) = ()
+
+(** Adding the [j]-th product of row [i] to the accumulator is an update of
+    column [i + j], because that column is still zero. *)
+let addw_rowj_step (x a b: Seq.seq nat) (i: nat) (j: nat { i + j < nw })
+  : Lemma (requires Seq.length x == nw)
+          (ensures addw x (rowj a b i (j + 1)) ==
+                   Seq.upd (addw x (rowj a b i j)) (i + j)
+                           (Seq.index (addw x (rowj a b i j)) (i + j) + vat a i * vat b j))
+  = Seq.lemma_eq_intro (addw x (rowj a b i (j + 1)))
+      (Seq.upd (addw x (rowj a b i j)) (i + j)
+               (Seq.index (addw x (rowj a b i j)) (i + j) + vat a i * vat b j))
+
+let part_step (a b: Seq.seq nat) (i: nat)
+  : Lemma (part a b (i + 1) == addw (part a b i) (row a b i)) = ()
+
+let rowj_zero (a b: Seq.seq nat) (i: nat)
+  : Lemma (rowj a b i 0 == zerow)
+  = Seq.lemma_eq_intro (rowj a b i 0) zerow
+
+(** {2 Eight primes}
+
+    [fsub] adds a multiple of the prime before subtracting, so that no limb
+    can go negative.  Four times [2 * prime] is the smallest one whose every
+    limb dominates a limb of the subtrahend. *)
+
+let ones (n: nat) : Seq.seq nat = Seq.create n ((base - 1) <: nat)
+
+let rec eval_ones (n: nat)
+  : Lemma (ensures eval (ones n) == pow2 (rad * n) - 1) (decreases n)
+  = if n = 0 then ()
+    else begin
+      Seq.lemma_eq_intro (Seq.slice (ones n) 1 n) (ones (n - 1));
+      eval_ones (n - 1);
+      Math.pow2_plus rad (rad * (n - 1));
+      Math.distributivity_sub_right base (pow2 (rad * (n - 1))) 1
+    end
+
+let twop : Seq.seq nat = Seq.upd (ones nl) 0 ((base - 38) <: nat)
+
+let eightp : Seq.seq nat = scale 4 twop
+
+let twop_ok (_: unit) : Lemma (eval twop == 2 * prime /\ Seq.length twop == nl)
+  = eval_ones nl;
+    eval_upd (ones nl) 0 ((base - 38) <: nat);
+    assert (rad * nl == 256);
+    two_prime ()
+
+let eightp_ok (_: unit)
+  : Lemma (eval eightp == 8 * prime /\ Seq.length eightp == nl /\
+           (forall (i: nat). i < nl ==> 4 * (base - 38) <= Seq.index eightp i))
+  = twop_ok ();
+    eval_scale 4 twop;
+    Math.paren_mul_right 4 2 prime
 
 #pop-options
