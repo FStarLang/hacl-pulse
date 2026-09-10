@@ -42,6 +42,17 @@ CUSTARD_ENTRIES_Hacl.Hash.Blake2.Ptr := \
   blake2b_512 blake2b_384 blake2b_256 blake2b_160 \
   blake2s_256 blake2s_224 blake2s_160 blake2s_128
 
+C_UNITS += Hacl.Streaming.Blake2.Ptr
+CUSTARD_ENTRIES_Hacl.Streaming.Blake2.Ptr := \
+  blake2b_512_init blake2b_512_update blake2b_512_digest \
+  blake2b_384_init blake2b_384_update blake2b_384_digest \
+  blake2b_256_init blake2b_256_update blake2b_256_digest \
+  blake2b_160_init blake2b_160_update blake2b_160_digest \
+  blake2s_256_init blake2s_256_update blake2s_256_digest \
+  blake2s_224_init blake2s_224_update blake2s_224_digest \
+  blake2s_160_init blake2s_160_update blake2s_160_digest \
+  blake2s_128_init blake2s_128_update blake2s_128_digest
+
 C_UNITS += Hacl.Chacha20.Ptr
 CUSTARD_ENTRIES_Hacl.Chacha20.Ptr := encrypt decrypt
 
@@ -65,6 +76,7 @@ TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
 TEST_UNITS_test_sha3 := Hacl.Hash.SHA3.Ptr
 TEST_UNITS_test_sha3_streaming := Hacl.Streaming.SHA3.Ptr
 TEST_UNITS_test_blake2 := Hacl.Hash.Blake2.Ptr
+TEST_UNITS_test_blake2_streaming := Hacl.Streaming.Blake2.Ptr
 TEST_UNITS_test_chacha20 := Hacl.Chacha20.Ptr
 TEST_UNITS_test_poly1305 := Hacl.Poly1305.Ptr
 TEST_UNITS_test_chacha20poly1305 := Hacl.Chacha20Poly1305.Ptr
