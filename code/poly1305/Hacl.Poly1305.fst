@@ -74,19 +74,8 @@ let step_cong (x y bv rr: nat)
     Math.lemma_mod_mul_distr_l (x + bv) rr prime;
     Math.lemma_mod_mul_distr_l (y + bv) rr prime
 
-(** Two functions that agree pointwise fold to the same thing.  The
-    specification writes its step as a lambda and the loop invariant writes it
-    as [step]; nothing else relates them, because [repeati_g] takes the
-    function as an argument and F* does not identify a lambda with a partial
-    application. *)
-#push-options "--fuel 2 --ifuel 1"
-let rec repeati_g_ext (#a: Type) (n: nat) (f g: (i: nat -> a -> GTot a)) (acc: a)
-  : Lemma (requires forall i x. f i x == g i x)
-          (ensures repeati_g n f acc == repeati_g n g acc)
-          (decreases n)
-  = if n = 0 then () else repeati_g_ext (n - 1) f g acc
-#pop-options
-
+(** The specification writes its step as a lambda and the invariant below
+    writes it as [step]; [repeati_g_ext] is the only thing that relates them. *)
 let poly_ext (msg: Seq.seq S8.t) (r: nat)
   : Lemma (Spec.poly msg r ==
            repeati_g (Spec.nblocks (Seq.length msg)) (step msg r) 0)

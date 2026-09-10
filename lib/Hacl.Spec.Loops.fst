@@ -43,10 +43,28 @@ let unfold_repeati_g (#a: Type) (n: nat) (f: (i: nat -> a -> GTot a)) (acc: a)
 (** Splitting an iteration in two, which is what lets an implementation run the
     message blocks and the padding blocks in separate loops while the
     specification remains a single fold. *)
+(** The tail of a fold, as a fold.  Named rather than written as a lambda at
+    the use site, for the reason given above: a caller has to be able to write
+    down the very same step function in order to rewrite it. *)
+let shift_g (#a: Type) (m: nat) (f: (i: nat -> a -> GTot a)) (i: nat) (x: a) : GTot a =
+  f (m + i) x
+
 let rec repeati_g_split (#a: Type) (m: nat) (n: nat { m <= n }) (f: (i: nat -> a -> GTot a)) (acc: a)
-  : Lemma (ensures repeati_g n f acc == repeati_g (n - m) (fun i x -> f (m + i) x) (repeati_g m f acc))
+  : Lemma (ensures repeati_g n f acc ==
+                   repeati_g (n - m) (shift_g m f) (repeati_g m f acc))
           (decreases (n - m))
   = if n = m then () else repeati_g_split m (n - 1) f acc
+
+(** Two functions that agree pointwise below [n] fold to the same thing.
+    Needed because [repeati_g] takes the step as an argument and F* does not
+    identify a lambda with a partial application of a named function: a
+    specification that writes its step one way and an implementation whose
+    loop invariant writes it the other are, to the solver, different terms. *)
+let rec repeati_g_ext (#a: Type) (n: nat) (f g: (i: nat -> a -> GTot a)) (acc: a)
+  : Lemma (requires forall (i: nat) (x: a). i < n ==> f i x == g i x)
+          (ensures repeati_g n f acc == repeati_g n g acc)
+          (decreases n)
+  = if n = 0 then () else repeati_g_ext (n - 1) f g acc
 
 let repeati_g_zero (#a: Type) (f: (i: nat -> a -> GTot a)) (acc: a)
   : Lemma (repeati_g 0 f acc == acc)
