@@ -29,6 +29,14 @@
     sixteen, and [nblocks_split] is the only thing anyone needs to know about
     the arrangement.
 
+    The loop and the two kinds of last block are three separate functions
+    rather than one, because ChaCha20-Poly1305 needs them in a different
+    order: it authenticates a concatenation of segments, each padded out to a
+    whole number of blocks with zeros, so its last block of a segment is a
+    full block and not Poly1305's own short one.  [absorb_blocks],
+    [absorb_pad] and [absorb_seg] are what it uses; [absorb_tail] is what the
+    plain MAC uses.
+
     The invariant is a congruence, not an equation: the accumulator is only
     ever equal to the specification's modulo [prime], because the carry chain
     inside [fmul] wraps the top of the number round to the bottom.  It is
@@ -56,12 +64,7 @@ module Spec = Spec.Poly1305
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-(** {2 The fold the loop computes} *)
-
-(** The specification's step, at a fixed message and multiplier.  Named so
-    that the loop invariant and the lemmas below agree on it. *)
-let step (msg: Seq.seq S8.t) (r: nat) (i: nat) (acc: nat) : GTot nat =
-  Spec.update r acc (Spec.block_at msg i)
+(** {2 What one iteration does to the accumulator} *)
 
 (** One iteration.  The accumulator held [x], which is congruent to the
     specification's [y]; a block is added and the product taken, and the
@@ -74,25 +77,22 @@ let step_cong (x y bv rr: nat)
     Math.lemma_mod_mul_distr_l (x + bv) rr prime;
     Math.lemma_mod_mul_distr_l (y + bv) rr prime
 
-(** The specification writes its step as a lambda and the invariant below
-    writes it as [step]; [repeati_g_ext] is the only thing that relates them. *)
-let poly_ext (msg: Seq.seq S8.t) (r: nat)
-  : Lemma (Spec.poly msg r ==
-           repeati_g (Spec.nblocks (Seq.length msg)) (step msg r) 0)
-  = repeati_g_ext (Spec.nblocks (Seq.length msg))
-                  (fun i acc -> Spec.update r acc (Spec.block_at msg i))
-                  (step msg r) 0
+(** The block loop's invariant, advanced by one.  Stated over [16 * i] and
+    never over [block_at]: [block_at] unfolds to a division, and a division
+    inside a separation-logic query is what makes the solver give up. *)
+let blocks_step (msg: Seq.seq S8.t) (r: nat) (i: nat) (x z acc: nat)
+  : Lemma (requires 16 * i + 16 <= Seq.length msg /\
+                    x % prime == Spec.blocks_acc msg 0 i r acc /\
+                    z % prime ==
+                      ((x + Spec.block_val (Seq.slice msg (16 * i) (16 * i + 16)))
+                       * r) % prime)
+          (ensures z % prime == Spec.blocks_acc msg 0 (i + 1) r acc)
+  = unfold_repeati_g i (Spec.bstep msg 0 r) acc;
+    step_cong x (Spec.blocks_acc msg 0 i r acc)
+              (Spec.block_val (Seq.slice msg (16 * i) (16 * i + 16))) r
 
-(** A full block of the message is the sixteen bytes at [16 i]. *)
-let full_block (msg: Seq.seq S8.t) (i: nat)
-  : Lemma (requires 16 * i + 16 <= Seq.length msg)
-          (ensures Spec.block_at msg i ==
-                   Seq.slice msg (16 * i) (16 * i + 16))
-  = Math.lemma_div_le (16 * i + 16) (Seq.length msg) 16;
-    Math.cancel_mul_div (i + 1) 16;
-    Spec.nblocks_split (Seq.length msg)
-
-(** And the short one is what is left over. *)
+(** And the plain MAC's short last block, if any: the full blocks and the
+    tail together are the whole message. *)
 let last_block (msg: Seq.seq S8.t) (i: nat)
   : Lemma (requires 16 * i == Seq.length msg - Seq.length msg % 16 /\
                     Seq.length msg % 16 <> 0)
@@ -101,62 +101,100 @@ let last_block (msg: Seq.seq S8.t) (i: nat)
   = Spec.nblocks_split (Seq.length msg);
     Math.euclidean_division_definition (Seq.length msg) 16
 
-(** One whole iteration as a single implication over naturals, so that the
-    loop body proves its invariant by instantiating one lemma rather than by
-    chaining four facts inside a separation-logic query. *)
-let step_of (msg: Seq.seq S8.t) (r: nat) (i: nat)
-            (b: Seq.seq S8.t { Seq.length b <= 16 }) (x z: nat)
-  : Lemma (requires x % prime == repeati_g i (step msg r) 0 /\
-                    Spec.block_at msg i == b /\
-                    z % prime == ((x + Spec.block_val b) * r) % prime)
-          (ensures z % prime == repeati_g (i + 1) (step msg r) 0)
-  = step_cong x (repeati_g i (step msg r) 0) (Spec.block_val b) r;
-    unfold_repeati_g i (step msg r) 0
-
-(** The two shapes the loop actually uses.  Neither mentions [block_at] or
-    [nblocks]: those unfold to divisions, and a division inside a
-    separation-logic query is what makes the solver give up.  Here the
-    division is discharged once, in a context that holds nothing else. *)
-let step_full (msg: Seq.seq S8.t) (r: nat) (i: nat) (x z: nat)
-  : Lemma (requires 16 * i + 16 <= Seq.length msg /\
-                    x % prime == repeati_g i (step msg r) 0 /\
+let mac_tail (msg: Seq.seq S8.t) (r: nat) (n: nat) (q: nat) (a z: nat)
+  : Lemma (requires q == Seq.length msg % 16 /\
+                    16 * n == Seq.length msg - q /\
+                    a == Spec.blocks_acc msg 0 n r 0 /\
                     z % prime ==
-                      ((x + Spec.block_val (Seq.slice msg (16 * i) (16 * i + 16)))
-                       * r) % prime)
-          (ensures z % prime == repeati_g (i + 1) (step msg r) 0)
-  = full_block msg i;
-    step_of msg r i (Seq.slice msg (16 * i) (16 * i + 16)) x z
-
-(** And the tail, whether or not there is one: the caller runs the loop over
-    [len / 16] blocks and then one conditional block, and this says that the
-    two together are [nblocks len] of them. *)
-let step_tail (msg: Seq.seq S8.t) (r: nat) (i: nat) (n: nat) (a z: nat)
-  : Lemma (requires n == Seq.length msg % 16 /\
-                    16 * i == Seq.length msg - n /\
-                    a == repeati_g i (step msg r) 0 /\
-                    z % prime ==
-                      (if n = 0 then a
-                       else ((a + Spec.block_val (Seq.slice msg (16 * i) (16 * i + n)))
+                      (if q = 0 then a
+                       else ((a + Spec.block_val (Seq.slice msg (16 * n) (16 * n + q)))
                              * r) % prime))
-          (ensures z % prime ==
-                   repeati_g (Spec.nblocks (Seq.length msg)) (step msg r) 0)
-  = Spec.nblocks_split (Seq.length msg);
+          (ensures z % prime == Spec.poly msg r)
+  = Spec.poly_is_acc msg r;
+    Spec.poly_acc_split msg r 0;
     Math.euclidean_division_definition (Seq.length msg) 16;
-    if n = 0 then ()
-    else (last_block msg i; unfold_repeati_g i (step msg r) 0)
+    if q <> 0 then last_block msg n
+
+(** The block of a segment's padded tail is a full block whose last bytes are
+    zero -- not Poly1305's short block, which carries its length in the
+    position of a one bit. *)
+let pad_block (msg: Seq.seq S8.t) (tmp: Seq.seq S8.t) (off: nat) (blen: nat)
+  : Lemma (requires blen < 16 /\ off + blen <= Seq.length msg /\
+                    Seq.length tmp == 16 /\
+                    (forall (k: nat). k < blen ==>
+                       Seq.index tmp k == Seq.index msg (off + k)) /\
+                    (forall (k: nat). blen <= k /\ k < 16 ==>
+                       Seq.index tmp k == S8.classify 0uy))
+          (ensures Seq.slice tmp 0 16 ==
+                   Seq.append (Seq.slice msg off (off + blen))
+                              (Spec.zeros (16 - blen)))
+  = Seq.lemma_eq_intro (Seq.slice tmp 0 16)
+                       (Seq.append (Seq.slice msg off (off + blen))
+                                   (Spec.zeros (16 - blen)))
 
 #pop-options
 
-(** {2 The short final block}
-
-    A separate function, and not an [if] inside the driver, because a Pulse
-    [if] has to be the last statement of something for its two branches to be
-    checked against one written-down postcondition.  Here that postcondition
-    is an [if] on the length as well: no block at all when the message divides
-    into sixteens, and one padded block otherwise. *)
+(** {2 The block loop} *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
+fn absorb_blocks (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
+                 (e: S.slice S64.t) (msg: S.slice S8.t) (n: SZ.t)
+                 (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
+                 (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
+                 (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
+requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
+         S.pts_to msg #pm vmsg **
+         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+               16 * SZ.v n <= Seq.length vmsg /\
+               feval vh % prime == reveal acc)
+ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
+  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
+  S.pts_to msg #pm vmsg **
+  pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
+        bounded vh' 27 /\ bounded vr 26 /\ 16 * SZ.v n <= Seq.length vmsg /\
+        feval vh' % prime ==
+          Spec.blocks_acc vmsg 0 (SZ.v n) (feval vr) (reveal acc))
+{
+  S.pts_to_len h;
+  S.pts_to_len msg;
+  repeati_g_zero (Spec.bstep vmsg 0 (feval vr)) (reveal acc);
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (vh1: Seq.seq S64.t) (vd1: Seq.seq S64.t)
+                    (ve1: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to h vh1 ** S.pts_to r vr ** S.pts_to d vd1 **
+    S.pts_to e ve1 ** S.pts_to msg #pm vmsg **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length vh1 == 5 /\ Seq.length vd1 == 5 /\
+          Seq.length ve1 == 5 /\ bounded vh1 27 /\
+          feval vh1 % prime ==
+            Spec.blocks_acc vmsg 0 (SZ.v vi) (feval vr) (reveal acc))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    Math.lemma_mult_le_right 16 (SZ.v vi + 1) (SZ.v n);
+    let off = SZ.mul vi 16sz;
+    load_full e msg off;
+    with vh0. assert (S.pts_to h vh0);
+    fadd h e;
+    fmul h r d;
+    with vh2. assert (S.pts_to h vh2);
+    blocks_step vmsg (feval vr) (SZ.v vi) (feval vh0) (feval vh2) (reveal acc);
+    i := SZ.add vi 1sz;
+  }
+}
+
+#pop-options
+
+(** {2 The two kinds of last block} *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+
+(** Poly1305's own short block: the bytes, then a one, then nothing.  A
+    separate function, and not an [if] inside the driver, because a Pulse [if]
+    has to be the last statement of something for its two branches to be
+    checked against one written-down postcondition. *)
 fn absorb_tail (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
                (e: S.slice S64.t) (msg: S.slice S8.t) (off: SZ.t) (blen: SZ.t)
                (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
@@ -191,9 +229,97 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   }
 }
 
+(** The AEAD's padded block: the bytes, then zeros out to sixteen, absorbed as
+    a full block. *)
+fn absorb_pad (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
+              (e: S.slice S64.t) (msg: S.slice S8.t) (off: SZ.t) (blen: SZ.t)
+              (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
+              (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
+              (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
+requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
+         S.pts_to msg #pm vmsg **
+         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+               0 < SZ.v blen /\ SZ.v blen < 16 /\
+               SZ.v off + SZ.v blen <= Seq.length vmsg /\
+               feval vh % prime == reveal acc)
+ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
+  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
+  S.pts_to msg #pm vmsg **
+  pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
+        bounded vh' 27 /\ bounded vr 26 /\
+        SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
+        feval vh' % prime ==
+          ((reveal acc +
+            Spec.block_val (Seq.append
+                             (Seq.slice vmsg (SZ.v off) (SZ.v off + SZ.v blen))
+                             (Spec.zeros (16 - SZ.v blen))))
+           * feval vr) % prime)
+{
+  S.pts_to_len msg;
+  let z8 = S8.classify 0uy;
+  let mut tarr = [| z8; 16sz |];
+  A.pts_to_len tarr;
+  let tmp = S.from_array tarr 16sz;
+  S.pts_to_len tmp;
+  Hacl.Impl.Copy.copy_range tmp 0sz msg off blen;
+  with vt. assert (S.pts_to tmp vt);
+  pad_block vmsg vt (SZ.v off) (SZ.v blen);
+  load_full e tmp 0sz;
+  with ve0. assert (S.pts_to e ve0);
+  step_cong (feval vh) (reveal acc) (feval ve0) (feval vr);
+  fadd h e;
+  fmul h r d;
+  S.to_array tmp;
+}
+
 #pop-options
 
-(** {2 The block loop} *)
+(** {2 A padded segment}
+
+    What ChaCha20-Poly1305 absorbs: the whole blocks of a slice, and then, if
+    it does not end on a boundary, one more block of the tail followed by
+    zeros.  The [if] is the last statement, which is what lets its two
+    branches be checked against the postcondition's own [if]. *)
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 200"
+
+fn absorb_seg (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
+              (e: S.slice S64.t) (msg: S.slice S8.t)
+              (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
+              (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
+              (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
+requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
+         S.pts_to msg #pm vmsg **
+         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+               feval vh % prime == reveal acc)
+ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
+  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
+  S.pts_to msg #pm vmsg **
+  pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
+        bounded vh' 27 /\ bounded vr 26 /\
+        feval vh' % prime == Spec.seg_acc vmsg (feval vr) (reveal acc))
+{
+  S.pts_to_len msg;
+  let len = S.len msg;
+  let n = SZ.div len 16sz;
+  let q = SZ.rem len 16sz;
+  Math.euclidean_division_definition (SZ.v len) 16;
+  Math.lemma_mod_lt (SZ.v len) 16;
+  absorb_blocks h r d e msg n #_ #_ #_ #_ #_ #_ #acc;
+  let off = SZ.mul n 16sz;
+  if SZ.gt q 0sz {
+    absorb_pad h r d e msg off q
+      #_ #_ #_ #_ #_ #_ #(hide (Spec.blocks_acc vmsg 0 (SZ.v n) (feval vr) acc));
+  } else {
+    ()
+  }
+}
+
+#pop-options
+
+(** {2 The driver} *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -232,57 +358,27 @@ ensures exists* (vout': Seq.seq S8.t).
   load_r r key;
   set_zero h;
   with vr. assert (S.pts_to r vr);
-  let rn: erased nat = hide (feval vr);
   Math.pow2_lt_compat 27 26;
-  repeati_g_zero (step vmsg (reveal rn)) 0;
 
   let len = S.len msg;
   let full = SZ.div len 16sz;
-
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi full)
-  invariant exists* (vi: SZ.t) (vh: Seq.seq S64.t) (vd: Seq.seq S64.t)
-                    (ve: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd **
-    S.pts_to e ve ** S.pts_to msg #pm vmsg ** S.pts_to key #pk vkey **
-    S.pts_to out vout ** S.is_from_array rarr r ** S.is_from_array harr h **
-    S.is_from_array earr e ** S.is_from_array darr d **
-    pure (SZ.v vi <= SZ.v full /\ Seq.length vh == 5 /\ Seq.length vd == 5 /\
-          Seq.length ve == 5 /\ bounded vh 27 /\
-          feval vh % prime ==
-            repeati_g (SZ.v vi) (step vmsg (reveal rn)) 0)
-  decreases (SZ.v full - SZ.v (!i))
-  {
-    let vi = !i;
-    let off = SZ.mul vi 16sz;
-    Math.lemma_mult_le_right 16 (SZ.v vi + 1) (SZ.v full);
-    Math.multiply_fractions (SZ.v len) 16;
-    load_full e msg off;
-    with vh0. assert (S.pts_to h vh0);
-    with ve. assert (S.pts_to e ve);
-    fadd h e;
-    with vh1. assert (S.pts_to h vh1);
-    fmul h r d;
-    with vh2. assert (S.pts_to h vh2);
-    step_full vmsg (reveal rn) (SZ.v vi) (feval vh0) (feval vh2);
-    i := SZ.add vi 1sz;
-  };
+  Math.multiply_fractions (SZ.v len) 16;
+  Math.euclidean_division_definition (SZ.v len) 16;
+  Math.lemma_mod_lt (SZ.v len) 16;
+  absorb_blocks h r d e msg full #_ #_ #_ #_ #_ #_ #(hide 0);
 
   (* The short final block, if there is one. *)
   let rem = SZ.rem len 16sz;
-  Math.euclidean_division_definition (SZ.v len) 16;
-  Math.lemma_mod_lt (SZ.v len) 16;
   let off = SZ.mul full 16sz;
   with vh0. assert (S.pts_to h vh0);
   absorb_tail h r d e msg off rem
-    #_ #_ #_ #_ #_ #_ #(hide (repeati_g (SZ.v full) (step vmsg (reveal rn)) 0));
+    #_ #_ #_ #_ #_ #_ #(hide (Spec.blocks_acc vmsg 0 (SZ.v full) (feval vr) 0));
   with vh3. assert (S.pts_to h vh3);
-  step_tail vmsg (reveal rn) (SZ.v full) (SZ.v rem)
-            (repeati_g (SZ.v full) (step vmsg (reveal rn)) 0) (feval vh3);
+  mac_tail vmsg (feval vr) (SZ.v full) (SZ.v rem)
+           (Spec.blocks_acc vmsg 0 (SZ.v full) (feval vr) 0) (feval vh3);
 
   reduce h;
   with vhf. assert (S.pts_to h vhf);
-  poly_ext vmsg (reveal rn);
   store_tag out h key;
   S.to_array d;
   S.to_array e;

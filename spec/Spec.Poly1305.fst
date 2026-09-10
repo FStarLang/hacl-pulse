@@ -397,3 +397,33 @@ let pad16_aligned (b: Seq.seq S8.t)
     Math.euclidean_division_definition (Seq.length b) 16;
     if Seq.length b % 16 = 0 then Math.cancel_mul_mod (Seq.length b / 16) 16
     else Math.cancel_mul_mod (Seq.length b / 16 + 1) 16
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 60"
+
+(** The whole message as its full blocks and, if there is one, a short last
+    block.  This is what the plain MAC's loop runs, stated over [blocks_acc]
+    so that the loop and the segment loop above are the same code. *)
+let poly_acc_split (msg: Seq.seq S8.t) (r: nat) (acc: nat)
+  : Lemma (poly_acc msg r acc ==
+           (let n = Seq.length msg / 16 in
+            if Seq.length msg % 16 = 0 then blocks_acc msg 0 n r acc
+            else update r (blocks_acc msg 0 n r acc) (block_at msg n)))
+  = let n = Seq.length msg / 16 in
+    nblocks_split (Seq.length msg);
+    Math.euclidean_division_definition (Seq.length msg) 16;
+    Math.lemma_mod_lt (Seq.length msg) 16;
+    repeati_g_split n (nblocks (Seq.length msg)) (pstep msg r) acc;
+    let aux (i: nat)
+      : Lemma (i < n ==> block_at msg i == block16 msg (0 + 16 * i))
+      = if i < n then
+          (Math.lemma_mult_le_left 16 (i + 1) n;
+           nblocks_split (Seq.length msg);
+           block_bound (Seq.length msg) i;
+           Math.lemma_mult_le_left 16 (i + 1) (nblocks (Seq.length msg)))
+    in
+    FStar.Classical.forall_intro aux;
+    repeati_g_ext n (pstep msg r) (bstep msg 0 r) acc;
+    repeati_g_zero (shift_g n (pstep msg r)) (blocks_acc msg 0 n r acc);
+    unfold_repeati_g 0 (shift_g n (pstep msg r)) (blocks_acc msg 0 n r acc)
+
+#pop-options
