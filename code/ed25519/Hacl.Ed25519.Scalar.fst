@@ -134,49 +134,51 @@ ensures exists* (va': Seq.seq S64.t).
 
 (** Limbwise addition, then one carry pass.  Each column is below
     [2 base - 1], so a single unit of headroom normalises it, and the
-    carry out is zero or one. *)
-fn addc_op (a b: S.slice S64.t)
-           (#va: erased (Seq.seq S64.t))
+    carry out is zero or one.
+
+    Out of place, like every loop in this file: an in-place limb update
+    forces the invariant to say what the limbs it has not reached yet
+    still hold, which doubles the quantifier and, in practice, the proof. *)
+fn addc_op (out a b: S.slice S64.t)
+           (#vo: erased (Seq.seq S64.t))
+           (#pa: perm) (#va: erased (Seq.seq S64.t))
            (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to a va ** S.pts_to b #pb vb **
-  pure (Seq.length va == F.nl /\ Seq.length vb == F.nl /\
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length vo == F.nl /\ Seq.length va == F.nl /\ Seq.length vb == F.nl /\
         F.bnd (vals va) F.base /\ F.bnd (vals vb) F.base)
 returns r: S64.t
-ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' ** S.pts_to b #pb vb **
-  pure (Seq.length va' == F.nl /\ F.bnd (vals va') F.base /\
-        vals va' == Sc.addc (vals va) (vals vb) /\
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length vo' == F.nl /\ F.bnd (vals vo') F.base /\
+        vals vo' == Sc.addc (vals va) (vals vb) /\
         S64.v r == Sc.addc_out (vals va) (vals vb))
 {
+  S.pts_to_len out;
   S.pts_to_len a;
   S.pts_to_len b;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to a v ** S.pts_to b #pb vb **
+    pts_to i vi ** S.pts_to out v ** S.pts_to a #pa va ** S.pts_to b #pb vb **
     pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k == Seq.index (vals va) k + Seq.index (vals vb) k) /\
-          (forall (k: nat). SZ.v vi <= k /\ k < F.nl ==>
-             Seq.index (vals v) k == Seq.index (vals va) k))
+             Seq.index (vals v) k == Seq.index (vals va) k + Seq.index (vals vb) k))
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
     let x = S.(a.(vi));
     let y = S.(b.(vi));
     assert_norm (2 * F.base < pow2 64);
-    let z = addw x y;
-    S.((a.(vi) <- z));
+    S.((out.(vi) <- addw x y));
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to a v);
+  with v. assert (S.pts_to out v);
   F.addw_len (vals va) (vals vb);
   assert (pure (vals v `Seq.equal` F.addw (vals va) (vals vb)));
-  assert (pure (F.ble (vals va) (F.base - 1) /\ F.ble (vals vb) (F.base - 1)));
   F.addw_ble (vals va) (vals vb) (F.base - 1) (F.base - 1);
   assert_norm (2 * F.base - 2 + 1 < F.base * 2);
   assert_norm (2 * F.base - 2 + 1 < pow2 64);
-  let r = carry_out_op a (2 * F.base - 2) 1;
+  let r = carry_out_op out (2 * F.base - 2) 1;
   Sc.addc_ok (vals va) (vals vb);
   r
 }
@@ -186,52 +188,56 @@ ensures exists* (va': Seq.seq S64.t).
 (** A doubling with a bit shifted into the bottom.  Columns reach
     [2 base - 1] here, so the chain gets two units of headroom; the carry
     out is zero by hypothesis, so [carry_low_op] serves. *)
-fn dbl_add_op (a: S.slice S64.t) (b: S64.t) (#va: erased (Seq.seq S64.t))
-requires S.pts_to a va **
-  pure (Seq.length va == F.nl /\ F.bnd (vals va) F.base /\ S64.v b < 2 /\
+fn dbl_add_op (out a: S.slice S64.t) (b: S64.t { S64.v b < 2 })
+              (#vo: erased (Seq.seq S64.t))
+              (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va **
+  pure (Seq.length vo == F.nl /\ Seq.length va == F.nl /\
+        F.bnd (vals va) F.base /\
         2 * F.eval (vals va) + S64.v b < pow2 256)
-ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' **
-  pure (Seq.length va' == F.nl /\ F.bnd (vals va') F.base /\
-        vals va' == Sc.dbl_add (vals va) (S64.v b) /\
-        F.eval (vals va') == 2 * F.eval (vals va) + S64.v b)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va **
+  pure (Seq.length vo' == F.nl /\ F.bnd (vals vo') F.base /\
+        vals vo' == Sc.dbl_add (vals va) (S64.v b) /\
+        F.eval (vals vo') == 2 * F.eval (vals va) + S64.v b)
 {
+  S.pts_to_len out;
   S.pts_to_len a;
+  let y : erased (Seq.seq nat) = hide (Seq.create 1 (S64.v b) <: Seq.seq nat);
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to a v **
+    pts_to i vi ** S.pts_to out v ** S.pts_to a #pa va **
     pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k == 2 * Seq.index (vals va) k) /\
-          (forall (k: nat). SZ.v vi <= k /\ k < F.nl ==>
-             Seq.index (vals v) k == Seq.index (vals va) k))
+             Seq.index (vals v) k == 2 * Seq.index (vals va) k))
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
     let x = S.(a.(vi));
     assert_norm (2 * F.base < pow2 64);
-    let z = addw x x;
-    S.((a.(vi) <- z));
+    S.((out.(vi) <- addw x x));
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to a v);
-  let z = S.(a.(0sz));
+  with u. assert (S.pts_to out u);
+  let z = S.(out.(0sz));
   assert_norm (2 * F.base + 1 < pow2 64);
   let z' = addw z b;
-  S.((a.(0sz) <- z'));
-  vals_upd v 0 z';
-  with w. assert (S.pts_to a w);
-  let y : erased (Seq.seq nat) = hide (Seq.create 1 (S64.v b) <: Seq.seq nat);
+  S.((out.(0sz) <- z'));
+  vals_upd u 0 z';
+  with v. assert (S.pts_to out v);
   assert (pure (Seq.length (F.scale 2 (vals va)) == F.nl));
-  assert (pure (vals w `Seq.equal` F.addw (F.scale 2 (vals va)) (reveal y)));
+  assert (pure (vals v `Seq.equal` F.addw (F.scale 2 (vals va)) (reveal y)));
   F.scale_ble 2 (vals va) (F.base - 1);
   assert (pure (F.ble (reveal y) 1));
   F.addw_ble (F.scale 2 (vals va)) (reveal y) (2 * F.base - 2) 1;
   assert_norm (2 * F.base - 1 + 2 < F.base * 3);
   assert_norm (2 * F.base - 1 + 2 < pow2 64);
-  carry_low_op a (2 * F.base - 1) 2;
+  carry_low_op out (2 * F.base - 1) 2;
   Sc.dbl_add_ok (vals va) (S64.v b);
+  with r. assert (S.pts_to out r);
+  assert (pure (vals r == Sc.dbl_add (vals va) (S64.v b) /\
+                F.eval (vals r) == 2 * F.eval (vals va) + S64.v b));
 }
 
 #pop-options
@@ -258,11 +264,10 @@ ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
 {
   S.pts_to_len a;
   S.pts_to_len t;
-  copy t a;
   let qcs = Table.table Tables.qc_arr 16sz;
   Tables.qc_seq_ok ();
   Sc.qc_ok ();
-  let c = addc_op t qcs;
+  let c = addc_op t a qcs;
   Table.drop_table qcs;
   Sc.addc_ok (vals va) Sc.qc;
   let m = S64.eq_mask c (S64.classify 1uL);
@@ -275,6 +280,7 @@ ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
 }
 
 #pop-options
+
 
 (** {2 The three operations} *)
 
@@ -300,75 +306,84 @@ ensures exists* (va': Seq.seq S64.t).
   };
   with v. assert (S.pts_to a v);
   Classical.forall_intro Sc.zero_index;
-  assert (pure (vals v `Seq.equal` Sc.zero));
   Sc.zero_ok ();
+  assert (pure (vals v `Seq.equal` Sc.zero));
+  assert (pure (F.bnd (vals v) F.base /\ F.eval (vals v) == 0));
 }
 
 #push-options "--z3rlimit 120"
 
-(** [a := (2 a + b) mod q]. *)
-fn qdbl_add_op (a t: S.slice S64.t) (b: S64.t)
-               (#va: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
-requires S.pts_to a va ** S.pts_to t vt **
-  pure (Seq.length va == F.nl /\ Seq.length vt == F.nl /\
-        F.bnd (vals va) F.base /\ F.eval (vals va) < Sc.q /\ S64.v b < 2)
-ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
-  S.pts_to a va' ** S.pts_to t vt' **
-  pure (Seq.length va' == F.nl /\ Seq.length vt' == F.nl /\
-        F.bnd (vals va') F.base /\ F.eval (vals va') < Sc.q /\
-        vals va' == Sc.qdbl_add (vals va) (S64.v b))
+(** [acc := (2 acc + b) mod q]. *)
+fn qdbl_add_op (acc t1 t2: S.slice S64.t) (b: S64.t { S64.v b < 2 })
+               (#vacc: erased (Seq.seq S64.t))
+               (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
+requires S.pts_to acc vacc ** S.pts_to t1 v1 ** S.pts_to t2 v2 **
+  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
+        F.bnd (vals vacc) F.base /\ F.eval (vals vacc) < Sc.q)
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
+  S.pts_to acc w ** S.pts_to t1 w1 ** S.pts_to t2 w2 **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        vals w == Sc.qdbl_add (vals vacc) (S64.v b))
 {
   Sc.q_bound ();
-  dbl_add_op a b;
-  csub_q_op a t;
-  Sc.dbl_add_ok (vals va) (S64.v b);
-  Sc.csub_q_ok (Sc.dbl_add (vals va) (S64.v b));
+  dbl_add_op t1 acc b;
+  csub_q_op t1 t2;
+  copy acc t1;
+  Sc.dbl_add_ok (vals vacc) (S64.v b);
+  Sc.csub_q_ok (Sc.dbl_add (vals vacc) (S64.v b));
 }
 
-(** [a := (a + b) mod q]. *)
-fn qadd_op (a b t: S.slice S64.t)
-           (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S64.t))
-           (#vt: erased (Seq.seq S64.t))
-requires S.pts_to a va ** S.pts_to b #pb vb ** S.pts_to t vt **
-  pure (Seq.length va == F.nl /\ Seq.length vb == F.nl /\ Seq.length vt == F.nl /\
-        F.bnd (vals va) F.base /\ F.bnd (vals vb) F.base /\
-        F.eval (vals va) < Sc.q /\ F.eval (vals vb) < Sc.q)
-ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
-  S.pts_to a va' ** S.pts_to b #pb vb ** S.pts_to t vt' **
-  pure (Seq.length va' == F.nl /\ Seq.length vt' == F.nl /\
-        F.bnd (vals va') F.base /\ F.eval (vals va') < Sc.q /\
-        vals va' == Sc.qadd (vals va) (vals vb))
+(** [acc := (acc + b) mod q]. *)
+fn qadd_op (acc b t1 t2: S.slice S64.t)
+           (#vacc: erased (Seq.seq S64.t))
+           (#pb: perm) (#vb: erased (Seq.seq S64.t))
+           (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
+requires S.pts_to acc vacc ** S.pts_to b #pb vb **
+         S.pts_to t1 v1 ** S.pts_to t2 v2 **
+  pure (Seq.length vacc == F.nl /\ Seq.length vb == F.nl /\
+        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
+        F.bnd (vals vacc) F.base /\ F.bnd (vals vb) F.base /\
+        F.eval (vals vacc) < Sc.q /\ F.eval (vals vb) < Sc.q)
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
+  S.pts_to acc w ** S.pts_to b #pb vb ** S.pts_to t1 w1 ** S.pts_to t2 w2 **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        vals w == Sc.qadd (vals vacc) (vals vb))
 {
   Sc.q_bound ();
-  Sc.addc_ok (vals va) (vals vb);
-  F.eval_bnd (Sc.addc (vals va) (vals vb));
-  let _ = addc_op a b;
-  csub_q_op a t;
-  Sc.csub_q_ok (Sc.addc (vals va) (vals vb));
+  Sc.addc_ok (vals vacc) (vals vb);
+  F.eval_bnd (Sc.addc (vals vacc) (vals vb));
+  let _ = addc_op t1 acc b;
+  csub_q_op t1 t2;
+  copy acc t1;
+  Sc.csub_q_ok (Sc.addc (vals vacc) (vals vb));
 }
 
 #pop-options
 
 (** {2 Reduction of a hash}
 
-    [SHA-512] of something, read as a little-endian integer below [2^512],
+    SHA-512 of something, read as a little-endian integer below [2^512],
     brought into [0, q).  Five hundred and twelve doublings; each is a
     sixteen-limb add and a conditional subtract, so about ten thousand
-    machine operations -- a fifth of a single point addition. *)
+    machine operations -- a fraction of one point addition. *)
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
 
-fn reduce_body (out t: S.slice S64.t) (h: S.slice S8.t) (i: SZ.t { SZ.v i < 512 })
-               (#vo: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
+fn reduce_body (acc t1 t2: S.slice S64.t) (h: S.slice S8.t) (i: SZ.t { SZ.v i < 512 })
+               (#vacc: erased (Seq.seq S64.t))
+               (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
                (#ph: perm) (#vh: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to t vt ** S.pts_to h #ph vh **
-  pure (Seq.length vo == F.nl /\ Seq.length vt == F.nl /\ Seq.length vh == 64 /\
-        F.bnd (vals vo) F.base /\ F.eval (vals vo) < Sc.q)
-ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to t vt' ** S.pts_to h #ph vh **
-  pure (Seq.length vo' == F.nl /\ Seq.length vt' == F.nl /\
-        F.bnd (vals vo') F.base /\ F.eval (vals vo') < Sc.q /\
-        vals vo' == Sc.reduce_step (le_nat vh) (SZ.v i) (vals vo))
+requires S.pts_to acc vacc ** S.pts_to t1 v1 ** S.pts_to t2 v2 ** S.pts_to h #ph vh **
+  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
+        Seq.length vh == 64 /\
+        F.bnd (vals vacc) F.base /\ F.eval (vals vacc) < Sc.q)
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
+  S.pts_to acc w ** S.pts_to t1 w1 ** S.pts_to t2 w2 ** S.pts_to h #ph vh **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        vals w == Sc.reduce_step (le_nat vh) (SZ.v i) (vals vacc))
 {
   S.pts_to_len h;
   let bi = SZ.sub 511sz i;
@@ -387,39 +402,46 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S64.t).
   let bit = S64.logand sr (S64.classify 1uL);
   Sc.le_nat_bit vh (SZ.v bi);
   assert (pure (S64.v bit == Sc.bit_of (le_nat vh) (SZ.v bi) /\ S64.v bit < 2));
-  qdbl_add_op out t bit;
+  qdbl_add_op acc t1 t2 bit;
 }
 
-fn reduce_op (out t: S.slice S64.t) (h: S.slice S8.t)
-             (#vo: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
+fn reduce_op (acc t1 t2: S.slice S64.t) (h: S.slice S8.t)
+             (#vacc: erased (Seq.seq S64.t))
+             (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
              (#ph: perm) (#vh: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to t vt ** S.pts_to h #ph vh **
-  pure (Seq.length vo == F.nl /\ Seq.length vt == F.nl /\ Seq.length vh == 64)
-ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to t vt' ** S.pts_to h #ph vh **
-  pure (Seq.length vo' == F.nl /\ Seq.length vt' == F.nl /\
-        F.bnd (vals vo') F.base /\ F.eval (vals vo') < Sc.q /\
-        F.eval (vals vo') == le_nat vh % Sc.q)
+requires S.pts_to acc vacc ** S.pts_to t1 v1 ** S.pts_to t2 v2 ** S.pts_to h #ph vh **
+  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
+        Seq.length vh == 64)
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
+  S.pts_to acc w ** S.pts_to t1 w1 ** S.pts_to t2 w2 ** S.pts_to h #ph vh **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        F.eval (vals w) == le_nat vh % Sc.q)
 {
   S.pts_to_len h;
   le_nat_bound vh;
-  set_zero out;
+  set_zero acc;
   Loops.repeati_zero (Sc.reduce_step (le_nat vh)) Sc.zero;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 512sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (w: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to out v ** S.pts_to t w ** S.pts_to h #ph vh **
-    pure (SZ.v vi <= 512 /\ Seq.length v == F.nl /\ Seq.length w == F.nl /\
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to acc v ** S.pts_to t1 w1 ** S.pts_to t2 w2 **
+    S.pts_to h #ph vh **
+    pure (SZ.v vi <= 512 /\ Seq.length v == F.nl /\
+          Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
           vals v == Loops.repeati (SZ.v vi) (Sc.reduce_step (le_nat vh)) Sc.zero)
   decreases (512 - SZ.v (!i))
   {
     let vi = !i;
     Sc.reduce_at (le_nat vh) (SZ.v vi);
-    reduce_body out t h vi;
+    reduce_body acc t1 t2 h vi;
     Loops.unfold_repeati (SZ.v vi) (Sc.reduce_step (le_nat vh)) Sc.zero;
     i := SZ.add vi 1sz;
   };
+  with v. assert (S.pts_to acc v);
   Sc.reduce_ok (le_nat vh);
+  assert (pure (F.bnd (vals v) F.base /\ F.eval (vals v) < Sc.q /\
+                F.eval (vals v) == le_nat vh % Sc.q));
 }
 
 #pop-options
@@ -433,24 +455,27 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S64.t).
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
 
-fn qmul_body (out a n t1 t2: S.slice S64.t) (i: SZ.t { SZ.v i < 256 })
-             (#vo: erased (Seq.seq S64.t))
+fn qmul_body (acc a n t1 t2 t3: S.slice S64.t) (i: SZ.t { SZ.v i < 256 })
+             (#vacc: erased (Seq.seq S64.t))
              (#pa: perm) (#va: erased (Seq.seq S64.t))
              (#pn: perm) (#vn: erased (Seq.seq S64.t))
              (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to n #pn vn **
-         S.pts_to t1 v1 ** S.pts_to t2 v2 **
-  pure (Seq.length vo == F.nl /\ Seq.length va == F.nl /\ Seq.length vn == F.nl /\
-        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
-        F.bnd (vals vo) F.base /\ F.eval (vals vo) < Sc.q /\
+             (#v3: erased (Seq.seq S64.t))
+requires S.pts_to acc vacc ** S.pts_to a #pa va ** S.pts_to n #pn vn **
+         S.pts_to t1 v1 ** S.pts_to t2 v2 ** S.pts_to t3 v3 **
+  pure (Seq.length vacc == F.nl /\ Seq.length va == F.nl /\ Seq.length vn == F.nl /\
+        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\ Seq.length v3 == F.nl /\
+        F.bnd (vals vacc) F.base /\ F.eval (vals vacc) < Sc.q /\
         F.bnd (vals va) F.base /\ F.eval (vals va) < Sc.q /\
         F.bnd (vals vn) F.base)
-ensures exists* (vo': Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to n #pn vn **
-  S.pts_to t1 w1 ** S.pts_to t2 w2 **
-  pure (Seq.length vo' == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals vo') F.base /\ F.eval (vals vo') < Sc.q /\
-        vals vo' == Sc.qmul_step (vals va) (F.eval (vals vn)) (SZ.v i) (vals vo))
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
+                (w2: Seq.seq S64.t) (w3: Seq.seq S64.t).
+  S.pts_to acc w ** S.pts_to a #pa va ** S.pts_to n #pn vn **
+  S.pts_to t1 w1 ** S.pts_to t2 w2 ** S.pts_to t3 w3 **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\
+        Seq.length w2 == F.nl /\ Seq.length w3 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        vals w == Sc.qmul_step (vals va) (F.eval (vals vn)) (SZ.v i) (vals vacc))
 {
   S.pts_to_len n;
   let bi = SZ.sub 255sz i;
@@ -462,64 +487,72 @@ ensures exists* (vo': Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
                 U32.v sh == SZ.v bi % 16));
   let limb = S.(n.(bj));
   let sr = S64.shift_right limb sh;
-  assert (pure (S64.v sr == Seq.index (vals vn) (SZ.v bi / F.rad) / pow2 (SZ.v bi % F.rad)));
+  assert (pure (S64.v sr ==
+                Seq.index (vals vn) (SZ.v bi / F.rad) / pow2 (SZ.v bi % F.rad)));
   UInt.logand_mask #64 (S64.v sr) 1;
   assert_norm (pow2 1 == 2);
   let bit = S64.logand sr (S64.classify 1uL);
   Sc.eval_bit (vals vn) (SZ.v bi);
   assert (pure (S64.v bit == Sc.bit_of (F.eval (vals vn)) (SZ.v bi) /\ S64.v bit < 2));
 
-  qdbl_add_op out t1 (S64.classify 0uL);
-  with acc. assert (S.pts_to out acc);
-  copy t2 out;
-  qadd_op t2 a t1;
-  with sum. assert (S.pts_to t2 sum);
+  qdbl_add_op acc t1 t2 (S64.classify 0uL);
+  with d. assert (S.pts_to acc d);
+  copy t3 acc;
+  qadd_op t3 a t1 t2;
   let m = S64.eq_mask bit (S64.classify 1uL);
   assert (pure ((S64.v m == 0) == (S64.v bit <> 1)));
-  cswap m out t2;
-  with vo'. assert (S.pts_to out vo');
-  assert (pure (vals vo' == Sc.qsel (S64.v bit) (vals acc) (Sc.qadd (vals acc) (vals va))));
+  cswap m acc t3;
+  with w. assert (S.pts_to acc w);
+  assert (pure (vals w == Sc.qsel (S64.v bit) (vals d) (Sc.qadd (vals d) (vals va))));
 }
 
-fn qmul_op (out a n t1 t2: S.slice S64.t)
-           (#vo: erased (Seq.seq S64.t))
+fn qmul_op (acc a n t1 t2 t3: S.slice S64.t)
+           (#vacc: erased (Seq.seq S64.t))
            (#pa: perm) (#va: erased (Seq.seq S64.t))
            (#pn: perm) (#vn: erased (Seq.seq S64.t))
            (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to n #pn vn **
-         S.pts_to t1 v1 ** S.pts_to t2 v2 **
-  pure (Seq.length vo == F.nl /\ Seq.length va == F.nl /\ Seq.length vn == F.nl /\
-        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
+           (#v3: erased (Seq.seq S64.t))
+requires S.pts_to acc vacc ** S.pts_to a #pa va ** S.pts_to n #pn vn **
+         S.pts_to t1 v1 ** S.pts_to t2 v2 ** S.pts_to t3 v3 **
+  pure (Seq.length vacc == F.nl /\ Seq.length va == F.nl /\ Seq.length vn == F.nl /\
+        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\ Seq.length v3 == F.nl /\
         F.bnd (vals va) F.base /\ F.eval (vals va) < Sc.q /\
         F.bnd (vals vn) F.base)
-ensures exists* (vo': Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to n #pn vn **
-  S.pts_to t1 w1 ** S.pts_to t2 w2 **
-  pure (Seq.length vo' == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals vo') F.base /\ F.eval (vals vo') < Sc.q /\
-        F.eval (vals vo') == (F.eval (vals va) * F.eval (vals vn)) % Sc.q)
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
+                (w2: Seq.seq S64.t) (w3: Seq.seq S64.t).
+  S.pts_to acc w ** S.pts_to a #pa va ** S.pts_to n #pn vn **
+  S.pts_to t1 w1 ** S.pts_to t2 w2 ** S.pts_to t3 w3 **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\
+        Seq.length w2 == F.nl /\ Seq.length w3 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        F.eval (vals w) == (F.eval (vals va) * F.eval (vals vn)) % Sc.q)
 {
   S.pts_to_len n;
   F.eval_bnd (vals vn);
-  set_zero out;
+  set_zero acc;
   Loops.repeati_zero (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 256sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to out v ** S.pts_to a #pa va ** S.pts_to n #pn vn **
-    S.pts_to t1 w1 ** S.pts_to t2 w2 **
-    pure (SZ.v vi <= 256 /\ Seq.length v == F.nl /\
-          Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-          vals v == Loops.repeati (SZ.v vi) (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (w1: Seq.seq S64.t)
+                    (w2: Seq.seq S64.t) (w3: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to acc v ** S.pts_to a #pa va ** S.pts_to n #pn vn **
+    S.pts_to t1 w1 ** S.pts_to t2 w2 ** S.pts_to t3 w3 **
+    pure (SZ.v vi <= 256 /\ Seq.length v == F.nl /\ Seq.length w1 == F.nl /\
+          Seq.length w2 == F.nl /\ Seq.length w3 == F.nl /\
+          vals v ==
+            Loops.repeati (SZ.v vi) (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero)
   decreases (256 - SZ.v (!i))
   {
     let vi = !i;
     Sc.qmul_at (vals va) (F.eval (vals vn)) (SZ.v vi);
-    qmul_body out a n t1 t2 vi;
+    qmul_body acc a n t1 t2 t3 vi;
     Loops.unfold_repeati (SZ.v vi) (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero;
     i := SZ.add vi 1sz;
   };
+  with v. assert (S.pts_to acc v);
   Sc.qmul_ok (vals va) (F.eval (vals vn));
+  assert (pure (F.bnd (vals v) F.base /\ F.eval (vals v) < Sc.q /\
+                F.eval (vals v) == (F.eval (vals va) * F.eval (vals vn)) % Sc.q));
 }
 
 #pop-options
