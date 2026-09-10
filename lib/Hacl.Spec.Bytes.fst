@@ -299,3 +299,33 @@ let digest_step_le (#t: Type0) {| w: word t |} (n: nat) (ws: Seq.lseq t n) (j: n
     FStar.Classical.forall_intro aux
 
 #pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+(** Which of two sixty-four-bit words a byte of the hundred-and-twenty-eight
+    bit number comes from.  This is what lets a sixteen-byte little-endian
+    store be two [store_le]s: below eight the byte is a byte of the low word,
+    at eight and above it is a byte of the high one. *)
+let le_bytes_split (lo hi: nat) (k: nat)
+  : Lemma (requires lo < pow2 64 /\ hi < pow2 64 /\ k < 16)
+          (ensures (let n = lo + pow2 64 * hi in
+                    ((n / pow2 (8 * k)) % 256 ==
+                       (if k < 8 then (lo / pow2 (8 * k)) % 256
+                                 else (hi / pow2 (8 * (k - 8))) % 256))))
+  = let n = lo + pow2 64 * hi in
+    if k < 8 then begin
+      Math.pow2_plus (8 * k) (64 - 8 * k);
+      Math.paren_mul_right (pow2 (8 * k)) (pow2 (64 - 8 * k)) hi;
+      Math.lemma_div_plus lo (pow2 (64 - 8 * k) * hi) (pow2 (8 * k));
+      Math.pow2_plus 8 (56 - 8 * k);
+      Math.paren_mul_right (pow2 8) (pow2 (56 - 8 * k)) hi;
+      assert_norm (pow2 8 == 256);
+      Math.lemma_mod_plus (lo / pow2 (8 * k)) (pow2 (56 - 8 * k) * hi) 256
+    end else begin
+      Math.pow2_plus 64 (8 * (k - 8));
+      Math.division_multiplication_lemma n (pow2 64) (pow2 (8 * (k - 8)));
+      Math.lemma_div_plus lo hi (pow2 64);
+      Math.small_division_lemma_1 lo (pow2 64)
+    end
+
+#pop-options
