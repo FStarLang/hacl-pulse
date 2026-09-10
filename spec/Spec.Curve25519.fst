@@ -208,6 +208,23 @@ let scalarmult (k u: Seq.lseq S8.t 32) : GTot (Seq.lseq S8.t 32) =
 
 let basepoint : Seq.lseq S8.t 32 = nat_to_le 32 9
 
+(** Nine, encoded: the implementation writes the bytes and this says that
+    is [basepoint]. *)
+let basepoint_eq (s: Seq.lseq S8.t 32)
+  : Lemma (requires S8.v (Seq.index s 0) == 9 /\
+                    (forall (i: nat). 0 < i /\ i < 32 ==> S8.v (Seq.index s i) == 0))
+          (ensures s == basepoint)
+  = let aux (i: nat { i < 32 }) : Lemma (Seq.index s i == Seq.index basepoint i) =
+      nat_to_le_index 32 9 i;
+      if i = 0 then assert_norm (9 / pow2 0 % 256 == 9)
+      else begin
+        Math.pow2_le_compat (8 * i) 8;
+        assert_norm (pow2 8 == 256);
+        Math.small_division_lemma_1 9 (pow2 (8 * i))
+      end in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro s basepoint
+
 let secret_to_public (k: Seq.lseq S8.t 32) : GTot (Seq.lseq S8.t 32) =
   scalarmult k basepoint
 
@@ -217,6 +234,32 @@ let secret_to_public (k: Seq.lseq S8.t 32) : GTot (Seq.lseq S8.t 32) =
     happens iff the peer sent a point of small order.  No other validation:
     the curve has no invalid-curve attack to defend against. *)
 let is_zero (s: Seq.lseq S8.t 32) : GTot bool = le_nat s = 0
+
+(** A little-endian number is zero exactly when every one of its bytes is.
+    One direction is [le_nat_zeros]; the other is that a nonzero byte at [k]
+    contributes at least [256^k]. *)
+let rec le_nat_pos (s: Seq.seq S8.t) (k: nat { k < Seq.length s })
+  : Lemma (requires S8.v (Seq.index s k) > 0) (ensures le_nat s > 0)
+          (decreases k)
+  = if k = 0 then ()
+    else begin
+      let n = Seq.length s in
+      let t = Seq.slice s 1 n in
+      assert (Seq.index t (k - 1) == Seq.index s k);
+      le_nat_pos t (k - 1)
+    end
+
+let le_nat_zero_iff (s: Seq.seq S8.t)
+  : Lemma ((le_nat s == 0) <==>
+           (forall (i: nat). i < Seq.length s ==> S8.v (Seq.index s i) == 0))
+  = let fwd () : Lemma (requires le_nat s == 0)
+                       (ensures forall (i: nat). i < Seq.length s ==>
+                                  S8.v (Seq.index s i) == 0)
+      = let aux (i: nat { i < Seq.length s }) : Lemma (S8.v (Seq.index s i) == 0) =
+          if S8.v (Seq.index s i) > 0 then le_nat_pos s i in
+        FStar.Classical.forall_intro aux in
+    FStar.Classical.move_requires fwd ();
+    FStar.Classical.move_requires le_nat_zeros s
 
 let ecdh (k u: Seq.lseq S8.t 32) : GTot (Seq.lseq S8.t 32 & bool) =
   let s = scalarmult k u in
