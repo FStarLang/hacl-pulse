@@ -104,6 +104,13 @@ let rec fexp_mul (x: elem) (a b: nat)
       fmul_comm (fexp x a) (fexp (fexp x a) (b - 1))
     end
 
+(** Squaring, which is what an addition chain spends nearly all its time
+    doing, is [fexp _ 2]; saying so lets the chain speak of exponents only. *)
+#push-options "--fuel 4"
+let fexp_one (x: elem) : Lemma (fexp x 1 == x) = fmul_one x
+let fexp_two (x: elem) : Lemma (fexp x 2 == fmul x x) = fmul_one x
+#pop-options
+
 (** Fermat's inverse.  [prime] is prime, so [x^(p-2) x = x^(p-1) = 1] for
     every nonzero [x]; for [x = 0] this is [0], which is what the ladder
     wants -- a point at infinity encodes as thirty-two zero bytes. *)
