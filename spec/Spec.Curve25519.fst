@@ -143,7 +143,7 @@ let add_and_double (x1: elem) (nq nqp1: proj) : proj & proj =
   let x3' = fmul (fadd da cb) (fadd da cb) in
   let z3' = fmul x1 (fmul (fsub da cb) (fsub da cb)) in
   let x2' = fmul aa bb in
-  let z2' = fmul e (fadd bb (fmul a24 e)) in
+  let z2' = fmul e (fadd aa (fmul a24 e)) in
   ((x2', z2'), (x3', z3'))
 
 (** {2 Scalars} *)

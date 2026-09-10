@@ -187,7 +187,7 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
   with s. assert (S.pts_to t0 s);
   Math.lemma_mod_mul_distr_r 121665 (eval (vals e)) C.prime;
   assert (pure (fev (vals s) == C.fmul C.a24 (fev (vals e))));
-  fadd t1 t3 t0;                          (* bb + a24 e *)
+  fadd t1 t2 t0;                          (* aa + a24 e *)
   fmul z2 t5 t1 t31;                      (* z2' *)
 }
 
