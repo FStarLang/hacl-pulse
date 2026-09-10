@@ -38,6 +38,7 @@ static uint64_t Hacl_Secret_UInt64_mul_mod(uint64_t x, uint64_t y);
 static void Hacl_Poly1305_Field_mul_limbs(Pulse_Lib_Slice_slice__uint64 d, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 r);
 static void Hacl_Poly1305_Field_carry_chain_impl(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 d);
 static void Hacl_Poly1305_Field_fmul(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 r, Pulse_Lib_Slice_slice__uint64 d);
+static void Hacl_Poly1305_absorb_blocks(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 r, Pulse_Lib_Slice_slice__uint64 d, Pulse_Lib_Slice_slice__uint64 e, Pulse_Lib_Slice_slice__uint8 msg, size_t n);
 static void Hacl_Poly1305_Load_load_last(Pulse_Lib_Slice_slice__uint64 e, Pulse_Lib_Slice_slice__uint8 b, size_t off, size_t blen);
 static void Hacl_Poly1305_absorb_tail(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 r, Pulse_Lib_Slice_slice__uint64 d, Pulse_Lib_Slice_slice__uint64 e, Pulse_Lib_Slice_slice__uint8 msg, size_t off, size_t blen);
 static uint64_t Hacl_Secret_UInt64_hi32(uint64_t x);
@@ -343,6 +344,18 @@ static void Hacl_Poly1305_Field_fmul(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_
   Hacl_Poly1305_Field_carry_chain_impl(h, d);
 }
 
+static void Hacl_Poly1305_absorb_blocks(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 r, Pulse_Lib_Slice_slice__uint64 d, Pulse_Lib_Slice_slice__uint64 e, Pulse_Lib_Slice_slice__uint8 msg, size_t n) {
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    size_t off = (vi * 16);
+    Hacl_Poly1305_Load_load_full(e, msg, off);
+    Hacl_Poly1305_Field_fadd(h, e);
+    Hacl_Poly1305_Field_fmul(h, r, d);
+    i = (vi + 1);
+  }
+}
+
 static void Hacl_Poly1305_Load_load_last(Pulse_Lib_Slice_slice__uint64 e, Pulse_Lib_Slice_slice__uint8 b, size_t off, size_t blen) {
   uint8_t z8 = 0;
   uint8_t *tarr;
@@ -573,18 +586,10 @@ static void Hacl_Poly1305_poly1305_mac(Pulse_Lib_Slice_slice__uint8 out, Pulse_L
   Hacl_Poly1305_Field_set_zero(h);
   size_t len = Pulse_Lib_Slice_len__t(msg);
   size_t full = (len / 16);
-  size_t i = 0;
-  while (i < full) {
-    size_t vi = i;
-    size_t off = (vi * 16);
-    Hacl_Poly1305_Load_load_full(e, msg, off);
-    Hacl_Poly1305_Field_fadd(h, e);
-    Hacl_Poly1305_Field_fmul(h, r, d);
-    i = (vi + 1);
-  }
+  Hacl_Poly1305_absorb_blocks(h, r, d, e, msg, full);
   size_t rem = (len % 16);
-  size_t off_1 = (full * 16);
-  Hacl_Poly1305_absorb_tail(h, r, d, e, msg, off_1, rem);
+  size_t off = (full * 16);
+  Hacl_Poly1305_absorb_tail(h, r, d, e, msg, off, rem);
   Hacl_Poly1305_Reduce_reduce(h);
   Hacl_Poly1305_Load_store_tag(out, h, key);
 }

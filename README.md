@@ -464,6 +464,50 @@ has to be the last statement of something for its two branches to be checked
 against one written-down postcondition, so the `if` is that function's body
 and the postcondition is itself an `if` on the length.
 
+### ChaCha20-Poly1305, three segments and one accumulator
+
+The AEAD is not "encrypt, then MAC three buffers".  The authenticated input is
+a *concatenation* -- the additional data, the ciphertext, and a sixteen-byte
+block holding the two lengths -- in which the first two are padded out to a
+multiple of sixteen with zeros before Poly1305 ever sees them.  A padded
+segment's last block is therefore a full block with a zero tail and the
+`2^128` bit set, and not Poly1305's own one-bit-padded short block.  Calling
+`poly1305_mac` on each piece would authenticate something else entirely.
+
+So the specification says the same thing twice and proves the two equal.
+`Spec.Poly1305.poly (mac_input aad ct) r` is the definition, over the
+concatenation; `mac_acc` is three passes of `seg_acc` over one running
+accumulator, which is what an implementation can actually run; and
+`mac_input_acc` is the induction that identifies them.  Underneath it,
+`poly_acc_append` says that the accumulator of `a ++ b` is the accumulator of
+`b` started from the accumulator of `a` -- true only because both are
+block-aligned, which is what the padding buys -- and `poly_acc_seg` says that
+absorbing a padded segment is absorbing its whole blocks and then, if the
+length is not a multiple of sixteen, one more full block of the tail.
+
+The implementation is then three calls to `Hacl.Poly1305.absorb_seg` and
+nothing else: the same `absorb_blocks` loop the plain MAC uses, plus
+`absorb_pad` for the one ragged block, which copies the tail into a zeroed
+scratch and loads it as a full block.  The length block goes through the same
+function -- it is already sixteen bytes, so the padded path is a no-op.  That
+is the entire reason `Hacl.Poly1305` exposes four functions instead of one.
+
+**The one-time key is obtained by encrypting thirty-two zero bytes.**  RFC 8439
+defines it as the first half of the ChaCha20 block at counter zero;
+`otk_is_encrypt` proves that exclusive-or with zero is the identity, so no
+keystream-block entry point has to exist.  The message is encrypted at counter
+one, and `Spec.Chacha20.max_len 1ul` is the precondition that says the counter
+does not wrap.
+
+**Decryption verifies before it decrypts.**  The postcondition is explicit
+about it: on failure the plaintext buffer is *unchanged*, not zeroed and not
+partially written.  The comparison is sixteen `eq_mask`s folded with `logand`,
+and the resulting bit is the only thing in the library that goes through
+`Hacl.Secret.Declassify` on this path -- it is the answer the caller asked
+for.  Because a secret byte has no decidable equality, the specification's
+notion of "the tag is right" is a `prop` (`decrypt_ok`) and the recovered
+plaintext is a separate function (`decrypted`), rather than one `option`.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -672,9 +716,25 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   A specification that writes its step as a lambda and an implementation whose
   invariant names it are different arguments to the same fold, and only a
   pointwise-extensionality lemma proved by induction relates them.
+* **Write folds over named step functions, never lambdas.**  Two lambdas that
+  are not the same source occurrence are two distinct opaque constants to the
+  solver, so an equation between two folds will not close no matter what
+  fuel it is given.  Every fold in `Spec.Poly1305` goes through a named
+  `pstep` or `bstep` for this reason alone.
+* **A `while` loop with no `decreases` is `stt_div`, and a divergent block
+  cannot be followed by a non-divergent one.**  The symptom is "cannot compose
+  computations in this divergent block" pointing at the whole function, not at
+  the loop.
+* **A lemma call cannot be the last statement of a Pulse block.**  Its
+  postcondition is added for the *continuation*, so if there is none, the
+  function's own postcondition is checked without it.  End with an `assert`
+  of what the lemma gave you.
+* **Ghost implicits that only appear in a `pure` refinement are not
+  inferred.**  An accumulator threaded through several calls has to be passed
+  explicitly at every one of them; the error is "unexpected unresolved uvars",
+  naming the application rather than the argument.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order:
-ChaCha20-Poly1305, incremental BLAKE2, Curve25519, Ed25519, P-256, and the
-DRBG.
+Following `design/reimplementation.md` §9, in dependency order: incremental
+BLAKE2, Curve25519, Ed25519, P-256, and the DRBG.
