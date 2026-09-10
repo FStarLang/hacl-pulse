@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`) |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -550,6 +550,53 @@ for.  Because a secret byte has no decidable equality, the specification's
 notion of "the tag is right" is a `prop` (`decrypt_ok`) and the recovered
 plaintext is a separate function (`decrypted`), rather than one `option`.
 
+### Curve25519, sixteen limbs because there is no `uint128`
+
+Every fast X25519 in existence represents a field element in radix 2^51,
+five limbs, because the product of two limbs fits in a 128-bit integer.
+Custard's builtins are `FStar.UInt8/16/32/64`, `FStar.Int8/16/32/64` and
+`FStar.SizeT`; there is no `FStar.UInt128`, and unlike karamel there is no
+compiler-side emulation of one.  Radix 2^51 is therefore not available.
+
+So this implementation uses **sixteen limbs of sixteen bits** in
+`Hacl.Secret.UInt64.t`.  A limb product is at most `(2^17)^2 = 2^34`, and a
+column of the schoolbook product accumulates sixteen of them plus carries,
+which is comfortably inside 64 bits -- no intermediate reduction inside
+`mul_columns` at all, which is what makes the proof tractable.  The price is
+256 word multiplies per `fmul` against 25 for HACL*'s `_51`, so this is an
+order of magnitude slower than the C fast path; a scalar multiplication runs
+in roughly 470 microseconds here.  That is honest arithmetic, not a
+competitive one, and the reduction `2^256 = 2 * prime + 38` is done once at
+the end of `fmul` rather than woven through it.
+
+**Inversion is an addition chain, not square-and-multiply.**  `x^(p-2)` by
+scanning the 255 bits of `p-2` would need a lemma about every one of those
+bits; the classical chain needs only `fexp_add` and `fexp_mul`, applied to
+`x^2, x^8, x^9, x^11, x^22` and then the runs `E5, E10, E20, E40, E50, E100,
+E200, E250`.  It is expressed as three in-place moves -- `a := a^2`,
+`a := a*b`, `a := a^(2^n)` -- each implemented by copying into scratch and
+calling the out-of-place `fmul`.  A sixteen-word copy against 256 multiplies
+is not worth avoiding.
+
+**The ladder's body is its own function.**  The loop invariant of the
+Montgomery ladder mentions thirteen separate `pts_to`, and stating it inside
+a `while` produced a verification condition that would not close in any
+rlimit.  Extracting one iteration as `ladder_one`, with a pre- and
+postcondition written in terms of `Spec.Curve25519.ladder_at`, leaves the
+loop itself with nothing to prove beyond the `repeati_g` bookkeeping.  This
+is the single most useful structural move in the whole library.
+
+**The specification was wrong and the proof did not care.**  The doubling
+step had `z2' = E * (BB + a24 * E)` where RFC 7748 says
+`z2' = E * (AA + a24 * E)`; the two differ by `E^2`, and the `BB` form would
+need `a24 + 1`.  Everything above it verified, because a proof says the code
+matches the specification and says nothing about whether the specification
+matches the RFC.  A thirty-line Python oracle checked against the published
+vectors found it in minutes.  `tests/test_curve25519.c` now covers 5.2, 6.1
+in both directions, the iterated product at 1 and 1000 rounds, a
+non-canonical `u` with the high bit set, and the five small-order points --
+for which `ecdh` returns `false` and the shared secret is all zeros.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -799,5 +846,5 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: Curve25519,
-Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: Ed25519,
+P-256, and the DRBG.  Curve25519 is done.
