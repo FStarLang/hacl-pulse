@@ -662,3 +662,189 @@ let load_limbs (lo hi c: nat)
     Math.division_multiplication_lemma hi (pow2 14) (pow2 26)
 
 #pop-options
+
+(** {2 The final reduction}
+
+    Everything above works modulo [prime] and leaves the limbs merely small,
+    not canonical: [carry_chain] wraps the top round to the bottom, so limb 1
+    can sit a shade over the radix and the number a shade over [2^130].  The
+    tag needs the one number below [prime].
+
+    The tool is a plain ripple carry with nothing wrapped: it splits an
+    arbitrary five-limb number into a canonical part and a carry out of the
+    top.  Three of them do the job.  The first turns the accumulator into
+    [as_nat5 a + ca * 2^130]; since [2^130] is [prime + 5], adding [5 * ca] to
+    limb 0 gives a number congruent to the accumulator and below [2 * prime].
+    The other two are the constant-time conditional subtraction: one ripples
+    that number, the other ripples it plus five, and the carry out of the
+    second is exactly the test "is it at least [prime]", because [prime + 5]
+    is [2^130].  Selecting between the two results is a mask, not a branch.
+
+    Nothing here needs the carry out to be zero or one by construction; where
+    that is needed it follows from the value, which is why [ripple_small] is
+    stated about [as_nat5] and not about the limbs. *)
+
+(** A number that is only limb zero.  Trivial, and needed as a lemma anyway:
+    inside a Pulse verification condition an [assert] of it does not close. *)
+let as_nat5_bottom (x: nat) : Lemma (as_nat5 x 0 0 0 0 == x) = ()
+
+let ripple (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat) : prop =
+  let f1 = e1 + e0 / radix in
+  let f2 = e2 + f1 / radix in
+  let f3 = e3 + f2 / radix in
+  let f4 = e4 + f3 / radix in
+  t0 == e0 % radix /\ t1 == f1 % radix /\ t2 == f2 % radix /\
+  t3 == f3 % radix /\ t4 == f4 % radix /\ c == f4 / radix
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** What a ripple is worth: the canonical part plus the carry at [2^130]. *)
+let ripple_eval (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat)
+  : Lemma (requires ripple e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c)
+          (ensures as_nat5 t0 t1 t2 t3 t4 + c * pow2 130 == as_nat5 e0 e1 e2 e3 e4 /\
+                   bounded5 t0 t1 t2 t3 t4 26)
+  = let f1 = e1 + e0 / radix in
+    let f2 = e2 + f1 / radix in
+    let f3 = e3 + f2 / radix in
+    let f4 = e4 + f3 / radix in
+    carry0 e0 e1 e2 e3 e4;
+    carry1 t0 f1 e2 e3 e4;
+    carry2 t0 t1 f2 e3 e4;
+    carry3 t0 t1 t2 f3 e4;
+    (* the top limb is the only one left uncarried; splitting it is where the
+       [2^130] comes from. *)
+    Math.euclidean_division_definition f4 radix;
+    Math.distributivity_add_left t4 (c * radix) (pow2 104);
+    Math.paren_mul_right c radix (pow2 104);
+    Math.pow2_plus 104 26
+
+(** Limbs a shade over the radix cannot ripple more than four out of the top. *)
+let ripple_carry_bound (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat)
+  : Lemma (requires ripple e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c /\
+                    bounded5 e0 e1 e2 e3 e4 27)
+          (ensures c < 4)
+  = let f1 = e1 + e0 / radix in
+    let f2 = e2 + f1 / radix in
+    let f3 = e3 + f2 / radix in
+    let f4 = e4 + f3 / radix in
+    assert_norm (pow2 1 == 2);
+    assert_norm (pow2 2 == 4);
+    assert_norm (pow2 27 + 4 < pow2 28);
+    div_bound e0 27 26;
+    assert (f1 < pow2 28);
+    div_bound f1 28 26;
+    assert (f2 < pow2 28);
+    div_bound f2 28 26;
+    assert (f3 < pow2 28);
+    div_bound f3 28 26;
+    assert (f4 < pow2 28);
+    div_bound f4 28 26
+
+(** A ripple of a number below [2^131] carries out at most one. *)
+let ripple_small (t0 t1 t2 t3 t4 c n: nat)
+  : Lemma (requires as_nat5 t0 t1 t2 t3 t4 + c * pow2 130 == n /\ n < 2 * pow2 130)
+          (ensures c <= 1)
+  = if c >= 2 then Math.lemma_mult_le_right (pow2 130) 2 c
+
+#pop-options
+
+(** {2 The conditional subtraction}
+
+    [p] is the number the first ripple produced with [5 * ca] folded into limb
+    zero: congruent to the accumulator, and below [2 * prime].  [r] is its
+    canonical form and [q] is the canonical form of [p + 5] with the [2^130]
+    dropped -- that is, [p - prime].  The carry out of the second ripple says
+    which one is the answer. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let fold_carry (a0 a1 a2 a3 a4 ca: nat)
+  : Lemma (requires ca < 4)
+          (ensures as_nat5 (a0 + 5 * ca) a1 a2 a3 a4 % prime ==
+                   (as_nat5 a0 a1 a2 a3 a4 + ca * pow2 130) % prime)
+  = Math.distributivity_sub_left (pow2 130) 5 ca;
+    Math.lemma_mod_plus (as_nat5 (a0 + 5 * ca) a1 a2 a3 a4) ca prime
+
+let select_ok (p r q: nat) (cr cq: nat)
+  : Lemma (requires r + cr * pow2 130 == p /\ q + cq * pow2 130 == p + 5 /\
+                    p < 2 * prime /\ cr <= 1 /\ cq <= 1 /\ r < pow2 130 /\ q < pow2 130)
+          (ensures (if cq = 1 then q else r) == p % prime)
+  = if cq = 1 then begin
+      assert (q == p - prime);
+      Math.lemma_mod_sub p prime 1;
+      Math.small_mod (p - prime) prime
+    end else begin
+      assert (p + 5 < pow2 130);
+      Math.small_mod p prime
+    end
+
+#pop-options
+
+(** {2 The tag}
+
+    The last thing the accumulator has to do is become sixteen little-endian
+    bytes, added to the key's second half modulo [2^128].  Two sixty-four-bit
+    words are the natural intermediate, and the top two bits of the canonical
+    accumulator simply fall off -- the tag is taken modulo [2^128], so there
+    is nothing to carry them into.
+
+    Both lemmas are linear once the powers of two are literals. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let tag_words (a0 a1 a2 a3 a4: nat)
+  : Lemma (requires bounded5 a0 a1 a2 a3 a4 26)
+          (ensures (let lo = a0 + a1 * pow2 26 + (a2 % pow2 12) * pow2 52 in
+                    let hi = a2 / pow2 12 + a3 * pow2 14 + (a4 % pow2 24) * pow2 40 in
+                    lo < pow2 64 /\ hi < pow2 64 /\
+                    lo + pow2 64 * hi == as_nat5 a0 a1 a2 a3 a4 % pow2 128))
+  = assert_norm (pow2 12 == 4096);
+    assert_norm (pow2 14 == 16384);
+    assert_norm (pow2 24 == 16777216);
+    assert_norm (pow2 26 == 67108864);
+    assert_norm (pow2 40 == 1099511627776);
+    assert_norm (pow2 52 == 4503599627370496);
+    assert_norm (pow2 64 == 18446744073709551616);
+    assert_norm (pow2 78 == 302231454903657293676544);
+    assert_norm (pow2 104 == 20282409603651670423947251286016);
+    assert_norm (pow2 128 == 340282366920938463463374607431768211456);
+    Math.euclidean_division_definition a2 (pow2 12);
+    Math.euclidean_division_definition a4 (pow2 24);
+    Math.lemma_mod_plus (a0 + a1 * pow2 26 + a2 * pow2 52 + a3 * pow2 78 +
+                         (a4 % pow2 24) * pow2 104)
+                        (a4 / pow2 24) (pow2 128)
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+(** A word addition wrapped exactly when the sum came out below the addend. *)
+let wrap_test (x y: nat)
+  : Lemma (requires x < pow2 64 /\ y < pow2 64)
+          (ensures ((x + y) % pow2 64 < x <==> x + y >= pow2 64) /\
+                   (x + y) / pow2 64 == (if x + y >= pow2 64 then 1 else 0))
+  = if x + y >= pow2 64 then Math.small_div (x + y - pow2 64) (pow2 64)
+    else Math.small_div (x + y) (pow2 64)
+
+(** Two-word addition with carry, modulo [2^128]. *)
+let add128 (lo hi slo shi: nat)
+  : Lemma (requires lo < pow2 64 /\ hi < pow2 64 /\ slo < pow2 64 /\ shi < pow2 64)
+          (ensures (let tlo = (lo + slo) % pow2 64 in
+                    let c = (lo + slo) / pow2 64 in
+                    let thi = (hi + shi + c) % pow2 64 in
+                    tlo + pow2 64 * thi ==
+                      (lo + pow2 64 * hi + (slo + pow2 64 * shi)) % pow2 128))
+  = let tlo = (lo + slo) % pow2 64 in
+    let c = (lo + slo) / pow2 64 in
+    let hh = hi + shi + c in
+    let thi = hh % pow2 64 in
+    Math.pow2_plus 64 64;
+    Math.euclidean_division_definition (lo + slo) (pow2 64);
+    Math.euclidean_division_definition hh (pow2 64);
+    Math.distributivity_add_right (pow2 64) thi (pow2 64 * (hh / pow2 64));
+    Math.paren_mul_right (pow2 64) (pow2 64) (hh / pow2 64);
+    Math.distributivity_add_right (pow2 64) hi (shi + c);
+    Math.lemma_mod_plus (tlo + pow2 64 * thi) (hh / pow2 64) (pow2 128);
+    Math.small_mod (tlo + pow2 64 * thi) (pow2 128)
+
+#pop-options

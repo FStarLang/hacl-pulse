@@ -190,3 +190,155 @@ ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' ** S.pts_to b #pb vb **
 }
 
 #pop-options
+
+(** {2 The key}
+
+    Sixteen bytes of clamped [r] and sixteen bytes of [s].  Clamping is seven
+    byte masks, exactly the seven [Spec.Poly1305.clamp_byte] names, done on a
+    copy so the caller's key is not disturbed. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+fn load_r (r: S.slice S64.t) (k: S.slice S8.t)
+          (#vr: erased (Seq.seq S64.t)) (#pk: perm) (#vk: erased (Seq.seq S8.t))
+requires S.pts_to r vr ** S.pts_to k #pk vk **
+         pure (Seq.length vr == 5 /\ Seq.length vk == 32)
+ensures exists* (vr': Seq.seq S64.t). S.pts_to r vr' ** S.pts_to k #pk vk **
+  pure (Seq.length vr' == 5 /\ bounded vr' 26 /\ Seq.length vk == 32 /\
+        feval vr' == Spec.r_of vk)
+{
+  S.pts_to_len r;
+  S.pts_to_len k;
+  let z8 = S8.classify 0uy;
+  let mut tarr = [| z8; 16sz |];
+  A.pts_to_len tarr;
+  let tmp = S.from_array tarr 16sz;
+  S.pts_to_len tmp;
+  copy_range tmp 0sz k 0sz 16sz;
+
+  let m0f = S8.classify 0x0fuy;
+  let mfc = S8.classify 0xfcuy;
+  let c3 = S.(tmp.(3sz));   S.((tmp.(3sz) <- S8.logand c3 m0f));
+  let c7 = S.(tmp.(7sz));   S.((tmp.(7sz) <- S8.logand c7 m0f));
+  let c11 = S.(tmp.(11sz)); S.((tmp.(11sz) <- S8.logand c11 m0f));
+  let c15 = S.(tmp.(15sz)); S.((tmp.(15sz) <- S8.logand c15 m0f));
+  let c4 = S.(tmp.(4sz));   S.((tmp.(4sz) <- S8.logand c4 mfc));
+  let c8 = S.(tmp.(8sz));   S.((tmp.(8sz) <- S8.logand c8 mfc));
+  let c12 = S.(tmp.(12sz)); S.((tmp.(12sz) <- S8.logand c12 mfc));
+
+  with vt. assert (S.pts_to tmp vt);
+  Spec.clamp_eq (Seq.slice vk 0 16) vt;
+
+  let lo = load_le #S64.t tmp 0sz;
+  let hi = load_le #S64.t tmp 8sz;
+  le_nat_split vt 8;
+  assert_norm (pow2 (8 * 8) == pow2 64);
+  store_limbs r lo hi S64.zero;
+  S.to_array tmp;
+}
+
+#pop-options
+
+(** {2 The tag}
+
+    The accumulator, already canonical, plus the key's second half, modulo
+    [2^128] and out as sixteen little-endian bytes.  The top two bits of the
+    accumulator fall off: the tag is taken modulo [2^128], so there is
+    nothing to carry them into. *)
+
+inline_for_extraction
+let lo12 (x: S64.t) : y: S64.t { S64.v y == S64.v x % pow2 12 } =
+  assert_norm (pow2 12 - 1 == 0xfff);
+  UInt.logand_mask #64 (S64.v x) 12;
+  S64.logand x (S64.classify 0xfffuL)
+
+inline_for_extraction
+let lo24 (x: S64.t) : y: S64.t { S64.v y == S64.v x % pow2 24 } =
+  assert_norm (pow2 24 - 1 == 0xffffff);
+  UInt.logand_mask #64 (S64.v x) 24;
+  S64.logand x (S64.classify 0xffffffuL)
+
+(** [1] as a mask of the low bit: turns [lt_mask]'s all-ones into a carry. *)
+inline_for_extraction
+let bit0 (x: S64.t) : y: S64.t { S64.v y == S64.v x % 2 } =
+  assert_norm (pow2 1 - 1 == 1);
+  UInt.logand_mask #64 (S64.v x) 1;
+  S64.logand x (S64.classify 1uL)
+
+(** Sixteen bytes from two words: [le_bytes_split] says which word each byte
+    comes from, and [nat_to_le_index] says what the specification puts there. *)
+let tag_bytes (vout: Seq.seq S8.t) (tlo thi n: nat)
+  : Lemma (requires Seq.length vout == 16 /\ tlo < pow2 64 /\ thi < pow2 64 /\
+                    n == tlo + pow2 64 * thi /\
+                    (forall (j: nat). j < 8 ==>
+                       S8.v (Seq.index vout j) == (tlo / pow2 (8 * j)) % 256) /\
+                    (forall (j: nat). j < 8 ==>
+                       S8.v (Seq.index vout (8 + j)) == (thi / pow2 (8 * j)) % 256))
+          (ensures vout == nat_to_le 16 n)
+  = let aux (i: nat { i < 16 })
+      : Lemma (Seq.index vout i == Seq.index (nat_to_le 16 n) i)
+      = le_bytes_split tlo thi i;
+        nat_to_le_index 16 n i
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro vout (nat_to_le 16 n)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+
+fn store_tag (out: S.slice S8.t) (h: S.slice S64.t) (k: S.slice S8.t)
+             (#vout: erased (Seq.seq S8.t)) (#ph: perm) (#vh: erased (Seq.seq S64.t))
+             (#pk: perm) (#vk: erased (Seq.seq S8.t))
+requires S.pts_to out vout ** S.pts_to h #ph vh ** S.pts_to k #pk vk **
+         pure (Seq.length vout == 16 /\ Seq.length vh == 5 /\ bounded vh 26 /\
+               Seq.length vk == 32)
+ensures exists* (vout': Seq.seq S8.t).
+  S.pts_to out vout' ** S.pts_to h #ph vh ** S.pts_to k #pk vk **
+  pure (Seq.length vk == 32 /\ Seq.length vout' == 16 /\
+        vout' == Spec.finish (feval vh) (Spec.s_of vk))
+{
+  S.pts_to_len out;
+  S.pts_to_len h;
+  S.pts_to_len k;
+  let a0 = S.(h.(0sz));
+  let a1 = S.(h.(1sz));
+  let a2 = S.(h.(2sz));
+  let a3 = S.(h.(3sz));
+  let a4 = S.(h.(4sz));
+  tag_words (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4);
+  Math.pow2_plus 26 26;
+  Math.pow2_plus 12 52;
+  Math.pow2_plus 14 26;
+  Math.pow2_plus 24 40;
+  Math.lemma_mult_le_right (pow2 26) (S64.v a1) (pow2 26 - 1);
+  Math.lemma_mult_le_right (pow2 52) (S64.v a2 % pow2 12) (pow2 12 - 1);
+  Math.lemma_mult_le_right (pow2 14) (S64.v a3) (pow2 26 - 1);
+  Math.lemma_mult_le_right (pow2 40) (S64.v a4 % pow2 24) (pow2 24 - 1);
+  Math.lemma_div_lt (S64.v a2) 26 12;
+  Math.pow2_lt_compat 64 52;
+  let lo = add2 (add2 a0 (shl a1 26ul)) (shl (lo12 a2) 52ul);
+  let hi = add2 (add2 (shr a2 12ul) (shl a3 14ul)) (shl (lo24 a4) 40ul);
+
+  let slo = load_le #S64.t k 16sz;
+  let shi = load_le #S64.t k 24sz;
+  le_nat_split (Seq.slice vk 16 32) 8;
+  Seq.lemma_eq_intro (Seq.slice (Seq.slice vk 16 32) 0 8) (Seq.slice vk 16 24);
+  Seq.lemma_eq_intro (Seq.slice (Seq.slice vk 16 32) 8 16) (Seq.slice vk 24 32);
+  assert_norm (pow2 (8 * 8) == pow2 64);
+
+  let tlo = S64.add_mod lo slo;
+  wrap_test (S64.v lo) (S64.v slo);
+  let carry = bit0 (S64.lt_mask tlo lo);
+  let thi = S64.add_mod (S64.add_mod hi shi) carry;
+  Math.lemma_mod_add_distr (S64.v carry) (S64.v hi + S64.v shi) (pow2 64);
+  add128 (S64.v lo) (S64.v hi) (S64.v slo) (S64.v shi);
+  Math.lemma_mod_add_distr (Spec.s_of vk) (feval vh) (pow2 128);
+
+  store_le #S64.t out 0sz tlo;
+  store_le #S64.t out 8sz thi;
+  with vout'. assert (S.pts_to out vout');
+  tag_bytes vout' (S64.v tlo) (S64.v thi)
+                  ((feval vh + Spec.s_of vk) % pow2 128);
+  S.pts_to_len out;
+}
+
+#pop-options

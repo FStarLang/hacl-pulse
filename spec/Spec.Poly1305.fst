@@ -149,3 +149,30 @@ let block_bound (len: nat) (i: nat { i < nblocks len })
   : Lemma (16 * i + block_len len i <= len)
   = nblocks_bound len;
     Math.lemma_mult_le_left 16 (i + 1) (nblocks len)
+
+(** {2 Clamping, pointwise}
+
+    [clamp] is a [Seq.init], so an implementation that masks seven particular
+    bytes has to be matched against it index by index.  These two lemmas are
+    that match: the first says what one index of the result is, and the
+    second lifts sixteen of those to the sequence. *)
+
+let clamp_index (rb: Seq.lseq S8.t 16) (i: nat { i < 16 })
+  : Lemma (Seq.index (clamp rb) i == clamp_byte i (Seq.index rb i))
+  = ()
+
+let clamp_eq (rb: Seq.lseq S8.t 16) (vt: Seq.seq S8.t)
+  : Lemma (requires Seq.length vt == 16 /\
+                    (forall (i: nat). i < 16 ==>
+                       Seq.index vt i == clamp_byte i (Seq.index rb i)))
+          (ensures vt == clamp rb)
+  = Seq.lemma_eq_intro vt (clamp rb)
+
+(** The block count as a division and a remainder, which is how the
+    implementation runs it: a loop over the full blocks and then, if there is
+    a remainder, one short block. *)
+let nblocks_split (len: nat)
+  : Lemma (nblocks len == len / 16 + (if len % 16 = 0 then 0 else 1))
+  = Math.euclidean_division_definition len 16;
+    Math.lemma_mod_lt len 16;
+    if len % 16 = 0 then Math.division_multiplication_lemma len 16 1
