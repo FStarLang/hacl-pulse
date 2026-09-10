@@ -395,6 +395,48 @@ compresses one block, of zeros, with counter zero; a *keyed* hash of the empty
 string compresses only the key block, with counter one block.  Both are in the
 test vectors.
 
+### The incremental BLAKE2, where a full buffer may be the last block
+
+The incremental interface is the same three flat pieces of state as SHA-2 --
+accumulator, one block of buffered bytes, one `size_t` -- and the same absence
+of allocation, destructor and error code.  Two things differ, and both come
+from the same fact: BLAKE2's *last* compression is flagged and takes the
+message length as its counter, while every other compression is unflagged and
+takes a block-aligned counter.
+
+First, **a just-filled buffer is not compressed**.  When `update` is given
+data, it cannot compress the block it has just completed: no more data may
+ever arrive, in which case that block is the last one and must be compressed
+flagged instead.  So the buffer holds between one and `block_len` bytes rather
+than between zero and `block_len - 1`, and the loop absorbs `(rest - 1) /
+block_len` blocks out of the caller's data rather than `rest / block_len`.
+That single `- 1` is the whole difference from `Hacl.Hash.SHA2.Streaming`.
+`Spec.Blake2.Streaming.update_split` proves the resulting offsets once, in a
+pure context, and the Pulse code just reads them off.
+
+Second, **the state counts the combined stream, not the message**.  Write
+
+    stream key seen = if key is empty then seen else pad_block key ++ seen
+
+for the byte sequence BLAKE2 actually compresses.  The stored `size_t` is the
+length of *that*, so it starts at `block_len` for a keyed hash and at zero for
+an unkeyed one.  Three things fall out for free:
+
+  * a keyed hash is an unkeyed one whose buffer starts full, so `init` is the
+    only function that ever looks at the key, and `update` and `digest` take
+    it only as a ghost argument;
+  * `Spec.Blake2.last_counter key seen` is exactly `Seq.length (stream key
+    seen)`, keyed or not, so `digest` passes the stored `size_t` to the
+    flagged compression unchanged;
+  * the chunking lemmas in `Hacl.Spec.Chunks` apply verbatim, because
+    `stream key (seen ++ data) == stream key seen ++ data`.
+
+`digest` copies the eight-word accumulator into scratch before compressing, so
+the state survives; calling it twice gives the same answer and updating
+afterwards continues the same message.  Both are in the tests, along with
+2160 checks that eight algorithms times three key lengths times ten message
+lengths times nine chunk sizes all agree with the one-shot digest.
+
 ### ChaCha20, a keystream and nothing else
 
 ChaCha20 is a block function, `Spec.Chacha20.chacha20_block`, applied at a
@@ -733,8 +775,29 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   inferred.**  An accumulator threaded through several calls has to be passed
   explicitly at every one of them; the error is "unexpected unresolved uvars",
   naming the application rather than the argument.
+* **An annotated `if` must list every resource in scope, not just the ones it
+  touches.**  The postcondition written on an `if` is the whole state after
+  it, with no framing; omitting an untouched slice is reported as "leftover
+  resources: did you forget to free these?" against the last statement of a
+  branch.
+* **An `if` with a postcondition is often worth deleting.**  Both BLAKE2
+  branches of "does this update fill the buffer?" ended up as one lemma call
+  once the lemma was generalized to allow the empty case, and the proof got
+  faster as well as shorter.
+* **Push index arithmetic out of Pulse and into pure lemmas.**  Three
+  timeouts in a row -- a block offset inside a loop, the bounds of an
+  overflowing update, the whole easy branch of `update` -- were fixed not by
+  raising `z3rlimit` but by moving the reasoning into `Spec.Blake2.Streaming`
+  as `pad_block_run`, `update_split` and `update_small`, where the solver sees
+  arithmetic and nothing else.  A lemma stated in exactly the shape the call
+  site needs is worth more than any budget.
+* **`FStar.SizeT.fits` obligations do not follow from `< pow2 64`.**  A
+  counter that a ghost sequence bounds needs a real `size_t` to descend from:
+  passing the byte offset in as an argument, with `SZ.v ctr0 == n0 * block_len`
+  as its specification, is easier than proving `fits` for every intermediate
+  product.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: incremental
-BLAKE2, Curve25519, Ed25519, P-256, and the DRBG.
+Following `design/reimplementation.md` §9, in dependency order: Curve25519,
+Ed25519, P-256, and the DRBG.
