@@ -259,6 +259,52 @@ let mev_eq (d: modulus) (a b: Seq.seq nat)
           (ensures (mev d a == mev d b <==> eval a == eval b))
   = mev_form d a; mev_form d b
 
+(** {2 Reading a bit}
+
+    The exponentiation loop walks the exponent one bit at a time and the
+    exponent arrives as limbs, so the two views have to be related once:
+    bit [i] of the value is bit [i mod 16] of limb [i / 16]. *)
+
+let ebit (s: Seq.seq nat) (i: nat { i < 256 })
+  : Lemma (requires Seq.length s == nl /\ bnd s base)
+          (ensures eval s / pow2 i % 2 ==
+                   Seq.index s (i / rad) / pow2 (i % rad) % 2)
+  = let k = i / rad in
+    let j = i % rad in
+    Math.euclidean_division_definition i rad;
+    Math.pow2_plus (rad * k) j;
+    Math.division_multiplication_lemma (eval s) (pow2 (rad * k)) (pow2 j);
+    eval_digit s k;
+    let n = eval s / pow2 (rad * k) in
+    Math.pow2_modulo_division_lemma_1 n j rad;
+    Math.pow2_modulo_modulo_lemma_1 (n / pow2 j) 1 (rad - j)
+
+(** The two steps of a left-to-right exponentiation: one more bit of the
+    exponent is one squaring and, when the bit is set, one multiplication. *)
+
+let edigit (e: nat) (i: pos)
+  : Lemma (e / pow2 (i - 1) == 2 * (e / pow2 i) + e / pow2 (i - 1) % 2)
+  = Math.pow2_plus (i - 1) 1;
+    Math.division_multiplication_lemma e (pow2 (i - 1)) 2;
+    Math.euclidean_division_definition (e / pow2 (i - 1)) 2
+
+let exp_step (#m: pos { 1 < m }) (x: MA.elem m) (k: nat) (b: nat { b < 2 })
+  : Lemma (MA.exp x (2 * k + b) ==
+             (let q = MA.mul (MA.exp x k) (MA.exp x k) in
+              if b = 1 then MA.mul q x else q))
+  = MA.exp_mul x k 2;
+    MA.exp_two (MA.exp x k);
+    MA.exp_add x (2 * k) b;
+    MA.exp_one x;
+    MA.mul_one (MA.exp x (2 * k))
+
+(** A total wrapper for [MA.exp].  A Pulse [ensures] is elaborated with no
+    [requires] in scope, so a postcondition may not mention a function whose
+    argument is refined by one; [mpow] is [MA.exp] with the refinement moved
+    inside, and under [modulus_ok] the two are the same by unfolding. *)
+let mpow (d: modulus) (x: MA.elem d.m) (n: nat) : MA.elem d.m =
+  if 1 < d.m then MA.exp x n else x
+
 (** {2 Canonical limbs}
 
     Everything here is fully reduced, so equality of residues is equality of
