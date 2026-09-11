@@ -53,6 +53,7 @@ module G = Pulse.Lib.GlobalArray
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module U64 = FStar.UInt64
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
 
@@ -90,6 +91,55 @@ let lit_limbs (l: list S64.t) (x: nat)
           (ensures vals (Seq.seq_of_list l) == limbs x)
   = lit_ok l;
     let s = vals (Seq.seq_of_list l) in
+    let aux (k: nat { k < nl }) : Lemma (Seq.index s k == Seq.index (limbs x) k)
+      = eval_digit s k;
+        Seq.init_index_ #nat nl (fun i -> x / pow2 (rad * i) % base) k in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro s (limbs x)
+
+(** {2 Public limbs}
+
+    An exponent is not a secret: the three that appear here -- [p - 2],
+    [(p + 1) / 4] and [n - 2] -- are in the standard.  Keeping them public
+    is what lets the exponentiation loop branch on a bit rather than
+    multiply unconditionally, which halves it.  The machinery is the same
+    as above with [U64] in place of [S64]. *)
+
+let pvals (v: Seq.seq U64.t)
+  : GTot (s: Seq.seq nat { Seq.length s == Seq.length v /\
+                           (forall (i: nat). i < Seq.length v ==>
+                              Seq.index s i == U64.v (Seq.index v i)) })
+  = Seq.init_ghost (Seq.length v) (fun i -> (U64.v (Seq.index v i) <: nat))
+
+let rec uleval (l: list U64.t) : GTot nat =
+  match l with
+  | [] -> 0
+  | h :: t -> U64.v h + base * uleval t
+
+let rec ulbnd (l: list U64.t) : GTot bool =
+  match l with
+  | [] -> true
+  | h :: t -> U64.v h < base && ulbnd t
+
+let rec ulit_ok (l: list U64.t)
+  : Lemma (ensures eval (pvals (Seq.seq_of_list l)) == uleval l /\
+                   (ulbnd l ==> bnd (pvals (Seq.seq_of_list l)) base))
+          (decreases l)
+  = match l with
+    | [] -> Seq.lemma_eq_intro (Seq.seq_of_list l) Seq.empty
+    | h :: t ->
+      ulit_ok t;
+      let s = pvals (Seq.seq_of_list l) in
+      let n = Seq.length s in
+      Classical.forall_intro (Seq.lemma_seq_of_list_index l);
+      Classical.forall_intro (Seq.lemma_seq_of_list_index t);
+      Seq.lemma_eq_intro (Seq.slice s 1 n) (pvals (Seq.seq_of_list t))
+
+let ulit_limbs (l: list U64.t) (x: nat)
+  : Lemma (requires L.length l == nl /\ ulbnd l /\ uleval l == x /\ x < pow2 256)
+          (ensures pvals (Seq.seq_of_list l) == limbs x)
+  = ulit_ok l;
+    let s = pvals (Seq.seq_of_list l) in
     let aux (k: nat { k < nl }) : Lemma (Seq.index s k == Seq.index (limbs x) k)
       = eval_digit s k;
         Seq.init_index_ #nat nl (fun i -> x / pow2 (rad * i) % base) k in
@@ -262,10 +312,84 @@ let one_arr : (a: G.static_array S64.t
     lit_limbs one_list 1;
     G.mk_static_array one_list
 
+(** {2 The exponents} *)
+
+(** [p - 2], the inversion exponent. *)
+let finv_e_list : list U64.t = [
+  65533uL; 65535uL; 65535uL; 65535uL;
+  65535uL; 65535uL; 0uL; 0uL;
+  0uL; 0uL; 0uL; 0uL;
+  1uL; 0uL; 65535uL; 65535uL
+]
+
+let finv_e_arr : (a: G.static_array U64.t
+                  { pvals (G.static_array_elems a) == limbs (P.prime - 2) })
+  = assert_norm (L.length finv_e_list == nl);
+    assert_norm (ulbnd finv_e_list);
+    assert_norm (uleval finv_e_list == 115792089210356248762697446949407573530086143415290314195533631308867097853949);
+    assert_norm (P.prime - 2 == 115792089210356248762697446949407573530086143415290314195533631308867097853949);
+    assert_norm (115792089210356248762697446949407573530086143415290314195533631308867097853949 < pow2 256);
+    ulit_limbs finv_e_list (P.prime - 2);
+    G.mk_static_array finv_e_list
+
+(** [(p + 1) / 4], the square-root exponent; [p] is [3 mod 4]. *)
+let fsqrt_e_list : list U64.t = [
+  0uL; 0uL; 0uL; 0uL;
+  0uL; 16384uL; 0uL; 0uL;
+  0uL; 0uL; 0uL; 16384uL;
+  0uL; 49152uL; 65535uL; 16383uL
+]
+
+let fsqrt_e_arr : (a: G.static_array U64.t
+                  { pvals (G.static_array_elems a) == limbs ((P.prime + 1) / 4) })
+  = assert_norm (L.length fsqrt_e_list == nl);
+    assert_norm (ulbnd fsqrt_e_list);
+    assert_norm (uleval fsqrt_e_list == 28948022302589062190674361737351893382521535853822578548883407827216774463488);
+    assert_norm ((P.prime + 1) / 4 == 28948022302589062190674361737351893382521535853822578548883407827216774463488);
+    assert_norm (28948022302589062190674361737351893382521535853822578548883407827216774463488 < pow2 256);
+    ulit_limbs fsqrt_e_list ((P.prime + 1) / 4);
+    G.mk_static_array fsqrt_e_list
+
+(** [n - 2], for inverting a scalar. *)
+let qinv_e_list : list U64.t = [
+  9551uL; 64611uL; 51906uL; 62393uL;
+  40580uL; 42775uL; 64173uL; 48358uL;
+  65535uL; 65535uL; 65535uL; 65535uL;
+  0uL; 0uL; 65535uL; 65535uL
+]
+
+let qinv_e_arr : (a: G.static_array U64.t
+                  { pvals (G.static_array_elems a) == limbs (P.order - 2) })
+  = assert_norm (L.length qinv_e_list == nl);
+    assert_norm (ulbnd qinv_e_list);
+    assert_norm (uleval qinv_e_list == 115792089210356248762697446949407573529996955224135760342422259061068512044367);
+    assert_norm (P.order - 2 == 115792089210356248762697446949407573529996955224135760342422259061068512044367);
+    assert_norm (115792089210356248762697446949407573529996955224135760342422259061068512044367 < pow2 256);
+    ulit_limbs qinv_e_list (P.order - 2);
+    G.mk_static_array qinv_e_list
+
 (** {2 Reading a table}
 
     Each is sixteen limbs, and the permission never comes back: these are
     [static const] arrays in the emitted C. *)
+
+inline_for_extraction
+fn finv_e () requires emp returns s: S.slice U64.t
+ensures exists* (p: perm) (v: Seq.seq U64.t).
+  S.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.prime - 2))
+{ table finv_e_arr 16sz }
+
+inline_for_extraction
+fn fsqrt_e () requires emp returns s: S.slice U64.t
+ensures exists* (p: perm) (v: Seq.seq U64.t).
+  S.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs ((P.prime + 1) / 4))
+{ table fsqrt_e_arr 16sz }
+
+inline_for_extraction
+fn qinv_e () requires emp returns s: S.slice U64.t
+ensures exists* (p: perm) (v: Seq.seq U64.t).
+  S.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.order - 2))
+{ table qinv_e_arr 16sz }
 
 inline_for_extraction
 fn mone () requires emp returns s: S.slice S64.t
