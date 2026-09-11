@@ -49,6 +49,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module MA = Spec.ModArith
+module G = Pulse.Lib.GlobalArray
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -265,6 +266,43 @@ ensures S.pts_to a #pa va ** pure (r == (fev va = P.fzero))
   S.to_array zs;
   r
 }
+
+(** {2 Curve constants}
+
+    Stored in Montgomery form, so reading one is just reading the table.
+    [mev_uniq] is what turns "these limbs are [b R mod p]" into "this is
+    [b]". *)
+
+inline_for_extraction
+fn fconst (a: G.static_array S64.t) (x: erased P.felem)
+requires pure (vals (G.static_array_elems a) == limbs (reveal x * pow2 256 % P.prime))
+returns s: S.slice S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  S.pts_to s #p v ** pure (felem v /\ fev v == reveal x)
+{
+  fmod_ok (); fmod_m ();
+  limbs_ok (reveal x * pow2 256 % P.prime);
+  mev_uniq fmod x (limbs (reveal x * pow2 256 % P.prime));
+  table a 16sz
+}
+
+inline_for_extraction
+fn fb () requires emp returns s: S.slice S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  S.pts_to s #p v ** pure (felem v /\ fev v == P.b_coeff)
+{ fconst bm_arr P.b_coeff }
+
+inline_for_extraction
+fn fgx () requires emp returns s: S.slice S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  S.pts_to s #p v ** pure (felem v /\ fev v == P.g_x)
+{ fconst gxm_arr P.g_x }
+
+inline_for_extraction
+fn fgy () requires emp returns s: S.slice S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  S.pts_to s #p v ** pure (felem v /\ fev v == P.g_y)
+{ fconst gym_arr P.g_y }
 
 (** {2 Bytes}
 

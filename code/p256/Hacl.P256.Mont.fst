@@ -321,5 +321,74 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
   csub_op a s nm S64.zero d;
 }
 
+(** {2 Constant-time selection}
+
+    The scalar multiplication chooses between two accumulators on a bit of
+    a secret scalar, so the choice cannot be a branch.  The mask carries
+    the bit as a ghost boolean, which is what lets the postcondition be an
+    ordinary [if]. *)
+
+fn asel (out a b: S.slice S64.t) (m: S64.t) (bb: erased bool)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length va == nl /\ Seq.length vb == nl /\
+        S64.v m == (if bb then pow2 64 - 1 else 0))
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (vo' == (if bb then reveal vb else reveal va))
+{
+  S.pts_to_len out; S.pts_to_len a; S.pts_to_len b;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to out v ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+          (forall (k: nat). k < SZ.v vi ==>
+             Seq.index v k ==
+               Seq.index (if bb then reveal vb else reveal va) k))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    let xa = S.(a.(vi));
+    let xb = S.(b.(vi));
+    S.((out.(vi) <- S64.select m xb xa));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (S.pts_to out v);
+  Seq.lemma_eq_intro v (if bb then reveal vb else reveal va);
+  ()
+}
+
+(** {2 Reading a bit of a secret number}
+
+    The index is public -- it is the loop counter -- but the bit is not, so
+    the answer comes back as a mask rather than a boolean. *)
+
+fn abit (s: S.slice S64.t) (i: SZ.t)
+        (#ps: perm) (#vs: erased (Seq.seq S64.t))
+requires S.pts_to s #ps vs **
+  pure (Seq.length vs == nl /\ bnd (vals vs) base /\ SZ.v i < 256)
+returns m: S64.t
+ensures S.pts_to s #ps vs **
+  pure (S64.v m ==
+          (if eval (vals vs) / pow2 (SZ.v i) % 2 = 1 then pow2 64 - 1 else 0))
+{
+  S.pts_to_len s;
+  assert_norm (rad == 16);
+  ebit (vals vs) (SZ.v i);
+  let k = SZ.div i 16sz;
+  let l = S.(s.(k));
+  let r = SZ.rem i 16sz;
+  Math.small_mod (SZ.v r) (pow2 32);
+  let j = SZ.sizet_to_uint32 r;
+  assert_norm (pow2 1 - 1 == 1);
+  assert_norm (pow2 1 == 2);
+  UInt.logand_mask #64 (S64.v (S64.shift_right l j)) 1;
+  let b = S64.logand (S64.shift_right l j) (S64.classify 1uL);
+  S64.sub_mod S64.zero b
+}
+
 #pop-options
 #pop-options

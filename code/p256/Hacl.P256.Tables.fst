@@ -368,6 +368,67 @@ let qinv_e_arr : (a: G.static_array U64.t
     ulit_limbs qinv_e_list (P.order - 2);
     G.mk_static_array qinv_e_list
 
+
+(** {2 Curve constants}
+
+    The coefficient [b] and the base point, already multiplied by [R]: they
+    are only ever used as field elements, so storing them in Montgomery
+    form saves two conversions per call and costs nothing. *)
+
+(** The curve coefficient [b] in Montgomery form. *)
+let bm_list : list S64.t = [
+  S64.classify 48607uL; S64.classify 10692uL; S64.classify 57186uL; S64.classify 55452uL;
+  S64.classify 12432uL; S64.classify 30852uL; S64.classify 1485uL; S64.classify 44272uL;
+  S64.classify 11990uL; S64.classify 63265uL; S64.classify 8363uL; S64.classify 58786uL;
+  S64.classify 18484uL; S64.classify 1159uL; S64.classify 1565uL; S64.classify 56368uL
+]
+
+let bm_arr : (a: G.static_array S64.t
+                  { vals (G.static_array_elems a) == limbs (P.b_coeff * pow2 256 % P.prime) })
+  = assert_norm (L.length bm_list == nl);
+    assert_norm (lbnd bm_list);
+    assert_norm (leval bm_list == 99593677540221402957765480916910020772520766868399186769503856397241456836063);
+    assert_norm (P.b_coeff * pow2 256 % P.prime == 99593677540221402957765480916910020772520766868399186769503856397241456836063);
+    assert_norm (99593677540221402957765480916910020772520766868399186769503856397241456836063 < pow2 256);
+    lit_limbs bm_list (P.b_coeff * pow2 256 % P.prime);
+    G.mk_static_array bm_list
+
+(** The base point, in Montgomery form. *)
+let gxm_list : list S64.t = [
+  S64.classify 5180uL; S64.classify 6313uL; S64.classify 12500uL; S64.classify 31207uL;
+  S64.classify 46593uL; S64.classify 24557uL; S64.classify 38396uL; S64.classify 30138uL;
+  S64.classify 9488uL; S64.classify 30562uL; S64.classify 29483uL; S64.classify 31227uL;
+  S64.classify 21958uL; S64.classify 42295uL; S64.classify 24438uL; S64.classify 6288uL
+]
+
+let gxm_arr : (a: G.static_array S64.t
+                  { vals (G.static_array_elems a) == limbs (P.g_x * pow2 256 % P.prime) })
+  = assert_norm (L.length gxm_list == nl);
+    assert_norm (lbnd gxm_list);
+    assert_norm (leval gxm_list == 11110593207902424140321080247206512405358633331993495164878354046817554469948);
+    assert_norm (P.g_x * pow2 256 % P.prime == 11110593207902424140321080247206512405358633331993495164878354046817554469948);
+    assert_norm (11110593207902424140321080247206512405358633331993495164878354046817554469948 < pow2 256);
+    lit_limbs gxm_list (P.g_x * pow2 256 % P.prime);
+    G.mk_static_array gxm_list
+
+(** The base point, in Montgomery form. *)
+let gym_list : list S64.t = [
+  S64.classify 22026uL; S64.classify 52885uL; S64.classify 21335uL; S64.classify 56818uL;
+  S64.classify 58460uL; S64.classify 47641uL; S64.classify 47332uL; S64.classify 35658uL;
+  S64.classify 62245uL; S64.classify 56609uL; S64.classify 34440uL; S64.classify 53992uL;
+  S64.classify 23941uL; S64.classify 9608uL; S64.classify 65304uL; S64.classify 34161uL
+]
+
+let gym_arr : (a: G.static_array S64.t
+                  { vals (G.static_array_elems a) == limbs (P.g_y * pow2 256 % P.prime) })
+  = assert_norm (L.length gym_list == nl);
+    assert_norm (lbnd gym_list);
+    assert_norm (leval gym_list == 60359023176204190920225817201443260813112970217682417638161152432929735267850);
+    assert_norm (P.g_y * pow2 256 % P.prime == 60359023176204190920225817201443260813112970217682417638161152432929735267850);
+    assert_norm (60359023176204190920225817201443260813112970217682417638161152432929735267850 < pow2 256);
+    lit_limbs gym_list (P.g_y * pow2 256 % P.prime);
+    G.mk_static_array gym_list
+
 (** {2 Reading a table}
 
     Each is sixteen limbs, and the permission never comes back: these are
