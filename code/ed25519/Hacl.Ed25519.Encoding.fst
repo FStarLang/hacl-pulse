@@ -634,3 +634,106 @@ ensures exists* (wx: Seq.seq S64.t).
 #pop-options
 
 #pop-options
+
+(** The sign bit is the top bit of the last byte, which is bit [255] of the
+    number the thirty-two bytes encode. *)
+#push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+
+let sign_bit (s: Seq.seq S8.t { Seq.length s == 32 })
+  : Lemma (le_nat s / pow2 255 == S8.v (Seq.index s 31) / pow2 7)
+  = let lo = le_nat (Seq.slice s 0 31) in
+    let hi = le_nat (Seq.slice s 31 32) in
+    le_nat_split s 31;
+    le_nat_bound (Seq.slice s 0 31);
+    le_nat_cons s 31;
+    assert (hi == S8.v (Seq.index s 31));
+    Math.pow2_plus 248 7;
+    Math.small_div lo (pow2 248);
+    Math.lemma_div_plus lo hi (pow2 248);
+    assert ((lo + pow2 248 * hi) / pow2 248 == hi);
+    Math.division_multiplication_lemma (lo + pow2 248 * hi) (pow2 248) (pow2 7)
+
+#pop-options
+
+(** {2 Decompression}
+
+    The inverse of [point_compress]: read [y] and the sign of [x] from the
+    bytes, then solve the curve equation for [x].  Three things can go
+    wrong -- [y] may not be a field element, the equation may have no
+    solution, and the sign bit may ask for a negative zero -- and all three
+    are public, so the answer comes back as an ordinary boolean.
+
+    The coordinates are only meaningful when that boolean is [true]. *)
+
+#push-options "--fuel 0 --ifuel 2 --z3rlimit 200"
+
+fn point_decompress (ox oy oz ot: S.slice S64.t) (s: S.slice S8.t)
+                    (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
+                    (#voz: erased (Seq.seq S64.t)) (#vot: erased (Seq.seq S64.t))
+                    (#ps: perm) (#vs: erased (Seq.lseq S8.t 32))
+requires S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz **
+  S.pts_to ot vot ** S.pts_to s #ps vs **
+  pure (Seq.length vox == nl /\ Seq.length voy == nl /\
+        Seq.length voz == nl /\ Seq.length vot == nl)
+returns ok: bool
+ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
+                (wz: Seq.seq S64.t) (wt: Seq.seq S64.t).
+  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
+  S.pts_to ot wt ** S.pts_to s #ps vs **
+  pure (Seq.length wx == nl /\ Seq.length wy == nl /\
+        Seq.length wz == nl /\ Seq.length wt == nl /\
+        (match E.point_decompress vs with
+         | None -> ok == false
+         | Some p -> ok == true /\ P.pt_ok wx wy wz wt /\ P.pt wx wy wz wt == p))
+{
+  S.pts_to_len ox; S.pts_to_len oy; S.pts_to_len oz; S.pts_to_len ot;
+  S.pts_to_len s;
+  let zz = S64.zero;
+  let mut c1 = [| zz; 16sz |]; A.pts_to_len c1; let f1 = S.from_array c1 16sz;
+  let mut c2 = [| zz; 16sz |]; A.pts_to_len c2; let f2 = S.from_array c2 16sz;
+  let mut c3 = [| zz; 31sz |]; A.pts_to_len c3; let tw = S.from_array c3 31sz;
+  S.pts_to_len f1; S.pts_to_len f2; S.pts_to_len tw;
+
+  load oy s;
+  mask_top oy;
+  with wy0. assert (S.pts_to oy wy0);
+  assert (pure (ble (vals wy0) (base - 1)));
+  assert_norm (base - 1 <= lim);
+  ble_mono (vals wy0) (base - 1) lim;
+
+  let b31 = S.(s.(31sz));
+  let sb = S8.shift_right b31 7ul;
+  let m = S8.eq_mask sb (S8.classify 1uy);
+  let sign = Declassify.bool_of_mask m;
+  sign_bit vs;
+  Math.lemma_div_lt_nat (S8.v b31) 8 7;
+  assert_norm (pow2 1 == 2);
+  assert (pure (S8.v sb == S8.v (Seq.index vs 31) / pow2 7));
+  assert_norm (U8.v 1uy == 1);
+  assert (pure (sign == (S8.v sb = 1)));
+  assert (pure (S8.v sb < 2));
+  assert (pure ((if sign then 1 else 0) == le_nat vs / pow2 255));
+
+  let lt = flt_prime oy f1 f2;
+
+  if lt {
+    Math.modulo_lemma (eval (vals wy0)) C.prime;
+    let ok = recover_x ox oy sign;
+    if ok {
+      assert_norm (1 < base);
+      P.set_small oz 1uL;
+      copy f1 ox;
+      fmul ot f1 oy tw;
+      S.to_array f1; S.to_array f2; S.to_array tw;
+      true
+    } else {
+      S.to_array f1; S.to_array f2; S.to_array tw;
+      false
+    }
+  } else {
+    S.to_array f1; S.to_array f2; S.to_array tw;
+    false
+  }
+}
+
+#pop-options
