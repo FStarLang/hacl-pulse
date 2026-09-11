@@ -288,6 +288,8 @@ let qmul_step (a: Seq.seq nat) (n: nat) (i: nat) (acc: Seq.seq nat) : Seq.seq na
 let qmul (a: Seq.seq nat) (n: nat) : Seq.seq nat =
   Loops.repeati 256 (qmul_step a n) zero
 
+#push-options "--z3rlimit 400"
+
 let rec qmul_at (a: Seq.seq nat) (n: nat) (i: nat)
   : Lemma (requires Seq.length a == F.nl /\ F.bnd a F.base /\ F.eval a < q /\
                     n < pow2 256 /\ i <= 256)
@@ -321,6 +323,8 @@ let rec qmul_at (a: Seq.seq nat) (n: nat) (i: nat)
         Math.distributivity_add_right (F.eval a) (2 * hi) 1
       end else ()
     end
+
+#pop-options
 
 let qmul_ok (a: Seq.seq nat) (n: nat)
   : Lemma (requires Seq.length a == F.nl /\ F.bnd a F.base /\ F.eval a < q /\ n < pow2 256)
