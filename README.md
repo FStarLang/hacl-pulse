@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`) |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -597,6 +597,67 @@ in both directions, the iterated product at 1 and 1000 rounds, a
 non-canonical `u` with the high bit set, and the five small-order points --
 for which `ecdh` returns `false` and the shared secret is all zeros.
 
+### Ed25519, on top of Curve25519's field
+
+Ed25519 lives on the same prime as X25519, so it reuses
+`Hacl.Curve25519.Field` unchanged -- the same sixteen limbs of sixteen bits,
+the same `fmul`, the same inversion chain.  Nothing in the signature scheme
+needed a second field implementation, which is the main reason the whole of
+`code/ed25519` is six modules.
+
+**A point is four slices, not a record.**  Extended coordinates `(x, y, z,
+t)` are passed as four separate 16-limb slices side by side, because a
+struct of slices would need its own separation discipline and Custard would
+have to lay it out.  `point_add ox oy oz ot x1 y1 z1 t1 x2 y2 z2 t2` is a
+wide signature, but the separation logic is then exactly the one the field
+operations already use.  One consequence: `point_add` and `point_mul` demand
+all four coordinates of an input at a *single shared* permission, so the
+read-only base-point table has to be copied into owned buffers before
+`point_mul_g` can use it -- `Table.table` hands back an existential
+permission per array, and four existentials are not one.
+
+**Failure is public.**  Decompression can fail, and a signature can be
+invalid; neither fact is secret, so both are ordinary `bool`s rather than
+masks.  The only place a mask is declassified is the final field comparison
+in `point_equal`, and the sign bit recovered from byte 31 in
+`point_decompress`.  Everything upstream of that stays in
+`Hacl.Secret.UInt64`.
+
+**Every hash is over a concatenation, and none of them is materialised.**
+`sig_r` hashes `prefix || msg`, `sig_k` hashes `R || A || msg`.  Building
+those buffers would allocate proportionally to the message.  Instead
+`hash2`/`hash3` drive `Hacl.Streaming.SHA2`'s `sha512_init` / `sha512_update`
+/ `sha512_digest` directly, feeding the pieces in order.  The cost is that
+the `seen` ghost argument has to be spelled out at each step --
+`Seq.append (Seq.append (Seq.empty #S8.t) va) vb` -- and reconciled with the
+specification's `Seq.append` tree by a single `Seq.equal` assertion at the
+end.
+
+**Big literals are the enemy of Z3.**  `d`, `sqrt_m1` and the group order
+`q` are 250-odd-bit numbers, and any goal that mentions one of them next to
+a `*` or a `%` can run for twenty minutes.  The fix, used everywhere in
+`recover_x` and `verify`, is to hoist the statement into a small pure lemma
+*parametrized over the constant*: `lt_char (a: nat) (n: pos) (oks: bool)`,
+`body dd sm y sign`.  The lemma's own proof never sees the literal, and the
+call site only instantiates it.  `recover_x` is five layers of this: a
+definition over abstract constants, a definitional lemma tying it to the
+spec, a purely boolean skeleton, a definitional lemma tying the two, and the
+real characterization proved about the skeleton alone.
+
+**Scratch modules make ten-minute files editable.**  `Hacl.Ed25519.fst`
+takes about sixteen minutes to recheck and `Hacl.Ed25519.Encoding.fst` about
+ten, which is far too slow to debug one function in.  The working method was
+to keep a warm copy of the checked files in a scratch cache directory, write
+the new function in a one-line `module Tmp` that `open`s the real module,
+and check *that* -- seconds instead of minutes -- then paste the finished
+function back and pay the full check once.
+
+`tests/test_ed25519.c` covers all five RFC 8032 §7.1 vectors in both
+directions, rejection of every single-bit tampering of a signature,
+rejection under a wrong message, rejection of the malleable `S + q`
+encoding, and agreement between `expand_keys`/`sign_expanded` and the
+one-shot `sign`.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -846,5 +907,5 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: Ed25519,
-P-256, and the DRBG.  Curve25519 is done.
+Following `design/reimplementation.md` §9, in dependency order: P-256, then
+the DRBG.  Curve25519 and Ed25519 are done.
