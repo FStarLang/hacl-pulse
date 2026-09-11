@@ -393,6 +393,26 @@ let bm_arr : (a: G.static_array S64.t
     lit_limbs bm_list (P.b_coeff * pow2 256 % P.prime);
     G.mk_static_array bm_list
 
+(** Three, in Montgomery form.  The curve equation names [-3] as the
+    coefficient [a]; the addition formulas fold it away, but the on-curve
+    test cannot. *)
+let threem_list : list S64.t = [
+  S64.classify 3uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL; S64.classify 65533uL; S64.classify 65535uL;
+  S64.classify 65535uL; S64.classify 65535uL; S64.classify 65535uL; S64.classify 65535uL;
+  S64.classify 65532uL; S64.classify 65535uL; S64.classify 2uL; S64.classify 0uL
+]
+
+let threem_arr : (a: G.static_array S64.t
+                     { vals (G.static_array_elems a) == limbs (3 * pow2 256 % P.prime) })
+  = assert_norm (L.length threem_list == nl);
+    assert_norm (lbnd threem_list);
+    assert_norm (leval threem_list == 80879839982620614177841002969551523751050749531771858097138095357955);
+    assert_norm (3 * pow2 256 % P.prime == 80879839982620614177841002969551523751050749531771858097138095357955);
+    assert_norm (80879839982620614177841002969551523751050749531771858097138095357955 < pow2 256);
+    lit_limbs threem_list (3 * pow2 256 % P.prime);
+    G.mk_static_array threem_list
+
 (** The base point, in Montgomery form. *)
 let gxm_list : list S64.t = [
   S64.classify 5180uL; S64.classify 6313uL; S64.classify 12500uL; S64.classify 31207uL;

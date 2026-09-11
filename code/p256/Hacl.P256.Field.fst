@@ -292,6 +292,15 @@ ensures exists* (p: perm) (v: Seq.seq S64.t).
   S.pts_to s #p v ** pure (felem v /\ fev v == P.b_coeff)
 { fconst bm_arr P.b_coeff }
 
+(** Three.  Kept in Montgomery form like the other constants. *)
+let three_f : P.felem = assert_norm (3 < P.prime); 3
+
+inline_for_extraction
+fn fthree () requires emp returns s: S.slice S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  S.pts_to s #p v ** pure (felem v /\ fev v == three_f)
+{ fconst threem_arr three_f }
+
 inline_for_extraction
 fn fgx () requires emp returns s: S.slice S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
