@@ -71,6 +71,22 @@ let nat_to_be_index (n: nat) (x: nat) (i: nat { i < n })
   : Lemma (S8.v (Seq.index (nat_to_be n x) i) == (x / pow2 (8 * (n - 1 - i))) % 256)
   = ()
 
+(** The parity of a big-endian number is the parity of its last byte.  The
+    SEC1 compressed forms are a bit of [y], and this is what connects that
+    bit to the byte a program actually reads. *)
+let be_nat_parity (s: Seq.seq S8.t { 0 < Seq.length s })
+  : Lemma (be_nat s % 2 == S8.v (Seq.index s (Seq.length s - 1)) % 2)
+  = let n = Seq.length s in
+    be_nat_snoc s (n - 1);
+    Seq.lemma_eq_intro (Seq.slice s 0 n) s;
+    Math.lemma_mod_plus (S8.v (Seq.index s (n - 1))) (be_nat (Seq.slice s 0 (n - 1)) * 128) 2
+
+let nat_to_be_parity (n: pos) (x: nat)
+  : Lemma (S8.v (Seq.index (nat_to_be n x) (n - 1)) % 2 == x % 2)
+  = nat_to_be_index n x (n - 1);
+    assert_norm (pow2 0 == 1);
+    Math.modulo_modulo_lemma x 2 128
+
 (** {2 Words} *)
 
 let word_from_be (#t: Type0) {| word t |} (s: Seq.lseq S8.t (bytes #t)) : GTot t =
