@@ -386,6 +386,20 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
   S.to_array h;
 }
 
+#push-options "--z3rlimit 600"
+
+(** The two halves of the signature buffer, reassembled.  Pulse leaves the
+    buffer as a nest of slices and appends; naming the halves and joining
+    them here keeps that term out of the SMT query. *)
+let join32 (o a b: Seq.seq S8.t)
+  : Lemma (requires Seq.length o == 64 /\ Seq.length a == 32 /\
+                    Seq.length b == 32 /\
+                    Seq.equal (Seq.slice o 0 32) a /\
+                    Seq.equal (Seq.slice o 32 64) b)
+          (ensures o == Seq.append a b)
+  = Seq.lemma_split o 32;
+    Seq.lemma_eq_elim o (Seq.append a b)
+
 (** {2 Signing}
 
     [r = H(prefix | msg) mod q], [R = [r]B], [k = H(R | A | msg) mod q] and
@@ -463,6 +477,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   S.join _ _ sg;
   with o1. assert (S.pts_to sg o1);
   S.pts_to_len sg;
+  assert (pure (Seq.equal (Seq.slice o1 0 32) vrr));
 
   let s1 = S.subslice sg 32sz 64sz;
   Hacl.Impl.Copy.copy_prefix s1 ssb 32sz;
@@ -473,6 +488,9 @@ ensures exists* (vsg': Seq.seq S8.t).
   S.join _ _ sg;
   with o2. assert (S.pts_to sg o2);
   S.pts_to_len sg;
+  assert (pure (Seq.equal (Seq.slice o2 0 32) vrr));
+  assert (pure (Seq.equal (Seq.slice o2 32 64) vss));
+  join32 o2 vrr vss;
 
   S.to_array h; S.to_array rb; S.to_array rrb; S.to_array ssb;
   S.to_array racc; S.to_array kacc; S.to_array sacc; S.to_array mac;
@@ -480,6 +498,8 @@ ensures exists* (vsg': Seq.seq S8.t).
   S.to_array px; S.to_array py; S.to_array pz; S.to_array ptt;
   assert (pure (Seq.equal o2 (Seq.append vrr vss)));
 }
+
+#pop-options
 
 fn sign (sg: S.slice S8.t) (secret: S.slice S8.t) (msg: S.slice S8.t)
         (#vsg: erased (Seq.seq S8.t))
