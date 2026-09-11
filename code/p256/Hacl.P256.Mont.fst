@@ -184,6 +184,31 @@ ensures exists* (vd': Seq.seq S64.t).
   ()
 }
 
+(** {2 Zeroing} *)
+
+fn azero (out: S.slice S64.t) (#vo: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** pure (Seq.length vo == nl)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** pure (Seq.length vo' == nl /\ vals vo' == mzero)
+{
+  S.pts_to_len out;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to out v **
+    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+          (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    S.((out.(vi) <- S64.zero));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (S.pts_to out v);
+  Seq.lemma_eq_intro (vals v) mzero;
+  ()
+}
+
 (** {2 Comparison}
 
     The limbs are canonical, so a difference in any of them is a difference
