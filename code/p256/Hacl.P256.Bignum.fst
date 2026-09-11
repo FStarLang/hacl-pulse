@@ -41,13 +41,16 @@ open Spec.Bignum256
 open Spec.Montgomery256
 open Spec.P256.Field
 open Hacl.Impl.Limb
+open Hacl.Spec.Bytes
 
 module S = Pulse.Lib.Slice
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
+module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module Cast = Hacl.Secret.Cast
 module Loops = Hacl.Spec.Loops
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -670,6 +673,91 @@ ensures exists* (vo': Seq.seq S64.t) (vp': Seq.seq S64.t)
   mmul_ok d (vals va) (vals vb);
   with vo'. assert (S.pts_to out vo');
   assert (pure (vals vo' == mmul d (vals va) (vals vb)));
+}
+
+#pop-options
+
+(** {2 Big-endian bytes}
+
+    P-256 serialises most significant byte first, so limb [k] -- the [k]-th
+    least significant -- is the byte pair at distance [2 (15 - k)] from the
+    start.  That mirroring is the only difference from Curve25519's
+    little-endian pair. *)
+
+#push-options "--z3rlimit 200"
+
+fn load_be (a: S.slice S64.t) (b: S.slice S8.t)
+           (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires S.pts_to a va ** S.pts_to b #pb vb **
+  pure (Seq.length va == nl /\ Seq.length vb == 32)
+ensures exists* (va': Seq.seq S64.t).
+  S.pts_to a va' ** S.pts_to b #pb vb **
+  pure (Seq.length va' == nl /\ bnd (vals va') base /\
+        eval (vals va') == be_nat vb)
+{
+  S.pts_to_len a;
+  S.pts_to_len b;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to a v ** S.pts_to b #pb vb **
+    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+          (forall (k: nat). k < SZ.v vi ==>
+             Seq.index (vals v) k == be_pair vb nl k))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    let pos = SZ.mul 2sz (SZ.sub 15sz vi);
+    let hi = S.(b.(pos));
+    let lo = S.(b.(SZ.add pos 1sz));
+    assert_norm (256 * (pow2 8 - 1) + (pow2 8 - 1) < pow2 64);
+    let w = addw (Cast.u8_to_u64 lo) (mulk 256uL (Cast.u8_to_u64 hi));
+    S.((a.(vi) <- w));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (S.pts_to a v);
+  assert (pure (forall (k: nat). k < nl ==> Seq.index (vals v) k == be_pair vb nl k));
+  eval_bytes_be vb (vals v);
+  assert_norm (256 * (pow2 8 - 1) + (pow2 8 - 1) < base);
+}
+
+fn store_be (b: S.slice S8.t) (a: S.slice S64.t)
+            (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to b vb ** S.pts_to a #pa va **
+  pure (Seq.length vb == 32 /\ Seq.length va == nl /\ bnd (vals va) base)
+ensures exists* (vb': Seq.seq S8.t).
+  S.pts_to b vb' ** S.pts_to a #pa va **
+  pure (vb' == nat_to_be 32 (eval (vals va)))
+{
+  S.pts_to_len b;
+  S.pts_to_len a;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
+    pts_to i vi ** S.pts_to b v ** S.pts_to a #pa va **
+    pure (SZ.v vi <= 16 /\ Seq.length v == 32 /\
+          (forall (k: nat). k < SZ.v vi ==>
+             S8.v (Seq.index v (2 * (nl - 1 - k))) == Seq.index (vals va) k / 256 /\
+             S8.v (Seq.index v (2 * (nl - 1 - k) + 1)) == Seq.index (vals va) k % 256))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = S.(a.(vi));
+    let pos = SZ.mul 2sz (SZ.sub 15sz vi);
+    Math.pow2_plus 8 8;
+    Math.lemma_div_lt_nat (S64.v x) 16 8;
+    Math.small_mod (S64.v x / 256) (pow2 8);
+    S.((b.(pos) <- Cast.u64_to_u8 (S64.shift_right x 8ul)));
+    S.((b.(SZ.add pos 1sz) <- Cast.u64_to_u8 x));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (S.pts_to b v);
+  assert (pure (Seq.length v == 32 /\ bnd (vals va) base));
+  assert (pure (forall (k: nat). k < nl ==>
+                  bat v (2 * (nl - 1 - k)) == Seq.index (vals va) k / 256 /\
+                  bat v (2 * (nl - 1 - k) + 1) == Seq.index (vals va) k % 256));
+  store_be_ok (vals va) v;
+  assert (pure (v == nat_to_be 32 (eval (vals va))));
 }
 
 #pop-options
