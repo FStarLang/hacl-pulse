@@ -73,6 +73,10 @@ CUSTARD_ENTRIES_Hacl.HKDF.Ptr := \
 C_UNITS += Hacl.Curve25519.Ptr
 CUSTARD_ENTRIES_Hacl.Curve25519.Ptr := scalarmult secret_to_public ecdh
 
+C_UNITS += Hacl.Ed25519.Ptr
+CUSTARD_ENTRIES_Hacl.Ed25519.Ptr := \
+  secret_to_public expand_keys sign sign_expanded verify
+
 # Which unit each C test links against; see mk/test.mk.
 TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
@@ -86,6 +90,7 @@ TEST_UNITS_test_chacha20poly1305 := Hacl.Chacha20Poly1305.Ptr
 TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
 TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 TEST_UNITS_test_curve25519 := Hacl.Curve25519.Ptr
+TEST_UNITS_test_ed25519 := Hacl.Ed25519.Ptr
 
 include mk/extract.mk
 
