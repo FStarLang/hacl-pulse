@@ -1,0 +1,269 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** The scalar field [Z/n].
+
+    The same sixteen limbs and the same Montgomery machinery as
+    [Hacl.P256.Field], with [qmod] in place of [fmod].  ECDSA needs
+    addition, multiplication and inversion here, plus two decoders: one
+    that insists the scalar is a proper private key, and one that reduces
+    a hash modulo the order.
+
+    Because [Hacl.P256.Mont] takes its modulus as data, none of this
+    duplicates any code in the emitted C: the two fields share every
+    operation and differ only in the table they pass. *)
+module Hacl.P256.Scalar
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+open Spec.Bignum256
+open Spec.P256.Field
+open Spec.P256.Mont
+open Hacl.Spec.Bytes
+open Hacl.Impl.Limb
+open Hacl.Impl.Table
+open Hacl.P256.Bignum
+open Hacl.P256.Mont
+open Hacl.P256.Tables
+open Hacl.P256.Exp
+
+module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
+module Seq = FStar.Seq
+module SZ = FStar.SizeT
+module U64 = FStar.UInt64
+module S8 = Hacl.Secret.UInt8
+module S64 = Hacl.Secret.UInt64
+module P = Spec.P256
+module MA = Spec.ModArith
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** {2 What a scalar is} *)
+
+let qelem (v: Seq.seq S64.t) : prop = res qmod (vals v)
+
+let qmod_m (_: unit) : Lemma (qmod.m == P.order) = ()
+
+let qev (v: Seq.seq S64.t) : GTot P.qelem = mev qmod (vals v)
+
+(** {2 The ring operations} *)
+
+fn qadd (out a b: S.slice S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ qelem va /\ qelem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (qelem vo' /\ qev vo' == P.qadd (qev va) (qev vb))
+{
+  qmod_ok (); qmod_m ();
+  mev_add qmod (vals va) (vals vb);
+  let nm = qnm ();
+  aadd out a b nm qmod;
+  drop_table nm;
+}
+
+fn qmul (out a b: S.slice S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ qelem va /\ qelem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (qelem vo' /\ qev vo' == P.qmul (qev va) (qev vb))
+{
+  qmod_ok (); qmod_m ();
+  mev_mul qmod (vals va) (vals vb);
+  let ms = qms ();
+  let nm = qnm ();
+  amul out a b ms nm qmu qmod;
+  drop_table ms;
+  drop_table nm;
+}
+
+fn qinv (out a: S.slice S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va **
+  pure (Seq.length vo == nl /\ qelem va)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va **
+  pure (qelem vo' /\ qev vo' == P.qinv (qev va))
+{
+  qmod_ok (); qmod_m ();
+  assert_norm (P.order - 2 < pow2 256);
+  limbs_ok (P.order - 2);
+  let e = qinv_e ();
+  let r1 = qr1 ();
+  let ms = qms ();
+  let nm = qnm ();
+  mexp out a e r1 ms nm qmu qmod;
+  drop_table e;
+  drop_table r1;
+  drop_table ms;
+  drop_table nm;
+}
+
+(** {2 Comparison} *)
+
+fn qis_zero (a: S.slice S64.t) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to a #pa va ** pure (qelem va)
+returns r: bool
+ensures S.pts_to a #pa va ** pure (r == (qev va = P.qzero))
+{
+  qmod_ok (); qmod_m ();
+  mev_iszero qmod (vals va);
+  mzero_ok ();
+  let z = S64.zero;
+  let mut az = [| z; 16sz |]; A.pts_to_len az; let zs = S.from_array az 16sz;
+  S.pts_to_len zs;
+  azero zs;
+  let r = aeq a zs;
+  S.to_array zs;
+  r
+}
+
+(** {2 Conversions} *)
+
+inline_for_extraction
+fn qto (out a: S.slice S64.t)
+       (#vo: erased (Seq.seq S64.t))
+       (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va **
+  pure (Seq.length vo == nl /\ res qmod (vals va))
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va **
+  pure (qelem vo' /\ qev vo' == eval (vals va))
+{
+  qmod_ok (); qmod_m ();
+  mev_to qmod (vals va);
+  let ms = qms ();
+  let nm = qnm ();
+  let r2 = qr2 ();
+  amul out a r2 ms nm qmu qmod;
+  drop_table ms;
+  drop_table nm;
+  drop_table r2;
+}
+
+inline_for_extraction
+fn qfrom (out a: S.slice S64.t)
+         (#vo: erased (Seq.seq S64.t))
+         (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va **
+  pure (Seq.length vo == nl /\ qelem va)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va **
+  pure (Seq.length vo' == nl /\ bnd (vals vo') base /\
+        eval (vals vo') == qev va)
+{
+  qmod_ok (); qmod_m ();
+  mone_ok ();
+  mev_of qmod (vals va);
+  let ms = qms ();
+  let nm = qnm ();
+  let one = mone ();
+  amul out a one ms nm qmu qmod;
+  drop_table ms;
+  drop_table nm;
+  drop_table one;
+}
+
+(** {2 Bytes}
+
+    Two decoders.  [qload] is the private-key and signature-component
+    check: thirty-two big-endian bytes are a scalar only when they are
+    strictly between zero and the order.  [qload_mod] is the hash
+    conversion, which reduces instead of rejecting; one conditional
+    subtraction suffices because [2^256] is below twice the order. *)
+
+#push-options "--z3rlimit 200"
+
+fn qload (out: S.slice S64.t) (b: S.slice S8.t)
+         (#vo: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires S.pts_to out vo ** S.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length vb == 32)
+returns r: bool
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to b #pb vb **
+  pure (qelem vo' /\ r == (0 < be_nat vb && be_nat vb < P.order) /\
+        (r ==> qev vo' == be_nat vb))
+{
+  qmod_ok (); qmod_m ();
+  assert_norm (pow2 256 < 2 * P.order);
+  let z = S64.zero;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; let t = S.from_array at 16sz;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
+  S.pts_to_len t; S.pts_to_len s;
+  load_be t b;
+  let nm = qnm ();
+  let lo = abelow t s nm qmod;
+  drop_table nm;
+  qto out t;
+  let nz = qis_zero out;
+  S.to_array t;
+  S.to_array s;
+  lo && not nz
+}
+
+fn qload_mod (out: S.slice S64.t) (b: S.slice S8.t)
+             (#vo: erased (Seq.seq S64.t))
+             (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires S.pts_to out vo ** S.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length vb == 32)
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to b #pb vb **
+  pure (qelem vo' /\ qev vo' == be_nat vb % P.order)
+{
+  qmod_ok (); qmod_m ();
+  assert_norm (pow2 256 < 2 * P.order);
+  let z = S64.zero;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; let t = S.from_array at 16sz;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
+  S.pts_to_len t; S.pts_to_len s;
+  load_be t b;
+  let nm = qnm ();
+  ared t s nm qmod;
+  drop_table nm;
+  qto out t;
+  S.to_array t;
+  S.to_array s;
+}
+
+fn qstore (b: S.slice S8.t) (a: S.slice S64.t)
+          (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires S.pts_to b vb ** S.pts_to a #pa va **
+  pure (Seq.length vb == 32 /\ qelem va)
+ensures exists* (vb': Seq.seq S8.t).
+  S.pts_to b vb' ** S.pts_to a #pa va **
+  pure (vb' == nat_to_be 32 (qev va))
+{
+  let z = S64.zero;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; let t = S.from_array at 16sz;
+  S.pts_to_len t;
+  qfrom t a;
+  store_be b t;
+  S.to_array t;
+}
+
+#pop-options
+
+#pop-options
