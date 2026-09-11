@@ -39,6 +39,7 @@ open Hacl.Spec.Bytes
 open Spec.Curve25519.Field
 open Hacl.Curve25519.Field
 open Hacl.Curve25519.Inverse
+open Hacl.Ed25519.Sqrt
 
 module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
@@ -56,6 +57,8 @@ module C = Spec.Curve25519
 module E = Spec.Ed25519
 module Sc = Spec.Ed25519.Scalar
 module P = Hacl.Ed25519.Point
+module Table = Hacl.Impl.Table
+module Tables = Hacl.Ed25519.Tables
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -113,6 +116,18 @@ let frozen_unique (a b: Seq.seq nat)
           (ensures a == b)
   = Sc.limbs_unique a (eval a); Sc.limbs_unique b (eval b)
 
+(** Reducing a number below twice the prime leaves it alone exactly when
+    it was already reduced. *)
+let mod_iff_lt (x: nat)
+  : Lemma (requires x < 2 * C.prime)
+          (ensures (x % C.prime = x) == (x < C.prime))
+  = C.prime_gt_one ();
+    if x < C.prime then Math.small_mod x C.prime
+    else begin
+      Math.lemma_mod_sub x C.prime 1;
+      Math.small_mod (x - C.prime) C.prime
+    end
+
 (** {2 Deciding} *)
 
 (** [a = b] as field elements.  [u] and [v] take the reduced copies and [w]
@@ -120,6 +135,50 @@ let frozen_unique (a b: Seq.seq nat)
 
 #push-options "--z3rlimit 200"
 
+fn limbs_eq (a b: S.slice S64.t)
+            (#pa: perm) (#va: erased (Seq.seq S64.t))
+            (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length va == nl /\ Seq.length vb == nl /\
+        bnd (vals va) base /\ bnd (vals vb) base)
+returns r: bool
+ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (r == (eval (vals va) = eval (vals vb)))
+{
+  S.pts_to_len a; S.pts_to_len b;
+  let mut m = S64.ones;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (mm: S64.t).
+    pts_to i vi ** pts_to m mm ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pure (SZ.v vi <= 16 /\
+          (if (forall (k: nat). k < SZ.v vi ==>
+                 Seq.index (vals va) k == Seq.index (vals vb) k)
+           then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    let mm = !m;
+    let xa = S.(a.(vi));
+    let xb = S.(b.(vi));
+    let e = S64.eq_mask xa xb;
+    UInt.logand_lemma_1 #64 (S64.v e);
+    UInt.logand_lemma_2 #64 (S64.v e);
+    UInt.logand_commutative #64 (S64.v mm) (S64.v e);
+    m := S64.logand mm e;
+    i := SZ.add vi 1sz;
+  };
+  let mm = !m;
+  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+  let m8 = Cast.u64_to_u8 mm;
+  let r = Declassify.bool_of_mask m8;
+  Classical.move_requires (Seq.lemma_eq_intro (vals va)) (vals vb);
+  Classical.move_requires (frozen_unique (vals va)) (vals vb);
+  r
+}
+
+(** [a = b] as field elements.  [u] and [v] take the reduced copies and [w]
+    is the scratch that [freeze] wants. *)
 fn feq (a b u v w: S.slice S64.t)
        (#pa: perm) (#va: erased (Seq.seq S64.t))
        (#pb: perm) (#vb: erased (Seq.seq S64.t))
@@ -141,40 +200,31 @@ ensures exists* (wu wv ww: Seq.seq S64.t).
   copy v b;
   freeze u w;
   freeze v w;
-  with xu. assert (S.pts_to u xu);
-  with xv. assert (S.pts_to v xv);
-  assert (pure (eval (vals xu) == fev (vals va) /\ eval (vals xv) == fev (vals vb)));
+  limbs_eq u v
+}
 
-  let mut m = S64.ones;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
-  invariant exists* (vi: SZ.t) (mm: S64.t) (ww: Seq.seq S64.t).
-    pts_to i vi ** pts_to m mm ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-    S.pts_to u xu ** S.pts_to v xv ** S.pts_to w ww **
-    pure (SZ.v vi <= 16 /\ Seq.length ww == nl /\
-          (if (forall (k: nat). k < SZ.v vi ==>
-                 Seq.index (vals xu) k == Seq.index (vals xv) k)
-           then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
-  decreases (16 - SZ.v (!i))
-  {
-    let vi = !i;
-    let mm = !m;
-    let xa = S.(u.(vi));
-    let xb = S.(v.(vi));
-    let e = S64.eq_mask xa xb;
-    UInt.logand_lemma_1 #64 (S64.v e);
-    UInt.logand_lemma_2 #64 (S64.v e);
-    UInt.logand_commutative #64 (S64.v mm) (S64.v e);
-    m := S64.logand mm e;
-    i := SZ.add vi 1sz;
-  };
-  let mm = !m;
-  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
-  let m8 = Cast.u64_to_u8 mm;
-  let r = Declassify.bool_of_mask m8;
-  Classical.move_requires (Seq.lemma_eq_intro (vals xu)) (vals xv);
-  Classical.move_requires (frozen_unique (vals xu)) (vals xv);
-  r
+(** Is the value this sequence of limbs denotes already below the prime?
+    Reducing it does not change it exactly when it is. *)
+fn flt_prime (a u w: S.slice S64.t)
+             (#pa: perm) (#va: erased (Seq.seq S64.t))
+             (#vu: erased (Seq.seq S64.t)) (#vw: erased (Seq.seq S64.t))
+requires S.pts_to a #pa va ** S.pts_to u vu ** S.pts_to w vw **
+  pure (Seq.length va == nl /\ bnd (vals va) base /\ eval (vals va) < pow2 255 /\
+        Seq.length vu == nl /\ Seq.length vw == nl)
+returns r: bool
+ensures exists* (wu ww: Seq.seq S64.t).
+  S.pts_to a #pa va ** S.pts_to u wu ** S.pts_to w ww **
+  pure (Seq.length wu == nl /\ Seq.length ww == nl /\
+        r == (eval (vals va) < C.prime))
+{
+  S.pts_to_len u;
+  assert_norm (base <= lim);
+  copy u a;
+  freeze u w;
+  with xu. assert (S.pts_to u xu);
+  assert_norm (pow2 255 < 2 * C.prime);
+  mod_iff_lt (eval (vals va));
+  limbs_eq u a
 }
 
 #pop-options
@@ -342,6 +392,243 @@ ensures
   S.to_array p; S.to_array q; S.to_array u;
   S.to_array v; S.to_array w; S.to_array tw;
   e1 && e2
+}
+
+#pop-options
+
+
+(** A public choice between two field elements.  Pulse joins the two
+    branches of an [if] against a stated postcondition, not against each
+    other, so a conditional copy has to be a function of its own. *)
+fn fselect (out a b: S.slice S64.t) (c: bool)
+           (#vout: erased (Seq.seq S64.t))
+           (#pa: perm) (#va: erased (Seq.seq S64.t))
+           (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to out vout ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length vout == nl /\ Seq.length va == nl /\ Seq.length vb == nl)
+ensures exists* (w: Seq.seq S64.t).
+  S.pts_to out w ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (w == (if c then reveal va else reveal vb))
+{
+  if c { copy out a } else { copy out b }
+}
+
+(** Negate, or do not. *)
+fn fneg_if (a: S.slice S64.t) (c: bool) (#va: erased (Seq.seq S64.t))
+requires S.pts_to a va ** pure (felem (vals va))
+ensures exists* (w: Seq.seq S64.t).
+  S.pts_to a w **
+  pure (felem (vals w) /\
+        fev (vals w) == (if c then C.fsub 0 (fev (vals va)) else fev (vals va)))
+{
+  if c {
+    S.pts_to_len a;
+    let zz = S64.zero;
+    let mut k1 = [| zz; 16sz |]; A.pts_to_len k1; let kb = S.from_array k1 16sz;
+    let mut k2 = [| zz; 16sz |]; A.pts_to_len k2; let f1 = S.from_array k2 16sz;
+    S.pts_to_len kb; S.pts_to_len f1;
+    P.set_small kb 0uL;
+    copy f1 a;
+    fsub a kb f1;
+    S.to_array kb;
+    S.to_array f1
+  } else {
+    ()
+  }
+}
+
+
+(** {2 Decompression}
+
+    Recovering [x] from [y] is a square root of [(y^2 - 1)/(d y^2 + 1)],
+    and there are three ways for it to fail: the denominator vanishes, the
+    quotient is not a square, or the root is zero and the sign bit asks for
+    the negative zero that does not exist.  None of the three is secret --
+    a compressed point is public -- so the failures are collected into
+    ordinary booleans and the arithmetic runs unconditionally, which is
+    both simpler and faster than branching out early.
+
+    [ox] receives the candidate; the caller looks at the result before
+    using it. *)
+
+(** What [recover_x] decides, in three steps.
+
+    Stating it in one lemma does not work: the query has to see the
+    two hundred and fifty-five bit literals [d] and [sqrt_m1] *and* do a
+    five-way case analysis, and Z3 will not finish.  Split so that no
+    single query does both -- [body] is [recover_x] with the constants
+    abstracted, [body_eq] names the values the code computes, and
+    [body3_char] is pure boolean reasoning -- the whole thing is under a
+    second. *)
+
+#push-options "--fuel 0 --ifuel 2 --z3rlimit 50"
+
+let body (dd sm y: C.elem) (sign: nat { sign < 2 }) : option C.elem =
+  let v = C.fadd (C.fmul dd (C.fmul y y)) C.one in
+  if v = 0 then None
+  else
+    let w = C.fmul (C.fsub (C.fmul y y) C.one) (C.finv v) in
+    let x1 = E.modp_sqrt w in
+    let x2 = C.fmul x1 sm in
+    if C.fmul x1 x1 = w then
+      (if x1 = 0 && sign = 1 then None
+       else if x1 % 2 = sign then Some x1 else Some (C.fsub 0 x1))
+    else if C.fmul x2 x2 = w then
+      (if x2 = 0 && sign = 1 then None
+       else if x2 % 2 = sign then Some x2 else Some (C.fsub 0 x2))
+    else None
+
+let body_ok (y: C.elem) (sign: nat { sign < 2 })
+  : Lemma (E.recover_x y sign == body E.d E.sqrt_m1 y sign) = ()
+
+(** The same thing once the three tests have been made. *)
+let body3 (sign: nat { sign < 2 }) (x1 x2: C.elem) (vzero ok1 ok2: bool)
+  : option C.elem =
+  if vzero then None
+  else if ok1 then
+    (if x1 = 0 && sign = 1 then None
+     else if x1 % 2 = sign then Some x1 else Some (C.fsub 0 x1))
+  else if ok2 then
+    (if x2 = 0 && sign = 1 then None
+     else if x2 % 2 = sign then Some x2 else Some (C.fsub 0 x2))
+  else None
+
+let body_eq (dd sm y: C.elem) (sign: nat { sign < 2 })
+            (u v w x1 x2: C.elem) (vzero ok1 ok2: bool)
+  : Lemma (requires
+             u == C.fsub (C.fmul y y) C.one /\
+             v == C.fadd (C.fmul dd (C.fmul y y)) C.one /\
+             vzero == (v = 0) /\ w == C.fmul u (C.finv v) /\
+             x1 == E.modp_sqrt w /\ ok1 == (C.fmul x1 x1 = w) /\
+             x2 == C.fmul x1 sm /\ ok2 == (C.fmul x2 x2 = w))
+          (ensures body dd sm y sign == body3 sign x1 x2 vzero ok1 ok2)
+  = ()
+
+let body3_char (sign: nat { sign < 2 }) (x1 x2 xr: C.elem)
+               (vzero ok1 ok2 xzero xodd: bool)
+  : Lemma (requires xr == (if ok1 then x1 else x2) /\
+                    xzero == (xr = 0) /\ xodd == (xr % 2 = 1))
+          (ensures
+             (let ok = not vzero && (ok1 || ok2) && not (xzero && sign = 1) in
+              let res = if xodd = (sign = 1) then xr else C.fsub 0 xr in
+              match body3 sign x1 x2 vzero ok1 ok2 with
+              | None -> ok == false
+              | Some x -> ok == true /\ res == x))
+  = Math.lemma_mod_lt xr 2
+
+#pop-options
+
+(** {2 Decompression}
+
+    Recovering [x] from [y] is a square root of [(y^2 - 1)/(d y^2 + 1)],
+    and there are three ways for it to fail: the denominator vanishes, the
+    quotient is not a square, or the root is zero and the sign bit asks for
+    the negative zero that does not exist.  None of the three is secret --
+    a compressed point is public -- so the failures are collected into
+    ordinary booleans and the arithmetic runs unconditionally, which is
+    both simpler and faster than branching out early.
+
+    [ox] receives the candidate; the caller looks at the result before
+    using it. *)
+
+#push-options "--fuel 0 --ifuel 2 --z3rlimit 200"
+
+fn recover_x (ox yb: S.slice S64.t) (sign: bool)
+             (#vox: erased (Seq.seq S64.t))
+             (#py: perm) (#vy: erased (Seq.seq S64.t))
+requires S.pts_to ox vox ** S.pts_to yb #py vy **
+  pure (Seq.length vox == nl /\ felem (vals vy))
+returns ok: bool
+ensures exists* (wx: Seq.seq S64.t).
+  S.pts_to ox wx ** S.pts_to yb #py vy **
+  pure (Seq.length wx == nl /\
+        (match E.recover_x (fev (vals vy)) (if sign then 1 else 0) with
+         | None -> ok == false
+         | Some x -> ok == true /\ felem (vals wx) /\ fev (vals wx) == x))
+{
+  S.pts_to_len ox;
+  let zz = S64.zero;
+  let mut b1 = [| zz; 16sz |]; A.pts_to_len b1; let y2 = S.from_array b1 16sz;
+  let mut b2 = [| zz; 16sz |]; A.pts_to_len b2; let uu = S.from_array b2 16sz;
+  let mut b3 = [| zz; 16sz |]; A.pts_to_len b3; let vv = S.from_array b3 16sz;
+  let mut b4 = [| zz; 16sz |]; A.pts_to_len b4; let ww = S.from_array b4 16sz;
+  let mut b5 = [| zz; 16sz |]; A.pts_to_len b5; let xs = S.from_array b5 16sz;
+  let mut b6 = [| zz; 16sz |]; A.pts_to_len b6; let k = S.from_array b6 16sz;
+  let mut b7 = [| zz; 16sz |]; A.pts_to_len b7; let f1 = S.from_array b7 16sz;
+  let mut b8 = [| zz; 16sz |]; A.pts_to_len b8; let f2 = S.from_array b8 16sz;
+  let mut b9 = [| zz; 16sz |]; A.pts_to_len b9; let f3 = S.from_array b9 16sz;
+  let mut ba = [| zz; 31sz |]; A.pts_to_len ba; let tw = S.from_array ba 31sz;
+  S.pts_to_len y2; S.pts_to_len uu; S.pts_to_len vv; S.pts_to_len ww;
+  S.pts_to_len xs; S.pts_to_len k; S.pts_to_len f1; S.pts_to_len f2;
+  S.pts_to_len f3; S.pts_to_len tw;
+
+  P.set_small k 1uL;
+  C.prime_gt_one ();
+
+  (* y2 = y^2, u = y2 - 1, v = d y2 + 1 *)
+  copy f1 yb;
+  fmul y2 f1 yb tw;
+  fsub uu y2 k;
+  with su. assert (S.pts_to uu su);
+  let dt = Table.table Tables.d_arr 16sz;
+  Tables.d_ok ();
+  fmul vv dt y2 tw;
+  Table.drop_table dt;
+  copy f1 vv;
+  fadd vv f1 k;
+  with sv. assert (S.pts_to vv sv);
+
+  let vzero = fzerop vv f1 f2;
+
+  (* w = u / v *)
+  finv ww vv;
+  copy f1 ww;
+  fmul ww uu f1 tw;
+  with sw. assert (S.pts_to ww sw);
+
+  (* the first candidate, w^((p+3)/8) *)
+  fsqrt xs ww;
+  with sx1. assert (S.pts_to xs sx1);
+  copy f1 xs;
+  fmul y2 f1 xs tw;
+  let ok1 = feq y2 ww f1 f2 f3;
+
+  (* the second, that one times sqrt(-1) *)
+  let sm = Table.table Tables.sqrtm1_arr 16sz;
+  Tables.sqrtm1_ok ();
+  copy f1 xs;
+  fmul uu f1 sm tw;
+  Table.drop_table sm;
+  with sx2. assert (S.pts_to uu sx2);
+  copy f1 uu;
+  fmul y2 f1 uu tw;
+  let ok2 = feq y2 ww f1 f2 f3;
+
+  fselect ox xs uu ok1;
+  with sxr. assert (S.pts_to ox sxr);
+
+  let xzero = fzerop ox f1 f2;
+  let xodd = fodd ox f1 f2;
+
+  fneg_if ox (xodd <> sign);
+  with wx. assert (S.pts_to ox wx);
+
+  let ok = (not vzero) && (ok1 || ok2) && (not (xzero && sign));
+  body_ok (fev (vals vy)) (if sign then 1 else 0);
+  body_eq E.d E.sqrt_m1 (fev (vals vy)) (if sign then 1 else 0)
+          (fev (vals su)) (fev (vals sv)) (fev (vals sw))
+          (fev (vals sx1)) (fev (vals sx2)) vzero ok1 ok2;
+  body3_char (if sign then 1 else 0) (fev (vals sx1)) (fev (vals sx2))
+             (fev (vals sxr)) vzero ok1 ok2 xzero xodd;
+  assert (pure (match E.recover_x (fev (vals vy)) (if sign then 1 else 0) with
+                | None -> ok == false
+                | Some x -> ok == true /\ felem (vals wx) /\
+                            fev (vals wx) == x));
+
+  S.to_array y2; S.to_array uu; S.to_array vv; S.to_array ww;
+  S.to_array xs; S.to_array k; S.to_array f1; S.to_array f2;
+  S.to_array f3; S.to_array tw;
+  ok
 }
 
 #pop-options
