@@ -48,6 +48,7 @@ module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
 module Declassify = Hacl.Secret.Declassify
 module UInt = FStar.UInt
+module Math = FStar.Math.Lemmas
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -296,6 +297,28 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
   Classical.move_requires (res_uniq (vals va')) (vals va);
   S.to_array c;
   r
+}
+
+(** The same subtraction used for its arithmetic rather than its answer: a
+    value below twice the modulus is brought below it. *)
+fn ared (a s nm: S.slice S64.t) (d: erased modulus)
+        (#va: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
+        (#pn: perm) (#vnm: erased (Seq.seq S64.t))
+requires S.pts_to a va ** S.pts_to s vs ** S.pts_to nm #pn vnm **
+  pure (modulus_ok d /\ Seq.length va == nl /\ Seq.length vs == nl /\
+        Seq.length vnm == nl /\ vals vnm == d.nm /\
+        bnd (vals va) base /\ pow2 256 < 2 * d.m)
+ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
+  S.pts_to a va' ** S.pts_to s vs' ** S.pts_to nm #pn vnm **
+  pure (Seq.length va' == nl /\ Seq.length vs' == nl /\
+        res d (vals va') /\ eval (vals va') == eval (vals va) % d.m)
+{
+  S.pts_to_len a;
+  ebnd (vals va);
+  csub_ok d (vals va) 0;
+  Classical.move_requires (Math.small_mod (eval (vals va))) d.m;
+  Math.lemma_mod_sub (eval (vals va)) d.m 1;
+  csub_op a s nm S64.zero d;
 }
 
 #pop-options
