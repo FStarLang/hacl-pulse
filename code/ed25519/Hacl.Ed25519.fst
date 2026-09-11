@@ -514,3 +514,226 @@ ensures exists* (vsg': Seq.seq S8.t).
 }
 
 #pop-options
+
+#push-options "--fuel 0 --ifuel 2 --z3rlimit 300"
+
+
+(** What verification decides, stated once so that the Pulse function does
+    not have to unfold the specification inside its own proof. *)
+
+(** [a] is already reduced exactly when it is small. *)
+let lt_char (a: nat) (n: pos) (oks: bool)
+  : Lemma (requires oks == (a = a % n)) (ensures oks == (a < n))
+  = Math.lemma_mod_lt a n;
+    if a < n then Math.modulo_lemma a n
+
+let verify_char (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
+                (sg: Seq.lseq S8.t 64) (aa rp: E.ext_point)
+                (s: nat { s < E.q }) (k: nat { k < E.q }) (res: bool)
+  : Lemma (requires
+             E.point_decompress pub == Some aa /\
+             E.point_decompress (Seq.slice sg 0 32) == Some rp /\
+             s == le_nat (Seq.slice sg 32 64) /\
+             k == E.sig_k (Seq.slice sg 0 32) pub msg /\
+             res == E.point_equal (E.point_mul_g (E.scalar_bytes s))
+                      (E.point_add rp (E.point_mul (E.scalar_bytes k) aa)))
+          (ensures E.verify pub msg sg == res)
+  = ()
+
+let verify_false (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
+                 (sg: Seq.lseq S8.t 64)
+  : Lemma (requires E.point_decompress pub == None \/
+                    E.point_decompress (Seq.slice sg 0 32) == None \/
+                    le_nat (Seq.slice sg 32 64) >= E.q)
+          (ensures E.verify pub msg sg == false)
+  = ()
+
+(** {2 Verification}
+
+    [[S]B = R + [k]A].  The three ways to fail -- an undecompressable
+    public key, an undecompressable [R], and an [S] at or above the group
+    order -- are all public, so they are ordinary booleans.  The last of
+    the three is what makes Ed25519 signatures non-malleable, and RFC 8032
+    requires it. *)
+
+fn verify (pub: S.slice S8.t) (msg: S.slice S8.t) (sg: S.slice S8.t)
+          (#ppub: perm) (#vpub: erased (Seq.lseq S8.t 32))
+          (#pm: perm) (#vm: erased (m: Seq.seq S8.t { E.msg_ok m }))
+          (#psg: perm) (#vsg: erased (Seq.lseq S8.t 64))
+requires S.pts_to pub #ppub vpub ** S.pts_to msg #pm vm ** S.pts_to sg #psg vsg **
+  pure (SZ.fits (64 + Seq.length vm))
+returns r: bool
+ensures S.pts_to pub #ppub vpub ** S.pts_to msg #pm vm ** S.pts_to sg #psg vsg **
+  pure (r == E.verify vpub vm vsg)
+{
+  S.pts_to_len pub; S.pts_to_len sg;
+  let z8 = S8.zero;
+  let zz = S64.zero;
+  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let rrb = S.from_array c1 32sz;
+  let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let sbb = S.from_array c2 32sz;
+  let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let sby = S.from_array c3 32sz;
+  let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let kb = S.from_array c4 32sz;
+  let mut c5 = [| z8; 64sz |]; A.pts_to_len c5; let h = S.from_array c5 64sz;
+  S.pts_to_len rrb; S.pts_to_len sbb; S.pts_to_len sby;
+  S.pts_to_len kb; S.pts_to_len h;
+
+  let mut d1 = [| zz; 16sz |]; A.pts_to_len d1; let ax = S.from_array d1 16sz;
+  let mut d2 = [| zz; 16sz |]; A.pts_to_len d2; let ay = S.from_array d2 16sz;
+  let mut d3 = [| zz; 16sz |]; A.pts_to_len d3; let az = S.from_array d3 16sz;
+  let mut d4 = [| zz; 16sz |]; A.pts_to_len d4; let at = S.from_array d4 16sz;
+  let mut d5 = [| zz; 16sz |]; A.pts_to_len d5; let rx = S.from_array d5 16sz;
+  let mut d6 = [| zz; 16sz |]; A.pts_to_len d6; let ry = S.from_array d6 16sz;
+  let mut d7 = [| zz; 16sz |]; A.pts_to_len d7; let rz = S.from_array d7 16sz;
+  let mut d8 = [| zz; 16sz |]; A.pts_to_len d8; let rt = S.from_array d8 16sz;
+  let mut d9 = [| zz; 16sz |]; A.pts_to_len d9; let kx = S.from_array d9 16sz;
+  let mut e1 = [| zz; 16sz |]; A.pts_to_len e1; let ky = S.from_array e1 16sz;
+  let mut e2 = [| zz; 16sz |]; A.pts_to_len e2; let kz = S.from_array e2 16sz;
+  let mut e3 = [| zz; 16sz |]; A.pts_to_len e3; let kt = S.from_array e3 16sz;
+  let mut e4 = [| zz; 16sz |]; A.pts_to_len e4; let ux = S.from_array e4 16sz;
+  let mut e5 = [| zz; 16sz |]; A.pts_to_len e5; let uy = S.from_array e5 16sz;
+  let mut e6 = [| zz; 16sz |]; A.pts_to_len e6; let uz = S.from_array e6 16sz;
+  let mut e7 = [| zz; 16sz |]; A.pts_to_len e7; let ut = S.from_array e7 16sz;
+  let mut e8 = [| zz; 16sz |]; A.pts_to_len e8; let vx = S.from_array e8 16sz;
+  let mut e9 = [| zz; 16sz |]; A.pts_to_len e9; let vy = S.from_array e9 16sz;
+  let mut f1 = [| zz; 16sz |]; A.pts_to_len f1; let vz = S.from_array f1 16sz;
+  let mut f2 = [| zz; 16sz |]; A.pts_to_len f2; let vt = S.from_array f2 16sz;
+  let mut f3 = [| zz; 16sz |]; A.pts_to_len f3; let sl = S.from_array f3 16sz;
+  let mut f4 = [| zz; 16sz |]; A.pts_to_len f4; let sr = S.from_array f4 16sz;
+  let mut f5 = [| zz; 16sz |]; A.pts_to_len f5; let acc = S.from_array f5 16sz;
+  let mut f6 = [| zz; 16sz |]; A.pts_to_len f6; let t1 = S.from_array f6 16sz;
+  let mut f7 = [| zz; 16sz |]; A.pts_to_len f7; let t2 = S.from_array f7 16sz;
+  S.pts_to_len ax; S.pts_to_len ay; S.pts_to_len az; S.pts_to_len at;
+  S.pts_to_len rx; S.pts_to_len ry; S.pts_to_len rz; S.pts_to_len rt;
+  S.pts_to_len kx; S.pts_to_len ky; S.pts_to_len kz; S.pts_to_len kt;
+  S.pts_to_len ux; S.pts_to_len uy; S.pts_to_len uz; S.pts_to_len ut;
+  S.pts_to_len vx; S.pts_to_len vy; S.pts_to_len vz; S.pts_to_len vt;
+  S.pts_to_len sl; S.pts_to_len sr; S.pts_to_len acc;
+  S.pts_to_len t1; S.pts_to_len t2;
+
+  (* The two halves of the signature, in their own buffers. *)
+  let g0 = S.subslice sg 0sz 32sz;
+  Hacl.Impl.Copy.copy_prefix rrb g0 32sz;
+  with vr0. assert (S.pts_to rrb vr0);
+  assert (pure (Seq.equal vr0 (Seq.slice (reveal vsg) 0 32)));
+  unfold S.subslice_rest;
+  S.join g0 _ _;
+  S.join _ _ sg;
+  with sg1. assert (S.pts_to sg #psg sg1);
+  S.pts_to_len sg;
+  assert (pure (Seq.equal sg1 vsg));
+
+  let g1 = S.subslice sg 32sz 64sz;
+  Hacl.Impl.Copy.copy_prefix sbb g1 32sz;
+  with vs0. assert (S.pts_to sbb vs0);
+  assert (pure (Seq.equal vs0 (Seq.slice (reveal vsg) 32 64)));
+  unfold S.subslice_rest;
+  S.join g1 _ _;
+  S.join _ _ sg;
+  with sg2. assert (S.pts_to sg #psg sg2);
+  S.pts_to_len sg;
+  assert (pure (Seq.equal sg2 vsg));
+
+  let oka = point_decompress ax ay az at pub;
+  let okr = point_decompress rx ry rz rt rrb;
+
+  (* [S] must be below the group order: reducing it has to be the
+     identity, which is exactly what comparing against the reduction
+     decides. *)
+  load sl sbb;
+  scalar_reduce32 sr t1 t2 sbb;
+  with vsl. assert (S.pts_to sl vsl);
+  with vsr. assert (S.pts_to sr vsr);
+  let oks = limbs_eq sl sr;
+  lt_char (le_nat vs0) Sc.q oks;
+  assert (pure (oks == (le_nat vs0 < Sc.q)));
+
+  assert (pure (Sc.q == E.q));
+
+  if ((oka && okr) && oks) {
+    with vax. assert (S.pts_to ax vax);
+    with vay. assert (S.pts_to ay vay);
+    with vaz. assert (S.pts_to az vaz);
+    with vat. assert (S.pts_to at vat);
+    with vrx. assert (S.pts_to rx vrx);
+    with vry. assert (S.pts_to ry vry);
+    with vrz. assert (S.pts_to rz vrz);
+    with vrt. assert (S.pts_to rt vrt);
+    store sby sl;
+    hash3 h rrb pub msg;
+    Scalar.reduce_op acc t1 t2 h;
+    store kb acc;
+    point_mul_g ux uy uz ut sby;
+    P.point_mul kx ky kz kt ax ay az at kb;
+    P.point_add vx vy vz vt rx ry rz rt kx ky kz kt;
+    with vacc. assert (S.pts_to acc vacc);
+    let r = point_equal ux uy uz ut vx vy vz vt;
+    verify_char vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
+                (le_nat vs0) (eval (vals vacc)) r;
+    S.to_array rrb;
+    S.to_array sbb;
+    S.to_array sby;
+    S.to_array kb;
+    S.to_array h;
+    S.to_array ax;
+    S.to_array ay;
+    S.to_array az;
+    S.to_array at;
+    S.to_array rx;
+    S.to_array ry;
+    S.to_array rz;
+    S.to_array rt;
+    S.to_array kx;
+    S.to_array ky;
+    S.to_array kz;
+    S.to_array kt;
+    S.to_array ux;
+    S.to_array uy;
+    S.to_array uz;
+    S.to_array ut;
+    S.to_array vx;
+    S.to_array vy;
+    S.to_array vz;
+    S.to_array vt;
+    S.to_array sl;
+    S.to_array sr;
+    S.to_array acc;
+    S.to_array t1;
+    S.to_array t2;
+    r
+  } else {
+    verify_false vpub vm vsg;
+    S.to_array rrb;
+    S.to_array sbb;
+    S.to_array sby;
+    S.to_array kb;
+    S.to_array h;
+    S.to_array ax;
+    S.to_array ay;
+    S.to_array az;
+    S.to_array at;
+    S.to_array rx;
+    S.to_array ry;
+    S.to_array rz;
+    S.to_array rt;
+    S.to_array kx;
+    S.to_array ky;
+    S.to_array kz;
+    S.to_array kt;
+    S.to_array ux;
+    S.to_array uy;
+    S.to_array uz;
+    S.to_array ut;
+    S.to_array vx;
+    S.to_array vy;
+    S.to_array vz;
+    S.to_array vt;
+    S.to_array sl;
+    S.to_array sr;
+    S.to_array acc;
+    S.to_array t1;
+    S.to_array t2;
+    false
+  }
+}
+
+#pop-options
