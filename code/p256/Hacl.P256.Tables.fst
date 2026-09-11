@@ -245,10 +245,33 @@ let qr2_arr : (a: G.static_array S64.t
     G.mk_static_array qr2_list
 
 
+(** One, for leaving Montgomery form. *)
+let one_list : list S64.t = [
+  S64.classify 1uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+]
+
+let one_arr : (a: G.static_array S64.t
+                  { vals (G.static_array_elems a) == limbs 1 })
+  = assert_norm (L.length one_list == nl);
+    assert_norm (lbnd one_list);
+    assert_norm (leval one_list == 1);
+    assert_norm (1 < pow2 256);
+    lit_limbs one_list 1;
+    G.mk_static_array one_list
+
 (** {2 Reading a table}
 
     Each is sixteen limbs, and the permission never comes back: these are
     [static const] arrays in the emitted C. *)
+
+inline_for_extraction
+fn mone () requires emp returns s: S.slice S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs 1)
+{ table one_arr 16sz }
 
 inline_for_extraction
 fn fms () requires emp returns s: S.slice S64.t

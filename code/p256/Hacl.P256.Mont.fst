@@ -1,0 +1,277 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** The modular operations, with their scratch.
+
+    [Hacl.P256.Bignum] allocates nothing: its workspace is eighty words and
+    it takes them as arguments, because that is the only way to prove
+    anything about a loop that reuses them.  Nobody wants to write that at a
+    call site, so each operation gets a wrapper here that declares the
+    scratch and drops it on return.  Eighty words of stack per multiply is
+    not a cost worth an interface for.
+
+    These are ordinary functions rather than [inline_for_extraction] ones,
+    and they still take the modulus as an argument: the field and the scalar
+    field share the code, and the emitted C has one [amul] rather than two.
+    Specialising the two moduli would buy the multiplier nothing -- the
+    limbs it reads are data either way -- and would double the object. *)
+module Hacl.P256.Mont
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+open Spec.Bignum256
+open Spec.Montgomery256
+open Spec.P256.Field
+open Hacl.Impl.Limb
+open Spec.P256.Mont
+open Hacl.P256.Bignum
+
+module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
+module Seq = FStar.Seq
+module SZ = FStar.SizeT
+module S64 = Hacl.Secret.UInt64
+module Cast = Hacl.Secret.Cast
+module Declassify = Hacl.Secret.Declassify
+module UInt = FStar.UInt
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+(** {2 Multiplication} *)
+
+fn amul (out a b ms nm: S.slice S64.t) (mu: S64.t) (d: erased modulus)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+        (#pm: perm) (#vms: erased (Seq.seq S64.t))
+        (#pn: perm) (#vnm: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+  pure (modulus_ok d /\ Seq.length vo == nl /\
+        Seq.length vms == nl /\ Seq.length vnm == nl /\
+        vals vms == d.ms /\ vals vnm == d.nm /\ S64.v mu == d.mu /\
+        res d (vals va) /\ res d (vals vb))
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+  pure (Seq.length vo' == nl /\ res d (vals vo') /\
+        vals vo' == mmul d (vals va) (vals vb))
+{
+  let z = S64.zero;
+  let mut ap = [| z; 31sz |]; A.pts_to_len ap; let p = S.from_array ap 31sz;
+  let mut at = [| z; 33sz |]; A.pts_to_len at; let t = S.from_array at 33sz;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
+  S.pts_to_len p; S.pts_to_len t; S.pts_to_len s;
+  assert_norm (nw == 31);
+  assert_norm (ncol == 33);
+  mmul_op out a b p t s ms nm mu d;
+  S.to_array p; S.to_array t; S.to_array s;
+}
+
+(** {2 Addition, subtraction and negation} *)
+
+fn aadd (out a b nm: S.slice S64.t) (d: erased modulus)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+        (#pn: perm) (#vnm: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to nm #pn vnm **
+  pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length vnm == nl /\
+        vals vnm == d.nm /\ res d (vals va) /\ res d (vals vb))
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to nm #pn vnm **
+  pure (Seq.length vo' == nl /\ res d (vals vo') /\
+        vals vo' == madd d (vals va) (vals vb))
+{
+  let z = S64.zero;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
+  S.pts_to_len s;
+  madd_op out a b s nm d;
+  S.to_array s;
+}
+
+fn asub (out a b ms: S.slice S64.t) (d: erased modulus)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+        (#pm: perm) (#vms: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to ms #pm vms **
+  pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length vms == nl /\
+        vals vms == d.ms /\ res d (vals va) /\ res d (vals vb))
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to ms #pm vms **
+  pure (Seq.length vo' == nl /\ res d (vals vo') /\
+        vals vo' == msub d (vals va) (vals vb))
+{
+  let z = S64.zero;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
+  S.pts_to_len s;
+  msub_op out a b s ms d;
+  S.to_array s;
+}
+
+(** Negation is a subtraction from a stack-allocated zero, which the
+    allocation already gives. *)
+fn aneg (out a ms: S.slice S64.t) (d: erased modulus)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pm: perm) (#vms: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to ms #pm vms **
+  pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length vms == nl /\
+        vals vms == d.ms /\ res d (vals va))
+ensures exists* (vo': Seq.seq S64.t).
+  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to ms #pm vms **
+  pure (Seq.length vo' == nl /\ res d (vals vo') /\
+        vals vo' == mneg d (vals va))
+{
+  let z = S64.zero;
+  let mut az = [| z; 16sz |]; A.pts_to_len az; let zs = S.from_array az 16sz;
+  S.pts_to_len zs;
+  with vz. assert (S.pts_to zs vz);
+  Seq.lemma_eq_intro (vals vz) mzero;
+  mzero_ok ();
+  asub out zs a ms d;
+  S.to_array zs;
+}
+
+(** {2 Copying} *)
+
+fn acopy (dst src: S.slice S64.t)
+         (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
+requires S.pts_to dst vd ** S.pts_to src #ps vs **
+  pure (Seq.length vd == nl /\ Seq.length vs == nl)
+ensures exists* (vd': Seq.seq S64.t).
+  S.pts_to dst vd' ** S.pts_to src #ps vs **
+  pure (Seq.length vd' == nl /\ vd' == reveal vs)
+{
+  S.pts_to_len dst;
+  S.pts_to_len src;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** S.pts_to dst v ** S.pts_to src #ps vs **
+    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+          (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = S.(src.(vi));
+    S.((dst.(vi) <- x));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (S.pts_to dst v);
+  assert (pure (Seq.length v == nl /\
+                (forall (k: nat). k < nl ==> Seq.index v k == Seq.index vs k)));
+  Seq.lemma_eq_intro v vs;
+  ()
+}
+
+(** {2 Comparison}
+
+    The limbs are canonical, so a difference in any of them is a difference
+    in the value.  The mask is folded rather than branched on, and only the
+    final answer -- which is public in every caller -- is declassified. *)
+
+#push-options "--z3rlimit 200"
+
+fn aeq (a b: S.slice S64.t)
+       (#pa: perm) (#va: erased (Seq.seq S64.t))
+       (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (Seq.length va == nl /\ Seq.length vb == nl /\
+        bnd (vals va) base /\ bnd (vals vb) base)
+returns r: bool
+ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (r == (eval (vals va) = eval (vals vb)))
+{
+  S.pts_to_len a; S.pts_to_len b;
+  let mut m = S64.ones;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (mm: S64.t).
+    pts_to i vi ** pts_to m mm ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pure (SZ.v vi <= 16 /\
+          (if (forall (k: nat). k < SZ.v vi ==>
+                 Seq.index (vals va) k == Seq.index (vals vb) k)
+           then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
+  decreases (16 - SZ.v (!i))
+  {
+    let vi = !i;
+    let mm = !m;
+    let xa = S.(a.(vi));
+    let xb = S.(b.(vi));
+    let e = S64.eq_mask xa xb;
+    UInt.logand_lemma_1 #64 (S64.v e);
+    UInt.logand_lemma_2 #64 (S64.v e);
+    UInt.logand_commutative #64 (S64.v mm) (S64.v e);
+    m := S64.logand mm e;
+    i := SZ.add vi 1sz;
+  };
+  let mm = !m;
+  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+  let m8 = Cast.u64_to_u8 mm;
+  let r = Declassify.bool_of_mask m8;
+  Classical.move_requires (Seq.lemma_eq_intro (vals va)) (vals vb);
+  Classical.move_requires (res_uniq (vals va)) (vals vb);
+  r
+}
+
+#pop-options
+
+(** {2 Range check}
+
+    A decoder gets thirty-two bytes and has to say whether they are below
+    the modulus.  The conditional subtraction already answers that: it
+    changes the value exactly when the value was too large. *)
+
+#push-options "--z3rlimit 200"
+
+fn abelow (a s nm: S.slice S64.t) (d: erased modulus)
+          (#va: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
+          (#pn: perm) (#vnm: erased (Seq.seq S64.t))
+requires S.pts_to a va ** S.pts_to s vs ** S.pts_to nm #pn vnm **
+  pure (modulus_ok d /\ Seq.length va == nl /\ Seq.length vs == nl /\
+        Seq.length vnm == nl /\ vals vnm == d.nm /\
+        bnd (vals va) base /\ pow2 256 < 2 * d.m)
+returns r: bool
+ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
+  S.pts_to a va' ** S.pts_to s vs' ** S.pts_to nm #pn vnm **
+  pure (Seq.length va' == nl /\ Seq.length vs' == nl /\
+        res d (vals va') /\ r == (eval (vals va) < d.m) /\
+        (r ==> vals va' == reveal (vals va)))
+{
+  S.pts_to_len a;
+  let z = S64.zero;
+  let mut ac = [| z; 16sz |]; A.pts_to_len ac; let c = S.from_array ac 16sz;
+  S.pts_to_len c;
+  acopy c a;
+  ebnd (vals va);
+  csub_op a s nm S64.zero d;
+  csub_eq d (vals va);
+  with va'. assert (S.pts_to a va');
+  let r = aeq a c;
+  Classical.move_requires (res_uniq (vals va')) (vals va);
+  S.to_array c;
+  r
+}
+
+#pop-options
+#pop-options

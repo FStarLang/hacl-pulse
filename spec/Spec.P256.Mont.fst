@@ -157,4 +157,118 @@ let mform_neg (d: modulus) (x: MA.elem d.m) (a: Seq.seq nat)
   = mform_zero d;
     mform_sub d (MA.zero #d.m) x mzero a
 
+(** {2 The value a residue holds}
+
+    [mform] is a relation, and a relation makes a poor postcondition: the
+    implementation would have to carry the number as a ghost argument
+    through every operation.  It is in fact a function -- multiplication by
+    [R] is injective -- and [mev] is that function, written with the same
+    [ri] that [rcancel] uses.  The two lemmas below say the relation and
+    the function agree, and after them the interface is
+    [mev d (mmul d a b) == mul (mev d a) (mev d b)] and its three
+    companions: no ghost arguments anywhere. *)
+
+let mev (d: modulus) (s: Seq.seq nat) : GTot (MA.elem d.m) =
+  eval s * d.ri % d.m
+
+let mev_form (d: modulus) (s: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d s) (ensures mform d (mev d s) s)
+  = let u = eval s in
+    rcancel1 d u;
+    Math.swap_mul (pow2 256) u;
+    Math.paren_mul_right u (pow2 256) d.ri;
+    Math.swap_mul (pow2 256) d.ri;
+    Math.paren_mul_right u d.ri (pow2 256);
+    Math.lemma_mod_mul_distr_l (u * d.ri) (pow2 256) d.m;
+    Math.small_mod u d.m
+
+let mev_uniq (d: modulus) (x: MA.elem d.m) (s: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ mform d x s) (ensures mev d s == x)
+  = rcancel1 d x;
+    Math.lemma_mod_mul_distr_l (pow2 256 * x) d.ri d.m;
+    Math.small_mod x d.m
+
+(** {2 The interface} *)
+
+let mev_mul (d: modulus) (a b: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a /\ res d b)
+          (ensures res d (mmul d a b) /\
+                   mev d (mmul d a b) == MA.mul (mev d a) (mev d b))
+  = mev_form d a; mev_form d b;
+    mform_mul d (mev d a) (mev d b) a b;
+    mev_uniq d (MA.mul (mev d a) (mev d b)) (mmul d a b)
+
+let mev_add (d: modulus) (a b: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a /\ res d b)
+          (ensures res d (madd d a b) /\
+                   mev d (madd d a b) == MA.add (mev d a) (mev d b))
+  = mev_form d a; mev_form d b;
+    mform_add d (mev d a) (mev d b) a b;
+    mev_uniq d (MA.add (mev d a) (mev d b)) (madd d a b)
+
+let mev_sub (d: modulus) (a b: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a /\ res d b)
+          (ensures res d (msub d a b) /\
+                   mev d (msub d a b) == MA.sub (mev d a) (mev d b))
+  = mev_form d a; mev_form d b;
+    mform_sub d (mev d a) (mev d b) a b;
+    mev_uniq d (MA.sub (mev d a) (mev d b)) (msub d a b)
+
+let mev_neg (d: modulus) (a: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a)
+          (ensures res d (mneg d a) /\ mev d (mneg d a) == MA.neg (mev d a))
+  = mev_form d a;
+    mform_neg d (mev d a) a;
+    mev_uniq d (MA.neg (mev d a)) (mneg d a)
+
+(** Entering: the plain number [eval a] comes out as the value held. *)
+let mev_to (d: modulus) (a: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a)
+          (ensures res d (mmul d a d.r2) /\ mev d (mmul d a d.r2) == eval a)
+  = to_mont d a;
+    mmul_ok d a d.r2;
+    mev_uniq d (eval a) (mmul d a d.r2)
+
+(** Leaving: the value held comes out as a plain number. *)
+let mev_of (d: modulus) (a: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a)
+          (ensures res d (mmul d a mone) /\ eval (mmul d a mone) == mev d a)
+  = mev_form d a;
+    of_mont d (mev d a) a
+
+let mev_zero (d: modulus)
+  : Lemma (requires modulus_ok d)
+          (ensures res d mzero /\ mev d mzero == MA.zero #d.m)
+  = mform_zero d; mev_uniq d (MA.zero #d.m) mzero
+
+let mev_one (d: modulus)
+  : Lemma (requires modulus_ok d)
+          (ensures res d d.r1 /\ mev d d.r1 == MA.one #d.m)
+  = mform_one d; mev_uniq d (MA.one #d.m) d.r1
+
+(** {2 Canonical limbs}
+
+    Everything here is fully reduced, so equality of residues is equality of
+    sequences, and a comparison need not normalise first.  [eval_digit] is
+    the whole argument: a proper limb is a digit of the value. *)
+
+let res_uniq (a b: Seq.seq nat)
+  : Lemma (requires Seq.length a == nl /\ Seq.length b == nl /\
+                    bnd a base /\ bnd b base /\ eval a == eval b)
+          (ensures a == b)
+  = let aux (k: nat { k < nl }) : Lemma (Seq.index a k == Seq.index b k)
+      = eval_digit a k; eval_digit b k in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro a b
+
+(** Reducing a value that is already below the modulus does nothing, and
+    reducing one that is not changes it: so the conditional subtraction is
+    itself the range check a decoder needs. *)
+let csub_eq (d: modulus) (a: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ Seq.length a == nl /\ bnd a base /\
+                    eval a < 2 * d.m)
+          (ensures res d (csub d a 0) /\
+                   (eval (csub d a 0) == eval a <==> eval a < d.m))
+  = csub_ok d a 0
+
 #pop-options
