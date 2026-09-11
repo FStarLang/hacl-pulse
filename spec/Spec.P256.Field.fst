@@ -20,8 +20,8 @@
     this module is the operations built on it -- addition, subtraction,
     negation, multiplication, and the byte conversions -- stated once over a
     general modulus so that P-256's field prime and its group order are two
-    instances of the same code.  [Spec.P256.Constants] supplies the two
-    constant bundles.
+    instances of the same code, [fmod] and [qmod], at the bottom of the
+    file.
 
     {b The representation.}  A residue [x] is stored as the sixteen proper
     limbs of [x R mod m], where [R = 2^256].  [mmul] computes
@@ -53,6 +53,7 @@ open Hacl.Spec.Bytes
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+module P = Spec.P256
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 50"
 
@@ -86,6 +87,84 @@ let res (d: modulus) (s: Seq.seq nat) : prop =
 (** [s] represents [x] in Montgomery form. *)
 let mform (d: modulus) (x: nat) (s: Seq.seq nat) : prop =
   res d s /\ eval s == x * pow2 256 % d.m
+
+(** {2 Building a modulus bundle from its number}
+
+    Rather than write five sequences of sixteen literals per modulus and
+    prove each one's [eval], the limbs are read off the number itself.  The
+    implementation will of course carry the literals; the specification
+    only has to say what they mean. *)
+
+let limbs_n (x: nat) (n: nat) : Seq.seq nat =
+  Seq.init #nat n (fun i -> x / pow2 (rad * i) % base)
+
+let rec limbs_n_eval (x: nat) (n: nat)
+  : Lemma (ensures Seq.length (limbs_n x n) == n /\ bnd (limbs_n x n) base /\
+                   eval (limbs_n x n) == x % pow2 (rad * n))
+          (decreases n)
+  = if n = 0 then ()
+    else begin
+      limbs_n_eval (x / base) (n - 1);
+      let t = Seq.slice (limbs_n x n) 1 n in
+      let aux (i: nat { i < n - 1 })
+        : Lemma (Seq.index t i == Seq.index (limbs_n (x / base) (n - 1)) i)
+        = Math.pow2_plus rad (rad * i);
+          Math.division_multiplication_lemma x base (pow2 (rad * i)) in
+      Classical.forall_intro aux;
+      Seq.lemma_eq_intro t (limbs_n (x / base) (n - 1));
+      Math.pow2_plus rad (rad * (n - 1));
+      Math.modulo_division_lemma x base (pow2 (rad * (n - 1)));
+      Math.euclidean_division_definition (x % pow2 (rad * n)) base;
+      Math.pow2_modulo_modulo_lemma_1 x rad (rad * n)
+    end
+
+let limbs (x: nat) : Seq.seq nat = limbs_n x nl
+
+let limbs_ok (x: nat)
+  : Lemma (requires x < pow2 256)
+          (ensures Seq.length (limbs x) == nl /\ bnd (limbs x) base /\
+                   eval (limbs x) == x)
+  = limbs_n_eval x nl;
+    assert_norm (rad * nl == 256);
+    Math.small_mod x (pow2 256)
+
+(** A modulus bundle is determined by three numbers: the modulus, the
+    Montgomery constant, and a witness for [R]'s inverse. *)
+let mk (m: pos { m < pow2 256 }) (mu ri: nat) : modulus = {
+  m = m;
+  ms = limbs m;
+  nm = limbs (pow2 256 - m);
+  r1 = limbs (pow2 256 % m);
+  r2 = limbs (pow2 256 * pow2 256 % m);
+  mu = mu;
+  ri = ri;
+}
+
+(** The bottom limb, which is what the Montgomery constant is chosen
+    against. *)
+let limbs_head (x: nat)
+  : Lemma (Seq.length (limbs x) == nl /\ Seq.index (limbs x) 0 == x % base)
+  = Seq.init_index_ nl (fun i -> x / pow2 (rad * i) % base) 0;
+    assert_norm (pow2 (rad * 0) == 1)
+
+let mk_mont (m: pos { m < pow2 256 }) (mu ri: nat)
+  : Lemma (requires 1 < m /\ mu < base /\ ((m % base) * mu + 1) % base == 0)
+          (ensures mont_ok (mk m mu ri).ms mu)
+  = limbs_ok m;
+    limbs_head m
+
+let mk_ok (m: pos { m < pow2 256 }) (mu ri: nat)
+  : Lemma (requires 1 < m /\ mu < base /\
+                    ((m % base) * mu + 1) % base == 0 /\
+                    pow2 256 * ri % m == 1)
+          (ensures modulus_ok (mk m mu ri))
+  = mk_mont m mu ri;
+    limbs_ok m;
+    limbs_ok (pow2 256 - m);
+    Math.lemma_mod_lt (pow2 256) m;
+    limbs_ok (pow2 256 % m);
+    Math.lemma_mod_lt (pow2 256 * pow2 256) m;
+    limbs_ok (pow2 256 * pow2 256 % m)
 
 (** {2 The conditional subtraction}
 
@@ -515,5 +594,44 @@ let store_be_ok (s: Seq.seq nat) (b: Seq.seq S8.t)
       S8.v_extensional (Seq.index b i) (Seq.index (nat_to_be 32 v) i) in
     Classical.forall_intro aux;
     Seq.lemma_eq_intro b (nat_to_be 32 v)
+
+(** {2 The two instances}
+
+    [mu] is [-m^-1 mod 2^16] and [ri] is [R^-1 mod m]; both are checked by
+    normalisation, which is the only place in the module where the moduli
+    appear as numbers at all.  The field prime's [mu] is [1], a small gift
+    from its Solinas shape -- the only one this representation collects. *)
+
+let fmod : modulus =
+  assert_norm (P.prime < pow2 256);
+  mk P.prime 1
+     0xfffffffe00000003fffffffd0000000200000001fffffffe0000000300000000
+
+let fmod_ok (_: unit) : Lemma (modulus_ok fmod) =
+  assert_norm (P.prime < pow2 256);
+  assert_norm (1 < P.prime);
+  assert_norm (1 < pow2 rad);
+  assert_norm (((P.prime % pow2 rad) * 1 + 1) % pow2 rad == 0);
+  assert_norm (pow2 256 *
+    0xfffffffe00000003fffffffd0000000200000001fffffffe0000000300000000
+    % P.prime == 1);
+  mk_ok P.prime 1
+    0xfffffffe00000003fffffffd0000000200000001fffffffe0000000300000000
+
+let qmod : modulus =
+  assert_norm (P.order < pow2 256);
+  mk P.order 48207
+     0x60d066334905c1e907f8b6041e607725badef3e243566fafce1bc8f79c197c79
+
+let qmod_ok (_: unit) : Lemma (modulus_ok qmod) =
+  assert_norm (P.order < pow2 256);
+  assert_norm (1 < P.order);
+  assert_norm (48207 < pow2 rad);
+  assert_norm (((P.order % pow2 rad) * 48207 + 1) % pow2 rad == 0);
+  assert_norm (pow2 256 *
+    0x60d066334905c1e907f8b6041e607725badef3e243566fafce1bc8f79c197c79
+    % P.order == 1);
+  mk_ok P.order 48207
+    0x60d066334905c1e907f8b6041e607725badef3e243566fafce1bc8f79c197c79
 
 #pop-options
