@@ -246,6 +246,19 @@ let mev_one (d: modulus)
           (ensures res d d.r1 /\ mev d d.r1 == MA.one #d.m)
   = mform_one d; mev_uniq d (MA.one #d.m) d.r1
 
+(** Zero and equality are visible on the representation without leaving it:
+    multiplication by [R] fixes zero and is injective. *)
+
+let mev_iszero (d: modulus) (a: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a)
+          (ensures (mev d a == MA.zero #d.m <==> eval a == 0))
+  = mev_form d a
+
+let mev_eq (d: modulus) (a b: Seq.seq nat)
+  : Lemma (requires modulus_ok d /\ res d a /\ res d b)
+          (ensures (mev d a == mev d b <==> eval a == eval b))
+  = mev_form d a; mev_form d b
+
 (** {2 Canonical limbs}
 
     Everything here is fully reduced, so equality of residues is equality of
