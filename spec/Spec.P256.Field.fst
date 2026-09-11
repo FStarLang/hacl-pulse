@@ -54,6 +54,7 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module P = Spec.P256
+module Loops = Hacl.Spec.Loops
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 50"
 
@@ -266,6 +267,64 @@ let normalize_ok (s: Seq.seq nat { Seq.length s == nl + 1 }) (c: nat)
     assert_norm (rad * nl == 256);
     assert_norm (pow2 257 == pow2 256 * 2);
     if vat r nl >= 2 then Math.lemma_mult_le_left (pow2 256) 2 (vat r nl)
+
+(** {3 Splitting the normalisation}
+
+    The implementation keeps the sixteen limbs and the top column in
+    separate buffers, so it runs the pass on the sixteen and adds the
+    overflow to the seventeenth by hand.  That is the same computation:
+    steps [0] to [14] never look above limb [15], and step [15] is exactly
+    the split that [carry_low] and [carry_out] perform. *)
+
+let carry_runr (s: Seq.seq nat) (k: nat)
+  : (r: Seq.seq nat { Seq.length r == Seq.length s /\ r == carry_run s k })
+  = carry_run_len s k; carry_run s k
+
+let rec carry_run_prefix (s: Seq.seq nat) (n: nat) (k: nat)
+  : Lemma (requires n <= Seq.length s /\ k < n)
+          (ensures Seq.slice (carry_runr s k) 0 n == carry_runr (Seq.slice s 0 n) k)
+          (decreases k)
+  = carry_run_len s k;
+    carry_run_len (Seq.slice s 0 n) k;
+    if k = 0 then Seq.lemma_eq_intro (Seq.slice (carry_run s 0) 0 n)
+                                     (carry_run (Seq.slice s 0 n) 0)
+    else begin
+      carry_run_prefix s n (k - 1);
+      carry_run_len s (k - 1);
+      carry_run_len (Seq.slice s 0 n) (k - 1);
+      Loops.unfold_repeati k carry_step s;
+      Loops.unfold_repeati k carry_step (Seq.slice s 0 n);
+      Seq.lemma_eq_intro
+        (Seq.slice (carry_step (k - 1) (carry_run s (k - 1))) 0 n)
+        (carry_step (k - 1) (Seq.slice (carry_run s (k - 1)) 0 n))
+    end
+
+let rec carry_run_above (s: Seq.seq nat) (k: nat) (i: nat)
+  : Lemma (requires k < i /\ i < Seq.length s)
+          (ensures vat (carry_run s k) i == vat s i)
+          (decreases k)
+  = carry_run_len s k;
+    if k = 0 then ()
+    else begin
+      carry_run_above s (k - 1) i;
+      carry_run_len s (k - 1);
+      Loops.unfold_repeati k carry_step s
+    end
+
+let normalize_split (s: Seq.seq nat { Seq.length s == nl + 1 })
+  : Lemma (Seq.slice (normalize s) 0 nl == carry_low (Seq.slice s 0 nl) /\
+           vat (normalize s) nl ==
+             vat s nl + carry_out (Seq.slice s 0 nl))
+  = let p = Seq.slice s 0 nl in
+    carry_run_len s nl;
+    carry_run_len s (nl - 1);
+    carry_run_len p (nl - 1);
+    carry_run_prefix s nl (nl - 1);
+    carry_run_above s (nl - 1) nl;
+    Loops.unfold_repeati nl carry_step s;
+    let r = carry_run s (nl - 1) in
+    Seq.lemma_eq_intro (Seq.slice (carry_step (nl - 1) r) 0 nl)
+                       (carry_low p)
 
 (** {2 Multiplication} *)
 
