@@ -51,14 +51,21 @@ module P = Spec.P256
     coefficient [-3] is the one place in this library where it has to be
     written down, the addition formulas having folded it away. *)
 
-fn is_on_curve (x y: S.slice S64.t)
-               (#px: perm) (#vx: erased (Seq.seq S64.t))
-               (#py: perm) (#vy: erased (Seq.seq S64.t))
-requires S.pts_to x #px vx ** S.pts_to y #py vy ** pure (felem vx /\ felem vy)
-returns r: bool
-ensures S.pts_to x #px vx ** S.pts_to y #py vy **
-  pure (r == P.is_on_curve (fev vx) (fev vy))
+(** The right-hand side, [x^3 - 3x + b].  [compressed_to_raw] needs the
+    value and not just the test, so it is written once here. *)
+let rhs_of (x: P.felem) : P.felem =
+  P.fadd (P.fsub (P.fmul (P.fmul x x) x) (P.fmul three_f x)) P.b_coeff
+
+fn curve_rhs (out: S.slice S64.t) (x: S.slice S64.t)
+             (#vo: erased (Seq.seq S64.t))
+             (#px: perm) (#vx: erased (Seq.seq S64.t))
+requires S.pts_to out vo ** S.pts_to x #px vx **
+  pure (Seq.length vo == nl /\ felem vx)
+ensures exists* (wo: Seq.seq S64.t).
+  S.pts_to out wo ** S.pts_to x #px vx **
+  pure (felem wo /\ fev wo == rhs_of (fev vx))
 {
+  S.pts_to_len out;
   let z = S64.zero;
   let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let t0 = S.from_array a0 16sz;
   let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let t1 = S.from_array a1 16sz;
@@ -72,12 +79,30 @@ ensures S.pts_to x #px vx ** S.pts_to y #py vy **
   drop_table th;
   fsub t0 t1 t2;
   let bs = fb ();
-  fadd t1 t0 bs;
+  fadd out t0 bs;
   drop_table bs;
+
+  S.to_array t0; S.to_array t1; S.to_array t2;
+}
+
+fn is_on_curve (x y: S.slice S64.t)
+               (#px: perm) (#vx: erased (Seq.seq S64.t))
+               (#py: perm) (#vy: erased (Seq.seq S64.t))
+requires S.pts_to x #px vx ** S.pts_to y #py vy ** pure (felem vx /\ felem vy)
+returns r: bool
+ensures S.pts_to x #px vx ** S.pts_to y #py vy **
+  pure (r == P.is_on_curve (fev vx) (fev vy))
+{
+  let z = S64.zero;
+  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let t0 = S.from_array a0 16sz;
+  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let t1 = S.from_array a1 16sz;
+  S.pts_to_len t0; S.pts_to_len t1;
+
+  curve_rhs t1 x;
   fsqr t0 y;
   let r = feq t0 t1;
 
-  S.to_array t0; S.to_array t1; S.to_array t2;
+  S.to_array t0; S.to_array t1;
   r
 }
 

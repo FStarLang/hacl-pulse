@@ -152,6 +152,7 @@ let is_on_curve (x y: felem) : bool =
     intermediate names are the paper's, kept verbatim so that the listing
     can be checked line by line against it, which is worth more than
     readable names for a formula nobody reads for meaning. *)
+[@@ "opaque_to_smt"]
 let point_add (p q: proj_point) : proj_point =
   let (x1, y1, z1) = p in
   let (x2, y2, z2) = q in
@@ -203,6 +204,7 @@ let point_add (p q: proj_point) : proj_point =
 (** Algorithm 6 of the same paper: doubling, again for [a = -3].  Eight
     multiplications instead of fourteen, which is worth having because a
     double-and-add loop is 256 doublings and 256 additions. *)
+[@@ "opaque_to_smt"]
 let point_double (p: proj_point) : proj_point =
   let (x, y, z) = p in
   let t0 = fmul x x in
