@@ -74,6 +74,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   pure (pt_ok wx wy wz /\
         pt wx wy wz == P.point_add (pt vx1 vy1 vz1) (pt vx2 vy2 vz2))
 {
+  reveal_opaque (`%P.point_add) P.point_add;
   S.pts_to_len ox; S.pts_to_len oy; S.pts_to_len oz;
   let z = S64.zero;
   let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let t0 = S.from_array a0 16sz;
@@ -174,6 +175,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   S.pts_to x #p1 vx ** S.pts_to y #p1 vy ** S.pts_to z #p1 vz **
   pure (pt_ok wx wy wz /\ pt wx wy wz == P.point_double (pt vx vy vz))
 {
+  reveal_opaque (`%P.point_double) P.point_double;
   S.pts_to_len ox; S.pts_to_len oy; S.pts_to_len oz;
   let zz = S64.zero;
   let mut a0 = [| zz; 16sz |]; A.pts_to_len a0; let t0 = S.from_array a0 16sz;
