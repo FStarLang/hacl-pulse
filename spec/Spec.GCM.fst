@@ -153,6 +153,72 @@ let gtag (v: variant) (w: Seq.lseq elem (xkeylen v)) (jj: G.block)
          (ensures fun _ -> True)
   = G.gadd (cipher v w jj) (G.ghash (hkey v w) (tag_input a c))
 
+(** {2 GHASH without the concatenation}
+
+    [tag_input] is a sequence no implementation can build: it is three pieces
+    long and one of them is padding.  What an implementation does instead is
+    fold, with [Spec.GF128.ghash_upd], over the whole blocks of the associated
+    data, then a zero-padded final block, then the same for the ciphertext,
+    then the length block.  The lemmas below are what license that. *)
+
+(** The whole blocks of [s], and the partial one padded out to a block. *)
+
+let whole (s: Seq.seq elem) : (r: Seq.seq elem { Seq.length r % blocklen == 0 }) =
+  Math.lemma_mult_le_right blocklen (G.nblocks s) (Seq.length s);
+  Math.multiple_division_lemma (G.nblocks s) blocklen;
+  Math.multiple_modulo_lemma (G.nblocks s) blocklen;
+  Seq.slice s 0 (G.nblocks s * blocklen)
+
+let tail_block (s: Seq.seq elem { Seq.length s % blocklen <> 0 })
+  : Seq.lseq elem blocklen =
+  Math.lemma_mult_le_right blocklen (G.nblocks s) (Seq.length s);
+  Math.euclidean_division_definition (Seq.length s) blocklen;
+  let r = Seq.append (Seq.slice s (G.nblocks s * blocklen) (Seq.length s))
+                     (Seq.create (padlen (Seq.length s)) 0) in
+  Seq.lemma_len_append (Seq.slice s (G.nblocks s * blocklen) (Seq.length s))
+                       (Seq.create (padlen (Seq.length s)) 0);
+  r
+
+let pad_split (s: Seq.seq elem)
+  : Lemma (pad s == (if Seq.length s % blocklen = 0
+                     then whole s
+                     else Seq.append (whole s) (tail_block s)))
+  = Math.lemma_mult_le_right blocklen (G.nblocks s) (Seq.length s);
+    Math.euclidean_division_definition (Seq.length s) blocklen;
+    if Seq.length s % blocklen = 0 then begin
+      Math.multiple_division_lemma (G.nblocks s) blocklen;
+      Seq.lemma_eq_intro (pad s) (whole s)
+    end else
+      Seq.lemma_eq_intro (pad s) (Seq.append (whole s) (tail_block s))
+
+(** Folding the padding of [s] is folding its whole blocks and then, if there
+    is one, its padded final block. *)
+let ghash_pad (h acc: G.block) (s: Seq.seq elem)
+  : Lemma (G.ghash_upd h acc (pad s) ==
+             (let a1 = G.ghash_upd h acc (whole s) in
+              if Seq.length s % blocklen = 0 then a1
+              else G.ghash_upd h a1 (tail_block s)))
+  = pad_split s;
+    if Seq.length s % blocklen = 0 then ()
+    else G.ghash_upd_append h acc (whole s) (tail_block s)
+
+(** And the tag is three folds. *)
+let gtag_fold (v: variant) (w: Seq.lseq elem (xkeylen v)) (jj: G.block)
+              (a c: Seq.seq elem)
+  : Lemma (requires aad_ok a /\ Seq.length c <= max_msg)
+          (ensures (let h = hkey v w in
+                    let acc = G.ghash_upd h (G.ghash_upd h
+                                (G.ghash_upd h G.zero (pad a)) (pad c))
+                                (len_block a c) in
+                    gtag v w jj a c == G.gadd (cipher v w jj) acc))
+  = let h = hkey v w in
+    let t = Seq.append (pad c) (len_block a c) in
+    Seq.lemma_len_append (pad c) (len_block a c);
+    ghash_input_mod (Seq.length (pad c)) blocklen;
+    G.ghash_is_upd h (tag_input a c);
+    G.ghash_upd_append h G.zero (pad a) t;
+    G.ghash_upd_append h (G.ghash_upd h G.zero (pad a)) (pad c) (len_block a c)
+
 (** {2 The two directions} *)
 
 let gcm_encrypt (v: variant) (key: Seq.lseq elem (keylen v))

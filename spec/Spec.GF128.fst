@@ -124,3 +124,112 @@ let rec ghash_acc (h: block) (data: Seq.seq elem { Seq.length data % blocklen ==
 
 let ghash (h: block) (data: Seq.seq elem { Seq.length data % blocklen == 0 })
   : block = ghash_acc h data (nblocks data)
+
+(** {2 GHASH as a fold}
+
+    An implementation cannot materialise the concatenation GCM hashes: the
+    padded associated data, the padded ciphertext and the length block live in
+    three different places, and the padding lives nowhere at all.  So GHASH is
+    restated here as a fold over an explicit accumulator, [ghash_upd], with
+    the one law an implementation needs -- hashing a concatenation is hashing
+    one part and then the other.  The driver then calls it once per piece and
+    never builds the concatenation. *)
+
+let rec ghash_from (h: block) (acc: block)
+                   (data: Seq.seq elem { Seq.length data % blocklen == 0 })
+                   (i: nat { i <= nblocks data })
+  : Tot block (decreases i) =
+  if i = 0 then acc
+  else begin
+    Math.lemma_mult_le_right blocklen i (nblocks data);
+    Math.multiple_division_lemma (nblocks data) blocklen;
+    gmul (gadd (ghash_from h acc data (i - 1)) (blk data (i - 1))) h
+  end
+
+(** Fold the whole of [data] into [acc]. *)
+let ghash_upd (h: block) (acc: block)
+              (data: Seq.seq elem { Seq.length data % blocklen == 0 })
+  : block = ghash_from h acc data (nblocks data)
+
+let rec ghash_from_zero (h: block)
+                        (data: Seq.seq elem { Seq.length data % blocklen == 0 })
+                        (i: nat { i <= nblocks data })
+  : Lemma (ensures ghash_from h zero data i == ghash_acc h data i) (decreases i)
+  = if i = 0 then () else ghash_from_zero h data (i - 1)
+
+let ghash_is_upd (h: block) (data: Seq.seq elem { Seq.length data % blocklen == 0 })
+  : Lemma (ghash h data == ghash_upd h zero data)
+  = ghash_from_zero h data (nblocks data)
+
+(** {3 The concatenation law} *)
+
+let nblocks_append (d1 d2: Seq.seq elem)
+  : Lemma (requires Seq.length d1 % blocklen == 0 /\ Seq.length d2 % blocklen == 0)
+          (ensures Seq.length (Seq.append d1 d2) % blocklen == 0 /\
+                   nblocks (Seq.append d1 d2) == nblocks d1 + nblocks d2)
+  = Seq.lemma_len_append d1 d2;
+    Math.modulo_distributivity (Seq.length d1) (Seq.length d2) blocklen;
+    Math.lemma_div_exact (Seq.length d1) blocklen;
+    Math.lemma_div_exact (Seq.length d2) blocklen;
+    Math.division_addition_lemma (Seq.length d2) blocklen (nblocks d1)
+
+let blk_append_left (d1 d2: Seq.seq elem)
+                    (k: nat { (k + 1) * blocklen <= Seq.length d1 })
+  : Lemma ((k + 1) * blocklen <= Seq.length (Seq.append d1 d2) /\
+           blk (Seq.append d1 d2) k == blk d1 k)
+  = Seq.lemma_len_append d1 d2;
+    Math.lemma_mult_le_right blocklen (k + 1) (Seq.length d1);
+    Seq.lemma_eq_intro (blk (Seq.append d1 d2) k) (blk d1 k)
+
+let blk_append_right (d1 d2: Seq.seq elem)
+                     (k: nat { (k + 1) * blocklen <= Seq.length d2 })
+  : Lemma (requires Seq.length d1 % blocklen == 0)
+          (ensures (nblocks d1 + k + 1) * blocklen <= Seq.length (Seq.append d1 d2) /\
+                   blk (Seq.append d1 d2) (nblocks d1 + k) == blk d2 k)
+  = Seq.lemma_len_append d1 d2;
+    Math.lemma_div_exact (Seq.length d1) blocklen;
+    Math.distributivity_add_left (nblocks d1) (k + 1) blocklen;
+    Math.distributivity_add_left (nblocks d1) k blocklen;
+    Seq.lemma_eq_intro (blk (Seq.append d1 d2) (nblocks d1 + k)) (blk d2 k)
+
+let rec ghash_from_prefix (h acc: block) (d1 d2: Seq.seq elem)
+                          (i: nat { i <= nblocks d1 })
+  : Lemma (requires Seq.length d1 % blocklen == 0 /\ Seq.length d2 % blocklen == 0)
+          (ensures Seq.length (Seq.append d1 d2) % blocklen == 0 /\
+                   i <= nblocks (Seq.append d1 d2) /\
+                   ghash_from h acc (Seq.append d1 d2) i == ghash_from h acc d1 i)
+          (decreases i)
+  = nblocks_append d1 d2;
+    if i = 0 then ()
+    else begin
+      ghash_from_prefix h acc d1 d2 (i - 1);
+      Math.lemma_mult_le_right blocklen i (nblocks d1);
+      Math.multiple_division_lemma (nblocks d1) blocklen;
+      blk_append_left d1 d2 (i - 1)
+    end
+
+let rec ghash_from_append (h acc: block) (d1 d2: Seq.seq elem)
+                          (j: nat { j <= nblocks d2 })
+  : Lemma (requires Seq.length d1 % blocklen == 0 /\ Seq.length d2 % blocklen == 0)
+          (ensures Seq.length (Seq.append d1 d2) % blocklen == 0 /\
+                   nblocks d1 + j <= nblocks (Seq.append d1 d2) /\
+                   ghash_from h acc (Seq.append d1 d2) (nblocks d1 + j) ==
+                     ghash_from h (ghash_upd h acc d1) d2 j)
+          (decreases j)
+  = nblocks_append d1 d2;
+    if j = 0 then ghash_from_prefix h acc d1 d2 (nblocks d1)
+    else begin
+      ghash_from_append h acc d1 d2 (j - 1);
+      Math.lemma_mult_le_right blocklen j (nblocks d2);
+      Math.multiple_division_lemma (nblocks d2) blocklen;
+      blk_append_right d1 d2 (j - 1)
+    end
+
+(** Hashing [d1 ++ d2] is hashing [d1] and then hashing [d2]. *)
+let ghash_upd_append (h acc: block) (d1 d2: Seq.seq elem)
+  : Lemma (requires Seq.length d1 % blocklen == 0 /\ Seq.length d2 % blocklen == 0)
+          (ensures Seq.length (Seq.append d1 d2) % blocklen == 0 /\
+                   ghash_upd h acc (Seq.append d1 d2) ==
+                     ghash_upd h (ghash_upd h acc d1) d2)
+  = nblocks_append d1 d2;
+    ghash_from_append h acc d1 d2 (nblocks d2)
