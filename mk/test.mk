@@ -25,7 +25,8 @@ $(BUILD_DIR)/tests/$(1).o: $(HACL_ROOT)/tests/$(1).c $$(C_HEADERS)
 	  -I $$(HACL_ROOT)/tests -c $$< -o $$@
 
 $(BUILD_DIR)/tests/$(1): $(BUILD_DIR)/tests/$(1).o \
-    $$(foreach u,$$(TEST_UNITS_$(1)),$$(BUILD_DIR)/$$(call c_name,$$(u)).o)
+    $$(foreach u,$$(TEST_UNITS_$(1)),$$(BUILD_DIR)/$$(call c_name,$$(u)).o) \
+    $$(HAND_OBJS)
 	$$(call msg, "LD", "$(1)")
 	$$(Q)$$(CC) $$(HACL_CFLAGS) $$^ -o $$@
 

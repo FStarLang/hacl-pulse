@@ -46,15 +46,21 @@ module S8 = Hacl.Secret.UInt8
     of the mechanism, and HACL* picked the values below; they are repeated
     here so that a caller can rely on the same numbers. *)
 
+inline_for_extraction
 let reseed_interval : pos = 1024
+inline_for_extraction
 let max_output_length : pos = 65536
+inline_for_extraction
 let max_length : pos = 65536
+inline_for_extraction
 let max_personalization_string_length : pos = 65536
+inline_for_extraction
 let max_additional_input_length : pos = 65536
 
 (** The security strength in bytes: SP 800-90A table 2 asks for at least
     [security_strength] bits of entropy, which is 256 bits for every hash
     this library offers. *)
+inline_for_extraction
 let min_length : pos = 32
 
 (** {2 The state}

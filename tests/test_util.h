@@ -10,23 +10,20 @@
 #include <stdio.h>
 #include <string.h>
 
-static void hex_of(char *dst, const uint8_t *src, size_t n) {
-  static const char digits[] = "0123456789abcdef";
-  for (size_t i = 0; i < n; i++) {
-    dst[2 * i] = digits[src[i] >> 4];
-    dst[2 * i + 1] = digits[src[i] & 0xf];
-  }
-  dst[2 * n] = '\0';
+static void print_hex(const uint8_t *src, size_t n) {
+  for (size_t i = 0; i < n; i++)
+    printf("%02x", src[i]);
 }
 
 /* Returns nonzero on mismatch, so a caller can accumulate with |=. */
 static int check(const char *name, const uint8_t *got, const uint8_t *expected,
                  size_t n) {
   if (memcmp(got, expected, n) != 0) {
-    char g[131], e[131];
-    hex_of(g, got, n);
-    hex_of(e, expected, n);
-    printf("  FAIL %s\n    got      %s\n    expected %s\n", name, g, e);
+    printf("  FAIL %s\n    got      ", name);
+    print_hex(got, n);
+    printf("\n    expected ");
+    print_hex(expected, n);
+    printf("\n");
     return 1;
   }
   printf("  ok   %s\n", name);

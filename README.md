@@ -35,8 +35,9 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`) |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF`, `Spec.HMAC_DRBG` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`) |
+| `c/` | handwritten C, and the whole of the trusted computing base on the C side: currently the platform entropy shim |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -719,6 +720,120 @@ the curve, all four SEC1 conversions and their round trips, and ECDH from
 both ends.
 
 
+### HMAC-DRBG, where the state belongs to the caller
+
+`code/drbg` is SP 800-90A's HMAC\_DRBG over SHA2-256, -384 and -512.  There is
+no SHA-1 instance: this library has no SHA-1, and SP 800-90A withdrew it
+anyway.
+
+The mechanism is four hundred words of pseudo-code and reduces to one
+operation, `update`, which re-keys the pair `(K, V)` from some data:
+
+    K <- HMAC(K, V || 0x00 || data);  V <- HMAC(K, V)
+    if data <> "" then
+      K <- HMAC(K, V || 0x01 || data);  V <- HMAC(K, V)
+
+Instantiation is `update` from entropy, nonce and personalization string;
+reseeding is `update` from entropy and additional input; generation runs
+`V <- HMAC(K, V)` until it has enough bytes and then does one more `update`.
+`Spec.HMAC_DRBG` says exactly that, and the implementation is the same shape.
+
+**Three things fell out of not wanting to allocate.**
+
+*The state is the caller's.*  `Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v,
+&ctr, ...)` writes into three buffers the caller owns; there is no
+`create_in`, no `free`, and no `state_s` struct.  HACL\* has all three,
+because its state has to live somewhere across the `malloc` boundary.  Here
+`k` and `v` are `uint8_t[32]` (or 48, or 64) in whatever storage the caller
+likes, down to the stack, and the counter is one `size_t`.  A caller that
+wants a heap-allocated state can still have one; it just does not need our
+help to get it.
+
+*`update` takes its data in three pieces.*  The data the DRBG hashes is a
+concatenation -- entropy `||` nonce `||` personalization -- and materializing
+it would need a run-time-sized buffer, which is the one thing a
+`create_in`-free implementation cannot have.  So `update` takes `d1 d2 d3`
+and the callers pass zero-length slices for the pieces they do not have.
+Zero-length slices are fine: `let mut a = [| z8; 0sz |]` typechecks and
+Custard emits `uint8_t a[1]` with a slice of length zero over it, which is
+portable C, not the GCC zero-length-array extension.
+
+*So HMAC grew a concatenating form.*  `Hacl.HMAC.Cat.hmac_cat out key a b c d`
+is HMAC(`key`, `a || b || c || d`) and never builds the concatenation: it
+drives the generic streaming SHA-2 across the four pieces, exactly as
+`Hacl.Ed25519.hash3` does for Ed25519's `SHA512(R || A || M)`.  `update`'s
+first three arguments are the fixed `V || 0x00` prefix and the data pieces,
+which is five streaming updates against one scratch block.
+
+**The output loop is the sharpest example of fuel discipline in the library.**
+`gen_bytes` is a recursive `GTot` function producing one digest per round.
+Written the obvious way -- one `fn`, an `if` in the loop body for the partial
+last block -- it verified in 3 minutes 54, of which a single goal took 221
+seconds.  Three changes together took it to 15:
+
+* the whole-block and partial-block cases became two top-level `fn`s,
+  `gen_full` and `gen_tail`, so each VC is half the size and each can be tuned
+  separately;
+* the loop invariant became one `unfold let inv`, so it is one term rather
+  than one term per occurrence;
+* **the module runs at `--fuel 0 --ifuel 0`**, so `gen_bytes` never unfolds at
+  all and every step has to come from a lemma (`gen_zero`, `gen_step`,
+  `gen_last`, `gen_len`).  Making the unfolding explicit is what did it: at
+  fuel 1 the solver unfolds the recursion opportunistically, in a context
+  carrying the whole separation-logic state, and each of those is a term the
+  size of the loop.
+
+The same lesson appeared twice more in this module and was cured the same way
+both times: a `Seq.equal` over a five-fold nested append inside `hmac_cat`
+took 6 minutes 32 and takes seconds as a context-free top-level lemma
+(`cat5`), and the two copy-back steps at the end of `rekey` took five minutes
+until `Hacl.Impl.Copy.copy_exact` was given a postcondition (`vd' == vs`) that
+is already the equality wanted, rather than one that has to be derived.  The
+rule: *pure reasoning that does not mention the heap belongs in a top-level
+lemma, and a Pulse function should only ever apply it.*
+
+**Aliasing, again.**  `rekey` cannot write its result over its own key --
+`hmac_cat out key ...` with `out == key` is not expressible, let alone sound
+-- so it computes into scratch and copies back.  And Pulse cannot pass the
+same slice as two arguments, which is why `generate` allocates *two*
+zero-length arrays where one would do in C.
+
+**Refusals are values, not preconditions.**  `generate` returns `bool`:
+`false` if the reseed counter has passed `reseed_interval` (1024) or the
+request exceeds `max_output_length` (65536), and in that case nothing is
+written and the state is unchanged -- which is what the postcondition says,
+so a caller who ignores the result cannot silently get zeros.  HACL\* makes
+the counter bound a runtime check too; the length bound it makes a
+precondition, which pushes the check onto the caller.
+
+`tests/test_drbg.c` is generated from the NIST CAVP `drbgvectors_no_reseed`
+and `drbgvectors_pr_false` files.  The generator transliterates
+`Spec.HMAC_DRBG` into Python, checks it against **all 1440** SHA2-256/384/512
+cases in those files, and only then emits a C test covering each
+(algorithm, reseeding, personalization, additional input) combination, plus
+the counter behaviour at exactly 1024 generates.
+
+### The entropy shim
+
+`c/Hacl_Random.c` is handwritten, trusted, and the only C in the repository
+that F\* did not write.  `Hacl_Random_bytes(buf, len)` is `BCryptGenRandom` on
+Windows, `getrandom`/`getentropy` elsewhere, and `/dev/urandom` if the
+syscall is missing; it retries on `EINTR`, loops over the per-call size caps,
+and returns `false` rather than filling the buffer with anything weaker.
+
+It is deliberately not a dependency of anything verified.  Every primitive
+that needs random bytes takes them as an argument, so the verified code stays
+a pure function of its inputs and a caller with a better entropy source can
+use it.  HACL\*'s `Lib_RandomBuffer_System` is bound into F\* as an assumed
+`val` and called from verified code; the equivalent here is a C header a C
+caller includes, which keeps the trusted surface at one function that F\* has
+never heard of.
+
+`tests/test_random.c` checks the things that can be checked without judging
+the operating system: that the call succeeds, stays inside the buffer, does
+not repeat, and covers the byte range.
+
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -968,5 +1083,12 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: the DRBG is
-next.  Curve25519, Ed25519 and P-256 are done.
+Following `design/reimplementation.md` §9, the minimum viable subset is now
+complete: the hashes and their streaming layers, HMAC, HKDF,
+ChaCha20-Poly1305, X25519, Ed25519, P-256, and HMAC-DRBG with an OS entropy
+shim.  AES-GCM is the one item of that list still missing, and is blocked on
+the "no assembly" commitment.
+
+Beyond the subset, in rough order of how often they are asked for:
+AES-GCM (portable, then AES-NI intrinsics), the generic bignum API, RSA-PSS,
+FFDHE, secp256k1, Salsa20/NaCl, FrodoKEM, and the legacy hashes.
