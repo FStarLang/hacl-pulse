@@ -1,0 +1,370 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** GF(2^128) as GCM uses it: the multiplication of SP 800-38D algorithm 1,
+    written out.
+
+    There is no table.  The usual GHASH implementation precomputes sixteen or
+    two hundred and fifty-six multiples of the hash key and indexes them by
+    four bits of the ciphertext at a time -- a lookup at a secret index,
+    which is the same cache-timing door that a table-driven S-box opens.  The
+    loop here runs all one hundred and twenty-eight steps, both branches of
+    each turned into a mask: about a hundred instructions per bit, so a
+    megabyte a second or so.  Carry-less multiply instructions are the real
+    answer on hardware that has them, and are the intended upgrade path.
+
+    The shift is written descending, so that the byte that supplies a
+    carry is read before it is overwritten and no scratch is needed. *)
+module Hacl.AES.GF128
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+open Spec.Byte
+open Spec.GF128
+open Hacl.AES.Core
+
+module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+module S8 = Hacl.Secret.UInt8
+module UInt = FStar.UInt
+module Copy = Hacl.Impl.Copy
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** {2 The pure side} *)
+
+let gadd_eq (v0 vb v: Seq.seq S8.t) (off: nat) (n: nat)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length v == blocklen /\
+             off + blocklen <= Seq.length vb /\ blocklen <= n /\
+             (forall (j: nat). j < blocklen ==>
+                Seq.index (vals v) j ==
+                  (if j < n
+                   then Seq.index (vals v0) j ^^ Seq.index (vals vb) (off + j)
+                   else Seq.index (vals v0) j)))
+          (ensures vals v == gadd (vals v0)
+                              (Seq.slice (vals vb) off (off + blocklen)))
+  = Seq.lemma_eq_intro (vals v)
+      (gadd (vals v0) (Seq.slice (vals vb) off (off + blocklen)))
+
+let shift_eq (v0 v: Seq.seq S8.t) (n: nat)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length v == blocklen /\ n == 0 /\
+             (forall (j: nat). j < blocklen ==>
+                Seq.index (vals v) j ==
+                  (if n <= j then shift_byte (vals v0) j
+                   else Seq.index (vals v0) j)))
+          (ensures vals v == shift_right_1 (vals v0))
+  = Seq.lemma_eq_intro (vals v) (shift_right_1 (vals v0))
+
+(** The reduction touches byte zero only: [r_block] is [0xe1] followed by
+    fifteen zeroes, and a byte xored with zero is itself. *)
+let reduce_eq (v0 v: Seq.seq S8.t) (odd: bool)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length v == blocklen /\
+             Seq.index (vals v) 0 ==
+               Seq.index (vals v0) 0 ^^ (if odd then 0xe1 else 0) /\
+             (forall (j: nat). 0 < j /\ j < blocklen ==>
+                Seq.index (vals v) j == Seq.index (vals v0) j))
+          (ensures vals v == (if odd then gadd (vals v0) r_block else vals v0))
+  = FStar.Classical.forall_intro xor_zero;
+    if odd then Seq.lemma_eq_intro (vals v) (gadd (vals v0) r_block)
+    else Seq.lemma_eq_intro (vals v) (vals v0)
+
+(** The conditional addition of [z + v] the multiplication makes at each
+    bit: a byte xored with zero is itself, which is the whole content of the
+    branch that is not taken. *)
+let select_add_eq (v0 vb v: Seq.seq S8.t) (taken: bool) (n: nat)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length vb == blocklen /\
+             Seq.length v == blocklen /\ blocklen <= n /\
+             (forall (j: nat). j < blocklen ==>
+                Seq.index (vals v) j ==
+                  (if j < n
+                   then Seq.index (vals v0) j ^^
+                        (if taken then Seq.index (vals vb) j else 0)
+                   else Seq.index (vals v0) j)))
+          (ensures vals v == (if taken then gadd (vals v0) (vals vb) else vals v0))
+  = FStar.Classical.forall_intro xor_zero;
+    if taken then Seq.lemma_eq_intro (vals v) (gadd (vals v0) (vals vb))
+    else Seq.lemma_eq_intro (vals v) (vals v0)
+
+(** A byte and a carry bit into the top of it occupy disjoint bits, so the
+    [or] the implementation writes is the sum the specification writes. *)
+let or_carry (c r: elem)
+  : Lemma (requires (c == 0 \/ c == 128) /\ r < 128)
+          (ensures UInt.logor #8 c r == c + r)
+  = assert_norm (pow2 7 == 128);
+    UInt.logor_disjoint #8 c r 7
+
+let and_one (a: elem) : Lemma (UInt.logand #8 a 1 == a % 2) =
+  assert_norm (pow2 1 == 2);
+  UInt.logand_mask #8 a 1
+
+#push-options "--fuel 2 --ifuel 1"
+
+let gmul_loop_done (x z v: block) : Lemma (gmul_loop x z v 128 == z) = ()
+
+let gmul_loop_step (x z v: block) (i: nat)
+  : Lemma (requires i < 128)
+          (ensures gmul_loop x z v i ==
+            gmul_loop x
+              (if bit x i then gadd z v else z)
+              (if Seq.index v (blocklen - 1) % 2 = 0
+               then shift_right_1 v
+               else gadd (shift_right_1 v) r_block)
+              (i + 1))
+  = ()
+
+let gmul_start (x y: block) : Lemma (gmul_loop x zero y 0 == gmul x y) = ()
+
+#pop-options
+
+let zero_block (v: Seq.seq S8.t) (n: nat)
+  : Lemma (requires Seq.length v == blocklen /\ blocklen <= n /\
+             (forall (j: nat). j < blocklen ==>
+                Seq.index (vals v) j == (if j < n then 0 else Seq.index (vals v) j)))
+          (ensures vals v == zero)
+  = Seq.lemma_eq_intro (vals v) zero
+
+(** {2 Addition} *)
+
+(** [a := a + b[off..off+16)]. *)
+
+fn gadd_at_impl (a: S.slice S8.t) (b: S.slice S8.t) (off: SZ.t)
+                (#v0 #vb: erased (Seq.seq S8.t))
+requires S.pts_to a v0 ** S.pts_to b vb ** pure (
+  Seq.length v0 == blocklen /\ SZ.v off + blocklen <= Seq.length vb)
+ensures exists* (v1: Seq.seq S8.t). S.pts_to a v1 ** S.pts_to b vb ** pure (
+  Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
+  SZ.v off + blocklen <= Seq.length vb /\
+  vals v1 == gadd (vals v0) (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
+{
+  S.pts_to_len a;
+  S.pts_to_len b;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
+    pts_to i vi ** S.pts_to a v ** S.pts_to b vb **
+    pure (SZ.v vi <= blocklen /\ Seq.length v == blocklen /\
+          Seq.length v0 == blocklen /\
+          SZ.v off + blocklen <= Seq.length vb /\
+          (forall (j: nat). j < blocklen ==>
+             Seq.index (vals v) j ==
+               (if j < SZ.v vi
+                then Seq.index (vals v0) j ^^ Seq.index (vals vb) (SZ.v off + j)
+                else Seq.index (vals v0) j)))
+  decreases (blocklen - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = S.(a.(vi));
+    let y = S.(b.(SZ.add off vi));
+    let r = bxor x y;
+    with v. assert S.pts_to a v;
+    vals_upd v (SZ.v vi) r;
+    S.((a.(vi) <- r));
+    i := SZ.add vi 1sz;
+  };
+  let vn = !i;
+  with v. assert S.pts_to a v;
+  gadd_eq v0 vb v (SZ.v off) (SZ.v vn);
+  S.pts_to_len a;
+}
+
+(** {2 The step on [v]}
+
+    One right shift of the whole block, then the reduction by [R] when the
+    bit that fell off the end was set.  The loop runs from the top byte down
+    so that byte [k - 1], which supplies the carry into byte [k], is still
+    untouched when it is read. *)
+
+fn shift_reduce_impl (v: S.slice S8.t) (#v0: erased (Seq.seq S8.t))
+requires S.pts_to v v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). S.pts_to v v1 ** pure (
+  Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
+  vals v1 == (if Seq.index (vals v0) (blocklen - 1) % 2 = 0
+              then shift_right_1 (vals v0)
+              else gadd (shift_right_1 (vals v0)) r_block))
+{
+  S.pts_to_len v;
+  let one = S8.classify 1uy;
+  let last = S.(v.(15sz));
+  let lsb = S8.logand last one;
+  and_one (S8.v last);
+  let rmask = S8.eq_mask lsb one;
+
+  let mut i = 16sz;
+  while (let vi = !i; SZ.gt vi 0sz)
+  invariant exists* (vi: SZ.t) (vv: Seq.seq S8.t).
+    pts_to i vi ** S.pts_to v vv **
+    pure (SZ.v vi <= blocklen /\ Seq.length vv == blocklen /\
+          Seq.length v0 == blocklen /\
+          (forall (j: nat). j < blocklen ==>
+             Seq.index (vals vv) j ==
+               (if SZ.v vi <= j then shift_byte (vals v0) j
+                else Seq.index (vals v0) j)))
+  decreases (SZ.v (!i))
+  {
+    let vi = !i;
+    let k = SZ.sub vi 1sz;
+    let cur = S.(v.(k));
+    let rest = S8.shift_right cur 1ul;
+    with vv. assert S.pts_to v vv;
+    if (k = 0sz) {
+      or_carry 0 (S8.v rest);
+      vals_upd vv 0 rest;
+      S.((v.(0sz) <- rest));
+      i := k;
+    } else {
+      let prev = S.(v.(SZ.sub k 1sz));
+      and_one (S8.v prev);
+      let carry = S8.shift_left (S8.logand prev one) 7ul;
+      assert_norm (pow2 7 == 128);
+      assert_norm (pow2 8 == 256);
+      or_carry (S8.v carry) (S8.v rest);
+      let r = S8.logor carry rest;
+      vals_upd vv (SZ.v k) r;
+      S.((v.(k) <- r));
+      i := k;
+    }
+  };
+  let vn = !i;
+  with vs. assert S.pts_to v vs;
+  shift_eq v0 vs (SZ.v vn);
+
+  assert (pure (S8.v lsb == Seq.index (vals v0) (blocklen - 1) % 2));
+  let b0 = S.(v.(0sz));
+  let e1 = S8.classify 0xe1uy;
+  let red = S8.select rmask e1 S8.zero;
+  assert (pure (S8.v red ==
+    (if Seq.index (vals v0) (blocklen - 1) % 2 = 1 then 0xe1 else 0)));
+  let nb0 = bxor b0 red;
+  vals_upd vs 0 nb0;
+  S.((v.(0sz) <- nb0));
+  with v1. assert S.pts_to v v1;
+  reduce_eq vs v1 (Seq.index (vals v0) (blocklen - 1) % 2 = 1);
+  S.pts_to_len v;
+}
+
+(** [z := z + v] when the mask is all ones, and nothing when it is all
+    zeroes -- the conditional accumulation of algorithm 1, branch-free. *)
+
+fn select_add (z: S.slice S8.t) (v: S.slice S8.t) (mask: S8.t)
+              (#v0 #vb: erased (Seq.seq S8.t))
+requires S.pts_to z v0 ** S.pts_to v vb ** pure (
+  Seq.length v0 == blocklen /\ Seq.length vb == blocklen /\
+  (S8.v mask == 0 \/ S8.v mask == 255))
+ensures exists* (v1: Seq.seq S8.t). S.pts_to z v1 ** S.pts_to v vb ** pure (
+  Seq.length v0 == blocklen /\ Seq.length vb == blocklen /\
+  Seq.length v1 == blocklen /\
+  vals v1 == (if S8.v mask = 0 then vals v0 else gadd (vals v0) (vals vb)))
+{
+  S.pts_to_len z;
+  S.pts_to_len v;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 16sz)
+  invariant exists* (vi: SZ.t) (vz: Seq.seq S8.t).
+    pts_to i vi ** S.pts_to z vz ** S.pts_to v vb **
+    pure (SZ.v vi <= blocklen /\ Seq.length vz == blocklen /\
+          Seq.length v0 == blocklen /\ Seq.length vb == blocklen /\
+          (S8.v mask == 0 \/ S8.v mask == 255) /\
+          (forall (j: nat). j < blocklen ==>
+             Seq.index (vals vz) j ==
+               (if j < SZ.v vi
+                then Seq.index (vals v0) j ^^
+                     (if S8.v mask = 0 then 0 else Seq.index (vals vb) j)
+                else Seq.index (vals v0) j)))
+  decreases (blocklen - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = S.(z.(vi));
+    let y = S.(v.(vi));
+    let r = bxor x (S8.select mask y S8.zero);
+    with vz. assert S.pts_to z vz;
+    vals_upd vz (SZ.v vi) r;
+    S.((z.(vi) <- r));
+    i := SZ.add vi 1sz;
+  };
+  let vn = !i;
+  with vz. assert S.pts_to z vz;
+  select_add_eq v0 vb vz (S8.v mask <> 0) (SZ.v vn);
+  S.pts_to_len z;
+}
+
+(** {2 Multiplication}
+
+    [a := a * h].  The accumulator and the running multiple of [h] are
+    scratch; the bits of [a] are read before anything is written to it. *)
+
+fn gmul_impl (a: S.slice S8.t) (h: S.slice S8.t)
+             (#va #vh: erased (Seq.seq S8.t))
+requires S.pts_to a va ** S.pts_to h vh ** pure (
+  Seq.length va == blocklen /\ Seq.length vh == blocklen)
+ensures exists* (va': Seq.seq S8.t). S.pts_to a va' ** S.pts_to h vh ** pure (
+  Seq.length va == blocklen /\ Seq.length vh == blocklen /\
+  Seq.length va' == blocklen /\
+  vals va' == gmul (vals va) (vals vh))
+{
+  S.pts_to_len a;
+  S.pts_to_len h;
+  let z8 = S8.zero;
+  let one = S8.classify 1uy;
+  let mut za = [| z8; 16sz |]; A.pts_to_len za; let z = S.from_array za 16sz;
+  let mut vaa = [| z8; 16sz |]; A.pts_to_len vaa; let vv = S.from_array vaa 16sz;
+  S.pts_to_len z;
+  S.pts_to_len vv;
+  Copy.copy_exact vv h 16sz;
+  with vz0. assert S.pts_to z vz0;
+  zero_block vz0 blocklen;
+  gmul_start (vals va) (vals vh);
+
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 128sz)
+  invariant exists* (vi: SZ.t) (vz: Seq.seq S8.t) (vw: Seq.seq S8.t).
+    pts_to i vi ** S.pts_to a va ** S.pts_to h vh **
+    S.pts_to z vz ** S.pts_to vv vw **
+    pure (SZ.v vi <= 128 /\ Seq.length vz == blocklen /\
+          Seq.length vw == blocklen /\ Seq.length va == blocklen /\
+          Seq.length vh == blocklen /\
+          gmul_loop (vals va) (vals vz) (vals vw) (SZ.v vi) ==
+            gmul (vals va) (vals vh))
+  decreases (128 - SZ.v (!i))
+  {
+    let vi = !i;
+    with vz. assert S.pts_to z vz;
+    with vw. assert S.pts_to vv vw;
+    gmul_loop_step (vals va) (vals vz) (vals vw) (SZ.v vi);
+
+    let bidx = SZ.div vi 8sz;
+    let sh = SZ.sub 7sz (SZ.rem vi 8sz);
+    let xb = S.(a.(bidx));
+    let bitv = S8.logand (S8.shift_right xb (SZ.sizet_to_uint32 sh)) one;
+    and_one (S8.v xb / pow2 (SZ.v sh));
+    let bmask = S8.eq_mask bitv one;
+
+    select_add z vv bmask;
+    shift_reduce_impl vv;
+    i := SZ.add vi 1sz;
+  };
+  let vn = !i;
+  with vz. assert S.pts_to z vz;
+  with vw. assert S.pts_to vv vw;
+  gmul_loop_done (vals va) (vals vz) (vals vw);
+  Copy.copy_exact a z 16sz;
+  S.to_array z;
+  S.to_array vv;
+}
+
+#pop-options
