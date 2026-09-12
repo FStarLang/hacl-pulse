@@ -63,7 +63,38 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
     Double, add, and keep whichever the bit says.  The two candidates are
     both computed; the mask decides which is copied back. *)
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 400"
+(** The one place the specification's own definition has to be unfolded.
+    Doing it in a lemma, rather than by raising the fuel of the Pulse
+    function, keeps [point_double] and [point_add] out of a query that
+    already carries the whole field. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 20"
+let step_def (k: nat) (p: P.proj_point) (i: nat { i < 256 }) (acc: P.proj_point)
+  : Lemma (P.point_mul_step k p i acc ==
+             (let d = P.point_double acc in
+              if k / pow2 (255 - i) % 2 = 1 then P.point_add d p else d))
+  = ()
+#pop-options
+
+(** [255 - n], as a subtraction whose result already carries its meaning:
+    under [--fuel 0] the literal [255sz] is [uint_to_t 255], and typing that
+    needs [pow2 64], which the solver will not compute here. *)
+let sub255 (x: SZ.t { SZ.v x < 256 }) : (r: SZ.t { SZ.v r == 255 - SZ.v x }) =
+  SZ.sub 255sz x
+
+(** The masked select happens coordinate by coordinate, so what comes back
+    is a triple of conditionals; the specification is a conditional of
+    triples.  Pushing the case split out into a lemma of its own keeps it
+    out of the query that carries the field. *)
+let sel_pt (bb: bool) (ax ay az bx byy bz: Seq.seq S64.t)
+  : Lemma (requires pt_ok ax ay az /\ pt_ok bx byy bz)
+          (ensures (let cx = if bb then bx else ax in
+                    let cy = if bb then byy else ay in
+                    let cz = if bb then bz else az in
+                    pt_ok cx cy cz /\
+                    pt cx cy cz == (if bb then pt bx byy bz else pt ax ay az)))
+  = ()
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
 
 fn point_mul_step (ox oy oz ux uy uz sx sy sz: S.slice S64.t)
                   (qx qy qz: S.slice S64.t) (ks: S.slice S64.t)
@@ -71,13 +102,13 @@ fn point_mul_step (ox oy oz ux uy uz sx sy sz: S.slice S64.t)
                   (#vox #voy #voz: erased (Seq.seq S64.t))
                   (#vux #vuy #vuz: erased (Seq.seq S64.t))
                   (#vsx #vsy #vsz: erased (Seq.seq S64.t))
-                  (#ppx #ppy #ppz: perm) (#vqx #vqy #vqz: erased (Seq.seq S64.t))
+                  (#pp: perm) (#vqx #vqy #vqz: erased (Seq.seq S64.t))
                   (#pk: perm) (#vk: erased (Seq.seq S64.t))
 requires
   S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz **
   S.pts_to ux vux ** S.pts_to uy vuy ** S.pts_to uz vuz **
   S.pts_to sx vsx ** S.pts_to sy vsy ** S.pts_to sz vsz **
-  S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
   S.pts_to ks #pk vk **
   pure (pt_ok vox voy voz /\ pt_ok vqx vqy vqz /\
         Seq.length vk == nl /\ bnd (vals vk) base /\
@@ -87,7 +118,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
   S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz **
   S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz **
-  S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
   S.pts_to ks #pk vk **
   pure (pt_ok wx wy wz /\
         Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
@@ -96,14 +127,22 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
           P.point_mul_step (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n)
                            (pt vox voy voz))
 {
-  let bi = SZ.sub 255sz n;
+  let bi = sub255 n;
   let m = abit ks bi;
   let bb = hide (eval (vals vk) / pow2 (SZ.v bi) % 2 = 1);
   point_double ux uy uz ox oy oz;
   point_add sx sy sz ux uy uz qx qy qz;
+  with wux wuy wuz. assert (S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz);
+  with wsx wsy wsz. assert (S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz);
   asel ox ux sx m bb;
   asel oy uy sy m bb;
   asel oz uz sz m bb;
+  sel_pt (reveal bb) wux wuy wuz wsx wsy wsz;
+  step_def (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz);
+  with wx wy wz. assert (S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz);
+  assert (pure (pt_ok wx wy wz));
+  assert (pure (pt wx wy wz ==
+    P.point_mul_step (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz)));
 }
 
 #pop-options

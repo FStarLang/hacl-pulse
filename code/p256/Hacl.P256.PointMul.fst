@@ -63,17 +63,17 @@ let lt256 (x: SZ.t) : (r: bool { r <==> SZ.v x < 256 }) = SZ.lt x 256sz
 fn point_mul (ox oy oz: S.slice S64.t) (qx qy qz: S.slice S64.t)
              (ks: S.slice S64.t)
              (#vox #voy #voz: erased (Seq.seq S64.t))
-             (#ppx #ppy #ppz: perm) (#vqx #vqy #vqz: erased (Seq.seq S64.t))
+             (#pp: perm) (#vqx #vqy #vqz: erased (Seq.seq S64.t))
              (#pk: perm) (#vk: erased (Seq.seq S64.t))
 requires
   S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz **
-  S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
   S.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
         Seq.length vk == nl /\ bnd (vals vk) base /\ pt_ok vqx vqy vqz)
 ensures exists* (wx wy wz: Seq.seq S64.t).
   S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
-  S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
   S.pts_to ks #pk vk **
   pure (pt_ok wx wy wz /\
         pt wx wy wz == P.point_mul (eval (vals vk)) (pt vqx vqy vqz))
@@ -101,7 +101,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
     S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
     S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz **
     S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz **
-    S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+    S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
     S.pts_to ks #pk vk **
     pure (SZ.v vi <= 256 /\ pt_ok wx wy wz /\
           Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
@@ -150,15 +150,22 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   pure (pt_ok wx wy wz /\ pt wx wy wz == P.point_mul_g (eval (vals vk)))
 {
   let z = S64.zero;
+  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let gx = S.from_array a1 16sz;
+  let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let gy = S.from_array a2 16sz;
   let mut a3 = [| z; 16sz |]; A.pts_to_len a3; let gz = S.from_array a3 16sz;
-  S.pts_to_len gz;
+  S.pts_to_len gx; S.pts_to_len gy; S.pts_to_len gz;
   fone gz;
-  let gx = fgx ();
-  let gy = fgy ();
+  (* [point_add] wants its three input coordinates at one permission, and
+     the constant tables hand back one existential permission each.  A copy
+     into owned buffers is cheaper than teaching the prover to split. *)
+  let tx = fgx ();
+  fcopy gx tx;
+  drop_table tx;
+  let ty = fgy ();
+  fcopy gy ty;
+  drop_table ty;
   point_mul ox oy oz gx gy gz ks;
-  drop_table gx;
-  drop_table gy;
-  S.to_array gz;
+  S.to_array gx; S.to_array gy; S.to_array gz;
 }
 
 #pop-options
