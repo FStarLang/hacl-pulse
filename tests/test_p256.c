@@ -201,18 +201,18 @@ static const struct {
 static bool sign_h(enum hash h, uint8_t *out, uint8_t *msg, size_t len,
                    uint8_t *priv, uint8_t *nonce) {
   switch (h) {
-  case SHA256: return Hacl_P256_Ptr_ecdsa_sign_sha256(out, msg, len, priv, nonce);
-  case SHA384: return Hacl_P256_Ptr_ecdsa_sign_sha384(out, msg, len, priv, nonce);
-  default:     return Hacl_P256_Ptr_ecdsa_sign_sha512(out, msg, len, priv, nonce);
+  case SHA256: return Hacl_P256_ecdsa_sign_sha256(out, msg, len, priv, nonce);
+  case SHA384: return Hacl_P256_ecdsa_sign_sha384(out, msg, len, priv, nonce);
+  default:     return Hacl_P256_ecdsa_sign_sha512(out, msg, len, priv, nonce);
   }
 }
 
 static bool verify_h(enum hash h, uint8_t *msg, size_t len, uint8_t *pub,
                      uint8_t *r, uint8_t *s) {
   switch (h) {
-  case SHA256: return Hacl_P256_Ptr_ecdsa_verify_sha256(msg, len, pub, r, s);
-  case SHA384: return Hacl_P256_Ptr_ecdsa_verify_sha384(msg, len, pub, r, s);
-  default:     return Hacl_P256_Ptr_ecdsa_verify_sha512(msg, len, pub, r, s);
+  case SHA256: return Hacl_P256_ecdsa_verify_sha256(msg, len, pub, r, s);
+  case SHA384: return Hacl_P256_ecdsa_verify_sha384(msg, len, pub, r, s);
+  default:     return Hacl_P256_ecdsa_verify_sha512(msg, len, pub, r, s);
   }
 }
 
@@ -268,13 +268,13 @@ int main(void) {
   }
 
   /* The prehashed path. */
-  if (!Hacl_P256_Ptr_ecdsa_sign_without_hash(sig, wmsg, sizeof wmsg, sk, wnon)) {
+  if (!Hacl_P256_ecdsa_sign_without_hash(sig, wmsg, sk, wnon)) {
     printf("  FAIL without_hash sign returned false\n");
     rc = 1;
   } else {
     rc |= check("without_hash sign", sig, wsig, 64);
   }
-  if (!Hacl_P256_Ptr_ecdsa_verify_without_hash(wmsg, sizeof wmsg, pk,
+  if (!Hacl_P256_ecdsa_verify_without_hash(wmsg, pk,
                                                wsig, wsig + 32)) {
     printf("  FAIL without_hash verify rejected a good signature\n");
     rc = 1;
@@ -283,27 +283,27 @@ int main(void) {
   }
 
   /* Key validation. */
-  if (!Hacl_P256_Ptr_validate_private_key(sk)) {
+  if (!Hacl_P256_Key_validate_private_key(sk)) {
     printf("  FAIL validate_private_key rejected a good key\n");
     rc = 1;
   } else {
     printf("  ok   validate_private_key\n");
   }
   memset(tmp, 0, 32);
-  if (Hacl_P256_Ptr_validate_private_key(tmp)) {
+  if (Hacl_P256_Key_validate_private_key(tmp)) {
     printf("  FAIL validate_private_key accepted zero\n");
     rc = 1;
   } else {
     printf("  ok   validate_private_key rejects zero\n");
   }
   memset(tmp, 0xff, 32);
-  if (Hacl_P256_Ptr_validate_private_key(tmp)) {
+  if (Hacl_P256_Key_validate_private_key(tmp)) {
     printf("  FAIL validate_private_key accepted a scalar above the order\n");
     rc = 1;
   } else {
     printf("  ok   validate_private_key rejects out-of-range\n");
   }
-  if (!Hacl_P256_Ptr_validate_public_key(pk)) {
+  if (!Hacl_P256_Key_Public_validate_public_key(pk)) {
     printf("  FAIL validate_public_key rejected a good key\n");
     rc = 1;
   } else {
@@ -311,7 +311,7 @@ int main(void) {
   }
   memcpy(tmp, pk, 64);
   tmp[63] ^= 1;
-  if (Hacl_P256_Ptr_validate_public_key(tmp)) {
+  if (Hacl_P256_Key_Public_validate_public_key(tmp)) {
     printf("  FAIL validate_public_key accepted a point off the curve\n");
     rc = 1;
   } else {
@@ -319,17 +319,17 @@ int main(void) {
   }
 
   /* SEC1 encodings, both directions. */
-  Hacl_P256_Ptr_raw_to_uncompressed(out, pk);
+  Hacl_P256_Sec1_raw_to_uncompressed(out, pk);
   rc |= check("raw_to_uncompressed", out, unc, 65);
-  Hacl_P256_Ptr_raw_to_compressed(out, pk);
+  Hacl_P256_Sec1_raw_to_compressed(out, pk);
   rc |= check("raw_to_compressed", out, cmpr, 33);
-  if (!Hacl_P256_Ptr_uncompressed_to_raw(out, unc)) {
+  if (!Hacl_P256_Sec1_uncompressed_to_raw(out, unc)) {
     printf("  FAIL uncompressed_to_raw returned false\n");
     rc = 1;
   } else {
     rc |= check("uncompressed_to_raw", out, pk, 64);
   }
-  if (!Hacl_P256_Ptr_compressed_to_raw(out, cmpr)) {
+  if (!Hacl_P256_Sec1_compressed_to_raw(out, cmpr)) {
     printf("  FAIL compressed_to_raw returned false\n");
     rc = 1;
   } else {
@@ -339,7 +339,7 @@ int main(void) {
     uint8_t bad_unc[65];
     memcpy(bad_unc, unc, 65);
     bad_unc[0] = 0x05;
-    if (Hacl_P256_Ptr_uncompressed_to_raw(out, bad_unc)) {
+    if (Hacl_P256_Sec1_uncompressed_to_raw(out, bad_unc)) {
       printf("  FAIL uncompressed_to_raw accepted a bad header\n");
       rc = 1;
     } else {
@@ -348,19 +348,19 @@ int main(void) {
   }
 
   /* ECDH: both parties must land on the same point. */
-  if (!Hacl_P256_Ptr_dh_initiator(out, sk)) {
+  if (!Hacl_P256_Ecdh_dh_initiator(out, sk)) {
     printf("  FAIL dh_initiator returned false\n");
     rc = 1;
   } else {
     rc |= check("dh_initiator", out, pk, 64);
   }
-  if (!Hacl_P256_Ptr_dh_responder(out, pkb, sk)) {
+  if (!Hacl_P256_Ecdh_dh_responder(out, pkb, sk)) {
     printf("  FAIL dh_responder returned false\n");
     rc = 1;
   } else {
     rc |= check("dh_responder", out, shared, 64);
   }
-  if (!Hacl_P256_Ptr_dh_responder(out, pk, skb)) {
+  if (!Hacl_P256_Ecdh_dh_responder(out, pk, skb)) {
     printf("  FAIL dh_responder (other direction) returned false\n");
     rc = 1;
   } else {
@@ -368,7 +368,7 @@ int main(void) {
   }
   memcpy(tmp, pk, 64);
   tmp[63] ^= 1;
-  if (Hacl_P256_Ptr_dh_responder(out, tmp, skb)) {
+  if (Hacl_P256_Ecdh_dh_responder(out, tmp, skb)) {
     printf("  FAIL dh_responder accepted a point off the curve\n");
     rc = 1;
   } else {

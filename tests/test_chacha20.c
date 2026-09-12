@@ -35,7 +35,7 @@ static void check(const char *name, const uint8_t *k, const uint8_t *n,
                   const char *expected) {
   char *got = malloc(2 * len + 1);
 
-  Hacl_Chacha20_Ptr_encrypt(out, (uint8_t *)msg, len, (uint8_t *)k,
+  Hacl_Chacha20_encrypt(out, (uint8_t *)msg, len, (uint8_t *)k,
                             (uint8_t *)n, ctr);
   hex(got, out, len);
   got[2 * len] = 0;
@@ -47,7 +47,7 @@ static void check(const char *name, const uint8_t *k, const uint8_t *n,
     return;
   }
 
-  Hacl_Chacha20_Ptr_decrypt(back, out, len, (uint8_t *)k, (uint8_t *)n, ctr);
+  Hacl_Chacha20_decrypt(back, out, len, (uint8_t *)k, (uint8_t *)n, ctr);
   if (memcmp(back, msg, len) != 0) {
     printf("  FAIL %s (round trip)\n", name);
     failures++;

@@ -22,54 +22,46 @@
 
       static const uint64_t Hacl_Hash_SHA3_rc_arr[24] = { 1ULL, ... };
 
-    which is what [Pulse.Lib.GlobalArray] gives.  The rest of this library
-    works on slices, so the one thing missing is the conversion, and it is the
-    same three lines every time.
+    which is what [Pulse.Lib.GlobalArray] gives.  What is left over is the
+    bookkeeping: the permission is fractional and it is never given back.
 
-    The permission is fractional and it is never given back.  That is not a
-    leak: the object has static storage duration, so there is nothing to
-    return it to, and it is exactly why the emitted array can be [const].  A
-    caller therefore does *not* pair this with [S.to_array], which is the one
-    visible difference from a stack table. *)
+    That is not a leak.  The object has static storage duration, so there is
+    nothing to return it to, and it is exactly why the emitted array can be
+    [const].  But Pulse will not discard a permission silently, so every use
+    of a table ends with a {!drop_table}. *)
 module Hacl.Impl.Table
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module G = Pulse.Lib.GlobalArray
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 
-(** [n] is passed rather than derived because [S.from_array] wants the length
-    as a [size_t] and the only length in scope is a [nat] under [Seq.length].
-    Callers write the literal, and the precondition checks it. *)
+(** [n] is passed so that a caller that wants the length as a machine value --
+    a loop bound, usually -- has one; the precondition checks it against the
+    table's actual length. *)
 inline_for_extraction
 fn table (#t: Type0) (a: G.static_array t) (n: SZ.t)
 requires pure (Seq.length (G.static_array_elems a) == SZ.v n)
-returns s: S.slice t
-ensures exists* (p: perm). S.pts_to s #p (G.static_array_elems a)
+returns arr: A.array t
+ensures exists* (p: perm). A.pts_to arr #p (G.static_array_elems a)
 {
   let arr = G.array_of_static_array a;
   with p v. assert (A.pts_to arr #p v);
   A.pts_to_len arr;
-  let s = S.from_array arr #p n;
-  drop_ (S.is_from_array arr s);
-  s
+  arr
 }
 
 (** Let a table go.
 
     A caller of {!table} ends up holding a read permission it can neither use
-    nor give back, and Pulse will not discard it silently, so every use of a
-    table ends with one of these.  It is the counterpart of the [S.to_array]
-    that a stack table needs -- one line either way, and this one compiles to
-    nothing. *)
-ghost fn drop_table (#t: Type0) (s: S.slice t) (#p: perm) (#v: Seq.seq t)
-requires S.pts_to s #p v
+    nor give back.  This is where it goes; it compiles to nothing. *)
+ghost fn drop_table (#t: Type0) (s: A.array t) (#p: perm) (#v: Seq.seq t)
+requires A.pts_to s #p v
 ensures emp
 {
-  drop_ (S.pts_to s #p v)
+  drop_ (A.pts_to s #p v)
 }

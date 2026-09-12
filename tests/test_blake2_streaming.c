@@ -63,14 +63,14 @@ typedef struct {
 #define NLEN 10
 
 static const alg algs[NALG] = {
-    ALG("BLAKE2B-512", 128, 64, 64, Hacl_Streaming_Blake2_Ptr_blake2b_512),
-    ALG("BLAKE2B-384", 128, 48, 64, Hacl_Streaming_Blake2_Ptr_blake2b_384),
-    ALG("BLAKE2B-256", 128, 32, 64, Hacl_Streaming_Blake2_Ptr_blake2b_256),
-    ALG("BLAKE2B-160", 128, 20, 64, Hacl_Streaming_Blake2_Ptr_blake2b_160),
-    ALG("BLAKE2S-256", 64, 32, 32, Hacl_Streaming_Blake2_Ptr_blake2s_256),
-    ALG("BLAKE2S-224", 64, 28, 32, Hacl_Streaming_Blake2_Ptr_blake2s_224),
-    ALG("BLAKE2S-160", 64, 20, 32, Hacl_Streaming_Blake2_Ptr_blake2s_160),
-    ALG("BLAKE2S-128", 64, 16, 32, Hacl_Streaming_Blake2_Ptr_blake2s_128),
+    ALG("BLAKE2B-512", 128, 64, 64, Hacl_Streaming_Blake2_blake2b_512),
+    ALG("BLAKE2B-384", 128, 48, 64, Hacl_Streaming_Blake2_blake2b_384),
+    ALG("BLAKE2B-256", 128, 32, 64, Hacl_Streaming_Blake2_blake2b_256),
+    ALG("BLAKE2B-160", 128, 20, 64, Hacl_Streaming_Blake2_blake2b_160),
+    ALG("BLAKE2S-256", 64, 32, 32, Hacl_Streaming_Blake2_blake2s_256),
+    ALG("BLAKE2S-224", 64, 28, 32, Hacl_Streaming_Blake2_blake2s_224),
+    ALG("BLAKE2S-160", 64, 20, 32, Hacl_Streaming_Blake2_blake2s_160),
+    ALG("BLAKE2S-128", 64, 16, 32, Hacl_Streaming_Blake2_blake2s_128),
 };
 
 static const size_t msg_lens[NLEN] = {0, 1, 63, 64, 65, 127, 128, 129, 256, 1000};

@@ -52,7 +52,6 @@ open Hacl.Poly1305.Field
 open Hacl.Poly1305.Load
 open Hacl.Poly1305.Reduce
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -138,34 +137,34 @@ let pad_block (msg: Seq.seq S8.t) (tmp: Seq.seq S8.t) (off: nat) (blen: nat)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn absorb_blocks (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
-                 (e: S.slice S64.t) (msg: S.slice S8.t) (n: SZ.t)
+fn absorb_blocks (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
+                 (e: A.array S64.t) (msg: A.array S8.t) (n: SZ.t)
                  (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
                  (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
-requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
-         S.pts_to msg #pm vmsg **
+requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
+         A.pts_to msg #pm vmsg **
          pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
                Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
                16 * SZ.v n <= Seq.length vmsg /\
                feval vh % prime == reveal acc)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
-  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
-  S.pts_to msg #pm vmsg **
+  A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
+  A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
         bounded vh' 27 /\ bounded vr 26 /\ 16 * SZ.v n <= Seq.length vmsg /\
         feval vh' % prime ==
           Spec.blocks_acc vmsg 0 (SZ.v n) (feval vr) (reveal acc))
 {
-  S.pts_to_len h;
-  S.pts_to_len msg;
+  A.pts_to_len h;
+  A.pts_to_len msg;
   repeati_g_zero (Spec.bstep vmsg 0 (feval vr)) (reveal acc);
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vh1: Seq.seq S64.t) (vd1: Seq.seq S64.t)
                     (ve1: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to h vh1 ** S.pts_to r vr ** S.pts_to d vd1 **
-    S.pts_to e ve1 ** S.pts_to msg #pm vmsg **
+    pts_to i vi ** A.pts_to h vh1 ** A.pts_to r vr ** A.pts_to d vd1 **
+    A.pts_to e ve1 ** A.pts_to msg #pm vmsg **
     pure (SZ.v vi <= SZ.v n /\ Seq.length vh1 == 5 /\ Seq.length vd1 == 5 /\
           Seq.length ve1 == 5 /\ bounded vh1 27 /\
           feval vh1 % prime ==
@@ -176,10 +175,10 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
     Math.lemma_mult_le_right 16 (SZ.v vi + 1) (SZ.v n);
     let off = SZ.mul vi 16sz;
     load_full e msg off;
-    with vh0. assert (S.pts_to h vh0);
+    with vh0. assert (A.pts_to h vh0);
     fadd h e;
     fmul h r d;
-    with vh2. assert (S.pts_to h vh2);
+    with vh2. assert (A.pts_to h vh2);
     blocks_step vmsg (feval vr) (SZ.v vi) (feval vh0) (feval vh2) (reveal acc);
     i := SZ.add vi 1sz;
   }
@@ -195,20 +194,20 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
     separate function, and not an [if] inside the driver, because a Pulse [if]
     has to be the last statement of something for its two branches to be
     checked against one written-down postcondition. *)
-fn absorb_tail (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
-               (e: S.slice S64.t) (msg: S.slice S8.t) (off: SZ.t) (blen: SZ.t)
+fn absorb_tail (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
+               (e: A.array S64.t) (msg: A.array S8.t) (off: SZ.t) (blen: SZ.t)
                (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
                (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
                (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
-requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
-         S.pts_to msg #pm vmsg **
+requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
+         A.pts_to msg #pm vmsg **
          pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
                Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
                SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
                feval vh % prime == reveal acc)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
-  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
-  S.pts_to msg #pm vmsg **
+  A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
+  A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
         bounded vh' 27 /\ bounded vr 26 /\
         SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
@@ -220,7 +219,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
 {
   if SZ.gt blen 0sz {
     load_last e msg off blen;
-    with ve0. assert (S.pts_to e ve0);
+    with ve0. assert (A.pts_to e ve0);
     step_cong (feval vh) (reveal acc) (feval ve0) (feval vr);
     fadd h e;
     fmul h r d;
@@ -231,21 +230,21 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
 
 (** The AEAD's padded block: the bytes, then zeros out to sixteen, absorbed as
     a full block. *)
-fn absorb_pad (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
-              (e: S.slice S64.t) (msg: S.slice S8.t) (off: SZ.t) (blen: SZ.t)
+fn absorb_pad (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
+              (e: A.array S64.t) (msg: A.array S8.t) (off: SZ.t) (blen: SZ.t)
               (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
               (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
               (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
-requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
-         S.pts_to msg #pm vmsg **
+requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
+         A.pts_to msg #pm vmsg **
          pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
                Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
                0 < SZ.v blen /\ SZ.v blen < 16 /\
                SZ.v off + SZ.v blen <= Seq.length vmsg /\
                feval vh % prime == reveal acc)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
-  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
-  S.pts_to msg #pm vmsg **
+  A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
+  A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
         bounded vh' 27 /\ bounded vr 26 /\
         SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
@@ -256,21 +255,20 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
                              (Spec.zeros (16 - SZ.v blen))))
            * feval vr) % prime)
 {
-  S.pts_to_len msg;
+  A.pts_to_len msg;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
   A.pts_to_len tarr;
-  let tmp = S.from_array tarr 16sz;
-  S.pts_to_len tmp;
-  Hacl.Impl.Copy.copy_range tmp 0sz msg off blen;
-  with vt. assert (S.pts_to tmp vt);
+  A.pts_to_len tarr;
+  Hacl.Impl.Copy.copy_range tarr 0sz msg off blen;
+  with vt. assert (A.pts_to tarr vt);
   pad_block vmsg vt (SZ.v off) (SZ.v blen);
-  load_full e tmp 0sz;
-  with ve0. assert (S.pts_to e ve0);
+  load_full e tarr 0sz;
+  with ve0. assert (A.pts_to e ve0);
   step_cong (feval vh) (reveal acc) (feval ve0) (feval vr);
   fadd h e;
   fmul h r d;
-  S.to_array tmp;
+  ()
 }
 
 #pop-options
@@ -284,25 +282,25 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 200"
 
-fn absorb_seg (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
-              (e: S.slice S64.t) (msg: S.slice S8.t)
+fn absorb_seg (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
+              (e: A.array S64.t) (msg: A.array S8.t) (len: SZ.t)
               (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
               (#vd: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S64.t))
               (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
-requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd ** S.pts_to e ve **
-         S.pts_to msg #pm vmsg **
+requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
+         A.pts_to msg #pm vmsg **
          pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
                Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
                feval vh % prime == reveal acc)
+         ** pure (SZ.v len == Seq.length vmsg)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
-  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' ** S.pts_to e ve' **
-  S.pts_to msg #pm vmsg **
+  A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
+  A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
         bounded vh' 27 /\ bounded vr 26 /\
         feval vh' % prime == Spec.seg_acc vmsg (feval vr) (reveal acc))
 {
-  S.pts_to_len msg;
-  let len = S.len msg;
+  A.pts_to_len msg;
   let n = SZ.div len 16sz;
   let q = SZ.rem len 16sz;
   Math.euclidean_division_definition (SZ.v len) 16;
@@ -323,67 +321,60 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn poly1305_mac (out: S.slice S8.t) (msg: S.slice S8.t) (key: S.slice S8.t)
+fn mac (out: A.array S8.t) (msg: A.array S8.t) (len: SZ.t) (key: A.array S8.t)
                 (#vout: erased (Seq.seq S8.t))
                 (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
                 (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to out vout ** S.pts_to msg #pm vmsg ** S.pts_to key #pk vkey **
+requires A.pts_to out vout ** A.pts_to msg #pm vmsg ** A.pts_to key #pk vkey **
          pure (Seq.length vout == 16 /\ Seq.length vkey == 32)
+         ** pure (SZ.v len == Seq.length vmsg)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to out vout' ** S.pts_to msg #pm vmsg ** S.pts_to key #pk vkey **
+  A.pts_to out vout' ** A.pts_to msg #pm vmsg ** A.pts_to key #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vout' == 16 /\
         vout' == Spec.poly1305 vmsg vkey)
 {
-  S.pts_to_len out;
-  S.pts_to_len msg;
-  S.pts_to_len key;
+  A.pts_to_len out;
+  A.pts_to_len msg;
+  A.pts_to_len key;
   let z = S64.zero;
   let mut rarr = [| z; 5sz |];
   A.pts_to_len rarr;
-  let r = S.from_array rarr 5sz;
-  S.pts_to_len r;
+  A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];
   A.pts_to_len harr;
-  let h = S.from_array harr 5sz;
-  S.pts_to_len h;
+  A.pts_to_len harr;
   let mut earr = [| z; 5sz |];
   A.pts_to_len earr;
-  let e = S.from_array earr 5sz;
-  S.pts_to_len e;
+  A.pts_to_len earr;
   let mut darr = [| z; 5sz |];
   A.pts_to_len darr;
-  let d = S.from_array darr 5sz;
-  S.pts_to_len d;
+  A.pts_to_len darr;
 
-  load_r r key;
-  set_zero h;
-  with vr. assert (S.pts_to r vr);
+  load_r rarr key;
+  set_zero harr;
+  with vr. assert (A.pts_to rarr vr);
   Math.pow2_lt_compat 27 26;
 
-  let len = S.len msg;
   let full = SZ.div len 16sz;
   Math.multiply_fractions (SZ.v len) 16;
   Math.euclidean_division_definition (SZ.v len) 16;
   Math.lemma_mod_lt (SZ.v len) 16;
-  absorb_blocks h r d e msg full #_ #_ #_ #_ #_ #_ #(hide 0);
+  absorb_blocks harr rarr darr earr msg full #_ #_ #_ #_ #_ #_ #(hide 0);
 
   (* The short final block, if there is one. *)
   let rem = SZ.rem len 16sz;
   let off = SZ.mul full 16sz;
-  with vh0. assert (S.pts_to h vh0);
-  absorb_tail h r d e msg off rem
+  with vh0. assert (A.pts_to harr vh0);
+  absorb_tail harr rarr darr earr msg off rem
     #_ #_ #_ #_ #_ #_ #(hide (Spec.blocks_acc vmsg 0 (SZ.v full) (feval vr) 0));
-  with vh3. assert (S.pts_to h vh3);
+  with vh3. assert (A.pts_to harr vh3);
   mac_tail vmsg (feval vr) (SZ.v full) (SZ.v rem)
            (Spec.blocks_acc vmsg 0 (SZ.v full) (feval vr) 0) (feval vh3);
 
-  reduce h;
-  with vhf. assert (S.pts_to h vhf);
-  store_tag out h key;
-  S.to_array d;
-  S.to_array e;
-  S.to_array h;
-  S.to_array r;
+  reduce harr;
+  with vhf. assert (A.pts_to harr vhf);
+  store_tag out harr key;
+  ()
 }
 
 #pop-options

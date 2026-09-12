@@ -37,7 +37,6 @@ open Pulse.Lib.Pervasives
 open Spec.Poly1305.Field
 open Hacl.Poly1305.Field
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -55,18 +54,18 @@ module S64 = Hacl.Secret.UInt64
     returned rather than folded back in. *)
 
 inline_for_extraction
-fn ripple_impl (t: S.slice S64.t) (e0 e1 e2 e3 e4: S64.t)
+fn ripple_impl (t: A.array S64.t) (e0 e1 e2 e3 e4: S64.t)
                (#vt: erased (Seq.seq S64.t))
-requires S.pts_to t vt **
+requires A.pts_to t vt **
          pure (Seq.length vt == 5 /\
                bounded5 (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4) 27)
 returns c: S64.t
-ensures exists* (vt': Seq.seq S64.t). S.pts_to t vt' **
+ensures exists* (vt': Seq.seq S64.t). A.pts_to t vt' **
   pure (Seq.length vt' == 5 /\
         ripple (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4)
                (vv vt' 0) (vv vt' 1) (vv vt' 2) (vv vt' 3) (vv vt' 4) (S64.v c))
 {
-  S.pts_to_len t;
+  A.pts_to_len t;
   Math.pow2_lt_compat 64 28;
   Math.lemma_div_lt (S64.v e0) 27 26;
   assert_norm (pow2 1 == 2);
@@ -79,11 +78,11 @@ ensures exists* (vt': Seq.seq S64.t). S.pts_to t vt' **
   let f3 = add2 e3 (hi26 f2);
   Math.lemma_div_lt (S64.v f3) 28 26;
   let f4 = add2 e4 (hi26 f3);
-  S.((t.(0sz) <- lo26 e0));
-  S.((t.(1sz) <- lo26 f1));
-  S.((t.(2sz) <- lo26 f2));
-  S.((t.(3sz) <- lo26 f3));
-  S.((t.(4sz) <- lo26 f4));
+  A.((t.(0sz) <- lo26 e0));
+  A.((t.(1sz) <- lo26 f1));
+  A.((t.(2sz) <- lo26 f2));
+  A.((t.(3sz) <- lo26 f3));
+  A.((t.(4sz) <- lo26 f4));
   hi26 f4
 }
 
@@ -93,34 +92,31 @@ ensures exists* (vt': Seq.seq S64.t). S.pts_to t vt' **
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn reduce (h: S.slice S64.t) (#vh: erased (Seq.seq S64.t))
-requires S.pts_to h vh ** pure (Seq.length vh == 5 /\ bounded vh 27)
-ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' **
+fn reduce (h: A.array S64.t) (#vh: erased (Seq.seq S64.t))
+requires A.pts_to h vh ** pure (Seq.length vh == 5 /\ bounded vh 27)
+ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' **
   pure (Seq.length vh' == 5 /\ bounded vh' 26 /\
         feval vh' == feval vh % prime)
 {
-  S.pts_to_len h;
+  A.pts_to_len h;
   let z = S64.zero;
   let mut aarr = [| z; 5sz |];
   A.pts_to_len aarr;
-  let a = S.from_array aarr 5sz;
-  S.pts_to_len a;
+  A.pts_to_len aarr;
   let mut rarr = [| z; 5sz |];
   A.pts_to_len rarr;
-  let r = S.from_array rarr 5sz;
-  S.pts_to_len r;
+  A.pts_to_len rarr;
   let mut qarr = [| z; 5sz |];
   A.pts_to_len qarr;
-  let q = S.from_array qarr 5sz;
-  S.pts_to_len q;
+  A.pts_to_len qarr;
 
-  let e0 = S.(h.(0sz));
-  let e1 = S.(h.(1sz));
-  let e2 = S.(h.(2sz));
-  let e3 = S.(h.(3sz));
-  let e4 = S.(h.(4sz));
-  let ca = ripple_impl a e0 e1 e2 e3 e4;
-  with va. assert (S.pts_to a va);
+  let e0 = A.(h.(0sz));
+  let e1 = A.(h.(1sz));
+  let e2 = A.(h.(2sz));
+  let e3 = A.(h.(3sz));
+  let e4 = A.(h.(4sz));
+  let ca = ripple_impl aarr e0 e1 e2 e3 e4;
+  with va. assert (A.pts_to aarr va);
   ripple_eval (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4)
               (vv va 0) (vv va 1) (vv va 2) (vv va 3) (vv va 4) (S64.v ca);
   ripple_carry_bound (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4)
@@ -128,22 +124,22 @@ ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' **
   fold_carry (vv va 0) (vv va 1) (vv va 2) (vv va 3) (vv va 4) (S64.v ca);
 
   (* [p], congruent to the accumulator and below [2 * prime]. *)
-  let a0 = S.(a.(0sz));
-  let a1 = S.(a.(1sz));
-  let a2 = S.(a.(2sz));
-  let a3 = S.(a.(3sz));
-  let a4 = S.(a.(4sz));
+  let a0 = A.(aarr.(0sz));
+  let a1 = A.(aarr.(1sz));
+  let a2 = A.(aarr.(2sz));
+  let a3 = A.(aarr.(3sz));
+  let a4 = A.(aarr.(4sz));
   assert_norm (pow2 26 + 20 < pow2 27);
   Math.pow2_lt_compat 64 27;
   let p0 = add2 a0 (times5 ca);
   let p0five = add2 p0 (S64.classify 5uL);
 
-  let cr = ripple_impl r p0 a1 a2 a3 a4;
-  with vr. assert (S.pts_to r vr);
+  let cr = ripple_impl rarr p0 a1 a2 a3 a4;
+  with vr. assert (A.pts_to rarr vr);
   ripple_eval (S64.v p0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4)
               (vv vr 0) (vv vr 1) (vv vr 2) (vv vr 3) (vv vr 4) (S64.v cr);
-  let cq = ripple_impl q p0five a1 a2 a3 a4;
-  with vq. assert (S.pts_to q vq);
+  let cq = ripple_impl qarr p0five a1 a2 a3 a4;
+  with vq. assert (A.pts_to qarr vq);
   ripple_eval (S64.v p0five) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4)
               (vv vq 0) (vv vq 1) (vv vq 2) (vv vq 3) (vv vq 4) (S64.v cq);
 
@@ -167,24 +163,22 @@ ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' **
             (S64.v cr) (S64.v cq);
 
   let m = S64.eq_mask cq (S64.classify 1uL);
-  let r0 = S.(r.(0sz));
-  let r1 = S.(r.(1sz));
-  let r2 = S.(r.(2sz));
-  let r3 = S.(r.(3sz));
-  let r4 = S.(r.(4sz));
-  let q0 = S.(q.(0sz));
-  let q1 = S.(q.(1sz));
-  let q2 = S.(q.(2sz));
-  let q3 = S.(q.(3sz));
-  let q4 = S.(q.(4sz));
-  S.((h.(0sz) <- S64.select m q0 r0));
-  S.((h.(1sz) <- S64.select m q1 r1));
-  S.((h.(2sz) <- S64.select m q2 r2));
-  S.((h.(3sz) <- S64.select m q3 r3));
-  S.((h.(4sz) <- S64.select m q4 r4));
-  S.to_array q;
-  S.to_array r;
-  S.to_array a;
+  let r0 = A.(rarr.(0sz));
+  let r1 = A.(rarr.(1sz));
+  let r2 = A.(rarr.(2sz));
+  let r3 = A.(rarr.(3sz));
+  let r4 = A.(rarr.(4sz));
+  let q0 = A.(qarr.(0sz));
+  let q1 = A.(qarr.(1sz));
+  let q2 = A.(qarr.(2sz));
+  let q3 = A.(qarr.(3sz));
+  let q4 = A.(qarr.(4sz));
+  A.((h.(0sz) <- S64.select m q0 r0));
+  A.((h.(1sz) <- S64.select m q1 r1));
+  A.((h.(2sz) <- S64.select m q2 r2));
+  A.((h.(3sz) <- S64.select m q3 r3));
+  A.((h.(4sz) <- S64.select m q4 r4));
+  ()
 }
 
 #pop-options

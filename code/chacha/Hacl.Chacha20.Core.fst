@@ -36,7 +36,7 @@ open Hacl.Spec.Loops
 open Hacl.Impl.Bytes
 open Spec.Chacha20
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
@@ -55,29 +55,29 @@ module G = FStar.Ghost
     trivially because the four indices of a quarter round are distinct, but
     writing it in the same order means the proof does not have to know
     that. *)
-fn line_impl (st: S.slice S32.t) (a b d: SZ.t) (s: rotval)
+fn line_impl (st: A.array S32.t) (a b d: SZ.t) (s: rotval)
              (#v0: erased (Seq.seq S32.t))
-requires S.pts_to st v0 **
+requires A.pts_to st v0 **
          pure (Seq.length v0 == 16 /\ SZ.v a < 16 /\ SZ.v b < 16 /\ SZ.v d < 16)
-ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
+ensures exists* (v1: Seq.seq S32.t). A.pts_to st v1 **
   pure (Seq.length v0 == 16 /\ SZ.v a < 16 /\ SZ.v b < 16 /\ SZ.v d < 16 /\
         Seq.length v1 == 16 /\ v1 == line (SZ.v a) (SZ.v b) (SZ.v d) s v0)
 {
-  S.pts_to_len st;
-  let ra = S.(st.(a));
-  let rb = S.(st.(b));
-  S.((st.(a) <- S32.add_mod ra rb));
-  let rd = S.(st.(d));
-  let ra' = S.(st.(a));
-  S.((st.(d) <- S32.rotate_left (S32.logxor rd ra') s));
+  A.pts_to_len st;
+  let ra = A.(st.(a));
+  let rb = A.(st.(b));
+  A.((st.(a) <- S32.add_mod ra rb));
+  let rd = A.(st.(d));
+  let ra' = A.(st.(a));
+  A.((st.(d) <- S32.rotate_left (S32.logxor rd ra') s));
 }
 
-fn quarter_round_impl (st: S.slice S32.t) (a b c d: SZ.t)
+fn quarter_round_impl (st: A.array S32.t) (a b c d: SZ.t)
                       (#v0: erased (Seq.seq S32.t))
-requires S.pts_to st v0 **
+requires A.pts_to st v0 **
          pure (Seq.length v0 == 16 /\
                SZ.v a < 16 /\ SZ.v b < 16 /\ SZ.v c < 16 /\ SZ.v d < 16)
-ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
+ensures exists* (v1: Seq.seq S32.t). A.pts_to st v1 **
   pure (Seq.length v0 == 16 /\
         SZ.v a < 16 /\ SZ.v b < 16 /\ SZ.v c < 16 /\ SZ.v d < 16 /\
         Seq.length v1 == 16 /\
@@ -91,9 +91,9 @@ ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
 
 (** {2 A double round} *)
 
-fn column_round_impl (st: S.slice S32.t) (#v0: erased (Seq.seq S32.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == 16)
-ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
+fn column_round_impl (st: A.array S32.t) (#v0: erased (Seq.seq S32.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == 16)
+ensures exists* (v1: Seq.seq S32.t). A.pts_to st v1 **
   pure (Seq.length v0 == 16 /\ Seq.length v1 == 16 /\ v1 == column_round v0)
 {
   quarter_round_impl st 0sz 4sz  8sz 12sz;
@@ -102,9 +102,9 @@ ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
   quarter_round_impl st 3sz 7sz 11sz 15sz;
 }
 
-fn diagonal_round_impl (st: S.slice S32.t) (#v0: erased (Seq.seq S32.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == 16)
-ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
+fn diagonal_round_impl (st: A.array S32.t) (#v0: erased (Seq.seq S32.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == 16)
+ensures exists* (v1: Seq.seq S32.t). A.pts_to st v1 **
   pure (Seq.length v0 == 16 /\ Seq.length v1 == 16 /\ v1 == diagonal_round v0)
 {
   quarter_round_impl st 0sz 5sz 10sz 15sz;
@@ -113,9 +113,9 @@ ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
   quarter_round_impl st 3sz 4sz  9sz 14sz;
 }
 
-fn double_round_impl (st: S.slice S32.t) (#v0: erased (Seq.seq S32.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == 16)
-ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
+fn double_round_impl (st: A.array S32.t) (#v0: erased (Seq.seq S32.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == 16)
+ensures exists* (v1: Seq.seq S32.t). A.pts_to st v1 **
   pure (Seq.length v0 == 16 /\ Seq.length v1 == 16 /\ v1 == double_round v0)
 {
   column_round_impl st;
@@ -124,17 +124,17 @@ ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
 
 (** {2 Twenty rounds} *)
 
-fn rounds_impl (st: S.slice S32.t) (#v0: erased (Seq.seq S32.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == 16)
-ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
+fn rounds_impl (st: A.array S32.t) (#v0: erased (Seq.seq S32.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == 16)
+ensures exists* (v1: Seq.seq S32.t). A.pts_to st v1 **
   pure (Seq.length v0 == 16 /\ Seq.length v1 == 16 /\ v1 == rounds v0)
 {
-  S.pts_to_len st;
+  A.pts_to_len st;
   repeati_zero (fun _ m -> double_round m) (reveal v0);
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 10sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
-    pts_to i vi ** S.pts_to st v **
+    pts_to i vi ** A.pts_to st v **
     pure (SZ.v vi <= 10 /\ Seq.length v0 == 16 /\ Seq.length v == 16 /\
           v == repeati (SZ.v vi) (fun _ m -> double_round m) v0)
   decreases (10 - SZ.v (!i))
@@ -157,37 +157,37 @@ ensures exists* (v1: Seq.seq S32.t). S.pts_to st v1 **
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-fn core_impl (ks: S.slice S32.t) (st: S.slice S32.t) (ctr: U32.t)
+fn core_impl (ks: A.array S32.t) (st: A.array S32.t) (ctr: U32.t)
              (#vks: erased (Seq.seq S32.t)) (#v0: erased (Seq.seq S32.t))
-requires S.pts_to ks vks ** S.pts_to st v0 **
+requires A.pts_to ks vks ** A.pts_to st v0 **
          pure (Seq.length vks == 16 /\ Seq.length v0 == 16)
 ensures exists* (vk1: Seq.seq S32.t) (vs1: Seq.seq S32.t).
-  S.pts_to ks vk1 ** S.pts_to st vs1 **
+  A.pts_to ks vk1 ** A.pts_to st vs1 **
   pure (Seq.length v0 == 16 /\ Seq.length vk1 == 16 /\ Seq.length vs1 == 16 /\
         vs1 == with_counter v0 ctr /\ vk1 == core v0 ctr)
 {
-  S.pts_to_len ks;
-  S.pts_to_len st;
+  A.pts_to_len ks;
+  A.pts_to_len st;
 
-  S.((st.(12sz) <- S32.classify ctr));
+  A.((st.(12sz) <- S32.classify ctr));
 
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj 16sz)
   invariant exists* (vj: SZ.t) (vk: Seq.seq S32.t) (vs: Seq.seq S32.t).
-    pts_to j vj ** S.pts_to ks vk ** S.pts_to st vs **
+    pts_to j vj ** A.pts_to ks vk ** A.pts_to st vs **
     pure (SZ.v vj <= 16 /\ Seq.length v0 == 16 /\ Seq.length vk == 16 /\
           Seq.length vs == 16 /\ vs == with_counter v0 ctr /\
           (forall (k: nat). k < SZ.v vj ==> Seq.index vk k == Seq.index vs k))
   decreases (16 - SZ.v (!j))
   {
     let vj = !j;
-    let x = S.(st.(vj));
-    S.((ks.(vj) <- x));
+    let x = A.(st.(vj));
+    A.((ks.(vj) <- x));
     j := SZ.add vj 1sz;
   };
 
-  with vk. assert (S.pts_to ks vk);
-  with vs. assert (S.pts_to st vs);
+  with vk. assert (A.pts_to ks vk);
+  with vs. assert (A.pts_to st vs);
   Seq.lemma_eq_intro vk vs;
   Seq.lemma_eq_elim vk vs;
 
@@ -196,7 +196,7 @@ ensures exists* (vk1: Seq.seq S32.t) (vs1: Seq.seq S32.t).
   let mut n = 0sz;
   while (let vn = !n; SZ.lt vn 16sz)
   invariant exists* (vn: SZ.t) (vk: Seq.seq S32.t) (vs: Seq.seq S32.t).
-    pts_to n vn ** S.pts_to ks vk ** S.pts_to st vs **
+    pts_to n vn ** A.pts_to ks vk ** A.pts_to st vs **
     pure (SZ.v vn <= 16 /\ Seq.length v0 == 16 /\ Seq.length vk == 16 /\
           Seq.length vs == 16 /\ vs == with_counter v0 ctr /\
           (forall (k: nat). k < SZ.v vn ==> Seq.index vk k == Seq.index (core v0 ctr) k) /\
@@ -205,13 +205,13 @@ ensures exists* (vk1: Seq.seq S32.t) (vs1: Seq.seq S32.t).
   decreases (16 - SZ.v (!n))
   {
     let vn = !n;
-    let x = S.(ks.(vn));
-    let y = S.(st.(vn));
-    S.((ks.(vn) <- S32.add_mod x y));
+    let x = A.(ks.(vn));
+    let y = A.(st.(vn));
+    A.((ks.(vn) <- S32.add_mod x y));
     n := SZ.add vn 1sz;
   };
 
-  with vk. assert (S.pts_to ks vk);
+  with vk. assert (A.pts_to ks vk);
   Seq.lemma_eq_intro vk (core v0 ctr);
   Seq.lemma_eq_elim vk (core v0 ctr);
 }
@@ -225,19 +225,19 @@ ensures exists* (vk1: Seq.seq S32.t) (vs1: Seq.seq S32.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-fn write_keystream (out: S.slice S8.t) (ks: S.slice S32.t)
+fn write_keystream (out: A.array S8.t) (ks: A.array S32.t)
                    (#vout: erased (Seq.seq S8.t)) (#pk: perm)
                    (#vk: erased (Seq.lseq S32.t 16))
-requires S.pts_to out vout ** S.pts_to ks #pk vk **
+requires A.pts_to out vout ** A.pts_to ks #pk vk **
          pure (Seq.length vout == 64)
-ensures S.pts_to out (words_to_le #S32.t 16 vk) ** S.pts_to ks #pk vk
+ensures A.pts_to out (words_to_le #S32.t 16 vk) ** A.pts_to ks #pk vk
 {
-  S.pts_to_len out;
-  S.pts_to_len ks;
+  A.pts_to_len out;
+  A.pts_to_len ks;
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj 16sz)
   invariant exists* (vj: SZ.t) (vo: Seq.seq S8.t).
-    pts_to j vj ** S.pts_to out vo ** S.pts_to ks #pk vk **
+    pts_to j vj ** A.pts_to out vo ** A.pts_to ks #pk vk **
     pure (SZ.v vj <= 16 /\ Seq.length vo == 64 /\
           (forall (i: nat). i < SZ.v vj * 4 ==>
              Seq.index vo i == Seq.index (words_to_le #S32.t 16 vk) i))
@@ -246,13 +246,13 @@ ensures S.pts_to out (words_to_le #S32.t 16 vk) ** S.pts_to ks #pk vk
     let vj = !j;
     Math.lemma_mult_le_right 4 (SZ.v vj + 1) 16;
     Math.distributivity_add_left (SZ.v vj) 1 4;
-    let x = S.(ks.(vj));
+    let x = A.(ks.(vj));
     store_le #S32.t out (SZ.mul vj 4sz) x;
-    with vo. assert (S.pts_to out vo);
+    with vo. assert (A.pts_to out vo);
     digest_step_le #S32.t 16 vk (SZ.v vj) (SZ.v (SZ.mul vj 4sz)) vo;
     j := SZ.add vj 1sz;
   };
-  with vo. assert (S.pts_to out vo);
+  with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (words_to_le #S32.t 16 vk);
   Seq.lemma_eq_elim vo (words_to_le #S32.t 16 vk);
 }

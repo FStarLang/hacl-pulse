@@ -28,22 +28,30 @@
     invocation; the invocation then emits one [Hacl.c] in which everything
     shared is shared.  The [--custard_entry] list lives in the Makefile, next
     to the rest of the build, since it is a statement about what the library
-    exports rather than about what F* proves. *)
+    exports rather than about what F* proves.
+
+    The modules named here are the implementations themselves: there is no
+    wrapper layer, so a C name is the F* name with the dots turned into
+    underscores. *)
 module Hacl
 
-module Hash_SHA2 = Hacl.Hash.SHA2.Ptr
-module Streaming_SHA2 = Hacl.Streaming.SHA2.Ptr
-module Hash_SHA3 = Hacl.Hash.SHA3.Ptr
-module Streaming_SHA3 = Hacl.Streaming.SHA3.Ptr
-module Hash_Blake2 = Hacl.Hash.Blake2.Ptr
-module Streaming_Blake2 = Hacl.Streaming.Blake2.Ptr
-module Chacha20 = Hacl.Chacha20.Ptr
-module Poly1305 = Hacl.Poly1305.Ptr
-module Chacha20Poly1305 = Hacl.Chacha20Poly1305.Ptr
-module HMAC = Hacl.HMAC.Ptr
-module HKDF = Hacl.HKDF.Ptr
-module Curve25519 = Hacl.Curve25519.Ptr
-module Ed25519 = Hacl.Ed25519.Ptr
-module P256 = Hacl.P256.Ptr
-module DRBG = Hacl.HMAC.DRBG.Ptr
-module AES_GCM = Hacl.AES.GCM.Ptr
+module Hash_SHA2 = Hacl.Hash.SHA2
+module Streaming_SHA2 = Hacl.Streaming.SHA2
+module Hash_SHA3 = Hacl.Hash.SHA3
+module Streaming_SHA3 = Hacl.Streaming.SHA3
+module Hash_Blake2 = Hacl.Hash.Blake2.Named
+module Streaming_Blake2 = Hacl.Streaming.Blake2
+module Chacha20 = Hacl.Chacha20
+module Poly1305 = Hacl.Poly1305
+module Chacha20Poly1305 = Hacl.Chacha20Poly1305
+module HMAC = Hacl.HMAC
+module HKDF = Hacl.HKDF
+module Curve25519 = Hacl.Curve25519
+module Ed25519 = Hacl.Ed25519
+module P256 = Hacl.P256
+module P256_Key = Hacl.P256.Key
+module P256_Key_Public = Hacl.P256.Key.Public
+module P256_Sec1 = Hacl.P256.Sec1
+module P256_Ecdh = Hacl.P256.Ecdh
+module DRBG = Hacl.HMAC.DRBG
+module AES_GCM = Hacl.AES.GCM

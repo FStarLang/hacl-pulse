@@ -163,12 +163,12 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v0_entropy, 32, v0_nonce, 16, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v0_entropy, 32, v0_nonce, 16, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 no reseed: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 no reseed: generate 1 refused\n");
       failures++;
     }
@@ -177,12 +177,12 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v1_entropy, 32, v1_nonce, 16, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v1_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v1_entropy, 32, v1_nonce, 16, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v1_add0, 32)) {
       printf("  FAIL SHA-256 no reseed, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v1_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v1_add1, 32)) {
       printf("  FAIL SHA-256 no reseed, additional input: generate 1 refused\n");
       failures++;
     }
@@ -191,12 +191,12 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v2_entropy, 32, v2_nonce, 16, v2_personal, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v2_entropy, 32, v2_nonce, 16, v2_personal, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 no reseed, personalized: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 no reseed, personalized: generate 1 refused\n");
       failures++;
     }
@@ -205,12 +205,12 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v3_entropy, 32, v3_nonce, 16, v3_personal, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v3_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v3_entropy, 32, v3_nonce, 16, v3_personal, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v3_add0, 32)) {
       printf("  FAIL SHA-256 no reseed, personalized, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v3_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v3_add1, 32)) {
       printf("  FAIL SHA-256 no reseed, personalized, additional input: generate 1 refused\n");
       failures++;
     }
@@ -219,12 +219,12 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v4_entropy, 32, v4_nonce, 16, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v4_entropy, 32, v4_nonce, 16, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 no reseed: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 no reseed: generate 1 refused\n");
       failures++;
     }
@@ -233,12 +233,12 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v5_entropy, 32, v5_nonce, 16, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v5_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v5_entropy, 32, v5_nonce, 16, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v5_add0, 32)) {
       printf("  FAIL SHA-384 no reseed, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v5_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v5_add1, 32)) {
       printf("  FAIL SHA-384 no reseed, additional input: generate 1 refused\n");
       failures++;
     }
@@ -247,12 +247,12 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v6_entropy, 32, v6_nonce, 16, v6_personal, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v6_entropy, 32, v6_nonce, 16, v6_personal, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 no reseed, personalized: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 no reseed, personalized: generate 1 refused\n");
       failures++;
     }
@@ -261,12 +261,12 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v7_entropy, 32, v7_nonce, 16, v7_personal, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v7_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v7_entropy, 32, v7_nonce, 16, v7_personal, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v7_add0, 32)) {
       printf("  FAIL SHA-384 no reseed, personalized, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v7_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v7_add1, 32)) {
       printf("  FAIL SHA-384 no reseed, personalized, additional input: generate 1 refused\n");
       failures++;
     }
@@ -275,12 +275,12 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v8_entropy, 32, v8_nonce, 16, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v8_entropy, 32, v8_nonce, 16, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 no reseed: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 no reseed: generate 1 refused\n");
       failures++;
     }
@@ -289,12 +289,12 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v9_entropy, 32, v9_nonce, 16, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v9_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v9_entropy, 32, v9_nonce, 16, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v9_add0, 32)) {
       printf("  FAIL SHA-512 no reseed, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v9_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v9_add1, 32)) {
       printf("  FAIL SHA-512 no reseed, additional input: generate 1 refused\n");
       failures++;
     }
@@ -303,12 +303,12 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v10_entropy, 32, v10_nonce, 16, v10_personal, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v10_entropy, 32, v10_nonce, 16, v10_personal, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 no reseed, personalized: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 no reseed, personalized: generate 1 refused\n");
       failures++;
     }
@@ -317,12 +317,12 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v11_entropy, 32, v11_nonce, 16, v11_personal, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v11_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v11_entropy, 32, v11_nonce, 16, v11_personal, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v11_add0, 32)) {
       printf("  FAIL SHA-512 no reseed, personalized, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v11_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v11_add1, 32)) {
       printf("  FAIL SHA-512 no reseed, personalized, additional input: generate 1 refused\n");
       failures++;
     }
@@ -331,13 +331,13 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v12_entropy, 32, v12_nonce, 16, NULL, 0);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha256(k, v, &ctr, v12_reseed_entropy, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v12_entropy, 32, v12_nonce, 16, NULL, 0);
+    Hacl_HMAC_DRBG_reseed_sha256(k, v, &ctr, v12_reseed_entropy, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 reseeded: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 reseeded: generate 1 refused\n");
       failures++;
     }
@@ -346,13 +346,13 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v13_entropy, 32, v13_nonce, 16, NULL, 0);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha256(k, v, &ctr, v13_reseed_entropy, 32, v13_reseed_add, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v13_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v13_entropy, 32, v13_nonce, 16, NULL, 0);
+    Hacl_HMAC_DRBG_reseed_sha256(k, v, &ctr, v13_reseed_entropy, 32, v13_reseed_add, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v13_add0, 32)) {
       printf("  FAIL SHA-256 reseeded, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v13_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v13_add1, 32)) {
       printf("  FAIL SHA-256 reseeded, additional input: generate 1 refused\n");
       failures++;
     }
@@ -361,13 +361,13 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v14_entropy, 32, v14_nonce, 16, v14_personal, 32);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha256(k, v, &ctr, v14_reseed_entropy, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v14_entropy, 32, v14_nonce, 16, v14_personal, 32);
+    Hacl_HMAC_DRBG_reseed_sha256(k, v, &ctr, v14_reseed_entropy, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 reseeded, personalized: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-256 reseeded, personalized: generate 1 refused\n");
       failures++;
     }
@@ -376,13 +376,13 @@ int main(void) {
   {
     uint8_t k[32], v[32], out[128];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, v15_entropy, 32, v15_nonce, 16, v15_personal, 32);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha256(k, v, &ctr, v15_reseed_entropy, 32, v15_reseed_add, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v15_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, v15_entropy, 32, v15_nonce, 16, v15_personal, 32);
+    Hacl_HMAC_DRBG_reseed_sha256(k, v, &ctr, v15_reseed_entropy, 32, v15_reseed_add, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v15_add0, 32)) {
       printf("  FAIL SHA-256 reseeded, personalized, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 128, k, v, &ctr, v15_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 128, k, v, &ctr, v15_add1, 32)) {
       printf("  FAIL SHA-256 reseeded, personalized, additional input: generate 1 refused\n");
       failures++;
     }
@@ -391,13 +391,13 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v16_entropy, 32, v16_nonce, 16, NULL, 0);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha384(k, v, &ctr, v16_reseed_entropy, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v16_entropy, 32, v16_nonce, 16, NULL, 0);
+    Hacl_HMAC_DRBG_reseed_sha384(k, v, &ctr, v16_reseed_entropy, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 reseeded: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 reseeded: generate 1 refused\n");
       failures++;
     }
@@ -406,13 +406,13 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v17_entropy, 32, v17_nonce, 16, NULL, 0);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha384(k, v, &ctr, v17_reseed_entropy, 32, v17_reseed_add, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v17_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v17_entropy, 32, v17_nonce, 16, NULL, 0);
+    Hacl_HMAC_DRBG_reseed_sha384(k, v, &ctr, v17_reseed_entropy, 32, v17_reseed_add, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v17_add0, 32)) {
       printf("  FAIL SHA-384 reseeded, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v17_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v17_add1, 32)) {
       printf("  FAIL SHA-384 reseeded, additional input: generate 1 refused\n");
       failures++;
     }
@@ -421,13 +421,13 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v18_entropy, 32, v18_nonce, 16, v18_personal, 32);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha384(k, v, &ctr, v18_reseed_entropy, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v18_entropy, 32, v18_nonce, 16, v18_personal, 32);
+    Hacl_HMAC_DRBG_reseed_sha384(k, v, &ctr, v18_reseed_entropy, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 reseeded, personalized: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-384 reseeded, personalized: generate 1 refused\n");
       failures++;
     }
@@ -436,13 +436,13 @@ int main(void) {
   {
     uint8_t k[48], v[48], out[192];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha384(k, v, &ctr, v19_entropy, 32, v19_nonce, 16, v19_personal, 32);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha384(k, v, &ctr, v19_reseed_entropy, 32, v19_reseed_add, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v19_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha384(k, v, &ctr, v19_entropy, 32, v19_nonce, 16, v19_personal, 32);
+    Hacl_HMAC_DRBG_reseed_sha384(k, v, &ctr, v19_reseed_entropy, 32, v19_reseed_add, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v19_add0, 32)) {
       printf("  FAIL SHA-384 reseeded, personalized, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha384(out, 192, k, v, &ctr, v19_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha384(out, 192, k, v, &ctr, v19_add1, 32)) {
       printf("  FAIL SHA-384 reseeded, personalized, additional input: generate 1 refused\n");
       failures++;
     }
@@ -451,13 +451,13 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v20_entropy, 32, v20_nonce, 16, NULL, 0);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha512(k, v, &ctr, v20_reseed_entropy, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v20_entropy, 32, v20_nonce, 16, NULL, 0);
+    Hacl_HMAC_DRBG_reseed_sha512(k, v, &ctr, v20_reseed_entropy, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 reseeded: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 reseeded: generate 1 refused\n");
       failures++;
     }
@@ -466,13 +466,13 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v21_entropy, 32, v21_nonce, 16, NULL, 0);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha512(k, v, &ctr, v21_reseed_entropy, 32, v21_reseed_add, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v21_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v21_entropy, 32, v21_nonce, 16, NULL, 0);
+    Hacl_HMAC_DRBG_reseed_sha512(k, v, &ctr, v21_reseed_entropy, 32, v21_reseed_add, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v21_add0, 32)) {
       printf("  FAIL SHA-512 reseeded, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v21_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v21_add1, 32)) {
       printf("  FAIL SHA-512 reseeded, additional input: generate 1 refused\n");
       failures++;
     }
@@ -481,13 +481,13 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v22_entropy, 32, v22_nonce, 16, v22_personal, 32);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha512(k, v, &ctr, v22_reseed_entropy, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v22_entropy, 32, v22_nonce, 16, v22_personal, 32);
+    Hacl_HMAC_DRBG_reseed_sha512(k, v, &ctr, v22_reseed_entropy, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 reseeded, personalized: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, NULL, 0)) {
       printf("  FAIL SHA-512 reseeded, personalized: generate 1 refused\n");
       failures++;
     }
@@ -496,13 +496,13 @@ int main(void) {
   {
     uint8_t k[64], v[64], out[256];
     size_t ctr;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha512(k, v, &ctr, v23_entropy, 32, v23_nonce, 16, v23_personal, 32);
-    Hacl_HMAC_DRBG_Ptr_reseed_sha512(k, v, &ctr, v23_reseed_entropy, 32, v23_reseed_add, 32);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v23_add0, 32)) {
+    Hacl_HMAC_DRBG_instantiate_sha512(k, v, &ctr, v23_entropy, 32, v23_nonce, 16, v23_personal, 32);
+    Hacl_HMAC_DRBG_reseed_sha512(k, v, &ctr, v23_reseed_entropy, 32, v23_reseed_add, 32);
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v23_add0, 32)) {
       printf("  FAIL SHA-512 reseeded, personalized, additional input: generate 0 refused\n");
       failures++;
     }
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha512(out, 256, k, v, &ctr, v23_add1, 32)) {
+    if (!Hacl_HMAC_DRBG_generate_sha512(out, 256, k, v, &ctr, v23_add1, 32)) {
       printf("  FAIL SHA-512 reseeded, personalized, additional input: generate 1 refused\n");
       failures++;
     }
@@ -514,16 +514,16 @@ int main(void) {
     uint8_t k[32], v[32], out[16], e[32] = { 0 }, nn[16] = { 0 };
     size_t ctr;
     int i, refused = 0;
-    Hacl_HMAC_DRBG_Ptr_instantiate_sha256(k, v, &ctr, e, 32, nn, 16, NULL, 0);
+    Hacl_HMAC_DRBG_instantiate_sha256(k, v, &ctr, e, 32, nn, 16, NULL, 0);
     for (i = 0; i < 1024; i++)
-      if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 16, k, v, &ctr, NULL, 0))
+      if (!Hacl_HMAC_DRBG_generate_sha256(out, 16, k, v, &ctr, NULL, 0))
         refused++;
     if (refused != 0) { printf("FAIL drbg: refused too early\n"); failures++; }
-    if (Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 16, k, v, &ctr, NULL, 0)) {
+    if (Hacl_HMAC_DRBG_generate_sha256(out, 16, k, v, &ctr, NULL, 0)) {
       printf("FAIL drbg: generate past reseed_interval\n"); failures++;
     }
-    Hacl_HMAC_DRBG_Ptr_reseed_sha256(k, v, &ctr, e, 32, NULL, 0);
-    if (!Hacl_HMAC_DRBG_Ptr_generate_sha256(out, 16, k, v, &ctr, NULL, 0)) {
+    Hacl_HMAC_DRBG_reseed_sha256(k, v, &ctr, e, 32, NULL, 0);
+    if (!Hacl_HMAC_DRBG_generate_sha256(out, 16, k, v, &ctr, NULL, 0)) {
       printf("FAIL drbg: reseed did not reset the counter\n"); failures++;
     }
   }

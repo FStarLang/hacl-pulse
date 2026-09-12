@@ -42,7 +42,6 @@ open Spec.P256.Mont
 open Hacl.P256.Tables
 open Hacl.P256.Scalar
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -58,14 +57,14 @@ module P = Spec.P256
     private key.  A caller that ignores the result gets the raw number,
     which is what the reductions in ECDSA want. *)
 
-fn load_scalar (out: S.slice S64.t) (b: S.slice S8.t)
+fn load_scalar (out: A.array S64.t) (b: A.array S8.t)
                (#vo: erased (Seq.seq S64.t))
                (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to b #pb vb **
+requires A.pts_to out vo ** A.pts_to b #pb vb **
   pure (Seq.length vo == nl /\ Seq.length vb == 32)
 returns r: bool
 ensures exists* (wo: Seq.seq S64.t).
-  S.pts_to out wo ** S.pts_to b #pb vb **
+  A.pts_to out wo ** A.pts_to b #pb vb **
   pure (Seq.length wo == nl /\ bnd (vals wo) base /\
         eval (vals wo) == be_nat vb /\
         r == (0 < be_nat vb && be_nat vb < P.order))
@@ -73,39 +72,33 @@ ensures exists* (wo: Seq.seq S64.t).
   qmod_ok (); qmod_m (); mzero_ok ();
   assert_norm (pow2 256 < 2 * P.order);
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let t = S.from_array a0 16sz;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let s = S.from_array a1 16sz;
-  let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let zs = S.from_array a2 16sz;
-  S.pts_to_len t; S.pts_to_len s; S.pts_to_len zs;
+  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
 
   load_be out b;
-  with wo. assert (S.pts_to out wo);
+  with wo. assert (A.pts_to out wo);
   assert (pure (eval (vals wo) == be_nat vb));
-  acopy t out;
-  azero zs;
+  acopy a0 out;
+  azero a2;
   let nm = qnm ();
-  let lo = abelow t s nm qmod;
+  let lo = abelow a0 a1 nm qmod;
   drop_table nm;
   assert (pure (lo == (be_nat vb < P.order)));
-  let nz = aeq out zs;
+  let nz = aeq out a2;
   assert (pure (nz == (be_nat vb = 0)));
-  S.to_array t; S.to_array s; S.to_array zs;
   lo && not nz
 }
 
 (** {2 The public checks} *)
 
-fn validate_private_key (b: S.slice S8.t)
+fn validate_private_key (b: A.array S8.t)
                         (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to b #pb vb ** pure (Seq.length vb == 32)
+requires A.pts_to b #pb vb ** pure (Seq.length vb == 32)
 returns r: bool
-ensures S.pts_to b #pb vb ** pure (r == (0 < be_nat vb && be_nat vb < P.order))
+ensures A.pts_to b #pb vb ** pure (r == (0 < be_nat vb && be_nat vb < P.order))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let k = S.from_array a0 16sz;
-  S.pts_to_len k;
-  let r = load_scalar k b;
-  S.to_array k;
+  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; A.pts_to_len a0;
+  let r = load_scalar a0 b;
   r
 }
 

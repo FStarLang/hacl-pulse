@@ -14,7 +14,7 @@
    limitations under the License.
 *)
 
-(** Copying bytes between slices.
+(** Copying bytes between arrays.
 
     Three loops that every algorithm here ends up needing: copy a prefix, copy
     at an offset, and copy as much of a digest as still fits in an output
@@ -26,7 +26,7 @@ module Hacl.Impl.Copy
 
 open Pulse.Lib.Pervasives
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
@@ -38,23 +38,23 @@ let szmin (a b: SZ.t) : r: SZ.t { SZ.v r == (if SZ.v a <= SZ.v b then SZ.v a els
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
 (** [dst[0 .. n) <- src[0 .. n)]. *)
-fn copy_prefix (dst: S.slice S8.t) (src: S.slice S8.t) (n: SZ.t)
+fn copy_prefix (dst: A.array S8.t) (src: A.array S8.t) (n: SZ.t)
                (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
          pure (SZ.v n <= Seq.length vd /\ SZ.v n <= Seq.length vs)
-ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
+ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
         pure (Seq.length vd' == Seq.length vd /\
               SZ.v n <= Seq.length vd' /\ SZ.v n <= Seq.length vs /\
               (forall (k: nat). k < SZ.v n ==> Seq.index vd' k == Seq.index vs k) /\
               (forall (k: nat). SZ.v n <= k /\ k < Seq.length vd ==>
                  Seq.index vd' k == Seq.index vd k))
 {
-  S.pts_to_len dst;
-  S.pts_to_len src;
+  A.pts_to_len dst;
+  A.pts_to_len src;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to dst vd' ** S.pts_to src #ps vs **
+    pts_to i vi ** A.pts_to dst vd' ** A.pts_to src #ps vs **
     pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == Seq.length vd /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index vd' k == Seq.index vs k) /\
           (forall (k: nat). SZ.v vi <= k /\ k < Seq.length vd ==>
@@ -62,18 +62,18 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
-    let x = S.(src.(vi));
-    S.((dst.(vi) <- x));
+    let x = A.(src.(vi));
+    A.((dst.(vi) <- x));
     i := SZ.add vi 1sz;
   };
 }
 
 (** [dst[base .. base+n) <- src[0 .. n)]. *)
-fn copy_at (dst: S.slice S8.t) (base: SZ.t) (src: S.slice S8.t) (n: SZ.t)
+fn copy_at (dst: A.array S8.t) (base: SZ.t) (src: A.array S8.t) (n: SZ.t)
            (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
          pure (SZ.v base + SZ.v n <= Seq.length vd /\ SZ.v n <= Seq.length vs)
-ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
+ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
         pure (Seq.length vd' == Seq.length vd /\
               SZ.v base + SZ.v n <= Seq.length vd' /\ SZ.v n <= Seq.length vs /\
               (forall (k: nat). k < SZ.v n ==>
@@ -81,12 +81,12 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
               (forall (k: nat). k < Seq.length vd /\ (k < SZ.v base \/ SZ.v base + SZ.v n <= k) ==>
                  Seq.index vd' k == Seq.index vd k))
 {
-  S.pts_to_len dst;
-  S.pts_to_len src;
+  A.pts_to_len dst;
+  A.pts_to_len src;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to dst vd' ** S.pts_to src #ps vs **
+    pts_to i vi ** A.pts_to dst vd' ** A.pts_to src #ps vs **
     pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == Seq.length vd /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index vd' (SZ.v base + k) == Seq.index vs k) /\
@@ -96,38 +96,41 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
   {
     let vi = !i;
     SZ.fits_lte (SZ.v base + SZ.v vi) (Seq.length vd);
-    let x = S.(src.(vi));
-    S.((dst.(SZ.add base vi) <- x));
+    let x = A.(src.(vi));
+    A.((dst.(SZ.add base vi) <- x));
     i := SZ.add vi 1sz;
   };
 }
 
-(** Write as much of the digest [dg] into [out] at offset [base] as fits. *)
-fn write_chunk (out: S.slice S8.t) (base: SZ.t) (dg: S.slice S8.t)
+(** Write as much of the digest [dg] into [out] at offset [base] as fits.
+
+    [ol] and [dl] are the two lengths.  An array does not carry its length, so
+    the one caller -- HKDF's expand loop -- passes them; it has both in scope
+    anyway, being the one that decided how long the output is. *)
+fn write_chunk (out: A.array S8.t) (ol: SZ.t) (base: SZ.t) (dg: A.array S8.t) (dl: SZ.t)
                (#vout: erased (Seq.seq S8.t)) (#pd: perm) (#vdg: erased (Seq.seq S8.t))
-requires S.pts_to out vout ** S.pts_to dg #pd vdg **
-         pure (SZ.v base <= Seq.length vout)
-ensures exists* vout'. S.pts_to out vout' ** S.pts_to dg #pd vdg **
+requires A.pts_to out vout ** A.pts_to dg #pd vdg **
+         pure (SZ.v base <= Seq.length vout /\
+               SZ.v ol == Seq.length vout /\ SZ.v dl == Seq.length vdg)
+ensures exists* vout'. A.pts_to out vout' ** A.pts_to dg #pd vdg **
         pure (Seq.length vout' == Seq.length vout /\
               SZ.v base <= Seq.length vout' /\
               (forall (k: nat). k < SZ.v base ==> Seq.index vout' k == Seq.index vout k) /\
               (forall (k: nat). k < Seq.length vdg /\ SZ.v base + k < Seq.length vout ==>
                  Seq.index vout' (SZ.v base + k) == Seq.index vdg k))
 {
-  S.pts_to_len out;
-  S.pts_to_len dg;
-  let ol = S.len out;
-  let dl = S.len dg;
+  A.pts_to_len out;
+  A.pts_to_len dg;
   let cnt = szmin dl (SZ.sub ol base);
   copy_at out base dg cnt;
 }
 
 (** [dst[dbase .. dbase+n) <- src[sbase .. sbase+n)]. *)
-fn copy_range (dst: S.slice S8.t) (dbase: SZ.t) (src: S.slice S8.t) (sbase: SZ.t) (n: SZ.t)
+fn copy_range (dst: A.array S8.t) (dbase: SZ.t) (src: A.array S8.t) (sbase: SZ.t) (n: SZ.t)
               (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
          pure (SZ.v dbase + SZ.v n <= Seq.length vd /\ SZ.v sbase + SZ.v n <= Seq.length vs)
-ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
+ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
         pure (Seq.length vd' == Seq.length vd /\
               SZ.v dbase + SZ.v n <= Seq.length vd' /\ SZ.v sbase + SZ.v n <= Seq.length vs /\
               (forall (k: nat). k < SZ.v n ==>
@@ -135,12 +138,12 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
               (forall (k: nat). k < Seq.length vd /\ (k < SZ.v dbase \/ SZ.v dbase + SZ.v n <= k) ==>
                  Seq.index vd' k == Seq.index vd k))
 {
-  S.pts_to_len dst;
-  S.pts_to_len src;
+  A.pts_to_len dst;
+  A.pts_to_len src;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to dst vd' ** S.pts_to src #ps vs **
+    pts_to i vi ** A.pts_to dst vd' ** A.pts_to src #ps vs **
     pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == Seq.length vd /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index vd' (SZ.v dbase + k) == Seq.index vs (SZ.v sbase + k)) /\
@@ -151,8 +154,8 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
     let vi = !i;
     SZ.fits_lte (SZ.v dbase + SZ.v vi) (Seq.length vd);
     SZ.fits_lte (SZ.v sbase + SZ.v vi) (Seq.length vs);
-    let x = S.(src.(SZ.add sbase vi));
-    S.((dst.(SZ.add dbase vi) <- x));
+    let x = A.(src.(SZ.add sbase vi));
+    A.((dst.(SZ.add dbase vi) <- x));
     i := SZ.add vi 1sz;
   };
 }
@@ -165,17 +168,17 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
     buffers have the same length that is extensional equality, and saying so
     once here keeps the [Seq.equal] out of every caller's proof context. *)
 
-fn copy_exact (dst: S.slice S8.t) (src: S.slice S8.t) (n: SZ.t)
+fn copy_exact (dst: A.array S8.t) (src: A.array S8.t) (n: SZ.t)
               (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
          pure (SZ.v n == Seq.length vd /\ SZ.v n == Seq.length vs)
-ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
+ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
         pure (vd' == reveal vs)
 {
-  S.pts_to_len dst;
-  S.pts_to_len src;
+  A.pts_to_len dst;
+  A.pts_to_len src;
   copy_prefix dst src n;
-  with vd'. assert (S.pts_to dst vd');
+  with vd'. assert (A.pts_to dst vd');
   assert (pure (Seq.equal vd' vs));
 }
 
@@ -201,25 +204,25 @@ let slice_copy_at (old: Seq.seq S8.t) (fresh: Seq.seq S8.t) (src: Seq.seq S8.t)
     [K] and [V] start at all zeroes and all ones, and the buffers are the
     caller's, so there has to be a way to write a constant over one. *)
 
-fn fill (dst: S.slice S8.t) (x: S8.t) (n: SZ.t)
+fn fill (dst: A.array S8.t) (x: S8.t) (n: SZ.t)
         (#vd: erased (Seq.seq S8.t))
-requires S.pts_to dst vd ** pure (SZ.v n == Seq.length vd)
-ensures exists* vd'. S.pts_to dst vd' **
+requires A.pts_to dst vd ** pure (SZ.v n == Seq.length vd)
+ensures exists* vd'. A.pts_to dst vd' **
         pure (vd' == Seq.create (SZ.v n) x)
 {
-  S.pts_to_len dst;
+  A.pts_to_len dst;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to dst vd' **
+    pts_to i vi ** A.pts_to dst vd' **
     pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == SZ.v n /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index vd' k == x))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
-    S.((dst.(vi) <- x));
+    A.((dst.(vi) <- x));
     i := SZ.add vi 1sz;
   };
-  with vd'. assert (S.pts_to dst vd');
+  with vd'. assert (A.pts_to dst vd');
   assert (pure (Seq.equal vd' (Seq.create (SZ.v n) x)));
 }

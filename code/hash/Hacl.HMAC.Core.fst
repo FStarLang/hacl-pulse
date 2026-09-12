@@ -34,7 +34,6 @@ open Spec.HMAC
 open Hacl.Hash.SHA2.Core
 open Hacl.Impl.Copy
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -56,32 +55,32 @@ let sizes (#t: Type0) {| word t |} (p: params t)
 (** {2 Building blocks} *)
 
 (** [pad <- k0 ^ c] over a whole block. *)
-fn fill_xor (#t: Type0) {| w: word t |} (pad: S.slice S8.t) (k0: S.slice S8.t) (c: U8.t)
+fn fill_xor (#t: Type0) {| w: word t |} (pad: A.array S8.t) (k0: A.array S8.t) (c: U8.t)
             (#vp: erased (Seq.seq S8.t)) (#pk: perm) (#vk0: erased (Seq.seq S8.t))
-requires S.pts_to pad vp ** S.pts_to k0 #pk vk0 **
+requires A.pts_to pad vp ** A.pts_to k0 #pk vk0 **
          pure (Seq.length vp == block_len #t /\ Seq.length vk0 == block_len #t)
-ensures exists* vp'. S.pts_to pad vp' ** S.pts_to k0 #pk vk0 **
+ensures exists* vp'. A.pts_to pad vp' ** A.pts_to k0 #pk vk0 **
         pure (Seq.length vk0 == block_len #t /\ vp' == xor_byte #t vk0 c)
 {
-  S.pts_to_len pad;
-  S.pts_to_len k0;
+  A.pts_to_len pad;
+  A.pts_to_len k0;
   let bl = block_len_sz #t #w;
   let cs = S8.classify c;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi bl)
   invariant exists* (vi: SZ.t) (vp': Seq.seq S8.t).
-    pts_to i vi ** S.pts_to pad vp' ** S.pts_to k0 #pk vk0 **
+    pts_to i vi ** A.pts_to pad vp' ** A.pts_to k0 #pk vk0 **
     pure (SZ.v vi <= block_len #t /\ Seq.length vp' == block_len #t /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index vp' k == S8.logxor (Seq.index vk0 k) (S8.classify c)))
   decreases (block_len #t - SZ.v (!i))
   {
     let vi = !i;
-    let x = S.(k0.(vi));
-    S.((pad.(vi) <- S8.logxor x cs));
+    let x = A.(k0.(vi));
+    A.((pad.(vi) <- S8.logxor x cs));
     i := SZ.add vi 1sz;
   };
-  with vp'. assert (S.pts_to pad vp');
+  with vp'. assert (A.pts_to pad vp');
   assert (pure (Seq.length vp' == block_len #t /\
                 (forall (k: nat). k < block_len #t ==>
                    Seq.index vp' k == S8.logxor (Seq.index vk0 k) (S8.classify c))));
@@ -94,33 +93,33 @@ ensures exists* vp'. S.pts_to pad vp' ** S.pts_to k0 #pk vk0 **
 (** [k0 <- K0].  [k0] must arrive zeroed; [dg] is scratch, used only when the
     key is longer than a block and must itself be hashed. *)
 fn key_block_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-                  (kt: S.slice t) (ivt: S.slice t)
-                  (k0: S.slice S8.t) (dg: S.slice S8.t) (key: S.slice S8.t)
+                  (kt: A.array t) (ivt: A.array t)
+                  (k0: A.array S8.t) (dg: A.array S8.t) (key: A.array S8.t) (lk: SZ.t)
                   (#pk: perm) (#vk: erased (Seq.seq t))
                   (#pi: perm) (#vi: erased (Seq.seq t))
                   (#vk0: erased (Seq.seq S8.t)) (#vdg: erased (Seq.seq S8.t))
                   (#pkey: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to k0 vk0 **
-         S.pts_to dg vdg ** S.pts_to key #pkey vkey **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to k0 vk0 **
+         A.pts_to dg vdg ** A.pts_to key #pkey vkey **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vk0 == block_len #t /\ Seq.length vdg == (hash_bytes p) /\
                (forall (j: nat). j < block_len #t ==> Seq.index vk0 j == S8.classify 0uy) /\
                Seq.length vkey < pow2 61 /\ Seq.length vkey < max_input #t)
+         ** pure (SZ.v lk == Seq.length vkey)
 ensures exists* (vk0': Seq.seq S8.t) (vdg': Seq.seq S8.t).
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to k0 vk0' **
-  S.pts_to dg vdg' ** S.pts_to key #pkey vkey **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to k0 vk0' **
+  A.pts_to dg vdg' ** A.pts_to key #pkey vkey **
   pure (Seq.length vdg' == (hash_bytes p) /\
         Seq.length vkey < max_input #t /\ vk0' == key_block p vkey)
 {
-  S.pts_to_len k0;
-  S.pts_to_len dg;
-  S.pts_to_len key;
+  A.pts_to_len k0;
+  A.pts_to_len dg;
+  A.pts_to_len key;
   let bl = block_len_sz #t #w;
-  let lk = S.len key;
   if (SZ.lte lk bl)
   {
     copy_prefix k0 key lk;
-    with vk0'. assert (S.pts_to k0 vk0');
+    with vk0'. assert (A.pts_to k0 vk0');
     key_block_pointwise #t (reveal vk0') (reveal vkey);
     assert (pure (Seq.length vkey <= block_len #t));
     assert (pure (reveal vk0' ==
@@ -128,9 +127,9 @@ ensures exists* (vk0': Seq.seq S8.t) (vdg': Seq.seq S8.t).
   }
   else
   {
-    hash_impl p kt ivt dg key;
+    hash_impl p kt ivt dg key lk;
     copy_prefix k0 dg p.nhash_bytes;
-    with vk0'. assert (S.pts_to k0 vk0');
+    with vk0'. assert (A.pts_to k0 vk0');
     key_block_pointwise #t (reveal vk0') (hash p vkey);
     assert (pure (block_len #t < Seq.length vkey));
     assert (pure (reveal vk0' ==
@@ -141,64 +140,61 @@ ensures exists* (vk0': Seq.seq S8.t) (vdg': Seq.seq S8.t).
 (** {2 HMAC} *)
 
 fn hmac_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-             (kt: S.slice t) (ivt: S.slice t) (out: S.slice S8.t)
-             (key: S.slice S8.t) (msg: S.slice S8.t)
+             (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
+             (key: A.array S8.t) (lk: SZ.t) (msg: A.array S8.t) (lm: SZ.t)
              (#pk: perm) (#vk: erased (Seq.seq t))
              (#pi: perm) (#vi: erased (Seq.seq t))
              (#vout: erased (Seq.seq S8.t))
              (#pkey: perm) (#vkey: erased (Seq.seq S8.t))
              (#pmsg: perm) (#vmsg: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout **
-         S.pts_to key #pkey vkey ** S.pts_to msg #pmsg vmsg **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vout == (hash_bytes p) /\
                Seq.length vkey < pow2 61 /\ Seq.length vkey < max_input #t /\
                SZ.fits (block_len #t + Seq.length vmsg) /\
                block_len #t + Seq.length vmsg < pow2 61 /\
                block_len #t + Seq.length vmsg < max_input #t)
+         ** pure (SZ.v lk == Seq.length vkey)
+         ** pure (SZ.v lm == Seq.length vmsg)
 ensures exists* vout'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout' **
-  S.pts_to key #pkey vkey ** S.pts_to msg #pmsg vmsg **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
   pure (Seq.length vkey < max_input #t /\
         block_len #t + Seq.length vmsg < max_input #t /\
         vout' == hmac p vkey vmsg)
 {
-  S.pts_to_len kt;
-  S.pts_to_len ivt;
-  S.pts_to_len out;
-  S.pts_to_len key;
-  S.pts_to_len msg;
+  A.pts_to_len kt;
+  A.pts_to_len ivt;
+  A.pts_to_len out;
+  A.pts_to_len key;
+  A.pts_to_len msg;
   let bl = block_len_sz #t #w;
   let z8 = S8.classify 0uy;
 
   let mut k0arr = [| z8; bl |];
   A.pts_to_len k0arr;
-  let k0 = S.from_array k0arr bl;
-  S.pts_to_len k0;
+  A.pts_to_len k0arr;
 
   let mut padarr = [| z8; bl |];
   A.pts_to_len padarr;
-  let pad = S.from_array padarr bl;
-  S.pts_to_len pad;
+  A.pts_to_len padarr;
 
   let mut dgarr = [| z8; p.nhash_bytes |];
   A.pts_to_len dgarr;
-  let dg = S.from_array dgarr p.nhash_bytes;
-  S.pts_to_len dg;
+  A.pts_to_len dgarr;
 
-  key_block_impl p kt ivt k0 dg key;
-  with vk0'. assert (S.pts_to k0 vk0');
+  key_block_impl p kt ivt k0arr dgarr key lk;
+  with vk0'. assert (A.pts_to k0arr vk0');
 
-  fill_xor #t pad k0 ipad;
-  hash_prefixed p kt ivt dg pad msg;
+  fill_xor #t padarr k0arr ipad;
+  hash_prefixed p kt ivt dgarr padarr msg lm;
 
-  fill_xor #t pad k0 opad;
+  fill_xor #t padarr k0arr opad;
   sizes #t p;
-  hash_prefixed p kt ivt out pad dg;
+  hash_prefixed p kt ivt out padarr dgarr p.nhash_bytes;
 
-  S.to_array dg;
-  S.to_array pad;
-  S.to_array k0;
+  ()
 }
 
 #pop-options

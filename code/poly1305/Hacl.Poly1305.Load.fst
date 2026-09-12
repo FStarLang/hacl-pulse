@@ -45,7 +45,6 @@ open Hacl.Impl.Copy
 open Spec.Poly1305.Field
 open Hacl.Poly1305.Field
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -92,15 +91,15 @@ let shl (x: S64.t) (s: U32.t { U32.v s < 64 })
     padded case share the code; both call sites pass a constant. *)
 
 inline_for_extraction
-fn store_limbs (e: S.slice S64.t) (lo: S64.t) (hi: S64.t) (c: S64.t)
+fn store_limbs (e: A.array S64.t) (lo: S64.t) (hi: S64.t) (c: S64.t)
                (#ve: erased (Seq.seq S64.t))
-requires S.pts_to e ve **
+requires A.pts_to e ve **
          pure (Seq.length ve == 5 /\ (S64.v c == 0 \/ S64.v c == pow2 24))
-ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' **
+ensures exists* (ve': Seq.seq S64.t). A.pts_to e ve' **
   pure (Seq.length ve' == 5 /\ bounded ve' 26 /\
         feval ve' == S64.v lo + pow2 64 * S64.v hi + S64.v c * pow2 104)
 {
-  S.pts_to_len e;
+  A.pts_to_len e;
   let cn: erased nat = hide (S64.v c / pow2 24);
   load_limbs (S64.v lo) (S64.v hi) cn;
   assert_norm (pow2 24 * pow2 104 == pow2 128);
@@ -112,27 +111,27 @@ ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' **
   Math.lemma_div_lt (S64.v hi) 64 40;
   assert_norm (pow2 24 + pow2 24 == pow2 25);
   Math.pow2_lt_compat 64 26;
-  S.((e.(0sz) <- lo26 lo));
-  S.((e.(1sz) <- lo26 (shr lo 26ul)));
-  S.((e.(2sz) <- add2 (shr lo 52ul) (shl (lo14 hi) 12ul)));
-  S.((e.(3sz) <- lo26 (shr hi 14ul)));
-  S.((e.(4sz) <- add2 (shr hi 40ul) c));
+  A.((e.(0sz) <- lo26 lo));
+  A.((e.(1sz) <- lo26 (shr lo 26ul)));
+  A.((e.(2sz) <- add2 (shr lo 52ul) (shl (lo14 hi) 12ul)));
+  A.((e.(3sz) <- lo26 (shr hi 14ul)));
+  A.((e.(4sz) <- add2 (shr hi 40ul) c));
 }
 
 (** {2 A full block} *)
 
 (** [e <- the sixteen bytes at [off], with the high bit set]. *)
-fn load_full (e: S.slice S64.t) (b: S.slice S8.t) (off: SZ.t)
+fn load_full (e: A.array S64.t) (b: A.array S8.t) (off: SZ.t)
              (#ve: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to e ve ** S.pts_to b #pb vb **
+requires A.pts_to e ve ** A.pts_to b #pb vb **
          pure (Seq.length ve == 5 /\ SZ.v off + 16 <= Seq.length vb)
-ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' ** S.pts_to b #pb vb **
+ensures exists* (ve': Seq.seq S64.t). A.pts_to e ve' ** A.pts_to b #pb vb **
   pure (Seq.length ve' == 5 /\ bounded ve' 26 /\
         SZ.v off + 16 <= Seq.length vb /\
         feval ve' == Spec.block_val (Seq.slice vb (SZ.v off) (SZ.v off + 16)))
 {
-  S.pts_to_len e;
-  S.pts_to_len b;
+  A.pts_to_len e;
+  A.pts_to_len b;
   let lo = load_le #S64.t b off;
   let hi = load_le #S64.t b (SZ.add off 8sz);
   let blk = hide (Seq.slice vb (SZ.v off) (SZ.v off + 16));
@@ -153,40 +152,39 @@ ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' ** S.pts_to b #pb vb **
     off.  [blen] may be zero only if the message is empty, which the caller
     does not do: [nblocks 0] is zero. *)
 
-fn load_last (e: S.slice S64.t) (b: S.slice S8.t) (off: SZ.t) (blen: SZ.t)
+fn load_last (e: A.array S64.t) (b: A.array S8.t) (off: SZ.t) (blen: SZ.t)
              (#ve: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to e ve ** S.pts_to b #pb vb **
+requires A.pts_to e ve ** A.pts_to b #pb vb **
          pure (Seq.length ve == 5 /\ SZ.v blen < 16 /\
                SZ.v off + SZ.v blen <= Seq.length vb)
-ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' ** S.pts_to b #pb vb **
+ensures exists* (ve': Seq.seq S64.t). A.pts_to e ve' ** A.pts_to b #pb vb **
   pure (Seq.length ve' == 5 /\ bounded ve' 26 /\
         SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vb /\
         feval ve' ==
           Spec.block_val (Seq.slice vb (SZ.v off) (SZ.v off + SZ.v blen)))
 {
-  S.pts_to_len e;
-  S.pts_to_len b;
+  A.pts_to_len e;
+  A.pts_to_len b;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
   A.pts_to_len tarr;
-  let tmp = S.from_array tarr 16sz;
-  S.pts_to_len tmp;
-  copy_range tmp 0sz b off blen;
-  S.((tmp.(blen) <- S8.classify 1uy));
+  A.pts_to_len tarr;
+  copy_range tarr 0sz b off blen;
+  A.((tarr.(blen) <- S8.classify 1uy));
 
-  with vt. assert (S.pts_to tmp vt);
+  with vt. assert (A.pts_to tarr vt);
   let blk = hide (Seq.slice vb (SZ.v off) (SZ.v off + SZ.v blen));
   le_nat_split vt (SZ.v blen);
   Seq.lemma_eq_intro (Seq.slice vt 0 (SZ.v blen)) (reveal blk);
   le_nat_one_zeros (Seq.slice vt (SZ.v blen) 16);
 
-  let lo = load_le #S64.t tmp 0sz;
-  let hi = load_le #S64.t tmp 8sz;
+  let lo = load_le #S64.t tarr 0sz;
+  let hi = load_le #S64.t tarr 8sz;
   le_nat_split vt 8;
   Seq.lemma_eq_intro (Seq.slice vt 0 8) (Seq.slice vt 0 8);
   assert_norm (pow2 (8 * 8) == pow2 64);
   store_limbs e lo hi S64.zero;
-  S.to_array tmp;
+  ()
 }
 
 #pop-options
@@ -199,42 +197,41 @@ ensures exists* (ve': Seq.seq S64.t). S.pts_to e ve' ** S.pts_to b #pb vb **
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-fn load_r (r: S.slice S64.t) (k: S.slice S8.t)
+fn load_r (r: A.array S64.t) (k: A.array S8.t)
           (#vr: erased (Seq.seq S64.t)) (#pk: perm) (#vk: erased (Seq.seq S8.t))
-requires S.pts_to r vr ** S.pts_to k #pk vk **
+requires A.pts_to r vr ** A.pts_to k #pk vk **
          pure (Seq.length vr == 5 /\ Seq.length vk == 32)
-ensures exists* (vr': Seq.seq S64.t). S.pts_to r vr' ** S.pts_to k #pk vk **
+ensures exists* (vr': Seq.seq S64.t). A.pts_to r vr' ** A.pts_to k #pk vk **
   pure (Seq.length vr' == 5 /\ bounded vr' 26 /\ Seq.length vk == 32 /\
         feval vr' == Spec.r_of vk)
 {
-  S.pts_to_len r;
-  S.pts_to_len k;
+  A.pts_to_len r;
+  A.pts_to_len k;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
   A.pts_to_len tarr;
-  let tmp = S.from_array tarr 16sz;
-  S.pts_to_len tmp;
-  copy_range tmp 0sz k 0sz 16sz;
+  A.pts_to_len tarr;
+  copy_range tarr 0sz k 0sz 16sz;
 
   let m0f = S8.classify 0x0fuy;
   let mfc = S8.classify 0xfcuy;
-  let c3 = S.(tmp.(3sz));   S.((tmp.(3sz) <- S8.logand c3 m0f));
-  let c7 = S.(tmp.(7sz));   S.((tmp.(7sz) <- S8.logand c7 m0f));
-  let c11 = S.(tmp.(11sz)); S.((tmp.(11sz) <- S8.logand c11 m0f));
-  let c15 = S.(tmp.(15sz)); S.((tmp.(15sz) <- S8.logand c15 m0f));
-  let c4 = S.(tmp.(4sz));   S.((tmp.(4sz) <- S8.logand c4 mfc));
-  let c8 = S.(tmp.(8sz));   S.((tmp.(8sz) <- S8.logand c8 mfc));
-  let c12 = S.(tmp.(12sz)); S.((tmp.(12sz) <- S8.logand c12 mfc));
+  let c3 = A.(tarr.(3sz));   A.((tarr.(3sz) <- S8.logand c3 m0f));
+  let c7 = A.(tarr.(7sz));   A.((tarr.(7sz) <- S8.logand c7 m0f));
+  let c11 = A.(tarr.(11sz)); A.((tarr.(11sz) <- S8.logand c11 m0f));
+  let c15 = A.(tarr.(15sz)); A.((tarr.(15sz) <- S8.logand c15 m0f));
+  let c4 = A.(tarr.(4sz));   A.((tarr.(4sz) <- S8.logand c4 mfc));
+  let c8 = A.(tarr.(8sz));   A.((tarr.(8sz) <- S8.logand c8 mfc));
+  let c12 = A.(tarr.(12sz)); A.((tarr.(12sz) <- S8.logand c12 mfc));
 
-  with vt. assert (S.pts_to tmp vt);
+  with vt. assert (A.pts_to tarr vt);
   Spec.clamp_eq (Seq.slice vk 0 16) vt;
 
-  let lo = load_le #S64.t tmp 0sz;
-  let hi = load_le #S64.t tmp 8sz;
+  let lo = load_le #S64.t tarr 0sz;
+  let hi = load_le #S64.t tarr 8sz;
   le_nat_split vt 8;
   assert_norm (pow2 (8 * 8) == pow2 64);
   store_limbs r lo hi S64.zero;
-  S.to_array tmp;
+  ()
 }
 
 #pop-options
@@ -285,25 +282,25 @@ let tag_bytes (vout: Seq.seq S8.t) (tlo thi n: nat)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn store_tag (out: S.slice S8.t) (h: S.slice S64.t) (k: S.slice S8.t)
+fn store_tag (out: A.array S8.t) (h: A.array S64.t) (k: A.array S8.t)
              (#vout: erased (Seq.seq S8.t)) (#ph: perm) (#vh: erased (Seq.seq S64.t))
              (#pk: perm) (#vk: erased (Seq.seq S8.t))
-requires S.pts_to out vout ** S.pts_to h #ph vh ** S.pts_to k #pk vk **
+requires A.pts_to out vout ** A.pts_to h #ph vh ** A.pts_to k #pk vk **
          pure (Seq.length vout == 16 /\ Seq.length vh == 5 /\ bounded vh 26 /\
                Seq.length vk == 32)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to out vout' ** S.pts_to h #ph vh ** S.pts_to k #pk vk **
+  A.pts_to out vout' ** A.pts_to h #ph vh ** A.pts_to k #pk vk **
   pure (Seq.length vk == 32 /\ Seq.length vout' == 16 /\
         vout' == Spec.finish (feval vh) (Spec.s_of vk))
 {
-  S.pts_to_len out;
-  S.pts_to_len h;
-  S.pts_to_len k;
-  let a0 = S.(h.(0sz));
-  let a1 = S.(h.(1sz));
-  let a2 = S.(h.(2sz));
-  let a3 = S.(h.(3sz));
-  let a4 = S.(h.(4sz));
+  A.pts_to_len out;
+  A.pts_to_len h;
+  A.pts_to_len k;
+  let a0 = A.(h.(0sz));
+  let a1 = A.(h.(1sz));
+  let a2 = A.(h.(2sz));
+  let a3 = A.(h.(3sz));
+  let a4 = A.(h.(4sz));
   tag_words (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4);
   Math.pow2_plus 26 26;
   Math.pow2_plus 12 52;
@@ -335,10 +332,10 @@ ensures exists* (vout': Seq.seq S8.t).
 
   store_le #S64.t out 0sz tlo;
   store_le #S64.t out 8sz thi;
-  with vout'. assert (S.pts_to out vout');
+  with vout'. assert (A.pts_to out vout');
   tag_bytes vout' (S64.v tlo) (S64.v thi)
                   ((feval vh + Spec.s_of vk) % pow2 128);
-  S.pts_to_len out;
+  A.pts_to_len out;
 }
 
 #pop-options

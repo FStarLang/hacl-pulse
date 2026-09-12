@@ -44,7 +44,7 @@ open Hacl.Impl.Copy
 open Spec.Chacha20
 open Hacl.Chacha20.Core
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
@@ -126,30 +126,30 @@ let step_ok (ctr0: U32.t) (len: nat) (b n: nat)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-fn init_state (st: S.slice S32.t) (key: S.slice S8.t) (nonce: S.slice S8.t) (ctr0: U32.t)
+fn init_state (st: A.array S32.t) (key: A.array S8.t) (nonce: A.array S8.t) (ctr0: U32.t)
               (#v0: erased (Seq.seq S32.t))
               (#pk: perm) (#vkey: erased (Seq.seq S8.t))
               (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+requires A.pts_to st v0 ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
          pure (Seq.length v0 == 16 /\ Seq.length vkey == 32 /\ Seq.length vnon == 12)
 ensures exists* (vs: Seq.seq S32.t).
-  S.pts_to st vs ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+  A.pts_to st vs ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\ Seq.length vs == 16 /\
         vs == init vkey vnon ctr0)
 {
-  S.pts_to_len st;
-  S.pts_to_len key;
-  S.pts_to_len nonce;
+  A.pts_to_len st;
+  A.pts_to_len key;
+  A.pts_to_len nonce;
 
-  S.((st.(0sz) <- c0));
-  S.((st.(1sz) <- c1));
-  S.((st.(2sz) <- c2));
-  S.((st.(3sz) <- c3));
+  A.((st.(0sz) <- c0));
+  A.((st.(1sz) <- c1));
+  A.((st.(2sz) <- c2));
+  A.((st.(3sz) <- c3));
 
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (vs: Seq.seq S32.t).
-    pts_to i vi ** S.pts_to st vs ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+    pts_to i vi ** A.pts_to st vs ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
     pure (SZ.v vi <= 8 /\ Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
           Seq.length vs == 16 /\
           (forall (j: nat). j < 4 + SZ.v vi ==>
@@ -160,16 +160,16 @@ ensures exists* (vs: Seq.seq S32.t).
     Math.lemma_mult_le_right 4 (SZ.v vi + 1) 8;
     let x = load_le #S32.t key (SZ.mul vi 4sz);
     word_u32.v_extensional x (Seq.index (words_from_le #S32.t 8 (reveal vkey)) (SZ.v vi));
-    S.((st.(SZ.add 4sz vi) <- x));
+    A.((st.(SZ.add 4sz vi) <- x));
     i := SZ.add vi 1sz;
   };
 
-  S.((st.(12sz) <- S32.classify ctr0));
+  A.((st.(12sz) <- S32.classify ctr0));
 
   let mut n = 0sz;
   while (let vn = !n; SZ.lt vn 3sz)
   invariant exists* (vn: SZ.t) (vs: Seq.seq S32.t).
-    pts_to n vn ** S.pts_to st vs ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+    pts_to n vn ** A.pts_to st vs ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
     pure (SZ.v vn <= 3 /\ Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
           Seq.length vs == 16 /\
           (forall (j: nat). j < 13 + SZ.v vn ==>
@@ -180,11 +180,11 @@ ensures exists* (vs: Seq.seq S32.t).
     Math.lemma_mult_le_right 4 (SZ.v vn + 1) 3;
     let x = load_le #S32.t nonce (SZ.mul vn 4sz);
     word_u32.v_extensional x (Seq.index (words_from_le #S32.t 3 (reveal vnon)) (SZ.v vn));
-    S.((st.(SZ.add 13sz vn) <- x));
+    A.((st.(SZ.add 13sz vn) <- x));
     n := SZ.add vn 1sz;
   };
 
-  with vs. assert (S.pts_to st vs);
+  with vs. assert (A.pts_to st vs);
   Seq.lemma_eq_intro vs (init vkey vnon ctr0);
   Seq.lemma_eq_elim vs (init vkey vnon ctr0);
 }
@@ -198,14 +198,14 @@ ensures exists* (vs: Seq.seq S32.t).
 (** Xor [n] keystream bytes into the output, starting at [b].  Split out of
     the driver so that the driver's own obligations stay about block
     arithmetic and this one's stay about bytes. *)
-fn xor_chunk (out: S.slice S8.t) (msg: S.slice S8.t) (kb: S.slice S8.t)
+fn xor_chunk (out: A.array S8.t) (msg: A.array S8.t) (kb: A.array S8.t)
              (b: SZ.t) (n: SZ.t)
              (st0: G.erased state) (ctr0: U32.t) (c: U32.t)
              (vs: G.erased (Seq.seq S32.t))
              (#vout: erased (Seq.seq S8.t))
              (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
              (#pb: perm) (#vkb: erased (Seq.seq S8.t))
-requires S.pts_to out vout ** S.pts_to msg #pm vmsg ** S.pts_to kb #pb vkb **
+requires A.pts_to out vout ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
          pure (Seq.length vout == Seq.length vmsg /\ Seq.length vkb == 64 /\
                Seq.length vs == 16 /\
                Seq.length vmsg <= max_len ctr0 /\
@@ -218,19 +218,19 @@ requires S.pts_to out vout ** S.pts_to msg #pm vmsg ** S.pts_to kb #pb vkb **
                (forall (p: nat). p < SZ.v b ==>
                   Seq.index vout p == Seq.index (encrypt_bytes st0 ctr0 vmsg) p))
 ensures exists* (vo: Seq.seq S8.t).
-  S.pts_to out vo ** S.pts_to msg #pm vmsg ** S.pts_to kb #pb vkb **
+  A.pts_to out vo ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
   pure (Seq.length vmsg <= max_len ctr0 /\ Seq.length vo == Seq.length vmsg /\
         SZ.v b + SZ.v n <= Seq.length vmsg /\
         (forall (p: nat). p < SZ.v b + SZ.v n ==>
            Seq.index vo p == Seq.index (encrypt_bytes st0 ctr0 vmsg) p))
 {
-  S.pts_to_len out;
-  S.pts_to_len msg;
-  S.pts_to_len kb;
+  A.pts_to_len out;
+  A.pts_to_len msg;
+  A.pts_to_len kb;
   let mut k = 0sz;
   while (let vk = !k; SZ.lt vk n)
   invariant exists* (vk: SZ.t) (vo: Seq.seq S8.t).
-    pts_to k vk ** S.pts_to out vo ** S.pts_to msg #pm vmsg ** S.pts_to kb #pb vkb **
+    pts_to k vk ** A.pts_to out vo ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
     pure (SZ.v vk <= SZ.v n /\ Seq.length vmsg <= max_len ctr0 /\
           Seq.length vo == Seq.length vmsg /\
           SZ.v b + SZ.v n <= Seq.length vmsg /\
@@ -239,10 +239,10 @@ ensures exists* (vo: Seq.seq S8.t).
   decreases (SZ.v n - SZ.v (!k))
   {
     let vk = !k;
-    let x = S.(msg.(SZ.add b vk));
-    let y = S.(kb.(vk));
+    let x = A.(msg.(SZ.add b vk));
+    let y = A.(kb.(vk));
     out_byte (reveal st0) ctr0 (reveal vmsg) (reveal vs) c (SZ.v b) (SZ.v vk);
-    S.((out.(SZ.add b vk) <- S8.logxor x y));
+    A.((out.(SZ.add b vk) <- S8.logxor x y));
     k := SZ.add vk 1sz;
   }
 }
@@ -253,49 +253,56 @@ ensures exists* (vo: Seq.seq S8.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
-fn chacha20_impl (out: S.slice S8.t) (msg: S.slice S8.t)
-                 (key: S.slice S8.t) (nonce: S.slice S8.t) (ctr0: U32.t)
+(** The C entry point.
+
+      void Hacl_Chacha20_encrypt(uint8_t *out,
+                                 uint8_t *msg, size_t mlen,
+                                 uint8_t *key, uint8_t *nonce, uint32_t ctr);
+
+    [out] and [msg] must not overlap, [key] is 32 bytes and [nonce] is 12.
+    The message length is bounded by [(2^32 - ctr) * 64], which is what it
+    takes for the 32-bit block counter not to wrap; on any real platform the
+    bound is only reachable with [ctr] very close to [2^32]. *)
+fn encrypt (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
+                 (key: A.array S8.t) (nonce: A.array S8.t) (ctr0: U32.t)
                  (#vout: erased (Seq.seq S8.t))
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
                  (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                  (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires S.pts_to out vout ** S.pts_to msg #pm vmsg **
-         S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+requires A.pts_to out vout ** A.pts_to msg #pm vmsg **
+         A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
          pure (Seq.length vout == Seq.length vmsg /\
+               Seq.length vmsg == SZ.v mlen /\
                Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
                Seq.length vmsg <= max_len ctr0)
 ensures exists* (vo: Seq.seq S8.t).
-  S.pts_to out vo ** S.pts_to msg #pm vmsg **
-  S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+  A.pts_to out vo ** A.pts_to msg #pm vmsg **
+  A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
         Seq.length vmsg <= max_len ctr0 /\
         vo == chacha20 vkey vnon ctr0 vmsg)
 {
-  S.pts_to_len out;
-  S.pts_to_len msg;
-  S.pts_to_len key;
-  S.pts_to_len nonce;
+  A.pts_to_len out;
+  A.pts_to_len msg;
+  A.pts_to_len key;
+  A.pts_to_len nonce;
 
   let z32 = S32.zero;
   let z8 = S8.classify 0uy;
 
   let mut starr = [| z32; 16sz |];
   A.pts_to_len starr;
-  let st = S.from_array starr 16sz;
   let mut ksarr = [| z32; 16sz |];
   A.pts_to_len ksarr;
-  let ks = S.from_array ksarr 16sz;
   let mut kbarr = [| z8; 64sz |];
   A.pts_to_len kbarr;
-  let kb = S.from_array kbarr 64sz;
-  S.pts_to_len st;
-  S.pts_to_len ks;
-  S.pts_to_len kb;
+  A.pts_to_len starr;
+  A.pts_to_len ksarr;
+  A.pts_to_len kbarr;
 
-  init_state st key nonce ctr0;
+  init_state starr key nonce ctr0;
   let st0 : G.erased state = G.hide (init (reveal vkey) (reveal vnon) ctr0);
 
-  let mlen = S.len msg;
   let mut base = 0sz;
   let mut ctr = ctr0;
 
@@ -303,10 +310,9 @@ ensures exists* (vo: Seq.seq S8.t).
   invariant exists* (b: SZ.t) (c: U32.t) (vo: Seq.seq S8.t)
                     (vs: Seq.seq S32.t) (vk: Seq.seq S32.t) (vkb: Seq.seq S8.t).
     pts_to base b ** pts_to ctr c **
-    S.pts_to out vo ** S.pts_to msg #pm vmsg **
-    S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
-    S.pts_to st vs ** S.pts_to ks vk ** S.pts_to kb vkb **
-    S.is_from_array starr st ** S.is_from_array ksarr ks ** S.is_from_array kbarr kb **
+    A.pts_to out vo ** A.pts_to msg #pm vmsg **
+    A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+    A.pts_to starr vs ** A.pts_to ksarr vk ** A.pts_to kbarr vkb **
     pure (Seq.length vmsg <= max_len ctr0 /\ Seq.length vo == Seq.length vmsg /\
           Seq.length vs == 16 /\ Seq.length vk == 16 /\ Seq.length vkb == 64 /\
           SZ.v b <= Seq.length vmsg /\
@@ -323,11 +329,11 @@ ensures exists* (vo: Seq.seq S8.t).
     let c = !ctr;
     let n = szmin 64sz (SZ.sub mlen b);
 
-    with vs0. assert (S.pts_to st vs0);
-    core_impl ks st c;
-    write_keystream kb ks;
+    with vs0. assert (A.pts_to starr vs0);
+    core_impl ksarr starr c;
+    write_keystream kbarr ksarr;
 
-    xor_chunk out msg kb b n st0 ctr0 c (G.hide vs0);
+    xor_chunk out msg kbarr b n st0 ctr0 c (G.hide vs0);
 
     step_ok ctr0 (Seq.length vmsg) (SZ.v b) (SZ.v n);
 
@@ -335,13 +341,35 @@ ensures exists* (vo: Seq.seq S8.t).
     ctr := U32.add_mod c 1ul;
   };
 
-  with vo. assert (S.pts_to out vo);
+  with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (encrypt_bytes st0 ctr0 vmsg);
   Seq.lemma_eq_elim vo (encrypt_bytes st0 ctr0 vmsg);
 
-  S.to_array st;
-  S.to_array ks;
-  S.to_array kb;
+  ()
 }
 
 #pop-options
+
+(** Decryption is the same function -- ChaCha20 is additive -- and is exported
+    under its own name so that callers read the way they mean. *)
+fn decrypt (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
+           (key: A.array S8.t) (nonce: A.array S8.t) (ctr0: U32.t)
+           (#vout: erased (Seq.seq S8.t))
+           (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
+           (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+           (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to msg #pm vmsg **
+         A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+         pure (Seq.length vout == Seq.length vmsg /\
+               Seq.length vmsg == SZ.v mlen /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+               Seq.length vmsg <= max_len ctr0)
+ensures exists* (vo: Seq.seq S8.t).
+  A.pts_to out vo ** A.pts_to msg #pm vmsg **
+  A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+        Seq.length vmsg <= max_len ctr0 /\
+        vo == chacha20 vkey vnon ctr0 vmsg)
+{
+  encrypt out msg mlen key nonce ctr0;
+}

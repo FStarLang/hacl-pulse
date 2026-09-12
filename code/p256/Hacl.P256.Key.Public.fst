@@ -41,7 +41,6 @@ open Hacl.Spec.Bytes
 open Hacl.P256.Point
 open Hacl.P256.Encode
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -51,19 +50,15 @@ module P = Spec.P256
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-fn validate_public_key (b: S.slice S8.t)
+fn validate_public_key (b: A.array S8.t)
                        (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to b #pb vb ** pure (Seq.length vb == 64)
+requires A.pts_to b #pb vb ** pure (Seq.length vb == 64)
 returns r: bool
-ensures S.pts_to b #pb vb ** pure (r == Some? (lpt vb))
+ensures A.pts_to b #pb vb ** pure (r == Some? (lpt vb))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let qx = S.from_array a0 16sz;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let qy = S.from_array a1 16sz;
-  let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let qz = S.from_array a2 16sz;
-  S.pts_to_len qx; S.pts_to_len qy; S.pts_to_len qz;
-  let r = load_point qx qy qz b;
-  S.to_array qx; S.to_array qy; S.to_array qz;
+  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let r = load_point a0 a1 a2 b;
   r
 }
 

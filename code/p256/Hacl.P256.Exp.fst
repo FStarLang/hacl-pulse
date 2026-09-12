@@ -41,7 +41,6 @@ open Hacl.Impl.Limb
 open Hacl.P256.Mont
 open Hacl.P256.Tables
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -77,27 +76,27 @@ let bit_of (ve: Seq.seq U64.t) (i: nat { i < 256 }) (l: U64.t) (j: U32.t)
     [if] whose branches disagree on the value of two slices is easier to
     join through a postcondition written by hand than one inferred. *)
 inline_for_extraction
-fn cmul (bb: bool) (out t1 a ms nm: S.slice S64.t) (mu: S64.t) (d: erased modulus)
+fn cmul (bb: bool) (out t1 a ms nm: A.array S64.t) (mu: S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t)) (#w1: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pm: perm) (#vms: erased (Seq.seq S64.t))
         (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to t1 w1 ** S.pts_to a #pa va **
-  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+requires A.pts_to out vo ** A.pts_to t1 w1 ** A.pts_to a #pa va **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length w1 == nl /\
         Seq.length vms == nl /\ Seq.length vnm == nl /\
         vals vms == d.ms /\ vals vnm == d.nm /\ S64.v mu == d.mu /\
         res d (vals va) /\ res d (vals vo))
 ensures exists* (vo': Seq.seq S64.t) (w1': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to t1 w1' ** S.pts_to a #pa va **
-  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+  A.pts_to out vo' ** A.pts_to t1 w1' ** A.pts_to a #pa va **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (Seq.length vo' == nl /\ Seq.length w1' == nl /\ res d (vals vo') /\
         mev d (vals vo') ==
           (if bb then MA.mul (mev d (vals vo)) (mev d (vals va))
            else mev d (vals vo)))
 {
-  S.pts_to_len out;
-  S.pts_to_len t1;
+  A.pts_to_len out;
+  A.pts_to_len t1;
   if bb {
     mev_mul d (vals vo) (vals va);
     acopy t1 out;
@@ -112,8 +111,8 @@ ensures exists* (vo': Seq.seq S64.t) (w1': Seq.seq S64.t).
     definition already in scope; a loop body of this size inside [mexp]
     times out where the same code in isolation does not. *)
 inline_for_extraction
-fn estep (out t1 t2 a: S.slice S64.t) (e: S.slice U64.t)
-         (ms nm: S.slice S64.t) (bi: SZ.t)
+fn estep (out t1 t2 a: A.array S64.t) (e: A.array U64.t)
+         (ms nm: A.array S64.t) (bi: SZ.t)
          (mu: S64.t) (d: erased modulus) (kk: erased nat)
          (#vo: erased (Seq.seq S64.t))
          (#w1: erased (Seq.seq S64.t)) (#w2: erased (Seq.seq S64.t))
@@ -121,9 +120,9 @@ fn estep (out t1 t2 a: S.slice S64.t) (e: S.slice U64.t)
          (#pe: perm) (#ve: erased (Seq.seq U64.t))
          (#pm: perm) (#vms: erased (Seq.seq S64.t))
          (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to t1 w1 ** S.pts_to t2 w2 **
-  S.pts_to a #pa va ** S.pts_to e #pe ve **
-  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+requires A.pts_to out vo ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
+  A.pts_to a #pa va ** A.pts_to e #pe ve **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length vo == nl /\
         Seq.length w1 == nl /\ Seq.length w2 == nl /\
         Seq.length ve == nl /\ bnd (pvals ve) base /\ SZ.v bi < 256 /\
@@ -133,26 +132,26 @@ requires S.pts_to out vo ** S.pts_to t1 w1 ** S.pts_to t2 w2 **
         mev d (vals vo) == mpow d (mev d (vals va)) kk)
 ensures exists* (vo': Seq.seq S64.t)
                 (w1': Seq.seq S64.t) (w2': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to t1 w1' ** S.pts_to t2 w2' **
-  S.pts_to a #pa va ** S.pts_to e #pe ve **
-  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+  A.pts_to out vo' ** A.pts_to t1 w1' ** A.pts_to t2 w2' **
+  A.pts_to a #pa va ** A.pts_to e #pe ve **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (Seq.length vo' == nl /\
         Seq.length w1' == nl /\ Seq.length w2' == nl /\ res d (vals vo') /\
         mev d (vals vo') ==
           mpow d (mev d (vals va))
                  (2 * kk + eval (pvals ve) / pow2 (SZ.v bi) % 2))
 {
-  S.pts_to_len out;
-  S.pts_to_len t1;
-  S.pts_to_len t2;
-  S.pts_to_len e;
-  with v. assert (S.pts_to out v);
+  A.pts_to_len out;
+  A.pts_to_len t1;
+  A.pts_to_len t2;
+  A.pts_to_len e;
+  with v. assert (A.pts_to out v);
   acopy t1 out;
   acopy t2 out;
   amul out t1 t2 ms nm mu d;
   mev_mul d (vals v) (vals v);
   let k = SZ.div bi 16sz;
-  let l = S.(e.(k));
+  let l = A.(e.(k));
   let r = SZ.rem bi 16sz;
   assert (pure (SZ.v r == SZ.v bi % 16));
   Math.small_mod (SZ.v r) (pow2 32);
@@ -161,12 +160,12 @@ ensures exists* (vo': Seq.seq S64.t)
   let b = U64.logand (U64.shift_right l j) 1uL;
   bit_of ve (SZ.v bi) l j;
   exp_step (mev d (vals va)) kk (U64.v b);
-  with u. assert (S.pts_to out u);
+  with u. assert (A.pts_to out u);
   assert (pure (mev d (vals u) ==
                 MA.mul (MA.exp (mev d (vals va)) kk)
                        (MA.exp (mev d (vals va)) kk)));
   cmul (is_one b) out t1 a ms nm mu d;
-  with vv. assert (S.pts_to out vv);
+  with vv. assert (A.pts_to out vv);
   assert (pure (mev d (vals vv) ==
                 MA.exp (mev d (vals va)) (2 * kk + U64.v b)));
 }
@@ -174,7 +173,7 @@ ensures exists* (vo': Seq.seq S64.t)
 (** [out := a^(eval e)], with [a] in Montgomery form and [e] sixteen public
     limbs.  [r1] is the Montgomery one, which is where the accumulator
     starts. *)
-fn mexp (out a: S.slice S64.t) (e: S.slice U64.t) (r1 ms nm: S.slice S64.t)
+fn mexp (out a: A.array S64.t) (e: A.array U64.t) (r1 ms nm: A.array S64.t)
         (mu: S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -182,29 +181,27 @@ fn mexp (out a: S.slice S64.t) (e: S.slice U64.t) (r1 ms nm: S.slice S64.t)
         (#p1: perm) (#v1: erased (Seq.seq S64.t))
         (#pm: perm) (#vms: erased (Seq.seq S64.t))
         (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to e #pe ve **
-  S.pts_to r1 #p1 v1 ** S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to e #pe ve **
+  A.pts_to r1 #p1 v1 ** A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length vo == nl /\
         Seq.length ve == nl /\ bnd (pvals ve) base /\
         Seq.length vms == nl /\ Seq.length vnm == nl /\
         vals vms == d.ms /\ vals vnm == d.nm /\ S64.v mu == d.mu /\
         vals v1 == d.r1 /\ res d (vals va))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to e #pe ve **
-  S.pts_to r1 #p1 v1 ** S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to e #pe ve **
+  A.pts_to r1 #p1 v1 ** A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (res d (vals vo') /\
         mev d (vals vo') == mpow d (mev d (vals va)) (eval (pvals ve)))
 {
-  S.pts_to_len out;
-  S.pts_to_len e;
-  S.pts_to_len r1;
+  A.pts_to_len out;
+  A.pts_to_len e;
+  A.pts_to_len r1;
   mev_one d;
   let en = hide (eval (pvals ve));
   ebnd (pvals ve);
   let z = S64.zero;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let t1 = S.from_array a1 16sz;
-  let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let t2 = S.from_array a2 16sz;
-  S.pts_to_len t1; S.pts_to_len t2;
+  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a1; A.pts_to_len a2;
   acopy out r1;
   ebnd (pvals ve);
   Math.small_div (reveal en) (pow2 256);
@@ -214,9 +211,9 @@ ensures exists* (vo': Seq.seq S64.t).
   while (let vi = !i; SZ.gt vi 0sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t)
                     (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to out v ** S.pts_to t1 w1 ** S.pts_to t2 w2 **
-    S.pts_to a #pa va ** S.pts_to e #pe ve ** S.pts_to r1 #p1 v1 **
-    S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+    pts_to i vi ** A.pts_to out v ** A.pts_to a1 w1 ** A.pts_to a2 w2 **
+    A.pts_to a #pa va ** A.pts_to e #pe ve ** A.pts_to r1 #p1 v1 **
+    A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
     pure (SZ.v vi <= 256 /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
           res d (vals v) /\
           mev d (vals v) ==
@@ -225,13 +222,12 @@ ensures exists* (vo': Seq.seq S64.t).
   {
     let vi = !i;
     let ni = SZ.sub vi 1sz;
-    estep out t1 t2 a e ms nm ni mu d (hide (reveal en / pow2 (SZ.v vi)));
+    estep out a1 a2 a e ms nm ni mu d (hide (reveal en / pow2 (SZ.v vi)));
     edigit (reveal en) (SZ.v vi);
     i := ni;
   };
   assert_norm (pow2 0 == 1);
-  S.to_array t1;
-  S.to_array t2;
+  ()
 }
 
 #pop-options

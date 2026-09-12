@@ -37,7 +37,6 @@ open Hacl.P256.Field
 open Hacl.P256.Inverse
 open Hacl.P256.Encode
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -72,42 +71,42 @@ let r2c (vp: Seq.seq S8.t) : GTot (Seq.lseq S8.t 33) =
 let u2r (vp: Seq.seq S8.t) : GTot (option (Seq.lseq S8.t 64)) =
   if Seq.length vp = 65 then P.uncompressed_to_raw vp else None
 
-fn raw_to_uncompressed (out pk: S.slice S8.t)
+fn raw_to_uncompressed (out pk: A.array S8.t)
                        (#vo: erased (Seq.seq S8.t))
                        (#pp: perm) (#vp: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to pk #pp vp **
+requires A.pts_to out vo ** A.pts_to pk #pp vp **
   pure (Seq.length vo == 65 /\ Seq.length vp == 64)
 ensures exists* (wo: Seq.seq S8.t).
-  S.pts_to out wo ** S.pts_to pk #pp vp **
+  A.pts_to out wo ** A.pts_to pk #pp vp **
   pure (Seq.length wo == 65 /\ wo == r2u vp)
 {
-  S.pts_to_len out; S.pts_to_len pk;
-  S.((out.(0sz) <- (S8.classify 4uy)));
+  A.pts_to_len out; A.pts_to_len pk;
+  A.((out.(0sz) <- (S8.classify 4uy)));
   copy_at out 1sz pk 64sz;
-  with wo. assert (S.pts_to out wo);
-  S.pts_to_len out;
+  with wo. assert (A.pts_to out wo);
+  A.pts_to_len out;
   assert (pure (Seq.equal wo (Seq.append (Seq.create 1 (S8.classify 4uy)) vp)));
 }
 
-fn raw_to_compressed (out pk: S.slice S8.t)
+fn raw_to_compressed (out pk: A.array S8.t)
                      (#vo: erased (Seq.seq S8.t))
                      (#pp: perm) (#vp: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to pk #pp vp **
+requires A.pts_to out vo ** A.pts_to pk #pp vp **
   pure (Seq.length vo == 33 /\ Seq.length vp == 64)
 ensures exists* (wo: Seq.seq S8.t).
-  S.pts_to out wo ** S.pts_to pk #pp vp **
+  A.pts_to out wo ** A.pts_to pk #pp vp **
   pure (Seq.length wo == 33 /\ wo == r2c vp)
 {
-  S.pts_to_len out; S.pts_to_len pk;
-  let lb = S.(pk.(63sz));
+  A.pts_to_len out; A.pts_to_len pk;
+  let lb = A.(pk.(63sz));
   UInt.logand_mask #8 (S8.v lb) 1;
   assert_norm (pow2 1 - 1 == 1);
   be_nat_parity (Seq.slice vp 32 64);
   let h = S8.add_mod (S8.classify 2uy) (S8.logand lb (S8.classify 1uy));
-  S.((out.(0sz) <- h));
+  A.((out.(0sz) <- h));
   copy_at out 1sz pk 32sz;
-  with wo. assert (S.pts_to out wo);
-  S.pts_to_len out;
+  with wo. assert (A.pts_to out wo);
+  A.pts_to_len out;
   assert (pure (Seq.equal wo
     (Seq.append (Seq.create 1 h) (Seq.slice vp 0 32))));
 }
@@ -117,23 +116,23 @@ ensures exists* (wo: Seq.seq S8.t).
     The header is public metadata, so reading it as a plain byte is not a
     leak -- but it is a declassification, and those are spelled out. *)
 
-fn uncompressed_to_raw (out pk: S.slice S8.t)
+fn uncompressed_to_raw (out pk: A.array S8.t)
                        (#vo: erased (Seq.seq S8.t))
                        (#pp: perm) (#vp: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to pk #pp vp **
+requires A.pts_to out vo ** A.pts_to pk #pp vp **
   pure (Seq.length vo == 64 /\ Seq.length vp == 65)
 returns r: bool
 ensures exists* (wo: Seq.seq S8.t).
-  S.pts_to out wo ** S.pts_to pk #pp vp **
+  A.pts_to out wo ** A.pts_to pk #pp vp **
   pure (Seq.length wo == 64 /\ r == Some? (u2r vp) /\
         (r ==> wo == Some?.v (u2r vp)))
 {
-  S.pts_to_len out; S.pts_to_len pk;
-  let h = Declassify.u8 (S.(pk.(0sz)));
+  A.pts_to_len out; A.pts_to_len pk;
+  let h = Declassify.u8 (A.(pk.(0sz)));
   if (h = 4uy) {
     copy_range out 0sz pk 1sz 64sz;
-    with wo. assert (S.pts_to out wo);
-    S.pts_to_len out;
+    with wo. assert (A.pts_to out wo);
+    A.pts_to_len out;
     assert (pure (Seq.equal wo (Seq.slice vp 1 65)));
     true
   } else {
@@ -154,21 +153,21 @@ ensures exists* (wo: Seq.seq S8.t).
 (** Write the root of the requested parity.  [fsqrt] returns whichever of
     the two roots the exponentiation lands on; the other is its negation,
     and the two have opposite parities because the prime is odd. *)
-fn store_y (yb: S.slice S8.t) (yf nf: S.slice S64.t) (odd: bool)
+fn store_y (yb: A.array S8.t) (yf nf: A.array S64.t) (odd: bool)
            (#vyb: erased (Seq.seq S8.t)) (#vnf: erased (Seq.seq S64.t))
            (#py: perm) (#vy: erased (Seq.seq S64.t))
-requires S.pts_to yb vyb ** S.pts_to yf #py vy ** S.pts_to nf vnf **
+requires A.pts_to yb vyb ** A.pts_to yf #py vy ** A.pts_to nf vnf **
   pure (Seq.length vyb == 32 /\ Seq.length vnf == nl /\ felem vy)
 ensures exists* (wyb: Seq.seq S8.t) (wnf: Seq.seq S64.t).
-  S.pts_to yb wyb ** S.pts_to yf #py vy ** S.pts_to nf wnf **
+  A.pts_to yb wyb ** A.pts_to yf #py vy ** A.pts_to nf wnf **
   pure (Seq.length wnf == nl /\
         wyb == nat_to_be 32 (if (fev vy % 2 = 1) = odd
                              then fev vy else P.fneg (fev vy)))
 {
-  S.pts_to_len yb;
+  A.pts_to_len yb;
   fstore yb yf;
   nat_to_be_parity 32 (fev vy);
-  let lb = S.(yb.(31sz));
+  let lb = A.(yb.(31sz));
   UInt.logand_mask #8 (S8.v lb) 1;
   assert_norm (pow2 1 - 1 == 1);
   let par = Declassify.u8 (S8.logand lb (S8.classify 1uy));
@@ -185,65 +184,51 @@ ensures exists* (wyb: Seq.seq S8.t) (wnf: Seq.seq S64.t).
 let c2r (vp: Seq.seq S8.t) : GTot (option (Seq.lseq S8.t 64)) =
   if Seq.length vp = 33 then P.compressed_to_raw vp else None
 
-fn compressed_to_raw (out pk: S.slice S8.t)
+fn compressed_to_raw (out pk: A.array S8.t)
                      (#vo: erased (Seq.seq S8.t))
                      (#pp: perm) (#vp: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to pk #pp vp **
+requires A.pts_to out vo ** A.pts_to pk #pp vp **
   pure (Seq.length vo == 64 /\ Seq.length vp == 33)
 returns r: bool
 ensures exists* (wo: Seq.seq S8.t).
-  S.pts_to out wo ** S.pts_to pk #pp vp **
+  A.pts_to out wo ** A.pts_to pk #pp vp **
   pure (Seq.length wo == 64 /\ r == Some? (c2r vp) /\
         (r ==> wo == Some?.v (c2r vp)))
 {
-  S.pts_to_len out; S.pts_to_len pk;
+  A.pts_to_len out; A.pts_to_len pk;
   let z = S64.zero;
-  let mut m0 = [| z; 16sz |]; A.pts_to_len m0; let xf = S.from_array m0 16sz;
-  let mut m1 = [| z; 16sz |]; A.pts_to_len m1; let rf = S.from_array m1 16sz;
-  let mut m2 = [| z; 16sz |]; A.pts_to_len m2; let yf = S.from_array m2 16sz;
-  let mut m3 = [| z; 16sz |]; A.pts_to_len m3; let nf = S.from_array m3 16sz;
-  S.pts_to_len xf; S.pts_to_len rf; S.pts_to_len yf; S.pts_to_len nf;
+  let mut m0 = [| z; 16sz |]; A.pts_to_len m0; let mut m1 = [| z; 16sz |]; A.pts_to_len m1; let mut m2 = [| z; 16sz |]; A.pts_to_len m2; let mut m3 = [| z; 16sz |]; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
   let z8 = S8.classify 0uy;
-  let mut n0 = [| z8; 32sz |]; A.pts_to_len n0; let xb = S.from_array n0 32sz;
-  let mut n1 = [| z8; 32sz |]; A.pts_to_len n1; let yb = S.from_array n1 32sz;
-  S.pts_to_len xb; S.pts_to_len yb;
+  let mut n0 = [| z8; 32sz |]; A.pts_to_len n0; let mut n1 = [| z8; 32sz |]; A.pts_to_len n1; A.pts_to_len n0; A.pts_to_len n1;
 
-  let h = Declassify.u8 (S.(pk.(0sz)));
+  let h = Declassify.u8 (A.(pk.(0sz)));
   if (h = 2uy || h = 3uy) {
-    copy_range xb 0sz pk 1sz 32sz;
-    with vxb. assert (S.pts_to xb vxb);
-    S.pts_to_len xb;
+    copy_range n0 0sz pk 1sz 32sz;
+    with vxb. assert (A.pts_to n0 vxb);
+    A.pts_to_len n0;
     assert (pure (Seq.equal vxb (Seq.slice vp 1 33)));
-    let okx = fload xf xb;
+    let okx = fload m0 n0;
     if okx {
-      curve_rhs rf xf;
-      let oks = fsqrt yf rf;
+      curve_rhs m1 m0;
+      let oks = fsqrt m2 m1;
       if oks {
-        store_y yb yf nf (h = 3uy);
-        with wyb. assert (S.pts_to yb wyb);
-        S.pts_to_len yb;
-        copy_at out 0sz xb 32sz;
-        copy_at out 32sz yb 32sz;
-        with wo. assert (S.pts_to out wo);
-        S.pts_to_len out;
+        store_y n1 m2 m3 (h = 3uy);
+        with wyb. assert (A.pts_to n1 wyb);
+        A.pts_to_len n1;
+        copy_at out 0sz n0 32sz;
+        copy_at out 32sz n1 32sz;
+        with wo. assert (A.pts_to out wo);
+        A.pts_to_len out;
         assert (pure (Seq.equal wo (Seq.append vxb wyb)));
-      S.to_array xf; S.to_array rf; S.to_array yf; S.to_array nf;
-      S.to_array xb; S.to_array yb;
-        true
+      true
       } else {
-      S.to_array xf; S.to_array rf; S.to_array yf; S.to_array nf;
-      S.to_array xb; S.to_array yb;
-        false
+      false
       }
     } else {
-      S.to_array xf; S.to_array rf; S.to_array yf; S.to_array nf;
-      S.to_array xb; S.to_array yb;
       false
     }
   } else {
-      S.to_array xf; S.to_array rf; S.to_array yf; S.to_array nf;
-      S.to_array xb; S.to_array yb;
-    false
+      false
   }
 }
 

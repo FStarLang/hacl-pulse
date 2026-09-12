@@ -50,10 +50,10 @@ typedef struct {
   }
 
 static const alg algs[4] = {
-    ALG("SHA-224", 4, 64, 28, Hacl_Streaming_SHA2_Ptr_sha224),
-    ALG("SHA-256", 4, 64, 32, Hacl_Streaming_SHA2_Ptr_sha256),
-    ALG("SHA-384", 8, 128, 48, Hacl_Streaming_SHA2_Ptr_sha384),
-    ALG("SHA-512", 8, 128, 64, Hacl_Streaming_SHA2_Ptr_sha512),
+    ALG("SHA-224", 4, 64, 28, Hacl_Streaming_SHA2_sha224),
+    ALG("SHA-256", 4, 64, 32, Hacl_Streaming_SHA2_sha256),
+    ALG("SHA-384", 8, 128, 48, Hacl_Streaming_SHA2_sha384),
+    ALG("SHA-512", 8, 128, 64, Hacl_Streaming_SHA2_sha512),
 };
 
 /* A state, big enough for either family. */

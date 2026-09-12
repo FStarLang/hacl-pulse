@@ -35,8 +35,8 @@ open Hacl.P256.Field
 open Hacl.P256.Inverse
 open Hacl.P256.Point
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
+module Sub = Hacl.Impl.Sub
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
@@ -56,53 +56,47 @@ module P = Spec.P256
 let rhs_of (x: P.felem) : P.felem =
   P.fadd (P.fsub (P.fmul (P.fmul x x) x) (P.fmul three_f x)) P.b_coeff
 
-fn curve_rhs (out: S.slice S64.t) (x: S.slice S64.t)
+fn curve_rhs (out: A.array S64.t) (x: A.array S64.t)
              (#vo: erased (Seq.seq S64.t))
              (#px: perm) (#vx: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to x #px vx **
+requires A.pts_to out vo ** A.pts_to x #px vx **
   pure (Seq.length vo == nl /\ felem vx)
 ensures exists* (wo: Seq.seq S64.t).
-  S.pts_to out wo ** S.pts_to x #px vx **
+  A.pts_to out wo ** A.pts_to x #px vx **
   pure (felem wo /\ fev wo == rhs_of (fev vx))
 {
-  S.pts_to_len out;
+  A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let t0 = S.from_array a0 16sz;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let t1 = S.from_array a1 16sz;
-  let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let t2 = S.from_array a2 16sz;
-  S.pts_to_len t0; S.pts_to_len t1; S.pts_to_len t2;
+  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
 
-  fsqr t0 x;
-  fmul t1 t0 x;
+  fsqr a0 x;
+  fmul a1 a0 x;
   let th = fthree ();
-  fmul t2 th x;
+  fmul a2 th x;
   drop_table th;
-  fsub t0 t1 t2;
+  fsub a0 a1 a2;
   let bs = fb ();
-  fadd out t0 bs;
+  fadd out a0 bs;
   drop_table bs;
 
-  S.to_array t0; S.to_array t1; S.to_array t2;
+  ()
 }
 
-fn is_on_curve (x y: S.slice S64.t)
+fn is_on_curve (x y: A.array S64.t)
                (#px: perm) (#vx: erased (Seq.seq S64.t))
                (#py: perm) (#vy: erased (Seq.seq S64.t))
-requires S.pts_to x #px vx ** S.pts_to y #py vy ** pure (felem vx /\ felem vy)
+requires A.pts_to x #px vx ** A.pts_to y #py vy ** pure (felem vx /\ felem vy)
 returns r: bool
-ensures S.pts_to x #px vx ** S.pts_to y #py vy **
+ensures A.pts_to x #px vx ** A.pts_to y #py vy **
   pure (r == P.is_on_curve (fev vx) (fev vy))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let t0 = S.from_array a0 16sz;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let t1 = S.from_array a1 16sz;
-  S.pts_to_len t0; S.pts_to_len t1;
+  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
 
-  curve_rhs t1 x;
-  fsqr t0 y;
-  let r = feq t0 t1;
+  curve_rhs a1 x;
+  fsqr a0 y;
+  let r = feq a0 a1;
 
-  S.to_array t0; S.to_array t1;
   r
 }
 
@@ -119,40 +113,36 @@ ensures S.pts_to x #px vx ** S.pts_to y #py vy **
 let lpt (vb: Seq.seq S8.t) : GTot (option P.proj_point) =
   if Seq.length vb = 64 then P.load_point vb else None
 
-fn load_point (ox oy oz: S.slice S64.t) (b: S.slice S8.t)
+fn load_point (ox oy oz: A.array S64.t) (b: A.array S8.t)
               (#vox #voy #voz: erased (Seq.seq S64.t))
               (#pb: perm) (#vb: erased (Seq.seq S8.t))
 requires
-  S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz ** S.pts_to b #pb vb **
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to b #pb vb **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
         Seq.length vb == 64)
 returns r: bool
 ensures exists* (wx wy wz: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz ** S.pts_to b #pb vb **
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to b #pb vb **
   pure (pt_ok wx wy wz /\ r == Some? (lpt vb) /\
         (r ==> pt wx wy wz == Some?.v (lpt vb)))
 {
-  S.pts_to_len b;
-  let xs = S.subslice b 0sz 32sz;
-  with vxs. assert (S.pts_to xs #pb vxs);
-  S.pts_to_len xs;
+  A.pts_to_len b;
+  let xs = Sub.sub b 0sz 32sz;
+  with vxs. assert (A.pts_to xs #pb vxs);
+  A.pts_to_len xs;
   let okx = fload ox xs;
-  unfold S.subslice_rest;
-  S.join xs _ _;
-  S.join _ _ b;
-  with vb1. assert (S.pts_to b #pb vb1);
-  S.pts_to_len b;
+  Sub.unsub b 0 32 xs;
+  with vb1. assert (A.pts_to b #pb vb1);
+  A.pts_to_len b;
   assert (pure (Seq.equal vb1 vb));
 
-  let ys = S.subslice b 32sz 64sz;
-  with vys. assert (S.pts_to ys #pb vys);
-  S.pts_to_len ys;
+  let ys = Sub.sub b 32sz 64sz;
+  with vys. assert (A.pts_to ys #pb vys);
+  A.pts_to_len ys;
   let oky = fload oy ys;
-  unfold S.subslice_rest;
-  S.join ys _ _;
-  S.join _ _ b;
-  with vb2. assert (S.pts_to b #pb vb2);
-  S.pts_to_len b;
+  Sub.unsub b 32 64 ys;
+  with vb2. assert (A.pts_to b #pb vb2);
+  A.pts_to_len b;
   assert (pure (Seq.equal vb2 vb));
 
   fone oz;
@@ -170,74 +160,67 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
     exactly as the specification does; every caller either checks for
     infinity first or is one for which [(0, 0)] is a rejecting answer. *)
 
-fn to_aff_point (ox oy: S.slice S64.t) (x y z: S.slice S64.t)
+fn to_aff_point (ox oy: A.array S64.t) (x y z: A.array S64.t)
                 (#vox #voy: erased (Seq.seq S64.t))
                 (#pp: perm) (#vx #vy #vz: erased (Seq.seq S64.t))
 requires
-  S.pts_to ox vox ** S.pts_to oy voy **
-  S.pts_to x #pp vx ** S.pts_to y #pp vy ** S.pts_to z #pp vz **
+  A.pts_to ox vox ** A.pts_to oy voy **
+  A.pts_to x #pp vx ** A.pts_to y #pp vy ** A.pts_to z #pp vz **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ pt_ok vx vy vz)
 ensures exists* (wx wy: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy **
-  S.pts_to x #pp vx ** S.pts_to y #pp vy ** S.pts_to z #pp vz **
+  A.pts_to ox wx ** A.pts_to oy wy **
+  A.pts_to x #pp vx ** A.pts_to y #pp vy ** A.pts_to z #pp vz **
   pure (felem wx /\ felem wy /\ (fev wx, fev wy) == P.to_aff_point (pt vx vy vz))
 {
-  S.pts_to_len ox; S.pts_to_len oy;
+  A.pts_to_len ox; A.pts_to_len oy;
   let z0 = S64.zero;
-  let mut a0 = [| z0; 16sz |]; A.pts_to_len a0; let zi = S.from_array a0 16sz;
-  S.pts_to_len zi;
-  finv zi z;
-  fmul ox x zi;
-  fmul oy y zi;
-  S.to_array zi;
+  let mut a0 = [| z0; 16sz |]; A.pts_to_len a0; A.pts_to_len a0;
+  finv a0 z;
+  fmul ox x a0;
+  fmul oy y a0;
+  ()
 }
 
 (** {2 Writing a point}
 
     Affine coordinates, thirty-two bytes each. *)
 
-fn store_point (b: S.slice S8.t) (x y z: S.slice S64.t)
+fn store_point (b: A.array S8.t) (x y z: A.array S64.t)
                (#vb: erased (Seq.seq S8.t))
                (#pp: perm) (#vx #vy #vz: erased (Seq.seq S64.t))
 requires
-  S.pts_to b vb ** S.pts_to x #pp vx ** S.pts_to y #pp vy ** S.pts_to z #pp vz **
+  A.pts_to b vb ** A.pts_to x #pp vx ** A.pts_to y #pp vy ** A.pts_to z #pp vz **
   pure (Seq.length vb == 64 /\ pt_ok vx vy vz)
 ensures exists* (wb: Seq.seq S8.t).
-  S.pts_to b wb ** S.pts_to x #pp vx ** S.pts_to y #pp vy ** S.pts_to z #pp vz **
+  A.pts_to b wb ** A.pts_to x #pp vx ** A.pts_to y #pp vy ** A.pts_to z #pp vz **
   pure (wb == P.store_point (pt vx vy vz))
 {
-  S.pts_to_len b;
+  A.pts_to_len b;
   let z0 = S64.zero;
-  let mut a0 = [| z0; 16sz |]; A.pts_to_len a0; let ax = S.from_array a0 16sz;
-  let mut a1 = [| z0; 16sz |]; A.pts_to_len a1; let ay = S.from_array a1 16sz;
-  S.pts_to_len ax; S.pts_to_len ay;
-  to_aff_point ax ay x y z;
-  with wax. assert (S.pts_to ax wax);
-  with way. assert (S.pts_to ay way);
+  let mut a0 = [| z0; 16sz |]; A.pts_to_len a0; let mut a1 = [| z0; 16sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
+  to_aff_point a0 a1 x y z;
+  with wax. assert (A.pts_to a0 wax);
+  with way. assert (A.pts_to a1 way);
 
-  let xs = S.subslice b 0sz 32sz;
-  S.pts_to_len xs;
-  fstore xs ax;
-  with vxs. assert (S.pts_to xs vxs);
-  unfold S.subslice_rest;
-  S.join xs _ _;
-  S.join _ _ b;
-  with vb1. assert (S.pts_to b vb1);
-  S.pts_to_len b;
+  let xs = Sub.sub b 0sz 32sz;
+  A.pts_to_len xs;
+  fstore xs a0;
+  with vxs. assert (A.pts_to xs vxs);
+  Sub.unsub b 0 32 xs;
+  with vb1. assert (A.pts_to b vb1);
+  A.pts_to_len b;
   assert (pure (Seq.equal (Seq.slice vb1 0 32) vxs));
 
-  let ys = S.subslice b 32sz 64sz;
-  S.pts_to_len ys;
-  fstore ys ay;
-  with vys. assert (S.pts_to ys vys);
-  unfold S.subslice_rest;
-  S.join ys _ _;
-  S.join _ _ b;
-  with wb. assert (S.pts_to b wb);
-  S.pts_to_len b;
+  let ys = Sub.sub b 32sz 64sz;
+  A.pts_to_len ys;
+  fstore ys a1;
+  with vys. assert (A.pts_to ys vys);
+  Sub.unsub b 32 64 ys;
+  with wb. assert (A.pts_to b wb);
+  A.pts_to_len b;
   assert (pure (Seq.equal wb (Seq.append vxs vys)));
 
-  S.to_array ax; S.to_array ay;
+  ()
 }
 
 #pop-options

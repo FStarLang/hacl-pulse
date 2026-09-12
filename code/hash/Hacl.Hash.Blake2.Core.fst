@@ -36,7 +36,7 @@ open Hacl.Impl.Bytes
 open Spec.Blake2
 open Spec.Blake2.Constants
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
@@ -61,7 +61,6 @@ let sigma_len (_: unit)
   : Lemma (Seq.length (GA.static_array_elems sigma_arr) == 160)
   = assert_norm (List.Tot.length sigma_list == 160)
 
-
 (** {2 The mixing function}
 
     All four reads happen before any write, which is what the specification
@@ -71,20 +70,20 @@ let sigma_len (_: unit)
 #push-options "--z3rlimit 60 --fuel 0 --ifuel 0"
 
 fn g_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-          (vv: S.slice t) (a b c d: SZ.t) (x y: t)
+          (vv: A.array t) (a b c d: SZ.t) (x y: t)
           (#v0: erased (Seq.seq t))
-requires S.pts_to vv v0 **
+requires A.pts_to vv v0 **
          pure (Seq.length v0 == 16 /\ SZ.v a < 16 /\ SZ.v b < 16 /\ SZ.v c < 16 /\ SZ.v d < 16)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 **
   pure (Seq.length v0 == 16 /\
         SZ.v a < 16 /\ SZ.v b < 16 /\ SZ.v c < 16 /\ SZ.v d < 16 /\
         Seq.length v1 == 16 /\ v1 == g p v0 (SZ.v a) (SZ.v b) (SZ.v c) (SZ.v d) x y)
 {
-  S.pts_to_len vv;
-  let ra = S.(vv.(a));
-  let rb = S.(vv.(b));
-  let rc = S.(vv.(c));
-  let rd = S.(vv.(d));
+  A.pts_to_len vv;
+  let ra = A.(vv.(a));
+  let rb = A.(vv.(b));
+  let rc = A.(vv.(c));
+  let rd = A.(vv.(d));
 
   let a1 = add_mod #t (add_mod #t ra rb) x;
   let d1 = rotate_right #t (logxor #t rd a1) p.rot1;
@@ -95,14 +94,13 @@ ensures exists* (v1: Seq.seq t). S.pts_to vv v1 **
   let c2 = add_mod #t c1 d2;
   let b2 = rotate_right #t (logxor #t b1 c2) p.rot4;
 
-  S.((vv.(a) <- a2));
-  S.((vv.(b) <- b2));
-  S.((vv.(c) <- c2));
-  S.((vv.(d) <- d2));
+  A.((vv.(a) <- a2));
+  A.((vv.(b) <- b2));
+  A.((vv.(c) <- c2));
+  A.((vv.(d) <- d2));
 }
 
 #pop-options
-
 
 (** {2 One round}
 
@@ -116,76 +114,76 @@ ensures exists* (v1: Seq.seq t). S.pts_to vv v1 **
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn mix_columns (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-               (vv: S.slice t) (m: S.slice t) (sg: S.slice SZ.t) (base: SZ.t) (r: G.erased nat)
+               (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
                (#v0: erased (Seq.seq t))
                (#pm: perm) (#vm: erased (Seq.seq t))
                (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires S.pts_to vv v0 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+requires A.pts_to vv v0 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
          pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ sigma_ok vs /\
                G.reveal r < 10 /\ SZ.v base == 16 * G.reveal r)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
   pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ G.reveal r < 10 /\
         Seq.length v1 == 16 /\ v1 == columns p vm v0 (G.reveal r))
 {
-  S.pts_to_len vv;
-  S.pts_to_len m;
-  S.pts_to_len sg;
+  A.pts_to_len vv;
+  A.pts_to_len m;
+  A.pts_to_len sg;
 
-  let s0 = S.(sg.(base));
-  let s1 = S.(sg.(SZ.add base 1sz));
-  let s2 = S.(sg.(SZ.add base 2sz));
-  let s3 = S.(sg.(SZ.add base 3sz));
-  let s4 = S.(sg.(SZ.add base 4sz));
-  let s5 = S.(sg.(SZ.add base 5sz));
-  let s6 = S.(sg.(SZ.add base 6sz));
-  let s7 = S.(sg.(SZ.add base 7sz));
+  let s0 = A.(sg.(base));
+  let s1 = A.(sg.(SZ.add base 1sz));
+  let s2 = A.(sg.(SZ.add base 2sz));
+  let s3 = A.(sg.(SZ.add base 3sz));
+  let s4 = A.(sg.(SZ.add base 4sz));
+  let s5 = A.(sg.(SZ.add base 5sz));
+  let s6 = A.(sg.(SZ.add base 6sz));
+  let s7 = A.(sg.(SZ.add base 7sz));
 
-  g_impl p vv 0sz 4sz  8sz 12sz S.(m.(s0)) S.(m.(s1));
-  g_impl p vv 1sz 5sz  9sz 13sz S.(m.(s2)) S.(m.(s3));
-  g_impl p vv 2sz 6sz 10sz 14sz S.(m.(s4)) S.(m.(s5));
-  g_impl p vv 3sz 7sz 11sz 15sz S.(m.(s6)) S.(m.(s7));
+  g_impl p vv 0sz 4sz  8sz 12sz A.(m.(s0)) A.(m.(s1));
+  g_impl p vv 1sz 5sz  9sz 13sz A.(m.(s2)) A.(m.(s3));
+  g_impl p vv 2sz 6sz 10sz 14sz A.(m.(s4)) A.(m.(s5));
+  g_impl p vv 3sz 7sz 11sz 15sz A.(m.(s6)) A.(m.(s7));
 }
 
 fn mix_diagonals (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-                 (vv: S.slice t) (m: S.slice t) (sg: S.slice SZ.t) (base: SZ.t) (r: G.erased nat)
+                 (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
                  (#v0: erased (Seq.seq t))
                  (#pm: perm) (#vm: erased (Seq.seq t))
                  (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires S.pts_to vv v0 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+requires A.pts_to vv v0 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
          pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ sigma_ok vs /\
                G.reveal r < 10 /\ SZ.v base == 16 * G.reveal r)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
   pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ G.reveal r < 10 /\
         Seq.length v1 == 16 /\ v1 == diagonals p vm v0 (G.reveal r))
 {
-  S.pts_to_len vv;
-  S.pts_to_len m;
-  S.pts_to_len sg;
+  A.pts_to_len vv;
+  A.pts_to_len m;
+  A.pts_to_len sg;
 
-  let s8  = S.(sg.(SZ.add base  8sz));
-  let s9  = S.(sg.(SZ.add base  9sz));
-  let s10 = S.(sg.(SZ.add base 10sz));
-  let s11 = S.(sg.(SZ.add base 11sz));
-  let s12 = S.(sg.(SZ.add base 12sz));
-  let s13 = S.(sg.(SZ.add base 13sz));
-  let s14 = S.(sg.(SZ.add base 14sz));
-  let s15 = S.(sg.(SZ.add base 15sz));
+  let s8  = A.(sg.(SZ.add base  8sz));
+  let s9  = A.(sg.(SZ.add base  9sz));
+  let s10 = A.(sg.(SZ.add base 10sz));
+  let s11 = A.(sg.(SZ.add base 11sz));
+  let s12 = A.(sg.(SZ.add base 12sz));
+  let s13 = A.(sg.(SZ.add base 13sz));
+  let s14 = A.(sg.(SZ.add base 14sz));
+  let s15 = A.(sg.(SZ.add base 15sz));
 
-  g_impl p vv 0sz 5sz 10sz 15sz S.(m.(s8))  S.(m.(s9));
-  g_impl p vv 1sz 6sz 11sz 12sz S.(m.(s10)) S.(m.(s11));
-  g_impl p vv 2sz 7sz  8sz 13sz S.(m.(s12)) S.(m.(s13));
-  g_impl p vv 3sz 4sz  9sz 14sz S.(m.(s14)) S.(m.(s15));
+  g_impl p vv 0sz 5sz 10sz 15sz A.(m.(s8))  A.(m.(s9));
+  g_impl p vv 1sz 6sz 11sz 12sz A.(m.(s10)) A.(m.(s11));
+  g_impl p vv 2sz 7sz  8sz 13sz A.(m.(s12)) A.(m.(s13));
+  g_impl p vv 3sz 4sz  9sz 14sz A.(m.(s14)) A.(m.(s15));
 }
 
 fn round_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-              (vv: S.slice t) (m: S.slice t) (sg: S.slice SZ.t) (base: SZ.t) (r: G.erased nat)
+              (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
               (#v0: erased (Seq.seq t))
               (#pm: perm) (#vm: erased (Seq.seq t))
               (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires S.pts_to vv v0 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+requires A.pts_to vv v0 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
          pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ sigma_ok vs /\
                G.reveal r < 10 /\ SZ.v base == 16 * G.reveal r)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
   pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ G.reveal r < 10 /\
         Seq.length v1 == 16 /\ v1 == round p vm v0 (G.reveal r))
 {
@@ -225,53 +223,53 @@ let sizet_hi_eq (#t: Type0) {| w: word t |} (x: SZ.t)
     argument over sixteen indices, is cheaper than a loop invariant that has to
     talk about two source slices at once. *)
 fn load_vector (#t: Type0) {| w: word t |}
-               (vv: S.slice t) (h: S.slice t) (ivs: S.slice t)
+               (vv: A.array t) (h: A.array t) (ivs: A.array t)
                (#v0: erased (Seq.seq t))
                (#ph: perm) (#vh: erased (Seq.seq t))
                (#pi: perm) (#vi: erased (Seq.seq t))
-requires S.pts_to vv v0 ** S.pts_to h #ph vh ** S.pts_to ivs #pi vi **
+requires A.pts_to vv v0 ** A.pts_to h #ph vh ** A.pts_to ivs #pi vi **
          pure (Seq.length v0 == 16 /\ Seq.length vh == 8 /\ Seq.length vi == 8)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to h #ph vh ** S.pts_to ivs #pi vi **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to h #ph vh ** A.pts_to ivs #pi vi **
   pure (Seq.length vh == 8 /\ Seq.length vi == 8 /\
         Seq.length v1 == 16 /\ v1 == Seq.append (reveal vh) (reveal vi))
 {
-  S.pts_to_len vv;
-  S.pts_to_len h;
-  S.pts_to_len ivs;
+  A.pts_to_len vv;
+  A.pts_to_len h;
+  A.pts_to_len ivs;
 
-  S.(vv.(0sz) <- h.(0sz));
-  S.(vv.(1sz) <- h.(1sz));
-  S.(vv.(2sz) <- h.(2sz));
-  S.(vv.(3sz) <- h.(3sz));
-  S.(vv.(4sz) <- h.(4sz));
-  S.(vv.(5sz) <- h.(5sz));
-  S.(vv.(6sz) <- h.(6sz));
-  S.(vv.(7sz) <- h.(7sz));
-  S.(vv.(8sz)  <- ivs.(0sz));
-  S.(vv.(9sz)  <- ivs.(1sz));
-  S.(vv.(10sz) <- ivs.(2sz));
-  S.(vv.(11sz) <- ivs.(3sz));
-  S.(vv.(12sz) <- ivs.(4sz));
-  S.(vv.(13sz) <- ivs.(5sz));
-  S.(vv.(14sz) <- ivs.(6sz));
-  S.(vv.(15sz) <- ivs.(7sz));
+  A.(vv.(0sz) <- h.(0sz));
+  A.(vv.(1sz) <- h.(1sz));
+  A.(vv.(2sz) <- h.(2sz));
+  A.(vv.(3sz) <- h.(3sz));
+  A.(vv.(4sz) <- h.(4sz));
+  A.(vv.(5sz) <- h.(5sz));
+  A.(vv.(6sz) <- h.(6sz));
+  A.(vv.(7sz) <- h.(7sz));
+  A.(vv.(8sz)  <- ivs.(0sz));
+  A.(vv.(9sz)  <- ivs.(1sz));
+  A.(vv.(10sz) <- ivs.(2sz));
+  A.(vv.(11sz) <- ivs.(3sz));
+  A.(vv.(12sz) <- ivs.(4sz));
+  A.(vv.(13sz) <- ivs.(5sz));
+  A.(vv.(14sz) <- ivs.(6sz));
+  A.(vv.(15sz) <- ivs.(7sz));
 
-  with v1. assert (S.pts_to vv v1);
+  with v1. assert (A.pts_to vv v1);
   assert (pure (Seq.equal v1 (Seq.append (reveal vh) (reveal vi))));
 }
 
 (** [Spec.Blake2.init_vector]. *)
 fn init_vector_impl (#t: Type0) {| w: word t |}
                     ([@@@FStar.Attributes.monomorphize] p: params t)
-                    (vv: S.slice t) (h: S.slice t) (ivs: S.slice t)
+                    (vv: A.array t) (h: A.array t) (ivs: A.array t)
                     (ctr: SZ.t) (last: bool)
                     (#v0: erased (Seq.seq t))
                     (#ph: perm) (#vh: erased (Seq.seq t))
                     (#pi: perm) (#vi: erased (Seq.seq t))
-requires S.pts_to vv v0 ** S.pts_to h #ph vh ** S.pts_to ivs #pi vi **
+requires A.pts_to vv v0 ** A.pts_to h #ph vh ** A.pts_to ivs #pi vi **
          pure (Seq.length v0 == 16 /\ Seq.length vh == 8 /\ Seq.length vi == 8 /\
                SZ.v ctr < pow2 64 /\ reveal vi == G.reveal p.iv)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to h #ph vh ** S.pts_to ivs #pi vi **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to h #ph vh ** A.pts_to ivs #pi vi **
   pure (Seq.length vh == 8 /\ Seq.length v1 == 16 /\
         v1 == init_vector p (reveal vh) (SZ.v ctr) last)
 {
@@ -279,17 +277,17 @@ ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to h #ph vh ** S.pts_to
   sizet_lo_eq #t ctr;
   sizet_hi_eq #t ctr;
 
-  let x12 = S.(vv.(12sz));
-  S.(vv.(12sz) <- logxor x12 (of_sizet_lo ctr));
-  let x13 = S.(vv.(13sz));
-  S.(vv.(13sz) <- logxor x13 (of_sizet_hi ctr));
+  let x12 = A.(vv.(12sz));
+  A.(vv.(12sz) <- logxor x12 (of_sizet_lo ctr));
+  let x13 = A.(vv.(13sz));
+  A.(vv.(13sz) <- logxor x13 (of_sizet_hi ctr));
 
   if last {
-    let x14 = S.(vv.(14sz));
-    S.(vv.(14sz) <- lognot x14);
-    S.pts_to_len vv;
+    let x14 = A.(vv.(14sz));
+    A.(vv.(14sz) <- lognot x14);
+    A.pts_to_len vv;
   } else {
-    S.pts_to_len vv;
+    A.pts_to_len vv;
   }
 }
 
@@ -301,18 +299,18 @@ ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to h #ph vh ** S.pts_to
 
 fn rounds_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (vv: S.slice t) (m: S.slice t) (sg: S.slice SZ.t)
+               (vv: A.array t) (m: A.array t) (sg: A.array SZ.t)
                (#v0: erased (Seq.seq t))
                (#pm: perm) (#vm: erased (Seq.seq t))
                (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires S.pts_to vv v0 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+requires A.pts_to vv v0 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
          pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ sigma_ok vs)
-ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
   pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\ Seq.length v1 == 16 /\
         v1 == rounds_upto p (reveal vm) (reveal v0) (rounds p))
 {
-  S.pts_to_len vv;
-  S.pts_to_len m;
+  A.pts_to_len vv;
+  A.pts_to_len m;
 
   let nr = p.nrounds;
   let mut i = 0sz;
@@ -320,7 +318,7 @@ ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to
 
   while (let vi = !i; SZ.lt vi nr)
   invariant exists* (vi: SZ.t) (vb: SZ.t) (v1: Seq.seq t).
-    pts_to i vi ** pts_to base vb ** S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to sg #ps vs **
+    pts_to i vi ** pts_to base vb ** A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
     pure (SZ.v vi <= SZ.v nr /\ SZ.v vb == 16 * (SZ.v vi % 10) /\
           Seq.length v0 == 16 /\
           Seq.length vm == 16 /\ Seq.length v1 == 16 /\ sigma_ok vs /\
@@ -344,22 +342,22 @@ ensures exists* (v1: Seq.seq t). S.pts_to vv v1 ** S.pts_to m #pm vm ** S.pts_to
 
 (** The feedforward, [Spec.Blake2.mix_state]. *)
 fn mix_state_impl (#t: Type0) {| w: word t |}
-                  (h: S.slice t) (vv: S.slice t)
+                  (h: A.array t) (vv: A.array t)
                   (#vh: erased (Seq.seq t))
                   (#pv: perm) (#v4: erased (Seq.seq t))
-requires S.pts_to h vh ** S.pts_to vv #pv v4 **
+requires A.pts_to h vh ** A.pts_to vv #pv v4 **
          pure (Seq.length vh == 8 /\ Seq.length v4 == 16)
-ensures exists* (vh': Seq.seq t). S.pts_to h vh' ** S.pts_to vv #pv v4 **
+ensures exists* (vh': Seq.seq t). A.pts_to h vh' ** A.pts_to vv #pv v4 **
   pure (Seq.length vh == 8 /\ Seq.length v4 == 16 /\ Seq.length vh' == 8 /\
         vh' == mix_state #t (reveal vh) (reveal v4))
 {
-  S.pts_to_len h;
-  S.pts_to_len vv;
+  A.pts_to_len h;
+  A.pts_to_len vv;
 
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (vc: Seq.seq t).
-    pts_to i vi ** S.pts_to h vc ** S.pts_to vv #pv v4 **
+    pts_to i vi ** A.pts_to h vc ** A.pts_to vv #pv v4 **
     pure (SZ.v vi <= 8 /\ Seq.length vc == 8 /\ Seq.length v4 == 16 /\
           (forall (j: nat). j < SZ.v vi ==>
             Seq.index vc j == logxor #t (logxor #t (Seq.index (reveal vh) j)
@@ -370,14 +368,14 @@ ensures exists* (vh': Seq.seq t). S.pts_to h vh' ** S.pts_to vv #pv v4 **
   decreases (8 - SZ.v (!i))
   {
     let vi = !i;
-    let a = S.(h.(vi));
-    let b = S.(vv.(vi));
-    let c = S.(vv.(SZ.add vi 8sz));
-    S.(h.(vi) <- logxor (logxor a b) c);
+    let a = A.(h.(vi));
+    let b = A.(vv.(vi));
+    let c = A.(vv.(SZ.add vi 8sz));
+    A.(h.(vi) <- logxor (logxor a b) c);
     i := SZ.add vi 1sz;
   };
 
-  with vc. assert (S.pts_to h vc);
+  with vc. assert (A.pts_to h vc);
   assert (pure (Seq.equal vc (mix_state #t (reveal vh) (reveal v4))));
 }
 
@@ -385,21 +383,21 @@ ensures exists* (vh': Seq.seq t). S.pts_to h vh' ** S.pts_to vv #pv v4 **
     scratch. *)
 fn compress_impl (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
-                 (h: S.slice t) (m: S.slice t) (vv: S.slice t) (ivs: S.slice t)
-                 (sg: S.slice SZ.t) (ctr: SZ.t) (last: bool)
+                 (h: A.array t) (m: A.array t) (vv: A.array t) (ivs: A.array t)
+                 (sg: A.array SZ.t) (ctr: SZ.t) (last: bool)
                  (#vh: erased (Seq.seq t))
                  (#v0: erased (Seq.seq t))
                  (#pm: perm) (#vm: erased (Seq.seq t))
                  (#pi: perm) (#vi: erased (Seq.seq t))
                  (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires S.pts_to h vh ** S.pts_to m #pm vm ** S.pts_to vv v0 **
-         S.pts_to ivs #pi vi ** S.pts_to sg #ps vs **
+requires A.pts_to h vh ** A.pts_to m #pm vm ** A.pts_to vv v0 **
+         A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
          pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\ Seq.length v0 == 16 /\
                Seq.length vi == 8 /\ sigma_ok vs /\
                SZ.v ctr < pow2 64 /\ reveal vi == G.reveal p.iv)
 ensures exists* (vh': Seq.seq t) (v1: Seq.seq t).
-  S.pts_to h vh' ** S.pts_to m #pm vm ** S.pts_to vv v1 **
-  S.pts_to ivs #pi vi ** S.pts_to sg #ps vs **
+  A.pts_to h vh' ** A.pts_to m #pm vm ** A.pts_to vv v1 **
+  A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
   pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\ Seq.length v1 == 16 /\
         Seq.length vh' == 8 /\
         vh' == compress p (reveal vh) (reveal vm) (SZ.v ctr) last)

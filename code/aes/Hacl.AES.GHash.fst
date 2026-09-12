@@ -35,7 +35,6 @@ open Spec.AES
 open Spec.GCM
 open Hacl.AES.GF128
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -125,28 +124,28 @@ let ghash_start (h acc: G.block)
 (** [acc := ghash_upd h acc (pad data)]: fold the whole blocks of [data] into
     the accumulator, then its zero-padded remainder if it has one. *)
 
-fn ghash_upd_impl (acc: S.slice S8.t) (h: S.slice S8.t) (data: S.slice S8.t)
+fn ghash_upd_impl (acc: A.array S8.t) (h: A.array S8.t) (data: A.array S8.t) (n: SZ.t)
                   (#va0 #vh: erased (Seq.seq S8.t))
                   (#pd: perm) (#vd: erased (Seq.seq S8.t))
-requires S.pts_to acc va0 ** S.pts_to h vh ** S.pts_to data #pd vd ** pure (
+requires A.pts_to acc va0 ** A.pts_to h vh ** A.pts_to data #pd vd ** pure (
   Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
   SZ.fits (Seq.length vd + blocklen))
+         ** pure (SZ.v n == Seq.length vd)
 ensures exists* (va1: Seq.seq S8.t).
-  S.pts_to acc va1 ** S.pts_to h vh ** S.pts_to data #pd vd ** pure (
+  A.pts_to acc va1 ** A.pts_to h vh ** A.pts_to data #pd vd ** pure (
   Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
   Seq.length va1 == blocklen /\
   vals va1 == G.ghash_upd (vals vh) (vals va0) (pad (vals vd)))
 {
-  S.pts_to_len acc;
-  S.pts_to_len h;
-  S.pts_to_len data;
-  let n = S.len data;
+  A.pts_to_len acc;
+  A.pts_to_len h;
+  A.pts_to_len data;
 
   ghash_start (vals vh) (vals va0) (whole (vals vd));
   let mut i = 0sz;
   while (let vi = !i; SZ.lte (SZ.add vi 16sz) n)
   invariant exists* (vi: SZ.t) (va: Seq.seq S8.t).
-    pts_to i vi ** S.pts_to acc va ** S.pts_to h vh ** S.pts_to data #pd vd **
+    pts_to i vi ** A.pts_to acc va ** A.pts_to h vh ** A.pts_to data #pd vd **
     pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
           Seq.length va == blocklen /\ Seq.length va0 == blocklen /\
           Seq.length vh == blocklen /\ Seq.length vd == SZ.v n /\
@@ -157,7 +156,7 @@ ensures exists* (va1: Seq.seq S8.t).
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
-    with va. assert S.pts_to acc va;
+    with va. assert A.pts_to acc va;
     ghash_body (vals vh) (vals va0) (vals vd) (SZ.v vi);
     gadd_at_impl acc data vi;
     gmul_impl acc h;
@@ -172,22 +171,19 @@ ensures exists* (va1: Seq.seq S8.t).
   let z = S8.zero;
   let mut tb = [| z; 16sz |];
   A.pts_to_len tb;
-  let tail = S.from_array tb 16sz;
-  S.pts_to_len tail;
+  A.pts_to_len tb;
 
   if (SZ.gt rem 0sz) {
-    Copy.copy_range tail 0sz data vi rem;
-    with vb. assert S.pts_to tail vb;
+    Copy.copy_range tb 0sz data vi rem;
+    with vb. assert A.pts_to tb vb;
     tail_eq vd vb (SZ.v vi);
     Seq.lemma_eq_intro (Seq.slice (vals vb) 0 blocklen) (vals vb);
-    with va. assert S.pts_to acc va;
+    with va. assert A.pts_to acc va;
     ghash_one (vals vh) (vals va) (tail_block (vals vd));
-    gadd_at_impl acc tail 0sz;
+    gadd_at_impl acc tb 0sz;
     gmul_impl acc h;
-    S.to_array tail;
-  } else {
-    S.to_array tail;
-  }
+    } else {
+    }
 }
 
 #pop-options

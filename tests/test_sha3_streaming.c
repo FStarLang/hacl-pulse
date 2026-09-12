@@ -55,12 +55,12 @@ typedef struct {
   { nm, r, dl, pfx##_init, pfx##_update, NULL, pfx##_digest }
 
 static const alg algs[6] = {
-    SHA3("SHA3-224", 144, 28, Hacl_Streaming_SHA3_Ptr_sha3_224),
-    SHA3("SHA3-256", 136, 32, Hacl_Streaming_SHA3_Ptr_sha3_256),
-    SHA3("SHA3-384", 104, 48, Hacl_Streaming_SHA3_Ptr_sha3_384),
-    SHA3("SHA3-512", 72, 64, Hacl_Streaming_SHA3_Ptr_sha3_512),
-    SHAKE("SHAKE128", 168, 64, Hacl_Streaming_SHA3_Ptr_shake128),
-    SHAKE("SHAKE256", 136, 64, Hacl_Streaming_SHA3_Ptr_shake256),
+    SHA3("SHA3-224", 144, 28, Hacl_Streaming_SHA3_sha3_224),
+    SHA3("SHA3-256", 136, 32, Hacl_Streaming_SHA3_sha3_256),
+    SHA3("SHA3-384", 104, 48, Hacl_Streaming_SHA3_sha3_384),
+    SHA3("SHA3-512", 72, 64, Hacl_Streaming_SHA3_sha3_512),
+    SHAKE("SHAKE128", 168, 64, Hacl_Streaming_SHA3_shake128),
+    SHAKE("SHAKE256", 136, 64, Hacl_Streaming_SHA3_shake256),
 };
 
 static void squeeze(const alg *a, state *st, uint8_t *out, size_t out_len) {

@@ -48,7 +48,7 @@ open Hacl.Impl.Table
 
 module Seq = FStar.Seq
 module L = FStar.List.Tot
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module G = Pulse.Lib.GlobalArray
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
@@ -294,7 +294,6 @@ let qr2_arr : (a: G.static_array S64.t
     lit_limbs qr2_list (pow2 256 * pow2 256 % P.order);
     G.mk_static_array qr2_list
 
-
 (** One, for leaving Montgomery form. *)
 let one_list : list S64.t = [
   S64.classify 1uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL;
@@ -367,7 +366,6 @@ let qinv_e_arr : (a: G.static_array U64.t
     assert_norm (115792089210356248762697446949407573529996955224135760342422259061068512044367 < pow2 256);
     ulit_limbs qinv_e_list (P.order - 2);
     G.mk_static_array qinv_e_list
-
 
 (** {2 Curve constants}
 
@@ -455,75 +453,75 @@ let gym_arr : (a: G.static_array S64.t
     [static const] arrays in the emitted C. *)
 
 inline_for_extraction
-fn finv_e () requires emp returns s: S.slice U64.t
+fn finv_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.prime - 2))
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.prime - 2))
 { table finv_e_arr 16sz }
 
 inline_for_extraction
-fn fsqrt_e () requires emp returns s: S.slice U64.t
+fn fsqrt_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs ((P.prime + 1) / 4))
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs ((P.prime + 1) / 4))
 { table fsqrt_e_arr 16sz }
 
 inline_for_extraction
-fn qinv_e () requires emp returns s: S.slice U64.t
+fn qinv_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.order - 2))
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.order - 2))
 { table qinv_e_arr 16sz }
 
 inline_for_extraction
-fn mone () requires emp returns s: S.slice S64.t
+fn mone () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs 1)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs 1)
 { table one_arr 16sz }
 
 inline_for_extraction
-fn fms () requires emp returns s: S.slice S64.t
+fn fms () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.ms)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.ms)
 { table fms_arr 16sz }
 
 inline_for_extraction
-fn fnm () requires emp returns s: S.slice S64.t
+fn fnm () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.nm)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.nm)
 { table fnm_arr 16sz }
 
 inline_for_extraction
-fn fr1 () requires emp returns s: S.slice S64.t
+fn fr1 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r1)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r1)
 { table fr1_arr 16sz }
 
 inline_for_extraction
-fn fr2 () requires emp returns s: S.slice S64.t
+fn fr2 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r2)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r2)
 { table fr2_arr 16sz }
 
 inline_for_extraction
-fn qms () requires emp returns s: S.slice S64.t
+fn qms () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.ms)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.ms)
 { table qms_arr 16sz }
 
 inline_for_extraction
-fn qnm () requires emp returns s: S.slice S64.t
+fn qnm () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.nm)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.nm)
 { table qnm_arr 16sz }
 
 inline_for_extraction
-fn qr1 () requires emp returns s: S.slice S64.t
+fn qr1 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r1)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r1)
 { table qr1_arr 16sz }
 
 inline_for_extraction
-fn qr2 () requires emp returns s: S.slice S64.t
+fn qr2 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
-  S.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r2)
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r2)
 { table qr2_arr 16sz }
 
 (** The Montgomery constants.  The field prime's is [1], a gift from its

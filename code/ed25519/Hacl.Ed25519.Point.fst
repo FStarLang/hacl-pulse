@@ -18,7 +18,7 @@
 
     A point is four field elements, and a field element is what
     [Hacl.Curve25519.Field] says it is: sixteen sixteen-bit limbs in a
-    [S.slice S64.t].  Rather than invent a record, a point is simply four
+    [A.array S64.t].  Rather than invent a record, a point is simply four
     slices passed side by side; that keeps the separation-logic obligations
     trivial (the caller says which four buffers are distinct) and it is
     what the extracted C looks like anyway.
@@ -38,7 +38,6 @@ open Pulse.Lib.Pervasives
 open Spec.Curve25519.Field
 open Hacl.Curve25519.Field
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -87,89 +86,81 @@ let double_ok (x: nat)
 
 #push-options "--z3rlimit 400"
 
-fn point_add (ox oy oz ot: S.slice S64.t)
-             (x1 y1 z1 t1: S.slice S64.t)
-             (x2 y2 z2 t2: S.slice S64.t)
+fn point_add (ox oy oz ot: A.array S64.t)
+             (x1 y1 z1 t1: A.array S64.t)
+             (x2 y2 z2 t2: A.array S64.t)
              (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t)) (#voz: erased (Seq.seq S64.t)) (#vot: erased (Seq.seq S64.t))
              (#p1: perm) (#vx1: erased (Seq.seq S64.t)) (#vy1: erased (Seq.seq S64.t)) (#vz1: erased (Seq.seq S64.t)) (#vt1: erased (Seq.seq S64.t))
              (#p2: perm) (#vx2: erased (Seq.seq S64.t)) (#vy2: erased (Seq.seq S64.t)) (#vz2: erased (Seq.seq S64.t)) (#vt2: erased (Seq.seq S64.t))
 requires
-  S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz ** S.pts_to ot vot **
-  S.pts_to x1 #p1 vx1 ** S.pts_to y1 #p1 vy1 **
-  S.pts_to z1 #p1 vz1 ** S.pts_to t1 #p1 vt1 **
-  S.pts_to x2 #p2 vx2 ** S.pts_to y2 #p2 vy2 **
-  S.pts_to z2 #p2 vz2 ** S.pts_to t2 #p2 vt2 **
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to ot vot **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 **
+  A.pts_to z1 #p1 vz1 ** A.pts_to t1 #p1 vt1 **
+  A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+  A.pts_to z2 #p2 vz2 ** A.pts_to t2 #p2 vt2 **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\
         Seq.length voz == nl /\ Seq.length vot == nl /\
         pt_ok vx1 vy1 vz1 vt1 /\ pt_ok vx2 vy2 vz2 vt2)
 ensures exists* (wx wy wz wt: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz ** S.pts_to ot wt **
-  S.pts_to x1 #p1 vx1 ** S.pts_to y1 #p1 vy1 **
-  S.pts_to z1 #p1 vz1 ** S.pts_to t1 #p1 vt1 **
-  S.pts_to x2 #p2 vx2 ** S.pts_to y2 #p2 vy2 **
-  S.pts_to z2 #p2 vz2 ** S.pts_to t2 #p2 vt2 **
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 **
+  A.pts_to z1 #p1 vz1 ** A.pts_to t1 #p1 vt1 **
+  A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+  A.pts_to z2 #p2 vz2 ** A.pts_to t2 #p2 vt2 **
   pure (pt_ok wx wy wz wt /\
         pt wx wy wz wt ==
           E.point_add (pt vx1 vy1 vz1 vt1) (pt vx2 vy2 vz2 vt2))
 {
-  S.pts_to_len ox; S.pts_to_len oy; S.pts_to_len oz; S.pts_to_len ot;
-  S.pts_to_len x1; S.pts_to_len y1; S.pts_to_len z1; S.pts_to_len t1;
-  S.pts_to_len x2; S.pts_to_len y2; S.pts_to_len z2; S.pts_to_len t2;
+  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
+  A.pts_to_len x1; A.pts_to_len y1; A.pts_to_len z1; A.pts_to_len t1;
+  A.pts_to_len x2; A.pts_to_len y2; A.pts_to_len z2; A.pts_to_len t2;
   let z = S64.zero;
-  let mut au = [| z; 16sz |]; A.pts_to_len au; let u = S.from_array au 16sz;
-  let mut av = [| z; 16sz |]; A.pts_to_len av; let v = S.from_array av 16sz;
-  let mut aa = [| z; 16sz |]; A.pts_to_len aa; let a = S.from_array aa 16sz;
-  let mut ab = [| z; 16sz |]; A.pts_to_len ab; let b = S.from_array ab 16sz;
-  let mut ac = [| z; 16sz |]; A.pts_to_len ac; let c = S.from_array ac 16sz;
-  let mut ae = [| z; 16sz |]; A.pts_to_len ae; let e = S.from_array ae 16sz;
-  let mut aw = [| z; 31sz |]; A.pts_to_len aw; let tw = S.from_array aw 31sz;
-  S.pts_to_len u; S.pts_to_len v; S.pts_to_len a;
-  S.pts_to_len b; S.pts_to_len c; S.pts_to_len e; S.pts_to_len tw;
+  let mut au = [| z; 16sz |]; A.pts_to_len au; let mut av = [| z; 16sz |]; A.pts_to_len av; let mut aa = [| z; 16sz |]; A.pts_to_len aa; let mut ab = [| z; 16sz |]; A.pts_to_len ab; let mut ac = [| z; 16sz |]; A.pts_to_len ac; let mut ae = [| z; 16sz |]; A.pts_to_len ae; let mut aw = [| z; 31sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len aa;
+  A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len ae; A.pts_to_len aw;
 
-  (* a = (y1 - x1) (y2 - x2) *)
-  fsub u y1 x1;
-  fsub v y2 x2;
-  fmul a u v tw;
+  (* aa = (y1 - x1) (y2 - x2) *)
+  fsub au y1 x1;
+  fsub av y2 x2;
+  fmul aa au av aw;
 
-  (* b = (y1 + x1) (y2 + x2) *)
-  fadd u y1 x1;
-  fadd v y2 x2;
-  fmul b u v tw;
+  (* ab = (y1 + x1) (y2 + x2) *)
+  fadd au y1 x1;
+  fadd av y2 x2;
+  fmul ab au av aw;
 
-  (* c = 2d t1 t2 *)
+  (* ac = 2d t1 t2 *)
   let dt = Table.table Tables.d2_arr 16sz;
   Tables.d2_ok ();
-  fmul u dt t1 tw;
+  fmul au dt t1 aw;
   Table.drop_table dt;
-  fmul c u t2 tw;
+  fmul ac au t2 aw;
 
-  (* e = 2 z1 z2 *)
-  fscale u z1 2uL;
-  with vu. assert (S.pts_to u vu);
+  (* ae = 2 z1 z2 *)
+  fscale au z1 2uL;
+  with vu. assert (A.pts_to au vu);
   double_ok (eval (vals vz1));
   assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul e u z2 tw;
+  fmul ae au z2 aw;
 
-  (* E = b - a, H = b + a, then F = e - c and G = e + c on top of a and b *)
-  fsub u b a;
-  fadd v b a;
-  fsub a e c;
-  fadd b e c;
+  (* E = ab - aa, H = ab + aa, then F = ae - ac and G = ae + ac on top of aa and ab *)
+  fsub au ab aa;
+  fadd av ab aa;
+  fsub aa ae ac;
+  fadd ab ae ac;
 
-  fmul ox u a tw;
-  fmul oy b v tw;
-  fmul oz a b tw;
-  fmul ot u v tw;
+  fmul ox au aa aw;
+  fmul oy ab av aw;
+  fmul oz aa ab aw;
+  fmul ot au av aw;
 
-  with wx. assert (S.pts_to ox wx);
-  with wy. assert (S.pts_to oy wy);
-  with wz. assert (S.pts_to oz wz);
-  with wt. assert (S.pts_to ot wt);
+  with wx. assert (A.pts_to ox wx);
+  with wy. assert (A.pts_to oy wy);
+  with wz. assert (A.pts_to oz wz);
+  with wt. assert (A.pts_to ot wt);
   assert (pure (pt wx wy wz wt ==
                 E.point_add (pt vx1 vy1 vz1 vt1) (pt vx2 vy2 vz2 vt2)));
 
-  S.to_array u; S.to_array v; S.to_array a; S.to_array b;
-  S.to_array c; S.to_array e; S.to_array tw;
+  ()
 }
 
 #pop-options
@@ -181,71 +172,63 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 
 #push-options "--z3rlimit 400"
 
-fn point_double (ox oy oz ot: S.slice S64.t)
-                (x1 y1 z1 t1: S.slice S64.t)
+fn point_double (ox oy oz ot: A.array S64.t)
+                (x1 y1 z1 t1: A.array S64.t)
                 (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t)) (#voz: erased (Seq.seq S64.t)) (#vot: erased (Seq.seq S64.t))
                 (#p1: perm) (#vx1: erased (Seq.seq S64.t)) (#vy1: erased (Seq.seq S64.t)) (#vz1: erased (Seq.seq S64.t))
                 (#vt1: erased (Seq.seq S64.t))
 requires
-  S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz ** S.pts_to ot vot **
-  S.pts_to x1 #p1 vx1 ** S.pts_to y1 #p1 vy1 ** S.pts_to z1 #p1 vz1 ** S.pts_to t1 #p1 vt1 **
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to ot vot **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 ** A.pts_to t1 #p1 vt1 **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\
         Seq.length voz == nl /\ Seq.length vot == nl /\
         felem (vals vx1) /\ felem (vals vy1) /\ felem (vals vz1))
 ensures exists* (wx wy wz wt: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz ** S.pts_to ot wt **
-  S.pts_to x1 #p1 vx1 ** S.pts_to y1 #p1 vy1 ** S.pts_to z1 #p1 vz1 ** S.pts_to t1 #p1 vt1 **
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 ** A.pts_to t1 #p1 vt1 **
   pure (pt_ok wx wy wz wt /\
         pt wx wy wz wt == E.point_double (pt vx1 vy1 vz1 vt1))
 {
-  S.pts_to_len ox; S.pts_to_len oy; S.pts_to_len oz; S.pts_to_len ot;
-  S.pts_to_len x1; S.pts_to_len y1; S.pts_to_len z1; S.pts_to_len t1;
+  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
+  A.pts_to_len x1; A.pts_to_len y1; A.pts_to_len z1; A.pts_to_len t1;
   let z = S64.zero;
-  let mut au = [| z; 16sz |]; A.pts_to_len au; let u = S.from_array au 16sz;
-  let mut av = [| z; 16sz |]; A.pts_to_len av; let v = S.from_array av 16sz;
-  let mut ar = [| z; 16sz |]; A.pts_to_len ar; let r = S.from_array ar 16sz;
-  let mut aa = [| z; 16sz |]; A.pts_to_len aa; let a = S.from_array aa 16sz;
-  let mut ab = [| z; 16sz |]; A.pts_to_len ab; let b = S.from_array ab 16sz;
-  let mut ac = [| z; 16sz |]; A.pts_to_len ac; let c = S.from_array ac 16sz;
-  let mut aw = [| z; 31sz |]; A.pts_to_len aw; let tw = S.from_array aw 31sz;
-  S.pts_to_len u; S.pts_to_len v; S.pts_to_len r;
-  S.pts_to_len a; S.pts_to_len b; S.pts_to_len c; S.pts_to_len tw;
+  let mut au = [| z; 16sz |]; A.pts_to_len au; let mut av = [| z; 16sz |]; A.pts_to_len av; let mut ar = [| z; 16sz |]; A.pts_to_len ar; let mut aa = [| z; 16sz |]; A.pts_to_len aa; let mut ab = [| z; 16sz |]; A.pts_to_len ab; let mut ac = [| z; 16sz |]; A.pts_to_len ac; let mut aw = [| z; 31sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len ar;
+  A.pts_to_len aa; A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len aw;
 
-  (* a = x1^2, b = y1^2, c = 2 z1^2 *)
-  copy u x1;
-  fmul a u x1 tw;
-  copy u y1;
-  fmul b u y1 tw;
-  fscale u z1 2uL;
-  with vu. assert (S.pts_to u vu);
+  (* aa = x1^2, ab = y1^2, ac = 2 z1^2 *)
+  copy au x1;
+  fmul aa au x1 aw;
+  copy au y1;
+  fmul ab au y1 aw;
+  fscale au z1 2uL;
+  with vu. assert (A.pts_to au vu);
   double_ok (eval (vals vz1));
   assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul c u z1 tw;
+  fmul ac au z1 aw;
 
-  (* r = (x1 + y1)^2 *)
-  fadd u x1 y1;
-  copy v u;
-  fmul r v u tw;
+  (* ar = (x1 + y1)^2 *)
+  fadd au x1 y1;
+  copy av au;
+  fmul ar av au aw;
 
-  (* H = a + b, E = H - r, G = a - b, F = c + G *)
-  fadd v a b;
-  fsub u v r;
-  fsub r a b;
-  fadd a c r;
+  (* H = aa + ab, E = H - ar, G = aa - ab, F = ac + G *)
+  fadd av aa ab;
+  fsub au av ar;
+  fsub ar aa ab;
+  fadd aa ac ar;
 
-  fmul ox u a tw;
-  fmul oy r v tw;
-  fmul oz a r tw;
-  fmul ot u v tw;
+  fmul ox au aa aw;
+  fmul oy ar av aw;
+  fmul oz aa ar aw;
+  fmul ot au av aw;
 
-  with wx. assert (S.pts_to ox wx);
-  with wy. assert (S.pts_to oy wy);
-  with wz. assert (S.pts_to oz wz);
-  with wt. assert (S.pts_to ot wt);
+  with wx. assert (A.pts_to ox wx);
+  with wy. assert (A.pts_to oy wy);
+  with wz. assert (A.pts_to oz wz);
+  with wt. assert (A.pts_to ot wt);
   assert (pure (pt wx wy wz wt == E.point_double (pt vx1 vy1 vz1 vt1)));
 
-  S.to_array u; S.to_array v; S.to_array r; S.to_array a;
-  S.to_array b; S.to_array c; S.to_array tw;
+  ()
 }
 
 #pop-options
@@ -258,28 +241,28 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 
 #push-options "--z3rlimit 120"
 
-fn set_small (a: S.slice S64.t) (m: U64.t { U64.v m < base })
+fn set_small (a: A.array S64.t) (m: U64.t { U64.v m < base })
              (#va: erased (Seq.seq S64.t))
-requires S.pts_to a va ** pure (Seq.length va == nl)
+requires A.pts_to a va ** pure (Seq.length va == nl)
 ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' ** pure (felem (vals va') /\ fev (vals va') == U64.v m)
+  A.pts_to a va' ** pure (felem (vals va') /\ fev (vals va') == U64.v m)
 {
-  S.pts_to_len a;
+  A.pts_to_len a;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to a v **
+    pts_to i vi ** A.pts_to a v **
     pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
-    S.((a.(vi) <- S64.zero));
+    A.((a.(vi) <- S64.zero));
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to a v);
-  S.((a.(0sz) <- S64.classify m));
-  with v'. assert (S.pts_to a v');
+  with v. assert (A.pts_to a v);
+  A.((a.(0sz) <- S64.classify m));
+  with v'. assert (A.pts_to a v');
   vals_upd v 0 (S64.classify m);
   eval_zeros (vals v);
   eval_upd (vals v) 0 (U64.v m);
@@ -294,14 +277,14 @@ ensures exists* (va': Seq.seq S64.t).
 #pop-options
 
 (** Set a point to the neutral element. *)
-fn set_infinity (x y z t: S.slice S64.t)
+fn set_infinity (x y z t: A.array S64.t)
                 (#vx: erased (Seq.seq S64.t)) (#vy: erased (Seq.seq S64.t))
                 (#vz: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
-requires S.pts_to x vx ** S.pts_to y vy ** S.pts_to z vz ** S.pts_to t vt **
+requires A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz ** A.pts_to t vt **
   pure (Seq.length vx == nl /\ Seq.length vy == nl /\
         Seq.length vz == nl /\ Seq.length vt == nl)
 ensures exists* (wx wy wz wt: Seq.seq S64.t).
-  S.pts_to x wx ** S.pts_to y wy ** S.pts_to z wz ** S.pts_to t wt **
+  A.pts_to x wx ** A.pts_to y wy ** A.pts_to z wz ** A.pts_to t wt **
   pure (pt_ok wx wy wz wt /\ pt wx wy wz wt == E.point_at_infinity)
 {
   set_small x 0uL;
@@ -321,8 +304,8 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
 
-fn point_mul_step (ax ay az at ux uy uz ut sx sy sz st: S.slice S64.t)
-                  (qx qy qz qt: S.slice S64.t) (ks: S.slice S8.t)
+fn point_mul_step (ax ay az at ux uy uz ut sx sy sz st: A.array S64.t)
+                  (qx qy qz qt: A.array S64.t) (ks: A.array S8.t)
                   (n: SZ.t { SZ.v n < 256 })
                   (#vax: erased (Seq.seq S64.t)) (#vay: erased (Seq.seq S64.t))
                   (#vaz: erased (Seq.seq S64.t)) (#vat: erased (Seq.seq S64.t))
@@ -335,22 +318,22 @@ fn point_mul_step (ax ay az at ux uy uz ut sx sy sz st: S.slice S64.t)
                   (#vpz: erased (Seq.seq S64.t)) (#vpt: erased (Seq.seq S64.t))
                   (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
 requires
-  S.pts_to ax vax ** S.pts_to ay vay ** S.pts_to az vaz ** S.pts_to at vat **
-  S.pts_to ux vux ** S.pts_to uy vuy ** S.pts_to uz vuz ** S.pts_to ut vut **
-  S.pts_to sx vsx ** S.pts_to sy vsy ** S.pts_to sz vsz ** S.pts_to st vst **
-  S.pts_to qx #pp vpx ** S.pts_to qy #pp vpy **
-  S.pts_to qz #pp vpz ** S.pts_to qt #pp vpt ** S.pts_to ks #pk vk **
+  A.pts_to ax vax ** A.pts_to ay vay ** A.pts_to az vaz ** A.pts_to at vat **
+  A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz ** A.pts_to ut vut **
+  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz ** A.pts_to st vst **
+  A.pts_to qx #pp vpx ** A.pts_to qy #pp vpy **
+  A.pts_to qz #pp vpz ** A.pts_to qt #pp vpt ** A.pts_to ks #pk vk **
   pure (pt_ok vax vay vaz vat /\ pt_ok vpx vpy vpz vpt /\
         Seq.length vux == nl /\ Seq.length vuy == nl /\
         Seq.length vuz == nl /\ Seq.length vut == nl /\
         Seq.length vsx == nl /\ Seq.length vsy == nl /\
         Seq.length vsz == nl /\ Seq.length vst == nl)
 ensures exists* (wax way waz wat wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
-  S.pts_to ax wax ** S.pts_to ay way ** S.pts_to az waz ** S.pts_to at wat **
-  S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz ** S.pts_to ut wut **
-  S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz ** S.pts_to st wst **
-  S.pts_to qx #pp vpx ** S.pts_to qy #pp vpy **
-  S.pts_to qz #pp vpz ** S.pts_to qt #pp vpt ** S.pts_to ks #pk vk **
+  A.pts_to ax wax ** A.pts_to ay way ** A.pts_to az waz ** A.pts_to at wat **
+  A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz ** A.pts_to ut wut **
+  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz ** A.pts_to st wst **
+  A.pts_to qx #pp vpx ** A.pts_to qy #pp vpy **
+  A.pts_to qz #pp vpz ** A.pts_to qt #pp vpt ** A.pts_to ks #pk vk **
   pure (pt_ok wax way waz wat /\
         Seq.length wux == nl /\ Seq.length wuy == nl /\
         Seq.length wuz == nl /\ Seq.length wut == nl /\
@@ -360,7 +343,7 @@ ensures exists* (wax way waz wat wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t)
           E.point_mul_step vk (pt vpx vpy vpz vpt) (SZ.v n)
                            (pt vax vay vaz vat))
 {
-  S.pts_to_len ks;
+  A.pts_to_len ks;
   let bi = SZ.sub 255sz n;
   let bj = SZ.div bi 8sz;
   let sh = SZ.sizet_to_uint32 (SZ.rem bi 8sz);
@@ -368,7 +351,7 @@ ensures exists* (wax way waz wat wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t)
   Math.small_mod (SZ.v (SZ.rem bi 8sz)) (pow2 32);
   assert (pure (SZ.v bi == 255 - SZ.v n /\ SZ.v bj == SZ.v bi / 8 /\
                 U32.v sh == SZ.v bi % 8));
-  let byte = S.(ks.(bj));
+  let byte = A.(ks.(bj));
   let w = Cast.u8_to_u64 byte;
   let sr = S64.shift_right w sh;
   assert (pure (S64.v sr == S64.v w / pow2 (SZ.v bi % 8)));
@@ -391,10 +374,10 @@ ensures exists* (wax way waz wat wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t)
   copy az uz;
   copy at ut;
 
-  with wax. assert (S.pts_to ax wax);
-  with way. assert (S.pts_to ay way);
-  with waz. assert (S.pts_to az waz);
-  with wat. assert (S.pts_to at wat);
+  with wax. assert (A.pts_to ax wax);
+  with way. assert (A.pts_to ay way);
+  with waz. assert (A.pts_to az waz);
+  with wat. assert (A.pts_to at wat);
   assert (pure (pt wax way waz wat ==
                 E.point_mul_step vk (pt vpx vpy vpz vpt) (SZ.v n)
                                  (pt vax vay vaz vat)));
@@ -407,8 +390,8 @@ ensures exists* (wax way waz wat wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
-fn point_mul (ox oy oz ot: S.slice S64.t) (qx qy qz qt: S.slice S64.t)
-             (ks: S.slice S8.t)
+fn point_mul (ox oy oz ot: A.array S64.t) (qx qy qz qt: A.array S64.t)
+             (ks: A.array S8.t)
              (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
              (#voz: erased (Seq.seq S64.t)) (#vot: erased (Seq.seq S64.t))
              (#pp: perm)
@@ -416,31 +399,23 @@ fn point_mul (ox oy oz ot: S.slice S64.t) (qx qy qz qt: S.slice S64.t)
              (#vqz: erased (Seq.seq S64.t)) (#vqt: erased (Seq.seq S64.t))
              (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
 requires
-  S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz ** S.pts_to ot vot **
-  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy **
-  S.pts_to qz #pp vqz ** S.pts_to qt #pp vqt ** S.pts_to ks #pk vk **
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to ot vot **
+  A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy **
+  A.pts_to qz #pp vqz ** A.pts_to qt #pp vqt ** A.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\
         Seq.length voz == nl /\ Seq.length vot == nl /\
         pt_ok vqx vqy vqz vqt)
 ensures exists* (wx wy wz wt: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz ** S.pts_to ot wt **
-  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy **
-  S.pts_to qz #pp vqz ** S.pts_to qt #pp vqt ** S.pts_to ks #pk vk **
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
+  A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy **
+  A.pts_to qz #pp vqz ** A.pts_to qt #pp vqt ** A.pts_to ks #pk vk **
   pure (pt_ok wx wy wz wt /\
         pt wx wy wz wt == E.point_mul vk (pt vqx vqy vqz vqt))
 {
-  S.pts_to_len ox; S.pts_to_len oy; S.pts_to_len oz; S.pts_to_len ot;
+  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
   let z = S64.zero;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let ux = S.from_array a1 16sz;
-  let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let uy = S.from_array a2 16sz;
-  let mut a3 = [| z; 16sz |]; A.pts_to_len a3; let uz = S.from_array a3 16sz;
-  let mut a4 = [| z; 16sz |]; A.pts_to_len a4; let ut = S.from_array a4 16sz;
-  let mut a5 = [| z; 16sz |]; A.pts_to_len a5; let sx = S.from_array a5 16sz;
-  let mut a6 = [| z; 16sz |]; A.pts_to_len a6; let sy = S.from_array a6 16sz;
-  let mut a7 = [| z; 16sz |]; A.pts_to_len a7; let sz = S.from_array a7 16sz;
-  let mut a8 = [| z; 16sz |]; A.pts_to_len a8; let st = S.from_array a8 16sz;
-  S.pts_to_len ux; S.pts_to_len uy; S.pts_to_len uz; S.pts_to_len ut;
-  S.pts_to_len sx; S.pts_to_len sy; S.pts_to_len sz; S.pts_to_len st;
+  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let mut a3 = [| z; 16sz |]; A.pts_to_len a3; let mut a4 = [| z; 16sz |]; A.pts_to_len a4; let mut a5 = [| z; 16sz |]; A.pts_to_len a5; let mut a6 = [| z; 16sz |]; A.pts_to_len a6; let mut a7 = [| z; 16sz |]; A.pts_to_len a7; let mut a8 = [| z; 16sz |]; A.pts_to_len a8; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
+  A.pts_to_len a5; A.pts_to_len a6; A.pts_to_len a7; A.pts_to_len a8;
 
   set_infinity ox oy oz ot;
   Loops.repeati_g_zero (E.point_mul_at vk (pt vqx vqy vqz vqt)) E.point_at_infinity;
@@ -450,11 +425,11 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   invariant exists* (vi: SZ.t)
                     (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
     pts_to i vi **
-    S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz ** S.pts_to ot wt **
-    S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz ** S.pts_to ut wut **
-    S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz ** S.pts_to st wst **
-    S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy **
-    S.pts_to qz #pp vqz ** S.pts_to qt #pp vqt ** S.pts_to ks #pk vk **
+    A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
+    A.pts_to a1 wux ** A.pts_to a2 wuy ** A.pts_to a3 wuz ** A.pts_to a4 wut **
+    A.pts_to a5 wsx ** A.pts_to a6 wsy ** A.pts_to a7 wsz ** A.pts_to a8 wst **
+    A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy **
+    A.pts_to qz #pp vqz ** A.pts_to qt #pp vqt ** A.pts_to ks #pk vk **
     pure (SZ.v vi <= 256 /\ pt_ok wx wy wz wt /\
           Seq.length wux == nl /\ Seq.length wuy == nl /\
           Seq.length wuz == nl /\ Seq.length wut == nl /\
@@ -466,15 +441,15 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   decreases (256 - SZ.v (!i))
   {
     let vi = !i;
-    with wx. assert (S.pts_to ox wx);
-    with wy. assert (S.pts_to oy wy);
-    with wz. assert (S.pts_to oz wz);
-    with wt. assert (S.pts_to ot wt);
-    point_mul_step ox oy oz ot ux uy uz ut sx sy sz st qx qy qz qt ks vi;
-    with rx. assert (S.pts_to ox rx);
-    with ry. assert (S.pts_to oy ry);
-    with rz. assert (S.pts_to oz rz);
-    with rt. assert (S.pts_to ot rt);
+    with wx. assert (A.pts_to ox wx);
+    with wy. assert (A.pts_to oy wy);
+    with wz. assert (A.pts_to oz wz);
+    with wt. assert (A.pts_to ot wt);
+    point_mul_step ox oy oz ot a1 a2 a3 a4 a5 a6 a7 a8 qx qy qz qt ks vi;
+    with rx. assert (A.pts_to ox rx);
+    with ry. assert (A.pts_to oy ry);
+    with rz. assert (A.pts_to oz rz);
+    with rt. assert (A.pts_to ot rt);
     Loops.unfold_repeati_g (SZ.v vi) (E.point_mul_at vk (pt vqx vqy vqz vqt))
                            E.point_at_infinity;
     assert (pure (pt rx ry rz rt ==
@@ -484,8 +459,7 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
     i := SZ.add vi 1sz;
   };
 
-  S.to_array ux; S.to_array uy; S.to_array uz; S.to_array ut;
-  S.to_array sx; S.to_array sy; S.to_array sz; S.to_array st;
+  ()
 }
 
 #pop-options

@@ -22,7 +22,7 @@ static uint8_t tag[16];
 
 static void check(const char *name, const uint8_t *key, const uint8_t *msg,
                   size_t len, const uint8_t *expected) {
-  Hacl_Poly1305_Ptr_mac(tag, (uint8_t *)msg, len, (uint8_t *)key);
+  Hacl_Poly1305_mac(tag, (uint8_t *)msg, len, (uint8_t *)key);
   if (memcmp(tag, expected, 16) != 0) {
     printf("FAIL %s\n  got      ", name);
     for (size_t i = 0; i < 16; i++) printf("%02x", tag[i]);
