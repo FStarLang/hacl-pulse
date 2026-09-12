@@ -47,19 +47,19 @@ fn point_mul_double_g (ox oy oz: S.slice S64.t)
                       (#vox #voy #voz: erased (Seq.seq S64.t))
                       (#p1: perm) (#v1: erased (Seq.seq S64.t))
                       (#p2: perm) (#v2: erased (Seq.seq S64.t))
-                      (#ppx #ppy #ppz: perm)
+                      (#pp: perm)
                       (#vqx #vqy #vqz: erased (Seq.seq S64.t))
 requires
   S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz **
   S.pts_to u1 #p1 v1 ** S.pts_to u2 #p2 v2 **
-  S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
         Seq.length v1 == nl /\ bnd (vals v1) base /\
         Seq.length v2 == nl /\ bnd (vals v2) base /\ pt_ok vqx vqy vqz)
 ensures exists* (wx wy wz: Seq.seq S64.t).
   S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
   S.pts_to u1 #p1 v1 ** S.pts_to u2 #p2 v2 **
-  S.pts_to qx #ppx vqx ** S.pts_to qy #ppy vqy ** S.pts_to qz #ppz vqz **
+  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
   pure (pt_ok wx wy wz /\
         pt wx wy wz ==
           P.point_mul_double_g (eval (vals v1)) (eval (vals v2))
