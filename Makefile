@@ -94,6 +94,10 @@ CUSTARD_ENTRIES_Hacl.HMAC.DRBG.Ptr := \
   instantiate_sha384 reseed_sha384 generate_sha384 \
   instantiate_sha512 reseed_sha512 generate_sha512
 
+C_UNITS += Hacl.AES.GCM.Ptr
+CUSTARD_ENTRIES_Hacl.AES.GCM.Ptr := \
+  aes128_encrypt aes128_decrypt aes256_encrypt aes256_decrypt
+
 # Which unit each C test links against; see mk/test.mk.
 TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
@@ -110,6 +114,7 @@ TEST_UNITS_test_curve25519 := Hacl.Curve25519.Ptr
 TEST_UNITS_test_ed25519 := Hacl.Ed25519.Ptr
 TEST_UNITS_test_p256 := Hacl.P256.Ptr
 TEST_UNITS_test_drbg := Hacl.HMAC.DRBG.Ptr
+TEST_UNITS_test_gcm := Hacl.AES.GCM.Ptr
 
 include mk/extract.mk
 
