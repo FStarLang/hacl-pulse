@@ -67,6 +67,7 @@ module UInt32 = FStar.UInt32
 module List = FStar.List.Tot
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+module SZ = FStar.SizeT
 
 open Spec.Byte
 
@@ -253,6 +254,26 @@ let keylen (v: variant) : n: pos { n == 16 \/ n == 32 } = 4 * nk v
 
 let xkeylen (v: variant) : pos = 16 * (nr v + 1)
 
+(** The implementation is specialized to one variant at a time, and follows
+    the house style of [Spec.SHA2]: a record of [SizeT.t] fields, passed as a
+    monomorphized argument, so that no [Prims.int] survives into the code and
+    Custard produces one C function per variant.  The refinements carry the
+    connection back to the definitions above, so nothing has to be re-proved
+    at the call sites. *)
+noeq type params = {
+  pv: variant;
+  pnk: (n: SZ.t { SZ.v n == nk pv });
+  pnr: (n: SZ.t { SZ.v n == nr pv });
+  pkeylen: (n: SZ.t { SZ.v n == keylen pv });
+  pxkeylen: (n: SZ.t { SZ.v n == xkeylen pv });
+}
+
+let params128 : params =
+  { pv = AES128; pnk = 4sz; pnr = 10sz; pkeylen = 16sz; pxkeylen = 176sz }
+
+let params256 : params =
+  { pv = AES256; pnk = 8sz; pnr = 14sz; pkeylen = 32sz; pxkeylen = 240sz }
+
 type word = Seq.lseq elem 4
 
 let xor_word (a b: word) : word =
@@ -286,9 +307,20 @@ let rec ks_word (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat)
       else prev in
     xor_word (ks_word v key (i - nk v)) temp
 
+(** Opaque to the solver: unfolded, this is a [Seq.init] whose body divides
+    the index, so any hypothesis quantified over indices would spawn a fresh
+    [ks_word] term for each of them and drown an implementation's query.
+    [key_expansion_index] is the only way in. *)
+[@@ "opaque_to_smt"]
 let key_expansion (v: variant) (key: Seq.lseq elem (keylen v))
   : Seq.lseq elem (xkeylen v) =
   Seq.init (xkeylen v) (fun j -> Seq.index (ks_word v key (j / 4)) (j % 4))
+
+let key_expansion_index (v: variant) (key: Seq.lseq elem (keylen v))
+                        (j: nat { j < xkeylen v })
+  : Lemma (Seq.index (key_expansion v key) j ==
+           Seq.index (ks_word v key (j / 4)) (j % 4))
+  = reveal_opaque (`%key_expansion) key_expansion
 
 (** {2 The cipher} *)
 
