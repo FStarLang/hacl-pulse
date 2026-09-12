@@ -124,6 +124,20 @@ ensures exists* (vo': Seq.seq S64.t).
 
 (** {2 Comparison} *)
 
+fn qeq (a b: S.slice S64.t)
+       (#pa: perm) (#va: erased (Seq.seq S64.t))
+       (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (qelem va /\ qelem vb)
+returns r: bool
+ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
+  pure (r == (qev va = qev vb))
+{
+  qmod_ok (); qmod_m ();
+  mev_eq qmod (vals va) (vals vb);
+  aeq a b
+}
+
 fn qis_zero (a: S.slice S64.t) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires S.pts_to a #pa va ** pure (qelem va)
 returns r: bool

@@ -34,6 +34,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
+module Classical = FStar.Classical
 module UInt = FStar.UInt
 module S8 = Hacl.Secret.UInt8
 
@@ -70,6 +71,32 @@ let nat_to_be (n: nat) (x: nat) : Seq.lseq S8.t n =
 let nat_to_be_index (n: nat) (x: nat) (i: nat { i < n })
   : Lemma (S8.v (Seq.index (nat_to_be n x) i) == (x / pow2 (8 * (n - 1 - i))) % 256)
   = ()
+
+(** Decoding undoes encoding.  ECDSA needs it: the x-coordinate leaves the
+    field as bytes and comes back as a scalar, and without this the two
+    numbers are unrelated. *)
+let rec be_nat_to_be (n: nat) (x: nat)
+  : Lemma (requires x < pow2 (8 * n))
+          (ensures be_nat (nat_to_be n x) == x)
+          (decreases n)
+  = if n = 0 then assert_norm (pow2 0 == 1)
+    else begin
+      assert_norm (pow2 8 == 256);
+      Math.pow2_plus (8 * (n - 1)) 8;
+      let s = nat_to_be n x in
+      let t = nat_to_be (n - 1) (x / 256) in
+      let aux (i: nat { i < n - 1 })
+        : Lemma (Seq.index (Seq.slice s 0 (n - 1)) i == Seq.index t i)
+        = Math.pow2_plus (8 * (n - 2 - i)) 8;
+          Math.division_multiplication_lemma x 256 (pow2 (8 * (n - 2 - i)))
+      in
+      Classical.forall_intro aux;
+      Seq.lemma_eq_intro (Seq.slice s 0 (n - 1)) t;
+      be_nat_to_be (n - 1) (x / 256);
+      nat_to_be_index n x (n - 1);
+      assert_norm (pow2 0 == 1);
+      Math.euclidean_division_definition x 256
+    end
 
 (** The parity of a big-endian number is the parity of its last byte.  The
     SEC1 compressed forms are a bit of [y], and this is what connects that
