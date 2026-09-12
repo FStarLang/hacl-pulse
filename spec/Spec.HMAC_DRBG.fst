@@ -150,13 +150,13 @@ let rec gen_bytes (#t: Type0) {| word t |} (p: params t)
         let (rest, vl) = gen_bytes p k v1 (n - hl) in
         (Seq.append v1 rest, vl)
 
-(** [None] means the caller must reseed first; that is the only way this
-    can refuse. *)
+(** [None] means either that the caller must reseed first or that it asked
+    for more than [max_output_length] bytes at once. *)
 let generate (#t: Type0) {| word t |} (p: params t)
              (st: state (hash_bytes p)) (n: nat)
              (additional: Seq.seq S8.t { data_ok p additional })
   : GTot (option (Seq.lseq S8.t n & state (hash_bytes p)))
-  = if st.ctr > reseed_interval then None
+  = if st.ctr > reseed_interval || n > max_output_length then None
     else
       let st1 = if Seq.length additional = 0 then st else update p additional st in
       let (out, vl) = gen_bytes p st1.k st1.v n in
@@ -257,3 +257,57 @@ let gen_step (#t: Type0) {| word t |} (p: params t)
                     fst (gen p vk vv n) == Seq.append v1 (fst (gen p vk v1 (n - hl))) /\
                     snd (gen p vk vv n) == snd (gen p vk v1 (n - hl))))
   = outer_fits #t p
+
+(** The implementation takes the data in three pieces -- entropy, nonce and
+    personalization string for [instantiate], entropy and additional input
+    for [reseed], additional input alone for [generate] -- so that nothing
+    ever has to concatenate them into a buffer sized at run time. *)
+let dcat (a: Seq.seq S8.t) (b: Seq.seq S8.t) (c: Seq.seq S8.t)
+  : (r: Seq.seq S8.t { Seq.length r == Seq.length a + Seq.length b + Seq.length c })
+  = Seq.append a (Seq.append b c)
+
+(** {2 The three transitions, on bare sequences} *)
+
+let inst_def (#t: Type0) {| word t |} (p: params t)
+             (entropy: Seq.seq S8.t) (nonce: Seq.seq S8.t) (personalization: Seq.seq S8.t)
+  : Lemma (requires data_ok p (seed_material entropy nonce personalization))
+          (ensures (let st = instantiate p entropy nonce personalization in
+                    let (a, b) = upd p (initial p).k (initial p).v
+                                     (seed_material entropy nonce personalization) in
+                    st.k == a /\ st.v == b /\ st.ctr == 1))
+  = ()
+
+let reseed_def (#t: Type0) {| word t |} (p: params t)
+               (st: state (hash_bytes p))
+               (entropy: Seq.seq S8.t) (additional: Seq.seq S8.t)
+  : Lemma (requires data_ok p (Seq.append entropy additional))
+          (ensures (let st' = reseed p st entropy additional in
+                    let (a, b) = upd p st.k st.v (Seq.append entropy additional) in
+                    st'.k == a /\ st'.v == b /\ st'.ctr == 1))
+  = ()
+
+(** [generate] on a bare state: the output, the new key, the new value and
+    the new counter. *)
+let gene (#t: Type0) {| word t |} (p: params t)
+         (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (c: nat)
+         (n: nat) (additional: Seq.seq S8.t)
+  : GTot (option (Seq.seq S8.t & Seq.seq S8.t & Seq.seq S8.t & nat))
+  = if Seq.length vk = hash_bytes p && Seq.length vv = hash_bytes p && data_ok p additional
+    then match generate p ({ k = vk; v = vv; ctr = c }) n additional with
+         | None -> None
+         | Some (o, st) -> Some (o, st.k, st.v, st.ctr)
+    else None
+
+(** What the implementation does, step by step: an optional first update,
+    the output loop, a second update, and the counter. *)
+let gene_def (#t: Type0) {| word t |} (p: params t)
+             (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (c: nat)
+             (n: nat) (additional: Seq.seq S8.t)
+  : Lemma (requires Seq.length vk == hash_bytes p /\ Seq.length vv == hash_bytes p /\
+                    data_ok p additional /\ c <= reseed_interval /\ n <= max_output_length)
+          (ensures (let (k1, v1) = if Seq.length additional = 0 then (vk, vv)
+                                   else upd p vk vv additional in
+                    let (o, vl) = gen p k1 v1 n in
+                    let (k2, v2) = upd p k1 vl additional in
+                    gene p vk vv c n additional == Some (o, k2, v2, c + 1)))
+  = ()

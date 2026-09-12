@@ -195,3 +195,31 @@ let slice_copy_at (old: Seq.seq S8.t) (fresh: Seq.seq S8.t) (src: Seq.seq S8.t)
                    Seq.slice fresh 0 i == Seq.slice old 0 i)
   = assert (Seq.equal (Seq.slice fresh 0 (i + n)) (Seq.append (Seq.slice old 0 i) src));
     assert (Seq.equal (Seq.slice fresh 0 i) (Seq.slice old 0 i))
+
+(** {2 Filling}
+
+    [K] and [V] start at all zeroes and all ones, and the buffers are the
+    caller's, so there has to be a way to write a constant over one. *)
+
+fn fill (dst: S.slice S8.t) (x: S8.t) (n: SZ.t)
+        (#vd: erased (Seq.seq S8.t))
+requires S.pts_to dst vd ** pure (SZ.v n == Seq.length vd)
+ensures exists* vd'. S.pts_to dst vd' **
+        pure (vd' == Seq.create (SZ.v n) x)
+{
+  S.pts_to_len dst;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (vd': Seq.seq S8.t).
+    pts_to i vi ** S.pts_to dst vd' **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length vd' == SZ.v n /\
+          (forall (k: nat). k < SZ.v vi ==> Seq.index vd' k == x))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    S.((dst.(vi) <- x));
+    i := SZ.add vi 1sz;
+  };
+  with vd'. assert (S.pts_to dst vd');
+  assert (pure (Seq.equal vd' (Seq.create (SZ.v n) x)));
+}

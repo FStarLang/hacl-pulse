@@ -14,13 +14,14 @@
    limitations under the License.
 *)
 
-(** HMAC over a message given in two pieces.
+(** HMAC over a message given in four pieces.
 
     [Hacl.HMAC.Core.hmac_impl] takes one contiguous message, which is the
     right shape for HKDF and for the one-shot API.  HMAC_DRBG instead keys
-    over [V || 0x00 || data] where [data] is the caller's buffer and may be
-    sixty-four kilobytes long; materialising the concatenation would mean
-    allocating proportionally to it.
+    over [V || 0x00 || entropy || nonce || personalization], where the last
+    three are the caller's buffers and may be sixty-four kilobytes each;
+    materialising the concatenation would mean allocating proportionally to
+    them.
 
     So the inner hash is driven incrementally -- [K0 ^ ipad], then the first
     piece, then the second -- exactly as [Hacl.Ed25519] hashes [R || A ||
@@ -45,34 +46,57 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module S8 = Hacl.Secret.UInt8
 
+(** The streaming interface threads what it has seen as a left-nested
+    append; the specification is right-nested.  Reconciling the two inside
+    the Pulse function costs minutes, and nothing here needs any of the
+    context, so it is a lemma. *)
+let cat5 (a b c d e: Seq.seq S8.t)
+  : Lemma (Seq.append (Seq.append (Seq.append (Seq.append
+             (Seq.append (Seq.empty #S8.t) a) b) c) d) e ==
+           Seq.append a (Seq.append b (Seq.append c (Seq.append d e))))
+  = assert (Seq.equal
+      (Seq.append (Seq.append (Seq.append (Seq.append
+        (Seq.append (Seq.empty #S8.t) a) b) c) d) e)
+      (Seq.append a (Seq.append b (Seq.append c (Seq.append d e)))))
+
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn hmac_cat (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
             (kt: S.slice t) (ivt: S.slice t) (out: S.slice S8.t)
-            (key: S.slice S8.t) (a: S.slice S8.t) (b: S.slice S8.t)
+            (key: S.slice S8.t)
+            (a: S.slice S8.t) (b: S.slice S8.t) (c: S.slice S8.t) (d: S.slice S8.t)
             (#pk: perm) (#vk: erased (Seq.seq t))
             (#pi: perm) (#vi: erased (Seq.seq t))
             (#vout: erased (Seq.seq S8.t))
             (#pkey: perm) (#vkey: erased (Seq.seq S8.t))
             (#pa: perm) (#va: erased (Seq.seq S8.t))
             (#pb: perm) (#vb: erased (Seq.seq S8.t))
+            (#pc: perm) (#vc: erased (Seq.seq S8.t))
+            (#pd: perm) (#vd: erased (Seq.seq S8.t))
 requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout **
          S.pts_to key #pkey vkey ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+         S.pts_to c #pc vc ** S.pts_to d #pd vd **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vout == (hash_bytes p) /\
                Seq.length vkey < pow2 61 /\ Seq.length vkey < max_input #t /\
-               SZ.fits (block_len #t + Seq.length va + Seq.length vb) /\
-               block_len #t + Seq.length va + Seq.length vb < pow2 61 /\
-               block_len #t + Seq.length va + Seq.length vb < max_input #t)
+               SZ.fits (block_len #t + Seq.length va + Seq.length vb +
+                        Seq.length vc + Seq.length vd) /\
+               block_len #t + Seq.length va + Seq.length vb +
+                 Seq.length vc + Seq.length vd < pow2 61 /\
+               block_len #t + Seq.length va + Seq.length vb +
+                 Seq.length vc + Seq.length vd < max_input #t)
 ensures exists* vout'.
   S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout' **
   S.pts_to key #pkey vkey ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  S.pts_to c #pc vc ** S.pts_to d #pd vd **
   pure (Seq.length vkey < max_input #t /\
-        block_len #t + Seq.length va + Seq.length vb < max_input #t /\
-        vout' == hmac p vkey (Seq.append va vb))
+        block_len #t + Seq.length va + Seq.length vb +
+          Seq.length vc + Seq.length vd < max_input #t /\
+        vout' == hmac p vkey (Seq.append va (Seq.append vb (Seq.append vc vd))))
 {
   S.pts_to_len kt; S.pts_to_len ivt; S.pts_to_len out;
   S.pts_to_len key; S.pts_to_len a; S.pts_to_len b;
+  S.pts_to_len c; S.pts_to_len d;
   let bl = block_len_sz #t #w;
   let z8 = S8.classify 0uy;
   let z0: t = zero #t #w;
@@ -102,11 +126,14 @@ ensures exists* vout'.
   update_impl p kt wsb acc buf tot a (Seq.append (Seq.empty #S8.t) vpad);
   update_impl p kt wsb acc buf tot b
     (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va);
-  digest_impl p kt wsb acc buf tot dg
+  update_impl p kt wsb acc buf tot c
     (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb);
-  assert (pure (Seq.equal
-    (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb)
-    (Seq.append vpad (Seq.append va vb))));
+  update_impl p kt wsb acc buf tot d
+    (Seq.append (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb) vc);
+  digest_impl p kt wsb acc buf tot dg
+    (Seq.append (Seq.append (Seq.append (Seq.append
+      (Seq.append (Seq.empty #S8.t) vpad) va) vb) vc) vd);
+  cat5 (reveal vpad) (reveal va) (reveal vb) (reveal vc) (reveal vd);
 
   (** {3 The outer hash} *)
   fill_xor #t pad k0 opad;
