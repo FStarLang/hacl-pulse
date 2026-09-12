@@ -144,10 +144,10 @@ let zero_block (v: Seq.seq S8.t) (n: nat)
 (** [a := a + b[off..off+16)]. *)
 
 fn gadd_at_impl (a: S.slice S8.t) (b: S.slice S8.t) (off: SZ.t)
-                (#v0 #vb: erased (Seq.seq S8.t))
-requires S.pts_to a v0 ** S.pts_to b vb ** pure (
+                (#v0 #vb: erased (Seq.seq S8.t)) (#pb: perm)
+requires S.pts_to a v0 ** S.pts_to b #pb vb ** pure (
   Seq.length v0 == blocklen /\ SZ.v off + blocklen <= Seq.length vb)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to a v1 ** S.pts_to b vb ** pure (
+ensures exists* (v1: Seq.seq S8.t). S.pts_to a v1 ** S.pts_to b #pb vb ** pure (
   Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
   SZ.v off + blocklen <= Seq.length vb /\
   vals v1 == gadd (vals v0) (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
@@ -157,7 +157,7 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to a v1 ** S.pts_to b vb ** pure (
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** S.pts_to a v ** S.pts_to b vb **
+    pts_to i vi ** S.pts_to a v ** S.pts_to b #pb vb **
     pure (SZ.v vi <= blocklen /\ Seq.length v == blocklen /\
           Seq.length v0 == blocklen /\
           SZ.v off + blocklen <= Seq.length vb /\
