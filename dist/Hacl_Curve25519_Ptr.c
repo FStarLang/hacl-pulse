@@ -388,75 +388,55 @@ static void Hacl_Curve25519_Inverse_fmul_ip(Pulse_Lib_Slice_slice__uint64 a, Pul
 
 static void Hacl_Curve25519_Inverse_finv(Pulse_Lib_Slice_slice__uint64 out, Pulse_Lib_Slice_slice__uint64 a) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t *arr1;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t arr1[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    arr1[_ci1] = z;
   }
-  arr1 = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 b1 = Pulse_Lib_Slice_from_array__t_1(arr1, 16);
-  uint64_t *arr2;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z;
+  uint64_t arr2[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    arr2[_ci2] = z;
   }
-  arr2 = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 b2 = Pulse_Lib_Slice_from_array__t_1(arr2, 16);
-  uint64_t *arr3;
-  uint64_t _cbuf5[16];
-  for (size_t _ci6 = 0; _ci6 < 16; _ci6++) {
-    _cbuf5[_ci6] = z;
+  uint64_t arr3[16];
+  for (size_t _ci3 = 0; _ci3 < 16; _ci3++) {
+    arr3[_ci3] = z;
   }
-  arr3 = _cbuf5;
   Pulse_Lib_Slice_slice__uint64 b3 = Pulse_Lib_Slice_from_array__t_1(arr3, 16);
-  uint64_t *arr4;
-  uint64_t _cbuf7[16];
-  for (size_t _ci8 = 0; _ci8 < 16; _ci8++) {
-    _cbuf7[_ci8] = z;
+  uint64_t arr4[16];
+  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
+    arr4[_ci4] = z;
   }
-  arr4 = _cbuf7;
   Pulse_Lib_Slice_slice__uint64 b4 = Pulse_Lib_Slice_from_array__t_1(arr4, 16);
-  uint64_t *arr5;
-  uint64_t _cbuf9[16];
-  for (size_t _ci10 = 0; _ci10 < 16; _ci10++) {
-    _cbuf9[_ci10] = z;
+  uint64_t arr5[16];
+  for (size_t _ci5 = 0; _ci5 < 16; _ci5++) {
+    arr5[_ci5] = z;
   }
-  arr5 = _cbuf9;
   Pulse_Lib_Slice_slice__uint64 b5 = Pulse_Lib_Slice_from_array__t_1(arr5, 16);
-  uint64_t *arr6;
-  uint64_t _cbuf11[16];
-  for (size_t _ci12 = 0; _ci12 < 16; _ci12++) {
-    _cbuf11[_ci12] = z;
+  uint64_t arr6[16];
+  for (size_t _ci6 = 0; _ci6 < 16; _ci6++) {
+    arr6[_ci6] = z;
   }
-  arr6 = _cbuf11;
   Pulse_Lib_Slice_slice__uint64 b6 = Pulse_Lib_Slice_from_array__t_1(arr6, 16);
-  uint64_t *arr7;
-  uint64_t _cbuf13[16];
-  for (size_t _ci14 = 0; _ci14 < 16; _ci14++) {
-    _cbuf13[_ci14] = z;
+  uint64_t arr7[16];
+  for (size_t _ci7 = 0; _ci7 < 16; _ci7++) {
+    arr7[_ci7] = z;
   }
-  arr7 = _cbuf13;
   Pulse_Lib_Slice_slice__uint64 b7 = Pulse_Lib_Slice_from_array__t_1(arr7, 16);
-  uint64_t *arrc;
-  uint64_t _cbuf15[16];
-  for (size_t _ci16 = 0; _ci16 < 16; _ci16++) {
-    _cbuf15[_ci16] = z;
+  uint64_t arrc[16];
+  for (size_t _ci8 = 0; _ci8 < 16; _ci8++) {
+    arrc[_ci8] = z;
   }
-  arrc = _cbuf15;
   Pulse_Lib_Slice_slice__uint64 c1 = Pulse_Lib_Slice_from_array__t_1(arrc, 16);
-  uint64_t *arrd;
-  uint64_t _cbuf17[16];
-  for (size_t _ci18 = 0; _ci18 < 16; _ci18++) {
-    _cbuf17[_ci18] = z;
+  uint64_t arrd[16];
+  for (size_t _ci9 = 0; _ci9 < 16; _ci9++) {
+    arrd[_ci9] = z;
   }
-  arrd = _cbuf17;
   Pulse_Lib_Slice_slice__uint64 c2 = Pulse_Lib_Slice_from_array__t_1(arrd, 16);
-  uint64_t *arrt;
-  uint64_t _cbuf19[31];
-  for (size_t _ci20 = 0; _ci20 < 31; _ci20++) {
-    _cbuf19[_ci20] = z;
+  uint64_t arrt[31];
+  for (size_t _ci10 = 0; _ci10 < 31; _ci10++) {
+    arrt[_ci10] = z;
   }
-  arrt = _cbuf19;
   Pulse_Lib_Slice_slice__uint64 t = Pulse_Lib_Slice_from_array__t_1(arrt, 31);
   Hacl_Curve25519_Field_copy(b1, a);
   Hacl_Curve25519_Inverse_fsqr_ip(b1, c1, c2, t);
@@ -579,103 +559,75 @@ static void Hacl_Curve25519_Field_store(Pulse_Lib_Slice_slice__uint8 b, Pulse_Li
 static void Hacl_Curve25519_scalarmult(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 k, Pulse_Lib_Slice_slice__uint8 u) {
   uint64_t z = Hacl_Secret_UInt64_zero;
   uint8_t z8 = 0;
-  uint8_t *ka;
-  uint8_t _cbuf1[32];
-  for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t ka[32];
+  for (size_t _ci1 = 0; _ci1 < 32; _ci1++) {
+    ka[_ci1] = z8;
   }
-  ka = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 ks = Pulse_Lib_Slice_from_array__t(ka, 32);
-  uint64_t *a1;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z;
+  uint64_t a1[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    a1[_ci2] = z;
   }
-  a1 = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 x1 = Pulse_Lib_Slice_from_array__t_1(a1, 16);
-  uint64_t *a2;
-  uint64_t _cbuf5[16];
-  for (size_t _ci6 = 0; _ci6 < 16; _ci6++) {
-    _cbuf5[_ci6] = z;
+  uint64_t a2[16];
+  for (size_t _ci3 = 0; _ci3 < 16; _ci3++) {
+    a2[_ci3] = z;
   }
-  a2 = _cbuf5;
   Pulse_Lib_Slice_slice__uint64 x2 = Pulse_Lib_Slice_from_array__t_1(a2, 16);
-  uint64_t *a3;
-  uint64_t _cbuf7[16];
-  for (size_t _ci8 = 0; _ci8 < 16; _ci8++) {
-    _cbuf7[_ci8] = z;
+  uint64_t a3[16];
+  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
+    a3[_ci4] = z;
   }
-  a3 = _cbuf7;
   Pulse_Lib_Slice_slice__uint64 z2 = Pulse_Lib_Slice_from_array__t_1(a3, 16);
-  uint64_t *a4;
-  uint64_t _cbuf9[16];
-  for (size_t _ci10 = 0; _ci10 < 16; _ci10++) {
-    _cbuf9[_ci10] = z;
+  uint64_t a4[16];
+  for (size_t _ci5 = 0; _ci5 < 16; _ci5++) {
+    a4[_ci5] = z;
   }
-  a4 = _cbuf9;
   Pulse_Lib_Slice_slice__uint64 x3 = Pulse_Lib_Slice_from_array__t_1(a4, 16);
-  uint64_t *a5;
-  uint64_t _cbuf11[16];
-  for (size_t _ci12 = 0; _ci12 < 16; _ci12++) {
-    _cbuf11[_ci12] = z;
+  uint64_t a5[16];
+  for (size_t _ci6 = 0; _ci6 < 16; _ci6++) {
+    a5[_ci6] = z;
   }
-  a5 = _cbuf11;
   Pulse_Lib_Slice_slice__uint64 z3 = Pulse_Lib_Slice_from_array__t_1(a5, 16);
-  uint64_t *b0;
-  uint64_t _cbuf13[16];
-  for (size_t _ci14 = 0; _ci14 < 16; _ci14++) {
-    _cbuf13[_ci14] = z;
+  uint64_t b0[16];
+  for (size_t _ci7 = 0; _ci7 < 16; _ci7++) {
+    b0[_ci7] = z;
   }
-  b0 = _cbuf13;
   Pulse_Lib_Slice_slice__uint64 t0 = Pulse_Lib_Slice_from_array__t_1(b0, 16);
-  uint64_t *b1;
-  uint64_t _cbuf15[16];
-  for (size_t _ci16 = 0; _ci16 < 16; _ci16++) {
-    _cbuf15[_ci16] = z;
+  uint64_t b1[16];
+  for (size_t _ci8 = 0; _ci8 < 16; _ci8++) {
+    b1[_ci8] = z;
   }
-  b1 = _cbuf15;
   Pulse_Lib_Slice_slice__uint64 t1 = Pulse_Lib_Slice_from_array__t_1(b1, 16);
-  uint64_t *b2;
-  uint64_t _cbuf17[16];
-  for (size_t _ci18 = 0; _ci18 < 16; _ci18++) {
-    _cbuf17[_ci18] = z;
+  uint64_t b2[16];
+  for (size_t _ci9 = 0; _ci9 < 16; _ci9++) {
+    b2[_ci9] = z;
   }
-  b2 = _cbuf17;
   Pulse_Lib_Slice_slice__uint64 t2 = Pulse_Lib_Slice_from_array__t_1(b2, 16);
-  uint64_t *b3;
-  uint64_t _cbuf19[16];
-  for (size_t _ci20 = 0; _ci20 < 16; _ci20++) {
-    _cbuf19[_ci20] = z;
+  uint64_t b3[16];
+  for (size_t _ci10 = 0; _ci10 < 16; _ci10++) {
+    b3[_ci10] = z;
   }
-  b3 = _cbuf19;
   Pulse_Lib_Slice_slice__uint64 t3 = Pulse_Lib_Slice_from_array__t_1(b3, 16);
-  uint64_t *b4;
-  uint64_t _cbuf21[16];
-  for (size_t _ci22 = 0; _ci22 < 16; _ci22++) {
-    _cbuf21[_ci22] = z;
+  uint64_t b4[16];
+  for (size_t _ci11 = 0; _ci11 < 16; _ci11++) {
+    b4[_ci11] = z;
   }
-  b4 = _cbuf21;
   Pulse_Lib_Slice_slice__uint64 t4 = Pulse_Lib_Slice_from_array__t_1(b4, 16);
-  uint64_t *b5;
-  uint64_t _cbuf23[16];
-  for (size_t _ci24 = 0; _ci24 < 16; _ci24++) {
-    _cbuf23[_ci24] = z;
+  uint64_t b5[16];
+  for (size_t _ci12 = 0; _ci12 < 16; _ci12++) {
+    b5[_ci12] = z;
   }
-  b5 = _cbuf23;
   Pulse_Lib_Slice_slice__uint64 t5 = Pulse_Lib_Slice_from_array__t_1(b5, 16);
-  uint64_t *b6;
-  uint64_t _cbuf25[16];
-  for (size_t _ci26 = 0; _ci26 < 16; _ci26++) {
-    _cbuf25[_ci26] = z;
+  uint64_t b6[16];
+  for (size_t _ci13 = 0; _ci13 < 16; _ci13++) {
+    b6[_ci13] = z;
   }
-  b6 = _cbuf25;
   Pulse_Lib_Slice_slice__uint64 t6 = Pulse_Lib_Slice_from_array__t_1(b6, 16);
-  uint64_t *bw;
-  uint64_t _cbuf27[31];
-  for (size_t _ci28 = 0; _ci28 < 31; _ci28++) {
-    _cbuf27[_ci28] = z;
+  uint64_t bw[31];
+  for (size_t _ci14 = 0; _ci14 < 31; _ci14++) {
+    bw[_ci14] = z;
   }
-  bw = _cbuf27;
   Pulse_Lib_Slice_slice__uint64 t31 = Pulse_Lib_Slice_from_array__t_1(bw, 31);
   Hacl_Curve25519_clamp(ks, k);
   Hacl_Curve25519_Field_load(x1, u);
@@ -733,12 +685,10 @@ static void Hacl_Curve25519_set_basepoint(Pulse_Lib_Slice_slice__uint8 b) {
 
 static void Hacl_Curve25519_secret_to_public(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 k) {
   uint8_t z8 = 0;
-  uint8_t *ba;
-  uint8_t _cbuf1[32];
-  for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t ba[32];
+  for (size_t _ci1 = 0; _ci1 < 32; _ci1++) {
+    ba[_ci1] = z8;
   }
-  ba = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 b = Pulse_Lib_Slice_from_array__t(ba, 32);
   Hacl_Curve25519_set_basepoint(b);
   Hacl_Curve25519_scalarmult(out, k, b);

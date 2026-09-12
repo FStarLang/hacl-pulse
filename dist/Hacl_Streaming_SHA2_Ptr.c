@@ -21,27 +21,27 @@ static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice
 static void Hacl_Hash_SHA2_Core_write_len_be(Pulse_Lib_Slice_slice__uint8 b, size_t off, size_t len);
 static void Hacl_Hash_SHA2_Core_build_tail__t(Pulse_Lib_Slice_slice__uint8 tl, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t base, size_t rem, size_t ntail);
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s);
-static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t s);
 static uint64_t Hacl_Secret_Cast_u8_to_u64(uint8_t x);
 static uint64_t Hacl_Secret_Word_of_byte__t(uint8_t b);
 static uint64_t Hacl_Impl_Bytes_load_be__t(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_add_mod__t(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_add_mod__t(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_logxor(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_logxor__t(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_logxor__t(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_shift_right(uint64_t x, uint32_t s);
 static uint64_t Hacl_Secret_UInt64_rotate(uint64_t x, uint32_t s);
-static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t eta);
-static uint64_t Hacl_Secret_Word_rotate_right__t(uint64_t x, uint32_t eta);
-static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t s);
+static uint64_t Hacl_Secret_Word_rotate_right__t(uint64_t x, uint32_t s);
+static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t s);
 static uint64_t Spec_SHA2__sigma1__t(uint64_t x);
 static uint64_t Spec_SHA2__sigma0__t(uint64_t x);
 static void Hacl_Hash_SHA2_Core_ws_expand__t(Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint8 block, size_t off);
 static uint64_t Spec_SHA2__Sigma1__t(uint64_t x);
 static uint64_t Hacl_Secret_UInt64_logand(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_logand__t(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_logand__t(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_lognot(uint64_t x);
 static uint64_t Hacl_Secret_Word_lognot__t(uint64_t x);
 static uint64_t Spec_SHA2__Ch__t(uint64_t x, uint64_t y, uint64_t z);
@@ -60,8 +60,8 @@ static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_1 = (((size_t)16ULL) * ((size_
 static size_t Pulse_Lib_Slice_len__t(Pulse_Lib_Slice_slice__uint8 s);
 static void Hacl_Impl_Copy_copy_range(Pulse_Lib_Slice_slice__uint8 dst, size_t dbase, Pulse_Lib_Slice_slice__uint8 src, size_t sbase, size_t n);
 static uint64_t Hacl_Secret_Word_zero__t_1 = 0;
-static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t eta);
-static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y);
+static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s);
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
 static uint64_t Hacl_Impl_Bytes_load_be__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static void Hacl_Hash_SHA2_Core_ws_expand__t_1(Pulse_Lib_Slice_slice__uint64 wsb, Pulse_Lib_Slice_slice__uint8 block, size_t off);
@@ -107,27 +107,27 @@ static void Hacl_Hash_SHA2_Streaming_copy8__t_1(Pulse_Lib_Slice_slice__uint32 ds
 static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_2 = (((size_t)2ULL) * ((size_t)4ULL));
 static void Hacl_Hash_SHA2_Core_build_tail__t_2(Pulse_Lib_Slice_slice__uint8 tl, Pulse_Lib_Slice_slice__uint8 input, size_t len, size_t base, size_t rem, size_t ntail);
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logor__t_2(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logor__t_2(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s);
-static uint32_t Hacl_Secret_Word_shift_left__t_2(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_shift_left__t_2(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x);
 static uint32_t Hacl_Secret_Word_of_byte__t_2(uint8_t b);
 static uint32_t Hacl_Impl_Bytes_load_be__t_2(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static uint32_t Hacl_Secret_UInt32_add_mod(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_add_mod__t_1(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_add_mod__t_1(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_logxor(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logxor__t_1(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logxor__t_1(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_UInt32_rotate(uint32_t x, uint32_t s);
-static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t eta);
-static uint32_t Hacl_Secret_Word_rotate_right__t_1(uint32_t x, uint32_t eta);
-static uint32_t Hacl_Secret_Word_shift_right__t_1(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t s);
+static uint32_t Hacl_Secret_Word_rotate_right__t_1(uint32_t x, uint32_t s);
+static uint32_t Hacl_Secret_Word_shift_right__t_1(uint32_t x, uint32_t s);
 static uint32_t Spec_SHA2__sigma1__t_2(uint32_t x);
 static uint32_t Spec_SHA2__sigma0__t_2(uint32_t x);
 static void Hacl_Hash_SHA2_Core_ws_expand__t_3(Pulse_Lib_Slice_slice__uint32 wsb, Pulse_Lib_Slice_slice__uint8 block, size_t off);
 static uint32_t Spec_SHA2__Sigma1__t_2(uint32_t x);
 static uint32_t Hacl_Secret_UInt32_logand(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logand__t_1(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logand__t_1(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_lognot(uint32_t x);
 static uint32_t Hacl_Secret_Word_lognot__t_1(uint32_t x);
 static uint32_t Spec_SHA2__Ch__t_1(uint32_t x, uint32_t y, uint32_t z);
@@ -254,16 +254,16 @@ static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
   return (x | y);
 }
 
-static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logor(x, eta);
+static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logor(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s) {
   return (x << s);
 }
 
-static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_left(x, eta);
+static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_left(x, s);
 }
 
 static uint64_t Hacl_Secret_Cast_u8_to_u64(uint8_t x) {
@@ -293,16 +293,16 @@ static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y) {
   return (x + y);
 }
 
-static uint64_t Hacl_Secret_Word_add_mod__t(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_add_mod(x, eta);
+static uint64_t Hacl_Secret_Word_add_mod__t(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_add_mod(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_logxor(uint64_t x, uint64_t y) {
   return (x ^ y);
 }
 
-static uint64_t Hacl_Secret_Word_logxor__t(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logxor(x, eta);
+static uint64_t Hacl_Secret_Word_logxor__t(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logxor(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_shift_right(uint64_t x, uint32_t s) {
@@ -316,16 +316,16 @@ static uint64_t Hacl_Secret_UInt64_rotate(uint64_t x, uint32_t s) {
   return (hi | lo);
 }
 
-static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_rotate(x, eta);
+static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_rotate(x, s);
 }
 
-static uint64_t Hacl_Secret_Word_rotate_right__t(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_rotate_right(x, eta);
+static uint64_t Hacl_Secret_Word_rotate_right__t(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_rotate_right(x, s);
 }
 
-static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_right(x, eta);
+static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_right(x, s);
 }
 
 static uint64_t Spec_SHA2__sigma1__t(uint64_t x) {
@@ -366,8 +366,8 @@ static uint64_t Hacl_Secret_UInt64_logand(uint64_t x, uint64_t y) {
   return (x & y);
 }
 
-static uint64_t Hacl_Secret_Word_logand__t(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logand(x, eta);
+static uint64_t Hacl_Secret_Word_logand__t(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logand(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_lognot(uint64_t x) {
@@ -469,12 +469,10 @@ static void Hacl_Hash_SHA2_Core_write_digest__t(Pulse_Lib_Slice_slice__uint8 out
   size_t nb = Hacl_Secret_Word_nbytes__t_1;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -503,12 +501,10 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t(Pulse_Lib_Slice_slice__uint64
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
   uint8_t z8 = 0;
-  uint8_t *tarr;
-  uint8_t _cbuf1[bl2];
-  for (size_t _ci2 = 0; _ci2 < (bl2); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t tarr[bl2];
+  for (size_t _ci1 = 0; _ci1 < (bl2); _ci1++) {
+    tarr[_ci1] = z8;
   }
-  tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
   Hacl_Hash_SHA2_Core_build_tail__t(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
@@ -527,12 +523,10 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t(Pulse_Lib_Slice_slice__uint6
   size_t blen = (tlen % bl);
   size_t nb0 = (tlen / bl);
   uint64_t z0 = Hacl_Secret_Word_zero__t;
-  uint64_t *starr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t(starr, 8);
   Hacl_Hash_SHA2_Streaming_copy8__t(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -543,12 +537,10 @@ static void Hacl_Streaming_SHA2_sha512_digest(Pulse_Lib_Slice_slice__uint64 acc,
   uint64_t z = 0;
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
   Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(arr, 80);
-  uint64_t *wsarr;
-  uint64_t _cbuf1[80];
-  for (size_t _ci2 = 0; _ci2 < 80; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t wsarr[80];
+  for (size_t _ci1 = 0; _ci1 < 80; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 wsb = Pulse_Lib_Slice_from_array__t(wsarr, 80);
   Hacl_Hash_SHA2_Streaming_digest_impl__t(kt, wsb, acc, buf, tot, out);
 }
@@ -575,12 +567,12 @@ static void Hacl_Impl_Copy_copy_range(Pulse_Lib_Slice_slice__uint8 dst, size_t d
   }
 }
 
-static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logor(x, eta);
+static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logor(x, y);
 }
 
-static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_left(x, eta);
+static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_left(x, s);
 }
 
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
@@ -728,12 +720,10 @@ static void Hacl_Streaming_SHA2_sha512_update(Pulse_Lib_Slice_slice__uint64 acc,
   uint64_t z = 0;
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
   Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(arr, 80);
-  uint64_t *wsarr;
-  uint64_t _cbuf1[80];
-  for (size_t _ci2 = 0; _ci2 < 80; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t wsarr[80];
+  for (size_t _ci1 = 0; _ci1 < 80; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 wsb = Pulse_Lib_Slice_from_array__t(wsarr, 80);
   Hacl_Hash_SHA2_Streaming_update_impl__t(kt, wsb, acc, buf, tot, data);
 }
@@ -873,12 +863,10 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_1(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_1;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -907,12 +895,10 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_1(Pulse_Lib_Slice_slice__uint
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
   uint8_t z8 = 0;
-  uint8_t *tarr;
-  uint8_t _cbuf1[bl2];
-  for (size_t _ci2 = 0; _ci2 < (bl2); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t tarr[bl2];
+  for (size_t _ci1 = 0; _ci1 < (bl2); _ci1++) {
+    tarr[_ci1] = z8;
   }
-  tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
   Hacl_Hash_SHA2_Core_build_tail__t_1(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
@@ -931,12 +917,10 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t_1(Pulse_Lib_Slice_slice__uin
   size_t blen = (tlen % bl);
   size_t nb0 = (tlen / bl);
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
-  uint64_t *starr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t(starr, 8);
   Hacl_Hash_SHA2_Streaming_copy8__t(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -947,12 +931,10 @@ static void Hacl_Streaming_SHA2_sha384_digest(Pulse_Lib_Slice_slice__uint64 acc,
   uint64_t z = 0;
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
   Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(arr, 80);
-  uint64_t *wsarr;
-  uint64_t _cbuf1[80];
-  for (size_t _ci2 = 0; _ci2 < 80; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t wsarr[80];
+  for (size_t _ci1 = 0; _ci1 < 80; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 wsb = Pulse_Lib_Slice_from_array__t(wsarr, 80);
   Hacl_Hash_SHA2_Streaming_digest_impl__t_1(kt, wsb, acc, buf, tot, out);
 }
@@ -1012,12 +994,10 @@ static void Hacl_Streaming_SHA2_sha384_update(Pulse_Lib_Slice_slice__uint64 acc,
   uint64_t z = 0;
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
   Pulse_Lib_Slice_slice__uint64 kt = Pulse_Lib_Slice_from_array__t(arr, 80);
-  uint64_t *wsarr;
-  uint64_t _cbuf1[80];
-  for (size_t _ci2 = 0; _ci2 < 80; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t wsarr[80];
+  for (size_t _ci1 = 0; _ci1 < 80; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 wsb = Pulse_Lib_Slice_from_array__t(wsarr, 80);
   Hacl_Hash_SHA2_Streaming_update_impl__t_1(kt, wsb, acc, buf, tot, data);
 }
@@ -1092,16 +1072,16 @@ static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y) {
   return (x | y);
 }
 
-static uint32_t Hacl_Secret_Word_logor__t_2(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logor(x, eta);
+static uint32_t Hacl_Secret_Word_logor__t_2(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logor(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s) {
   return (x << s);
 }
 
-static uint32_t Hacl_Secret_Word_shift_left__t_2(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_left(x, eta);
+static uint32_t Hacl_Secret_Word_shift_left__t_2(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_left(x, s);
 }
 
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x) {
@@ -1131,16 +1111,16 @@ static uint32_t Hacl_Secret_UInt32_add_mod(uint32_t x, uint32_t y) {
   return (x + y);
 }
 
-static uint32_t Hacl_Secret_Word_add_mod__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_add_mod(x, eta);
+static uint32_t Hacl_Secret_Word_add_mod__t_1(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_add_mod(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_logxor(uint32_t x, uint32_t y) {
   return (x ^ y);
 }
 
-static uint32_t Hacl_Secret_Word_logxor__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logxor(x, eta);
+static uint32_t Hacl_Secret_Word_logxor__t_1(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logxor(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s) {
@@ -1154,16 +1134,16 @@ static uint32_t Hacl_Secret_UInt32_rotate(uint32_t x, uint32_t s) {
   return (hi | lo);
 }
 
-static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_rotate(x, eta);
+static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_rotate(x, s);
 }
 
-static uint32_t Hacl_Secret_Word_rotate_right__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_rotate_right(x, eta);
+static uint32_t Hacl_Secret_Word_rotate_right__t_1(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_rotate_right(x, s);
 }
 
-static uint32_t Hacl_Secret_Word_shift_right__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_right(x, eta);
+static uint32_t Hacl_Secret_Word_shift_right__t_1(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_right(x, s);
 }
 
 static uint32_t Spec_SHA2__sigma1__t_2(uint32_t x) {
@@ -1204,8 +1184,8 @@ static uint32_t Hacl_Secret_UInt32_logand(uint32_t x, uint32_t y) {
   return (x & y);
 }
 
-static uint32_t Hacl_Secret_Word_logand__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logand(x, eta);
+static uint32_t Hacl_Secret_Word_logand__t_1(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logand(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_lognot(uint32_t x) {
@@ -1307,12 +1287,10 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_2(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_2;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -1341,12 +1319,10 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_2(Pulse_Lib_Slice_slice__uint
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
   uint8_t z8 = 0;
-  uint8_t *tarr;
-  uint8_t _cbuf1[bl2];
-  for (size_t _ci2 = 0; _ci2 < (bl2); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t tarr[bl2];
+  for (size_t _ci1 = 0; _ci1 < (bl2); _ci1++) {
+    tarr[_ci1] = z8;
   }
-  tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
   Hacl_Hash_SHA2_Core_build_tail__t_2(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
@@ -1365,12 +1341,10 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t_2(Pulse_Lib_Slice_slice__uin
   size_t blen = (tlen % bl);
   size_t nb0 = (tlen / bl);
   uint32_t z0 = Hacl_Secret_Word_zero__t_2;
-  uint32_t *starr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t_2(starr, 8);
   Hacl_Hash_SHA2_Streaming_copy8__t_1(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -1381,12 +1355,10 @@ static void Hacl_Streaming_SHA2_sha256_digest(Pulse_Lib_Slice_slice__uint32 acc,
   uint32_t z = 0;
   uint32_t *arr = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
   Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(arr, 64);
-  uint32_t *wsarr;
-  uint32_t _cbuf1[64];
-  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint32_t wsarr[64];
+  for (size_t _ci1 = 0; _ci1 < 64; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 wsb = Pulse_Lib_Slice_from_array__t_2(wsarr, 64);
   Hacl_Hash_SHA2_Streaming_digest_impl__t_2(kt, wsb, acc, buf, tot, out);
 }
@@ -1446,12 +1418,10 @@ static void Hacl_Streaming_SHA2_sha256_update(Pulse_Lib_Slice_slice__uint32 acc,
   uint32_t z = 0;
   uint32_t *arr = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
   Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(arr, 64);
-  uint32_t *wsarr;
-  uint32_t _cbuf1[64];
-  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint32_t wsarr[64];
+  for (size_t _ci1 = 0; _ci1 < 64; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 wsb = Pulse_Lib_Slice_from_array__t_2(wsarr, 64);
   Hacl_Hash_SHA2_Streaming_update_impl__t_2(kt, wsb, acc, buf, tot, data);
 }
@@ -1578,12 +1548,10 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_3(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_2;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -1612,12 +1580,10 @@ static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(Pulse_Lib_Slice_slice__uint
   else ntail = (2 * bl1);
   size_t bl2 = (2 * bl);
   uint8_t z8 = 0;
-  uint8_t *tarr;
-  uint8_t _cbuf1[bl2];
-  for (size_t _ci2 = 0; _ci2 < (bl2); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t tarr[bl2];
+  for (size_t _ci1 = 0; _ci1 < (bl2); _ci1++) {
+    tarr[_ci1] = z8;
   }
-  tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tl = Pulse_Lib_Slice_from_array__t_1(tarr, bl2);
   Hacl_Hash_SHA2_Core_build_tail__t_2(tl, input, len, base_in, rem, ntail);
   size_t ntb = (ntail / bl);
@@ -1636,12 +1602,10 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t_3(Pulse_Lib_Slice_slice__uin
   size_t blen = (tlen % bl);
   size_t nb0 = (tlen / bl);
   uint32_t z0 = Hacl_Secret_Word_zero__t_2;
-  uint32_t *starr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t_2(starr, 8);
   Hacl_Hash_SHA2_Streaming_copy8__t_1(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -1652,12 +1616,10 @@ static void Hacl_Streaming_SHA2_sha224_digest(Pulse_Lib_Slice_slice__uint32 acc,
   uint32_t z = 0;
   uint32_t *arr = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
   Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(arr, 64);
-  uint32_t *wsarr;
-  uint32_t _cbuf1[64];
-  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint32_t wsarr[64];
+  for (size_t _ci1 = 0; _ci1 < 64; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 wsb = Pulse_Lib_Slice_from_array__t_2(wsarr, 64);
   Hacl_Hash_SHA2_Streaming_digest_impl__t_3(kt, wsb, acc, buf, tot, out);
 }
@@ -1717,12 +1679,10 @@ static void Hacl_Streaming_SHA2_sha224_update(Pulse_Lib_Slice_slice__uint32 acc,
   uint32_t z = 0;
   uint32_t *arr = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
   Pulse_Lib_Slice_slice__uint32 kt = Pulse_Lib_Slice_from_array__t_2(arr, 64);
-  uint32_t *wsarr;
-  uint32_t _cbuf1[64];
-  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint32_t wsarr[64];
+  for (size_t _ci1 = 0; _ci1 < 64; _ci1++) {
+    wsarr[_ci1] = z;
   }
-  wsarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 wsb = Pulse_Lib_Slice_from_array__t_2(wsarr, 64);
   Hacl_Hash_SHA2_Streaming_update_impl__t_3(kt, wsb, acc, buf, tot, data);
 }

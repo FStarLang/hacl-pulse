@@ -311,12 +311,10 @@ static void Hacl_Hash_SHA3_Sponge_absorb_impl(Pulse_Lib_Slice_slice__uint64 st, 
   Hacl_Hash_SHA3_Sponge_zero_state_impl(st);
   Hacl_Hash_SHA3_Sponge_absorb_full(st, b, c, rotc_tbl, rc_tbl, msg, r);
   uint8_t z8 = 0;
-  uint8_t *arr;
-  uint8_t _cbuf1[200];
-  for (size_t _ci2 = 0; _ci2 < 200; _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t arr[200];
+  for (size_t _ci1 = 0; _ci1 < 200; _ci1++) {
+    arr[_ci1] = z8;
   }
-  arr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 blkfull = Pulse_Lib_Slice_from_array__t_2(arr, 200);
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_subslice__t(blkfull, 0, r);
   Hacl_Hash_SHA3_Sponge_last_block(blk, msg, r, suffix);
@@ -361,26 +359,20 @@ static void Hacl_Hash_SHA3_Sponge_squeeze_impl(Pulse_Lib_Slice_slice__uint8 out,
 
 static void Hacl_Hash_SHA3_keccak_impl(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 msg, size_t r, uint8_t suffix) {
   uint64_t z64 = 0;
-  uint64_t *starr;
-  uint64_t _cbuf1[25];
-  for (size_t _ci2 = 0; _ci2 < 25; _ci2++) {
-    _cbuf1[_ci2] = z64;
+  uint64_t starr[25];
+  for (size_t _ci1 = 0; _ci1 < 25; _ci1++) {
+    starr[_ci1] = z64;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t(starr, 25);
-  uint64_t *barr;
-  uint64_t _cbuf3[25];
-  for (size_t _ci4 = 0; _ci4 < 25; _ci4++) {
-    _cbuf3[_ci4] = z64;
+  uint64_t barr[25];
+  for (size_t _ci2 = 0; _ci2 < 25; _ci2++) {
+    barr[_ci2] = z64;
   }
-  barr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 bb = Pulse_Lib_Slice_from_array__t(barr, 25);
-  uint64_t *carr;
-  uint64_t _cbuf5[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    _cbuf5[_ci6] = z64;
+  uint64_t carr[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    carr[_ci3] = z64;
   }
-  carr = _cbuf5;
   Pulse_Lib_Slice_slice__uint64 cc = Pulse_Lib_Slice_from_array__t(carr, 5);
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA3_rc_arr;
   Pulse_Lib_Slice_slice__uint64 rc_tbl = Pulse_Lib_Slice_from_array__t(arr, 24);

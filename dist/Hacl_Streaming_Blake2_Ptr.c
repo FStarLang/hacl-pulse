@@ -24,16 +24,16 @@ static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_2(Pulse_Lib_Slice_slice__
 static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v);
 static void Hacl_Hash_Blake2_read_block__t(Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 s, size_t off);
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s);
-static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x);
 static uint32_t Hacl_Secret_Word_of_byte__t(uint8_t b);
 static uint32_t Hacl_Impl_Bytes_load_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static void Hacl_Hash_Blake2_load_block__t(Pulse_Lib_Slice_slice__uint32 mw, Pulse_Lib_Slice_slice__uint8 blk);
 static void Hacl_Hash_Blake2_Core_load_vector__t(Pulse_Lib_Slice_slice__uint32 vv, Pulse_Lib_Slice_slice__uint32 h, Pulse_Lib_Slice_slice__uint32 ivs);
 static uint32_t Hacl_Secret_UInt32_logxor(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logxor__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logxor__t(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x);
 static uint64_t Hacl_Secret_Word_Instances_sz64(size_t x);
 static uint32_t Hacl_Secret_Word_Instances_sz_lo_32(size_t x);
@@ -45,11 +45,11 @@ static uint32_t Hacl_Secret_UInt32_lognot(uint32_t x);
 static uint32_t Hacl_Secret_Word_lognot__t(uint32_t x);
 static void Hacl_Hash_Blake2_Core_init_vector_impl__t(Pulse_Lib_Slice_slice__uint32 vv, Pulse_Lib_Slice_slice__uint32 h, Pulse_Lib_Slice_slice__uint32 ivs, size_t ctr, bool last);
 static uint32_t Hacl_Secret_UInt32_add_mod(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_add_mod__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_add_mod__t(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_UInt32_rotate(uint32_t x, uint32_t s);
-static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t eta);
-static uint32_t Hacl_Secret_Word_rotate_right__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t s);
+static uint32_t Hacl_Secret_Word_rotate_right__t(uint32_t x, uint32_t s);
 static void Hacl_Hash_Blake2_Core_g_impl__t(Pulse_Lib_Slice_slice__uint32 vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y);
 static void Hacl_Hash_Blake2_Core_mix_columns__t(Pulse_Lib_Slice_slice__uint32 vv, Pulse_Lib_Slice_slice__uint32 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base);
 static void Hacl_Hash_Blake2_Core_mix_diagonals__t(Pulse_Lib_Slice_slice__uint32 vv, Pulse_Lib_Slice_slice__uint32 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base);
@@ -60,7 +60,7 @@ static void Hacl_Hash_Blake2_Core_compress_impl__t(Pulse_Lib_Slice_slice__uint32
 static size_t Hacl_Secret_Word_nbytes__t_1 = 4;
 static uint8_t Hacl_Secret_Cast_u32_to_u8(uint32_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t(uint32_t x);
-static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t s);
 static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint32_t x);
 static void Hacl_Hash_Blake2_write_digest_le__t(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint32 st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t(Pulse_Lib_Slice_slice__uint32 acc, Pulse_Lib_Slice_slice__uint32 vv, Pulse_Lib_Slice_slice__uint32 mw, Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint32 ivs, Pulse_Lib_Slice_slice__uintsize sg, Pulse_Lib_Slice_slice__uint8 buf, Pulse_Lib_Slice_slice__uintsize tot, Pulse_Lib_Slice_slice__uint8 out);
@@ -71,8 +71,8 @@ static size_t Hacl_Hash_Blake2_block_len_sz__t_1 = (((size_t)16ULL) * ((size_t)4
 static size_t Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(size_t tlen);
 static void Hacl_Impl_Copy_copy_range(Pulse_Lib_Slice_slice__uint8 dst, size_t dbase, Pulse_Lib_Slice_slice__uint8 src, size_t sbase, size_t n);
 static void Hacl_Hash_Blake2_read_block__t_1(Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 s, size_t off);
-static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t eta);
-static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t y);
+static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
 static uint32_t Hacl_Impl_Bytes_load_le__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static void Hacl_Hash_Blake2_load_block__t_1(Pulse_Lib_Slice_slice__uint32 mw, Pulse_Lib_Slice_slice__uint8 blk);
@@ -155,16 +155,16 @@ static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_3(Pulse_Lib_Slice
 static void Hacl_Hash_Blake2_Streaming_copy_state__t_1(Pulse_Lib_Slice_slice__uint64 dst, Pulse_Lib_Slice_slice__uint64 src);
 static void Hacl_Hash_Blake2_read_block__t_2(Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint8 s, size_t off);
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_logor__t_2(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_logor__t_2(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s);
-static uint64_t Hacl_Secret_Word_shift_left__t_2(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_shift_left__t_2(uint64_t x, uint32_t s);
 static uint64_t Hacl_Secret_Cast_u8_to_u64(uint8_t x);
 static uint64_t Hacl_Secret_Word_of_byte__t_2(uint8_t b);
 static uint64_t Hacl_Impl_Bytes_load_le__t_2(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static void Hacl_Hash_Blake2_load_block__t_2(Pulse_Lib_Slice_slice__uint64 mw, Pulse_Lib_Slice_slice__uint8 blk);
 static void Hacl_Hash_Blake2_Core_load_vector__t_1(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs);
 static uint64_t Hacl_Secret_UInt64_logxor(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_logxor__t_1(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_logxor__t_1(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Word_Instances_sz_lo_64(size_t x);
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t_1(size_t x);
 static uint64_t Hacl_Secret_Word_Instances_sz_hi_64(size_t x);
@@ -173,10 +173,10 @@ static uint64_t Hacl_Secret_UInt64_lognot(uint64_t x);
 static uint64_t Hacl_Secret_Word_lognot__t_1(uint64_t x);
 static void Hacl_Hash_Blake2_Core_init_vector_impl__t_4(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 ivs, size_t ctr, bool last);
 static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_add_mod__t_1(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_add_mod__t_1(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_rotate(uint64_t x, uint32_t s);
-static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t eta);
-static uint64_t Hacl_Secret_Word_rotate_right__t_1(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t s);
+static uint64_t Hacl_Secret_Word_rotate_right__t_1(uint64_t x, uint32_t s);
 static void Hacl_Hash_Blake2_Core_g_impl__t_4(Pulse_Lib_Slice_slice__uint64 vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y);
 static void Hacl_Hash_Blake2_Core_mix_columns__t_4(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base);
 static void Hacl_Hash_Blake2_Core_mix_diagonals__t_4(Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uintsize sg, size_t base);
@@ -186,7 +186,7 @@ static void Hacl_Hash_Blake2_Core_mix_state_impl__t_1(Pulse_Lib_Slice_slice__uin
 static void Hacl_Hash_Blake2_Core_compress_impl__t_4(Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint64 m, Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 ivs, Pulse_Lib_Slice_slice__uintsize sg, size_t ctr, bool last);
 static uint8_t Hacl_Secret_Cast_u64_to_u8(uint64_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t_1(uint64_t x);
-static uint64_t Hacl_Secret_Word_shift_right__t_1(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_shift_right__t_1(uint64_t x, uint32_t s);
 static void Hacl_Impl_Bytes_store_le__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint64_t x);
 static void Hacl_Hash_Blake2_write_digest_le__t_4(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint64 st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(Pulse_Lib_Slice_slice__uint64 acc, Pulse_Lib_Slice_slice__uint64 vv, Pulse_Lib_Slice_slice__uint64 mw, Pulse_Lib_Slice_slice__uint8 blk, Pulse_Lib_Slice_slice__uint64 ivs, Pulse_Lib_Slice_slice__uintsize sg, Pulse_Lib_Slice_slice__uint8 buf, Pulse_Lib_Slice_slice__uintsize tot, Pulse_Lib_Slice_slice__uint8 out);
@@ -359,16 +359,16 @@ static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y) {
   return (x | y);
 }
 
-static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logor(x, eta);
+static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logor(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s) {
   return (x << s);
 }
 
-static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_left(x, eta);
+static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_left(x, s);
 }
 
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x) {
@@ -445,8 +445,8 @@ static uint32_t Hacl_Secret_UInt32_logxor(uint32_t x, uint32_t y) {
   return (x ^ y);
 }
 
-static uint32_t Hacl_Secret_Word_logxor__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logxor(x, eta);
+static uint32_t Hacl_Secret_Word_logxor__t(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logxor(x, y);
 }
 
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x) {
@@ -501,8 +501,8 @@ static uint32_t Hacl_Secret_UInt32_add_mod(uint32_t x, uint32_t y) {
   return (x + y);
 }
 
-static uint32_t Hacl_Secret_Word_add_mod__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_add_mod(x, eta);
+static uint32_t Hacl_Secret_Word_add_mod__t(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_add_mod(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s) {
@@ -516,12 +516,12 @@ static uint32_t Hacl_Secret_UInt32_rotate(uint32_t x, uint32_t s) {
   return (hi | lo);
 }
 
-static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_rotate(x, eta);
+static uint32_t Hacl_Secret_UInt32_rotate_right(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_rotate(x, s);
 }
 
-static uint32_t Hacl_Secret_Word_rotate_right__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_rotate_right(x, eta);
+static uint32_t Hacl_Secret_Word_rotate_right__t(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_rotate_right(x, s);
 }
 
 static void Hacl_Hash_Blake2_Core_g_impl__t(Pulse_Lib_Slice_slice__uint32 vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y) {
@@ -635,8 +635,8 @@ static uint8_t Hacl_Secret_Word_to_byte__t(uint32_t x) {
   return Hacl_Secret_Cast_u32_to_u8(x);
 }
 
-static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_right(x, eta);
+static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_right(x, s);
 }
 
 static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint32_t x) {
@@ -656,12 +656,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t(Pulse_Lib_Slice_slice__uint8 out
   size_t nb = Hacl_Secret_Word_nbytes__t_1;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -686,12 +684,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t(Pulse_Lib_Slice_slice__uin
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint32_t z0 = Hacl_Secret_Word_zero__t;
-  uint32_t *starr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -705,26 +701,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t(Pulse_Lib_Slice_slice__uint32 iv
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -780,12 +770,12 @@ static void Hacl_Hash_Blake2_read_block__t_1(Pulse_Lib_Slice_slice__uint8 blk, P
   }
 }
 
-static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logor(x, eta);
+static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logor(x, y);
 }
 
-static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_left(x, eta);
+static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_left(x, s);
 }
 
 static uint32_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
@@ -867,26 +857,20 @@ static void Hacl_Streaming_Blake2_update_gen__t(Pulse_Lib_Slice_slice__uint32 iv
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1056,12 +1040,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_1(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_1;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -1086,12 +1068,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
-  uint32_t *starr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -1105,26 +1085,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_1(Pulse_Lib_Slice_slice__uint32 
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1189,26 +1163,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_1(Pulse_Lib_Slice_slice__uint32 
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1378,12 +1346,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_2(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_1;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -1408,12 +1374,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
-  uint32_t *starr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -1427,26 +1391,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_2(Pulse_Lib_Slice_slice__uint32 
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1511,26 +1469,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_2(Pulse_Lib_Slice_slice__uint32 
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1700,12 +1652,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_3(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_1;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -1730,12 +1680,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
-  uint32_t *starr;
-  uint32_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -1749,26 +1697,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_3(Pulse_Lib_Slice_slice__uint32 
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1833,26 +1775,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_3(Pulse_Lib_Slice_slice__uint32 
   uint32_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
-  uint32_t *varr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint32_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 vv = Pulse_Lib_Slice_from_array__t(varr, 16);
-  uint32_t *marr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint32_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 mw = Pulse_Lib_Slice_from_array__t(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -1970,16 +1906,16 @@ static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
   return (x | y);
 }
 
-static uint64_t Hacl_Secret_Word_logor__t_2(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logor(x, eta);
+static uint64_t Hacl_Secret_Word_logor__t_2(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logor(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s) {
   return (x << s);
 }
 
-static uint64_t Hacl_Secret_Word_shift_left__t_2(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_left(x, eta);
+static uint64_t Hacl_Secret_Word_shift_left__t_2(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_left(x, s);
 }
 
 static uint64_t Hacl_Secret_Cast_u8_to_u64(uint8_t x) {
@@ -2056,8 +1992,8 @@ static uint64_t Hacl_Secret_UInt64_logxor(uint64_t x, uint64_t y) {
   return (x ^ y);
 }
 
-static uint64_t Hacl_Secret_Word_logxor__t_1(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logxor(x, eta);
+static uint64_t Hacl_Secret_Word_logxor__t_1(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logxor(x, y);
 }
 
 static uint64_t Hacl_Secret_Word_Instances_sz_lo_64(size_t x) {
@@ -2101,8 +2037,8 @@ static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y) {
   return (x + y);
 }
 
-static uint64_t Hacl_Secret_Word_add_mod__t_1(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_add_mod(x, eta);
+static uint64_t Hacl_Secret_Word_add_mod__t_1(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_add_mod(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_rotate(uint64_t x, uint32_t s) {
@@ -2112,12 +2048,12 @@ static uint64_t Hacl_Secret_UInt64_rotate(uint64_t x, uint32_t s) {
   return (hi | lo);
 }
 
-static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_rotate(x, eta);
+static uint64_t Hacl_Secret_UInt64_rotate_right(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_rotate(x, s);
 }
 
-static uint64_t Hacl_Secret_Word_rotate_right__t_1(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_rotate_right(x, eta);
+static uint64_t Hacl_Secret_Word_rotate_right__t_1(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_rotate_right(x, s);
 }
 
 static void Hacl_Hash_Blake2_Core_g_impl__t_4(Pulse_Lib_Slice_slice__uint64 vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) {
@@ -2231,8 +2167,8 @@ static uint8_t Hacl_Secret_Word_to_byte__t_1(uint64_t x) {
   return Hacl_Secret_Cast_u64_to_u8(x);
 }
 
-static uint64_t Hacl_Secret_Word_shift_right__t_1(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_right(x, eta);
+static uint64_t Hacl_Secret_Word_shift_right__t_1(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_right(x, s);
 }
 
 static void Hacl_Impl_Bytes_store_le__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint64_t x) {
@@ -2252,12 +2188,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_4(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_2;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -2282,12 +2216,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_2(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
-  uint64_t *starr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t_3(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t_1(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -2301,26 +2233,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_4(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -2385,26 +2311,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_4(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -2574,12 +2494,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_5(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_2;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -2604,12 +2522,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_2(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
-  uint64_t *starr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t_3(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t_1(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -2623,26 +2539,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_5(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -2707,26 +2617,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_5(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -2896,12 +2800,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_6(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_2;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -2926,12 +2828,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_2(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
-  uint64_t *starr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t_3(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t_1(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -2945,26 +2845,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_6(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -3029,26 +2923,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_6(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -3218,12 +3106,10 @@ static void Hacl_Hash_Blake2_write_digest_le__t_7(Pulse_Lib_Slice_slice__uint8 o
   size_t nb = Hacl_Secret_Word_nbytes__t_2;
   uint8_t z8 = 0;
   size_t dlen = (8 * nb);
-  uint8_t *darr;
-  uint8_t _cbuf1[dlen];
-  for (size_t _ci2 = 0; _ci2 < (dlen); _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t darr[dlen];
+  for (size_t _ci1 = 0; _ci1 < (dlen); _ci1++) {
+    darr[_ci1] = z8;
   }
-  darr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 dig = Pulse_Lib_Slice_from_array__t_1(darr, dlen);
   size_t j = 0;
   while (j < 8) {
@@ -3248,12 +3134,10 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(Pulse_Lib_Slice_slice__u
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_2(tlen);
   size_t blen = (tlen - (nlast * bl));
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
-  uint64_t *starr;
-  uint64_t _cbuf1[8];
-  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st = Pulse_Lib_Slice_from_array__t_3(starr, 8);
   Hacl_Hash_Blake2_Streaming_copy_state__t_1(st, acc);
   Pulse_Lib_Slice_slice__uint8 sub = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
@@ -3267,26 +3151,20 @@ static void Hacl_Streaming_Blake2_digest_gen__t_7(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);
@@ -3351,26 +3229,20 @@ static void Hacl_Streaming_Blake2_update_gen__t_7(Pulse_Lib_Slice_slice__uint64 
   uint64_t z0 = Hacl_Secret_Word_zero__t_2;
   uint8_t z8 = 0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_2;
-  uint64_t *varr;
-  uint64_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z0;
+  uint64_t varr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    varr[_ci1] = z0;
   }
-  varr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 vv = Pulse_Lib_Slice_from_array__t_3(varr, 16);
-  uint64_t *marr;
-  uint64_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z0;
+  uint64_t marr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    marr[_ci2] = z0;
   }
-  marr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 mw = Pulse_Lib_Slice_from_array__t_3(marr, 16);
-  uint8_t *barr;
-  uint8_t _cbuf5[bl];
-  for (size_t _ci6 = 0; _ci6 < (bl); _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t barr[bl];
+  for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
+    barr[_ci3] = z8;
   }
-  barr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_from_array__t_1(barr, bl);
   size_t *arr = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Pulse_Lib_Slice_slice__uintsize sg = Pulse_Lib_Slice_from_array__t_2(arr, 160);

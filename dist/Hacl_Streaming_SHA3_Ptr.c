@@ -367,22 +367,18 @@ static void Hacl_Hash_SHA3_Streaming_digest_impl(Pulse_Lib_Slice_slice__uint64 s
   size_t tlen = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(tot, 0);
   size_t blen = (tlen % r);
   uint64_t z64 = 0;
-  uint64_t *starr;
-  uint64_t _cbuf1[25];
-  for (size_t _ci2 = 0; _ci2 < 25; _ci2++) {
-    _cbuf1[_ci2] = z64;
+  uint64_t starr[25];
+  for (size_t _ci1 = 0; _ci1 < 25; _ci1++) {
+    starr[_ci1] = z64;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 st2 = Pulse_Lib_Slice_from_array__t(starr, 25);
   Hacl_Hash_SHA3_Streaming_copy25(st2, st);
   Pulse_Lib_Slice_slice__uint8 tail = Pulse_Lib_Slice_subslice__t(buf, 0, blen);
   uint8_t z8 = 0;
-  uint8_t *blkarr;
-  uint8_t _cbuf3[200];
-  for (size_t _ci4 = 0; _ci4 < 200; _ci4++) {
-    _cbuf3[_ci4] = z8;
+  uint8_t blkarr[200];
+  for (size_t _ci2 = 0; _ci2 < 200; _ci2++) {
+    blkarr[_ci2] = z8;
   }
-  blkarr = _cbuf3;
   Pulse_Lib_Slice_slice__uint8 blkfull = Pulse_Lib_Slice_from_array__t_2(blkarr, 200);
   Pulse_Lib_Slice_slice__uint8 blk = Pulse_Lib_Slice_subslice__t(blkfull, 0, r);
   Hacl_Hash_SHA3_Sponge_last_block(blk, tail, r, suffix);
@@ -393,19 +389,15 @@ static void Hacl_Hash_SHA3_Streaming_digest_impl(Pulse_Lib_Slice_slice__uint64 s
 
 static void Hacl_Streaming_SHA3_keccak_digest(Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 buf, Pulse_Lib_Slice_slice__uintsize tot, Pulse_Lib_Slice_slice__uint8 out, size_t r, uint8_t suffix) {
   uint64_t z64 = 0;
-  uint64_t *barr;
-  uint64_t _cbuf1[25];
-  for (size_t _ci2 = 0; _ci2 < 25; _ci2++) {
-    _cbuf1[_ci2] = z64;
+  uint64_t barr[25];
+  for (size_t _ci1 = 0; _ci1 < 25; _ci1++) {
+    barr[_ci1] = z64;
   }
-  barr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 bb = Pulse_Lib_Slice_from_array__t(barr, 25);
-  uint64_t *carr;
-  uint64_t _cbuf3[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    _cbuf3[_ci4] = z64;
+  uint64_t carr[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    carr[_ci2] = z64;
   }
-  carr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 cc = Pulse_Lib_Slice_from_array__t(carr, 5);
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA3_rc_arr;
   Pulse_Lib_Slice_slice__uint64 rc_tbl = Pulse_Lib_Slice_from_array__t(arr, 24);
@@ -468,19 +460,15 @@ static void Hacl_Hash_SHA3_Streaming_update_impl(Pulse_Lib_Slice_slice__uint64 s
 
 static void Hacl_Streaming_SHA3_keccak_update(Pulse_Lib_Slice_slice__uint64 st, Pulse_Lib_Slice_slice__uint8 buf, Pulse_Lib_Slice_slice__uintsize tot, Pulse_Lib_Slice_slice__uint8 data, size_t r) {
   uint64_t z64 = 0;
-  uint64_t *barr;
-  uint64_t _cbuf1[25];
-  for (size_t _ci2 = 0; _ci2 < 25; _ci2++) {
-    _cbuf1[_ci2] = z64;
+  uint64_t barr[25];
+  for (size_t _ci1 = 0; _ci1 < 25; _ci1++) {
+    barr[_ci1] = z64;
   }
-  barr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 bb = Pulse_Lib_Slice_from_array__t(barr, 25);
-  uint64_t *carr;
-  uint64_t _cbuf3[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    _cbuf3[_ci4] = z64;
+  uint64_t carr[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    carr[_ci2] = z64;
   }
-  carr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 cc = Pulse_Lib_Slice_from_array__t(carr, 5);
   uint64_t *arr = (uint64_t *)Hacl_Hash_SHA3_rc_arr;
   Pulse_Lib_Slice_slice__uint64 rc_tbl = Pulse_Lib_Slice_from_array__t(arr, 24);

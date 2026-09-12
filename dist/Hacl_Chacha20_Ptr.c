@@ -14,16 +14,16 @@ static size_t Hacl_Secret_Word_nbytes__t = 4;
 static uint32_t Hacl_Secret_Word_zero__t = 0;
 static uint8_t Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t(Pulse_Lib_Slice_slice__uint8 a, size_t i);
 static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s);
-static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x);
 static uint32_t Hacl_Secret_Word_of_byte__t(uint8_t b);
 static uint32_t Hacl_Impl_Bytes_load_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static size_t Hacl_Secret_Word_nbytes__t_1 = 4;
 static uint32_t Hacl_Secret_Word_zero__t_1 = 0;
-static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t eta);
-static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t y);
+static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
 static uint32_t Hacl_Impl_Bytes_load_le__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static void Hacl_Chacha20_init_state(Pulse_Lib_Slice_slice__uint32 st, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 nonce, uint32_t ctr0);
@@ -44,7 +44,7 @@ static void Hacl_Chacha20_Core_core_impl(Pulse_Lib_Slice_slice__uint32 ks, Pulse
 static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint8 a, size_t i, uint8_t v);
 static uint8_t Hacl_Secret_Cast_u32_to_u8(uint32_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t(uint32_t x);
-static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t eta);
+static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t s);
 static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint32_t x);
 static void Hacl_Chacha20_Core_write_keystream(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint32 ks);
 static uint8_t Hacl_Secret_UInt8_logxor(uint8_t x, uint8_t y);
@@ -75,16 +75,16 @@ static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y) {
   return (x | y);
 }
 
-static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logor(x, eta);
+static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logor(x, y);
 }
 
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s) {
   return (x << s);
 }
 
-static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_left(x, eta);
+static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_left(x, s);
 }
 
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x) {
@@ -111,12 +111,12 @@ static uint32_t Hacl_Impl_Bytes_load_le__t(Pulse_Lib_Slice_slice__uint8 b, size_
   return acc;
 }
 
-static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_logor(x, eta);
+static uint32_t Hacl_Secret_Word_logor__t_1(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logor(x, y);
 }
 
-static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_left(x, eta);
+static uint32_t Hacl_Secret_Word_shift_left__t_1(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_left(x, s);
 }
 
 static uint32_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
@@ -268,8 +268,8 @@ static uint8_t Hacl_Secret_Word_to_byte__t(uint32_t x) {
   return Hacl_Secret_Cast_u32_to_u8(x);
 }
 
-static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t eta) {
-  return Hacl_Secret_UInt32_shift_right(x, eta);
+static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t s) {
+  return Hacl_Secret_UInt32_shift_right(x, s);
 }
 
 static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint32_t x) {
@@ -315,26 +315,20 @@ static void Hacl_Chacha20_xor_chunk(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_
 static void Hacl_Chacha20_chacha20_impl(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 msg, Pulse_Lib_Slice_slice__uint8 key, Pulse_Lib_Slice_slice__uint8 nonce, uint32_t ctr0) {
   uint32_t z32 = Hacl_Secret_UInt32_zero;
   uint8_t z8 = 0;
-  uint32_t *starr;
-  uint32_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z32;
+  uint32_t starr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    starr[_ci1] = z32;
   }
-  starr = _cbuf1;
   Pulse_Lib_Slice_slice__uint32 st = Pulse_Lib_Slice_from_array__t(starr, 16);
-  uint32_t *ksarr;
-  uint32_t _cbuf3[16];
-  for (size_t _ci4 = 0; _ci4 < 16; _ci4++) {
-    _cbuf3[_ci4] = z32;
+  uint32_t ksarr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    ksarr[_ci2] = z32;
   }
-  ksarr = _cbuf3;
   Pulse_Lib_Slice_slice__uint32 ks = Pulse_Lib_Slice_from_array__t(ksarr, 16);
-  uint8_t *kbarr;
-  uint8_t _cbuf5[64];
-  for (size_t _ci6 = 0; _ci6 < 64; _ci6++) {
-    _cbuf5[_ci6] = z8;
+  uint8_t kbarr[64];
+  for (size_t _ci3 = 0; _ci3 < 64; _ci3++) {
+    kbarr[_ci3] = z8;
   }
-  kbarr = _cbuf5;
   Pulse_Lib_Slice_slice__uint8 kb = Pulse_Lib_Slice_from_array__t_1(kbarr, 64);
   Hacl_Chacha20_init_state(st, key, nonce, ctr0);
   size_t mlen = Pulse_Lib_Slice_len__t(msg);

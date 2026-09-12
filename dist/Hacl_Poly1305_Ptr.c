@@ -12,16 +12,16 @@ static uint8_t Hacl_Secret_UInt8_logand(uint8_t x, uint8_t y);
 static size_t Hacl_Secret_Word_nbytes__t = 8;
 static uint64_t Hacl_Secret_Word_zero__t = 0;
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t eta);
+static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s);
-static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t s);
 static uint64_t Hacl_Secret_Cast_u8_to_u64(uint8_t x);
 static uint64_t Hacl_Secret_Word_of_byte__t(uint8_t b);
 static uint64_t Hacl_Impl_Bytes_load_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static size_t Hacl_Secret_Word_nbytes__t_1 = 8;
 static uint64_t Hacl_Secret_Word_zero__t_1 = 0;
-static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t eta);
-static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y);
+static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s);
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
 static uint64_t Hacl_Impl_Bytes_load_le__t_1(Pulse_Lib_Slice_slice__uint8 b, size_t off);
 static void Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t_1(Pulse_Lib_Slice_slice__uint64 a, size_t i, uint64_t v);
@@ -51,7 +51,7 @@ static uint64_t Hacl_Secret_UInt64_borrow(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_lt_mask(uint64_t x, uint64_t y);
 static uint8_t Hacl_Secret_Cast_u64_to_u8(uint64_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t(uint64_t x);
-static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t eta);
+static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t s);
 static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint64_t x);
 static void Hacl_Poly1305_Load_store_tag(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint64 h, Pulse_Lib_Slice_slice__uint8 k);
 static void Hacl_Poly1305_poly1305_mac(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 msg, Pulse_Lib_Slice_slice__uint8 key);
@@ -94,16 +94,16 @@ static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
   return (x | y);
 }
 
-static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logor(x, eta);
+static uint64_t Hacl_Secret_Word_logor__t(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logor(x, y);
 }
 
 static uint64_t Hacl_Secret_UInt64_shift_left(uint64_t x, uint32_t s) {
   return (x << s);
 }
 
-static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_left(x, eta);
+static uint64_t Hacl_Secret_Word_shift_left__t(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_left(x, s);
 }
 
 static uint64_t Hacl_Secret_Cast_u8_to_u64(uint8_t x) {
@@ -130,12 +130,12 @@ static uint64_t Hacl_Impl_Bytes_load_le__t(Pulse_Lib_Slice_slice__uint8 b, size_
   return acc;
 }
 
-static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t eta) {
-  return Hacl_Secret_UInt64_logor(x, eta);
+static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y) {
+  return Hacl_Secret_UInt64_logor(x, y);
 }
 
-static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_left(x, eta);
+static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_left(x, s);
 }
 
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
@@ -176,12 +176,10 @@ static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y) {
 
 static void Hacl_Poly1305_Load_load_r(Pulse_Lib_Slice_slice__uint64 r, Pulse_Lib_Slice_slice__uint8 k) {
   uint8_t z8 = 0;
-  uint8_t *tarr;
-  uint8_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t tarr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    tarr[_ci1] = z8;
   }
-  tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tmp = Pulse_Lib_Slice_from_array__t_1(tarr, 16);
   Hacl_Impl_Copy_copy_range(tmp, 0, k, 0, 16);
   uint8_t m0f = 0xf;
@@ -358,12 +356,10 @@ static void Hacl_Poly1305_absorb_blocks(Pulse_Lib_Slice_slice__uint64 h, Pulse_L
 
 static void Hacl_Poly1305_Load_load_last(Pulse_Lib_Slice_slice__uint64 e, Pulse_Lib_Slice_slice__uint8 b, size_t off, size_t blen) {
   uint8_t z8 = 0;
-  uint8_t *tarr;
-  uint8_t _cbuf1[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    _cbuf1[_ci2] = z8;
+  uint8_t tarr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    tarr[_ci1] = z8;
   }
-  tarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint8 tmp = Pulse_Lib_Slice_from_array__t_1(tarr, 16);
   Hacl_Impl_Copy_copy_range(tmp, 0, b, off, blen);
   Pulse_Lib_Slice_op_Dot_Lparen_Rparen_Less_Minus__t(tmp, blen, 1);
@@ -414,26 +410,20 @@ static uint64_t Hacl_Secret_UInt64_select(uint64_t mask, uint64_t x, uint64_t y)
 
 static void Hacl_Poly1305_Reduce_reduce(Pulse_Lib_Slice_slice__uint64 h) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t *aarr;
-  uint64_t _cbuf1[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t aarr[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    aarr[_ci1] = z;
   }
-  aarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 a = Pulse_Lib_Slice_from_array__t(aarr, 5);
-  uint64_t *rarr;
-  uint64_t _cbuf3[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    _cbuf3[_ci4] = z;
+  uint64_t rarr[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    rarr[_ci2] = z;
   }
-  rarr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 r = Pulse_Lib_Slice_from_array__t(rarr, 5);
-  uint64_t *qarr;
-  uint64_t _cbuf5[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    _cbuf5[_ci6] = z;
+  uint64_t qarr[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    qarr[_ci3] = z;
   }
-  qarr = _cbuf5;
   Pulse_Lib_Slice_slice__uint64 q = Pulse_Lib_Slice_from_array__t(qarr, 5);
   uint64_t e0 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(h, 0);
   uint64_t e1 = Pulse_Lib_Slice_op_Dot_Lparen_Rparen__t_1(h, 1);
@@ -518,8 +508,8 @@ static uint8_t Hacl_Secret_Word_to_byte__t(uint64_t x) {
   return Hacl_Secret_Cast_u64_to_u8(x);
 }
 
-static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t eta) {
-  return Hacl_Secret_UInt64_shift_right(x, eta);
+static uint64_t Hacl_Secret_Word_shift_right__t(uint64_t x, uint32_t s) {
+  return Hacl_Secret_UInt64_shift_right(x, s);
 }
 
 static void Hacl_Impl_Bytes_store_le__t(Pulse_Lib_Slice_slice__uint8 b, size_t off, uint64_t x) {
@@ -554,33 +544,25 @@ static void Hacl_Poly1305_Load_store_tag(Pulse_Lib_Slice_slice__uint8 out, Pulse
 
 static void Hacl_Poly1305_poly1305_mac(Pulse_Lib_Slice_slice__uint8 out, Pulse_Lib_Slice_slice__uint8 msg, Pulse_Lib_Slice_slice__uint8 key) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t *rarr;
-  uint64_t _cbuf1[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    _cbuf1[_ci2] = z;
+  uint64_t rarr[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    rarr[_ci1] = z;
   }
-  rarr = _cbuf1;
   Pulse_Lib_Slice_slice__uint64 r = Pulse_Lib_Slice_from_array__t(rarr, 5);
-  uint64_t *harr;
-  uint64_t _cbuf3[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    _cbuf3[_ci4] = z;
+  uint64_t harr[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    harr[_ci2] = z;
   }
-  harr = _cbuf3;
   Pulse_Lib_Slice_slice__uint64 h = Pulse_Lib_Slice_from_array__t(harr, 5);
-  uint64_t *earr;
-  uint64_t _cbuf5[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    _cbuf5[_ci6] = z;
+  uint64_t earr[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    earr[_ci3] = z;
   }
-  earr = _cbuf5;
   Pulse_Lib_Slice_slice__uint64 e = Pulse_Lib_Slice_from_array__t(earr, 5);
-  uint64_t *darr;
-  uint64_t _cbuf7[5];
-  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
-    _cbuf7[_ci8] = z;
+  uint64_t darr[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
+    darr[_ci4] = z;
   }
-  darr = _cbuf7;
   Pulse_Lib_Slice_slice__uint64 d = Pulse_Lib_Slice_from_array__t(darr, 5);
   Hacl_Poly1305_Load_load_r(r, key);
   Hacl_Poly1305_Field_set_zero(h);
