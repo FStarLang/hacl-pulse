@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Hacl_Hash_SHA2_Ptr.h"
+#include "Hacl.h"
 
 typedef void (*hash_fn)(uint8_t *out, uint8_t *input, size_t input_len);
 

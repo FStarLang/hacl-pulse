@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "Hacl_Curve25519_Ptr.h"
+#include "Hacl.h"
 #include "test_util.h"
 
 static uint8_t k1[32] = {

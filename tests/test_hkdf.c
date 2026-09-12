@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "Hacl_HKDF_Ptr.h"
+#include "Hacl.h"
 #include "test_util.h"
 
 static uint8_t ikm1[22] = {

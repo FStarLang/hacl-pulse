@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Hacl_Poly1305_Ptr.h"
+#include "Hacl.h"
 
 static int failures = 0;
 
