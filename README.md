@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF`, `Spec.HMAC_DRBG` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`) |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF`, `Spec.HMAC_DRBG` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`, `code/aes/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: currently the platform entropy shim |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
@@ -833,6 +833,93 @@ never heard of.
 the operating system: that the call succeeds, stays inside the buffer, does
 not repeat, and covers the byte range.
 
+### AES-GCM, where there is no table to look up
+
+`code/aes` is FIPS 197 and SP 800-38D: AES-128 and AES-256 in Galois/counter
+mode, encryption only, tag length sixteen.  It is the one algorithm here that
+HACL\* does not have a portable version of at all -- its AES is Vale assembly,
+and the "no assembly" commitment rules that out -- so this is new code rather
+than a reimplementation.
+
+**The whole design follows from one refusal: no secret-indexed table.**  The
+textbook AES S-box is a 256-byte array indexed by a byte of the state, and the
+textbook GHASH is sixteen or two hundred and fifty-six precomputed multiples
+of the hash key indexed by four bits of the ciphertext.  Both are cache-timing
+side channels, and both are exactly the pattern this library's secret-integer
+layer exists to prevent: `Hacl.Secret.UInt8.t` has no `index` at all, so a
+table-driven implementation cannot even be written here.
+
+So the S-box is computed:
+
+    sbox x = affine (ginv x)
+
+with `ginv` an addition chain of fifteen multiplications in GF(2^8) -- the
+inverse is `x^254`, and `x^254 = ((x^2 . x)^4 . (x^2 . x))^16 . ((x^2 . x)^4
+. (x^2 . x)) . x^2` when written to share subterms -- and `affine` eight
+rotations and a xor.  `Spec.AES.sbox_is_algebraic` is the lemma that this
+agrees with the 256-entry table of the standard, which is stated once, proved
+once by `assert_norm`, and never unfolded again: `sbox_list` is
+`opaque_to_smt`, because a 256-element literal in the solver's context makes
+every subsequent query slow.
+
+GHASH is the literal 128-step algorithm 1 of SP 800-38D, with both branches of
+each step turned into a mask rather than taken.  A field multiplication is
+about a hundred instructions per bit of input; the result is roughly a
+megabyte a second.  That is slow, and deliberately so: carry-less multiply
+(`PCLMULQDQ`, `PMULL`) is the real answer on hardware that has it and is the
+documented upgrade path, as bitslicing is for the cipher.  A correct, portable
+and constant-time implementation comes first.
+
+**Everything counts in bytes.**  FIPS 197 describes the key expansion in
+four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
+it that way puts a multiplication by four in front of every buffer index and
+a division by four in every invariant.  `Hacl.AES.Key` steps a byte offset by
+four instead, so the conditions become `b mod keylen = 0` and `b mod keylen =
+16` and no multiplication appears anywhere.  The round constant is carried in
+a register and doubled when it is used; the invariant names it by
+`rcidx b = b / keylen` rounded up, the number of key-length boundaries the
+loop has passed.
+
+**GHASH is a fold, not a hash of a concatenation.**  The GCM tag authenticates
+`pad(aad) || pad(ciphertext) || lengths`, which is a sequence no
+implementation can build: it is three pieces long, the pieces are in different
+buffers, and the padding is in no buffer at all.  `Spec.GF128.ghash_upd h acc
+data` is GHASH restated as a fold over an accumulator, and
+`Spec.GF128.ghash_upd_append` says that folding a concatenation is folding the
+parts in turn.  `Hacl.AES.GHash.ghash_upd_impl` folds one buffer -- whole
+blocks straight from the caller's memory, then a partial tail assembled in
+sixteen bytes of stack that start at zero -- and `Hacl.AES.GCM` calls it three
+times.  Nothing proportional to the input is ever allocated.
+
+**Decryption writes nothing when the tag is wrong.**  `Spec.GCM.gcm_decrypt`
+returns `option`, not a plaintext and a boolean, and the implementation
+matches: the tag is computed over the ciphertext *before* anything is
+decrypted, and the counter-mode pass runs only if it verifies.  A caller that
+ignores the return value still never sees forged plaintext, because the buffer
+still holds the ciphertext it passed in.  The comparison itself folds sixteen
+`eq_mask`s with `logand` and declassifies one bit at the end -- no early exit,
+nothing that depends on where the first difference is.
+
+    void Hacl_AES_GCM_Ptr_aes128_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len,
+                                         uint8_t *key, uint8_t *iv, size_t iv_len,
+                                         uint8_t *aad, size_t aad_len);
+    bool Hacl_AES_GCM_Ptr_aes128_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag,
+                                         uint8_t *key, uint8_t *iv, size_t iv_len,
+                                         uint8_t *aad, size_t aad_len);
+
+and the same pair for `aes256`.  Both are in place on `msg`.  The nonce may be
+any non-empty length: twelve bytes is the fast path every protocol uses, and
+the general case -- a GHASH of the padded nonce -- is implemented because
+leaving it out would make this library unable to decrypt what another
+implementation produced.  `tests/test_gcm.c` is 450 cases from the NIST CAVP
+`gcmtestvectors` set, one per (nonce length, message length, AAD length)
+configuration in each direction, including one forgery per configuration that
+must be rejected without touching the buffer.
+
+**A nonce must never repeat under one key.**  Two messages sharing a nonce
+leak the xor of the plaintexts and enough of the hash subkey to forge
+arbitrary messages.  Nothing in the interface can prevent that.
+
 
 ## Proof engineering notes
 
@@ -1080,15 +1167,38 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   passing the byte offset in as an argument, with `SZ.v ctr0 == n0 * block_len`
   as its specification, is easier than proving `fits` for every intermediate
   product.
+* **A Pulse `fn` must not end with a pure or ghost statement.**  A trailing
+  lemma call is silently dropped, and the fact it was meant to establish
+  simply is not there; the error appears at the function's postcondition with
+  no indication of the cause.  End with something stateful -- `S.pts_to_len
+  st;` or `S.to_array scratch;` will do.  The same applies to each branch of
+  an `if`: move the loop-counter update into the branches rather than leaving
+  a lemma call last.
+* **A `while` with no `decreases` has effect `stt_div`, and nothing after it
+  composes.**  Make the measure a `nat` under the invariant: a loop that steps
+  by sixteen past `n` needs `SZ.v n + 16 - SZ.v (!j)`, with `SZ.v vj <= SZ.v n
+  + 16` carried in the invariant.
+* **`opaque_to_smt` is a proof tool, not an optimization.**  Three separate
+  blow-ups in `code/aes` were fixed by it: the 256-element `sbox_list`, the
+  large bodies of `ginv_impl` and `sbox_impl`, and `key_expansion`, whose
+  unfolding is a `Seq.init` with a division in the body, so that every
+  `forall j < b` hypothesis spawned a fresh `ks_word (j/4)` term.  Pair each
+  opaque definition with exactly one `*_index` lemma and nothing else can
+  reach inside it.
+* **Repeat the `requires` inside the `ensures`.**  A postcondition that
+  mentions a specification function with a refined argument -- `gcm_encrypt`
+  needs `msg_ok`, `blk` needs a bound -- is typechecked without the
+  precondition in scope, and fails as "ill-typed term" at the `ensures`
+  clause rather than anywhere useful.
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, the minimum viable subset is now
+Following `design/reimplementation.md` §9, the minimum viable subset is
 complete: the hashes and their streaming layers, HMAC, HKDF,
-ChaCha20-Poly1305, X25519, Ed25519, P-256, and HMAC-DRBG with an OS entropy
-shim.  AES-GCM is the one item of that list still missing, and is blocked on
-the "no assembly" commitment.
+ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with an OS entropy shim,
+and AES-GCM.
 
-Beyond the subset, in rough order of how often they are asked for:
-AES-GCM (portable, then AES-NI intrinsics), the generic bignum API, RSA-PSS,
-FFDHE, secp256k1, Salsa20/NaCl, FrodoKEM, and the legacy hashes.
+Beyond the subset, in rough order of how often they are asked for: AES-NI and
+carry-less-multiply intrinsics under the portable AES-GCM, the generic bignum
+API, RSA-PSS, FFDHE, secp256k1, Salsa20/NaCl, FrodoKEM, and the legacy
+hashes.
