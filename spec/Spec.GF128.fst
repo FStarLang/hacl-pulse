@@ -161,6 +161,16 @@ let ghash_is_upd (h: block) (data: Seq.seq elem { Seq.length data % blocklen == 
   : Lemma (ghash h data == ghash_upd h zero data)
   = ghash_from_zero h data (nblocks data)
 
+(** One step of the fold, which is what a loop body does. *)
+let ghash_from_step (h acc: block)
+                    (data: Seq.seq elem { Seq.length data % blocklen == 0 })
+                    (k: nat { k + 1 <= nblocks data })
+  : Lemma ((k + 1) * blocklen <= Seq.length data /\
+           ghash_from h acc data (k + 1) ==
+             gmul (gadd (ghash_from h acc data k) (blk data k)) h)
+  = Math.lemma_mult_le_right blocklen (k + 1) (nblocks data);
+    Math.multiple_division_lemma (nblocks data) blocklen
+
 (** {3 The concatenation law} *)
 
 let nblocks_append (d1 d2: Seq.seq elem)

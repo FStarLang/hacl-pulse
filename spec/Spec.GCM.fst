@@ -179,6 +179,25 @@ let tail_block (s: Seq.seq elem { Seq.length s % blocklen <> 0 })
                        (Seq.create (padlen (Seq.length s)) 0);
   r
 
+let nblocks_whole (s: Seq.seq elem)
+  : Lemma (Seq.length (whole s) == G.nblocks s * blocklen /\
+           G.nblocks (whole s) == G.nblocks s)
+  = Math.lemma_mult_le_right blocklen (G.nblocks s) (Seq.length s);
+    Math.multiple_division_lemma (G.nblocks s) blocklen
+
+(** A whole block of [s] is a block of [whole s], so a loop over the input
+    needs no view of the padding at all. *)
+let blk_whole (s: Seq.seq elem) (k: nat { (k + 1) * blocklen <= Seq.length s })
+  : Lemma (k + 1 <= G.nblocks (whole s) /\
+           (k + 1) * blocklen <= Seq.length (whole s) /\
+           G.blk (whole s) k == Seq.slice s (k * blocklen) (k * blocklen + blocklen))
+  = nblocks_whole s;
+    Math.lemma_mult_le_right blocklen (k + 1) (G.nblocks s);
+    Math.lemma_div_le ((k + 1) * blocklen) (Seq.length s) blocklen;
+    Math.multiple_division_lemma (k + 1) blocklen;
+    Seq.lemma_eq_intro (G.blk (whole s) k)
+                       (Seq.slice s (k * blocklen) (k * blocklen + blocklen))
+
 let pad_split (s: Seq.seq elem)
   : Lemma (pad s == (if Seq.length s % blocklen = 0
                      then whole s
