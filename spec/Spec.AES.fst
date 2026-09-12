@@ -114,6 +114,11 @@ let affine (b: elem) : elem =
 
 (** {2 The S-box} *)
 
+(* Opaque to the solver: a 256-element literal in the SMT context makes every
+   query that so much as mentions the S-box enormous, including ones that have
+   nothing to say about it.  Nothing outside this file needs to see it -- the
+   two lemmas below say all there is to say. *)
+[@@ "opaque_to_smt"]
 let sbox_list : list elem = [
   0x63; 0x7c; 0x77; 0x7b; 0xf2; 0x6b; 0x6f; 0xc5;
   0x30; 0x01; 0x67; 0x2b; 0xfe; 0xd7; 0xab; 0x76;
@@ -200,7 +205,7 @@ let sbox_is_algebraic (x: elem)
     ShiftRows cares, and it is easier to read as an index permutation on the
     flat sixteen bytes than as a matrix. *)
 
-let blocklen = 16
+unfold let blocklen = 16
 
 type block = Seq.lseq elem blocklen
 
