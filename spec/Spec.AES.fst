@@ -33,14 +33,9 @@
 
     {2 Bytes as numbers}
 
-    Unlike the rest of this library's specifications, which are written on
-    sequences of [Hacl.Secret.UInt8.t], AES is specified here on sequences of
-    {i numbers} below 256.  AES is arithmetic in GF(2^8) and its statements --
-    [xtime], the affine map that defines the S-box, the MixColumns matrix --
-    read as arithmetic.  A secret-integer spelling of them would be the same
-    equations with [S8.logxor] where [^^] is, and every proof about them would
-    carry the [S8.v] round trip.  [vals] is the view that connects the two,
-    and it is the only place the two worlds meet.
+    AES is specified here on sequences of {i numbers} below 256 rather than on
+    secret bytes, for the reasons [Spec.Byte] gives; [Spec.Byte.vals] is the
+    view that connects the two.
 
     {2 The S-box}
 
@@ -73,29 +68,13 @@ module List = FStar.List.Tot
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 
+open Spec.Byte
+
 (** {2 GF(2^8)}
 
     The field is F2[x] / (x^8 + x^4 + x^3 + x + 1); an element is the eight
     coefficients read as a binary number, so [0x1b] is the low part of the
     reduction polynomial. *)
-
-let elem = UInt.uint_t 8
-
-(** Bitwise operations on a byte.
- 
-    These route through [FStar.UInt8] rather than through [FStar.UInt] because
-    [FStar.UInt.logxor] is an abstract [val]: it has no definition to unfold,
-    so a term built from it can only be reasoned about by the solver, one
-    axiom at a time.  [FStar.UInt8]'s operations are primitives that F*'s
-    normalizer evaluates directly, which is the difference between
-    [sbox_is_algebraic] taking a second and not finishing at all.  The two
-    agree by the postconditions in [FStar.UInt8.fsti], which is what
-    [xor_is_logxor] records for the implementation's benefit. *)
-
-unfold let ( ^^ ) (a b: elem) : elem =
-  U8.v (U8.logxor (U8.uint_to_t a) (U8.uint_to_t b))
-
-let xor_is_logxor (a b: elem) : Lemma (a ^^ b == UInt.logxor #8 a b) = ()
 
 (** Multiplication by [x].  The shift can leave the field, and then the
     modulus is subtracted -- which, the characteristic being two, is the same
@@ -126,12 +105,6 @@ let rec fexp (a: elem) (n: nat) : Tot elem (decreases n) =
 (** The multiplicative inverse, with zero mapped to zero as FIPS 197 asks.
     The group has order 255, so [a^254] is [a^-1]. *)
 let ginv (a: elem) : elem = if a = 0 then 0 else fexp a 254
-
-(** Rotation of the eight bits, left by [k]. *)
-let rotl8 (x: elem) (k: nat { 0 < k /\ k < 8 }) : elem =
-  let b = U8.uint_to_t x in
-  U8.v (U8.logor (U8.shift_left b (UInt32.uint_to_t k))
-                 (U8.shift_right b (UInt32.uint_to_t (8 - k))))
 
 (** FIPS 197 5.1.1's affine transformation:
     [b_i' = b_i ^ b_(i+4) ^ b_(i+5) ^ b_(i+6) ^ b_(i+7) ^ c_i] with
@@ -351,11 +324,6 @@ let be32 (b: block) : n: nat { n < pow2 32 } =
   assert_norm (256 * 256 * 256 * 256 == pow2 32);
   x
 
-(** Byte [k / 8] from the bottom of [n]. *)
-let byte_at (n: nat) (k: nat) : elem =
-  assert_norm (pow2 8 == 256);
-  (n / pow2 k) % 256
-
 let inc32 (b: block) : block =
   let n = (be32 b + 1) % pow2 32 in
   Seq.init blocklen (fun i ->
@@ -379,27 +347,3 @@ let ctr_encrypt (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
   : Seq.seq elem =
   Seq.init (Seq.length msg)
     (fun i -> Seq.index msg i ^^ ctr_keystream v w b (Seq.length msg) i)
-
-(** {2 The view of a secret byte sequence}
-
-    The implementations work on [Hacl.Secret.UInt8.t]; their postconditions
-    say that [vals] of the output is what the functions above compute. *)
-
-let vals (s: Seq.seq S8.t) : GTot (Seq.seq elem) =
-  Seq.init_ghost (Seq.length s) (fun k -> (S8.v (Seq.index s k) <: elem))
-
-let vals_len (s: Seq.seq S8.t)
-  : Lemma (Seq.length (vals s) == Seq.length s)
-          [SMTPat (Seq.length (vals s))]
-  = ()
-
-let vals_index (s: Seq.seq S8.t) (i: nat { i < Seq.length s })
-  : Lemma (Seq.index (vals s) i == S8.v (Seq.index s i))
-          [SMTPat (Seq.index (vals s) i)]
-  = Seq.init_ghost_index (Seq.length s) (fun k -> (S8.v (Seq.index s k) <: elem))
-
-(** [vals] commutes with slicing, which is what a caller who hands a
-    sub-buffer to a block function needs. *)
-let vals_slice (s: Seq.seq S8.t) (lo: nat) (hi: nat { lo <= hi /\ hi <= Seq.length s })
-  : Lemma (vals (Seq.slice s lo hi) == Seq.slice (vals s) lo hi)
-  = Seq.lemma_eq_intro (vals (Seq.slice s lo hi)) (Seq.slice (vals s) lo hi)
