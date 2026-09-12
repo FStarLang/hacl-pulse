@@ -70,6 +70,7 @@ SOURCE_DIRS += code/aead
 SOURCE_DIRS += code/curve25519
 SOURCE_DIRS += code/ed25519
 SOURCE_DIRS += code/p256
+SOURCE_DIRS += code/drbg
 SOURCE_DIRS += tests
 
 INCLUDE_DIRS := $(addprefix $(HACL_ROOT)/,$(SOURCE_DIRS))

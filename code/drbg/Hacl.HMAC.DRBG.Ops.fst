@@ -120,8 +120,7 @@ ensures exists* vkey' vval' vctr'.
 {
   S.pts_to_len k; S.pts_to_len v; S.pts_to_len ctr;
   S.pts_to_len entropy; S.pts_to_len additional;
-  let z8 = S8.classify 0uy;
-  let mut earr = [| z8; 0sz |]; A.pts_to_len earr;
+  let mut earr = [| (S8.classify 0uy <: S8.t); 0sz |]; A.pts_to_len earr;
   let empty = S.from_array earr 0sz; S.pts_to_len empty;
   with vempty. assert (S.pts_to empty vempty);
   assert (pure (Seq.equal (dcat ve va vempty) (Seq.append ve va)));
@@ -215,10 +214,9 @@ ensures exists* vkey' vval' vctr' vout'.
   if (SZ.gt c 1024sz || SZ.gt n (big max_output_length)) {
     false
   } else {
-    let z8 = S8.classify 0uy;
-    let mut e1a = [| z8; 0sz |]; A.pts_to_len e1a;
+    let mut e1a = [| (S8.classify 0uy <: S8.t); 0sz |]; A.pts_to_len e1a;
     let e1 = S.from_array e1a 0sz; S.pts_to_len e1;
-    let mut e2a = [| z8; 0sz |]; A.pts_to_len e2a;
+    let mut e2a = [| (S8.classify 0uy <: S8.t); 0sz |]; A.pts_to_len e2a;
     let e2 = S.from_array e2a 0sz; S.pts_to_len e2;
     with ve1. assert (S.pts_to e1 ve1);
     with ve2. assert (S.pts_to e2 ve2);

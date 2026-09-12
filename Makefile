@@ -88,6 +88,12 @@ CUSTARD_ENTRIES_Hacl.P256.Ptr := \
   uncompressed_to_raw compressed_to_raw \
   dh_initiator dh_responder
 
+C_UNITS += Hacl.HMAC.DRBG.Ptr
+CUSTARD_ENTRIES_Hacl.HMAC.DRBG.Ptr := \
+  instantiate_sha256 reseed_sha256 generate_sha256 \
+  instantiate_sha384 reseed_sha384 generate_sha384 \
+  instantiate_sha512 reseed_sha512 generate_sha512
+
 # Which unit each C test links against; see mk/test.mk.
 TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
@@ -103,6 +109,7 @@ TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 TEST_UNITS_test_curve25519 := Hacl.Curve25519.Ptr
 TEST_UNITS_test_ed25519 := Hacl.Ed25519.Ptr
 TEST_UNITS_test_p256 := Hacl.P256.Ptr
+TEST_UNITS_test_drbg := Hacl.HMAC.DRBG.Ptr
 
 include mk/extract.mk
 

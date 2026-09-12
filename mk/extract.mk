@@ -71,10 +71,21 @@ HACL_CFLAGS ?= -std=c11 -O3 -Wall -Wextra -Werror
 
 $(foreach u,$(C_UNITS),$(eval $(call hacl_c_unit,$(u))))
 
+# Handwritten C.  Everything in c/ is trusted computing base -- currently just
+# the platform entropy shim -- and is compiled with the same flags and linked
+# into every binary that needs it.
+HAND_SRCS := $(wildcard $(HACL_ROOT)/c/*.c)
+HAND_OBJS := $(patsubst $(HACL_ROOT)/c/%.c,$(BUILD_DIR)/c/%.o,$(HAND_SRCS))
+
+$(BUILD_DIR)/c/%.o: $(HACL_ROOT)/c/%.c $(HACL_ROOT)/c/%.h
+	$(call msg, "CC", "c/$*.c")
+	$(Q)mkdir -p $(dir $@)
+	$(Q)$(CC) $(HACL_CFLAGS) -I $(HACL_ROOT)/c -c $< -o $@
+
 C_FILES   = $(foreach u,$(C_UNITS),$(DIST_DIR)/$(call c_name,$(u)).c)
 C_HEADERS = $(foreach u,$(C_UNITS),$(DIST_DIR)/$(call c_name,$(u)).h)
 C_OBJECTS = $(foreach u,$(C_UNITS),$(BUILD_DIR)/$(call c_name,$(u)).o)
 
 .PHONY: extract compile
 extract: $(C_FILES)
-compile: $(C_OBJECTS)
+compile: $(C_OBJECTS) $(HAND_OBJS)
