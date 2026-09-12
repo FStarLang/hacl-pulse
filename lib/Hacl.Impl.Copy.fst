@@ -158,3 +158,40 @@ ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
 }
 
 #pop-options
+
+(** {2 Whole-buffer copy}
+
+    [copy_prefix] leaves the caller with a pointwise equality; when the two
+    buffers have the same length that is extensional equality, and saying so
+    once here keeps the [Seq.equal] out of every caller's proof context. *)
+
+fn copy_exact (dst: S.slice S8.t) (src: S.slice S8.t) (n: SZ.t)
+              (#vd: erased (Seq.seq S8.t)) (#ps: perm) (#vs: erased (Seq.seq S8.t))
+requires S.pts_to dst vd ** S.pts_to src #ps vs **
+         pure (SZ.v n == Seq.length vd /\ SZ.v n == Seq.length vs)
+ensures exists* vd'. S.pts_to dst vd' ** S.pts_to src #ps vs **
+        pure (vd' == reveal vs)
+{
+  S.pts_to_len dst;
+  S.pts_to_len src;
+  copy_prefix dst src n;
+  with vd'. assert (S.pts_to dst vd');
+  assert (pure (Seq.equal vd' vs));
+}
+
+(** [copy_at] leaves its caller with two pointwise facts; a caller that is
+    filling a buffer left to right wants them as a statement about prefixes.
+    Proving that inside a Pulse function is expensive -- the extensionality
+    argument runs in whatever context the caller has built up -- so it is
+    done here, once, with nothing else in scope. *)
+let slice_copy_at (old: Seq.seq S8.t) (fresh: Seq.seq S8.t) (src: Seq.seq S8.t)
+                  (i: nat) (n: nat)
+  : Lemma (requires Seq.length old == Seq.length fresh /\ i + n <= Seq.length old /\
+                    Seq.length src == n /\
+                    (forall (k: nat). k < n ==> Seq.index fresh (i + k) == Seq.index src k) /\
+                    (forall (k: nat). k < Seq.length old /\ (k < i \/ i + n <= k) ==>
+                       Seq.index fresh k == Seq.index old k))
+          (ensures Seq.slice fresh 0 (i + n) == Seq.append (Seq.slice old 0 i) src /\
+                   Seq.slice fresh 0 i == Seq.slice old 0 i)
+  = assert (Seq.equal (Seq.slice fresh 0 (i + n)) (Seq.append (Seq.slice old 0 i) src));
+    assert (Seq.equal (Seq.slice fresh 0 i) (Seq.slice old 0 i))

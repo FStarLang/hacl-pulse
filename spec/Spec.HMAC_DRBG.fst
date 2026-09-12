@@ -73,13 +73,14 @@ noeq type state (hl: nat) = {
     one byte and the caller's data; this is the bound that makes all of them
     well defined. *)
 unfold let data_ok (#t: Type0) {| word t |} (p: params t) (data: Seq.seq S8.t) : prop =
+  block_len #t + hash_bytes p + 1 + Seq.length data < pow2 61 /\
   block_len #t + hash_bytes p + 1 + Seq.length data < max_input #t
 
 let byte (c: U8.t) : Seq.lseq S8.t 1 = Seq.create 1 (S8.classify c)
 
 (** [V || c || data], the message each re-keying hashes. *)
-let tagged (#hl: nat) (v: Seq.lseq S8.t hl) (c: U8.t) (data: Seq.seq S8.t)
-  : (r: Seq.seq S8.t { Seq.length r == hl + 1 + Seq.length data })
+let tagged (v: Seq.seq S8.t) (c: U8.t) (data: Seq.seq S8.t)
+  : (r: Seq.seq S8.t { Seq.length r == Seq.length v + 1 + Seq.length data })
   = Seq.append v (Seq.append (byte c) data)
 
 let update (#t: Type0) {| word t |} (p: params t)
@@ -161,3 +162,98 @@ let generate (#t: Type0) {| word t |} (p: params t)
       let (out, vl) = gen_bytes p st1.k st1.v n in
       let st2 = update p additional { st1 with v = vl } in
       Some (out, { st2 with ctr = st1.ctr + 1 })
+
+(** {2 Total wrappers, for the implementation}
+
+    A Pulse [ensures] is elaborated with no [requires] in scope, so the
+    refinements on [hmac] and on [state] have to be discharged inside a
+    definition rather than at its use. *)
+
+(** [hmac] where it is defined, and the empty sequence elsewhere. *)
+let hm (#t: Type0) {| word t |} (p: params t) (key: Seq.seq S8.t) (msg: Seq.seq S8.t)
+  : GTot (Seq.seq S8.t)
+  = if Seq.length key < max_input #t && block_len #t + Seq.length msg < max_input #t
+    then hmac p key msg
+    else Seq.empty
+
+let hm_def (#t: Type0) {| word t |} (p: params t) (key: Seq.seq S8.t) (msg: Seq.seq S8.t)
+  : Lemma (requires Seq.length key < max_input #t /\
+                    block_len #t + Seq.length msg < max_input #t)
+          (ensures hm p key msg == hmac p key msg /\
+                   Seq.length (hm p key msg) == hash_bytes p)
+  = ()
+
+(** [update] on a bare pair of sequences. *)
+let upd (#t: Type0) {| word t |} (p: params t)
+        (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (data: Seq.seq S8.t)
+  : GTot (Seq.seq S8.t & Seq.seq S8.t)
+  = if Seq.length vk = hash_bytes p && Seq.length vv = hash_bytes p && data_ok p data
+    then let st = update p data ({ k = vk; v = vv; ctr = 0 }) in (st.k, st.v)
+    else (Seq.empty, Seq.empty)
+
+let upd_def (#t: Type0) {| word t |} (p: params t)
+            (data: Seq.seq S8.t { data_ok p data }) (st: state (hash_bytes p))
+  : Lemma (upd p st.k st.v data == ((update p data st).k, (update p data st).v))
+  = ()
+
+(** [gen_bytes] on a bare pair of sequences. *)
+let gen (#t: Type0) {| word t |} (p: params t)
+        (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (n: nat)
+  : GTot (Seq.seq S8.t & Seq.seq S8.t)
+  = if Seq.length vk = hash_bytes p && Seq.length vv = hash_bytes p
+    then let (o, vl) = gen_bytes p vk vv n in (o, vl)
+    else (Seq.empty, Seq.empty)
+
+(** The implementation writes [V] then the tag byte into a scratch buffer. *)
+let tagged_prefix (v: Seq.seq S8.t) (c: U8.t) (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length b == Seq.length v + 1 /\
+                    (forall (k: nat). k < Seq.length v ==> Seq.index b k == Seq.index v k) /\
+                    Seq.index b (Seq.length v) == S8.classify c)
+          (ensures b == Seq.append v (byte c))
+  = assert (Seq.equal b (Seq.append v (byte c)))
+
+(** ... and then hashes that buffer followed by the caller's data. *)
+let tagged_split (v: Seq.seq S8.t) (c: U8.t) (data: Seq.seq S8.t)
+  : Lemma (Seq.append (Seq.append v (byte c)) data == tagged v c data)
+  = Seq.append_assoc v (byte c) data
+
+(** {2 Unfolding [gen_bytes] one block at a time}
+
+    The implementation is a loop, so the recursion has to be turned into a
+    step relation on the suffix that is still to be produced. *)
+
+let gen_len (#t: Type0) {| word t |} (p: params t)
+            (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (n: nat)
+  : Lemma (requires Seq.length vk == hash_bytes p /\ Seq.length vv == hash_bytes p)
+          (ensures Seq.length (fst (gen p vk vv n)) == n /\
+                   Seq.length (snd (gen p vk vv n)) == hash_bytes p)
+  = ()
+
+(** Nothing left to do. *)
+let gen_zero (#t: Type0) {| word t |} (p: params t)
+             (vk: Seq.seq S8.t) (vv: Seq.seq S8.t)
+  : Lemma (requires Seq.length vk == hash_bytes p /\ Seq.length vv == hash_bytes p)
+          (ensures gen p vk vv 0 == (Seq.empty #S8.t, vv))
+  = ()
+
+(** The last, possibly partial, block. *)
+let gen_last (#t: Type0) {| word t |} (p: params t)
+             (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (n: nat)
+  : Lemma (requires Seq.length vk == hash_bytes p /\ Seq.length vv == hash_bytes p /\
+                    0 < n /\ n <= hash_bytes p)
+          (ensures (let v1 = hm p vk vv in
+                    Seq.length v1 == hash_bytes p /\
+                    gen p vk vv n == (Seq.slice v1 0 n, v1)))
+  = outer_fits #t p
+
+(** A whole block, with more to come. *)
+let gen_step (#t: Type0) {| word t |} (p: params t)
+             (vk: Seq.seq S8.t) (vv: Seq.seq S8.t) (n: nat)
+  : Lemma (requires Seq.length vk == hash_bytes p /\ Seq.length vv == hash_bytes p /\
+                    hash_bytes p < n)
+          (ensures (let hl = hash_bytes p in
+                    let v1 = hm p vk vv in
+                    Seq.length v1 == hl /\
+                    fst (gen p vk vv n) == Seq.append v1 (fst (gen p vk v1 (n - hl))) /\
+                    snd (gen p vk vv n) == snd (gen p vk v1 (n - hl))))
+  = outer_fits #t p
