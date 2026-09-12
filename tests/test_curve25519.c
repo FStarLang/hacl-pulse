@@ -143,31 +143,31 @@ int main(void) {
   int rc = 0;
   uint8_t out[32], k[32], u[32], t[32];
 
-  Hacl_Curve25519_Ptr_scalarmult(out, k1, u1);
+  Hacl_Curve25519_scalarmult(out, k1, u1);
   rc |= check("X25519 rfc7748/5.2 #1", out, e_r1, 32);
-  Hacl_Curve25519_Ptr_scalarmult(out, k2, u2);
+  Hacl_Curve25519_scalarmult(out, k2, u2);
   rc |= check("X25519 rfc7748/5.2 #2", out, e_r2, 32);
 
   /* The top bit of u is not part of the number. */
-  Hacl_Curve25519_Ptr_scalarmult(out, k1, u1_topbit);
+  Hacl_Curve25519_scalarmult(out, k1, u1_topbit);
   rc |= check("X25519 non-canonical u", out, e_r1, 32);
 
-  Hacl_Curve25519_Ptr_secret_to_public(out, ska);
+  Hacl_Curve25519_secret_to_public(out, ska);
   rc |= check("X25519 rfc7748/6.1 public a", out, e_pka, 32);
-  Hacl_Curve25519_Ptr_secret_to_public(out, skb);
+  Hacl_Curve25519_secret_to_public(out, skb);
   rc |= check("X25519 rfc7748/6.1 public b", out, e_pkb, 32);
 
   /* secret_to_public is scalarmult against the base point. */
-  Hacl_Curve25519_Ptr_scalarmult(out, ska, bp);
+  Hacl_Curve25519_scalarmult(out, ska, bp);
   rc |= check("X25519 base point by hand", out, e_pka, 32);
 
-  if (!Hacl_Curve25519_Ptr_ecdh(out, ska, e_pkb)) {
+  if (!Hacl_Curve25519_ecdh(out, ska, e_pkb)) {
     printf("  FAIL X25519 ecdh a*B rejected a good point\n");
     rc = 1;
   } else {
     rc |= check("X25519 rfc7748/6.1 shared a", out, e_shared, 32);
   }
-  if (!Hacl_Curve25519_Ptr_ecdh(out, skb, e_pka)) {
+  if (!Hacl_Curve25519_ecdh(out, skb, e_pka)) {
     printf("  FAIL X25519 ecdh b*A rejected a good point\n");
     rc = 1;
   } else {
@@ -178,7 +178,7 @@ int main(void) {
   memcpy(k, bp, 32);
   memcpy(u, bp, 32);
   for (int i = 0; i < 1000; i++) {
-    Hacl_Curve25519_Ptr_scalarmult(t, k, u);
+    Hacl_Curve25519_scalarmult(t, k, u);
     memcpy(u, k, 32);
     memcpy(k, t, 32);
     if (i == 0)
@@ -192,7 +192,7 @@ int main(void) {
     for (int i = 0; i < 5; i++) {
       char name[48];
       snprintf(name, sizeof name, "X25519 low-order point %d", i);
-      bool ok = Hacl_Curve25519_Ptr_ecdh(out, ska, low[i]);
+      bool ok = Hacl_Curve25519_ecdh(out, ska, low[i]);
       if (ok) {
         printf("  FAIL %s: ecdh accepted it\n", name);
         rc = 1;

@@ -35,7 +35,6 @@ open Spec.HMAC_DRBG
 open Hacl.Impl.Copy
 open Hacl.HMAC.Core
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -59,37 +58,37 @@ unfold let inv (#t: Type0) {| word t |} (p: params t)
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn gen_full (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-            (kt: S.slice t) (ivt: S.slice t)
-            (k: S.slice S8.t) (v: S.slice S8.t) (v1: S.slice S8.t) (out: S.slice S8.t)
+            (kt: A.array t) (ivt: A.array t)
+            (k: A.array S8.t) (v: A.array S8.t) (v1: A.array S8.t) (out: A.array S8.t)
             (ix: SZ.t) (vval: erased (Seq.seq S8.t))
             (#pk: perm) (#vk: erased (Seq.seq t))
             (#pi: perm) (#vi: erased (Seq.seq t))
             (#pkey: perm) (#vkey: erased (Seq.seq S8.t))
             (#vcur: erased (Seq.seq S8.t)) (#vv0: erased (Seq.seq S8.t))
             (#vout: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to k #pkey vkey **
-         S.pts_to v vcur ** S.pts_to v1 vv0 ** S.pts_to out vout **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to k #pkey vkey **
+         A.pts_to v vcur ** A.pts_to v1 vv0 ** A.pts_to out vout **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vkey == (hash_bytes p) /\ Seq.length vv0 == (hash_bytes p) /\
                SZ.v ix + (hash_bytes p) < Seq.length vout /\
                inv p vkey vval vout (SZ.v ix) vcur)
 ensures exists* vcur' vv1 vout'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to k #pkey vkey **
-  S.pts_to v vcur' ** S.pts_to v1 vv1 ** S.pts_to out vout' **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to k #pkey vkey **
+  A.pts_to v vcur' ** A.pts_to v1 vv1 ** A.pts_to out vout' **
   pure (Seq.length vout' == Seq.length vout /\ Seq.length vv1 == (hash_bytes p) /\
         inv p vkey vval vout' (SZ.v ix + (hash_bytes p)) vcur')
 {
-  S.pts_to_len k; S.pts_to_len v; S.pts_to_len v1; S.pts_to_len out;
+  A.pts_to_len k; A.pts_to_len v; A.pts_to_len v1; A.pts_to_len out;
   let hb = p.nhash_bytes;
   outer_fits #t p;
   sizes #t p;
-  hmac_impl p kt ivt v1 k v;
+  hmac_impl p kt ivt v1 k hb v hb;
   hm_def p (reveal vkey) (reveal vcur);
-  with vv1. assert (S.pts_to v1 vv1);
+  with vv1. assert (A.pts_to v1 vv1);
   copy_exact v v1 hb;
   gen_step p (reveal vkey) (reveal vcur) (Seq.length vout - SZ.v ix);
   copy_at out ix v1 hb;
-  with vout'. assert (S.pts_to out vout');
+  with vout'. assert (A.pts_to out vout');
   slice_copy_at (reveal vout) vout' (reveal vv1) (SZ.v ix) (hash_bytes p);
   Seq.append_assoc (Seq.slice vout 0 (SZ.v ix)) (reveal vv1)
                    (fst (gen p vkey vv1 (Seq.length vout - SZ.v ix - (hash_bytes p))));
@@ -110,41 +109,41 @@ ensures exists* vcur' vv1 vout'.
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn gen_tail (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-            (kt: S.slice t) (ivt: S.slice t)
-            (k: S.slice S8.t) (v: S.slice S8.t) (v1: S.slice S8.t) (out: S.slice S8.t)
+            (kt: A.array t) (ivt: A.array t)
+            (k: A.array S8.t) (v: A.array S8.t) (v1: A.array S8.t) (out: A.array S8.t) (n: SZ.t)
             (ix: SZ.t) (vval: erased (Seq.seq S8.t))
             (#pk: perm) (#vk: erased (Seq.seq t))
             (#pi: perm) (#vi: erased (Seq.seq t))
             (#pkey: perm) (#vkey: erased (Seq.seq S8.t))
             (#vcur: erased (Seq.seq S8.t)) (#vv0: erased (Seq.seq S8.t))
             (#vout: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to k #pkey vkey **
-         S.pts_to v vcur ** S.pts_to v1 vv0 ** S.pts_to out vout **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to k #pkey vkey **
+         A.pts_to v vcur ** A.pts_to v1 vv0 ** A.pts_to out vout **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vkey == (hash_bytes p) /\ Seq.length vv0 == (hash_bytes p) /\
                SZ.v ix < Seq.length vout /\
                Seq.length vout <= SZ.v ix + (hash_bytes p) /\
                inv p vkey vval vout (SZ.v ix) vcur)
+         ** pure (SZ.v n == Seq.length vout)
 ensures exists* vcur' vv1 vout'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to k #pkey vkey **
-  S.pts_to v vcur' ** S.pts_to v1 vv1 ** S.pts_to out vout' **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to k #pkey vkey **
+  A.pts_to v vcur' ** A.pts_to v1 vv1 ** A.pts_to out vout' **
   pure (Seq.length vout' == Seq.length vout /\ Seq.length vv1 == (hash_bytes p) /\
         inv p vkey vval vout' (Seq.length vout) vcur')
 {
-  S.pts_to_len k; S.pts_to_len v; S.pts_to_len v1; S.pts_to_len out;
+  A.pts_to_len k; A.pts_to_len v; A.pts_to_len v1; A.pts_to_len out;
   let hb = p.nhash_bytes;
-  let n = S.len out;
   let rem = SZ.sub n ix;
   outer_fits #t p;
   sizes #t p;
-  hmac_impl p kt ivt v1 k v;
+  hmac_impl p kt ivt v1 k hb v hb;
   hm_def p (reveal vkey) (reveal vcur);
-  with vv1. assert (S.pts_to v1 vv1);
+  with vv1. assert (A.pts_to v1 vv1);
   copy_exact v v1 hb;
   gen_last p (reveal vkey) (reveal vcur) (SZ.v rem);
   gen_zero p (reveal vkey) (reveal vv1);
   copy_at out ix v1 rem;
-  with vout'. assert (S.pts_to out vout');
+  with vout'. assert (A.pts_to out vout');
   slice_copy_at (reveal vout) vout' (Seq.slice vv1 0 (SZ.v rem)) (SZ.v ix) (SZ.v rem);
   Seq.append_empty_r (Seq.slice vout' 0 (SZ.v n));
   assert (pure (reveal vv1 == hm p vkey vcur));
@@ -164,29 +163,29 @@ ensures exists* vcur' vv1 vout'.
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn gen_loop (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-            (kt: S.slice t) (ivt: S.slice t)
-            (k: S.slice S8.t) (v: S.slice S8.t) (out: S.slice S8.t)
+            (kt: A.array t) (ivt: A.array t)
+            (k: A.array S8.t) (v: A.array S8.t) (out: A.array S8.t) (n: SZ.t)
             (#pk: perm) (#vk: erased (Seq.seq t))
             (#pi: perm) (#vi: erased (Seq.seq t))
             (#pkey: perm) (#vkey: erased (Seq.seq S8.t))
             (#vval: erased (Seq.seq S8.t)) (#vout: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-         S.pts_to k #pkey vkey ** S.pts_to v vval ** S.pts_to out vout **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+         A.pts_to k #pkey vkey ** A.pts_to v vval ** A.pts_to out vout **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vkey == (hash_bytes p) /\ Seq.length vval == (hash_bytes p))
+         ** pure (SZ.v n == Seq.length vout)
 ensures exists* vval' vout'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-  S.pts_to k #pkey vkey ** S.pts_to v vval' ** S.pts_to out vout' **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+  A.pts_to k #pkey vkey ** A.pts_to v vval' ** A.pts_to out vout' **
   pure ((vout', vval') == gen p vkey vval (Seq.length vout))
 {
-  S.pts_to_len kt; S.pts_to_len ivt;
-  S.pts_to_len k; S.pts_to_len v; S.pts_to_len out;
+  A.pts_to_len kt; A.pts_to_len ivt;
+  A.pts_to_len k; A.pts_to_len v; A.pts_to_len out;
   let hb = p.nhash_bytes;
-  let n = S.len out;
   let z8 = S8.classify 0uy;
 
   let mut v1arr = [| z8; hb |]; A.pts_to_len v1arr;
-  let v1 = S.from_array v1arr hb; S.pts_to_len v1;
+  A.pts_to_len v1arr;
 
   let mut i = 0sz;
   gen_len p (reveal vkey) (reveal vval) (SZ.v n);
@@ -194,8 +193,8 @@ ensures exists* vval' vout'.
   assert (pure (Seq.equal (Seq.slice vout 0 0) (Seq.empty #S8.t)));
   while (let ix = !i; SZ.lt ix n)
   invariant exists* (ix: SZ.t) (vcur: Seq.seq S8.t) (vv1: Seq.seq S8.t) (vout': Seq.seq S8.t).
-    pts_to i ix ** S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-    S.pts_to k #pkey vkey ** S.pts_to v vcur ** S.pts_to v1 vv1 ** S.pts_to out vout' **
+    pts_to i ix ** A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+    A.pts_to k #pkey vkey ** A.pts_to v vcur ** A.pts_to v1arr vv1 ** A.pts_to out vout' **
     pure (Seq.length vout' == SZ.v n /\ Seq.length vv1 == (hash_bytes p) /\
           inv p vkey vval vout' (SZ.v ix) vcur)
   decreases (SZ.v n - SZ.v (!i))
@@ -203,19 +202,19 @@ ensures exists* vval' vout'.
     let ix = !i;
     let rem = SZ.sub n ix;
     if (SZ.gt rem hb) {
-      gen_full p kt ivt k v v1 out ix vval;
+      gen_full p kt ivt k v v1arr out ix vval;
       i := SZ.add ix hb;
     } else {
-      gen_tail p kt ivt k v v1 out ix vval;
+      gen_tail p kt ivt k v v1arr out n ix vval;
       i := n;
     }
   };
-  with vout'. assert (S.pts_to out vout');
-  with vcur. assert (S.pts_to v vcur);
+  with vout'. assert (A.pts_to out vout');
+  with vcur. assert (A.pts_to v vcur);
   gen_zero p (reveal vkey) (reveal vcur);
   Seq.append_empty_r (Seq.slice vout' 0 (SZ.v n));
   assert (pure (Seq.equal (Seq.slice vout' 0 (SZ.v n)) vout'));
-  S.to_array v1;
+  ()
 }
 
 #pop-options

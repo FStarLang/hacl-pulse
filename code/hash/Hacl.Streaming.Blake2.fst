@@ -48,7 +48,6 @@ open Hacl.Hash.Blake2.Named
 open Hacl.Hash.Blake2.Streaming
 open Hacl.Impl.Table
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -56,7 +55,6 @@ module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module G = FStar.Ghost
-
 
 (** The two block lengths, as literals.  [block_len] is [16 * (bits / 8)] and
     the type class does not reduce on its own inside a Pulse context. *)
@@ -67,7 +65,6 @@ let block_len_64 (_: unit)
 let block_len_32 (_: unit)
   : Lemma (block_len #S32.t == 64 /\ max_key_len #S32.t == 32)
   = assert_norm (bits #S32.t == 32)
-
 
 (** {2 The three generic entry points}
 
@@ -81,23 +78,24 @@ let block_len_32 (_: unit)
 
 fn update_gen (#t: Type0) {| w: word t |}
               ([@@@FStar.Attributes.monomorphize] p: params t)
-              (ivs: S.slice t) (acc: S.slice t) (buf: S.slice S8.t)
-              (tot: S.slice SZ.t) (data: S.slice S8.t)
+              (ivs: A.array t) (acc: A.array t) (buf: A.array S8.t)
+              (tot: A.array SZ.t) (data: A.array S8.t) (data_len: SZ.t)
               (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
               (#pi: perm) (#vi: erased (Seq.seq t))
               (#vacc: erased (Seq.seq t)) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
               (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to ivs #pi vi ** S.pts_to acc vacc ** S.pts_to buf vbuf **
-         S.pts_to tot vtot ** S.pts_to data #pd vdata **
+requires A.pts_to ivs #pi vi ** A.pts_to acc vacc ** A.pts_to buf vbuf **
+         A.pts_to tot vtot ** A.pts_to data #pd vdata **
          pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
                stream_ok p key seen vacc vbuf vtot /\
                Seq.length (stream #t key seen) + Seq.length vdata +
                  2 * block_len #t < pow2 64 /\
                SZ.fits (Seq.length (stream #t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to ivs #pi vi ** S.pts_to acc vacc' ** S.pts_to buf vbuf' **
-  S.pts_to tot vtot' ** S.pts_to data #pd vdata **
+  A.pts_to ivs #pi vi ** A.pts_to acc vacc' ** A.pts_to buf vbuf' **
+  A.pts_to tot vtot' ** A.pts_to data #pd vdata **
   pure (stream_ok p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   let z0: t = zero #t #w;
@@ -106,47 +104,41 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
 
   let mut varr = [| z0; 16sz |];
   A.pts_to_len varr;
-  let vv = S.from_array varr 16sz;
   let mut marr = [| z0; 16sz |];
   A.pts_to_len marr;
-  let mw = S.from_array marr 16sz;
   let mut barr = [| z8; bl |];
   A.pts_to_len barr;
-  let blk = S.from_array barr bl;
   sigma_len ();
   let sg = table sigma_arr 160sz;
   sigma_seq_ok ();
-  S.pts_to_len vv;
-  S.pts_to_len mw;
-  S.pts_to_len blk;
-  S.pts_to_len sg;
+  A.pts_to_len varr;
+  A.pts_to_len marr;
+  A.pts_to_len barr;
+  A.pts_to_len sg;
 
-  update_impl p acc vv mw blk ivs sg buf tot data key seen;
+  update_impl p acc varr marr barr ivs sg buf tot data data_len key seen;
 
-  S.to_array vv;
-  S.to_array mw;
-  S.to_array blk;
   drop_table sg;
 }
 
 fn digest_gen (#t: Type0) {| w: word t |}
               ([@@@FStar.Attributes.monomorphize] p: params t)
-              (ivs: S.slice t) (acc: S.slice t) (buf: S.slice S8.t)
-              (tot: S.slice SZ.t) (out: S.slice S8.t)
+              (ivs: A.array t) (acc: A.array t) (buf: A.array S8.t)
+              (tot: A.array SZ.t) (out: A.array S8.t)
               (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
               (#pi: perm) (#vi: erased (Seq.seq t))
               (#pa: perm) (#vacc: erased (Seq.seq t))
               (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
               (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
               (#vout: erased (Seq.seq S8.t))
-requires S.pts_to ivs #pi vi ** S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf **
-         S.pts_to tot #pt vtot ** S.pts_to out vout **
+requires A.pts_to ivs #pi vi ** A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf **
+         A.pts_to tot #pt vtot ** A.pts_to out vout **
          pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
                Seq.length vout == hash_bytes p /\
                stream_ok p key seen vacc vbuf vtot)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to ivs #pi vi ** S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf **
-  S.pts_to tot #pt vtot ** S.pts_to out vout' **
+  A.pts_to ivs #pi vi ** A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf **
+  A.pts_to tot #pt vtot ** A.pts_to out vout' **
   pure (Seq.length key <= max_key_len #t /\ vout' == blake2 p key seen)
 {
   let z0: t = zero #t #w;
@@ -155,31 +147,24 @@ ensures exists* (vout': Seq.seq S8.t).
 
   let mut varr = [| z0; 16sz |];
   A.pts_to_len varr;
-  let vv = S.from_array varr 16sz;
   let mut marr = [| z0; 16sz |];
   A.pts_to_len marr;
-  let mw = S.from_array marr 16sz;
   let mut barr = [| z8; bl |];
   A.pts_to_len barr;
-  let blk = S.from_array barr bl;
   sigma_len ();
   let sg = table sigma_arr 160sz;
   sigma_seq_ok ();
-  S.pts_to_len vv;
-  S.pts_to_len mw;
-  S.pts_to_len blk;
-  S.pts_to_len sg;
+  A.pts_to_len varr;
+  A.pts_to_len marr;
+  A.pts_to_len barr;
+  A.pts_to_len sg;
 
-  digest_impl p acc vv mw blk ivs sg buf tot out key seen;
+  digest_impl p acc varr marr barr ivs sg buf tot out key seen;
 
-  S.to_array vv;
-  S.to_array mw;
-  S.to_array blk;
   drop_table sg;
 }
 
 #pop-options
-
 
 (** {2 The eight named hashes}
 
@@ -190,63 +175,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2B-512} *)
 
-fn blake2b_512_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2b_512_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 64)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2b_512_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  init_impl blake2b_512_p acc buf tot ivt key;
+  init_impl blake2b_512_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2b_512_update (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2b_512_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2b_512_p key seen vacc vbuf vtot /\
                Seq.length (stream #S64.t key seen) + Seq.length vdata + 256 < pow2 64 /\
                SZ.fits (Seq.length (stream #S64.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2b_512_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_512_p ivt acc buf tot data key seen;
+  update_gen blake2b_512_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2b_512_digest (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2b_512_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S64.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2b_512_p key seen vacc vbuf vtot /\ Seq.length vout == 64)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 64 /\ vout' == blake2 blake2b_512_p key seen)
 {
   block_len_64 ();
@@ -258,63 +245,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2B-384} *)
 
-fn blake2b_384_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2b_384_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 64)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2b_384_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  init_impl blake2b_384_p acc buf tot ivt key;
+  init_impl blake2b_384_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2b_384_update (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2b_384_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2b_384_p key seen vacc vbuf vtot /\
                Seq.length (stream #S64.t key seen) + Seq.length vdata + 256 < pow2 64 /\
                SZ.fits (Seq.length (stream #S64.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2b_384_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_384_p ivt acc buf tot data key seen;
+  update_gen blake2b_384_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2b_384_digest (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2b_384_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S64.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2b_384_p key seen vacc vbuf vtot /\ Seq.length vout == 48)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 64 /\ vout' == blake2 blake2b_384_p key seen)
 {
   block_len_64 ();
@@ -326,63 +315,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2B-256} *)
 
-fn blake2b_256_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2b_256_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 64)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2b_256_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  init_impl blake2b_256_p acc buf tot ivt key;
+  init_impl blake2b_256_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2b_256_update (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2b_256_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2b_256_p key seen vacc vbuf vtot /\
                Seq.length (stream #S64.t key seen) + Seq.length vdata + 256 < pow2 64 /\
                SZ.fits (Seq.length (stream #S64.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2b_256_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_256_p ivt acc buf tot data key seen;
+  update_gen blake2b_256_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2b_256_digest (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2b_256_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S64.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2b_256_p key seen vacc vbuf vtot /\ Seq.length vout == 32)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 64 /\ vout' == blake2 blake2b_256_p key seen)
 {
   block_len_64 ();
@@ -394,63 +385,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2B-160} *)
 
-fn blake2b_160_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2b_160_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 64)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2b_160_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  init_impl blake2b_160_p acc buf tot ivt key;
+  init_impl blake2b_160_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2b_160_update (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2b_160_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2b_160_p key seen vacc vbuf vtot /\
                Seq.length (stream #S64.t key seen) + Seq.length vdata + 256 < pow2 64 /\
                SZ.fits (Seq.length (stream #S64.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2b_160_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_160_p ivt acc buf tot data key seen;
+  update_gen blake2b_160_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2b_160_digest (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2b_160_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S64.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2b_160_p key seen vacc vbuf vtot /\ Seq.length vout == 20)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 64 /\ vout' == blake2 blake2b_160_p key seen)
 {
   block_len_64 ();
@@ -462,63 +455,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2S-256} *)
 
-fn blake2s_256_init (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2s_256_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 32)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2s_256_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  init_impl blake2s_256_p acc buf tot ivt key;
+  init_impl blake2s_256_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2s_256_update (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2s_256_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2s_256_p key seen vacc vbuf vtot /\
                Seq.length (stream #S32.t key seen) + Seq.length vdata + 128 < pow2 64 /\
                SZ.fits (Seq.length (stream #S32.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2s_256_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_256_p ivt acc buf tot data key seen;
+  update_gen blake2s_256_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2s_256_digest (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2s_256_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S32.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2s_256_p key seen vacc vbuf vtot /\ Seq.length vout == 32)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 32 /\ vout' == blake2 blake2s_256_p key seen)
 {
   block_len_32 ();
@@ -530,63 +525,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2S-224} *)
 
-fn blake2s_224_init (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2s_224_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 32)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2s_224_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  init_impl blake2s_224_p acc buf tot ivt key;
+  init_impl blake2s_224_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2s_224_update (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2s_224_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2s_224_p key seen vacc vbuf vtot /\
                Seq.length (stream #S32.t key seen) + Seq.length vdata + 128 < pow2 64 /\
                SZ.fits (Seq.length (stream #S32.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2s_224_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_224_p ivt acc buf tot data key seen;
+  update_gen blake2s_224_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2s_224_digest (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2s_224_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S32.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2s_224_p key seen vacc vbuf vtot /\ Seq.length vout == 28)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 32 /\ vout' == blake2 blake2s_224_p key seen)
 {
   block_len_32 ();
@@ -598,63 +595,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2S-160} *)
 
-fn blake2s_160_init (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2s_160_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 32)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2s_160_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  init_impl blake2s_160_p acc buf tot ivt key;
+  init_impl blake2s_160_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2s_160_update (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2s_160_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2s_160_p key seen vacc vbuf vtot /\
                Seq.length (stream #S32.t key seen) + Seq.length vdata + 128 < pow2 64 /\
                SZ.fits (Seq.length (stream #S32.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2s_160_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_160_p ivt acc buf tot data key seen;
+  update_gen blake2s_160_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2s_160_digest (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2s_160_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S32.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2s_160_p key seen vacc vbuf vtot /\ Seq.length vout == 20)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 32 /\ vout' == blake2 blake2s_160_p key seen)
 {
   block_len_32 ();
@@ -666,63 +665,65 @@ ensures exists* (vout': Seq.seq S8.t).
 
 (** {3 BLAKE2S-128} *)
 
-fn blake2s_128_init (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                    (key: S.slice S8.t)
+fn blake2s_128_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t)
                     (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                     (#vtot: erased (Seq.seq SZ.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to key #pk vkey **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\
                Seq.length vtot == 1 /\ Seq.length vkey <= 32)
+         ** pure (SZ.v key_len == Seq.length vkey)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to key #pk vkey **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (stream_ok blake2s_128_p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  init_impl blake2s_128_p acc buf tot ivt key;
+  init_impl blake2s_128_p acc buf tot ivt key key_len;
   drop_table ivt;
 }
 
-fn blake2s_128_update (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (data: S.slice S8.t)
+fn blake2s_128_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                       (#vtot: erased (Seq.seq SZ.t))
                       (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok blake2s_128_p key seen vacc vbuf vtot /\
                Seq.length (stream #S32.t key seen) + Seq.length vdata + 128 < pow2 64 /\
                SZ.fits (Seq.length (stream #S32.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok blake2s_128_p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_128_p ivt acc buf tot data key seen;
+  update_gen blake2s_128_p ivt acc buf tot data data_len key seen;
   drop_table ivt;
 }
 
-fn blake2s_128_digest (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                      (out: S.slice S8.t)
+fn blake2s_128_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t)
                       (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                       (#pa: perm) (#vacc: erased (Seq.seq S32.t))
                       (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                       (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                       (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
          pure (stream_ok blake2s_128_p key seen vacc vbuf vtot /\ Seq.length vout == 16)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot #pt vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
   pure (Seq.length key <= 32 /\ vout' == blake2 blake2s_128_p key seen)
 {
   block_len_32 ();

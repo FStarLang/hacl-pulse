@@ -48,7 +48,6 @@ open Hacl.Poly1305.Load
 open Hacl.Poly1305.Reduce
 open Hacl.Poly1305
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -94,19 +93,19 @@ let len_block_bytes (la lc: nat) (b: Seq.seq S8.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
 
-fn write_len_block (lb: S.slice S8.t) (la: SZ.t) (lc: SZ.t)
+fn write_len_block (lb: A.array S8.t) (la: SZ.t) (lc: SZ.t)
                    (#vlb: erased (Seq.seq S8.t))
-requires S.pts_to lb vlb ** pure (Seq.length vlb == 16)
+requires A.pts_to lb vlb ** pure (Seq.length vlb == 16)
 ensures exists* (vlb': Seq.seq S8.t).
-  S.pts_to lb vlb' ** pure (vlb' == Spec.len_block (SZ.v la) (SZ.v lc))
+  A.pts_to lb vlb' ** pure (vlb' == Spec.len_block (SZ.v la) (SZ.v lc))
 {
-  S.pts_to_len lb;
+  A.pts_to_len lb;
   let wa: S64.t = of_sizet_lo #S64.t la;
   let wc: S64.t = of_sizet_lo #S64.t lc;
   store_le #S64.t lb 0sz wa;
-  with v1. assert (S.pts_to lb v1);
+  with v1. assert (A.pts_to lb v1);
   store_le #S64.t lb 8sz wc;
-  with v'. assert (S.pts_to lb v');
+  with v'. assert (A.pts_to lb v');
   Math.lemma_mod_twice (SZ.v la) (pow2 64);
   Math.lemma_mod_twice (SZ.v lc) (pow2 64);
   assert_norm (bytes #S64.t == 8);
@@ -128,72 +127,65 @@ ensures exists* (vlb': Seq.seq S8.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-fn aead_tag (tag: S.slice S8.t) (aad: S.slice S8.t) (ct: S.slice S8.t)
-            (key: S.slice S8.t)
+fn aead_tag (tag: A.array S8.t) (aad: A.array S8.t) (alen: SZ.t) (ct: A.array S8.t) (clen: SZ.t)
+            (key: A.array S8.t)
             (#vtag: erased (Seq.seq S8.t))
             (#pa: perm) (#vaad: erased (Seq.seq S8.t))
             (#pc: perm) (#vct: erased (Seq.seq S8.t))
             (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to tag vtag ** S.pts_to aad #pa vaad ** S.pts_to ct #pc vct **
-         S.pts_to key #pk vkey **
+requires A.pts_to tag vtag ** A.pts_to aad #pa vaad ** A.pts_to ct #pc vct **
+         A.pts_to key #pk vkey **
          pure (Seq.length vtag == 16 /\ Seq.length vkey == 32)
+         ** pure (SZ.v alen == Seq.length vaad)
+         ** pure (SZ.v clen == Seq.length vct)
 ensures exists* (vtag': Seq.seq S8.t).
-  S.pts_to tag vtag' ** S.pts_to aad #pa vaad ** S.pts_to ct #pc vct **
-  S.pts_to key #pk vkey **
+  A.pts_to tag vtag' ** A.pts_to aad #pa vaad ** A.pts_to ct #pc vct **
+  A.pts_to key #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vtag' == 16 /\
         vtag' == P.poly1305 (Spec.mac_input vaad vct) vkey)
 {
-  S.pts_to_len tag;
-  S.pts_to_len aad;
-  S.pts_to_len ct;
-  S.pts_to_len key;
+  A.pts_to_len tag;
+  A.pts_to_len aad;
+  A.pts_to_len ct;
+  A.pts_to_len key;
 
   let z = S64.zero;
   let z8 = S8.classify 0uy;
   let mut rarr = [| z; 5sz |];
   A.pts_to_len rarr;
-  let r = S.from_array rarr 5sz;
-  S.pts_to_len r;
+  A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];
   A.pts_to_len harr;
-  let h = S.from_array harr 5sz;
-  S.pts_to_len h;
+  A.pts_to_len harr;
   let mut earr = [| z; 5sz |];
   A.pts_to_len earr;
-  let e = S.from_array earr 5sz;
-  S.pts_to_len e;
+  A.pts_to_len earr;
   let mut darr = [| z; 5sz |];
   A.pts_to_len darr;
-  let d = S.from_array darr 5sz;
-  S.pts_to_len d;
+  A.pts_to_len darr;
   let mut lbarr = [| z8; 16sz |];
   A.pts_to_len lbarr;
-  let lb = S.from_array lbarr 16sz;
-  S.pts_to_len lb;
+  A.pts_to_len lbarr;
 
-  write_len_block lb (S.len aad) (S.len ct);
+  write_len_block lbarr alen clen;
 
-  load_r r key;
-  set_zero h;
-  with vr. assert (S.pts_to r vr);
+  load_r rarr key;
+  set_zero harr;
+  with vr. assert (A.pts_to rarr vr);
   Math.pow2_lt_compat 27 26;
 
-  absorb_seg h r d e aad #_ #_ #_ #_ #_ #_ #(hide 0);
-  absorb_seg h r d e ct
+  absorb_seg harr rarr darr earr aad alen #_ #_ #_ #_ #_ #_ #(hide 0);
+  absorb_seg harr rarr darr earr ct clen
     #_ #_ #_ #_ #_ #_ #(hide (P.seg_acc vaad (feval vr) 0));
-  absorb_seg h r d e lb
+  absorb_seg harr rarr darr earr lbarr 16sz
     #_ #_ #_ #_ #_ #_
     #(hide (P.seg_acc vct (feval vr) (P.seg_acc vaad (feval vr) 0)));
 
-  reduce h;
+  reduce harr;
   Spec.mac_input_acc vaad vct (feval vr);
-  store_tag tag h key;
+  store_tag tag harr key;
 
-  S.to_array lb;
-  S.to_array d;
-  S.to_array e;
-  S.to_array h;
-  S.to_array r;
+  ()
 }
 
 #pop-options
@@ -202,73 +194,73 @@ ensures exists* (vtag': Seq.seq S8.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-fn derive_otk (otk: S.slice S8.t) (key: S.slice S8.t) (nonce: S.slice S8.t)
+fn derive_otk (otk: A.array S8.t) (key: A.array S8.t) (nonce: A.array S8.t)
               (#vo: erased (Seq.seq S8.t))
               (#pk: perm) (#vkey: erased (Seq.seq S8.t))
               (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires S.pts_to otk vo ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+requires A.pts_to otk vo ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
          pure (Seq.length vo == 32 /\ Seq.length vkey == 32 /\
                Seq.length vnon == 12)
 ensures exists* (vo': Seq.seq S8.t).
-  S.pts_to otk vo' ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+  A.pts_to otk vo' ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
         Seq.length vo' == 32 /\ vo' == Spec.otk vkey vnon)
 {
-  S.pts_to_len otk;
+  A.pts_to_len otk;
   let z8 = S8.classify 0uy;
   let mut zarr = [| z8; 32sz |];
   A.pts_to_len zarr;
-  let zs = S.from_array zarr 32sz;
-  S.pts_to_len zs;
+  A.pts_to_len zarr;
   assert (pure (Seq.equal (Seq.create 32 (S8.classify 0uy)) (P.zeros 32)));
-  Hacl.Chacha20.chacha20_impl otk zs key nonce 0ul;
+  Hacl.Chacha20.encrypt otk zarr 32sz key nonce 0ul;
   Spec.otk_is_encrypt vkey vnon;
-  S.to_array zs;
+  ()
 }
 
 #pop-options
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-fn encrypt (ct: S.slice S8.t) (tag: S.slice S8.t)
-           (msg: S.slice S8.t) (aad: S.slice S8.t)
-           (key: S.slice S8.t) (nonce: S.slice S8.t)
+fn encrypt (ct: A.array S8.t) (tag: A.array S8.t)
+           (msg: A.array S8.t) (mlen: SZ.t) (aad: A.array S8.t) (alen: SZ.t)
+           (key: A.array S8.t) (nonce: A.array S8.t)
            (#vct: erased (Seq.seq S8.t)) (#vtag: erased (Seq.seq S8.t))
            (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
            (#pa: perm) (#vaad: erased (Seq.seq S8.t))
            (#pk: perm) (#vkey: erased (Seq.seq S8.t))
            (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires S.pts_to ct vct ** S.pts_to tag vtag ** S.pts_to msg #pm vmsg **
-         S.pts_to aad #pa vaad ** S.pts_to key #pk vkey **
-         S.pts_to nonce #pn vnon **
+requires A.pts_to ct vct ** A.pts_to tag vtag ** A.pts_to msg #pm vmsg **
+         A.pts_to aad #pa vaad ** A.pts_to key #pk vkey **
+         A.pts_to nonce #pn vnon **
          pure (Seq.length vct == Seq.length vmsg /\ Seq.length vtag == 16 /\
                Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
                Seq.length vmsg <= C.max_len 1ul)
+         ** pure (SZ.v mlen == Seq.length vmsg)
+         ** pure (SZ.v alen == Seq.length vaad)
 ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
-  S.pts_to ct vct' ** S.pts_to tag vtag' ** S.pts_to msg #pm vmsg **
-  S.pts_to aad #pa vaad ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+  A.pts_to ct vct' ** A.pts_to tag vtag' ** A.pts_to msg #pm vmsg **
+  A.pts_to aad #pa vaad ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
         Seq.length vmsg <= C.max_len 1ul /\
         Seq.length vct' == Seq.length vmsg /\ Seq.length vtag' == 16 /\
         (vct', vtag') == Spec.encrypt vkey vnon vaad vmsg)
 {
-  S.pts_to_len ct;
-  S.pts_to_len tag;
-  S.pts_to_len msg;
-  S.pts_to_len key;
-  S.pts_to_len nonce;
+  A.pts_to_len ct;
+  A.pts_to_len tag;
+  A.pts_to_len msg;
+  A.pts_to_len key;
+  A.pts_to_len nonce;
 
   let z8 = S8.classify 0uy;
   let mut karr = [| z8; 32sz |];
   A.pts_to_len karr;
-  let otk = S.from_array karr 32sz;
-  S.pts_to_len otk;
+  A.pts_to_len karr;
 
-  derive_otk otk key nonce;
-  Hacl.Chacha20.chacha20_impl ct msg key nonce 1ul;
-  aead_tag tag aad ct otk;
+  derive_otk karr key nonce;
+  Hacl.Chacha20.encrypt ct msg mlen key nonce 1ul;
+  aead_tag tag aad alen ct mlen karr;
 
-  S.to_array otk;
+  ()
 }
 
 #pop-options
@@ -282,23 +274,23 @@ ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-fn tag_eq (a: S.slice S8.t) (b: S.slice S8.t)
+fn tag_eq (a: A.array S8.t) (b: A.array S8.t)
           (#pa: perm) (#va: erased (Seq.seq S8.t))
           (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
          pure (Seq.length va == 16 /\ Seq.length vb == 16)
 returns res: bool
-ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
         pure (Seq.length va == 16 /\ Seq.length vb == 16 /\
               (res <==> Seq.equal va vb))
 {
-  S.pts_to_len a;
-  S.pts_to_len b;
+  A.pts_to_len a;
+  A.pts_to_len b;
   let mut acc = S8.ones;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (m: S8.t).
-    pts_to i vi ** pts_to acc m ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pts_to i vi ** pts_to acc m ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= 16 /\ Seq.length va == 16 /\ Seq.length vb == 16 /\
           (S8.v m == 0 \/ S8.v m == pow2 8 - 1) /\
           (S8.v m == pow2 8 - 1 <==>
@@ -307,8 +299,8 @@ ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
-    let x = S.(a.(vi));
-    let y = S.(b.(vi));
+    let x = A.(a.(vi));
+    let y = A.(b.(vi));
     let m = !acc;
     let eq = S8.eq_mask x y;
     let m' = S8.logand m eq;
@@ -332,24 +324,26 @@ ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
-fn decrypt (msg: S.slice S8.t) (ct: S.slice S8.t) (tag: S.slice S8.t)
-           (aad: S.slice S8.t) (key: S.slice S8.t) (nonce: S.slice S8.t)
+fn decrypt (msg: A.array S8.t) (ct: A.array S8.t) (clen: SZ.t) (tag: A.array S8.t)
+           (aad: A.array S8.t) (alen: SZ.t) (key: A.array S8.t) (nonce: A.array S8.t)
            (#vmsg: erased (Seq.seq S8.t))
            (#pc: perm) (#vct: erased (Seq.seq S8.t))
            (#pt: perm) (#vtag: erased (Seq.seq S8.t))
            (#pa: perm) (#vaad: erased (Seq.seq S8.t))
            (#pk: perm) (#vkey: erased (Seq.seq S8.t))
            (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires S.pts_to msg vmsg ** S.pts_to ct #pc vct ** S.pts_to tag #pt vtag **
-         S.pts_to aad #pa vaad ** S.pts_to key #pk vkey **
-         S.pts_to nonce #pn vnon **
+requires A.pts_to msg vmsg ** A.pts_to ct #pc vct ** A.pts_to tag #pt vtag **
+         A.pts_to aad #pa vaad ** A.pts_to key #pk vkey **
+         A.pts_to nonce #pn vnon **
          pure (Seq.length vmsg == Seq.length vct /\ Seq.length vtag == 16 /\
                Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
                Seq.length vct <= C.max_len 1ul)
+         ** pure (SZ.v clen == Seq.length vct)
+         ** pure (SZ.v alen == Seq.length vaad)
 returns res: bool
 ensures exists* (vmsg': Seq.seq S8.t).
-  S.pts_to msg vmsg' ** S.pts_to ct #pc vct ** S.pts_to tag #pt vtag **
-  S.pts_to aad #pa vaad ** S.pts_to key #pk vkey ** S.pts_to nonce #pn vnon **
+  A.pts_to msg vmsg' ** A.pts_to ct #pc vct ** A.pts_to tag #pt vtag **
+  A.pts_to aad #pa vaad ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
         Seq.length vtag == 16 /\
         Seq.length vct <= C.max_len 1ul /\
@@ -357,34 +351,28 @@ ensures exists* (vmsg': Seq.seq S8.t).
         (res <==> Spec.decrypt_ok vkey vnon vaad vct vtag) /\
         (if res then vmsg' == Spec.decrypted vkey vnon vct else vmsg' == vmsg))
 {
-  S.pts_to_len msg;
-  S.pts_to_len ct;
-  S.pts_to_len tag;
-  S.pts_to_len key;
-  S.pts_to_len nonce;
+  A.pts_to_len msg;
+  A.pts_to_len ct;
+  A.pts_to_len tag;
+  A.pts_to_len key;
+  A.pts_to_len nonce;
 
   let z8 = S8.classify 0uy;
   let mut karr = [| z8; 32sz |];
   A.pts_to_len karr;
-  let otk = S.from_array karr 32sz;
-  S.pts_to_len otk;
+  A.pts_to_len karr;
   let mut tarr = [| z8; 16sz |];
   A.pts_to_len tarr;
-  let exp = S.from_array tarr 16sz;
-  S.pts_to_len exp;
+  A.pts_to_len tarr;
 
-  derive_otk otk key nonce;
-  aead_tag exp aad ct otk;
-  let ok = tag_eq exp tag;
+  derive_otk karr key nonce;
+  aead_tag tarr aad alen ct clen karr;
+  let ok = tag_eq tarr tag;
 
   if ok {
-    Hacl.Chacha20.chacha20_impl msg ct key nonce 1ul;
-    S.to_array exp;
-    S.to_array otk;
+    Hacl.Chacha20.encrypt msg ct clen key nonce 1ul;
     true
   } else {
-    S.to_array exp;
-    S.to_array otk;
     false
   }
 }

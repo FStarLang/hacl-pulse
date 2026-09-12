@@ -40,7 +40,7 @@ open Spec.Blake2.Constants
 open Hacl.Hash.Blake2.Core
 open Hacl.Impl.Table
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
@@ -70,24 +70,24 @@ let block_avail (off len bl: SZ.t)
     the end of [s].  No bound on [off] -- past the end the whole block is
     zero, which is exactly what the specification says. *)
 fn read_block (#t: Type0) {| w: word t |}
-              (blk: S.slice S8.t) (s: S.slice S8.t) (off: SZ.t)
+              (blk: A.array S8.t) (s: A.array S8.t) (len: SZ.t) (off: SZ.t)
               (#vblk0: erased (Seq.seq S8.t))
               (#ps: perm) (#vs: erased (Seq.seq S8.t))
-requires S.pts_to blk vblk0 ** S.pts_to s #ps vs **
+requires A.pts_to blk vblk0 ** A.pts_to s #ps vs **
          pure (Seq.length vblk0 == block_len #t)
-ensures S.pts_to blk (pad_block #t (reveal vs) (SZ.v off)) ** S.pts_to s #ps vs
+         ** pure (SZ.v len == Seq.length vs)
+ensures A.pts_to blk (pad_block #t (reveal vs) (SZ.v off)) ** A.pts_to s #ps vs
 {
-  S.pts_to_len blk;
-  S.pts_to_len s;
+  A.pts_to_len blk;
+  A.pts_to_len s;
   let z8 = S8.classify 0uy;
   let bl = block_len_sz #t #w;
-  let len = S.len s;
   let n = block_avail off len bl;
 
   let mut k = 0sz;
   while (let vk = !k; SZ.lt vk n)
   invariant exists* (vk: SZ.t) (vb: Seq.seq S8.t).
-    pts_to k vk ** S.pts_to blk vb ** S.pts_to s #ps vs **
+    pts_to k vk ** A.pts_to blk vb ** A.pts_to s #ps vs **
     pure (SZ.v vk <= SZ.v n /\ SZ.v n <= block_len #t /\
           Seq.length vb == block_len #t /\
           (0 < SZ.v n ==> SZ.v off + SZ.v n <= Seq.length vs) /\
@@ -96,15 +96,15 @@ ensures S.pts_to blk (pad_block #t (reveal vs) (SZ.v off)) ** S.pts_to s #ps vs
   decreases (SZ.v n - SZ.v (!k))
   {
     let vk = !k;
-    let x = S.(s.(SZ.add off vk));
-    S.((blk.(vk) <- x));
+    let x = A.(s.(SZ.add off vk));
+    A.((blk.(vk) <- x));
     k := SZ.add vk 1sz;
   };
 
   let mut k2 = n;
   while (let vk = !k2; SZ.lt vk bl)
   invariant exists* (vk: SZ.t) (vb: Seq.seq S8.t).
-    pts_to k2 vk ** S.pts_to blk vb ** S.pts_to s #ps vs **
+    pts_to k2 vk ** A.pts_to blk vb ** A.pts_to s #ps vs **
     pure (SZ.v n <= SZ.v vk /\ SZ.v vk <= block_len #t /\
           Seq.length vb == block_len #t /\
           (0 < SZ.v n ==> SZ.v off + SZ.v n <= Seq.length vs) /\
@@ -114,30 +114,30 @@ ensures S.pts_to blk (pad_block #t (reveal vs) (SZ.v off)) ** S.pts_to s #ps vs
   decreases (block_len #t - SZ.v (!k2))
   {
     let vk = !k2;
-    S.((blk.(vk) <- z8));
+    A.((blk.(vk) <- z8));
     k2 := SZ.add vk 1sz;
   };
-  with vb. assert (S.pts_to blk vb);
+  with vb. assert (A.pts_to blk vb);
   Seq.lemma_eq_intro vb (pad_block #t (reveal vs) (SZ.v off));
   Seq.lemma_eq_elim vb (pad_block #t (reveal vs) (SZ.v off));
 }
 
 (** {2 A block as sixteen little-endian words} *)
 fn load_block (#t: Type0) {| w: word t |}
-              (mw: S.slice t) (blk: S.slice S8.t)
+              (mw: A.array t) (blk: A.array S8.t)
               (#vm0: erased (Seq.seq t))
               (#pb: perm) (#vb: erased (Seq.lseq S8.t (block_len #t)))
-requires S.pts_to mw vm0 ** S.pts_to blk #pb vb **
+requires A.pts_to mw vm0 ** A.pts_to blk #pb vb **
          pure (Seq.length vm0 == 16)
-ensures S.pts_to mw (words_from_le block_words (reveal vb)) ** S.pts_to blk #pb vb
+ensures A.pts_to mw (words_from_le block_words (reveal vb)) ** A.pts_to blk #pb vb
 {
-  S.pts_to_len mw;
-  S.pts_to_len blk;
+  A.pts_to_len mw;
+  A.pts_to_len blk;
   let nb = nbytes #t #w;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (vm: Seq.seq t).
-    pts_to i vi ** S.pts_to mw vm ** S.pts_to blk #pb vb **
+    pts_to i vi ** A.pts_to mw vm ** A.pts_to blk #pb vb **
     pure (SZ.v vi <= 16 /\ Seq.length vm == 16 /\
           (forall (j: nat). j < SZ.v vi ==>
              Seq.index vm j == Seq.index (words_from_le block_words (reveal vb)) j))
@@ -147,10 +147,10 @@ ensures S.pts_to mw (words_from_le block_words (reveal vb)) ** S.pts_to blk #pb 
     Math.lemma_mult_le_right (bytes #t) (SZ.v vi + 1) 16;
     let x = load_le #t blk (SZ.mul vi nb);
     w.v_extensional x (Seq.index (words_from_le block_words (reveal vb)) (SZ.v vi));
-    S.((mw.(vi) <- x));
+    A.((mw.(vi) <- x));
     i := SZ.add vi 1sz;
   };
-  with vm. assert (S.pts_to mw vm);
+  with vm. assert (A.pts_to mw vm);
   Seq.lemma_eq_intro vm (words_from_le block_words (reveal vb));
   Seq.lemma_eq_elim vm (words_from_le block_words (reveal vb));
 }
@@ -200,31 +200,31 @@ let param_word_word (#t: Type0) {| w: word t |} (klen nn: SZ.t)
     is arithmetic, and arithmetic is what [Spec.Blake2.param_word] is. *)
 fn init_state (#t: Type0) {| w: word t |}
               ([@@@FStar.Attributes.monomorphize] p: params t)
-              (h: S.slice t) (ivs: S.slice t) (klen: SZ.t)
+              (h: A.array t) (ivs: A.array t) (klen: SZ.t)
               (#vh0: erased (Seq.seq t))
               (#pi: perm) (#vi: erased (Seq.seq t))
-requires S.pts_to h vh0 ** S.pts_to ivs #pi vi **
+requires A.pts_to h vh0 ** A.pts_to ivs #pi vi **
          pure (Seq.length vh0 == 8 /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\ SZ.v klen <= max_key_len #t)
-ensures exists* (vh: Seq.seq t). S.pts_to h vh ** S.pts_to ivs #pi vi **
+ensures exists* (vh: Seq.seq t). A.pts_to h vh ** A.pts_to ivs #pi vi **
   pure (SZ.v klen <= max_key_len #t /\ Seq.length vh == 8 /\ vh == init p (SZ.v klen))
 {
-  S.pts_to_len h;
-  S.pts_to_len ivs;
+  A.pts_to_len h;
+  A.pts_to_len ivs;
   let mut i = 0sz;
   while (let vi2 = !i; SZ.lt vi2 8sz)
   invariant exists* (vi2: SZ.t) (vh: Seq.seq t).
-    pts_to i vi2 ** S.pts_to h vh ** S.pts_to ivs #pi vi **
+    pts_to i vi2 ** A.pts_to h vh ** A.pts_to ivs #pi vi **
     pure (SZ.v vi2 <= 8 /\ Seq.length vh == 8 /\ Seq.length vi == 8 /\
           (forall (j: nat). j < SZ.v vi2 ==> Seq.index vh j == Seq.index (reveal vi) j))
   decreases (8 - SZ.v (!i))
   {
     let vi2 = !i;
-    let x = S.(ivs.(vi2));
-    S.((h.(vi2) <- x));
+    let x = A.(ivs.(vi2));
+    A.((h.(vi2) <- x));
     i := SZ.add vi2 1sz;
   };
-  with vh. assert (S.pts_to h vh);
+  with vh. assert (A.pts_to h vh);
   Seq.lemma_eq_intro vh (reveal vi);
   Seq.lemma_eq_elim vh (reveal vi);
 
@@ -238,9 +238,9 @@ ensures exists* (vh: Seq.seq t). S.pts_to h vh ** S.pts_to ivs #pi vi **
   Math.small_mod (param_word (hash_bytes p) (SZ.v klen)) (pow2 (bits #t));
   w.v_extensional pw (small_word #t (param_word (hash_bytes p) (SZ.v klen)));
 
-  let x0 = S.(h.(0sz));
-  S.((h.(0sz) <- logxor #t x0 pw));
-  with vh2. assert (S.pts_to h vh2);
+  let x0 = A.(h.(0sz));
+  A.((h.(0sz) <- logxor #t x0 pw));
+  with vh2. assert (A.pts_to h vh2);
   Seq.lemma_eq_intro vh2 (init p (SZ.v klen));
   Seq.lemma_eq_elim vh2 (init p (SZ.v klen));
 }
@@ -256,26 +256,25 @@ ensures exists* (vh: Seq.seq t). S.pts_to h vh ** S.pts_to ivs #pi vi **
     written to a scratch buffer first. *)
 fn write_digest_le (#t: Type0) {| w: word t |}
                    ([@@@FStar.Attributes.monomorphize] p: params t)
-                   (out: S.slice S8.t) (st: S.slice t)
+                   (out: A.array S8.t) (st: A.array t)
                    (#vout: erased (Seq.seq S8.t)) (#pst: perm) (#vst: erased (Seq.lseq t 8))
-requires S.pts_to out vout ** S.pts_to st #pst vst **
+requires A.pts_to out vout ** A.pts_to st #pst vst **
          pure (Seq.length vout == (hash_bytes p))
-ensures S.pts_to out (final p vst) ** S.pts_to st #pst vst
+ensures A.pts_to out (final p vst) ** A.pts_to st #pst vst
 {
-  S.pts_to_len out;
-  S.pts_to_len st;
+  A.pts_to_len out;
+  A.pts_to_len st;
   let nb = nbytes #t #w;
   let z8 = S8.classify 0uy;
   let dlen = SZ.mul 8sz nb;
   let mut darr = [| z8; dlen |];
   A.pts_to_len darr;
-  let dig = S.from_array darr dlen;
-  S.pts_to_len dig;
+  A.pts_to_len darr;
 
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj 8sz)
   invariant exists* (vj: SZ.t) (vd: Seq.seq S8.t).
-    pts_to j vj ** S.pts_to dig vd ** S.pts_to st #pst vst ** S.is_from_array darr dig **
+    pts_to j vj ** A.pts_to darr vd ** A.pts_to st #pst vst **
     pure (SZ.v vj <= 8 /\ Seq.length vd == 8 * bytes #t /\
           (forall (i: nat). i < SZ.v vj * bytes #t ==>
              Seq.index vd i == Seq.index (words_to_le 8 vst) i))
@@ -284,13 +283,13 @@ ensures S.pts_to out (final p vst) ** S.pts_to st #pst vst
     let vj = !j;
     Math.lemma_mult_le_right (bytes #t) (SZ.v vj + 1) 8;
     Math.distributivity_add_left (SZ.v vj) 1 (bytes #t);
-    let x = S.(st.(vj));
-    store_le #t dig (SZ.mul vj nb) x;
-    with vd. assert (S.pts_to dig vd);
+    let x = A.(st.(vj));
+    store_le #t darr (SZ.mul vj nb) x;
+    with vd. assert (A.pts_to darr vd);
     digest_step_le #t 8 vst (SZ.v vj) (SZ.v (SZ.mul vj nb)) vd;
     j := SZ.add vj 1sz;
   };
-  with vd. assert (S.pts_to dig vd);
+  with vd. assert (A.pts_to darr vd);
   Seq.lemma_eq_intro vd (words_to_le 8 vst);
   Seq.lemma_eq_elim vd (words_to_le 8 vst);
 
@@ -298,21 +297,20 @@ ensures S.pts_to out (final p vst) ** S.pts_to st #pst vst
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi hb)
   invariant exists* (vi: SZ.t) (vo: Seq.seq S8.t).
-    pts_to i vi ** S.pts_to out vo ** S.pts_to dig vd ** S.pts_to st #pst vst **
-    S.is_from_array darr dig **
+    pts_to i vi ** A.pts_to out vo ** A.pts_to darr vd ** A.pts_to st #pst vst **
     pure (SZ.v vi <= (hash_bytes p) /\ Seq.length vo == (hash_bytes p) /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index vo k == Seq.index vd k))
   decreases (hash_bytes p - SZ.v (!i))
   {
     let vi = !i;
-    let x = S.(dig.(vi));
-    S.((out.(vi) <- x));
+    let x = A.(darr.(vi));
+    A.((out.(vi) <- x));
     i := SZ.add vi 1sz;
   };
-  with vo. assert (S.pts_to out vo);
+  with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (final p vst);
   Seq.lemma_eq_elim vo (final p vst);
-  S.to_array dig;
+  ()
 }
 
 (** Block [i] of the padded stream: the key block for [i < koff], a message
@@ -320,23 +318,25 @@ ensures S.pts_to out (final p vst) ** S.pts_to st #pst vst
     are checked against one written-down postcondition; Pulse will not invent
     the join itself. *)
 fn read_block_of (#t: Type0) {| w: word t |}
-                 (blk: S.slice S8.t) (key: S.slice S8.t) (msg: S.slice S8.t)
+                 (blk: A.array S8.t) (key: A.array S8.t) (klen: SZ.t) (msg: A.array S8.t) (mlen: SZ.t)
                  (usekey: bool) (off: SZ.t)
                  (#vblk0: erased (Seq.seq S8.t))
                  (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
-requires S.pts_to blk vblk0 ** S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+requires A.pts_to blk vblk0 ** A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
          pure (Seq.length vblk0 == block_len #t)
+         ** pure (SZ.v klen == Seq.length vkey)
+         ** pure (SZ.v mlen == Seq.length vmsg)
 ensures exists* (vb: Seq.seq S8.t).
-  S.pts_to blk vb ** S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+  A.pts_to blk vb ** A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vb == block_len #t /\
         vb == (if usekey then pad_block #t (reveal vkey) 0
                else pad_block #t (reveal vmsg) (SZ.v off)))
 {
   if usekey {
-    read_block #t blk key 0sz;
+    read_block #t blk key klen 0sz;
   } else {
-    read_block #t blk msg off;
+    read_block #t blk msg mlen off;
   }
 }
 
@@ -371,9 +371,9 @@ let nblocks_sz (klen mlen bl: SZ.t)
     bytes absorbed including this block. *)
 fn blake2_blocks (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
-                 (h: S.slice t) (vv: S.slice t) (mw: S.slice t) (blk: S.slice S8.t)
-                 (ivs: S.slice t) (sg: S.slice SZ.t)
-                 (key: S.slice S8.t) (msg: S.slice S8.t)
+                 (h: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+                 (ivs: A.array t) (sg: A.array SZ.t)
+                 (key: A.array S8.t) (klen: SZ.t) (msg: A.array S8.t) (mlen: SZ.t)
                  (koffsz: SZ.t) (nlast: SZ.t)
                  (#vh0: erased (Seq.seq t)) (#vv0: erased (Seq.seq t)) (#vm0: erased (Seq.seq t))
                  (#vblk0: erased (Seq.seq S8.t))
@@ -382,9 +382,9 @@ fn blake2_blocks (#t: Type0) {| w: word t |}
                  (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
 requires
-  S.pts_to h vh0 ** S.pts_to vv vv0 ** S.pts_to mw vm0 ** S.pts_to blk vblk0 **
-  S.pts_to ivs #pi vi ** S.pts_to sg #ps vs **
-  S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+  A.pts_to h vh0 ** A.pts_to vv vv0 ** A.pts_to mw vm0 ** A.pts_to blk vblk0 **
+  A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+  A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vh0 == 8 /\ Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
         Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
         reveal vi == G.reveal p.iv /\ sigma_ok vs /\
@@ -394,10 +394,12 @@ requires
         Seq.length vmsg + 2 * block_len #t < pow2 64 /\
         SZ.fits (Seq.length vmsg + 2 * block_len #t) /\
         reveal vh0 == init p (Seq.length vkey))
+         ** pure (SZ.v klen == Seq.length vkey)
+         ** pure (SZ.v mlen == Seq.length vmsg)
 ensures exists* (vh: Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq S8.t).
-  S.pts_to h vh ** S.pts_to vv vv1 ** S.pts_to mw vm1 ** S.pts_to blk vb1 **
-  S.pts_to ivs #pi vi ** S.pts_to sg #ps vs **
-  S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+  A.pts_to h vh ** A.pts_to vv vv1 ** A.pts_to mw vm1 ** A.pts_to blk vb1 **
+  A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+  A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vkey <= max_key_len #t /\ Seq.length vh == 8 /\
         Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
         Seq.length vb1 == block_len #t /\
@@ -405,9 +407,9 @@ ensures exists* (vh: Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq 
                 (compress_at p (data #t (reveal vkey) (reveal vmsg)))
                 (init p (Seq.length vkey)))
 {
-  S.pts_to_len h;
-  S.pts_to_len msg;
-  S.pts_to_len key;
+  A.pts_to_len h;
+  A.pts_to_len msg;
+  A.pts_to_len key;
   nblocks_exact #t (reveal vkey) (reveal vmsg);
   data_len_bound #t (reveal vkey) (reveal vmsg);
   let bl = block_len_sz #t #w;
@@ -419,9 +421,9 @@ ensures exists* (vh: Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq 
   invariant exists* (vi2: SZ.t) (voff: SZ.t) (vctr: SZ.t)
                     (vh: Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq S8.t).
     pts_to i vi2 ** pts_to off voff ** pts_to ctr vctr **
-    S.pts_to h vh ** S.pts_to vv vv1 ** S.pts_to mw vm1 ** S.pts_to blk vb1 **
-    S.pts_to ivs #pi vi ** S.pts_to sg #ps vs **
-    S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+    A.pts_to h vh ** A.pts_to vv vv1 ** A.pts_to mw vm1 ** A.pts_to blk vb1 **
+    A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+    A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
     pure (Seq.length vkey <= max_key_len #t /\
           SZ.v vi2 <= SZ.v nlast /\ Seq.length vh == 8 /\
           Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
@@ -455,7 +457,7 @@ ensures exists* (vh: Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq 
     Math.distributivity_add_left (SZ.v vi2 - SZ.v koffsz) 1 (block_len #t);
     Math.lemma_mult_le_right (block_len #t) (SZ.v vi2 + 2) (SZ.v nlast + 1);
 
-    read_block_of #t blk key msg usekey voff;
+    read_block_of #t blk key klen msg mlen usekey voff;
     load_block #t mw blk;
     compress_impl p h mw vv ivs sg vctr false;
 
@@ -504,28 +506,30 @@ let msg_blocks_bound_opt (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (nlast
     everything else is scratch this function allocates and gives back. *)
 fn blake2_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (ivs: S.slice t) (out: S.slice S8.t)
-               (key: S.slice S8.t) (msg: S.slice S8.t)
+               (ivs: A.array t) (out: A.array S8.t)
+               (key: A.array S8.t) (klen: SZ.t) (msg: A.array S8.t) (mlen: SZ.t)
                (#pi: perm) (#vi: erased (Seq.seq t))
                (#vout: erased (Seq.seq S8.t))
                (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
-requires S.pts_to ivs #pi vi ** S.pts_to out vout **
-         S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+requires A.pts_to ivs #pi vi ** A.pts_to out vout **
+         A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
          pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
                Seq.length vout == (hash_bytes p) /\
                Seq.length vkey <= max_key_len #t /\
                Seq.length vmsg + 2 * block_len #t < pow2 64 /\
                SZ.fits (Seq.length vmsg + 2 * block_len #t))
+         ** pure (SZ.v klen == Seq.length vkey)
+         ** pure (SZ.v mlen == Seq.length vmsg)
 ensures exists* (vout': Seq.seq S8.t).
-  S.pts_to ivs #pi vi ** S.pts_to out vout' **
-  S.pts_to key #pk vkey ** S.pts_to msg #pm vmsg **
+  A.pts_to ivs #pi vi ** A.pts_to out vout' **
+  A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vkey <= max_key_len #t /\ vout' == blake2 p (reveal vkey) (reveal vmsg))
 {
-  S.pts_to_len ivs;
-  S.pts_to_len out;
-  S.pts_to_len key;
-  S.pts_to_len msg;
+  A.pts_to_len ivs;
+  A.pts_to_len out;
+  A.pts_to_len key;
+  A.pts_to_len msg;
 
   let bl = block_len_sz #t #w;
   let z0: t = zero #t #w;
@@ -533,28 +537,22 @@ ensures exists* (vout': Seq.seq S8.t).
 
   let mut harr = [| z0; 8sz |];
   A.pts_to_len harr;
-  let h = S.from_array harr 8sz;
   let mut varr = [| z0; 16sz |];
   A.pts_to_len varr;
-  let vv = S.from_array varr 16sz;
   let mut marr = [| z0; 16sz |];
   A.pts_to_len marr;
-  let mw = S.from_array marr 16sz;
   let mut barr = [| z8; bl |];
   A.pts_to_len barr;
-  let blk = S.from_array barr bl;
   sigma_len ();
   let sg = table sigma_arr 160sz;
   sigma_seq_ok ();
-  S.pts_to_len h;
-  S.pts_to_len vv;
-  S.pts_to_len mw;
-  S.pts_to_len blk;
-  S.pts_to_len sg;
+  A.pts_to_len harr;
+  A.pts_to_len varr;
+  A.pts_to_len marr;
+  A.pts_to_len barr;
+  A.pts_to_len sg;
 
-  let klen = S.len key;
-  let mlen = S.len msg;
-  init_state p h ivs klen;
+  init_state p harr ivs klen;
 
   nblocks_eq #t (reveal vkey) (reveal vmsg);
   nblocks_pos #t (reveal vkey) (reveal vmsg);
@@ -565,24 +563,20 @@ ensures exists* (vout': Seq.seq S8.t).
   let nb = nblocks_sz klen mlen bl;
   let nlast = SZ.sub nb 1sz;
 
-  blake2_blocks p h vv mw blk ivs sg key msg koffsz nlast;
+  blake2_blocks p harr varr marr barr ivs sg key klen msg mlen koffsz nlast;
 
   msg_blocks_bound_opt #t (reveal vkey) (reveal vmsg) (SZ.v nlast) (SZ.v koffsz);
   block_at_data #t (reveal vkey) (reveal vmsg) (SZ.v nlast);
 
   let foff = final_off nlast koffsz bl;
   let usekey = SZ.lt nlast koffsz;
-  read_block_of #t blk key msg usekey foff;
-  load_block #t mw blk;
+  read_block_of #t barr key klen msg mlen usekey foff;
+  load_block #t marr barr;
 
   let lastc = last_ctr klen mlen bl;
-  compress_impl p h mw vv ivs sg lastc true;
-  write_digest_le p out h;
+  compress_impl p harr marr varr ivs sg lastc true;
+  write_digest_le p out harr;
 
-  S.to_array h;
-  S.to_array vv;
-  S.to_array mw;
-  S.to_array blk;
   drop_table sg;
 }
 

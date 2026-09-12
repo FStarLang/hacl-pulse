@@ -47,7 +47,6 @@ open Hacl.Hash.SHA2.Tables
 open Hacl.Impl.Table
 open Hacl.Hash.SHA2.Streaming
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -55,7 +54,6 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
-
 
 (** The two block lengths, as literals.  [block_len] is [16 * (bits / 8)] and
     the type class does not reduce on its own inside a Pulse context. *)
@@ -65,17 +63,16 @@ let block_len_32 (_: unit) : Lemma (block_len #S32.t == 64) =
 let block_len_64 (_: unit) : Lemma (block_len #S64.t == 128) =
   assert_norm (bits #S64.t == 64)
 
-
 (** {2 SHA224} *)
 
 (** Reset the state to the empty message. *)
-fn sha224_init (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
+fn sha224_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
               (#vacc: erased (Seq.seq S32.t)) (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
-requires S.pts_to acc vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot **
+requires A.pts_to acc vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\ Seq.length vtot == 1)
 ensures exists* (vacc': Seq.seq S32.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot' **
+  A.pts_to acc vacc' ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot' **
   pure (stream_ok sha2_224 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_32 ();
@@ -85,19 +82,20 @@ ensures exists* (vacc': Seq.seq S32.t) (vtot': Seq.seq SZ.t).
 }
 
 (** Absorb [data]. *)
-fn sha224_update (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (data: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha224_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (data: A.array S8.t) (data_len: SZ.t) (seen: erased (Seq.seq S8.t))
                 (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#vtot: erased (Seq.seq SZ.t))
                 (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok sha2_224 vacc vbuf vtot seen /\
                Seq.length seen + Seq.length vdata < pow2 61 /\
                SZ.fits (Seq.length seen + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok sha2_224 vacc' vbuf' vtot' (Seq.append seen vdata))
 {
   block_len_32 ();
@@ -106,24 +104,22 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 64sz;
-  update_impl sha2_224 kt wsb acc buf tot data seen;
-  S.to_array wsb;
+  update_impl sha2_224 kt wsarr acc buf tot data data_len seen;
   drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
-fn sha224_digest (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (out: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha224_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
                 (#pa: perm) (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf vbuf ** S.pts_to tot #ptot vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+         A.pts_to out vout **
          pure (stream_ok sha2_224 vacc vbuf vtot seen /\ Seq.length vout == 28)
 ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf vbuf' ** S.pts_to tot #ptot vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+  A.pts_to out vout' **
   pure (Seq.length seen < max_input #S32.t /\ vout' == hash sha2_224 seen)
 {
   block_len_32 ();
@@ -131,23 +127,20 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
   let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 64sz;
-  digest_impl sha2_224 kt wsb acc buf tot out seen;
-  S.to_array wsb;
+  digest_impl sha2_224 kt wsarr acc buf tot out seen;
   drop_table kt;
 }
-
 
 (** {2 SHA256} *)
 
 (** Reset the state to the empty message. *)
-fn sha256_init (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
+fn sha256_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
               (#vacc: erased (Seq.seq S32.t)) (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
-requires S.pts_to acc vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot **
+requires A.pts_to acc vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\ Seq.length vtot == 1)
 ensures exists* (vacc': Seq.seq S32.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot' **
+  A.pts_to acc vacc' ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot' **
   pure (stream_ok sha2_256 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_32 ();
@@ -157,19 +150,20 @@ ensures exists* (vacc': Seq.seq S32.t) (vtot': Seq.seq SZ.t).
 }
 
 (** Absorb [data]. *)
-fn sha256_update (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (data: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha256_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (data: A.array S8.t) (data_len: SZ.t) (seen: erased (Seq.seq S8.t))
                 (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#vtot: erased (Seq.seq SZ.t))
                 (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok sha2_256 vacc vbuf vtot seen /\
                Seq.length seen + Seq.length vdata < pow2 61 /\
                SZ.fits (Seq.length seen + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok sha2_256 vacc' vbuf' vtot' (Seq.append seen vdata))
 {
   block_len_32 ();
@@ -178,24 +172,22 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 64sz;
-  update_impl sha2_256 kt wsb acc buf tot data seen;
-  S.to_array wsb;
+  update_impl sha2_256 kt wsarr acc buf tot data data_len seen;
   drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
-fn sha256_digest (acc: S.slice S32.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (out: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha256_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
                 (#pa: perm) (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf vbuf ** S.pts_to tot #ptot vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+         A.pts_to out vout **
          pure (stream_ok sha2_256 vacc vbuf vtot seen /\ Seq.length vout == 32)
 ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf vbuf' ** S.pts_to tot #ptot vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+  A.pts_to out vout' **
   pure (Seq.length seen < max_input #S32.t /\ vout' == hash sha2_256 seen)
 {
   block_len_32 ();
@@ -203,12 +195,9 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
   let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 64sz;
-  digest_impl sha2_256 kt wsb acc buf tot out seen;
-  S.to_array wsb;
+  digest_impl sha2_256 kt wsarr acc buf tot out seen;
   drop_table kt;
 }
-
 
 (** {2 SHA384} *)
 
@@ -218,13 +207,13 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
    the default budget. *)
 #push-options "--z3rlimit 40"
 
-fn sha384_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
+fn sha384_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
               (#vacc: erased (Seq.seq S64.t)) (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
-requires S.pts_to acc vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot **
+requires A.pts_to acc vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\ Seq.length vtot == 1)
 ensures exists* (vacc': Seq.seq S64.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot' **
+  A.pts_to acc vacc' ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot' **
   pure (stream_ok sha2_384 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_64 ();
@@ -234,19 +223,20 @@ ensures exists* (vacc': Seq.seq S64.t) (vtot': Seq.seq SZ.t).
 }
 
 (** Absorb [data]. *)
-fn sha384_update (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (data: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha384_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (data: A.array S8.t) (data_len: SZ.t) (seen: erased (Seq.seq S8.t))
                 (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#vtot: erased (Seq.seq SZ.t))
                 (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok sha2_384 vacc vbuf vtot seen /\
                Seq.length seen + Seq.length vdata < pow2 61 /\
                SZ.fits (Seq.length seen + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok sha2_384 vacc' vbuf' vtot' (Seq.append seen vdata))
 {
   block_len_64 ();
@@ -255,24 +245,22 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 80sz;
-  update_impl sha2_384 kt wsb acc buf tot data seen;
-  S.to_array wsb;
+  update_impl sha2_384 kt wsarr acc buf tot data data_len seen;
   drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
-fn sha384_digest (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (out: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha384_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
                 (#pa: perm) (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf vbuf ** S.pts_to tot #ptot vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+         A.pts_to out vout **
          pure (stream_ok sha2_384 vacc vbuf vtot seen /\ Seq.length vout == 48)
 ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf vbuf' ** S.pts_to tot #ptot vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+  A.pts_to out vout' **
   pure (Seq.length seen < max_input #S64.t /\ vout' == hash sha2_384 seen)
 {
   block_len_64 ();
@@ -280,23 +268,20 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
   let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 80sz;
-  digest_impl sha2_384 kt wsb acc buf tot out seen;
-  S.to_array wsb;
+  digest_impl sha2_384 kt wsarr acc buf tot out seen;
   drop_table kt;
 }
-
 
 (** {2 SHA512} *)
 
 (** Reset the state to the empty message. *)
-fn sha512_init (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
+fn sha512_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
               (#vacc: erased (Seq.seq S64.t)) (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
-requires S.pts_to acc vacc ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot **
+requires A.pts_to acc vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot **
          pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\ Seq.length vtot == 1)
 ensures exists* (vacc': Seq.seq S64.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf #pb vbuf ** S.pts_to tot vtot' **
+  A.pts_to acc vacc' ** A.pts_to buf #pb vbuf ** A.pts_to tot vtot' **
   pure (stream_ok sha2_512 vacc' vbuf vtot' (Seq.empty #S8.t))
 {
   block_len_64 ();
@@ -306,19 +291,20 @@ ensures exists* (vacc': Seq.seq S64.t) (vtot': Seq.seq SZ.t).
 }
 
 (** Absorb [data]. *)
-fn sha512_update (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (data: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha512_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (data: A.array S8.t) (data_len: SZ.t) (seen: erased (Seq.seq S8.t))
                 (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#vtot: erased (Seq.seq SZ.t))
                 (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires S.pts_to acc vacc ** S.pts_to buf vbuf ** S.pts_to tot vtot **
-         S.pts_to data #pd vdata **
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
          pure (stream_ok sha2_512 vacc vbuf vtot seen /\
                Seq.length seen + Seq.length vdata < pow2 61 /\
                SZ.fits (Seq.length seen + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
 ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  S.pts_to acc vacc' ** S.pts_to buf vbuf' ** S.pts_to tot vtot' **
-  S.pts_to data #pd vdata **
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
   pure (stream_ok sha2_512 vacc' vbuf' vtot' (Seq.append seen vdata))
 {
   block_len_64 ();
@@ -327,24 +313,22 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 80sz;
-  update_impl sha2_512 kt wsb acc buf tot data seen;
-  S.to_array wsb;
+  update_impl sha2_512 kt wsarr acc buf tot data data_len seen;
   drop_table kt;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
-fn sha512_digest (acc: S.slice S64.t) (buf: S.slice S8.t) (tot: S.slice SZ.t)
-                (out: S.slice S8.t) (seen: erased (Seq.seq S8.t))
+fn sha512_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
                 (#pa: perm) (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires S.pts_to acc #pa vacc ** S.pts_to buf vbuf ** S.pts_to tot #ptot vtot **
-         S.pts_to out vout **
+requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+         A.pts_to out vout **
          pure (stream_ok sha2_512 vacc vbuf vtot seen /\ Seq.length vout == 64)
 ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  S.pts_to acc #pa vacc ** S.pts_to buf vbuf' ** S.pts_to tot #ptot vtot **
-  S.pts_to out vout' **
+  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+  A.pts_to out vout' **
   pure (Seq.length seen < max_input #S64.t /\ vout' == hash sha2_512 seen)
 {
   block_len_64 ();
@@ -352,9 +336,7 @@ ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
   let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
   A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr 80sz;
-  digest_impl sha2_512 kt wsb acc buf tot out seen;
-  S.to_array wsb;
+  digest_impl sha2_512 kt wsarr acc buf tot out seen;
   drop_table kt;
 }
 

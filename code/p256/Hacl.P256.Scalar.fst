@@ -41,7 +41,6 @@ open Hacl.P256.Mont
 open Hacl.P256.Tables
 open Hacl.P256.Exp
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -63,14 +62,14 @@ let qev (v: Seq.seq S64.t) : GTot P.qelem = mev qmod (vals v)
 
 (** {2 The ring operations} *)
 
-fn qadd (out a b: S.slice S64.t)
+fn qadd (out a b: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vo == nl /\ qelem va /\ qelem vb)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (qelem vo' /\ qev vo' == P.qadd (qev va) (qev vb))
 {
   qmod_ok (); qmod_m ();
@@ -80,14 +79,14 @@ ensures exists* (vo': Seq.seq S64.t).
   drop_table nm;
 }
 
-fn qmul (out a b: S.slice S64.t)
+fn qmul (out a b: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vo == nl /\ qelem va /\ qelem vb)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (qelem vo' /\ qev vo' == P.qmul (qev va) (qev vb))
 {
   qmod_ok (); qmod_m ();
@@ -99,13 +98,13 @@ ensures exists* (vo': Seq.seq S64.t).
   drop_table nm;
 }
 
-fn qinv (out a: S.slice S64.t)
+fn qinv (out a: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va **
+requires A.pts_to out vo ** A.pts_to a #pa va **
   pure (Seq.length vo == nl /\ qelem va)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va **
+  A.pts_to out vo' ** A.pts_to a #pa va **
   pure (qelem vo' /\ qev vo' == P.qinv (qev va))
 {
   qmod_ok (); qmod_m ();
@@ -124,13 +123,13 @@ ensures exists* (vo': Seq.seq S64.t).
 
 (** {2 Comparison} *)
 
-fn qeq (a b: S.slice S64.t)
+fn qeq (a b: A.array S64.t)
        (#pa: perm) (#va: erased (Seq.seq S64.t))
        (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (qelem va /\ qelem vb)
 returns r: bool
-ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (r == (qev va = qev vb))
 {
   qmod_ok (); qmod_m ();
@@ -138,33 +137,31 @@ ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
   aeq a b
 }
 
-fn qis_zero (a: S.slice S64.t) (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to a #pa va ** pure (qelem va)
+fn qis_zero (a: A.array S64.t) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** pure (qelem va)
 returns r: bool
-ensures S.pts_to a #pa va ** pure (r == (qev va = P.qzero))
+ensures A.pts_to a #pa va ** pure (r == (qev va = P.qzero))
 {
   qmod_ok (); qmod_m ();
   mev_iszero qmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 16sz |]; A.pts_to_len az; let zs = S.from_array az 16sz;
-  S.pts_to_len zs;
-  azero zs;
-  let r = aeq a zs;
-  S.to_array zs;
+  let mut az = [| z; 16sz |]; A.pts_to_len az; A.pts_to_len az;
+  azero az;
+  let r = aeq a az;
   r
 }
 
 (** {2 Conversions} *)
 
 inline_for_extraction
-fn qto (out a: S.slice S64.t)
+fn qto (out a: A.array S64.t)
        (#vo: erased (Seq.seq S64.t))
        (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va **
+requires A.pts_to out vo ** A.pts_to a #pa va **
   pure (Seq.length vo == nl /\ res qmod (vals va))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va **
+  A.pts_to out vo' ** A.pts_to a #pa va **
   pure (qelem vo' /\ qev vo' == eval (vals va))
 {
   qmod_ok (); qmod_m ();
@@ -179,13 +176,13 @@ ensures exists* (vo': Seq.seq S64.t).
 }
 
 inline_for_extraction
-fn qfrom (out a: S.slice S64.t)
+fn qfrom (out a: A.array S64.t)
          (#vo: erased (Seq.seq S64.t))
          (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va **
+requires A.pts_to out vo ** A.pts_to a #pa va **
   pure (Seq.length vo == nl /\ qelem va)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va **
+  A.pts_to out vo' ** A.pts_to a #pa va **
   pure (Seq.length vo' == nl /\ bnd (vals vo') base /\
         eval (vals vo') == qev va)
 {
@@ -211,71 +208,63 @@ ensures exists* (vo': Seq.seq S64.t).
 
 #push-options "--z3rlimit 200"
 
-fn qload (out: S.slice S64.t) (b: S.slice S8.t)
+fn qload (out: A.array S64.t) (b: A.array S8.t)
          (#vo: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to b #pb vb **
+requires A.pts_to out vo ** A.pts_to b #pb vb **
   pure (Seq.length vo == nl /\ Seq.length vb == 32)
 returns r: bool
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to b #pb vb **
+  A.pts_to out vo' ** A.pts_to b #pb vb **
   pure (qelem vo' /\ r == (0 < be_nat vb && be_nat vb < P.order) /\
         (r ==> qev vo' == be_nat vb))
 {
   qmod_ok (); qmod_m ();
   assert_norm (pow2 256 < 2 * P.order);
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; let t = S.from_array at 16sz;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
-  S.pts_to_len t; S.pts_to_len s;
-  load_be t b;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  load_be at b;
   let nm = qnm ();
-  let lo = abelow t s nm qmod;
+  let lo = abelow at asv nm qmod;
   drop_table nm;
-  qto out t;
+  qto out at;
   let nz = qis_zero out;
-  S.to_array t;
-  S.to_array s;
   lo && not nz
 }
 
-fn qload_mod (out: S.slice S64.t) (b: S.slice S8.t)
+fn qload_mod (out: A.array S64.t) (b: A.array S8.t)
              (#vo: erased (Seq.seq S64.t))
              (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to out vo ** S.pts_to b #pb vb **
+requires A.pts_to out vo ** A.pts_to b #pb vb **
   pure (Seq.length vo == nl /\ Seq.length vb == 32)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to b #pb vb **
+  A.pts_to out vo' ** A.pts_to b #pb vb **
   pure (qelem vo' /\ qev vo' == be_nat vb % P.order)
 {
   qmod_ok (); qmod_m ();
   assert_norm (pow2 256 < 2 * P.order);
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; let t = S.from_array at 16sz;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
-  S.pts_to_len t; S.pts_to_len s;
-  load_be t b;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  load_be at b;
   let nm = qnm ();
-  ared t s nm qmod;
+  ared at asv nm qmod;
   drop_table nm;
-  qto out t;
-  S.to_array t;
-  S.to_array s;
+  qto out at;
+  ()
 }
 
-fn qstore (b: S.slice S8.t) (a: S.slice S64.t)
+fn qstore (b: A.array S8.t) (a: A.array S64.t)
           (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to b vb ** S.pts_to a #pa va **
+requires A.pts_to b vb ** A.pts_to a #pa va **
   pure (Seq.length vb == 32 /\ qelem va)
 ensures exists* (vb': Seq.seq S8.t).
-  S.pts_to b vb' ** S.pts_to a #pa va **
+  A.pts_to b vb' ** A.pts_to a #pa va **
   pure (vb' == nat_to_be 32 (qev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; let t = S.from_array at 16sz;
-  S.pts_to_len t;
-  qfrom t a;
-  store_be b t;
-  S.to_array t;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; A.pts_to_len at;
+  qfrom at a;
+  store_be b at;
+  ()
 }
 
 #pop-options

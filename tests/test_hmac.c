@@ -283,16 +283,16 @@ static uint8_t sha512_7[64] = {
 #define CASE(n)                                                                \
   do {                                                                         \
     uint8_t out[64];                                                           \
-    Hacl_HMAC_Ptr_hmac_sha224(out, key##n, sizeof key##n, msg##n,               \
+    Hacl_HMAC_hmac_sha224(out, key##n, sizeof key##n, msg##n,               \
                               sizeof msg##n);                                  \
     rc |= check("HMAC-SHA-224 rfc4231/" #n, out, sha224_##n, 28);              \
-    Hacl_HMAC_Ptr_hmac_sha256(out, key##n, sizeof key##n, msg##n,               \
+    Hacl_HMAC_hmac_sha256(out, key##n, sizeof key##n, msg##n,               \
                               sizeof msg##n);                                  \
     rc |= check("HMAC-SHA-256 rfc4231/" #n, out, sha256_##n, 32);              \
-    Hacl_HMAC_Ptr_hmac_sha384(out, key##n, sizeof key##n, msg##n,               \
+    Hacl_HMAC_hmac_sha384(out, key##n, sizeof key##n, msg##n,               \
                               sizeof msg##n);                                  \
     rc |= check("HMAC-SHA-384 rfc4231/" #n, out, sha384_##n, 48);              \
-    Hacl_HMAC_Ptr_hmac_sha512(out, key##n, sizeof key##n, msg##n,               \
+    Hacl_HMAC_hmac_sha512(out, key##n, sizeof key##n, msg##n,               \
                               sizeof msg##n);                                  \
     rc |= check("HMAC-SHA-512 rfc4231/" #n, out, sha512_##n, 64);              \
   } while (0)

@@ -44,7 +44,7 @@ module Hacl.Impl.Limb
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U32 = FStar.UInt32
@@ -132,39 +132,39 @@ let mulk (k: U64.t) (x: S64.t)
 (** The pass itself, over any width: limbs [0] to [n - 1] each hand their
     top bits to their neighbour.  [n] must leave a neighbour to carry into,
     so it is strictly below the length. *)
-fn carry_run_op (a: S.slice S64.t) (n: SZ.t) (c: erased nat) (d: erased nat)
+fn carry_run_op (a: A.array S64.t) (n: SZ.t) (c: erased nat) (d: erased nat)
                 (#va: erased (Seq.seq S64.t))
-requires S.pts_to a va **
+requires A.pts_to a va **
   pure (SZ.v n < Seq.length va /\ ble (vals va) c /\
         reveal c + reveal d < base * (reveal d + 1) /\
         reveal c + reveal d < pow2 64)
 ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' **
+  A.pts_to a va' **
   pure (Seq.length va' == Seq.length va /\
         vals va' == carry_run (vals va) (SZ.v n))
 {
-  S.pts_to_len a;
+  A.pts_to_len a;
   div_le_of_lt (reveal c + reveal d) base d;
   Loops.repeati_zero carry_step (vals va);
   let mut k = 0sz;
   while (let vk = !k; SZ.lt vk n)
   invariant exists* (vk: SZ.t) (v: Seq.seq S64.t).
-    pts_to k vk ** S.pts_to a v **
+    pts_to k vk ** A.pts_to a v **
     pure (SZ.v vk <= SZ.v n /\ Seq.length v == Seq.length va /\
           vals v == carry_run (vals va) (SZ.v vk))
   decreases (SZ.v n - SZ.v (!k))
   {
-    with v. assert (S.pts_to a v);
+    with v. assert (A.pts_to a v);
     let vk = !k;
     carry_run_chained (vals va) c d (SZ.v vk);
     carry_run_len (vals va) (SZ.v vk);
-    let t = S.(a.(vk));
-    let u = S.(a.(SZ.add vk 1sz));
+    let t = A.(a.(vk));
+    let u = A.(a.(SZ.add vk 1sz));
     Math.lemma_div_le (S64.v t) (reveal c + reveal d) base;
     let lo = lo16 t;
     let up = addw u (hi16 t);
-    S.((a.(vk) <- lo));
-    S.((a.(SZ.add vk 1sz) <- up));
+    A.((a.(vk) <- lo));
+    A.((a.(SZ.add vk 1sz) <- up));
     vals_upd v (SZ.v vk) lo;
     vals_upd (Seq.upd v (SZ.v vk) lo) (SZ.v vk + 1) up;
     Loops.unfold_repeati (SZ.v vk) carry_step (vals va);
@@ -174,40 +174,40 @@ ensures exists* (va': Seq.seq S64.t).
 }
 
 (** Sixteen limbs: the pass, then the top limb's overflow, returned. *)
-fn carry_out_op (a: S.slice S64.t) (c: erased nat) (d: erased nat)
+fn carry_out_op (a: A.array S64.t) (c: erased nat) (d: erased nat)
                 (#va: erased (Seq.seq S64.t))
-requires S.pts_to a va **
+requires A.pts_to a va **
   pure (Seq.length va == nl /\ ble (vals va) c /\
         reveal c + reveal d < base * (reveal d + 1) /\
         reveal c + reveal d < pow2 64)
 returns r: S64.t
 ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' **
+  A.pts_to a va' **
   pure (Seq.length va' == nl /\ vals va' == carry_low (vals va) /\
         S64.v r == carry_out (vals va))
 {
-  S.pts_to_len a;
+  A.pts_to_len a;
   carry_run_op a 15sz c d;
-  with v. assert (S.pts_to a v);
+  with v. assert (A.pts_to a v);
   carry_run_chained (vals va) c d 15;
   carry_run_len (vals va) 15;
-  let t = S.(a.(15sz));
+  let t = A.(a.(15sz));
   let lo = lo16 t;
   let hi = hi16 t;
-  S.((a.(15sz) <- lo));
+  A.((a.(15sz) <- lo));
   vals_upd v 15 lo;
   assert (pure (vals (Seq.upd v 15 lo) == carry_low (vals va)));
   hi
 }
 
-fn carry_low_op (a: S.slice S64.t) (c: erased nat) (d: erased nat)
+fn carry_low_op (a: A.array S64.t) (c: erased nat) (d: erased nat)
                 (#va: erased (Seq.seq S64.t))
-requires S.pts_to a va **
+requires A.pts_to a va **
   pure (Seq.length va == nl /\ ble (vals va) c /\
         reveal c + reveal d < base * (reveal d + 1) /\
         reveal c + reveal d < pow2 64)
 ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' **
+  A.pts_to a va' **
   pure (Seq.length va' == nl /\ vals va' == carry_low (vals va))
 {
   let _ = carry_out_op a c d;
@@ -248,70 +248,70 @@ let acc_ble (a b acc: Seq.seq nat) (lim: nat) (i j: nat)
 
 #push-options "--z3rlimit 300"
 
-fn mul_columns (t a b: S.slice S64.t) (lim: erased nat)
+fn mul_columns (t a b: A.array S64.t) (lim: erased nat)
                (#vt: erased (Seq.seq S64.t))
                (#pa: perm) (#va: erased (Seq.seq S64.t))
                (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to t vt ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to t vt ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vt == nw /\ Seq.length va == nl /\ Seq.length vb == nl /\
         ble (vals va) lim /\ ble (vals vb) lim /\
         nl * (reveal lim * reveal lim) + reveal lim * reveal lim < pow2 64)
 ensures exists* (vt': Seq.seq S64.t).
-  S.pts_to t vt' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  A.pts_to t vt' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vt' == nw /\ ble (vals vt') (nl * (reveal lim * reveal lim)) /\
         vals vt' == part (vals va) (vals vb) nl)
 {
-  S.pts_to_len t;
-  S.pts_to_len a;
-  S.pts_to_len b;
+  A.pts_to_len t;
+  A.pts_to_len a;
+  A.pts_to_len b;
   let z = S64.zero;
   let mut c = 0sz;
   while (let vc = !c; SZ.lt vc 31sz)
   invariant exists* (vc: SZ.t) (v: Seq.seq S64.t).
-    pts_to c vc ** S.pts_to t v ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pts_to c vc ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vc <= 31 /\ Seq.length v == nw /\
           (forall (k: nat). k < SZ.v vc ==> Seq.index (vals v) k == 0))
   decreases (31 - SZ.v (!c))
   {
     let vc = !c;
-    S.((t.(vc) <- z));
+    A.((t.(vc) <- z));
     c := SZ.add vc 1sz;
   };
-  with v0. assert (S.pts_to t v0);
+  with v0. assert (A.pts_to t v0);
   assert (pure (vals v0 `Seq.equal` zerow));
   Loops.repeati_zero (mul_step (vals va) (vals vb)) zerow;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to t v ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pts_to i vi ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= 16 /\ Seq.length v == nw /\
           vals v == part (vals va) (vals vb) (SZ.v vi))
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
-    let ai = S.(a.(vi));
+    let ai = A.(a.(vi));
     part_len (vals va) (vals vb) (SZ.v vi);
     rowj_zero (vals va) (vals vb) (SZ.v vi);
     addw_zerow (part (vals va) (vals vb) (SZ.v vi));
     let mut j = 0sz;
     while (let vj = !j; SZ.lt vj 16sz)
     invariant exists* (vj: SZ.t) (v: Seq.seq S64.t).
-      pts_to j vj ** pts_to i vi ** S.pts_to t v ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+      pts_to j vj ** pts_to i vi ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
       pure (SZ.v vj <= 16 /\ Seq.length v == nw /\ SZ.v vi < 16 /\
             vals v == addw (part (vals va) (vals vb) (SZ.v vi))
                            (rowj (vals va) (vals vb) (SZ.v vi) (SZ.v vj)))
     decreases (16 - SZ.v (!j))
     {
-      with v. assert (S.pts_to t v);
+      with v. assert (A.pts_to t v);
       let vj = !j;
       acc_ble (vals va) (vals vb) (vals v) lim (SZ.v vi) (SZ.v vj);
-      let bj = S.(b.(vj));
+      let bj = A.(b.(vj));
       let pos = SZ.add vi vj;
-      let cur = S.(t.(pos));
+      let cur = A.(t.(pos));
       Math.lemma_mult_le_left (S64.v ai) (S64.v bj) lim;
       Math.lemma_mult_le_right lim (S64.v ai) lim;
       let nw' = addw cur (mulw ai bj);
-      S.((t.(pos) <- nw'));
+      A.((t.(pos) <- nw'));
       vals_upd v (SZ.v vi + SZ.v vj) nw';
       addw_rowj_step (part (vals va) (vals vb) (SZ.v vi)) (vals va) (vals vb)
                      (SZ.v vi) (SZ.v vj);
@@ -335,23 +335,23 @@ ensures exists* (vt': Seq.seq S64.t).
 
 #push-options "--z3rlimit 200"
 
-fn cselect (a b: S.slice S64.t) (m: S64.t)
+fn cselect (a b: A.array S64.t) (m: S64.t)
            (#va: erased (Seq.seq S64.t))
            (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to a va ** S.pts_to b #pb vb **
+requires A.pts_to a va ** A.pts_to b #pb vb **
   pure (Seq.length va == nl /\ Seq.length vb == nl /\
         (S64.v m == 0 \/ S64.v m == pow2 64 - 1))
 ensures exists* (va': Seq.seq S64.t).
-  S.pts_to a va' ** S.pts_to b #pb vb **
+  A.pts_to a va' ** A.pts_to b #pb vb **
   pure (Seq.length va' == nl /\
         vals va' == (if S64.v m = 0 then vals va else vals vb))
 {
-  S.pts_to_len a;
-  S.pts_to_len b;
+  A.pts_to_len a;
+  A.pts_to_len b;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to a v ** S.pts_to b #pb vb **
+    pts_to i vi ** A.pts_to a v ** A.pts_to b #pb vb **
     pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index (vals v) k ==
@@ -360,16 +360,16 @@ ensures exists* (va': Seq.seq S64.t).
              Seq.index (vals v) k == Seq.index (vals va) k))
   decreases (16 - SZ.v (!i))
   {
-    with v. assert (S.pts_to a v);
+    with v. assert (A.pts_to a v);
     let vi = !i;
-    let x = S.(a.(vi));
-    let y = S.(b.(vi));
+    let x = A.(a.(vi));
+    let y = A.(b.(vi));
     let z = S64.select m y x;
-    S.((a.(vi) <- z));
+    A.((a.(vi) <- z));
     vals_upd v (SZ.v vi) z;
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to a v);
+  with v. assert (A.pts_to a v);
   assert (pure (vals v `Seq.equal` (if S64.v m = 0 then vals va else vals vb)));
 }
 

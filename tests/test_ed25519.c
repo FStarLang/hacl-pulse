@@ -252,15 +252,15 @@ int main(void) {
     struct vector *v = &vectors[i];
     char name[96];
 
-    Hacl_Ed25519_Ptr_secret_to_public(pub, v->sk);
+    Hacl_Ed25519_secret_to_public(pub, v->sk);
     snprintf(name, sizeof name, "%s public key", v->name);
     rc |= check(name, pub, v->pk, 32);
 
-    Hacl_Ed25519_Ptr_sign(sig, v->sk, v->msg, v->msg_len);
+    Hacl_Ed25519_sign(sig, v->sk, v->msg, v->msg_len);
     snprintf(name, sizeof name, "%s signature", v->name);
     rc |= check(name, sig, v->sg, 64);
 
-    if (!Hacl_Ed25519_Ptr_verify(v->pk, v->msg, v->msg_len, v->sg)) {
+    if (!Hacl_Ed25519_verify(v->pk, v->msg, v->msg_len, v->sg)) {
       printf("  FAIL %s verify rejected a valid signature\n", v->name);
       rc = 1;
     } else {
@@ -273,7 +273,7 @@ int main(void) {
       for (int b = 0; b < 64; b++) {
         memcpy(sig, v->sg, 64);
         sig[b] ^= 1;
-        if (Hacl_Ed25519_Ptr_verify(v->pk, v->msg, v->msg_len, sig))
+        if (Hacl_Ed25519_verify(v->pk, v->msg, v->msg_len, sig))
           bad = 1;
       }
       if (bad) {
@@ -288,7 +288,7 @@ int main(void) {
     if (v->msg_len + 1 <= sizeof tmp) {
       memcpy(tmp, v->msg, v->msg_len);
       tmp[v->msg_len] = 0;
-      if (Hacl_Ed25519_Ptr_verify(v->pk, tmp, v->msg_len + 1, v->sg)) {
+      if (Hacl_Ed25519_verify(v->pk, tmp, v->msg_len + 1, v->sg)) {
         printf("  FAIL %s verify accepted the wrong message\n", v->name);
         rc = 1;
       } else {
@@ -299,7 +299,7 @@ int main(void) {
 
   /* S + q encodes the same point but is a different signature: RFC 8032
      requires S < q, and this is what makes the scheme non-malleable. */
-  if (Hacl_Ed25519_Ptr_verify(pk1, msg1, sizeof msg1, mal1)) {
+  if (Hacl_Ed25519_verify(pk1, msg1, sizeof msg1, mal1)) {
     printf("  FAIL malleable signature (S + q) accepted\n");
     rc = 1;
   } else {
@@ -307,11 +307,11 @@ int main(void) {
   }
 
   /* The expanded key, and signing from it. */
-  Hacl_Ed25519_Ptr_expand_keys(keys, sk1);
+  Hacl_Ed25519_expand_keys(keys, sk1);
   rc |= check("expand_keys public key", keys, keys1, 32);
   rc |= check("expand_keys scalar", keys + 32, keys1 + 32, 32);
   rc |= check("expand_keys prefix", keys + 64, keys1 + 64, 32);
-  Hacl_Ed25519_Ptr_sign_expanded(sig, keys, keys + 32, keys + 64,
+  Hacl_Ed25519_sign_expanded(sig, keys, keys + 32, keys + 64,
                                  msg1, sizeof msg1);
   rc |= check("sign_expanded", sig, sg1, 64);
 

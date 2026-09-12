@@ -40,7 +40,6 @@ open Hacl.Impl.Limb
 open Spec.P256.Mont
 open Hacl.P256.Bignum
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -54,131 +53,125 @@ module Math = FStar.Math.Lemmas
 
 (** {2 Multiplication} *)
 
-fn amul (out a b ms nm: S.slice S64.t) (mu: S64.t) (d: erased modulus)
+fn amul (out a b ms nm: A.array S64.t) (mu: S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
         (#pm: perm) (#vms: erased (Seq.seq S64.t))
         (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length vo == nl /\
         Seq.length vms == nl /\ Seq.length vnm == nl /\
         vals vms == d.ms /\ vals vnm == d.nm /\ S64.v mu == d.mu /\
         res d (vals va) /\ res d (vals vb))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to ms #pm vms ** S.pts_to nm #pn vnm **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
   pure (Seq.length vo' == nl /\ res d (vals vo') /\
         vals vo' == mmul d (vals va) (vals vb))
 {
   let z = S64.zero;
-  let mut ap = [| z; 31sz |]; A.pts_to_len ap; let p = S.from_array ap 31sz;
-  let mut at = [| z; 33sz |]; A.pts_to_len at; let t = S.from_array at 33sz;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
-  S.pts_to_len p; S.pts_to_len t; S.pts_to_len s;
+  let mut ap = [| z; 31sz |]; A.pts_to_len ap; let mut at = [| z; 33sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len ap; A.pts_to_len at; A.pts_to_len asv;
   assert_norm (nw == 31);
   assert_norm (ncol == 33);
-  mmul_op out a b p t s ms nm mu d;
-  S.to_array p; S.to_array t; S.to_array s;
+  mmul_op out a b ap at asv ms nm mu d;
+  ()
 }
 
 (** {2 Addition, subtraction and negation} *)
 
-fn aadd (out a b nm: S.slice S64.t) (d: erased modulus)
+fn aadd (out a b nm: A.array S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
         (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to nm #pn vnm **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length vnm == nl /\
         vals vnm == d.nm /\ res d (vals va) /\ res d (vals vb))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to nm #pn vnm **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to nm #pn vnm **
   pure (Seq.length vo' == nl /\ res d (vals vo') /\
         vals vo' == madd d (vals va) (vals vb))
 {
   let z = S64.zero;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
-  S.pts_to_len s;
-  madd_op out a b s nm d;
-  S.to_array s;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len asv;
+  madd_op out a b asv nm d;
+  ()
 }
 
-fn asub (out a b ms: S.slice S64.t) (d: erased modulus)
+fn asub (out a b ms: A.array S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
         (#pm: perm) (#vms: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to ms #pm vms **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to ms #pm vms **
   pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length vms == nl /\
         vals vms == d.ms /\ res d (vals va) /\ res d (vals vb))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to ms #pm vms **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to ms #pm vms **
   pure (Seq.length vo' == nl /\ res d (vals vo') /\
         vals vo' == msub d (vals va) (vals vb))
 {
   let z = S64.zero;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; let s = S.from_array asv 16sz;
-  S.pts_to_len s;
-  msub_op out a b s ms d;
-  S.to_array s;
+  let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len asv;
+  msub_op out a b asv ms d;
+  ()
 }
 
 (** Negation is a subtraction from a stack-allocated zero, which the
     allocation already gives. *)
-fn aneg (out a ms: S.slice S64.t) (d: erased modulus)
+fn aneg (out a ms: A.array S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pm: perm) (#vms: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to ms #pm vms **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to ms #pm vms **
   pure (modulus_ok d /\ Seq.length vo == nl /\ Seq.length vms == nl /\
         vals vms == d.ms /\ res d (vals va))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to ms #pm vms **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to ms #pm vms **
   pure (Seq.length vo' == nl /\ res d (vals vo') /\
         vals vo' == mneg d (vals va))
 {
   let z = S64.zero;
-  let mut az = [| z; 16sz |]; A.pts_to_len az; let zs = S.from_array az 16sz;
-  S.pts_to_len zs;
-  with vz. assert (S.pts_to zs vz);
+  let mut az = [| z; 16sz |]; A.pts_to_len az; A.pts_to_len az;
+  with vz. assert (A.pts_to az vz);
   Seq.lemma_eq_intro (vals vz) mzero;
   mzero_ok ();
-  asub out zs a ms d;
-  S.to_array zs;
+  asub out az a ms d;
+  ()
 }
 
 (** {2 Copying} *)
 
-fn acopy (dst src: S.slice S64.t)
+fn acopy (dst src: A.array S64.t)
          (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
-requires S.pts_to dst vd ** S.pts_to src #ps vs **
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
   pure (Seq.length vd == nl /\ Seq.length vs == nl)
 ensures exists* (vd': Seq.seq S64.t).
-  S.pts_to dst vd' ** S.pts_to src #ps vs **
+  A.pts_to dst vd' ** A.pts_to src #ps vs **
   pure (Seq.length vd' == nl /\ vd' == reveal vs)
 {
-  S.pts_to_len dst;
-  S.pts_to_len src;
+  A.pts_to_len dst;
+  A.pts_to_len src;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to dst v ** S.pts_to src #ps vs **
+    pts_to i vi ** A.pts_to dst v ** A.pts_to src #ps vs **
     pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
-    let x = S.(src.(vi));
-    S.((dst.(vi) <- x));
+    let x = A.(src.(vi));
+    A.((dst.(vi) <- x));
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to dst v);
+  with v. assert (A.pts_to dst v);
   assert (pure (Seq.length v == nl /\
                 (forall (k: nat). k < nl ==> Seq.index v k == Seq.index vs k)));
   Seq.lemma_eq_intro v vs;
@@ -187,25 +180,25 @@ ensures exists* (vd': Seq.seq S64.t).
 
 (** {2 Zeroing} *)
 
-fn azero (out: S.slice S64.t) (#vo: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** pure (Seq.length vo == nl)
+fn azero (out: A.array S64.t) (#vo: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** pure (Seq.length vo == nl)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** pure (Seq.length vo' == nl /\ vals vo' == mzero)
+  A.pts_to out vo' ** pure (Seq.length vo' == nl /\ vals vo' == mzero)
 {
-  S.pts_to_len out;
+  A.pts_to_len out;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to out v **
+    pts_to i vi ** A.pts_to out v **
     pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
-    S.((out.(vi) <- S64.zero));
+    A.((out.(vi) <- S64.zero));
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to out v);
+  with v. assert (A.pts_to out v);
   Seq.lemma_eq_intro (vals v) mzero;
   ()
 }
@@ -218,22 +211,22 @@ ensures exists* (vo': Seq.seq S64.t).
 
 #push-options "--z3rlimit 200"
 
-fn aeq (a b: S.slice S64.t)
+fn aeq (a b: A.array S64.t)
        (#pa: perm) (#va: erased (Seq.seq S64.t))
        (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length va == nl /\ Seq.length vb == nl /\
         bnd (vals va) base /\ bnd (vals vb) base)
 returns r: bool
-ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (r == (eval (vals va) = eval (vals vb)))
 {
-  S.pts_to_len a; S.pts_to_len b;
+  A.pts_to_len a; A.pts_to_len b;
   let mut m = S64.ones;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (mm: S64.t).
-    pts_to i vi ** pts_to m mm ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pts_to i vi ** pts_to m mm ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= 16 /\
           (if (forall (k: nat). k < SZ.v vi ==>
                  Seq.index (vals va) k == Seq.index (vals vb) k)
@@ -242,8 +235,8 @@ ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
   {
     let vi = !i;
     let mm = !m;
-    let xa = S.(a.(vi));
-    let xb = S.(b.(vi));
+    let xa = A.(a.(vi));
+    let xb = A.(b.(vi));
     let e = S64.eq_mask xa xb;
     UInt.logand_lemma_1 #64 (S64.v e);
     UInt.logand_lemma_2 #64 (S64.v e);
@@ -270,50 +263,48 @@ ensures S.pts_to a #pa va ** S.pts_to b #pb vb **
 
 #push-options "--z3rlimit 200"
 
-fn abelow (a s nm: S.slice S64.t) (d: erased modulus)
+fn abelow (a s nm: A.array S64.t) (d: erased modulus)
           (#va: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
           (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to a va ** S.pts_to s vs ** S.pts_to nm #pn vnm **
+requires A.pts_to a va ** A.pts_to s vs ** A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length va == nl /\ Seq.length vs == nl /\
         Seq.length vnm == nl /\ vals vnm == d.nm /\
         bnd (vals va) base /\ pow2 256 < 2 * d.m)
 returns r: bool
 ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
-  S.pts_to a va' ** S.pts_to s vs' ** S.pts_to nm #pn vnm **
+  A.pts_to a va' ** A.pts_to s vs' ** A.pts_to nm #pn vnm **
   pure (Seq.length va' == nl /\ Seq.length vs' == nl /\
         res d (vals va') /\ r == (eval (vals va) < d.m) /\
         (r ==> vals va' == reveal (vals va)))
 {
-  S.pts_to_len a;
+  A.pts_to_len a;
   let z = S64.zero;
-  let mut ac = [| z; 16sz |]; A.pts_to_len ac; let c = S.from_array ac 16sz;
-  S.pts_to_len c;
-  acopy c a;
+  let mut ac = [| z; 16sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  acopy ac a;
   ebnd (vals va);
   csub_op a s nm S64.zero d;
   csub_eq d (vals va);
-  with va'. assert (S.pts_to a va');
-  let r = aeq a c;
+  with va'. assert (A.pts_to a va');
+  let r = aeq a ac;
   Classical.move_requires (res_uniq (vals va')) (vals va);
-  S.to_array c;
   r
 }
 
 (** The same subtraction used for its arithmetic rather than its answer: a
     value below twice the modulus is brought below it. *)
-fn ared (a s nm: S.slice S64.t) (d: erased modulus)
+fn ared (a s nm: A.array S64.t) (d: erased modulus)
         (#va: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
         (#pn: perm) (#vnm: erased (Seq.seq S64.t))
-requires S.pts_to a va ** S.pts_to s vs ** S.pts_to nm #pn vnm **
+requires A.pts_to a va ** A.pts_to s vs ** A.pts_to nm #pn vnm **
   pure (modulus_ok d /\ Seq.length va == nl /\ Seq.length vs == nl /\
         Seq.length vnm == nl /\ vals vnm == d.nm /\
         bnd (vals va) base /\ pow2 256 < 2 * d.m)
 ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
-  S.pts_to a va' ** S.pts_to s vs' ** S.pts_to nm #pn vnm **
+  A.pts_to a va' ** A.pts_to s vs' ** A.pts_to nm #pn vnm **
   pure (Seq.length va' == nl /\ Seq.length vs' == nl /\
         res d (vals va') /\ eval (vals va') == eval (vals va) % d.m)
 {
-  S.pts_to_len a;
+  A.pts_to_len a;
   ebnd (vals va);
   csub_ok d (vals va) 0;
   Classical.move_requires (Math.small_mod (eval (vals va))) d.m;
@@ -328,22 +319,22 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
     the bit as a ghost boolean, which is what lets the postcondition be an
     ordinary [if]. *)
 
-fn asel (out a b: S.slice S64.t) (m: S64.t) (bb: erased bool)
+fn asel (out a b: A.array S64.t) (m: S64.t) (bb: erased bool)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vo == nl /\ Seq.length va == nl /\ Seq.length vb == nl /\
         S64.v m == (if bb then pow2 64 - 1 else 0))
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (vo' == (if bb then reveal vb else reveal va))
 {
-  S.pts_to_len out; S.pts_to_len a; S.pts_to_len b;
+  A.pts_to_len out; A.pts_to_len a; A.pts_to_len b;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** S.pts_to out v ** S.pts_to a #pa va ** S.pts_to b #pb vb **
+    pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index v k ==
@@ -351,12 +342,12 @@ ensures exists* (vo': Seq.seq S64.t).
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
-    let xa = S.(a.(vi));
-    let xb = S.(b.(vi));
-    S.((out.(vi) <- S64.select m xb xa));
+    let xa = A.(a.(vi));
+    let xb = A.(b.(vi));
+    A.((out.(vi) <- S64.select m xb xa));
     i := SZ.add vi 1sz;
   };
-  with v. assert (S.pts_to out v);
+  with v. assert (A.pts_to out v);
   Seq.lemma_eq_intro v (if bb then reveal vb else reveal va);
   ()
 }
@@ -366,20 +357,20 @@ ensures exists* (vo': Seq.seq S64.t).
     The index is public -- it is the loop counter -- but the bit is not, so
     the answer comes back as a mask rather than a boolean. *)
 
-fn abit (s: S.slice S64.t) (i: SZ.t)
+fn abit (s: A.array S64.t) (i: SZ.t)
         (#ps: perm) (#vs: erased (Seq.seq S64.t))
-requires S.pts_to s #ps vs **
+requires A.pts_to s #ps vs **
   pure (Seq.length vs == nl /\ bnd (vals vs) base /\ SZ.v i < 256)
 returns m: S64.t
-ensures S.pts_to s #ps vs **
+ensures A.pts_to s #ps vs **
   pure (S64.v m ==
           (if eval (vals vs) / pow2 (SZ.v i) % 2 = 1 then pow2 64 - 1 else 0))
 {
-  S.pts_to_len s;
+  A.pts_to_len s;
   assert_norm (rad == 16);
   ebit (vals vs) (SZ.v i);
   let k = SZ.div i 16sz;
-  let l = S.(s.(k));
+  let l = A.(s.(k));
   let r = SZ.rem i 16sz;
   Math.small_mod (SZ.v r) (pow2 32);
   let j = SZ.sizet_to_uint32 r;

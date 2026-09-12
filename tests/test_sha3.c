@@ -76,143 +76,143 @@ int main(void) {
 
 
   printf("SHA3-224\n");
-  check("empty", Hacl_Hash_SHA3_Ptr_sha3_224, 28, (const uint8_t *)"", 0,
+  check("empty", Hacl_Hash_SHA3_sha3_224, 28, (const uint8_t *)"", 0,
         "6b4e03423667dbb73b6e15454f0eb1abd4597f9a1b078e3f5b5a6bc7");
-  check("abc", Hacl_Hash_SHA3_Ptr_sha3_224, 28, (const uint8_t *)ABC, 3,
+  check("abc", Hacl_Hash_SHA3_sha3_224, 28, (const uint8_t *)ABC, 3,
         "e642824c3f8cf24ad09234ee7d3c766fc9a3a5168d0c94ad73b46fdf");
-  check("448", Hacl_Hash_SHA3_Ptr_sha3_224, 28, (const uint8_t *)S448, 56,
+  check("448", Hacl_Hash_SHA3_sha3_224, 28, (const uint8_t *)S448, 56,
         "8a24108b154ada21c9fd5574494479ba5c7e7ab76ef264ead0fcce33");
-  check("896", Hacl_Hash_SHA3_Ptr_sha3_224, 28, (const uint8_t *)S896, 112,
+  check("896", Hacl_Hash_SHA3_sha3_224, 28, (const uint8_t *)S896, 112,
         "543e6868e1666c1a643630df77367ae5a62a85070a51c14cbf665cbc");
-  check("million_a", Hacl_Hash_SHA3_Ptr_sha3_224, 28, million, 1000000,
+  check("million_a", Hacl_Hash_SHA3_sha3_224, 28, million, 1000000,
         "d69335b93325192e516a912e6d19a15cb51c6ed5c15243e7a7fd653c");
 
   printf("SHA3-256\n");
-  check("empty", Hacl_Hash_SHA3_Ptr_sha3_256, 32, (const uint8_t *)"", 0,
+  check("empty", Hacl_Hash_SHA3_sha3_256, 32, (const uint8_t *)"", 0,
         "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a");
-  check("abc", Hacl_Hash_SHA3_Ptr_sha3_256, 32, (const uint8_t *)ABC, 3,
+  check("abc", Hacl_Hash_SHA3_sha3_256, 32, (const uint8_t *)ABC, 3,
         "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532");
-  check("448", Hacl_Hash_SHA3_Ptr_sha3_256, 32, (const uint8_t *)S448, 56,
+  check("448", Hacl_Hash_SHA3_sha3_256, 32, (const uint8_t *)S448, 56,
         "41c0dba2a9d6240849100376a8235e2c82e1b9998a999e21db32dd97496d3376");
-  check("896", Hacl_Hash_SHA3_Ptr_sha3_256, 32, (const uint8_t *)S896, 112,
+  check("896", Hacl_Hash_SHA3_sha3_256, 32, (const uint8_t *)S896, 112,
         "916f6061fe879741ca6469b43971dfdb28b1a32dc36cb3254e812be27aad1d18");
-  check("million_a", Hacl_Hash_SHA3_Ptr_sha3_256, 32, million, 1000000,
+  check("million_a", Hacl_Hash_SHA3_sha3_256, 32, million, 1000000,
         "5c8875ae474a3634ba4fd55ec85bffd661f32aca75c6d699d0cdcb6c115891c1");
 
   printf("SHA3-384\n");
-  check("empty", Hacl_Hash_SHA3_Ptr_sha3_384, 48, (const uint8_t *)"", 0,
+  check("empty", Hacl_Hash_SHA3_sha3_384, 48, (const uint8_t *)"", 0,
         "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004");
-  check("abc", Hacl_Hash_SHA3_Ptr_sha3_384, 48, (const uint8_t *)ABC, 3,
+  check("abc", Hacl_Hash_SHA3_sha3_384, 48, (const uint8_t *)ABC, 3,
         "ec01498288516fc926459f58e2c6ad8df9b473cb0fc08c2596da7cf0e49be4b298d88cea927ac7f539f1edf228376d25");
-  check("448", Hacl_Hash_SHA3_Ptr_sha3_384, 48, (const uint8_t *)S448, 56,
+  check("448", Hacl_Hash_SHA3_sha3_384, 48, (const uint8_t *)S448, 56,
         "991c665755eb3a4b6bbdfb75c78a492e8c56a22c5c4d7e429bfdbc32b9d4ad5aa04a1f076e62fea19eef51acd0657c22");
-  check("896", Hacl_Hash_SHA3_Ptr_sha3_384, 48, (const uint8_t *)S896, 112,
+  check("896", Hacl_Hash_SHA3_sha3_384, 48, (const uint8_t *)S896, 112,
         "79407d3b5916b59c3e30b09822974791c313fb9ecc849e406f23592d04f625dc8c709b98b43b3852b337216179aa7fc7");
-  check("million_a", Hacl_Hash_SHA3_Ptr_sha3_384, 48, million, 1000000,
+  check("million_a", Hacl_Hash_SHA3_sha3_384, 48, million, 1000000,
         "eee9e24d78c1855337983451df97c8ad9eedf256c6334f8e948d252d5e0e76847aa0774ddb90a842190d2c558b4b8340");
 
   printf("SHA3-512\n");
-  check("empty", Hacl_Hash_SHA3_Ptr_sha3_512, 64, (const uint8_t *)"", 0,
+  check("empty", Hacl_Hash_SHA3_sha3_512, 64, (const uint8_t *)"", 0,
         "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26");
-  check("abc", Hacl_Hash_SHA3_Ptr_sha3_512, 64, (const uint8_t *)ABC, 3,
+  check("abc", Hacl_Hash_SHA3_sha3_512, 64, (const uint8_t *)ABC, 3,
         "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0");
-  check("448", Hacl_Hash_SHA3_Ptr_sha3_512, 64, (const uint8_t *)S448, 56,
+  check("448", Hacl_Hash_SHA3_sha3_512, 64, (const uint8_t *)S448, 56,
         "04a371e84ecfb5b8b77cb48610fca8182dd457ce6f326a0fd3d7ec2f1e91636dee691fbe0c985302ba1b0d8dc78c086346b533b49c030d99a27daf1139d6e75e");
-  check("896", Hacl_Hash_SHA3_Ptr_sha3_512, 64, (const uint8_t *)S896, 112,
+  check("896", Hacl_Hash_SHA3_sha3_512, 64, (const uint8_t *)S896, 112,
         "afebb2ef542e6579c50cad06d2e578f9f8dd6881d7dc824d26360feebf18a4fa73e3261122948efcfd492e74e82e2189ed0fb440d187f382270cb455f21dd185");
-  check("million_a", Hacl_Hash_SHA3_Ptr_sha3_512, 64, million, 1000000,
+  check("million_a", Hacl_Hash_SHA3_sha3_512, 64, million, 1000000,
         "3c3a876da14034ab60627c077bb98f7e120a2a5370212dffb3385a18d4f38859ed311d0a9d5141ce9cc5c66ee689b266a8aa18ace8282a0e0db596c90b0a7b87");
 
   printf("SHAKE128\n");
-  check_xof("empty/16", Hacl_Hash_SHA3_Ptr_shake128, 16, (const uint8_t *)"", 0,
+  check_xof("empty/16", Hacl_Hash_SHA3_shake128, 16, (const uint8_t *)"", 0,
             "7f9c2ba4e88f827d616045507605853e");
-  check_xof("empty/32", Hacl_Hash_SHA3_Ptr_shake128, 32, (const uint8_t *)"", 0,
+  check_xof("empty/32", Hacl_Hash_SHA3_shake128, 32, (const uint8_t *)"", 0,
             "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef26");
-  check_xof("empty/64", Hacl_Hash_SHA3_Ptr_shake128, 64, (const uint8_t *)"", 0,
+  check_xof("empty/64", Hacl_Hash_SHA3_shake128, 64, (const uint8_t *)"", 0,
             "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef263cb1eea988004b93103cfb0aeefd2a686e01fa4a58e8a3639ca8a1e3f9ae57e2");
-  check_xof("empty/200", Hacl_Hash_SHA3_Ptr_shake128, 200, (const uint8_t *)"", 0,
+  check_xof("empty/200", Hacl_Hash_SHA3_shake128, 200, (const uint8_t *)"", 0,
             "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef263cb1eea988004b93103cfb0aeefd2a686e01fa4a58e8a3639ca8a1e3f9ae57e235b8cc873c23dc62b8d260169afa2f75ab916a58d974918835d25e6a435085b2badfd6dfaac359a5efbb7bcc4b59d538df9a04302e10c8bc1cbf1a0b3a5120ea17cda7cfad765f5623474d368ccca8af0007cd9f5e4c849f167a580b14aabdefaee7eef47cb0fca9767be1fda69419dfb927e9df07348b196691abaeb580b32def58538b8d23f877");
-  check_xof("empty/512", Hacl_Hash_SHA3_Ptr_shake128, 512, (const uint8_t *)"", 0,
+  check_xof("empty/512", Hacl_Hash_SHA3_shake128, 512, (const uint8_t *)"", 0,
             "7f9c2ba4e88f827d616045507605853ed73b8093f6efbc88eb1a6eacfa66ef263cb1eea988004b93103cfb0aeefd2a686e01fa4a58e8a3639ca8a1e3f9ae57e235b8cc873c23dc62b8d260169afa2f75ab916a58d974918835d25e6a435085b2badfd6dfaac359a5efbb7bcc4b59d538df9a04302e10c8bc1cbf1a0b3a5120ea17cda7cfad765f5623474d368ccca8af0007cd9f5e4c849f167a580b14aabdefaee7eef47cb0fca9767be1fda69419dfb927e9df07348b196691abaeb580b32def58538b8d23f87732ea63b02b4fa0f4873360e2841928cd60dd4cee8cc0d4c922a96188d032675c8ac850933c7aff1533b94c834adbb69c6115bad4692d8619f90b0cdf8a7b9c264029ac185b70b83f2801f2f4b3f70c593ea3aeeb613a7f1b1de33fd75081f592305f2e4526edc09631b10958f464d889f31ba010250fda7f1368ec2967fc84ef2ae9aff268e0b1700affc6820b523a3d917135f2dff2ee06bfe72b3124721d4a26c04e53a75e30e73a7a9c4a95d91c55d495e9f51dd0b5e9d83c6d5e8ce803aa62b8d654db53d09b8dcff273cdfeb573fad8bcd45578bec2e770d01efde86e721a3f7c6cce275dabe6e2143f1af18da7efddc4c7b70b5e345db93cc936bea323491ccb38a388f546a9ff00dd4e1300b9b2153d2041d205b443e41b45a653f2a5c4492c1add544512dda2529833462b71a41a45be97290b6f");
-  check_xof("abc/16", Hacl_Hash_SHA3_Ptr_shake128, 16, (const uint8_t *)ABC, 3,
+  check_xof("abc/16", Hacl_Hash_SHA3_shake128, 16, (const uint8_t *)ABC, 3,
             "5881092dd818bf5cf8a3ddb793fbcba7");
-  check_xof("abc/32", Hacl_Hash_SHA3_Ptr_shake128, 32, (const uint8_t *)ABC, 3,
+  check_xof("abc/32", Hacl_Hash_SHA3_shake128, 32, (const uint8_t *)ABC, 3,
             "5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc8");
-  check_xof("abc/64", Hacl_Hash_SHA3_Ptr_shake128, 64, (const uint8_t *)ABC, 3,
+  check_xof("abc/64", Hacl_Hash_SHA3_shake128, 64, (const uint8_t *)ABC, 3,
             "5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc844c50af32acd3f2cdd066568706f509bc1bdde58295dae3f891a9a0fca578378");
-  check_xof("abc/200", Hacl_Hash_SHA3_Ptr_shake128, 200, (const uint8_t *)ABC, 3,
+  check_xof("abc/200", Hacl_Hash_SHA3_shake128, 200, (const uint8_t *)ABC, 3,
             "5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc844c50af32acd3f2cdd066568706f509bc1bdde58295dae3f891a9a0fca5783789a41f8611214ce612394df286a62d1a2252aa94db9c538956c717dc2bed4f232a0294c857c730aa16067ac1062f1201fb0d377cfb9cde4c63599b27f3462bba4a0ed296c801f9ff7f57302bb3076ee145f97a32ae68e76ab66c48d51675bd49acc29082f5647584e6aa01b3f5af057805f973ff8ecb8b226ac32ada6f01c1fcd4818cb006aa5b4cd");
-  check_xof("abc/512", Hacl_Hash_SHA3_Ptr_shake128, 512, (const uint8_t *)ABC, 3,
+  check_xof("abc/512", Hacl_Hash_SHA3_shake128, 512, (const uint8_t *)ABC, 3,
             "5881092dd818bf5cf8a3ddb793fbcba74097d5c526a6d35f97b83351940f2cc844c50af32acd3f2cdd066568706f509bc1bdde58295dae3f891a9a0fca5783789a41f8611214ce612394df286a62d1a2252aa94db9c538956c717dc2bed4f232a0294c857c730aa16067ac1062f1201fb0d377cfb9cde4c63599b27f3462bba4a0ed296c801f9ff7f57302bb3076ee145f97a32ae68e76ab66c48d51675bd49acc29082f5647584e6aa01b3f5af057805f973ff8ecb8b226ac32ada6f01c1fcd4818cb006aa5b4cdb3611eb1e533c8964cacfdf31012cd3fb744d02225b988b475375faad996eb1b9176ecb0f8b2871723d6dbb804e23357e50732f5cfc904b1319795000d7361d9e5e1b77b4b8f5774aa1482cfa58f83096bdb2e06a3eed543a38919b57ecbec737f4086be007f8ef80094ceea8807193d46e9be540b6e99b4c1c71507095028a024e8d39aa8f4c5854cedd50d30a223e7d54e9a24f0a2526b31002afbd1b4ebea69c8400c3deb4c1c35d6dbb75651b284076f5fde47b4a0586ee173e30bd4d08f2bc59c6114bdd745d20876bee2bf800bd7d8b5e51536c844c73256f7d1ada1870c7bbaf83af10a6fdd7c02967811815459cfd02d67b936e975c6007c63ea7ae087f0a6b0a1319668bb61788eaa3d3b78e3f2061adcdead407085901803ec6f17f0ec650a292198275211a56bf13f0bf7241268b50d3f1ec8");
-  check_xof("448/16", Hacl_Hash_SHA3_Ptr_shake128, 16, (const uint8_t *)S448, 56,
+  check_xof("448/16", Hacl_Hash_SHA3_shake128, 16, (const uint8_t *)S448, 56,
             "1a96182b50fb8c7e74e0a707788f55e9");
-  check_xof("448/32", Hacl_Hash_SHA3_Ptr_shake128, 32, (const uint8_t *)S448, 56,
+  check_xof("448/32", Hacl_Hash_SHA3_shake128, 32, (const uint8_t *)S448, 56,
             "1a96182b50fb8c7e74e0a707788f55e98209b8d91fade8f32f8dd5cff7bf21f5");
-  check_xof("448/64", Hacl_Hash_SHA3_Ptr_shake128, 64, (const uint8_t *)S448, 56,
+  check_xof("448/64", Hacl_Hash_SHA3_shake128, 64, (const uint8_t *)S448, 56,
             "1a96182b50fb8c7e74e0a707788f55e98209b8d91fade8f32f8dd5cff7bf21f54ee5f19550825a6e070030519e944263ac1c6765287065621f9fcb3201723e32");
-  check_xof("448/200", Hacl_Hash_SHA3_Ptr_shake128, 200, (const uint8_t *)S448, 56,
+  check_xof("448/200", Hacl_Hash_SHA3_shake128, 200, (const uint8_t *)S448, 56,
             "1a96182b50fb8c7e74e0a707788f55e98209b8d91fade8f32f8dd5cff7bf21f54ee5f19550825a6e070030519e944263ac1c6765287065621f9fcb3201723e3223b63a46c2938aa953ba8401d0ea77b8d26490775566407b95673c0f4cc1ce9fd966148d7efdff26bbf9f48a21c6da35bfaa545654f70ae586ff10131420771483ec92edab408c767bf4c5b4fffaa80c8ca214d84c4dc700d0c50630b2ffc3793ea4d87258b4c9548c5485a5ca666ef73fbd816d418aea6395b503addd9b150f9e0663325f01e551");
-  check_xof("448/512", Hacl_Hash_SHA3_Ptr_shake128, 512, (const uint8_t *)S448, 56,
+  check_xof("448/512", Hacl_Hash_SHA3_shake128, 512, (const uint8_t *)S448, 56,
             "1a96182b50fb8c7e74e0a707788f55e98209b8d91fade8f32f8dd5cff7bf21f54ee5f19550825a6e070030519e944263ac1c6765287065621f9fcb3201723e3223b63a46c2938aa953ba8401d0ea77b8d26490775566407b95673c0f4cc1ce9fd966148d7efdff26bbf9f48a21c6da35bfaa545654f70ae586ff10131420771483ec92edab408c767bf4c5b4fffaa80c8ca214d84c4dc700d0c50630b2ffc3793ea4d87258b4c9548c5485a5ca666ef73fbd816d418aea6395b503addd9b150f9e0663325f01e5518b71ffa1244ea284cebe0cea2f774d7b3a437dca3282e324777e19624bf2be3cd355c1bfbddb323a33f11efafb2448293501dc0454c6b72f167cde4dc99418b8e10dc39821d9517e6a7e8720d33317f7833cea5692884b31e2c870154760b3b21b6a4539ed0384fec1a66ec5963f1a6464174020d7c06052cb4ae84bc479c11a366e36d3b360586feb254953939a3010bb973e5f96b7c40c16e7da2048cecfcddcea0b9e87fd60815921eda47376bf90b274571d316df9117162d5f9a4a27171597ca509c9243a47329490303ff5414d07708edce14e6a6389c95efa12c9aa8412d2f414aa07ed403f4b9ff01dbe93138e60039032e103cca13d15cc643100a085cdf2416b248c2a90a8e743576c09d3aaa161577834a9efb0db71fef49e81eb5202552168e51ff3d14a9bab965c213d5319d82c4dbcbcd7");
-  check_xof("896/16", Hacl_Hash_SHA3_Ptr_shake128, 16, (const uint8_t *)S896, 112,
+  check_xof("896/16", Hacl_Hash_SHA3_shake128, 16, (const uint8_t *)S896, 112,
             "7b6df6ff181173b6d7898d7ff63fb07b");
-  check_xof("896/32", Hacl_Hash_SHA3_Ptr_shake128, 32, (const uint8_t *)S896, 112,
+  check_xof("896/32", Hacl_Hash_SHA3_shake128, 32, (const uint8_t *)S896, 112,
             "7b6df6ff181173b6d7898d7ff63fb07b7c237daf471a5ae5602adbccef9ccf4b");
-  check_xof("896/64", Hacl_Hash_SHA3_Ptr_shake128, 64, (const uint8_t *)S896, 112,
+  check_xof("896/64", Hacl_Hash_SHA3_shake128, 64, (const uint8_t *)S896, 112,
             "7b6df6ff181173b6d7898d7ff63fb07b7c237daf471a5ae5602adbccef9ccf4b37e06b4a3543164ffbe0d0557c02f9b25ad434005526d88ca04a6094b93ee57a");
-  check_xof("896/200", Hacl_Hash_SHA3_Ptr_shake128, 200, (const uint8_t *)S896, 112,
+  check_xof("896/200", Hacl_Hash_SHA3_shake128, 200, (const uint8_t *)S896, 112,
             "7b6df6ff181173b6d7898d7ff63fb07b7c237daf471a5ae5602adbccef9ccf4b37e06b4a3543164ffbe0d0557c02f9b25ad434005526d88ca04a6094b93ee57a55d5ea66e744bd391f8f52baf4e031d9e60e5ca32a0ed162bb89fc908097984548796652952dd4737d2a234a401f4857f3d1866efa736fd6a8f7c0b5d02ab06e5f821b2cc8cb8b4606fb15b9527cce5c3ec02c65cd1cdb5c81bd67686ebdd3b5b3fcffb123ca8ca63df53537042f64637ab595f06e865ebaa322b253bfa533a056b46c7a63e21e56");
-  check_xof("896/512", Hacl_Hash_SHA3_Ptr_shake128, 512, (const uint8_t *)S896, 112,
+  check_xof("896/512", Hacl_Hash_SHA3_shake128, 512, (const uint8_t *)S896, 112,
             "7b6df6ff181173b6d7898d7ff63fb07b7c237daf471a5ae5602adbccef9ccf4b37e06b4a3543164ffbe0d0557c02f9b25ad434005526d88ca04a6094b93ee57a55d5ea66e744bd391f8f52baf4e031d9e60e5ca32a0ed162bb89fc908097984548796652952dd4737d2a234a401f4857f3d1866efa736fd6a8f7c0b5d02ab06e5f821b2cc8cb8b4606fb15b9527cce5c3ec02c65cd1cdb5c81bd67686ebdd3b5b3fcffb123ca8ca63df53537042f64637ab595f06e865ebaa322b253bfa533a056b46c7a63e21e569ff3cb26a976ccb749104adfce5f8db6751bbdbf0d898c22dad8e85523376744b889a7e68fab7e68699cd63bcc3d40e6b8cbb39e8e8a0931a654566e47b8cc1b43e5dfcf09e3d50433454c908a33897537485d54aa7377ec70b4a2912940316bdce41a054f73a9001eed6dcaf91764e4236b10dff5134b0e68908b99bf0fd1d65f5c798e430ba1473d5826cf5811d39d443c7031c4c81991712f2f648416940dc32450295dbad221f9cbbbca4b0fca40deb9f37ce03eeec584ad7ba5f546633f79c92d2ed0adc5f1273f18bca35b8a2aa74fdb88ba87f36ea56acafa03f416864632a3f4f4f259334945a0a5f4d848696966fce6abc54a4b4d3795c89cdce5297f9df391794a8d992407be93dbe182703a83560ca2ed8d1ba03c63a3d8c6342504c11f8d40b7c65b8e4777850f2ce126716df79725bd1c83");
-  check_xof("million_a/32", Hacl_Hash_SHA3_Ptr_shake128, 32, million, 1000000,
+  check_xof("million_a/32", Hacl_Hash_SHA3_shake128, 32, million, 1000000,
             "9d222c79c4ff9d092cf6ca86143aa411e369973808ef97093255826c5572ef58");
-  check_xof("million_a/512", Hacl_Hash_SHA3_Ptr_shake128, 512, million, 1000000,
+  check_xof("million_a/512", Hacl_Hash_SHA3_shake128, 512, million, 1000000,
             "9d222c79c4ff9d092cf6ca86143aa411e369973808ef97093255826c5572ef58424c4b5c28475ffdcf981663867fec6321c1262e387bccf8ca676884c4a9d0c13bfa6869763d5ae4bbc9b3ccd09d1ca5ea7446538d69b3fb98c72b59a2b4817db5eadd9011f90fa71091931f8134f4f00b562e2fe105937270361c1909862ad45046e3932f5dd311ec72fec5f8fb8f60b45a3bee3f85bbf7fcedc6a555677648e0654b381941a86bd3e512657b0d57a7991fc4543f89d8290492222ce4a33e17602b3b99c009f7655f87535cdaa3716f58c47b8a157ad195f02809f27500b9254979311c6bb415968cd10431169a27d5a8d61e13a6b8b77af1f8b6dd2eefdea040789680490b5edcb1d3e538a466f757ad718fe1fd9faeefa47246ad5e367f87d3b4850d4486eb2199e94a7979e2091abcdf3bc13379c896dceb79a8fd08f11073f33e3f992322b31202dee234330cf3304a588f0d59dae4e63ba2ac3ce682cc19d4e341678cc3a67a47c113b4db890f30a92aa08a1f6dc8fb6463f8038c2b40b2530077b236ce88afcccda08ad6d75eee1899b10cd800c2ce5372bff22ee3a339d4b9c1a2f5f4b820f687e5519bd05b1fc5da0eb45336814f48132c640e66c3a02a22e63598f94f22f35184110446b648cf8474f30c43ead58309fb25901609e24187e801c809561a64809450e603c4a8039525c476b58e32ce2c47b37da591");
 
   printf("SHAKE256\n");
-  check_xof("empty/16", Hacl_Hash_SHA3_Ptr_shake256, 16, (const uint8_t *)"", 0,
+  check_xof("empty/16", Hacl_Hash_SHA3_shake256, 16, (const uint8_t *)"", 0,
             "46b9dd2b0ba88d13233b3feb743eeb24");
-  check_xof("empty/32", Hacl_Hash_SHA3_Ptr_shake256, 32, (const uint8_t *)"", 0,
+  check_xof("empty/32", Hacl_Hash_SHA3_shake256, 32, (const uint8_t *)"", 0,
             "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762f");
-  check_xof("empty/64", Hacl_Hash_SHA3_Ptr_shake256, 64, (const uint8_t *)"", 0,
+  check_xof("empty/64", Hacl_Hash_SHA3_shake256, 64, (const uint8_t *)"", 0,
             "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762fd75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be");
-  check_xof("empty/200", Hacl_Hash_SHA3_Ptr_shake256, 200, (const uint8_t *)"", 0,
+  check_xof("empty/200", Hacl_Hash_SHA3_shake256, 200, (const uint8_t *)"", 0,
             "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762fd75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be141e96616fb13957692cc7edd0b45ae3dc07223c8e92937bef84bc0eab862853349ec75546f58fb7c2775c38462c5010d846c185c15111e595522a6bcd16cf86f3d122109e3b1fdd943b6aec468a2d621a7c06c6a957c62b54dafc3be87567d677231395f6147293b68ceab7a9e0c58d864e8efde4e1b9a46cbe854713672f5caaae314ed9083dab");
-  check_xof("empty/512", Hacl_Hash_SHA3_Ptr_shake256, 512, (const uint8_t *)"", 0,
+  check_xof("empty/512", Hacl_Hash_SHA3_shake256, 512, (const uint8_t *)"", 0,
             "46b9dd2b0ba88d13233b3feb743eeb243fcd52ea62b81b82b50c27646ed5762fd75dc4ddd8c0f200cb05019d67b592f6fc821c49479ab48640292eacb3b7c4be141e96616fb13957692cc7edd0b45ae3dc07223c8e92937bef84bc0eab862853349ec75546f58fb7c2775c38462c5010d846c185c15111e595522a6bcd16cf86f3d122109e3b1fdd943b6aec468a2d621a7c06c6a957c62b54dafc3be87567d677231395f6147293b68ceab7a9e0c58d864e8efde4e1b9a46cbe854713672f5caaae314ed9083dab4b099f8e300f01b8650f1f4b1d8fcf3f3cb53fb8e9eb2ea203bdc970f50ae55428a91f7f53ac266b28419c3778a15fd248d339ede785fb7f5a1aaa96d313eacc890936c173cdcd0fab882c45755feb3aed96d477ff96390bf9a66d1368b208e21f7c10d04a3dbd4e360633e5db4b602601c14cea737db3dcf722632cc77851cbdde2aaf0a33a07b373445df490cc8fc1e4160ff118378f11f0477de055a81a9eda57a4a2cfb0c83929d310912f729ec6cfa36c6ac6a75837143045d791cc85eff5b21932f23861bcf23a52b5da67eaf7baae0f5fb1369db78f3ac45f8c4ac5671d85735cdddb09d2b1e34a1fc066ff4a162cb263d6541274ae2fcc865f618abe27c124cd8b074ccd516301b91875824d09958f341ef274bdab0bae316339894304e35877b0c28a9b1fd166c796b9cc258a064a8f57e27f2a");
-  check_xof("abc/16", Hacl_Hash_SHA3_Ptr_shake256, 16, (const uint8_t *)ABC, 3,
+  check_xof("abc/16", Hacl_Hash_SHA3_shake256, 16, (const uint8_t *)ABC, 3,
             "483366601360a8771c6863080cc4114d");
-  check_xof("abc/32", Hacl_Hash_SHA3_Ptr_shake256, 32, (const uint8_t *)ABC, 3,
+  check_xof("abc/32", Hacl_Hash_SHA3_shake256, 32, (const uint8_t *)ABC, 3,
             "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739");
-  check_xof("abc/64", Hacl_Hash_SHA3_Ptr_shake256, 64, (const uint8_t *)ABC, 3,
+  check_xof("abc/64", Hacl_Hash_SHA3_shake256, 64, (const uint8_t *)ABC, 3,
             "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e4");
-  check_xof("abc/200", Hacl_Hash_SHA3_Ptr_shake256, 200, (const uint8_t *)ABC, 3,
+  check_xof("abc/200", Hacl_Hash_SHA3_shake256, 200, (const uint8_t *)ABC, 3,
             "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e41385141204f329979fd3047a13c5657724ada64d2470157b3cdc288620944d78dbcddbd912993f0913f164fb2ce95131a2d09a3e6d51cbfc622720d7a75c6334e8a2d7ec71a7cc29cf0ea610eeff1a588290a53000faa79932becec0bd3cd0b33a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b677513771af6bfe119");
-  check_xof("abc/512", Hacl_Hash_SHA3_Ptr_shake256, 512, (const uint8_t *)ABC, 3,
+  check_xof("abc/512", Hacl_Hash_SHA3_shake256, 512, (const uint8_t *)ABC, 3,
             "483366601360a8771c6863080cc4114d8db44530f8f1e1ee4f94ea37e78b5739d5a15bef186a5386c75744c0527e1faa9f8726e462a12a4feb06bd8801e751e41385141204f329979fd3047a13c5657724ada64d2470157b3cdc288620944d78dbcddbd912993f0913f164fb2ce95131a2d09a3e6d51cbfc622720d7a75c6334e8a2d7ec71a7cc29cf0ea610eeff1a588290a53000faa79932becec0bd3cd0b33a7e5d397fed1ada9442b99903f4dcfd8559ed3950faf40fe6f3b5d710ed3b677513771af6bfe11934817e8762d9896ba579d88d84ba7aa3cdc7055f6796f195bd9ae788f2f5bb96100d6bbaff7fbc6eea24d4449a2477d172a5507dcc931412fc346b1bb39b878330e026b12ddf384af3334560ea1d363966caa7d8ddcbec7da52b42215c11d5f8ee57f341e399343ce63a752fc5edec99124a0eb314403e5f358b8b83d05be2d2970099284b00dcc33d7c753d1f752ab743325bc53d91aa671e50f9c3f93abf6e9662f90145c61954f2abbd26edad1553ea3a626f359e8f79ade16384e151755c47e822fc74c5d7100fd31f667564c6debc7d20d99e109f22abcbb8c86c0c1146333903422252a5d34a896770b6cb99a1f33935bf87a8e47b0549dc2539de9e6a9d1e596111b660cb6b3e0040b4d4916f886dd0b6f1a702849440b99d6088e20203aebafa8e9dffa94ed35ef1f41f5fdf549fbcc5a0f68298");
-  check_xof("448/16", Hacl_Hash_SHA3_Ptr_shake256, 16, (const uint8_t *)S448, 56,
+  check_xof("448/16", Hacl_Hash_SHA3_shake256, 16, (const uint8_t *)S448, 56,
             "4d8c2dd2435a0128eefbb8c36f6f8713");
-  check_xof("448/32", Hacl_Hash_SHA3_Ptr_shake256, 32, (const uint8_t *)S448, 56,
+  check_xof("448/32", Hacl_Hash_SHA3_shake256, 32, (const uint8_t *)S448, 56,
             "4d8c2dd2435a0128eefbb8c36f6f87133a7911e18d979ee1ae6be5d4fd2e3329");
-  check_xof("448/64", Hacl_Hash_SHA3_Ptr_shake256, 64, (const uint8_t *)S448, 56,
+  check_xof("448/64", Hacl_Hash_SHA3_shake256, 64, (const uint8_t *)S448, 56,
             "4d8c2dd2435a0128eefbb8c36f6f87133a7911e18d979ee1ae6be5d4fd2e332940d8688a4e6a59aa8060f1f9bc996c05aca3c696a8b66279dc672c740bb224ec");
-  check_xof("448/200", Hacl_Hash_SHA3_Ptr_shake256, 200, (const uint8_t *)S448, 56,
+  check_xof("448/200", Hacl_Hash_SHA3_shake256, 200, (const uint8_t *)S448, 56,
             "4d8c2dd2435a0128eefbb8c36f6f87133a7911e18d979ee1ae6be5d4fd2e332940d8688a4e6a59aa8060f1f9bc996c05aca3c696a8b66279dc672c740bb224ec37a92b65db0539c0203455f51d97cce4cfc49127d7260afc673af208baf19be21233f3debe78d06760cfa551ee1e079141d49dd3ef7e182b1524df82ea1cefe1c6c3966175f0228d35887cd9f09b05457f6d952f9b3b32464e0b3c54dcc13efdb4c54e29cdb4088faf482cddd0a5e6b822f5a80d0cc78d4cc90131906fd5159eb5142e155024b624");
-  check_xof("448/512", Hacl_Hash_SHA3_Ptr_shake256, 512, (const uint8_t *)S448, 56,
+  check_xof("448/512", Hacl_Hash_SHA3_shake256, 512, (const uint8_t *)S448, 56,
             "4d8c2dd2435a0128eefbb8c36f6f87133a7911e18d979ee1ae6be5d4fd2e332940d8688a4e6a59aa8060f1f9bc996c05aca3c696a8b66279dc672c740bb224ec37a92b65db0539c0203455f51d97cce4cfc49127d7260afc673af208baf19be21233f3debe78d06760cfa551ee1e079141d49dd3ef7e182b1524df82ea1cefe1c6c3966175f0228d35887cd9f09b05457f6d952f9b3b32464e0b3c54dcc13efdb4c54e29cdb4088faf482cddd0a5e6b822f5a80d0cc78d4cc90131906fd5159eb5142e155024b62402eb0017f986c9638ba61970e9086dd94884275f484d3c3b8422110ed64f079ab2c9acff78e8bd4951923f75f0a2f18c43806ce5de92386fea1b7bc46a117f2501bb0129393e776438d07bcb970c004c38db5e712cd3503692f5cf199d26a4a714ce14b8ab3138b9a5b3927b529b06dc4ed3e1d7065a3ad267d7e21f9543ec3174dcbf1236bc4b88da4babf677556b774d08b36c7ec11061fe291a5ce95a0cae2ddfd5ef1d1f2d11adefe4671c9e8568dc9b5da35f9e7aa699ca08be250f8456f016b948d822bb60c2962feed3490c51349298a9722961af6e5d60950fde1fed06eaa9a0cfa4bfd0fb381ea710aac33b7f332d866fecbd54679edd4ac2631b1d76ada2ddd12647d733bedc80cb5308da086f3989e7220c2b5e2334ec2fc8fbe5264adce521678dcf22784d6812c81dcaa4e128e33fe14576");
-  check_xof("896/16", Hacl_Hash_SHA3_Ptr_shake256, 16, (const uint8_t *)S896, 112,
+  check_xof("896/16", Hacl_Hash_SHA3_shake256, 16, (const uint8_t *)S896, 112,
             "98be04516c04cc73593fef3ed0352ea9");
-  check_xof("896/32", Hacl_Hash_SHA3_Ptr_shake256, 32, (const uint8_t *)S896, 112,
+  check_xof("896/32", Hacl_Hash_SHA3_shake256, 32, (const uint8_t *)S896, 112,
             "98be04516c04cc73593fef3ed0352ea9f6443942d6950e29a372a681c3deaf45");
-  check_xof("896/64", Hacl_Hash_SHA3_Ptr_shake256, 64, (const uint8_t *)S896, 112,
+  check_xof("896/64", Hacl_Hash_SHA3_shake256, 64, (const uint8_t *)S896, 112,
             "98be04516c04cc73593fef3ed0352ea9f6443942d6950e29a372a681c3deaf4535423709b02843948684e029010badcc0acd8303fc85fdad3eabf4f78cae1656");
-  check_xof("896/200", Hacl_Hash_SHA3_Ptr_shake256, 200, (const uint8_t *)S896, 112,
+  check_xof("896/200", Hacl_Hash_SHA3_shake256, 200, (const uint8_t *)S896, 112,
             "98be04516c04cc73593fef3ed0352ea9f6443942d6950e29a372a681c3deaf4535423709b02843948684e029010badcc0acd8303fc85fdad3eabf4f78cae165635f57afd28810fc22abf63df55c5ead450fdfb64209010e982102aa0b5f0a4b4753b53eb4b5319c06986f5aac5cc247256d06b05a273d7ef8d31864777d488d541451ed82a38926582deb65d40ddb959b79dbe933635f9f3e2ae57f7c6aefc4d5bd7f230070fc2e9e2357d4eb39cee4bd064c4a33f35d5f652774fe941300cce4e800b127d54ba35");
-  check_xof("896/512", Hacl_Hash_SHA3_Ptr_shake256, 512, (const uint8_t *)S896, 112,
+  check_xof("896/512", Hacl_Hash_SHA3_shake256, 512, (const uint8_t *)S896, 112,
             "98be04516c04cc73593fef3ed0352ea9f6443942d6950e29a372a681c3deaf4535423709b02843948684e029010badcc0acd8303fc85fdad3eabf4f78cae165635f57afd28810fc22abf63df55c5ead450fdfb64209010e982102aa0b5f0a4b4753b53eb4b5319c06986f5aac5cc247256d06b05a273d7ef8d31864777d488d541451ed82a38926582deb65d40ddb959b79dbe933635f9f3e2ae57f7c6aefc4d5bd7f230070fc2e9e2357d4eb39cee4bd064c4a33f35d5f652774fe941300cce4e800b127d54ba3548986db411d08dee19a295c1e9219e8c76a292bae5cfecf54785b37044bac9deef0f129c666b99719164d5f62ccef52b2ae53e4e8e971646f3e8cdcb2887abceba41829d88cf60cb35bbcaa329eb854b13636d14cc5d03688eb5deb122cbf98b3514d02967fe8f404c7f53dda530e7199260a090e61777f52fdc0327ea450a49ad667c7670a59c39a25743c30768b7b50f4b0aead4cef9c29b8a56d8fea34b0e2ed26ff944be0d9937fa6871c97c6501f2878e21f54fe7d3443dee89112f68b10c7c8d8516c2ed087acaab0ddd64a1926265603cb65a022f006b701988d590e21a8d6c91839b2fb8902cf4357c4f01433f2683c3cfb1d522a377b3688e071e6c2c3f899fc83d929f8a1d69c818aa715d0d381565e0708d68142038ea56bb183f5fd9395319afe76b057020d2123895097154ca7338a84912");
-  check_xof("million_a/32", Hacl_Hash_SHA3_Ptr_shake256, 32, million, 1000000,
+  check_xof("million_a/32", Hacl_Hash_SHA3_shake256, 32, million, 1000000,
             "3578a7a4ca9137569cdf76ed617d31bb994fca9c1bbf8b184013de8234dfd13a");
-  check_xof("million_a/512", Hacl_Hash_SHA3_Ptr_shake256, 512, million, 1000000,
+  check_xof("million_a/512", Hacl_Hash_SHA3_shake256, 512, million, 1000000,
             "3578a7a4ca9137569cdf76ed617d31bb994fca9c1bbf8b184013de8234dfd13a3fd124d4df76c0a539ee7dd2f6e1ec346124c815d9410e145eb561bcd97b18ab6ce8d5553e0eab3d1f7dfb8f9deefe16847e2192f6f61fb82fb90dde60b19063c56a4c55cdd7b672b75bf515adbfe204903c8c0036de54a2999a920de90f66d7ff6ec8e4c93d24ae346fdcb3a5a5bd5739ec15a6eddb5ce5b02da53039fac63e19555faa2eddc693b1f0c2a6fcbe7c0a0a091d0ee700d7322e4b0ff09590de166422f9ead5da4c993d605fe4d9c634843aa178b17672c6568c8a2e62abebea2c21c302bd366ad698959e1f6e434af155568b2734d8379fcd3ffe6489baffa6d71109442e1b344f138a09cae3e2d3942eee828fc47e64deb5e00a024ae1f2c077e6b7b133f6c1de913092d4e829ecd2b2ef28ca8020821e2b8be517d93ed08836f6f066cc3d03b625d8497f29dbc1c39e6fe463226f85c128a2c29888112e06a99c5d17b25e900d204f397231cdf79c313446532dad07f4c0bd9fba1dd413d8a7e6cbc0a0862cc769239a89f9db085b78a054596ad7080ddf96019b7399b503480e5a65a2208d74724c987d325e9b0e82fecd4f27f3135b1d9e27b48e69dd6f5962b8a63b48921ec8ee53869f1ac1c8182387ee0d6cfef653ff8bf605f14704b71beb6553f281fa756948c438494b19b4ee69a5436b222bc988eda4ac600024c9");
 
   free(million);

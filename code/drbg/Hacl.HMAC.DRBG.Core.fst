@@ -33,7 +33,6 @@ open Hacl.Impl.Copy
 open Hacl.HMAC.Core
 open Hacl.HMAC.Cat
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -50,59 +49,63 @@ module S8 = Hacl.Secret.UInt8
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn rekey (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-         (kt: S.slice t) (ivt: S.slice t)
-         (k: S.slice S8.t) (v: S.slice S8.t)
-         (d1: S.slice S8.t) (d2: S.slice S8.t) (d3: S.slice S8.t) (c: U8.t)
+         (kt: A.array t) (ivt: A.array t)
+         (k: A.array S8.t) (v: A.array S8.t)
+         (d1: A.array S8.t) (n1: SZ.t) (d2: A.array S8.t) (n2: SZ.t)
+         (d3: A.array S8.t) (n3: SZ.t) (c: U8.t)
          (#pk: perm) (#vk: erased (Seq.seq t))
          (#pi: perm) (#vi: erased (Seq.seq t))
          (#vkey: erased (Seq.seq S8.t)) (#vval: erased (Seq.seq S8.t))
          (#p1: perm) (#vd1: erased (Seq.seq S8.t))
          (#p2: perm) (#vd2: erased (Seq.seq S8.t))
          (#p3: perm) (#vd3: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-         S.pts_to k vkey ** S.pts_to v vval ** S.pts_to d1 #p1 vd1 ** S.pts_to d2 #p2 vd2 ** S.pts_to d3 #p3 vd3 **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+         A.pts_to k vkey ** A.pts_to v vval ** A.pts_to d1 #p1 vd1 ** A.pts_to d2 #p2 vd2 ** A.pts_to d3 #p3 vd3 **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vkey == (hash_bytes p) /\ Seq.length vval == (hash_bytes p) /\
                data_ok p (dcat vd1 vd2 vd3) /\
                SZ.fits (block_len #t + (hash_bytes p) + 1 + Seq.length (dcat vd1 vd2 vd3)))
+         ** pure (SZ.v n1 == Seq.length vd1)
+         ** pure (SZ.v n2 == Seq.length vd2)
+         ** pure (SZ.v n3 == Seq.length vd3)
 ensures exists* vkey' vval'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-  S.pts_to k vkey' ** S.pts_to v vval' ** S.pts_to d1 #p1 vd1 ** S.pts_to d2 #p2 vd2 ** S.pts_to d3 #p3 vd3 **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+  A.pts_to k vkey' ** A.pts_to v vval' ** A.pts_to d1 #p1 vd1 ** A.pts_to d2 #p2 vd2 ** A.pts_to d3 #p3 vd3 **
   pure (vkey' == hm p vkey (tagged vval c (dcat vd1 vd2 vd3)) /\ vval' == hm p vkey' vval)
 {
-  S.pts_to_len kt; S.pts_to_len ivt;
-  S.pts_to_len k; S.pts_to_len v;
-  S.pts_to_len d1; S.pts_to_len d2; S.pts_to_len d3;
+  A.pts_to_len kt; A.pts_to_len ivt;
+  A.pts_to_len k; A.pts_to_len v;
+  A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3;
   let hb = p.nhash_bytes;
   let z8 = S8.classify 0uy;
   outer_fits #t p;
   sizes #t p;
 
-  (** [tmp <- V || c] *)
+  (** [tarr <- V || c] *)
   let tn = SZ.add hb 1sz;
   let mut tarr = [| z8; tn |]; A.pts_to_len tarr;
-  let tmp = S.from_array tarr tn; S.pts_to_len tmp;
-  copy_prefix tmp v hb;
-  S.((tmp.(hb) <- S8.classify c));
-  with vtmp. assert (S.pts_to tmp vtmp);
+  A.pts_to_len tarr;
+  copy_prefix tarr v hb;
+  A.((tarr.(hb) <- S8.classify c));
+  with vtmp. assert (A.pts_to tarr vtmp);
   tagged_prefix (reveal vval) c (reveal vtmp);
   tagged_split (reveal vval) c (dcat vd1 vd2 vd3);
 
   let mut k1arr = [| z8; hb |]; A.pts_to_len k1arr;
-  let k1 = S.from_array k1arr hb; S.pts_to_len k1;
-  hmac_cat p kt ivt k1 k tmp d1 d2 d3;
-  with vk1. assert (S.pts_to k1 vk1);
+  A.pts_to_len k1arr;
+  hmac_cat p kt ivt k1arr k tarr d1 d2 d3 hb tn n1 n2 n3;
+  with vk1. assert (A.pts_to k1arr vk1);
   hm_def p (reveal vkey) (tagged (reveal vval) c (dcat vd1 vd2 vd3));
 
   let mut v1arr = [| z8; hb |]; A.pts_to_len v1arr;
-  let v1 = S.from_array v1arr hb; S.pts_to_len v1;
-  hmac_impl p kt ivt v1 k1 v;
+  A.pts_to_len v1arr;
+  hmac_impl p kt ivt v1arr k1arr hb v hb;
   hm_def p (reveal vk1) (reveal vval);
 
-  copy_exact k k1 hb;
-  copy_exact v v1 hb;
+  copy_exact k k1arr hb;
+  copy_exact v v1arr hb;
 
-  S.to_array v1; S.to_array k1; S.to_array tmp;
+  ()
 }
 
 #pop-options
@@ -114,42 +117,43 @@ ensures exists* vkey' vval'.
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn update (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-          (kt: S.slice t) (ivt: S.slice t)
-          (k: S.slice S8.t) (v: S.slice S8.t)
-          (d1: S.slice S8.t) (d2: S.slice S8.t) (d3: S.slice S8.t)
+          (kt: A.array t) (ivt: A.array t)
+          (k: A.array S8.t) (v: A.array S8.t)
+          (d1: A.array S8.t) (n1: SZ.t) (d2: A.array S8.t) (n2: SZ.t) (d3: A.array S8.t) (n3: SZ.t)
           (#pk: perm) (#vk: erased (Seq.seq t))
           (#pi: perm) (#vi: erased (Seq.seq t))
           (#vkey: erased (Seq.seq S8.t)) (#vval: erased (Seq.seq S8.t))
           (#p1: perm) (#vd1: erased (Seq.seq S8.t))
          (#p2: perm) (#vd2: erased (Seq.seq S8.t))
          (#p3: perm) (#vd3: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-         S.pts_to k vkey ** S.pts_to v vval ** S.pts_to d1 #p1 vd1 ** S.pts_to d2 #p2 vd2 ** S.pts_to d3 #p3 vd3 **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+         A.pts_to k vkey ** A.pts_to v vval ** A.pts_to d1 #p1 vd1 ** A.pts_to d2 #p2 vd2 ** A.pts_to d3 #p3 vd3 **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vkey == (hash_bytes p) /\ Seq.length vval == (hash_bytes p) /\
                data_ok p (dcat vd1 vd2 vd3) /\
                SZ.fits (block_len #t + (hash_bytes p) + 1 + Seq.length (dcat vd1 vd2 vd3)))
+         ** pure (SZ.v n1 == Seq.length vd1)
+         ** pure (SZ.v n2 == Seq.length vd2)
+         ** pure (SZ.v n3 == Seq.length vd3)
 ensures exists* vkey' vval'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi **
-  S.pts_to k vkey' ** S.pts_to v vval' ** S.pts_to d1 #p1 vd1 ** S.pts_to d2 #p2 vd2 ** S.pts_to d3 #p3 vd3 **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi **
+  A.pts_to k vkey' ** A.pts_to v vval' ** A.pts_to d1 #p1 vd1 ** A.pts_to d2 #p2 vd2 ** A.pts_to d3 #p3 vd3 **
   pure ((vkey', vval') == upd p vkey vval (dcat vd1 vd2 vd3))
 {
-  S.pts_to_len k; S.pts_to_len v;
-  S.pts_to_len d1; S.pts_to_len d2; S.pts_to_len d3;
+  A.pts_to_len k; A.pts_to_len v;
+  A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3;
   outer_fits #t p;
-  rekey p kt ivt k v d1 d2 d3 0x00uy;
+  rekey p kt ivt k v d1 n1 d2 n2 d3 n3 0x00uy;
   hm_def p (reveal vkey) (tagged (reveal vval) 0x00uy (dcat vd1 vd2 vd3));
-  with vk1. assert (S.pts_to k vk1);
-  with vv1. assert (S.pts_to v vv1);
+  with vk1. assert (A.pts_to k vk1);
+  with vv1. assert (A.pts_to v vv1);
   hm_def p (reveal vk1) (reveal vval);
-  let n1 = S.len d1;
-  let n2 = S.len d2;
-  let n3 = S.len d3;
   if (SZ.gt n1 0sz || SZ.gt n2 0sz || SZ.gt n3 0sz) {
-    rekey p kt ivt k v d1 d2 d3 0x01uy;
+    rekey p kt ivt k v d1 n1 d2 n2 d3 n3 0x01uy;
     hm_def p (reveal vk1) (tagged (reveal vv1) 0x01uy (dcat vd1 vd2 vd3));
-    with vk2. assert (S.pts_to k vk2);
+    with vk2. assert (A.pts_to k vk2);
     hm_def p (reveal vk2) (reveal vv1);
+    ()
   } else {
     ()
   }

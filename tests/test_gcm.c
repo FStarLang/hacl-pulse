@@ -49,10 +49,10 @@ static void gcm_encrypt(int bits, uint8_t *t, uint8_t *m, size_t mlen,
                         const uint8_t *k, const uint8_t *iv, size_t ivlen,
                         const uint8_t *aad, size_t aadlen) {
   if (bits == 128)
-    Hacl_AES_GCM_Ptr_aes128_encrypt(t, m, mlen, (uint8_t *)k, (uint8_t *)iv,
+    Hacl_AES_GCM_aes128_encrypt(t, m, mlen, (uint8_t *)k, (uint8_t *)iv,
                                     ivlen, (uint8_t *)aad, aadlen);
   else
-    Hacl_AES_GCM_Ptr_aes256_encrypt(t, m, mlen, (uint8_t *)k, (uint8_t *)iv,
+    Hacl_AES_GCM_aes256_encrypt(t, m, mlen, (uint8_t *)k, (uint8_t *)iv,
                                     ivlen, (uint8_t *)aad, aadlen);
 }
 
@@ -60,10 +60,10 @@ static bool gcm_decrypt(int bits, uint8_t *m, size_t mlen, const uint8_t *t,
                         const uint8_t *k, const uint8_t *iv, size_t ivlen,
                         const uint8_t *aad, size_t aadlen) {
   if (bits == 128)
-    return Hacl_AES_GCM_Ptr_aes128_decrypt(m, mlen, (uint8_t *)t, (uint8_t *)k,
+    return Hacl_AES_GCM_aes128_decrypt(m, mlen, (uint8_t *)t, (uint8_t *)k,
                                            (uint8_t *)iv, ivlen,
                                            (uint8_t *)aad, aadlen);
-  return Hacl_AES_GCM_Ptr_aes256_decrypt(m, mlen, (uint8_t *)t, (uint8_t *)k,
+  return Hacl_AES_GCM_aes256_decrypt(m, mlen, (uint8_t *)t, (uint8_t *)k,
                                          (uint8_t *)iv, ivlen,
                                          (uint8_t *)aad, aadlen);
 }

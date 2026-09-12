@@ -39,7 +39,6 @@ open Hacl.Hash.SHA2.Core
 open Hacl.Hash.SHA2.Streaming
 open Hacl.HMAC.Core
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -62,9 +61,10 @@ let cat5 (a b c d e: Seq.seq S8.t)
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn hmac_cat (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
-            (kt: S.slice t) (ivt: S.slice t) (out: S.slice S8.t)
-            (key: S.slice S8.t)
-            (a: S.slice S8.t) (b: S.slice S8.t) (c: S.slice S8.t) (d: S.slice S8.t)
+            (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
+            (key: A.array S8.t)
+            (a: A.array S8.t) (b: A.array S8.t) (c: A.array S8.t) (d: A.array S8.t)
+            (lk: SZ.t) (la: SZ.t) (lb: SZ.t) (lc: SZ.t) (ld: SZ.t)
             (#pk: perm) (#vk: erased (Seq.seq t))
             (#pi: perm) (#vi: erased (Seq.seq t))
             (#vout: erased (Seq.seq S8.t))
@@ -73,9 +73,9 @@ fn hmac_cat (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: p
             (#pb: perm) (#vb: erased (Seq.seq S8.t))
             (#pc: perm) (#vc: erased (Seq.seq S8.t))
             (#pd: perm) (#vd: erased (Seq.seq S8.t))
-requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout **
-         S.pts_to key #pkey vkey ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-         S.pts_to c #pc vc ** S.pts_to d #pd vd **
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to key #pkey vkey ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+         A.pts_to c #pc vc ** A.pts_to d #pd vd **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                Seq.length vout == (hash_bytes p) /\
                Seq.length vkey < pow2 61 /\ Seq.length vkey < max_input #t /\
@@ -84,64 +84,66 @@ requires S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout **
                block_len #t + Seq.length va + Seq.length vb +
                  Seq.length vc + Seq.length vd < pow2 61 /\
                block_len #t + Seq.length va + Seq.length vb +
-                 Seq.length vc + Seq.length vd < max_input #t)
+                 Seq.length vc + Seq.length vd < max_input #t /\
+               SZ.v lk == Seq.length vkey /\ SZ.v la == Seq.length va /\
+               SZ.v lb == Seq.length vb /\ SZ.v lc == Seq.length vc /\
+               SZ.v ld == Seq.length vd)
 ensures exists* vout'.
-  S.pts_to kt #pk vk ** S.pts_to ivt #pi vi ** S.pts_to out vout' **
-  S.pts_to key #pkey vkey ** S.pts_to a #pa va ** S.pts_to b #pb vb **
-  S.pts_to c #pc vc ** S.pts_to d #pd vd **
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to key #pkey vkey ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to c #pc vc ** A.pts_to d #pd vd **
   pure (Seq.length vkey < max_input #t /\
         block_len #t + Seq.length va + Seq.length vb +
           Seq.length vc + Seq.length vd < max_input #t /\
         vout' == hmac p vkey (Seq.append va (Seq.append vb (Seq.append vc vd))))
 {
-  S.pts_to_len kt; S.pts_to_len ivt; S.pts_to_len out;
-  S.pts_to_len key; S.pts_to_len a; S.pts_to_len b;
-  S.pts_to_len c; S.pts_to_len d;
+  A.pts_to_len kt; A.pts_to_len ivt; A.pts_to_len out;
+  A.pts_to_len key; A.pts_to_len a; A.pts_to_len b;
+  A.pts_to_len c; A.pts_to_len d;
   let bl = block_len_sz #t #w;
   let z8 = S8.classify 0uy;
   let z0: t = zero #t #w;
 
   let mut k0arr = [| z8; bl |]; A.pts_to_len k0arr;
-  let k0 = S.from_array k0arr bl; S.pts_to_len k0;
+  A.pts_to_len k0arr;
   let mut padarr = [| z8; bl |]; A.pts_to_len padarr;
-  let pad = S.from_array padarr bl; S.pts_to_len pad;
+  A.pts_to_len padarr;
   let mut dgarr = [| z8; p.nhash_bytes |]; A.pts_to_len dgarr;
-  let dg = S.from_array dgarr p.nhash_bytes; S.pts_to_len dg;
+  A.pts_to_len dgarr;
   let mut accarr = [| z0; 8sz |]; A.pts_to_len accarr;
-  let acc = S.from_array accarr 8sz; S.pts_to_len acc;
+  A.pts_to_len accarr;
   let mut bufarr = [| z8; bl |]; A.pts_to_len bufarr;
-  let buf = S.from_array bufarr bl; S.pts_to_len buf;
+  A.pts_to_len bufarr;
   let mut totarr = [| 0sz; 1sz |]; A.pts_to_len totarr;
-  let tot = S.from_array totarr 1sz; S.pts_to_len tot;
+  A.pts_to_len totarr;
   let mut wsarr = [| z0; p.nrounds |]; A.pts_to_len wsarr;
-  let wsb = S.from_array wsarr p.nrounds; S.pts_to_len wsb;
+  A.pts_to_len wsarr;
 
-  key_block_impl p kt ivt k0 dg key;
+  key_block_impl p kt ivt k0arr dgarr key lk;
 
   (** {3 The inner hash, in three pieces} *)
-  fill_xor #t pad k0 ipad;
-  with vpad. assert (S.pts_to pad vpad);
-  init_impl p ivt acc buf tot;
-  update_impl p kt wsb acc buf tot pad (Seq.empty #S8.t);
-  update_impl p kt wsb acc buf tot a (Seq.append (Seq.empty #S8.t) vpad);
-  update_impl p kt wsb acc buf tot b
+  fill_xor #t padarr k0arr ipad;
+  with vpad. assert (A.pts_to padarr vpad);
+  init_impl p ivt accarr bufarr totarr;
+  update_impl p kt wsarr accarr bufarr totarr padarr bl (Seq.empty #S8.t);
+  update_impl p kt wsarr accarr bufarr totarr a la (Seq.append (Seq.empty #S8.t) vpad);
+  update_impl p kt wsarr accarr bufarr totarr b lb
     (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va);
-  update_impl p kt wsb acc buf tot c
+  update_impl p kt wsarr accarr bufarr totarr c lc
     (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb);
-  update_impl p kt wsb acc buf tot d
+  update_impl p kt wsarr accarr bufarr totarr d ld
     (Seq.append (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb) vc);
-  digest_impl p kt wsb acc buf tot dg
+  digest_impl p kt wsarr accarr bufarr totarr dgarr
     (Seq.append (Seq.append (Seq.append (Seq.append
       (Seq.append (Seq.empty #S8.t) vpad) va) vb) vc) vd);
   cat5 (reveal vpad) (reveal va) (reveal vb) (reveal vc) (reveal vd);
 
   (** {3 The outer hash} *)
-  fill_xor #t pad k0 opad;
+  fill_xor #t padarr k0arr opad;
   sizes #t p;
-  hash_prefixed p kt ivt out pad dg;
+  hash_prefixed p kt ivt out padarr dgarr p.nhash_bytes;
 
-  S.to_array wsb; S.to_array tot; S.to_array buf; S.to_array acc;
-  S.to_array dg; S.to_array pad; S.to_array k0;
+  ()
 }
 
 #pop-options

@@ -32,7 +32,6 @@ open Hacl.Spec.Bytes
 open Hacl.Impl.Copy
 open Hacl.P256.Scalar
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -51,24 +50,23 @@ module C = Spec.SHA2.Constants
 let mqe (vb: Seq.seq S8.t) : GTot P.qelem =
   if 32 <= Seq.length vb then P.msg_as_qelem vb else 0
 
-fn msg_qelem (mq: S.slice S64.t) (b: S.slice S8.t)
+fn msg_qelem (mq: A.array S64.t) (b: A.array S8.t)
              (#vm: erased (Seq.seq S64.t))
              (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to mq vm ** S.pts_to b #pb vb **
+requires A.pts_to mq vm ** A.pts_to b #pb vb **
   pure (Seq.length vm == nl /\ 32 <= Seq.length vb)
 ensures exists* (wm: Seq.seq S64.t).
-  S.pts_to mq wm ** S.pts_to b #pb vb **
+  A.pts_to mq wm ** A.pts_to b #pb vb **
   pure (qelem wm /\ qev wm == mqe vb)
 {
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; let hb = S.from_array d0 32sz;
-  S.pts_to_len hb;
-  copy_prefix hb b 32sz;
-  with vhb. assert (S.pts_to hb vhb);
-  S.pts_to_len hb;
+  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  copy_prefix d0 b 32sz;
+  with vhb. assert (A.pts_to d0 vhb);
+  A.pts_to_len d0;
   assert (pure (Seq.equal vhb (Seq.slice vb 0 32)));
-  qload_mod mq hb;
-  S.to_array hb;
+  qload_mod mq d0;
+  ()
 }
 
 (** {2 The hashed representatives}
@@ -86,58 +84,58 @@ let s384 (vb: Seq.seq S8.t) : GTot P.qelem =
 let s512 (vb: Seq.seq S8.t) : GTot P.qelem =
   if Seq.length vb < pow2 61 then P.sha512_as_qelem vb else 0
 
-fn sha256_qelem (mq: S.slice S64.t) (msg: S.slice S8.t)
+fn sha256_qelem (mq: A.array S64.t) (msg: A.array S8.t) (msg_len: SZ.t)
                 (#vm: erased (Seq.seq S64.t))
                 (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to mq vm ** S.pts_to msg #pb vb **
+requires A.pts_to mq vm ** A.pts_to msg #pb vb **
   pure (Seq.length vm == nl /\ Seq.length vb < pow2 61)
+         ** pure (SZ.v msg_len == Seq.length vb)
 ensures exists* (wm: Seq.seq S64.t).
-  S.pts_to mq wm ** S.pts_to msg #pb vb **
+  A.pts_to mq wm ** A.pts_to msg #pb vb **
   pure (qelem wm /\ qev wm == s256 vb)
 {
   P.msg_ok_hashable vb; P.digest_ge_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; let h = S.from_array d0 32sz;
-  S.pts_to_len h;
-  Hash.sha256 h msg;
-  msg_qelem mq h;
-  S.to_array h;
+  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  Hash.sha256 d0 msg msg_len;
+  msg_qelem mq d0;
+  ()
 }
 
-fn sha384_qelem (mq: S.slice S64.t) (msg: S.slice S8.t)
+fn sha384_qelem (mq: A.array S64.t) (msg: A.array S8.t) (msg_len: SZ.t)
                 (#vm: erased (Seq.seq S64.t))
                 (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to mq vm ** S.pts_to msg #pb vb **
+requires A.pts_to mq vm ** A.pts_to msg #pb vb **
   pure (Seq.length vm == nl /\ Seq.length vb < pow2 61)
+         ** pure (SZ.v msg_len == Seq.length vb)
 ensures exists* (wm: Seq.seq S64.t).
-  S.pts_to mq wm ** S.pts_to msg #pb vb **
+  A.pts_to mq wm ** A.pts_to msg #pb vb **
   pure (qelem wm /\ qev wm == s384 vb)
 {
   P.msg_ok_hashable vb; P.digest_ge_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 48sz |]; A.pts_to_len d0; let h = S.from_array d0 48sz;
-  S.pts_to_len h;
-  Hash.sha384 h msg;
-  msg_qelem mq h;
-  S.to_array h;
+  let mut d0 = [| z8; 48sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  Hash.sha384 d0 msg msg_len;
+  msg_qelem mq d0;
+  ()
 }
 
-fn sha512_qelem (mq: S.slice S64.t) (msg: S.slice S8.t)
+fn sha512_qelem (mq: A.array S64.t) (msg: A.array S8.t) (msg_len: SZ.t)
                 (#vm: erased (Seq.seq S64.t))
                 (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires S.pts_to mq vm ** S.pts_to msg #pb vb **
+requires A.pts_to mq vm ** A.pts_to msg #pb vb **
   pure (Seq.length vm == nl /\ Seq.length vb < pow2 61)
+         ** pure (SZ.v msg_len == Seq.length vb)
 ensures exists* (wm: Seq.seq S64.t).
-  S.pts_to mq wm ** S.pts_to msg #pb vb **
+  A.pts_to mq wm ** A.pts_to msg #pb vb **
   pure (qelem wm /\ qev wm == s512 vb)
 {
   P.msg_ok_hashable vb; P.digest_ge_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 64sz |]; A.pts_to_len d0; let h = S.from_array d0 64sz;
-  S.pts_to_len h;
-  Hash.sha512 h msg;
-  msg_qelem mq h;
-  S.to_array h;
+  let mut d0 = [| z8; 64sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  Hash.sha512 d0 msg msg_len;
+  msg_qelem mq d0;
+  ()
 }
 
 #pop-options

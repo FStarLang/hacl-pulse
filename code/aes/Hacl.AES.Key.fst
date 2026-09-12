@@ -40,7 +40,7 @@ open Spec.Byte
 open Spec.AES
 open Hacl.AES.Core
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
@@ -321,61 +321,61 @@ let rcon_keep (v: variant) (b: nat)
     property alone. *)
 
 fn ks_word_impl ([@@@FStar.Attributes.monomorphize] p: params)
-                (w: S.slice S8.t) (b: SZ.t) (rc: S8.t)
+                (w: A.array S8.t) (b: SZ.t) (rc: S8.t)
                 (#key: erased (Seq.lseq elem (keylen p.pv)))
                 (#vw0: erased (Seq.seq S8.t))
-requires S.pts_to w vw0 ** pure (
+requires A.pts_to w vw0 ** pure (
   Seq.length vw0 == xkeylen p.pv /\
   keylen p.pv <= SZ.v b /\ SZ.v b + 4 <= xkeylen p.pv /\ SZ.v b % 4 == 0 /\
   (SZ.v b % keylen p.pv == 0 ==> S8.v rc == rcon0 (SZ.v b / keylen p.pv)) /\
   (forall (j: nat). j < SZ.v b ==>
      Seq.index (vals vw0) j == Seq.index (key_expansion p.pv key) j))
-ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** pure (
+ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
   Seq.length vw1 == xkeylen p.pv /\ SZ.v b + 4 <= xkeylen p.pv /\
   (forall (j: nat). j < SZ.v b + 4 ==>
      Seq.index (vals vw1) j == Seq.index (key_expansion p.pv key) j))
 {
-  S.pts_to_len w;
+  A.pts_to_len w;
   let back = SZ.sub b p.pkeylen;
   let prev = SZ.sub b 4sz;
-  let a0 = S.(w.(back));
-  let a1 = S.(w.(SZ.add back 1sz));
-  let a2 = S.(w.(SZ.add back 2sz));
-  let a3 = S.(w.(SZ.add back 3sz));
-  let p0 = S.(w.(prev));
-  let p1 = S.(w.(SZ.add prev 1sz));
-  let p2 = S.(w.(SZ.add prev 2sz));
-  let p3 = S.(w.(SZ.add prev 3sz));
+  let a0 = A.(w.(back));
+  let a1 = A.(w.(SZ.add back 1sz));
+  let a2 = A.(w.(SZ.add back 2sz));
+  let a3 = A.(w.(SZ.add back 3sz));
+  let p0 = A.(w.(prev));
+  let p1 = A.(w.(SZ.add prev 1sz));
+  let p2 = A.(w.(SZ.add prev 2sz));
+  let p3 = A.(w.(SZ.add prev 3sz));
   let m = SZ.rem b p.pkeylen;
   if (m = 0sz) {
     let t0 = bxor (sbox_impl p1) rc;
     let t1 = sbox_impl p2;
     let t2 = sbox_impl p3;
     let t3 = sbox_impl p0;
-    S.((w.(b) <- bxor a0 t0));
-    S.((w.(SZ.add b 1sz) <- bxor a1 t1));
-    S.((w.(SZ.add b 2sz) <- bxor a2 t2));
-    S.((w.(SZ.add b 3sz) <- bxor a3 t3));
-    with vw1. assert S.pts_to w vw1;
+    A.((w.(b) <- bxor a0 t0));
+    A.((w.(SZ.add b 1sz) <- bxor a1 t1));
+    A.((w.(SZ.add b 2sz) <- bxor a2 t2));
+    A.((w.(SZ.add b 3sz) <- bxor a3 t3));
+    with vw1. assert A.pts_to w vw1;
     ks_join_mul p.pv key vw0 vw1 (SZ.v b);
-    S.pts_to_len w;
+    A.pts_to_len w;
   } else {
     if (SZ.gt p.pkeylen 24sz && m = 16sz) {
-      S.((w.(b) <- bxor a0 (sbox_impl p0)));
-      S.((w.(SZ.add b 1sz) <- bxor a1 (sbox_impl p1)));
-      S.((w.(SZ.add b 2sz) <- bxor a2 (sbox_impl p2)));
-      S.((w.(SZ.add b 3sz) <- bxor a3 (sbox_impl p3)));
-      with vw1. assert S.pts_to w vw1;
+      A.((w.(b) <- bxor a0 (sbox_impl p0)));
+      A.((w.(SZ.add b 1sz) <- bxor a1 (sbox_impl p1)));
+      A.((w.(SZ.add b 2sz) <- bxor a2 (sbox_impl p2)));
+      A.((w.(SZ.add b 3sz) <- bxor a3 (sbox_impl p3)));
+      with vw1. assert A.pts_to w vw1;
       ks_join_sub p.pv key vw0 vw1 (SZ.v b);
-      S.pts_to_len w;
+      A.pts_to_len w;
     } else {
-      S.((w.(b) <- bxor a0 p0));
-      S.((w.(SZ.add b 1sz) <- bxor a1 p1));
-      S.((w.(SZ.add b 2sz) <- bxor a2 p2));
-      S.((w.(SZ.add b 3sz) <- bxor a3 p3));
-      with vw1. assert S.pts_to w vw1;
+      A.((w.(b) <- bxor a0 p0));
+      A.((w.(SZ.add b 1sz) <- bxor a1 p1));
+      A.((w.(SZ.add b 2sz) <- bxor a2 p2));
+      A.((w.(SZ.add b 3sz) <- bxor a3 p3));
+      with vw1. assert A.pts_to w vw1;
       ks_join_plain p.pv key vw0 vw1 (SZ.v b);
-      S.pts_to_len w;
+      A.pts_to_len w;
     }
   }
 }
@@ -384,21 +384,21 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** pure (
     bytes: the key first, then one word at a time. *)
 
 fn key_expansion_impl ([@@@FStar.Attributes.monomorphize] p: params)
-                      (w: S.slice S8.t) (key: S.slice S8.t)
+                      (w: A.array S8.t) (key: A.array S8.t)
                       (#vw0: erased (Seq.seq S8.t))
                       (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires S.pts_to w vw0 ** S.pts_to key #pk vkey ** pure (
+requires A.pts_to w vw0 ** A.pts_to key #pk vkey ** pure (
   Seq.length vw0 == xkeylen p.pv /\ Seq.length vkey == keylen p.pv)
-ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key #pk vkey ** pure (
+ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** A.pts_to key #pk vkey ** pure (
   Seq.length vw1 == xkeylen p.pv /\ Seq.length vkey == keylen p.pv /\
   vals vw1 == key_expansion p.pv (vals vkey))
 {
-  S.pts_to_len w;
-  S.pts_to_len key;
+  A.pts_to_len w;
+  A.pts_to_len key;
   let mut c = 0sz;
   while (let vc = !c; SZ.lt vc p.pkeylen)
   invariant exists* (vc: SZ.t) (vw: Seq.seq S8.t).
-    pts_to c vc ** S.pts_to w vw ** S.pts_to key #pk vkey **
+    pts_to c vc ** A.pts_to w vw ** A.pts_to key #pk vkey **
     pure (SZ.v vc <= keylen p.pv /\ Seq.length vw == xkeylen p.pv /\
           Seq.length vkey == keylen p.pv /\
           (forall (j: nat). j < SZ.v vc ==>
@@ -406,14 +406,14 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key #pk vkey ** 
   decreases (keylen p.pv - SZ.v (!c))
   {
     let vc = !c;
-    let x = S.(key.(vc));
-    with vw. assert S.pts_to w vw;
+    let x = A.(key.(vc));
+    with vw. assert A.pts_to w vw;
     vals_upd vw (SZ.v vc) x;
-    S.((w.(vc) <- x));
+    A.((w.(vc) <- x));
     c := SZ.add vc 1sz;
   };
   let nc = !c;
-  with vw. assert S.pts_to w vw;
+  with vw. assert A.pts_to w vw;
   key_prefix p.pv (vals vkey) vw (SZ.v nc);
 
   let mut b = p.pkeylen;
@@ -421,7 +421,7 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key #pk vkey ** 
   let mut rc = S8.classify 1uy;
   while (let vb = !b; SZ.lt vb p.pxkeylen)
   invariant exists* (vb: SZ.t) (vrc: S8.t) (vw: Seq.seq S8.t).
-    pts_to b vb ** pts_to rc vrc ** S.pts_to w vw ** S.pts_to key #pk vkey **
+    pts_to b vb ** pts_to rc vrc ** A.pts_to w vw ** A.pts_to key #pk vkey **
     pure (keylen p.pv <= SZ.v vb /\ SZ.v vb <= xkeylen p.pv /\ SZ.v vb % 4 == 0 /\
           Seq.length vw == xkeylen p.pv /\ Seq.length vkey == keylen p.pv /\
           S8.v vrc == rcon0 (rcidx (SZ.v vb) (keylen p.pv)) /\
@@ -445,9 +445,9 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key #pk vkey ** 
     }
   };
   let nb = !b;
-  with vw. assert S.pts_to w vw;
+  with vw. assert A.pts_to w vw;
   ks_done p.pv (vals vkey) vw (SZ.v nb);
-  S.pts_to_len w;
+  A.pts_to_len w;
 }
 
 #pop-options

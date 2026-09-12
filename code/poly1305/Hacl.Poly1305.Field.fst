@@ -40,7 +40,7 @@ module Hacl.Poly1305.Field
 open Pulse.Lib.Pervasives
 open Spec.Poly1305.Field
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U32 = FStar.UInt32
@@ -181,32 +181,32 @@ let add5w (a b c d e: S64.t)
 (** The twenty-five products, summed into five limbs under [2^58].  The four
     terms of each limb that would land at or above [2^130] have already been
     brought down five places and multiplied by five. *)
-fn mul_limbs (d: S.slice S64.t) (h: S.slice S64.t) (r: S.slice S64.t)
+fn mul_limbs (d: A.array S64.t) (h: A.array S64.t) (r: A.array S64.t)
              (#vd: erased (Seq.seq S64.t))
              (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
-requires S.pts_to d vd ** S.pts_to h vh ** S.pts_to r vr **
+requires A.pts_to d vd ** A.pts_to h vh ** A.pts_to r vr **
          pure (Seq.length vd == 5 /\ Seq.length vh == 5 /\ Seq.length vr == 5 /\
                bounded vh 28 /\ bounded vr 26)
 ensures exists* (vd': Seq.seq S64.t).
-  S.pts_to d vd' ** S.pts_to h vh ** S.pts_to r vr **
+  A.pts_to d vd' ** A.pts_to h vh ** A.pts_to r vr **
   pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\
         bounded vh 28 /\ bounded vr 26 /\
         Seq.length vd' == 5 /\ bounded vd' 59 /\ is_product vd' vh vr)
 {
-  S.pts_to_len d;
-  S.pts_to_len h;
-  S.pts_to_len r;
+  A.pts_to_len d;
+  A.pts_to_len h;
+  A.pts_to_len r;
   sum21 ();
-  let h0 = S.(h.(0sz));
-  let h1 = S.(h.(1sz));
-  let h2 = S.(h.(2sz));
-  let h3 = S.(h.(3sz));
-  let h4 = S.(h.(4sz));
-  let r0 = S.(r.(0sz));
-  let r1 = S.(r.(1sz));
-  let r2 = S.(r.(2sz));
-  let r3 = S.(r.(3sz));
-  let r4 = S.(r.(4sz));
+  let h0 = A.(h.(0sz));
+  let h1 = A.(h.(1sz));
+  let h2 = A.(h.(2sz));
+  let h3 = A.(h.(3sz));
+  let h4 = A.(h.(4sz));
+  let r0 = A.(r.(0sz));
+  let r1 = A.(r.(1sz));
+  let r2 = A.(r.(2sz));
+  let r3 = A.(r.(3sz));
+  let r4 = A.(r.(4sz));
 
   let p00 = mul26 h0 r0;
   let p01 = mul26 h0 r1;
@@ -251,33 +251,33 @@ ensures exists* (vd': Seq.seq S64.t).
   let e3 = add5w p03 p12 p21 p30 (times5 p44);
   let e4 = add5w p04 p13 p22 p31 p40;
 
-  S.((d.(0sz) <- e0));
-  S.((d.(1sz) <- e1));
-  S.((d.(2sz) <- e2));
-  S.((d.(3sz) <- e3));
-  S.((d.(4sz) <- e4));
+  A.((d.(0sz) <- e0));
+  A.((d.(1sz) <- e1));
+  A.((d.(2sz) <- e2));
+  A.((d.(3sz) <- e3));
+  A.((d.(4sz) <- e4));
 }
 
 (** The six carries: five up, and one wrapping the top round to the bottom
     multiplied by five, then one more up.  This computes exactly
     [Spec.Poly1305.Field.chain] and claims nothing else; what that chain is
     worth is [carry_chain_cong]'s business. *)
-fn carry_chain_impl (h: S.slice S64.t) (d: S.slice S64.t)
+fn carry_chain_impl (h: A.array S64.t) (d: A.array S64.t)
                     (#vh: erased (Seq.seq S64.t)) (#vd: erased (Seq.seq S64.t))
-requires S.pts_to h vh ** S.pts_to d vd **
+requires A.pts_to h vh ** A.pts_to d vd **
          pure (Seq.length vh == 5 /\ Seq.length vd == 5 /\ bounded vd 59)
-ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' ** S.pts_to d vd **
+ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' ** A.pts_to d vd **
   pure (Seq.length vd == 5 /\ bounded vd 59 /\ Seq.length vh' == 5 /\
         chain (vv vd 0) (vv vd 1) (vv vd 2) (vv vd 3) (vv vd 4)
               (vv vh' 0) (vv vh' 1) (vv vh' 2) (vv vh' 3) (vv vh' 4))
 {
-  S.pts_to_len h;
-  S.pts_to_len d;
-  let e0 = S.(d.(0sz));
-  let e1 = S.(d.(1sz));
-  let e2 = S.(d.(2sz));
-  let e3 = S.(d.(3sz));
-  let e4 = S.(d.(4sz));
+  A.pts_to_len h;
+  A.pts_to_len d;
+  let e0 = A.(d.(0sz));
+  let e1 = A.(d.(1sz));
+  let e2 = A.(d.(2sz));
+  let e3 = A.(d.(3sz));
+  let e4 = A.(d.(4sz));
 
   chain_fits (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4);
   Math.pow2_lt_compat 64 60;
@@ -292,35 +292,35 @@ ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' ** S.pts_to d vd **
   five_fits (S64.v (hi26 f4));
   let g0 = add2 (lo26 e0) (times5 (hi26 f4));
 
-  S.((h.(0sz) <- lo26 g0));
-  S.((h.(1sz) <- add2 (lo26 f1) (hi26 g0)));
-  S.((h.(2sz) <- lo26 f2));
-  S.((h.(3sz) <- lo26 f3));
-  S.((h.(4sz) <- lo26 f4));
+  A.((h.(0sz) <- lo26 g0));
+  A.((h.(1sz) <- add2 (lo26 f1) (hi26 g0)));
+  A.((h.(2sz) <- lo26 f2));
+  A.((h.(3sz) <- lo26 f3));
+  A.((h.(4sz) <- lo26 f4));
 }
 
-fn fmul (h: S.slice S64.t) (r: S.slice S64.t) (d: S.slice S64.t)
+fn fmul (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
         (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
         (#vd: erased (Seq.seq S64.t))
-requires S.pts_to h vh ** S.pts_to r vr ** S.pts_to d vd **
+requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd **
          pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
                bounded vh 28 /\ bounded vr 26)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
-  S.pts_to h vh' ** S.pts_to r vr ** S.pts_to d vd' **
+  A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' **
   pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\
         bounded vh 28 /\ bounded vr 26 /\
         Seq.length vd' == 5 /\
         Seq.length vh' == 5 /\ fmul_post vh vr vh')
 {
   mul_limbs d h r;
-  with vd'. assert (S.pts_to d vd');
+  with vd'. assert (A.pts_to d vd');
   carry_chain_impl h d;
-  with vh'. assert (S.pts_to h vh');
+  with vh'. assert (A.pts_to h vh');
   fmul_ok vh vr vd' vh';
   (* A Pulse [fn] must not end with a lemma call: the function's [ensures] is
      checked at the last statement, and a trailing lemma's conclusion is not
      yet in scope there.  Any statement after it will do. *)
-  S.pts_to_len h;
+  A.pts_to_len h;
 }
 
 #pop-options
@@ -336,52 +336,52 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
 
-fn fadd (h: S.slice S64.t) (b: S.slice S64.t)
+fn fadd (h: A.array S64.t) (b: A.array S64.t)
         (#vh: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S64.t))
-requires S.pts_to h vh ** S.pts_to b vb **
+requires A.pts_to h vh ** A.pts_to b vb **
          pure (Seq.length vh == 5 /\ Seq.length vb == 5 /\
                bounded vh 27 /\ bounded vb 26)
-ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' ** S.pts_to b vb **
+ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' ** A.pts_to b vb **
   pure (Seq.length vh == 5 /\ Seq.length vb == 5 /\
         Seq.length vh' == 5 /\ bounded vh' 28 /\
         feval vh' == feval vh + feval vb)
 {
-  S.pts_to_len h;
-  S.pts_to_len b;
+  A.pts_to_len h;
+  A.pts_to_len b;
   Math.pow2_lt_compat 27 26;
   Math.pow2_double_sum 27;
   Math.pow2_lt_compat 64 28;
   add5_eval (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
             (vv vb 0) (vv vb 1) (vv vb 2) (vv vb 3) (vv vb 4);
-  let a0 = S.(h.(0sz));
-  let a1 = S.(h.(1sz));
-  let a2 = S.(h.(2sz));
-  let a3 = S.(h.(3sz));
-  let a4 = S.(h.(4sz));
-  let b0 = S.(b.(0sz));
-  let b1 = S.(b.(1sz));
-  let b2 = S.(b.(2sz));
-  let b3 = S.(b.(3sz));
-  let b4 = S.(b.(4sz));
-  S.((h.(0sz) <- add2 a0 b0));
-  S.((h.(1sz) <- add2 a1 b1));
-  S.((h.(2sz) <- add2 a2 b2));
-  S.((h.(3sz) <- add2 a3 b3));
-  S.((h.(4sz) <- add2 a4 b4));
+  let a0 = A.(h.(0sz));
+  let a1 = A.(h.(1sz));
+  let a2 = A.(h.(2sz));
+  let a3 = A.(h.(3sz));
+  let a4 = A.(h.(4sz));
+  let b0 = A.(b.(0sz));
+  let b1 = A.(b.(1sz));
+  let b2 = A.(b.(2sz));
+  let b3 = A.(b.(3sz));
+  let b4 = A.(b.(4sz));
+  A.((h.(0sz) <- add2 a0 b0));
+  A.((h.(1sz) <- add2 a1 b1));
+  A.((h.(2sz) <- add2 a2 b2));
+  A.((h.(3sz) <- add2 a3 b3));
+  A.((h.(4sz) <- add2 a4 b4));
 }
 
 (** The accumulator starts at zero. *)
-fn set_zero (h: S.slice S64.t) (#vh: erased (Seq.seq S64.t))
-requires S.pts_to h vh ** pure (Seq.length vh == 5)
-ensures exists* (vh': Seq.seq S64.t). S.pts_to h vh' **
+fn set_zero (h: A.array S64.t) (#vh: erased (Seq.seq S64.t))
+requires A.pts_to h vh ** pure (Seq.length vh == 5)
+ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' **
   pure (Seq.length vh' == 5 /\ bounded vh' 26 /\ feval vh' == 0)
 {
-  S.pts_to_len h;
-  S.((h.(0sz) <- S64.zero));
-  S.((h.(1sz) <- S64.zero));
-  S.((h.(2sz) <- S64.zero));
-  S.((h.(3sz) <- S64.zero));
-  S.((h.(4sz) <- S64.zero));
+  A.pts_to_len h;
+  A.((h.(0sz) <- S64.zero));
+  A.((h.(1sz) <- S64.zero));
+  A.((h.(2sz) <- S64.zero));
+  A.((h.(3sz) <- S64.zero));
+  A.((h.(4sz) <- S64.zero));
 }
 
 #pop-options

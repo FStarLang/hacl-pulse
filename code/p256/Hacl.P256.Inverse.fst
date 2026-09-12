@@ -35,7 +35,6 @@ open Hacl.P256.Tables
 open Hacl.P256.Exp
 open Hacl.P256.Field
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -49,15 +48,15 @@ module MA = Spec.ModArith
 (** The exponentiation both entry points perform: [out := a^n], with [n]
     given as a table of public limbs whose value is known. *)
 inline_for_extraction
-fn fexp (out a: S.slice S64.t) (e: S.slice U64.t) (n: erased nat)
+fn fexp (out a: A.array S64.t) (e: A.array U64.t) (n: erased nat)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pe: perm) (#ve: erased (Seq.seq U64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va ** S.pts_to e #pe ve **
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to e #pe ve **
   pure (Seq.length vo == nl /\ felem va /\
         reveal n < pow2 256 /\ pvals ve == limbs n)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va ** S.pts_to e #pe ve **
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to e #pe ve **
   pure (felem vo' /\ fev vo' == MA.exp #P.prime (fev va) n)
 {
   fmod_ok (); fmod_m ();
@@ -72,13 +71,13 @@ ensures exists* (vo': Seq.seq S64.t).
 }
 
 (** [out := a^-1].  Zero inverts to zero, as [Spec.ModArith.inv] says. *)
-fn finv (out a: S.slice S64.t)
+fn finv (out a: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va **
+requires A.pts_to out vo ** A.pts_to a #pa va **
   pure (Seq.length vo == nl /\ felem va)
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va **
+  A.pts_to out vo' ** A.pts_to a #pa va **
   pure (felem vo' /\ fev vo' == P.finv (fev va))
 {
   assert_norm (P.prime - 2 < pow2 256);
@@ -90,14 +89,14 @@ ensures exists* (vo': Seq.seq S64.t).
 (** [out := sqrt a] when [a] is a square, and [false] otherwise.  The
     candidate is written to [out] either way; the caller must not use it
     when the result is [false]. *)
-fn fsqrt (out a: S.slice S64.t)
+fn fsqrt (out a: A.array S64.t)
          (#vo: erased (Seq.seq S64.t))
          (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires S.pts_to out vo ** S.pts_to a #pa va **
+requires A.pts_to out vo ** A.pts_to a #pa va **
   pure (Seq.length vo == nl /\ felem va)
 returns ok: bool
 ensures exists* (vo': Seq.seq S64.t).
-  S.pts_to out vo' ** S.pts_to a #pa va **
+  A.pts_to out vo' ** A.pts_to a #pa va **
   pure (felem vo' /\
         P.fsqrt (fev va) == (if ok then Some (fev vo') else None))
 {
@@ -107,11 +106,9 @@ ensures exists* (vo': Seq.seq S64.t).
   fexp out a e (hide ((P.prime + 1) / 4));
   drop_table e;
   let z = S64.zero;
-  let mut aq = [| z; 16sz |]; A.pts_to_len aq; let q = S.from_array aq 16sz;
-  S.pts_to_len q;
-  fsqr q out;
-  let ok = feq q a;
-  S.to_array q;
+  let mut aq = [| z; 16sz |]; A.pts_to_len aq; A.pts_to_len aq;
+  fsqr aq out;
+  let ok = feq aq a;
   ok
 }
 

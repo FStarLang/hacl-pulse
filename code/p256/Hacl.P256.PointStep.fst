@@ -33,7 +33,6 @@ open Hacl.P256.Mont
 open Hacl.P256.Field
 open Hacl.P256.Point
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
@@ -45,12 +44,12 @@ module Loops = Hacl.Spec.Loops
 
 (** {2 The point at infinity} *)
 
-fn set_infinity (ox oy oz: S.slice S64.t)
+fn set_infinity (ox oy oz: A.array S64.t)
                 (#vox #voy #voz: erased (Seq.seq S64.t))
-requires S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz **
+requires A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl)
 ensures exists* (wx wy wz: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   pure (pt_ok wx wy wz /\ pt wx wy wz == P.point_at_infinity)
 {
   fzero ox;
@@ -96,8 +95,8 @@ let sel_pt (bb: bool) (ax ay az bx byy bz: Seq.seq S64.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
 
-fn point_mul_step (ox oy oz ux uy uz sx sy sz: S.slice S64.t)
-                  (qx qy qz: S.slice S64.t) (ks: S.slice S64.t)
+fn point_mul_step (ox oy oz ux uy uz sx sy sz: A.array S64.t)
+                  (qx qy qz: A.array S64.t) (ks: A.array S64.t)
                   (n: SZ.t { SZ.v n < 256 })
                   (#vox #voy #voz: erased (Seq.seq S64.t))
                   (#vux #vuy #vuz: erased (Seq.seq S64.t))
@@ -105,21 +104,21 @@ fn point_mul_step (ox oy oz ux uy uz sx sy sz: S.slice S64.t)
                   (#pp: perm) (#vqx #vqy #vqz: erased (Seq.seq S64.t))
                   (#pk: perm) (#vk: erased (Seq.seq S64.t))
 requires
-  S.pts_to ox vox ** S.pts_to oy voy ** S.pts_to oz voz **
-  S.pts_to ux vux ** S.pts_to uy vuy ** S.pts_to uz vuz **
-  S.pts_to sx vsx ** S.pts_to sy vsy ** S.pts_to sz vsz **
-  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
-  S.pts_to ks #pk vk **
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
+  A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
+  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
+  A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
+  A.pts_to ks #pk vk **
   pure (pt_ok vox voy voz /\ pt_ok vqx vqy vqz /\
         Seq.length vk == nl /\ bnd (vals vk) base /\
         Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
         Seq.length vsx == nl /\ Seq.length vsy == nl /\ Seq.length vsz == nl)
 ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
-  S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz **
-  S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz **
-  S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz **
-  S.pts_to qx #pp vqx ** S.pts_to qy #pp vqy ** S.pts_to qz #pp vqz **
-  S.pts_to ks #pk vk **
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
+  A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
+  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
+  A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
+  A.pts_to ks #pk vk **
   pure (pt_ok wx wy wz /\
         Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
         Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
@@ -132,20 +131,19 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   let bb = hide (eval (vals vk) / pow2 (SZ.v bi) % 2 = 1);
   point_double ux uy uz ox oy oz;
   point_add sx sy sz ux uy uz qx qy qz;
-  with wux wuy wuz. assert (S.pts_to ux wux ** S.pts_to uy wuy ** S.pts_to uz wuz);
-  with wsx wsy wsz. assert (S.pts_to sx wsx ** S.pts_to sy wsy ** S.pts_to sz wsz);
+  with wux wuy wuz. assert (A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz);
+  with wsx wsy wsz. assert (A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz);
   asel ox ux sx m bb;
   asel oy uy sy m bb;
   asel oz uz sz m bb;
   sel_pt (reveal bb) wux wuy wuz wsx wsy wsz;
   step_def (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz);
-  with wx wy wz. assert (S.pts_to ox wx ** S.pts_to oy wy ** S.pts_to oz wz);
+  with wx wy wz. assert (A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz);
   assert (pure (pt_ok wx wy wz));
   assert (pure (pt wx wy wz ==
     P.point_mul_step (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz)));
 }
 
 #pop-options
-
 
 #pop-options

@@ -37,7 +37,7 @@ open Spec.AES
 open Hacl.AES.Core
 open Hacl.AES
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
@@ -80,27 +80,27 @@ let rounds_last (v: variant) (w: Seq.lseq elem (xkeylen v)) (st: block)
 (** {2 The cipher} *)
 
 fn cipher_impl ([@@@FStar.Attributes.monomorphize] p: params)
-               (st: S.slice S8.t) (w: S.slice S8.t)
+               (st: A.array S8.t) (w: A.array S8.t)
                (#v0 #vw: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** S.pts_to w vw ** pure (
+requires A.pts_to st v0 ** A.pts_to w vw ** pure (
   Seq.length v0 == blocklen /\ Seq.length vw == xkeylen p.pv)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** S.pts_to w vw ** pure (
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length v0 == blocklen /\
   Seq.length v1 == blocklen /\
   vals v1 == cipher p.pv (vals vw) (vals v0))
 {
-  S.pts_to_len st;
-  S.pts_to_len w;
+  A.pts_to_len st;
+  A.pts_to_len w;
   round_key_slice p.pv (vals vw) 0;
   add_round_key_impl st w 0sz;
-  with va. assert S.pts_to st va;
+  with va. assert A.pts_to st va;
   cipher_start p.pv (vals vw) (vals v0);
 
   let mut i = 1sz;
   let mut off = 16sz;
   while (let vi = !i; SZ.lt vi p.pnr)
   invariant exists* (vi: SZ.t) (vo: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** pts_to off vo ** S.pts_to st v ** S.pts_to w vw **
+    pts_to i vi ** pts_to off vo ** A.pts_to st v ** A.pts_to w vw **
     pure (1 <= SZ.v vi /\ SZ.v vi <= nr p.pv /\ SZ.v vo == 16 * SZ.v vi /\
           Seq.length vw == xkeylen p.pv /\ Seq.length v0 == blocklen /\
           Seq.length v == blocklen /\
@@ -110,29 +110,29 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** S.pts_to w vw ** pure (
   {
     let vi = !i;
     let vo = !off;
-    with v. assert S.pts_to st v;
+    with v. assert A.pts_to st v;
     rounds_step p.pv (vals vw) (vals v) (SZ.v vi);
     round_key_slice p.pv (vals vw) (SZ.v vi);
     sub_bytes_impl st;
     shift_rows_impl st;
     mix_columns_impl st;
     add_round_key_impl st w vo;
-    with v'. assert S.pts_to st v';
+    with v'. assert A.pts_to st v';
     round_unfold (Seq.slice (vals vw) (SZ.v vo) (SZ.v vo + blocklen)) (vals v);
     i := SZ.add vi 1sz;
     off := SZ.add vo 16sz;
   };
   let vn = !i;
   let vo = !off;
-  with v. assert S.pts_to st v;
+  with v. assert A.pts_to st v;
   rounds_last p.pv (vals vw) (vals v);
   round_key_slice p.pv (vals vw) (SZ.v vn);
   sub_bytes_impl st;
   shift_rows_impl st;
   add_round_key_impl st w vo;
-  with v'. assert S.pts_to st v';
+  with v'. assert A.pts_to st v';
   last_round_unfold (Seq.slice (vals vw) (SZ.v vo) (SZ.v vo + blocklen)) (vals v);
-  S.pts_to_len st;
+  A.pts_to_len st;
 }
 
 #pop-options

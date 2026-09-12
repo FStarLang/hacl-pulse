@@ -35,7 +35,7 @@ open Spec.Byte
 open Spec.AES
 open Hacl.AES.Core
 
-module S = Pulse.Lib.Slice
+module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
@@ -180,16 +180,16 @@ let mix_columns_join (v0 v: Seq.seq S8.t)
 
 (** {2 SubBytes} *)
 
-fn sub_bytes_impl (st: S.slice S8.t) (#v0: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == blocklen)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
+fn sub_bytes_impl (st: A.array S8.t) (#v0: erased (Seq.seq S8.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 **
   pure (Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\ vals v1 == sub_bytes (vals v0))
 {
-  S.pts_to_len st;
+  A.pts_to_len st;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** S.pts_to st v **
+    pts_to i vi ** A.pts_to st v **
     pure (SZ.v vi <= blocklen /\ Seq.length v == blocklen /\
           Seq.length v0 == blocklen /\
           (forall (j: nat). j < blocklen ==>
@@ -199,19 +199,19 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
   decreases (blocklen - SZ.v (!i))
   {
     let vi = !i;
-    let x = S.(st.(vi));
+    let x = A.(st.(vi));
     let y = sbox_impl x;
-    with v. assert S.pts_to st v;
+    with v. assert A.pts_to st v;
     vals_upd v (SZ.v vi) y;
-    S.((st.(vi) <- y));
+    A.((st.(vi) <- y));
     i := SZ.add vi 1sz;
   };
   let vn = !i;
-  with v. assert S.pts_to st v;
+  with v. assert A.pts_to st v;
   sub_bytes_eq v0 v (SZ.v vn);
   (* A Pulse function may not end with a pure statement: the last one is
      dropped.  This read of the length is the cheapest thing that is not. *)
-  S.pts_to_len st;
+  A.pts_to_len st;
 }
 
 (** {2 AddRoundKey}
@@ -220,23 +220,23 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
     slice of its own, so that the caller does not have to carve one out at
     every round. *)
 
-fn add_round_key_impl (st: S.slice S8.t) (w: S.slice S8.t) (off: SZ.t)
+fn add_round_key_impl (st: A.array S8.t) (w: A.array S8.t) (off: SZ.t)
                       (#v0 #vw: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** S.pts_to w vw **
+requires A.pts_to st v0 ** A.pts_to w vw **
          pure (Seq.length v0 == blocklen /\
                SZ.v off + blocklen <= Seq.length vw)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** S.pts_to w vw **
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw **
   pure (Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
         SZ.v off + blocklen <= Seq.length vw /\
         vals v1 == add_round_key (vals v0)
                      (Seq.slice (vals vw) (SZ.v off) (SZ.v off + blocklen)))
 {
-  S.pts_to_len st;
-  S.pts_to_len w;
+  A.pts_to_len st;
+  A.pts_to_len w;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** S.pts_to st v ** S.pts_to w vw **
+    pts_to i vi ** A.pts_to st v ** A.pts_to w vw **
     pure (SZ.v vi <= blocklen /\ Seq.length v == blocklen /\
           Seq.length v0 == blocklen /\
           SZ.v off + blocklen <= Seq.length vw /\
@@ -248,20 +248,20 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** S.pts_to w vw **
   decreases (blocklen - SZ.v (!i))
   {
     let vi = !i;
-    let a = S.(st.(vi));
-    let b = S.(w.(SZ.add off vi));
+    let a = A.(st.(vi));
+    let b = A.(w.(SZ.add off vi));
     let y = bxor a b;
-    with v. assert S.pts_to st v;
+    with v. assert A.pts_to st v;
     vals_upd v (SZ.v vi) y;
-    S.((st.(vi) <- y));
+    A.((st.(vi) <- y));
     i := SZ.add vi 1sz;
   };
   let vn = !i;
-  with v. assert S.pts_to st v;
+  with v. assert A.pts_to st v;
   add_round_key_eq v0 vw v (SZ.v off) (SZ.v vn);
   (* A Pulse function may not end with a pure statement: the last one is
      dropped.  This read of the length is the cheapest thing that is not. *)
-  S.pts_to_len st;
+  A.pts_to_len st;
 }
 
 (** {2 ShiftRows}
@@ -270,29 +270,29 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** S.pts_to w vw **
     four-cycle, row two two transpositions, row three the inverse
     four-cycle. *)
 
-fn shift_rows_impl (st: S.slice S8.t) (#v0: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == blocklen)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
+fn shift_rows_impl (st: A.array S8.t) (#v0: erased (Seq.seq S8.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 **
   pure (Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\ vals v1 == shift_rows (vals v0))
 {
-  S.pts_to_len st;
-  let x1  = S.(st.(1sz));  let x5  = S.(st.(5sz));
-  let x9  = S.(st.(9sz));  let x13 = S.(st.(13sz));
-  let x2  = S.(st.(2sz));  let x6  = S.(st.(6sz));
-  let x10 = S.(st.(10sz)); let x14 = S.(st.(14sz));
-  let x3  = S.(st.(3sz));  let x7  = S.(st.(7sz));
-  let x11 = S.(st.(11sz)); let x15 = S.(st.(15sz));
-  S.((st.(1sz)  <- x5));  S.((st.(5sz)  <- x9));
-  S.((st.(9sz)  <- x13)); S.((st.(13sz) <- x1));
-  S.((st.(2sz)  <- x10)); S.((st.(6sz)  <- x14));
-  S.((st.(10sz) <- x2));  S.((st.(14sz) <- x6));
-  S.((st.(3sz)  <- x15)); S.((st.(7sz)  <- x3));
-  S.((st.(11sz) <- x7));  S.((st.(15sz) <- x11));
-  with v. assert S.pts_to st v;
+  A.pts_to_len st;
+  let x1  = A.(st.(1sz));  let x5  = A.(st.(5sz));
+  let x9  = A.(st.(9sz));  let x13 = A.(st.(13sz));
+  let x2  = A.(st.(2sz));  let x6  = A.(st.(6sz));
+  let x10 = A.(st.(10sz)); let x14 = A.(st.(14sz));
+  let x3  = A.(st.(3sz));  let x7  = A.(st.(7sz));
+  let x11 = A.(st.(11sz)); let x15 = A.(st.(15sz));
+  A.((st.(1sz)  <- x5));  A.((st.(5sz)  <- x9));
+  A.((st.(9sz)  <- x13)); A.((st.(13sz) <- x1));
+  A.((st.(2sz)  <- x10)); A.((st.(6sz)  <- x14));
+  A.((st.(10sz) <- x2));  A.((st.(14sz) <- x6));
+  A.((st.(3sz)  <- x15)); A.((st.(7sz)  <- x3));
+  A.((st.(11sz) <- x7));  A.((st.(15sz) <- x11));
+  with v. assert A.pts_to st v;
   shift_rows_eq v0 v;
   (* A Pulse function may not end with a pure statement: the last one is
      dropped.  This read of the length is the cheapest thing that is not. *)
-  S.pts_to_len st;
+  A.pts_to_len st;
 }
 
 (** {2 MixColumns}
@@ -309,10 +309,10 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
     [Seq.upd]s; sixteen in a row made the solver time out on nothing more than
     the length of the result. *)
 
-fn mix_column_impl (st: S.slice S8.t) (o: SZ.t) (a0 a1 a2 a3: S8.t)
+fn mix_column_impl (st: A.array S8.t) (o: SZ.t) (a0 a1 a2 a3: S8.t)
   (#v0: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == blocklen /\ SZ.v o + 4 <= blocklen)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** pure (
+requires A.pts_to st v0 ** pure (Seq.length v0 == blocklen /\ SZ.v o + 4 <= blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** pure (
   Seq.length v0 == blocklen /\ SZ.v o + 4 <= blocklen /\ Seq.length v1 == blocklen /\
   (forall (j: nat). j < blocklen /\ (j < SZ.v o \/ SZ.v o + 4 <= j) ==>
      Seq.index v1 j == Seq.index v0 j) /\
@@ -321,36 +321,36 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 ** pure (
   S8.v (Seq.index v1 (SZ.v o + 2)) == fmul 1 (S8.v a0) ^^ (fmul 1 (S8.v a1) ^^ (fmul 2 (S8.v a2) ^^ fmul 3 (S8.v a3))) /\
   S8.v (Seq.index v1 (SZ.v o + 3)) == fmul 3 (S8.v a0) ^^ (fmul 1 (S8.v a1) ^^ (fmul 1 (S8.v a2) ^^ fmul 2 (S8.v a3))))
 {
-  S.pts_to_len st;
+  A.pts_to_len st;
   let c1 = S8.classify 1uy;
   let c2 = S8.classify 2uy;
   let c3 = S8.classify 3uy;
-  S.((st.(SZ.add o 0sz) <- bxor (fmul_impl c2 a0) (bxor (fmul_impl c3 a1) (bxor (fmul_impl c1 a2) (fmul_impl c1 a3)))));
-  S.((st.(SZ.add o 1sz) <- bxor (fmul_impl c1 a0) (bxor (fmul_impl c2 a1) (bxor (fmul_impl c3 a2) (fmul_impl c1 a3)))));
-  S.((st.(SZ.add o 2sz) <- bxor (fmul_impl c1 a0) (bxor (fmul_impl c1 a1) (bxor (fmul_impl c2 a2) (fmul_impl c3 a3)))));
-  S.((st.(SZ.add o 3sz) <- bxor (fmul_impl c3 a0) (bxor (fmul_impl c1 a1) (bxor (fmul_impl c1 a2) (fmul_impl c2 a3)))));
-  S.pts_to_len st;
+  A.((st.(SZ.add o 0sz) <- bxor (fmul_impl c2 a0) (bxor (fmul_impl c3 a1) (bxor (fmul_impl c1 a2) (fmul_impl c1 a3)))));
+  A.((st.(SZ.add o 1sz) <- bxor (fmul_impl c1 a0) (bxor (fmul_impl c2 a1) (bxor (fmul_impl c3 a2) (fmul_impl c1 a3)))));
+  A.((st.(SZ.add o 2sz) <- bxor (fmul_impl c1 a0) (bxor (fmul_impl c1 a1) (bxor (fmul_impl c2 a2) (fmul_impl c3 a3)))));
+  A.((st.(SZ.add o 3sz) <- bxor (fmul_impl c3 a0) (bxor (fmul_impl c1 a1) (bxor (fmul_impl c1 a2) (fmul_impl c2 a3)))));
+  A.pts_to_len st;
 }
 
-fn mix_columns_impl (st: S.slice S8.t) (#v0: erased (Seq.seq S8.t))
-requires S.pts_to st v0 ** pure (Seq.length v0 == blocklen)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
+fn mix_columns_impl (st: A.array S8.t) (#v0: erased (Seq.seq S8.t))
+requires A.pts_to st v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 **
   pure (Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\ vals v1 == mix_columns (vals v0))
 {
-  S.pts_to_len st;
-  let a0  = S.(st.(0sz));  let a1  = S.(st.(1sz));
-  let a2  = S.(st.(2sz));  let a3  = S.(st.(3sz));
-  let a4  = S.(st.(4sz));  let a5  = S.(st.(5sz));
-  let a6  = S.(st.(6sz));  let a7  = S.(st.(7sz));
-  let a8  = S.(st.(8sz));  let a9  = S.(st.(9sz));
-  let a10 = S.(st.(10sz)); let a11 = S.(st.(11sz));
-  let a12 = S.(st.(12sz)); let a13 = S.(st.(13sz));
-  let a14 = S.(st.(14sz)); let a15 = S.(st.(15sz));
+  A.pts_to_len st;
+  let a0  = A.(st.(0sz));  let a1  = A.(st.(1sz));
+  let a2  = A.(st.(2sz));  let a3  = A.(st.(3sz));
+  let a4  = A.(st.(4sz));  let a5  = A.(st.(5sz));
+  let a6  = A.(st.(6sz));  let a7  = A.(st.(7sz));
+  let a8  = A.(st.(8sz));  let a9  = A.(st.(9sz));
+  let a10 = A.(st.(10sz)); let a11 = A.(st.(11sz));
+  let a12 = A.(st.(12sz)); let a13 = A.(st.(13sz));
+  let a14 = A.(st.(14sz)); let a15 = A.(st.(15sz));
   mix_column_impl st 0sz  a0  a1  a2  a3;
   mix_column_impl st 4sz  a4  a5  a6  a7;
   mix_column_impl st 8sz  a8  a9  a10 a11;
   mix_column_impl st 12sz a12 a13 a14 a15;
-  with v. assert S.pts_to st v;
+  with v. assert A.pts_to st v;
   mix_at_0 (vals v0) (Seq.index (vals v) 0);
   mix_at_1 (vals v0) (Seq.index (vals v) 1);
   mix_at_2 (vals v0) (Seq.index (vals v) 2);
@@ -370,7 +370,7 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to st v1 **
   mix_columns_join v0 v;
   (* A Pulse function may not end with a pure statement: the last one is
      dropped.  This read of the length is the cheapest thing that is not. *)
-  S.pts_to_len st;
+  A.pts_to_len st;
 }
 
 #pop-options

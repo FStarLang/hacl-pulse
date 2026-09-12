@@ -35,7 +35,7 @@ static void check(const char *name, const uint8_t *key, const uint8_t *nonce,
                   const uint8_t *ect, const uint8_t *etag) {
   memset(ct, 0xaa, sizeof ct);
   memset(tag, 0xaa, sizeof tag);
-  Hacl_Chacha20Poly1305_Ptr_encrypt(ct, tag, (uint8_t *)pt, pt_len,
+  Hacl_Chacha20Poly1305_encrypt(ct, tag, (uint8_t *)pt, pt_len,
                                     (uint8_t *)aad, aad_len,
                                     (uint8_t *)key, (uint8_t *)nonce);
   if (memcmp(ct, ect, pt_len) != 0 || memcmp(tag, etag, 16) != 0) {
@@ -53,7 +53,7 @@ static void check(const char *name, const uint8_t *key, const uint8_t *nonce,
   }
 
   memset(msg, 0x55, sizeof msg);
-  bool ok = Hacl_Chacha20Poly1305_Ptr_decrypt(msg, ct, pt_len, tag,
+  bool ok = Hacl_Chacha20Poly1305_decrypt(msg, ct, pt_len, tag,
                                               (uint8_t *)aad, aad_len,
                                               (uint8_t *)key, (uint8_t *)nonce);
   if (!ok) {
@@ -80,7 +80,7 @@ static void check_reject(const char *name, const uint8_t *key,
   static uint8_t bad_aad[512];
   uint8_t bad_key[32], bad_nonce[12], bad_tag[16];
 
-  Hacl_Chacha20Poly1305_Ptr_encrypt(ct, tag, (uint8_t *)pt, pt_len,
+  Hacl_Chacha20Poly1305_encrypt(ct, tag, (uint8_t *)pt, pt_len,
                                     (uint8_t *)aad, aad_len,
                                     (uint8_t *)key, (uint8_t *)nonce);
 
@@ -98,7 +98,7 @@ static void check_reject(const char *name, const uint8_t *key,
       case 4: bad_nonce[0] ^= 0x01; break;
     }
     memset(msg, 0x55, sizeof msg);
-    bool ok = Hacl_Chacha20Poly1305_Ptr_decrypt(msg, bad_ct, pt_len, bad_tag,
+    bool ok = Hacl_Chacha20Poly1305_decrypt(msg, bad_ct, pt_len, bad_tag,
                                                 bad_aad, aad_len,
                                                 bad_key, bad_nonce);
     if (ok) {

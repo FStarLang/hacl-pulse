@@ -31,7 +31,6 @@ open Hacl.Impl.Table
 open Hacl.Hash.SHA3.Core
 open Hacl.Hash.SHA3.Sponge
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -40,7 +39,6 @@ module S64 = Hacl.Secret.UInt64
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module G = Pulse.Lib.GlobalArray
-
 
 (** {2 The constant tables}
 
@@ -58,7 +56,6 @@ let table_lens (_: unit)
   = assert_norm (List.Tot.length rc_list == 24);
     assert_norm (List.Tot.length rotc_list == 25)
 
-
 (** {2 The sponge, wrapped}
 
     [keccak_impl] is the only real code in this module; the named algorithms
@@ -66,110 +63,114 @@ let table_lens (_: unit)
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
-fn keccak_impl (out: S.slice S8.t) (msg: S.slice S8.t) (r: SZ.t) (suffix: U8.t)
+fn keccak_impl (out: A.array S8.t) (out_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t) (r: SZ.t) (suffix: U8.t)
                (#vout0: erased (Seq.seq S8.t))
                (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm **
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm **
          pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200)
+         ** pure (SZ.v out_len == Seq.length vout0)
+         ** pure (SZ.v msg_len == Seq.length vm)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
+  A.pts_to out vout ** A.pts_to msg #pm vm **
   pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
         vout == keccak (SZ.v r) suffix vm (Seq.length vout0))
 {
-  S.pts_to_len out;
+  A.pts_to_len out;
   let z64 = S64.classify 0uL;
 
   let mut starr = [| z64; 25sz |];
   A.pts_to_len starr;
-  let st = S.from_array starr 25sz;
-  S.pts_to_len st;
+  A.pts_to_len starr;
 
   let mut barr = [| z64; 25sz |];
   A.pts_to_len barr;
-  let bb = S.from_array barr 25sz;
-  S.pts_to_len bb;
+  A.pts_to_len barr;
 
   let mut carr = [| z64; 5sz |];
   A.pts_to_len carr;
-  let cc = S.from_array carr 5sz;
-  S.pts_to_len cc;
+  A.pts_to_len carr;
 
   table_lens ();
   let rc_tbl = table rc_arr 24sz;
   let rotc_tbl = table rotc_arr 25sz;
   rotc_seq_ok ();
 
-  absorb_impl st bb cc rotc_tbl rc_tbl msg r suffix;
-  squeeze_impl out st bb cc rotc_tbl rc_tbl r;
+  absorb_impl starr barr carr rotc_tbl rc_tbl msg msg_len r suffix;
+  squeeze_impl out out_len starr barr carr rotc_tbl rc_tbl r;
 
   drop_table rotc_tbl;
   drop_table rc_tbl;
-  S.to_array cc;
-  S.to_array bb;
-  S.to_array st;
+  ()
 }
 
 #pop-options
 
-
 (** {2 The named algorithms} *)
 
-fn sha3_224_impl (out: S.slice S8.t) (msg: S.slice S8.t)
+fn sha3_224 (out: A.array S8.t) (msg: A.array S8.t) (msg_len: SZ.t)
                  (#vout0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm ** pure (Seq.length vout0 == 28)
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm ** pure (Seq.length vout0 == 28)
+         ** pure (SZ.v msg_len == Seq.length vm)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
-  pure (Seq.length vout0 == 28 /\ vout == sha3_224 vm)
+  A.pts_to out vout ** A.pts_to msg #pm vm **
+  pure (Seq.length vout0 == 28 /\ vout == Spec.SHA3.sha3_224 vm)
 {
-  keccak_impl out msg 144sz sha3_suffix;
+  keccak_impl out 28sz msg msg_len 144sz sha3_suffix;
 }
 
-fn sha3_256_impl (out: S.slice S8.t) (msg: S.slice S8.t)
+fn sha3_256 (out: A.array S8.t) (msg: A.array S8.t) (msg_len: SZ.t)
                  (#vout0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm ** pure (Seq.length vout0 == 32)
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm ** pure (Seq.length vout0 == 32)
+         ** pure (SZ.v msg_len == Seq.length vm)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
-  pure (Seq.length vout0 == 32 /\ vout == sha3_256 vm)
+  A.pts_to out vout ** A.pts_to msg #pm vm **
+  pure (Seq.length vout0 == 32 /\ vout == Spec.SHA3.sha3_256 vm)
 {
-  keccak_impl out msg 136sz sha3_suffix;
+  keccak_impl out 32sz msg msg_len 136sz sha3_suffix;
 }
 
-fn sha3_384_impl (out: S.slice S8.t) (msg: S.slice S8.t)
+fn sha3_384 (out: A.array S8.t) (msg: A.array S8.t) (msg_len: SZ.t)
                  (#vout0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm ** pure (Seq.length vout0 == 48)
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm ** pure (Seq.length vout0 == 48)
+         ** pure (SZ.v msg_len == Seq.length vm)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
-  pure (Seq.length vout0 == 48 /\ vout == sha3_384 vm)
+  A.pts_to out vout ** A.pts_to msg #pm vm **
+  pure (Seq.length vout0 == 48 /\ vout == Spec.SHA3.sha3_384 vm)
 {
-  keccak_impl out msg 104sz sha3_suffix;
+  keccak_impl out 48sz msg msg_len 104sz sha3_suffix;
 }
 
-fn sha3_512_impl (out: S.slice S8.t) (msg: S.slice S8.t)
+fn sha3_512 (out: A.array S8.t) (msg: A.array S8.t) (msg_len: SZ.t)
                  (#vout0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm ** pure (Seq.length vout0 == 64)
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm ** pure (Seq.length vout0 == 64)
+         ** pure (SZ.v msg_len == Seq.length vm)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
-  pure (Seq.length vout0 == 64 /\ vout == sha3_512 vm)
+  A.pts_to out vout ** A.pts_to msg #pm vm **
+  pure (Seq.length vout0 == 64 /\ vout == Spec.SHA3.sha3_512 vm)
 {
-  keccak_impl out msg 72sz sha3_suffix;
+  keccak_impl out 64sz msg msg_len 72sz sha3_suffix;
 }
 
-fn shake128_impl (out: S.slice S8.t) (msg: S.slice S8.t)
+fn shake128 (out: A.array S8.t) (out_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t)
                  (#vout0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm
+         ** pure (SZ.v msg_len == Seq.length vm)
+         ** pure (SZ.v out_len == Seq.length vout0)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
-  pure (vout == shake128 vm (Seq.length vout0))
+  A.pts_to out vout ** A.pts_to msg #pm vm **
+  pure (vout == Spec.SHA3.shake128 vm (Seq.length vout0))
 {
-  keccak_impl out msg 168sz shake_suffix;
+  keccak_impl out out_len msg msg_len 168sz shake_suffix;
 }
 
-fn shake256_impl (out: S.slice S8.t) (msg: S.slice S8.t)
+fn shake256 (out: A.array S8.t) (out_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t)
                  (#vout0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires S.pts_to out vout0 ** S.pts_to msg #pm vm
+requires A.pts_to out vout0 ** A.pts_to msg #pm vm
+         ** pure (SZ.v msg_len == Seq.length vm)
+         ** pure (SZ.v out_len == Seq.length vout0)
 ensures exists* (vout: Seq.seq S8.t).
-  S.pts_to out vout ** S.pts_to msg #pm vm **
-  pure (vout == shake256 vm (Seq.length vout0))
+  A.pts_to out vout ** A.pts_to msg #pm vm **
+  pure (vout == Spec.SHA3.shake256 vm (Seq.length vout0))
 {
-  keccak_impl out msg 136sz shake_suffix;
+  keccak_impl out out_len msg msg_len 136sz shake_suffix;
 }

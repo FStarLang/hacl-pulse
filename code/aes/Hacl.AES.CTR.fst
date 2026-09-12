@@ -36,7 +36,6 @@ open Spec.AES
 open Hacl.AES.Core
 open Hacl.AES.Cipher
 
-module S = Pulse.Lib.Slice
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -145,19 +144,19 @@ let ctr_done (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
 
 (** {2 The increment} *)
 
-fn inc32_impl (ctr: S.slice S8.t) (#v0: erased (Seq.seq S8.t))
-requires S.pts_to ctr v0 ** pure (Seq.length v0 == blocklen)
-ensures exists* (v1: Seq.seq S8.t). S.pts_to ctr v1 ** pure (
+fn inc32_impl (ctr: A.array S8.t) (#v0: erased (Seq.seq S8.t))
+requires A.pts_to ctr v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to ctr v1 ** pure (
   Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
   vals v1 == inc32 (vals v0))
 {
-  S.pts_to_len ctr;
+  A.pts_to_len ctr;
   let one = S8.classify 1uy;
   let ff = S8.classify 255uy;
-  let x12 = S.(ctr.(12sz));
-  let x13 = S.(ctr.(13sz));
-  let x14 = S.(ctr.(14sz));
-  let x15 = S.(ctr.(15sz));
+  let x12 = A.(ctr.(12sz));
+  let x13 = A.(ctr.(13sz));
+  let x14 = A.(ctr.(14sz));
+  let x15 = A.(ctr.(15sz));
   let r15 = S8.add_mod x15 one;
   let c15 = S8.select (S8.eq_mask x15 ff) one S8.zero;
   let r14 = S8.add_mod x14 c15;
@@ -165,15 +164,15 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to ctr v1 ** pure (
   let r13 = S8.add_mod x13 c14;
   let c13 = S8.select (S8.eq_mask x13 ff) c14 S8.zero;
   let r12 = S8.add_mod x12 c13;
-  S.((ctr.(12sz) <- r12));
-  S.((ctr.(13sz) <- r13));
-  S.((ctr.(14sz) <- r14));
-  S.((ctr.(15sz) <- r15));
-  with v1. assert S.pts_to ctr v1;
+  A.((ctr.(12sz) <- r12));
+  A.((ctr.(13sz) <- r13));
+  A.((ctr.(14sz) <- r14));
+  A.((ctr.(15sz) <- r15));
+  with v1. assert A.pts_to ctr v1;
   assert_norm (pow2 8 == 256);
   inc32_bytes (vals v0) (S8.v r12) (S8.v r13) (S8.v r14) (S8.v r15);
   Seq.lemma_eq_intro (vals v1) (inc32 (vals v0));
-  S.pts_to_len ctr;
+  A.pts_to_len ctr;
 }
 
 (** {2 Counter mode}
@@ -183,26 +182,25 @@ ensures exists* (v1: Seq.seq S8.t). S.pts_to ctr v1 ** pure (
     it or, in GCM's case, has already saved what it needs. *)
 
 fn ctr_encrypt_impl ([@@@FStar.Attributes.monomorphize] p: params)
-                    (msg: S.slice S8.t) (w: S.slice S8.t) (ctr: S.slice S8.t)
+                    (msg: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (ctr: A.array S8.t)
                     (#vm0 #vw #vc0: erased (Seq.seq S8.t))
-requires S.pts_to msg vm0 ** S.pts_to w vw ** S.pts_to ctr vc0 ** pure (
+requires A.pts_to msg vm0 ** A.pts_to w vw ** A.pts_to ctr vc0 ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vc0 == blocklen /\
   SZ.fits (Seq.length vm0 + blocklen))
+         ** pure (SZ.v n == Seq.length vm0)
 ensures exists* (vm1 vc1: Seq.seq S8.t).
-  S.pts_to msg vm1 ** S.pts_to w vw ** S.pts_to ctr vc1 ** pure (
+  A.pts_to msg vm1 ** A.pts_to w vw ** A.pts_to ctr vc1 ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vc0 == blocklen /\
   Seq.length vc1 == blocklen /\ Seq.length vm1 == Seq.length vm0 /\
   vals vm1 == ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0))
 {
-  S.pts_to_len msg;
-  S.pts_to_len w;
-  S.pts_to_len ctr;
-  let n = S.len msg;
+  A.pts_to_len msg;
+  A.pts_to_len w;
+  A.pts_to_len ctr;
   let z = S8.zero;
   let mut ka = [| z; 16sz |];
   A.pts_to_len ka;
-  let ks = S.from_array ka 16sz;
-  S.pts_to_len ks;
+  A.pts_to_len ka;
 
   counter_block_zero (vals vc0);
   let mut j = 0sz;
@@ -210,8 +208,8 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
   while (let vj = !j; SZ.lt vj n)
   invariant exists* (vj: SZ.t) (vbi: SZ.t) (vm: Seq.seq S8.t)
                     (vc: Seq.seq S8.t) (vk: Seq.seq S8.t).
-    pts_to j vj ** pts_to bi vbi ** S.pts_to msg vm ** S.pts_to w vw **
-    S.pts_to ctr vc ** S.pts_to ks vk **
+    pts_to j vj ** pts_to bi vbi ** A.pts_to msg vm ** A.pts_to w vw **
+    A.pts_to ctr vc ** A.pts_to ka vk **
     pure (SZ.v vj == 16 * SZ.v vbi /\ Seq.length vk == blocklen /\
           Seq.length vw == xkeylen p.pv /\ Seq.length vc0 == blocklen /\
           Seq.length vc == blocklen /\
@@ -228,15 +226,15 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
   {
     let vj = !j;
     let vbi = !bi;
-    Copy.copy_exact ks ctr 16sz;
-    cipher_impl p ks w;
-    with vk. assert S.pts_to ks vk;
+    Copy.copy_exact ka ctr 16sz;
+    cipher_impl p ka w;
+    with vk. assert A.pts_to ka vk;
 
     let rem = SZ.sub n vj;
     let mut t = 0sz;
     while (let vt = !t; SZ.lt vt 16sz && SZ.lt vt rem)
     invariant exists* (vt: SZ.t) (vm: Seq.seq S8.t).
-      pts_to t vt ** S.pts_to msg vm ** S.pts_to w vw ** S.pts_to ks vk **
+      pts_to t vt ** A.pts_to msg vm ** A.pts_to w vw ** A.pts_to ka vk **
       pure (SZ.v vt <= blocklen /\ SZ.v vj == 16 * SZ.v vbi /\
             SZ.v vj < SZ.v n /\ SZ.v rem == SZ.v n - SZ.v vj /\
             SZ.fits (SZ.v n + blocklen) /\ Seq.length vk == blocklen /\
@@ -254,25 +252,25 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
       let vt = !t;
       SZ.fits_lte (SZ.v vj + SZ.v vt) (SZ.v n + blocklen);
       let idx = SZ.add vj vt;
-      let a = S.(msg.(idx));
-      let b = S.(ks.(vt));
+      let a = A.(msg.(idx));
+      let b = A.(ka.(vt));
       let y = bxor a b;
-      with vm. assert S.pts_to msg vm;
+      with vm. assert A.pts_to msg vm;
       ks_index p.pv (vals vw) (vals vc0) (SZ.v n) (SZ.v vj) (SZ.v vbi) (SZ.v vt);
       vals_upd vm (SZ.v idx) y;
-      S.((msg.(idx) <- y));
+      A.((msg.(idx) <- y));
       t := SZ.add vt 1sz;
     };
 
-    with vc. assert S.pts_to ctr vc;
+    with vc. assert A.pts_to ctr vc;
     counter_block_step (vals vc0) (SZ.v vbi);
     inc32_impl ctr;
     j := SZ.add vj 16sz;
     bi := SZ.add vbi 1sz;
   };
-  with vm. assert S.pts_to msg vm;
+  with vm. assert A.pts_to msg vm;
   ctr_done p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n);
-  S.to_array ks;
+  ()
 }
 
 #pop-options
