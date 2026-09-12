@@ -115,21 +115,31 @@ prose and the proof is a great deal shorter.
 
 The implementation is generic in `Hacl.Hash.SHA2.Core` — message schedule,
 compression, padding, digest — and `Hacl.Hash.SHA2` names the four algorithms.
-`Hacl.Hash.SHA2.Ptr` is the C API.
+`Hacl.Hash.SHA2` is also the C API: there is no wrapper layer.
 
-### Slices inside, pointers at the boundary
+### Arrays all the way out
 
-Internally everything is `Pulse.Lib.Slice.slice`, a pointer and a length that
-travel together and that the verifier can reason about.  A slice extracts to a
-two-field struct, which is not something a C caller should have to know about,
-so the entry points in `Hacl.Hash.SHA2.Ptr` take `Pulse.Lib.ArrayPtr.ptr` and a
-`size_t` and convert:
+Every buffer in the library is a `Pulse.Lib.Array.array`, which extracts to a
+bare `t *`.  So an F\* entry point *is* the C entry point, and its name is its
+F\* name with the dots turned into underscores:
 
 ```c
-void Hacl_Hash_SHA2_Ptr_sha256(uint8_t *out, uint8_t *input, size_t input_len);
+void Hacl_Hash_SHA2_sha256(uint8_t *out, uint8_t *input, size_t input_len);
 ```
 
-The conversion is free at run time.
+An array's length is ghost, so a function over a variable-length buffer takes
+the length as an ordinary `size_t` argument with `SZ.v input_len == Seq.length
+vin` in its precondition.  That is exactly the argument the C signature wants
+anyway, and it means fixed-size buffers — a 32-byte key, a 16-byte tag — carry
+no length at run time at all.
+
+This replaced an earlier design in which the internals used
+`Pulse.Lib.Slice.slice` (a pointer and a length travelling together) and a
+`Hacl.*.Ptr` module converted at the boundary.  A slice extracts to a two-field
+struct, so the wrapper layer was not optional; and since almost every length in
+a cryptographic primitive is a compile-time constant, the length field was dead
+weight in most of the library.  Sixteen wrapper modules and about two thousand
+lines of C went away with it.
 
 ### The constant tables
 
@@ -146,8 +156,8 @@ one thing the axiomatization does *not* hand out is write permission — the
 postcondition of `array_of_static_array` gives an existential fraction and
 never a full one — which is what licenses the `const`, and which means a table
 is acquired and never released.  `Hacl.Impl.Table` is the three lines that
-turn one into a slice, and `drop_table` is the counterpart of the `S.to_array`
-a stack buffer needs.
+turn one into an array, and `drop_table` gives the (fractional) permission
+back.
 
 `table` is `inline_for_extraction`, and has to be.  A `static_array` is
 represented as a plain `t *`, and the `const`-discarding cast is emitted at the
@@ -215,8 +225,8 @@ that out in a single buffer
 
 writes `info` into it exactly once, and then each round overwrites only the
 leading digest and the trailing counter byte.  Round 1 is the exception --
-`T(0)` is empty -- and is handled by hashing the `info || i` *subslice*, using
-`Pulse.Lib.Slice.subslice` and giving the permission back with two `join`s.
+`T(0)` is empty -- and is handled by hashing the `info || i` *window* of the
+buffer, using `Hacl.Impl.Sub`.
 
 The loop invariant never mentions `expand_all` at the round count reached so
 far; it is stated against the *final* count, so that on exit it is literally
@@ -253,10 +263,10 @@ disjunction.
 `update` fills the buffer, and if that filled it, absorbs it and then absorbs
 whatever whole blocks follow *directly out of the caller's data* -- no copy --
 keeping only the trailing partial block.  That is the same ghost-prefix trick
-HMAC uses: `absorb_blocks` hands `hash_blocks` a prefix length and a subslice,
+HMAC uses: `absorb_blocks` hands `hash_blocks` a prefix length and a window,
 and `Spec.SHA2.Streaming.absorb_congr` -- absorbing `n` blocks only looks at
 the first `n * bl` bytes, so two messages that agree that far absorb alike --
-is what bridges "the bytes in this slice" to "the bytes of `seen`".
+is what bridges "the bytes in this buffer" to "the bytes of `seen`".
 
 `digest` copies the accumulator to the stack and finishes there, so the state
 survives: digesting twice gives the same answer, and updating after a digest
@@ -264,8 +274,7 @@ continues the same message.  `tests/test_streaming.c` checks both, and checks
 the FIPS 180-4 messages fed in nine different chunk sizes chosen to straddle
 the block boundary from both sides.
 
-`Hacl.Streaming.SHA2` names the four algorithms and `Hacl.Streaming.SHA2.Ptr`
-is the C ABI.  One wart: `total` is a `size_t`, so on a 32-bit target a single
+`Hacl.Streaming.SHA2` names the four algorithms and is the C ABI.  One wart: `total` is a `size_t`, so on a 32-bit target a single
 state tops out at four gigabytes.  That follows from using `FStar.SizeT` for
 every length (see `design/changes.md`); the one-shot interface has the same
 limit, and HACL* does not.
@@ -276,7 +285,7 @@ SHA-3 shares almost nothing with SHA-2, so it gets its own stack:
 `Spec.SHA3.Constants` (the round constants and rotation offsets),
 `Spec.SHA3` (the spec), `Hacl.Hash.SHA3.Core` (Keccak-f[1600]),
 `Hacl.Hash.SHA3.Sponge` (absorb and squeeze), `Hacl.Hash.SHA3` (the six named
-algorithms) and `Hacl.Hash.SHA3.Ptr` (the C ABI).
+algorithms, which is also the C ABI).
 
 Two things are different from the SHA-2 stack.
 
@@ -291,7 +300,7 @@ correctness argument is an indexwise equality of `Seq`s.
 *The rate is a runtime value.*  SHA3-224/256/384/512 and SHAKE128/256 differ
 only in the rate, the domain-separation byte and the output length, so there
 is one copy of the sponge, taking all three as arguments, and six thin
-wrappers.  The state is a 25-lane `S.slice S64.t` indexed `x + 5*y`, matching
+wrappers.  The state is a 25-lane `A.array S64.t` indexed `x + 5*y`, matching
 the spec's flattening; scratch is 25 lanes for the pi/rho result and 5 for the
 theta parities.
 
@@ -346,7 +355,7 @@ sides.
 
 One copy of the code serves all six algorithms, since the rate and the
 domain-separation byte are ordinary runtime arguments; `Hacl.Streaming.SHA3`
-names the six and `Hacl.Streaming.SHA3.Ptr` is the C ABI.  The cost is that
+names the six and is the C ABI.  The cost is that
 `update` writes the round-constant and rotation tables into stack arrays on
 every call, forty-nine stores whatever the call absorbs, because the
 direct-to-C backend cannot yet emit a constant global.  That is a backend
@@ -606,9 +615,9 @@ the same `fmul`, the same inversion chain.  Nothing in the signature scheme
 needed a second field implementation, which is the main reason the whole of
 `code/ed25519` is six modules.
 
-**A point is four slices, not a record.**  Extended coordinates `(x, y, z,
-t)` are passed as four separate 16-limb slices side by side, because a
-struct of slices would need its own separation discipline and Custard would
+**A point is four arrays, not a record.**  Extended coordinates `(x, y, z,
+t)` are passed as four separate 16-limb arrays side by side, because a
+struct of arrays would need its own separation discipline and Custard would
 have to lay it out.  `point_add ox oy oz ot x1 y1 z1 t1 x2 y2 z2 t2` is a
 wide signature, but the separation logic is then exactly the one the field
 operations already use.  One consequence: `point_add` and `point_mul` demand
@@ -753,9 +762,9 @@ help to get it.
 concatenation -- entropy `||` nonce `||` personalization -- and materializing
 it would need a run-time-sized buffer, which is the one thing a
 `create_in`-free implementation cannot have.  So `update` takes `d1 d2 d3`
-and the callers pass zero-length slices for the pieces they do not have.
-Zero-length slices are fine: `let mut a = [| z8; 0sz |]` typechecks and
-Custard emits `uint8_t a[1]` with a slice of length zero over it, which is
+and the callers pass zero-length arrays for the pieces they do not have.
+Zero-length arrays are fine: `let mut a = [| z8; 0sz |]` typechecks and
+Custard emits `uint8_t a[1]`, which is
 portable C, not the GCC zero-length-array extension.
 
 *So HMAC grew a concatenating form.*  `Hacl.HMAC.Cat.hmac_cat out key a b c d`
@@ -795,7 +804,7 @@ lemma, and a Pulse function should only ever apply it.*
 **Aliasing, again.**  `rekey` cannot write its result over its own key --
 `hmac_cat out key ...` with `out == key` is not expressible, let alone sound
 -- so it computes into scratch and copies back.  And Pulse cannot pass the
-same slice as two arguments, which is why `generate` allocates *two*
+same array as two arguments, which is why `generate` allocates *two*
 zero-length arrays where one would do in C.
 
 **Refusals are values, not preconditions.**  `generate` returns `bool`:
@@ -955,10 +964,10 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   `Seq.index (Seq.append pre s) (base + k)`, however obviously the two indices
   are equal.  `Spec.SHA2.Lemmas.append_index_at` takes the absolute offset as
   its own argument for exactly this reason.
-* **A `while` invariant must carry the non-`pts_to` resources too.**  A slice
-  obtained from a stack array owns an `is_from_array`; leaving it out of an
-  invariant (or out of an explicit `if ... ensures`) fails with "leftover
-  resources" at the end of the function, far from the cause.
+* **A `while` invariant must carry every resource the body touches, not just
+  the ones it changes.**  Leaving one out (or leaving it out of an explicit
+  `if ... ensures`) fails with "leftover resources" at the end of the
+  function, far from the cause.
 * **A `decreases` expression has to be a `nat` at every iteration.**  A loop
   that advances by a fixed stride past a limit cannot measure `limit - i`;
   measure the iteration count instead.  The symptom is a timeout on
@@ -972,7 +981,7 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   secret-integer layer and of SHA-2, and two of them could not be linked into
   one binary at all.  Collapsing the sixteen roots into one `code/Hacl.fst`
   that names every entry module halved the generated code -- 25,200 lines to
-  13,400 -- and made the library linkable with itself.  The only cost is that
+  11,200 -- and made the library linkable with itself.  The only cost is that
   `--custard_entry` moved from a per-unit variable to one list, which is a
   better place for it: that list is the public API.
 * **Mark big `Seq.init` definitions `opaque_to_smt`.**  A spec function that
@@ -981,7 +990,7 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   `reveal_opaque`s it; that one change is what made Keccak provable.
 * **A trailing `Seq.lemma_eq_elim` does not discharge a Pulse `ensures`.**  The
   idiom that works is to name the witness and assert the goal:
-  `with v. assert (S.pts_to x v); assert (pure (reveal v \`Seq.equal\` rhs));`.
+  `with v. assert (A.pts_to x v); assert (pure (reveal v \`Seq.equal\` rhs));`.
   More generally, a lemma call whose conclusion the postcondition needs must be
   followed by an `assert (pure ...)` restating that conclusion.
 * **`let ... in` is a syntax error inside a Pulse block**, and so is
@@ -990,8 +999,8 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   in `Spec.SHA3` rather than next to the loop that uses them.
 * **Bind the initial value of a stack array first.**
   `let mut a = [| S8.classify 0uy; 200sz |]` gives the array the *refined*
-  element type `x:S8.t{S8.v x == 0}`, and the slice taken from it then fails to
-  match `S.slice S8.t` with an unreadable error.  `let z8 = S8.classify 0uy;`
+  element type `x:S8.t{S8.v x == 0}`, which then fails to match
+  `A.array S8.t` with an unreadable error.  `let z8 = S8.classify 0uy;`
   first, then `[| z8; 200sz |]`.
 * **Do not multiply in a loop guard.**  `SZ.mul i r` carries a
   `SZ.fits (v i * v r)` obligation that is not provable from the invariant.
@@ -1006,10 +1015,16 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   and the base offset -- as arguments and does the instantiation in a small
   context, ending in the caller's exact syntactic shape
   (`Spec.SHA3.Streaming.block_eq_slice_at`).
-* **`unfold S.subslice_rest` is ambiguous when two subslices are live.**
-  `subslice_rest` is a plain `let`, so it can be unfolded at explicit
-  arguments: `unfold (S.subslice_rest tail buf 1.0R 0sz blen vbuf);`.  Full
-  permission is written `1.0R`.
+* **Hand out a window of an array with `Hacl.Impl.Sub`, not by hand.**
+  `Sub.sub a i j` gives back an array over `a[i..j)` carrying a plain `pts_to`
+  plus a `rest` token for everything outside; `Sub.unsub` trades the two back.
+  Two details make it usable: `sub` has to re-export Pulse's
+  `ensures rewrites_to b (A.gsub a i j)`, because the resource matcher is
+  syntactic and a refinement `b == gsub a i j` is not enough on its own; and
+  `unsub` only returns the contents *pointwise*, so the common read-only case
+  gets its own `Sub.unsub_id`, which does the pointwise-to-`Seq.equal` step
+  once inside the module instead of in every caller's (huge) context.  Omitting
+  that shows up as a resource-matching timeout, not as a clean failure.
 * **A callee's `ensures` is all you get.**  `squeeze_impl` does not promise
   anything about the length of the scratch buffers it was handed, so a caller
   whose own postcondition mentions them has to re-establish it -- one
@@ -1100,7 +1115,7 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   one at every use.
 * **Custard eta-renames trivial wrappers.**  A Pulse `fn` whose body is just
   a call to another `fn` extracts with its parameters named `eta`, `eta1`,
-  ...  Inline the body instead; that is why `Hacl.Chacha20.Ptr.decrypt`
+  ...  Inline the body instead; that is why `Hacl.Chacha20.decrypt`
   repeats `encrypt`'s body rather than calling it.
 
 * **Spell powers of two out as decimal literals.**  An identity about limbs
@@ -1121,9 +1136,12 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   three lemmas in the middle of `Hacl.Spec.Bytes` made a later, untouched
   lemma time out; appending them at the end fixed it.  The solver sees earlier
   definitions of the same module as ambient facts.
-* **`Pulse.Lib.Slice.len` shadows a parameter named `len`** inside an
-  `S.(...)` block, and the error is the baffling "Expected expression of type
-  `FStar.SizeT.t`, got `Pulse.Lib.Slice.len`".
+* **Pulse silently drops a pure statement in final position.**  A `fn` body,
+  or a branch of an `if`, that ends with a lemma call simply does not make that
+  call; the postcondition then fails with no indication why.  End such a body
+  with `()`.  This is worth knowing before a large mechanical edit: removing a
+  trailing statement from sixty-six functions left sixty-six silently broken
+  proofs.
 * **A Pulse `ensures` does not see the `requires`.**  Any refinement a
   postcondition needs in order to typecheck -- a length, a bound -- has to be
   restated as one of its own earlier conjuncts.
