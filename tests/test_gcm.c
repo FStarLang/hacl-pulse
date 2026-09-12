@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "Hacl_AES_GCM_Ptr.h"
+#include "Hacl.h"
 
 static int failures = 0;
 

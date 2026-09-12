@@ -39,7 +39,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`, `code/aes/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: currently the platform entropy shim |
 | `tests/` | C test harnesses |
-| `dist/` | generated C (one `.c`/`.h` pair per unit) |
+| `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
 | `design/` | the inventory of HACL\* that this library is measured against |
 
 ## The four design commitments
@@ -967,9 +967,14 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   `update_impl` was on a goal like `nb + 1 <= |seen| + |data|`.  Moving the
   block-full case out into `update_full` made all of them go away at once; no
   amount of rlimit would have.
-* **A unit is a whole program.**  Two extracted units each contain everything
-  their entry points reach, and each defines it, so they cannot be linked into
-  one binary.  One test binary per unit.
+* **Extract one whole program, not sixteen.**  Custard emits everything an
+  entry point reaches, so a per-family unit carried its own copy of the
+  secret-integer layer and of SHA-2, and two of them could not be linked into
+  one binary at all.  Collapsing the sixteen roots into one `code/Hacl.fst`
+  that names every entry module halved the generated code -- 25,200 lines to
+  13,400 -- and made the library linkable with itself.  The only cost is that
+  `--custard_entry` moved from a per-unit variable to one list, which is a
+  better place for it: that list is the public API.
 * **Mark big `Seq.init` definitions `opaque_to_smt`.**  A spec function that
   builds a 25-element sequence is, unfolded, 25 copies of its body in every
   query that mentions it.  Make it opaque and give it an index lemma that
@@ -1074,7 +1079,8 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   was assigned in a `custard_init_globals` that every `main` had to call
   first — and a test that forgot got a BLAKE2 block length of zero and a
   division by zero.  Custard now folds a constant global into the initializer
-  of the global that reads it, so no unit here emits that function at all.
+  of the global that reads it, so the library does not emit that function at
+  all.
   Recorded because the failure mode was so quiet.
 * **`Seq.index` does not reduce through `Seq.seq_of_list`.**  The sequence
   type is abstract, so `assert_norm (Seq.index (seq_of_list l) i == ...)`

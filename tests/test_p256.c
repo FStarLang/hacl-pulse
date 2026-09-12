@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "Hacl_P256_Ptr.h"
+#include "Hacl.h"
 #include "test_util.h"
 
 static uint8_t sk[32] = {

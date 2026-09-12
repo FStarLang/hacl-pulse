@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Hacl_Hash_Blake2_Ptr.h"
+#include "Hacl.h"
 
 typedef void (*blake2_fn)(uint8_t *out, uint8_t *key, size_t key_len,
                           uint8_t *msg, size_t msg_len);

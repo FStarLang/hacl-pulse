@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Hacl_Streaming_SHA3_Ptr.h"
+#include "Hacl.h"
 
 static int failures = 0;
 

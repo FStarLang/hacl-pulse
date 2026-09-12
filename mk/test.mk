@@ -5,14 +5,10 @@
 # specifications happens on the F* side instead, where the specification is
 # available; see tests/.
 #
-# One binary per test source.  A unit is a *whole-program* translation unit --
-# everything its entry points reach is emitted into it -- so two units share
-# code and each carries its own `custard_init_globals`; they cannot be linked
-# together.  Each test therefore names the unit it exercises:
-#
-#     TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
-#
-# and gets its own `main`, which calls `custard_init_globals` first.
+# One binary per test source.  There is a single extracted translation unit,
+# so every test just includes "Hacl.h" and links dist/Hacl.c; no test has to
+# say which part of the library it exercises, and a test is free to use two
+# algorithms at once.
 
 TEST_SRCS  := $(wildcard $(HACL_ROOT)/tests/*.c)
 TEST_NAMES := $(notdir $(basename $(TEST_SRCS)))
@@ -24,9 +20,7 @@ $(BUILD_DIR)/tests/$(1).o: $(HACL_ROOT)/tests/$(1).c $$(C_HEADERS)
 	$$(Q)$$(CC) $$(HACL_CFLAGS) -I $$(DIST_DIR) -I $$(HACL_ROOT)/c \
 	  -I $$(HACL_ROOT)/tests -c $$< -o $$@
 
-$(BUILD_DIR)/tests/$(1): $(BUILD_DIR)/tests/$(1).o \
-    $$(foreach u,$$(TEST_UNITS_$(1)),$$(BUILD_DIR)/$$(call c_name,$$(u)).o) \
-    $$(HAND_OBJS)
+$(BUILD_DIR)/tests/$(1): $(BUILD_DIR)/tests/$(1).o $$(C_OBJECTS) $$(HAND_OBJS)
 	$$(call msg, "LD", "$(1)")
 	$$(Q)$$(CC) $$(HACL_CFLAGS) $$^ -o $$@
 
