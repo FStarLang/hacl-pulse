@@ -42,6 +42,7 @@ module Seq = FStar.Seq
 module UInt = FStar.UInt
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
+module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 
 let elem = UInt.uint_t 8
@@ -73,6 +74,21 @@ let rotl8 (x: elem) (k: nat { 0 < k /\ k < 8 }) : elem =
   U8.v (U8.logor (U8.shift_left b (U32.uint_to_t k))
                  (U8.shift_right b (U32.uint_to_t (8 - k))))
 
+(** The two halves of the rotation occupy disjoint bits, so the or is an
+    addition -- which is what lets [Hacl.Secret.UInt8.rotate_left], whose
+    postcondition is arithmetic, be recognized as this. *)
+let rotl8_value (x: elem) (k: nat { 0 < k /\ k < 8 })
+  : Lemma (rotl8 x k == (x % pow2 (8 - k)) * pow2 k + x / pow2 (8 - k))
+  = let b = U8.uint_to_t x in
+    let hi = U8.shift_left b (U32.uint_to_t k) in
+    let lo = U8.shift_right b (U32.uint_to_t (8 - k)) in
+    UInt.shift_left_value_lemma #8 x k;
+    UInt.shift_right_value_lemma #8 x (8 - k);
+    Math.pow2_multiplication_modulo_lemma_2 x 8 k;
+    Math.multiple_modulo_lemma (x % pow2 (8 - k)) (pow2 k);
+    Math.lemma_div_lt x 8 (8 - k);
+    UInt.logor_disjoint #8 (U8.v hi) (U8.v lo) k
+
 (** {2 The view of a secret byte sequence}
 
     The implementations work on [Hacl.Secret.UInt8.t]; their postconditions
@@ -96,6 +112,10 @@ let vals_index (s: Seq.seq S8.t) (i: nat { i < Seq.length s })
   : Lemma (Seq.index (vals s) i == S8.v (Seq.index s i))
           [SMTPat (Seq.index (vals s) i)]
   = Seq.init_ghost_index (Seq.length s) (fun k -> (S8.v (Seq.index s k) <: elem))
+
+let vals_upd (s: Seq.seq S8.t) (i: nat { i < Seq.length s }) (x: S8.t)
+  : Lemma (vals (Seq.upd s i x) == Seq.upd (vals s) i (S8.v x))
+  = Seq.lemma_eq_intro (vals (Seq.upd s i x)) (Seq.upd (vals s) i (S8.v x))
 
 (** [vals] commutes with slicing, which is what a caller who hands a
     sub-buffer to a block function needs. *)
