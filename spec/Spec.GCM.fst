@@ -221,6 +221,29 @@ let ghash_pad (h acc: G.block) (s: Seq.seq elem)
     if Seq.length s % blocklen = 0 then ()
     else G.ghash_upd_append h acc (whole s) (tail_block s)
 
+(** A whole number of blocks needs no padding at all. *)
+let pad_exact (s: Seq.seq elem)
+  : Lemma (requires Seq.length s % blocklen == 0) (ensures pad s == s)
+  = Seq.lemma_eq_intro (pad s) s
+
+(** The general nonce path is two folds: the padded nonce, then a length
+    block whose first half is zero. *)
+let j0_fold (v: variant) (w: Seq.lseq elem (xkeylen v)) (iv: Seq.seq elem { iv_ok iv })
+  : Lemma (requires Seq.length iv <> 12)
+          (ensures (let lb = Seq.append (u64be 0) (u64be (8 * Seq.length iv)) in
+                    assert_norm (8 * (pow2 61 - 1) < pow2 64);
+                    Seq.length lb == blocklen /\
+                    j0 v w iv == G.ghash_upd (hkey v w)
+                                   (G.ghash_upd (hkey v w) G.zero (pad iv)) lb))
+  = assert_norm (8 * (pow2 61 - 1) < pow2 64);
+    let h = hkey v w in
+    let lb = Seq.append (u64be 0) (u64be (8 * Seq.length iv)) in
+    Seq.lemma_len_append (u64be 0) (u64be (8 * Seq.length iv));
+    Seq.lemma_len_append (pad iv) lb;
+    ghash_input_mod (Seq.length (pad iv)) blocklen;
+    G.ghash_is_upd h (Seq.append (pad iv) lb);
+    G.ghash_upd_append h G.zero (pad iv) lb
+
 (** And the tag is three folds. *)
 let gtag_fold (v: variant) (w: Seq.lseq elem (xkeylen v)) (jj: G.block)
               (a c: Seq.seq elem)

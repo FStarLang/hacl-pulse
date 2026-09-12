@@ -385,10 +385,11 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** pure (
 
 fn key_expansion_impl ([@@@FStar.Attributes.monomorphize] p: params)
                       (w: S.slice S8.t) (key: S.slice S8.t)
-                      (#vw0 #vkey: erased (Seq.seq S8.t))
-requires S.pts_to w vw0 ** S.pts_to key vkey ** pure (
+                      (#vw0: erased (Seq.seq S8.t))
+                      (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+requires S.pts_to w vw0 ** S.pts_to key #pk vkey ** pure (
   Seq.length vw0 == xkeylen p.pv /\ Seq.length vkey == keylen p.pv)
-ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key vkey ** pure (
+ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key #pk vkey ** pure (
   Seq.length vw1 == xkeylen p.pv /\ Seq.length vkey == keylen p.pv /\
   vals vw1 == key_expansion p.pv (vals vkey))
 {
@@ -397,7 +398,7 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key vkey ** pure
   let mut c = 0sz;
   while (let vc = !c; SZ.lt vc p.pkeylen)
   invariant exists* (vc: SZ.t) (vw: Seq.seq S8.t).
-    pts_to c vc ** S.pts_to w vw ** S.pts_to key vkey **
+    pts_to c vc ** S.pts_to w vw ** S.pts_to key #pk vkey **
     pure (SZ.v vc <= keylen p.pv /\ Seq.length vw == xkeylen p.pv /\
           Seq.length vkey == keylen p.pv /\
           (forall (j: nat). j < SZ.v vc ==>
@@ -420,7 +421,7 @@ ensures exists* (vw1: Seq.seq S8.t). S.pts_to w vw1 ** S.pts_to key vkey ** pure
   let mut rc = S8.classify 1uy;
   while (let vb = !b; SZ.lt vb p.pxkeylen)
   invariant exists* (vb: SZ.t) (vrc: S8.t) (vw: Seq.seq S8.t).
-    pts_to b vb ** pts_to rc vrc ** S.pts_to w vw ** S.pts_to key vkey **
+    pts_to b vb ** pts_to rc vrc ** S.pts_to w vw ** S.pts_to key #pk vkey **
     pure (keylen p.pv <= SZ.v vb /\ SZ.v vb <= xkeylen p.pv /\ SZ.v vb % 4 == 0 /\
           Seq.length vw == xkeylen p.pv /\ Seq.length vkey == keylen p.pv /\
           S8.v vrc == rcon0 (rcidx (SZ.v vb) (keylen p.pv)) /\
