@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`) |
+| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`) |
 | `tests/` | C test harnesses |
 | `dist/` | generated C (one `.c`/`.h` pair per unit) |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -658,6 +658,67 @@ rejection under a wrong message, rejection of the malleable `S + q`
 encoding, and agreement between `expand_keys`/`sign_expanded` and the
 one-shot `sign`.
 
+### P-256, a second field and a second scalar field
+
+P-256 is the first curve here whose field is not Curve25519's, and the first
+whose group order matters arithmetically rather than only as a range check.
+Both are 256-bit primes with no special shape, so both are done in Montgomery
+form over sixteen 16-bit limbs by one shared `Hacl.P256.Mont`:
+`Spec.Bignum256` fixes the representation, `mont_mul` does
+Coarsely-Integrated Operand Scanning, and `Hacl.P256.Field` and
+`Hacl.P256.Scalar` are two instantiations that never meet.
+
+**Keeping them apart is a performance decision, not a taste one.**  The field
+modulus `p` and the order `q` are both 78-digit literals, and a goal that
+mentions both takes minutes.  So `code/p256` is twenty modules: the on-curve
+test and the scalar reduction never appear in the same verification context,
+and `Hacl.P256.Key` (private keys, the scalar field) and
+`Hacl.P256.Key.Public` (public keys, the field) are separate files for no
+other reason.
+
+**`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
+addition formulas are Renes-Costello-Batina, twelve field multiplications
+with no special cases -- and about forty lines of nested `fmul`/`fadd` when
+unfolded.  Once, in the scalar-multiplication loop, that is fine; on every
+iteration of a 256-step ladder it is fatal.  Sealing them means the loop
+invariant talks about `point_add` the symbol.
+
+**Scalar multiplication reads bits, so it does not use Montgomery form.**
+`Hacl.P256.Key.load_scalar` produces sixteen plain limbs with `load_be`;
+`qload` is used only where the scalar enters the order field (signing).  The
+ladder itself is a plain 256-iteration double-and-add with the addend
+selected by a constant-time swap, in its own module
+(`Hacl.P256.PointStep`) so that one step's proof does not carry the
+loop's.
+
+**Verification is not constant time and need not be.**
+`point_mul_double_g u1 u2 Q` is two independent multiplications and one
+addition rather than Shamir's trick, because nothing in verification is
+secret and the simpler code is the one that verifies.
+
+**`r` travels field -> bytes -> scalar.**  The specification says
+`r = x mod q` where `x` is a field element; the implementation stores `x` to
+thirty-two big-endian bytes and reloads them into the scalar field, which is
+the only conversion the two Montgomery domains share.  Connecting the two
+needed a new round-trip lemma in `Hacl.Spec.Bytes`,
+`be_nat (nat_to_be n x) == x`.
+
+**Machine literals are surprisingly expensive under `--fuel 0`.**  The loop
+guard `SZ.lt i 256sz` was, on its own, an unprovable obligation inside
+`point_mul`: `256sz` is `uint_to_t 256`, whose typing needs `pow2 64`, and Z3
+will not compute that in a context the size of P-256's.  The cure is a
+one-line top-level helper *outside* the options block whose type states the
+conclusion -- `let lt256 (x: SZ.t) : (r: bool { r <==> SZ.v x < 256 })` -- and
+the whole function then goes through in about a minute.
+
+`tests/test_p256.c` covers the six RFC 6979 A.2.5 ECDSA examples (two
+messages times three hashes) in both directions, the prehashed path, every
+single-bit tampering of a signature, verification under a wrong message,
+private keys that are zero or above the order, a public key that is not on
+the curve, all four SEC1 conversions and their round trips, and ECDH from
+both ends.
+
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -907,5 +968,5 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 
 ## Roadmap
 
-Following `design/reimplementation.md` §9, in dependency order: P-256, then
-the DRBG.  Curve25519 and Ed25519 are done.
+Following `design/reimplementation.md` §9, in dependency order: the DRBG is
+next.  Curve25519, Ed25519 and P-256 are done.

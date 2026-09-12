@@ -77,6 +77,17 @@ C_UNITS += Hacl.Ed25519.Ptr
 CUSTARD_ENTRIES_Hacl.Ed25519.Ptr := \
   secret_to_public expand_keys sign sign_expanded verify
 
+C_UNITS += Hacl.P256.Ptr
+CUSTARD_ENTRIES_Hacl.P256.Ptr := \
+  ecdsa_sign_sha256 ecdsa_sign_sha384 ecdsa_sign_sha512 \
+  ecdsa_sign_without_hash \
+  ecdsa_verify_sha256 ecdsa_verify_sha384 ecdsa_verify_sha512 \
+  ecdsa_verify_without_hash \
+  validate_private_key validate_public_key \
+  raw_to_uncompressed raw_to_compressed \
+  uncompressed_to_raw compressed_to_raw \
+  dh_initiator dh_responder
+
 # Which unit each C test links against; see mk/test.mk.
 TEST_UNITS_test_sha2 := Hacl.Hash.SHA2.Ptr
 TEST_UNITS_test_streaming := Hacl.Streaming.SHA2.Ptr
@@ -91,6 +102,7 @@ TEST_UNITS_test_hmac := Hacl.HMAC.Ptr
 TEST_UNITS_test_hkdf := Hacl.HKDF.Ptr
 TEST_UNITS_test_curve25519 := Hacl.Curve25519.Ptr
 TEST_UNITS_test_ed25519 := Hacl.Ed25519.Ptr
+TEST_UNITS_test_p256 := Hacl.P256.Ptr
 
 include mk/extract.mk
 
