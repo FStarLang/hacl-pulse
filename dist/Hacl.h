@@ -75,6 +75,18 @@ void Hacl_HMAC_hmac_sha256(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *
 void Hacl_HKDF_extract_sha256(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len);
 void Hacl_HMAC_hmac_sha224(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len);
 void Hacl_HKDF_extract_sha224(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len);
+void Hacl_Streaming_HMAC_hmac_sha512_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *out);
+void Hacl_Streaming_HMAC_hmac_sha512_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
+void Hacl_Streaming_HMAC_hmac_sha512_init(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *key, size_t key_len);
+void Hacl_Streaming_HMAC_hmac_sha384_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *out);
+void Hacl_Streaming_HMAC_hmac_sha384_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
+void Hacl_Streaming_HMAC_hmac_sha384_init(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *key, size_t key_len);
+void Hacl_Streaming_HMAC_hmac_sha256_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *out);
+void Hacl_Streaming_HMAC_hmac_sha256_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
+void Hacl_Streaming_HMAC_hmac_sha256_init(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *key, size_t key_len);
+void Hacl_Streaming_HMAC_hmac_sha224_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *out);
+void Hacl_Streaming_HMAC_hmac_sha224_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
+void Hacl_Streaming_HMAC_hmac_sha224_init(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *key, size_t key_len);
 void Hacl_Chacha20_encrypt(uint8_t *out, uint8_t *msg, size_t mlen, uint8_t *key, uint8_t *nonce, uint32_t ctr0);
 bool Hacl_Chacha20Poly1305_decrypt(uint8_t *msg, uint8_t *ct, size_t clen, uint8_t *tag, uint8_t *aad, size_t alen, uint8_t *key, uint8_t *nonce);
 void Hacl_Chacha20Poly1305_encrypt(uint8_t *ct, uint8_t *tag, uint8_t *msg, size_t mlen, uint8_t *aad, size_t alen, uint8_t *key, uint8_t *nonce);

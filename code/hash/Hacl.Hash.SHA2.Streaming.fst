@@ -364,16 +364,17 @@ fn digest_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p
                (seen: erased (Seq.seq S8.t))
                (#pk: perm) (#vk: erased (Seq.seq t))
                (#vw0: erased (Seq.seq t)) (#pa: perm) (#vacc: erased (Seq.seq t))
-               (#vbuf: erased (Seq.seq S8.t)) (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
+               (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
+               (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                (#vout: erased (Seq.seq S8.t))
 requires A.pts_to kt #pk vk ** A.pts_to wsb vw0 ** A.pts_to acc #pa vacc **
-         A.pts_to buf vbuf ** A.pts_to tot #ptot vtot ** A.pts_to out vout **
+         A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot ** A.pts_to out vout **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ Seq.length vw0 == (rounds p) /\
                Seq.length vout == (hash_bytes p) /\
                stream_ok p vacc vbuf vtot seen)
-ensures exists* (vw: Seq.seq t) (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
+ensures exists* (vw: Seq.seq t) (vout': Seq.seq S8.t).
   A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to acc #pa vacc **
-  A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot ** A.pts_to out vout' **
+  A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot ** A.pts_to out vout' **
   pure (Seq.length vw == (rounds p) /\ Seq.length seen < max_input #t /\
         vout' == hash p seen)
 {
@@ -396,7 +397,7 @@ ensures exists* (vw: Seq.seq t) (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
 
   split3 (reveal vbuf) 0 (SZ.v blen);
   let sub = Sub.sub buf 0sz blen;
-  with vsub. assert (A.pts_to sub vsub);
+  with vsub. assert (A.pts_to sub #pbuf vsub);
   let pre = G.hide (Seq.slice (reveal seen) 0 (SZ.v nb0 * block_len #t));
   Seq.lemma_len_append (reveal pre) (reveal vsub);
   buf_is_tail (block_len #t) (reveal seen) (reveal vbuf) (SZ.v nb0) (SZ.v blen);
@@ -404,8 +405,7 @@ ensures exists* (vw: Seq.seq t) (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
 
   tail_and_finish p kt wsb starr out sub tlen nb0 0sz blen pre;
 
-  Sub.unsub buf 0 (SZ.v blen) sub;
-  ()
+  Sub.unsub_id buf 0 (SZ.v blen) sub;
 }
 
 #pop-options

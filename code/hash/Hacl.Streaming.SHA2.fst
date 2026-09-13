@@ -111,14 +111,15 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha224_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
                 (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-                (#pa: perm) (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
+                (#pa: perm) (#vacc: erased (Seq.seq S32.t))
+                (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout **
          pure (stream_ok sha2_224 vacc vbuf vtot seen /\ Seq.length vout == 28)
-ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout' **
   pure (Seq.length seen < max_input #S32.t /\ vout' == hash sha2_224 seen)
 {
@@ -179,14 +180,15 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha256_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
                 (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-                (#pa: perm) (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
+                (#pa: perm) (#vacc: erased (Seq.seq S32.t))
+                (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout **
          pure (stream_ok sha2_256 vacc vbuf vtot seen /\ Seq.length vout == 32)
-ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout' **
   pure (Seq.length seen < max_input #S32.t /\ vout' == hash sha2_256 seen)
 {
@@ -252,14 +254,15 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha384_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
                 (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-                (#pa: perm) (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+                (#pa: perm) (#vacc: erased (Seq.seq S64.t))
+                (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout **
          pure (stream_ok sha2_384 vacc vbuf vtot seen /\ Seq.length vout == 48)
-ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout' **
   pure (Seq.length seen < max_input #S64.t /\ vout' == hash sha2_384 seen)
 {
@@ -320,14 +323,15 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha512_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
                 (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-                (#pa: perm) (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+                (#pa: perm) (#vacc: erased (Seq.seq S64.t))
+                (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
                 (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
-requires A.pts_to acc #pa vacc ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout **
          pure (stream_ok sha2_512 vacc vbuf vtot seen /\ Seq.length vout == 64)
-ensures exists* (vbuf': Seq.seq S8.t) (vout': Seq.seq S8.t).
-  A.pts_to acc #pa vacc ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to acc #pa vacc ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout' **
   pure (Seq.length seen < max_input #S64.t /\ vout' == hash sha2_512 seen)
 {

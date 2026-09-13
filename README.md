@@ -210,8 +210,8 @@ the instance where `pre` is empty.
 `Hacl.HMAC.Core` then allocates exactly three small buffers — the padded key,
 one scratch block that holds `K0 ^ ipad` and later `K0 ^ opad`, and one digest
 — and calls `hash_prefixed` twice.  HMAC of a gigabyte costs the same memory as
-HMAC of a byte, with no state machine.  The same generalization is what a
-streaming interface will be built on.
+HMAC of a byte, with no state machine.  `hash_prefixed` is also what the
+incremental interface is built on; see below.
 
 ### HKDF's one scratch buffer
 
@@ -278,6 +278,49 @@ the block boundary from both sides.
 state tops out at four gigabytes.  That follows from using `FStar.SizeT` for
 every length (see `design/changes.md`); the one-shot interface has the same
 limit, and HACL* does not.
+
+### The incremental HMAC, which is an incremental hash plus one block
+
+HMAC is two hashes, but only the inner one ever sees the message, so an
+incremental HMAC is an incremental SHA-2 state and one more block:
+
+```
+acc, buf, tot   the inner hash, which has already absorbed K0 ^ ipad
+opadb           K0 ^ opad, kept for the outer hash
+```
+
+`init` derives `K0` from the key, absorbs `K0 ^ ipad` and saves `K0 ^ opad`;
+`update` is the inner hash's `update` and nothing else, so it costs exactly
+what a bare SHA-2 `update` costs; `digest` finishes the inner hash into a
+stack digest and calls the one-shot `hash_prefixed` on `K0 ^ opad` and that
+digest.  The key is consumed by `init` and is not part of the state.
+
+The state invariant is one line:
+
+```fstar
+unfold let hmac_ok p key vacc vbuf vtot vopadb msg =
+  Seq.length key < max_input #t /  stream_ok p vacc vbuf vtot (Seq.append (xor_byte #t (key_block p key) ipad) msg) /  vopadb == xor_byte #t (key_block p key) opad
+```
+
+which is to say: the inner stream has seen `K0 ^ ipad` followed by the
+message.  Everything else follows from the SHA-2 streaming contract, and
+`Hacl.Streaming.HMAC.Core` is under two hundred lines.
+
+Getting there needed one change underneath.  `digest_impl` pads the trailing
+partial block on the stack and only *reads* `buf`, but its postcondition used
+to leave `buf`'s contents existentially quantified, which threw the state
+invariant away.  Taking `buf` at a fractional permission and returning it
+unchanged is both truer and more useful: `stream_ok` survives a digest, so a
+caller may digest twice or keep absorbing afterwards, which is what
+`Hacl.Streaming.HMAC` needs and what the SHA-2 layer had always been able to
+promise.  `tests/test_hmac_streaming.c` checks all three.
+
+HACL\*'s streaming HMAC is *agile*: the implementation is chosen at run time
+from an enum, the state is heap-allocated behind an abstract pointer, and
+there is a `copy` and a `free`.  Here, as everywhere else in this library, the
+algorithm is chosen at compile time by which function you call and the state
+is four arrays the caller declares — so there is no allocation, no destructor
+and no error code, and a `copy` is `memcpy`.
 
 ### The sponge
 
@@ -1218,9 +1261,9 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 ## Roadmap
 
 Following `design/reimplementation.md` §9, the minimum viable subset is
-complete: the hashes and their streaming layers, HMAC, HKDF,
-ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with an OS entropy shim,
-and AES-GCM.
+complete: the hashes and their streaming layers, HMAC one-shot and
+incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
+an OS entropy shim, and AES-GCM.
 
 Beyond the subset, in rough order of how often they are asked for: AES-NI and
 carry-less-multiply intrinsics under the portable AES-GCM, the generic bignum
