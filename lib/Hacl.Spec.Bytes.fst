@@ -60,6 +60,30 @@ let be_nat_snoc (s: Seq.seq S8.t) (j: nat { j < Seq.length s })
   : Lemma (be_nat (Seq.slice s 0 (j + 1)) == be_nat (Seq.slice s 0 j) * 256 + S8.v (Seq.index s j))
   = Seq.lemma_eq_intro (Seq.slice (Seq.slice s 0 (j + 1)) 0 j) (Seq.slice s 0 j)
 
+(** Cutting a big-endian number in two: the last [k] bytes are the low [8k]
+    bits, so the value is the suffix plus [2^(8k)] times the prefix.  The
+    mirror of {!le_nat_split}, and what lets a bignum conversion read one
+    limb-sized window at a time. *)
+let rec be_nat_split (s: Seq.seq S8.t) (k: nat { k <= Seq.length s })
+  : Lemma (ensures (let n = Seq.length s in
+                    be_nat s == be_nat (Seq.slice s 0 (n - k)) * pow2 (8 * k) +
+                                be_nat (Seq.slice s (n - k) n)))
+          (decreases k)
+  = let n = Seq.length s in
+    if k = 0 then begin
+      Seq.lemma_eq_intro (Seq.slice s 0 n) s;
+      Seq.lemma_eq_intro (Seq.slice s n n) Seq.empty
+    end else begin
+      let t = Seq.slice s 0 (n - 1) in
+      be_nat_split t (k - 1);
+      Seq.lemma_eq_intro (Seq.slice t 0 (n - k)) (Seq.slice s 0 (n - k));
+      Seq.lemma_eq_intro (Seq.slice t (n - k) (n - 1)) (Seq.slice s (n - k) (n - 1));
+      Seq.lemma_eq_intro (Seq.slice (Seq.slice s (n - k) n) 0 (k - 1))
+                         (Seq.slice s (n - k) (n - 1));
+      Math.pow2_plus (8 * (k - 1)) 8;
+      Math.paren_mul_right (be_nat (Seq.slice s 0 (n - k))) (pow2 (8 * (k - 1))) 256
+    end
+
 (** {2 Numbers as bytes} *)
 
 let byte_of_nat (n: nat) (x: nat) (i: nat { i < n }) : S8.t =
@@ -294,6 +318,30 @@ let nat_to_le (n: nat) (x: nat) : Seq.lseq S8.t n =
 let nat_to_le_index (n: nat) (x: nat) (i: nat { i < n })
   : Lemma (S8.v (Seq.index (nat_to_le n x) i) == (x / pow2 (8 * i)) % 256)
   = ()
+
+(** Decoding undoes encoding, the little-endian half of {!be_nat_to_be}. *)
+let rec le_nat_to_le (n: nat) (x: nat)
+  : Lemma (requires x < pow2 (8 * n))
+          (ensures le_nat (nat_to_le n x) == x)
+          (decreases n)
+  = if n = 0 then assert_norm (pow2 0 == 1)
+    else begin
+      assert_norm (pow2 8 == 256);
+      Math.pow2_plus 8 (8 * (n - 1));
+      let s = nat_to_le n x in
+      let t = nat_to_le (n - 1) (x / 256) in
+      let aux (i: nat { i < n - 1 })
+        : Lemma (Seq.index (Seq.slice s 1 n) i == Seq.index t i)
+        = Math.pow2_plus 8 (8 * i);
+          Math.division_multiplication_lemma x 256 (pow2 (8 * i))
+      in
+      Classical.forall_intro aux;
+      Seq.lemma_eq_intro (Seq.slice s 1 n) t;
+      le_nat_to_le (n - 1) (x / 256);
+      nat_to_le_index n x 0;
+      assert_norm (pow2 0 == 1);
+      Math.euclidean_division_definition x 256
+    end
 
 let word_from_le (#t: Type0) {| word t |} (s: Seq.lseq S8.t (bytes #t)) : GTot t =
   le_nat_bound s;
