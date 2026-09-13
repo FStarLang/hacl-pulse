@@ -45,6 +45,7 @@ module Chacha20 = Hacl.Chacha20
 module Poly1305 = Hacl.Poly1305
 module Chacha20Poly1305 = Hacl.Chacha20Poly1305
 module HMAC = Hacl.HMAC
+module Streaming_HMAC = Hacl.Streaming.HMAC
 module HKDF = Hacl.HKDF
 module Curve25519 = Hacl.Curve25519
 module Ed25519 = Hacl.Ed25519

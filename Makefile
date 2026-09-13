@@ -62,6 +62,12 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Chacha20Poly1305., encrypt decrypt)
 CUSTARD_ENTRIES += $(addprefix Hacl.HMAC., \
   hmac_sha224 hmac_sha256 hmac_sha384 hmac_sha512)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.HMAC., \
+  hmac_sha224_init hmac_sha224_update hmac_sha224_digest \
+  hmac_sha256_init hmac_sha256_update hmac_sha256_digest \
+  hmac_sha384_init hmac_sha384_update hmac_sha384_digest \
+  hmac_sha512_init hmac_sha512_update hmac_sha512_digest)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.HKDF., \
   extract_sha224 extract_sha256 extract_sha384 extract_sha512 \
   expand_sha224 expand_sha256 expand_sha384 expand_sha512)
