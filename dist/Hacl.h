@@ -20,12 +20,16 @@ typedef uint8_t custard_unit;
 extern "C" {
 #endif
 
-void Hacl_Bignum_Montgomery_reduction(uint32_t *res, uint32_t *c, uint32_t *nmod, size_t nn, uint32_t mu);
 void Hacl_Bignum_Base_zero(uint32_t *res, size_t n);
+uint32_t Hacl_Bignum_Base_sub(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
 void Hacl_Bignum_Base_mul(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+void Hacl_Bignum_Montgomery_reduction(uint32_t *res, uint32_t *c, uint32_t *nmod, size_t nn, uint32_t mu);
 void Hacl_Bignum_Montgomery_mont_mul(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *tmp, uint32_t *nmod, size_t nn, uint32_t mu);
-void Hacl_Bignum_Montgomery_modulo(uint32_t *res, uint32_t *a, uint32_t *acc, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu);
 void Hacl_Bignum_Montgomery_from_mont(uint32_t *res, uint32_t *a, uint32_t *tmp, uint32_t *nmod, size_t nn, uint32_t mu);
+void Hacl_Bignum_Exponentiation_mod_exp_vartime(uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+void Hacl_Bignum_Exponentiation_mod_inv_prime_vartime(uint32_t *res, uint32_t *a, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *e, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+void Hacl_Bignum_Montgomery_modulo(uint32_t *res, uint32_t *a, uint32_t *acc, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu);
 void Hacl_Bignum_Montgomery_precomp(uint32_t *res, uint32_t *nmod, size_t nn);
 uint32_t Hacl_Bignum_Montgomery_mont_mu(uint32_t m0);
 void Hacl_Bignum_Convert_to_bytes_le(uint8_t *b, uint32_t *a, size_t n);
@@ -35,7 +39,6 @@ void Hacl_Bignum_Convert_from_bytes_be(uint32_t *res, size_t n, uint8_t *b);
 uint32_t Hacl_Bignum_Base_eq_mask(uint32_t *a, uint32_t *b, size_t n);
 uint32_t Hacl_Bignum_Base_lt_mask(uint32_t *a, uint32_t *b, size_t n);
 void Hacl_Bignum_Base_sqr(uint32_t *res, uint32_t *a, size_t n);
-uint32_t Hacl_Bignum_Base_sub(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
 void Hacl_Bignum_Base_sub_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n);
 uint32_t Hacl_Bignum_Base_add(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
 void Hacl_Bignum_Base_add_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n);

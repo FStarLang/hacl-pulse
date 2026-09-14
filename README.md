@@ -1090,8 +1090,57 @@ so its quotient is an explicit inverse of the radix, and a power of that
 inverts `R`.  No appeal to Bezout, no gcd, and nothing computed at run time
 -- the inverse only ever exists in the proof.
 
+### Modular exponentiation
+
+`code/bignum/Hacl.Bignum.Exponentiation.fst` is the square-and-multiply
+ladder that RSA and finite-field Diffie-Hellman are built out of.  It runs
+entirely in Montgomery form: the base goes in once, the accumulator comes
+out once, and every rung in between is two `mont_mul`s.
+
+    void Hacl_Bignum_Exponentiation_mod_exp_consttime(
+        uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits,
+        uint32_t *r2, uint32_t *n, size_t nn, uint32_t mu,
+        uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+    void Hacl_Bignum_Exponentiation_mod_exp_vartime(/* the same arguments */);
+    void Hacl_Bignum_Exponentiation_mod_inv_prime_vartime(
+        uint32_t *res, uint32_t *a, uint32_t *r2, uint32_t *n,
+        size_t nn, uint32_t mu, uint32_t *e,
+        uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+
+**The invariant is the whole proof.**  Reading the exponent from the top
+down, the accumulator after `i` bits have been consumed holds
+
+    acc == a^(b / 2^i) * R mod n
+
+and one rung takes `i` to `i-1` by `b / 2^(i-1) = 2 * (b / 2^i) + bit i-1`.
+That identity, `pw_step`, is the only arithmetic fact the loop needs; the
+rest is `mont_cancel`, which is what says that a `mont_mul` of two numbers
+in Montgomery form is again in Montgomery form.
+
+**The constant-time one always multiplies.**  It computes both candidates
+and picks with `cselect`, a branch-free masked copy, so the instruction
+trace does not depend on the exponent.  The mask comes from `get_bit`,
+which returns a secret all-ones or all-zeroes word and offers no way to
+turn one into a `bool`.  The variable-time one branches instead, and is
+correspondingly only for public exponents -- which is why it is the one
+`mod_inv_prime_vartime` calls: the exponent there is `n - 2`, and the
+modulus is public.
+
+Inversion is Fermat's little theorem, `a^(n-2) = a^-1 mod n` when `n` is
+prime.  The specification does not mention primality -- it says only that
+the result is `a^(n-2) mod n`, which is true unconditionally and is what
+the code actually establishes.  Claiming an inverse would require a
+primality hypothesis the caller cannot discharge and the library does not
+check, so, like HACL*, we do not claim it.
+
+**Nothing allocates**, here least of all: the length is a run-time value,
+so every temporary is a caller-supplied array.  A ladder needs three `nn`
+words of scratch plus one `2*nn` for the products, and `res` serves as a
+fourth while the loop runs.
+
 `tests/test_montgomery.c` checks every one of these against Python, which
-inverts the radix with `pow(R, -1, n)` and multiplies out.
+inverts the radix with `pow(R, -1, n)` and multiplies out, and compares
+both ladders against `pow(a, b, n)`.
 
 ## Proof engineering notes
 
@@ -1384,10 +1433,9 @@ Following `design/reimplementation.md` §9, the minimum viable subset is
 complete: the hashes and their streaming layers, HMAC one-shot and
 incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
 an OS entropy shim, and AES-GCM.  Past it, the generic bignum has its
-arithmetic, its conversions and its Montgomery layer; modular
-exponentiation is next.
+arithmetic, its conversions, its Montgomery layer and its modular
+exponentiation -- both ladders and Fermat inversion.
 
 Beyond the subset, in rough order of how often they are asked for: AES-NI and
-carry-less-multiply intrinsics under the portable AES-GCM, modular
-exponentiation on top of the generic bignum, RSA-PSS, FFDHE, secp256k1,
+carry-less-multiply intrinsics under the portable AES-GCM, RSA-PSS, FFDHE, secp256k1,
 Salsa20/NaCl, FrodoKEM, and the legacy hashes.

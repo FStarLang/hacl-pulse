@@ -450,3 +450,89 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S32.t).
 #pop-options
 
 #pop-options
+
+
+(** {2 Inversion modulo a prime}
+
+    Fermat's little theorem: if [n] is prime and [a] is not a multiple of
+    it, then [a^(n-2)] is the inverse of [a] modulo [n].  We do not ask the
+    caller to prove that [n] is prime -- HACL* does not either -- so the
+    specification below is the honest one: this computes a power.  It is an
+    inverse exactly when the hypothesis the name announces holds. *)
+
+(** The exponent [n-2] fits, and is what [sub] leaves behind when no borrow
+    comes out. *)
+let inv_exp (nN e c w: int)
+  : Lemma (requires nN + c * w == e + 2 /\ 0 <= c /\ c <= 1 /\ 2 <= nN /\
+                    0 <= e /\ e < w)
+          (ensures e == nN - 2)
+  = ()
+
+#push-options "--z3rlimit 100"
+
+(** [mod_inv_prime_vartime res a r2 nmod nn mu e aM acc t wide] is
+    [a^(n-2) mod n].  The array [res] doubles as the scratch that holds the
+    constant two while the exponent is being formed, and [e] holds that
+    exponent for the duration of the ladder. *)
+fn mod_inv_prime_vartime (res: A.array S32.t) (a: A.array S32.t)
+                         (r2: A.array S32.t) (nmod: A.array S32.t)
+                         (nn: SZ.t) (mu: S32.t)
+                         (e: A.array S32.t)
+                         (aM: A.array S32.t) (acc: A.array S32.t)
+                         (t: A.array S32.t) (wide: A.array S32.t)
+                         (#vres #ve #vaM #vacc #vt #vwide: erased (Seq.seq S32.t))
+                         (#pa #pr #pn: perm)
+                         (#va #vr2: erased (Seq.seq S32.t))
+                         (#vn: erased (s: Seq.seq S32.t { 1 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to a #pa va **
+         A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn ** A.pts_to e ve **
+         A.pts_to aM vaM ** A.pts_to acc vacc ** A.pts_to t vt **
+         A.pts_to wide vwide **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
+        Seq.length vr2 == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        Seq.length ve == SZ.v nn /\
+        Seq.length vaM == SZ.v nn /\ Seq.length vacc == SZ.v nn /\
+        Seq.length vt == SZ.v nn /\
+        Seq.length vwide == SZ.v nn + SZ.v nn /\
+        0 < SZ.v nn /\ SZ.fits (SZ.v nn + SZ.v nn) /\ SZ.fits (32 * SZ.v nn) /\
+        num va < num vn /\
+        num vr2 == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn /\
+        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v v0 v1 v2 v3 v4: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a #pa va **
+  A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn ** A.pts_to e v0 **
+  A.pts_to aM v1 ** A.pts_to acc v2 ** A.pts_to t v3 ** A.pts_to wide v4 **
+  pure (Seq.length v == SZ.v nn /\ Seq.length v0 == SZ.v nn /\
+        Seq.length v1 == SZ.v nn /\
+        Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn /\
+        Seq.length v4 == SZ.v nn + SZ.v nn /\
+        num v == pw (num va) (num vn - 2) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  A.pts_to_len r2;
+  A.pts_to_len nmod;
+  A.pts_to_len e;
+  A.pts_to_len aM;
+  A.pts_to_len acc;
+  A.pts_to_len t;
+  A.pts_to_len wide;
+  zero res nn;
+  with v0. assert (A.pts_to res v0);
+  num_zeros_above v0 0;
+  pre_zero v0;
+  A.((res.(0sz) <- S32.classify 2ul));
+  num_upd v0 0 (S32.classify 2ul);
+  with v1. assert (A.pts_to res v1);
+  assert (pure (num v1 == 2));
+  let c = sub e nmod res nn;
+  with v2. assert (A.pts_to e v2);
+  pre_bnd v2 (SZ.v nn);
+  pre_full v2;
+  inv_exp (num vn) (num v2) (S32.v c) (wt (SZ.v nn)) ;
+  assert (pure (num v2 == num vn - 2));
+  mod_exp_vartime res a e (SZ.mul 32sz nn) r2 nmod nn mu aM acc t wide;
+  ()
+}
+
+#pop-options

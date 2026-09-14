@@ -2,21 +2,26 @@
 #include "Hacl.h"
 
 static uint32_t Hacl_Secret_UInt32_zero = 0;
-static uint32_t Hacl_Secret_UInt32_mul_mod(uint32_t x, uint32_t y);
+static uint64_t Hacl_Secret_UInt64_sub_mod(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y);
-static uint64_t Hacl_Secret_UInt64_mul_mod(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Cast_u32_to_u64(uint32_t x);
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x);
 static uint64_t Hacl_Secret_UInt64_shift_right(uint64_t x, uint32_t s);
-static uint32_t Hacl_Bignum_Base_mul_row(uint32_t *res, uint32_t *a, size_t n, uint32_t bi, size_t off);
-static void Hacl_Bignum_Montgomery_copy_upper(uint32_t *res, uint32_t *c, size_t nn);
-static uint64_t Hacl_Secret_UInt64_sub_mod(uint64_t x, uint64_t y);
 static uint32_t Hacl_Secret_UInt32_sub_mod(uint32_t x, uint32_t y);
+static uint64_t Hacl_Secret_UInt64_mul_mod(uint64_t x, uint64_t y);
+static uint32_t Hacl_Bignum_Base_mul_row(uint32_t *res, uint32_t *a, size_t n, uint32_t bi, size_t off);
+static uint32_t Hacl_Secret_UInt32_mul_mod(uint32_t x, uint32_t y);
+static void Hacl_Bignum_Montgomery_copy_upper(uint32_t *res, uint32_t *c, size_t nn);
 static uint32_t Hacl_Bignum_Base_sub_from(uint32_t *res, uint32_t *b, size_t n);
 static uint32_t Hacl_Secret_UInt32_eq_mask(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_select(uint32_t mask, uint32_t x, uint32_t y);
 static uint32_t Hacl_Bignum_Base_add_masked(uint32_t *res, uint32_t *b, size_t n, uint32_t m);
 static void Hacl_Bignum_Montgomery_embed(uint32_t *tmp, uint32_t *a, size_t nn);
+static void Hacl_Bignum_Base_copy(uint32_t *res, uint32_t *a, size_t n);
+static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s);
+static uint32_t Hacl_Secret_UInt32_logand(uint32_t x, uint32_t y);
+static uint32_t Hacl_Bignum_Base_get_bit(uint32_t *b, size_t i);
+static void Hacl_Bignum_Base_cselect(uint32_t *res, uint32_t *a, size_t n, uint32_t m);
 static uint32_t Hacl_Bignum_Base_double(uint32_t *res, size_t n);
 static uint32_t Hacl_Secret_UInt32_borrow(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_lt_mask(uint32_t x, uint32_t y);
@@ -24,7 +29,6 @@ static void Hacl_Bignum_Base_double_mod(uint32_t *res, uint32_t *m, size_t n);
 static size_t Hacl_Secret_Word_nbytes__t = 4;
 static uint8_t Hacl_Secret_Cast_u32_to_u8(uint32_t x);
 static uint8_t Hacl_Secret_Word_to_byte__t(uint32_t x);
-static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t s);
 static void Hacl_Impl_Bytes_store_le__t(uint8_t *b, size_t off, uint32_t x);
 static void Hacl_Impl_Bytes_store_be__t(uint8_t *b, size_t off, uint32_t x);
@@ -199,7 +203,6 @@ static uint32_t Spec_SHA2__sigma1__t_2(uint32_t x);
 static uint32_t Spec_SHA2__sigma0__t_2(uint32_t x);
 static void Hacl_Hash_SHA2_Core_ws_expand__t_2(uint32_t *wsb, uint8_t *block, size_t off);
 static uint32_t Spec_SHA2__Sigma1__t_2(uint32_t x);
-static uint32_t Hacl_Secret_UInt32_logand(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_Word_logand__t_1(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_lognot(uint32_t x);
 static uint32_t Hacl_Secret_Word_lognot__t_1(uint32_t x);
@@ -714,16 +717,22 @@ static void Hacl_Hash_SHA2_Streaming_update_impl__t_7(uint32_t *kt, uint32_t *ws
 static void Hacl_Hash_SHA2_Streaming_init_impl__t_7(uint32_t *ivt, uint32_t *acc, uint8_t *buf, size_t *tot);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_7(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 
-static uint32_t Hacl_Secret_UInt32_mul_mod(uint32_t x, uint32_t y) {
-  return (x * y);
+void Hacl_Bignum_Base_zero(uint32_t *res, size_t n) {
+  uint32_t z = Hacl_Secret_UInt32_zero;
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    res[vi] = z;
+    i = (vi + 1);
+  }
+}
+
+static uint64_t Hacl_Secret_UInt64_sub_mod(uint64_t x, uint64_t y) {
+  return (x - y);
 }
 
 static uint64_t Hacl_Secret_UInt64_add_mod(uint64_t x, uint64_t y) {
   return (x + y);
-}
-
-static uint64_t Hacl_Secret_UInt64_mul_mod(uint64_t x, uint64_t y) {
-  return (x * y);
 }
 
 static uint64_t Hacl_Secret_Cast_u32_to_u64(uint32_t x) {
@@ -736,6 +745,34 @@ static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x) {
 
 static uint64_t Hacl_Secret_UInt64_shift_right(uint64_t x, uint32_t s) {
   return (x >> s);
+}
+
+static uint32_t Hacl_Secret_UInt32_sub_mod(uint32_t x, uint32_t y) {
+  return (x - y);
+}
+
+uint32_t Hacl_Bignum_Base_sub(uint32_t *res, uint32_t *a, uint32_t *b, size_t n) {
+  size_t i = 0;
+  uint32_t c = Hacl_Secret_UInt32_zero;
+  while (i < n) {
+    size_t vi = i;
+    uint32_t vc = c;
+    uint32_t ai = a[vi];
+    uint32_t bi = b[vi];
+    uint64_t b1 = 0x100000000ULL;
+    uint64_t d = Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_add_mod(b1, Hacl_Secret_Cast_u32_to_u64(ai)), Hacl_Secret_Cast_u32_to_u64(bi)), Hacl_Secret_Cast_u32_to_u64(vc));
+    uint32_t r = Hacl_Secret_Cast_u64_to_u32(d);
+    uint32_t h = Hacl_Secret_Cast_u64_to_u32(Hacl_Secret_UInt64_shift_right(d, 32));
+    uint32_t bo = Hacl_Secret_UInt32_sub_mod(1, h);
+    res[vi] = r;
+    c = bo;
+    i = (vi + 1);
+  }
+  return c;
+}
+
+static uint64_t Hacl_Secret_UInt64_mul_mod(uint64_t x, uint64_t y) {
+  return (x * y);
 }
 
 static uint32_t Hacl_Bignum_Base_mul_row(uint32_t *res, uint32_t *a, size_t n, uint32_t bi, size_t off) {
@@ -757,6 +794,23 @@ static uint32_t Hacl_Bignum_Base_mul_row(uint32_t *res, uint32_t *a, size_t n, u
   return c;
 }
 
+void Hacl_Bignum_Base_mul(uint32_t *res, uint32_t *a, uint32_t *b, size_t n) {
+  Hacl_Bignum_Base_zero(res, (n + n));
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint32_t bi = b[vi];
+    uint32_t c = Hacl_Bignum_Base_mul_row(res, a, n, bi, vi);
+    size_t pos = (n + vi);
+    res[pos] = c;
+    i = (vi + 1);
+  }
+}
+
+static uint32_t Hacl_Secret_UInt32_mul_mod(uint32_t x, uint32_t y) {
+  return (x * y);
+}
+
 static void Hacl_Bignum_Montgomery_copy_upper(uint32_t *res, uint32_t *c, size_t nn) {
   size_t i = 0;
   while (i < nn) {
@@ -765,14 +819,6 @@ static void Hacl_Bignum_Montgomery_copy_upper(uint32_t *res, uint32_t *c, size_t
     res[vi] = ci;
     i = (vi + 1);
   }
-}
-
-static uint64_t Hacl_Secret_UInt64_sub_mod(uint64_t x, uint64_t y) {
-  return (x - y);
-}
-
-static uint32_t Hacl_Secret_UInt32_sub_mod(uint32_t x, uint32_t y) {
-  return (x - y);
 }
 
 static uint32_t Hacl_Bignum_Base_sub_from(uint32_t *res, uint32_t *b, size_t n) {
@@ -851,37 +897,9 @@ void Hacl_Bignum_Montgomery_reduction(uint32_t *res, uint32_t *c, uint32_t *nmod
   (void)(Hacl_Bignum_Base_add_masked(res, nmod, nn, mask));
 }
 
-void Hacl_Bignum_Base_zero(uint32_t *res, size_t n) {
-  uint32_t z = Hacl_Secret_UInt32_zero;
-  size_t i = 0;
-  while (i < n) {
-    size_t vi = i;
-    res[vi] = z;
-    i = (vi + 1);
-  }
-}
-
-void Hacl_Bignum_Base_mul(uint32_t *res, uint32_t *a, uint32_t *b, size_t n) {
-  Hacl_Bignum_Base_zero(res, (n + n));
-  size_t i = 0;
-  while (i < n) {
-    size_t vi = i;
-    uint32_t bi = b[vi];
-    uint32_t c = Hacl_Bignum_Base_mul_row(res, a, n, bi, vi);
-    size_t pos = (n + vi);
-    res[pos] = c;
-    i = (vi + 1);
-  }
-}
-
 void Hacl_Bignum_Montgomery_mont_mul(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *tmp, uint32_t *nmod, size_t nn, uint32_t mu) {
   Hacl_Bignum_Base_mul(tmp, a, b, nn);
   Hacl_Bignum_Montgomery_reduction(res, tmp, nmod, nn, mu);
-}
-
-void Hacl_Bignum_Montgomery_modulo(uint32_t *res, uint32_t *a, uint32_t *acc, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu) {
-  Hacl_Bignum_Montgomery_reduction(acc, a, nmod, nn, mu);
-  Hacl_Bignum_Montgomery_mont_mul(res, acc, r2, a, nmod, nn, mu);
 }
 
 static void Hacl_Bignum_Montgomery_embed(uint32_t *tmp, uint32_t *a, size_t nn) {
@@ -898,6 +916,96 @@ static void Hacl_Bignum_Montgomery_embed(uint32_t *tmp, uint32_t *a, size_t nn) 
 void Hacl_Bignum_Montgomery_from_mont(uint32_t *res, uint32_t *a, uint32_t *tmp, uint32_t *nmod, size_t nn, uint32_t mu) {
   Hacl_Bignum_Montgomery_embed(tmp, a, nn);
   Hacl_Bignum_Montgomery_reduction(res, tmp, nmod, nn, mu);
+}
+
+static void Hacl_Bignum_Base_copy(uint32_t *res, uint32_t *a, size_t n) {
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint32_t ai = a[vi];
+    res[vi] = ai;
+    i = (vi + 1);
+  }
+}
+
+static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s) {
+  return (x >> s);
+}
+
+static uint32_t Hacl_Secret_UInt32_logand(uint32_t x, uint32_t y) {
+  return (x & y);
+}
+
+static uint32_t Hacl_Bignum_Base_get_bit(uint32_t *b, size_t i) {
+  size_t q = (i / 32);
+  size_t r = (i % 32);
+  uint32_t w = b[q];
+  uint32_t x = Hacl_Secret_UInt32_shift_right(w, (uint32_t)r);
+  uint32_t one = 1;
+  uint32_t bit = Hacl_Secret_UInt32_logand(x, one);
+  return Hacl_Secret_UInt32_eq_mask(bit, one);
+}
+
+void Hacl_Bignum_Exponentiation_mod_exp_vartime(uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide) {
+  Hacl_Bignum_Montgomery_mont_mul(aM, a, r2, wide, nmod, nn, mu);
+  Hacl_Bignum_Montgomery_from_mont(acc, r2, wide, nmod, nn, mu);
+  size_t i = bbits;
+  while (i > 0) {
+    size_t vi = i;
+    size_t j = (vi - 1);
+    Hacl_Bignum_Base_copy(t, acc, nn);
+    Hacl_Bignum_Montgomery_mont_mul(res, acc, t, wide, nmod, nn, mu);
+    Hacl_Bignum_Base_copy(acc, res, nn);
+    uint32_t msk = Hacl_Bignum_Base_get_bit(bb, j);
+    if (msk == 0) i = j;
+    else {
+      Hacl_Bignum_Montgomery_mont_mul(t, acc, aM, wide, nmod, nn, mu);
+      Hacl_Bignum_Base_copy(acc, t, nn);
+      i = j;
+    }
+  }
+  Hacl_Bignum_Montgomery_from_mont(res, acc, wide, nmod, nn, mu);
+}
+
+void Hacl_Bignum_Exponentiation_mod_inv_prime_vartime(uint32_t *res, uint32_t *a, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *e, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide) {
+  Hacl_Bignum_Base_zero(res, nn);
+  res[0] = 2;
+  (void)(Hacl_Bignum_Base_sub(e, nmod, res, nn));
+  Hacl_Bignum_Exponentiation_mod_exp_vartime(res, a, e, (32 * nn), r2, nmod, nn, mu, aM, acc, t, wide);
+}
+
+static void Hacl_Bignum_Base_cselect(uint32_t *res, uint32_t *a, size_t n, uint32_t m) {
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint32_t ai = a[vi];
+    uint32_t ri = res[vi];
+    res[vi] = Hacl_Secret_UInt32_select(m, ai, ri);
+    i = (vi + 1);
+  }
+}
+
+void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide) {
+  Hacl_Bignum_Montgomery_mont_mul(aM, a, r2, wide, nmod, nn, mu);
+  Hacl_Bignum_Montgomery_from_mont(acc, r2, wide, nmod, nn, mu);
+  size_t i = bbits;
+  while (i > 0) {
+    size_t vi = i;
+    size_t j = (vi - 1);
+    Hacl_Bignum_Base_copy(t, acc, nn);
+    Hacl_Bignum_Montgomery_mont_mul(res, acc, t, wide, nmod, nn, mu);
+    Hacl_Bignum_Base_copy(acc, res, nn);
+    Hacl_Bignum_Montgomery_mont_mul(t, acc, aM, wide, nmod, nn, mu);
+    uint32_t msk = Hacl_Bignum_Base_get_bit(bb, j);
+    Hacl_Bignum_Base_cselect(acc, t, nn, msk);
+    i = j;
+  }
+  Hacl_Bignum_Montgomery_from_mont(res, acc, wide, nmod, nn, mu);
+}
+
+void Hacl_Bignum_Montgomery_modulo(uint32_t *res, uint32_t *a, uint32_t *acc, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu) {
+  Hacl_Bignum_Montgomery_reduction(acc, a, nmod, nn, mu);
+  Hacl_Bignum_Montgomery_mont_mul(res, acc, r2, a, nmod, nn, mu);
 }
 
 static uint32_t Hacl_Bignum_Base_double(uint32_t *res, size_t n) {
@@ -962,10 +1070,6 @@ static uint8_t Hacl_Secret_Cast_u32_to_u8(uint32_t x) {
 
 static uint8_t Hacl_Secret_Word_to_byte__t(uint32_t x) {
   return Hacl_Secret_Cast_u32_to_u8(x);
-}
-
-static uint32_t Hacl_Secret_UInt32_shift_right(uint32_t x, uint32_t s) {
-  return (x >> s);
 }
 
 static uint32_t Hacl_Secret_Word_shift_right__t(uint32_t x, uint32_t s) {
@@ -1137,26 +1241,6 @@ void Hacl_Bignum_Base_sqr(uint32_t *res, uint32_t *a, size_t n) {
     res[pos] = c;
     i = (vi + 1);
   }
-}
-
-uint32_t Hacl_Bignum_Base_sub(uint32_t *res, uint32_t *a, uint32_t *b, size_t n) {
-  size_t i = 0;
-  uint32_t c = Hacl_Secret_UInt32_zero;
-  while (i < n) {
-    size_t vi = i;
-    uint32_t vc = c;
-    uint32_t ai = a[vi];
-    uint32_t bi = b[vi];
-    uint64_t b1 = 0x100000000ULL;
-    uint64_t d = Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_add_mod(b1, Hacl_Secret_Cast_u32_to_u64(ai)), Hacl_Secret_Cast_u32_to_u64(bi)), Hacl_Secret_Cast_u32_to_u64(vc));
-    uint32_t r = Hacl_Secret_Cast_u64_to_u32(d);
-    uint32_t h = Hacl_Secret_Cast_u64_to_u32(Hacl_Secret_UInt64_shift_right(d, 32));
-    uint32_t bo = Hacl_Secret_UInt32_sub_mod(1, h);
-    res[vi] = r;
-    c = bo;
-    i = (vi + 1);
-  }
-  return c;
 }
 
 void Hacl_Bignum_Base_sub_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n) {
@@ -3183,10 +3267,6 @@ static void Hacl_Hash_SHA2_Core_ws_expand__t_2(uint32_t *wsb, uint8_t *block, si
 
 static uint32_t Spec_SHA2__Sigma1__t_2(uint32_t x) {
   return Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_rotate_right__t_1(x, 6), Hacl_Secret_Word_rotate_right__t_1(x, 11)), Hacl_Secret_Word_rotate_right__t_1(x, 25));
-}
-
-static uint32_t Hacl_Secret_UInt32_logand(uint32_t x, uint32_t y) {
-  return (x & y);
 }
 
 static uint32_t Hacl_Secret_Word_logand__t_1(uint32_t x, uint32_t y) {
