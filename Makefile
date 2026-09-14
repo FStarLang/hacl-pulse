@@ -107,6 +107,9 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Base., \
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Convert., \
   from_bytes_be from_bytes_le to_bytes_be to_bytes_le)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Montgomery., \
+  mont_mu precomp reduction mont_mul from_mont modulo)
+
 include mk/extract.mk
 
 .DEFAULT_GOAL := all
