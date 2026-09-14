@@ -416,8 +416,40 @@ static void Hacl_Curve25519_add_and_double(uint64_t *x2, uint64_t *z2, uint64_t 
 static void Hacl_Curve25519_ladder_one(uint64_t *x2, uint64_t *z2, uint64_t *x3, uint64_t *z3, uint64_t *t0, uint64_t *t1, uint64_t *t2, uint64_t *t3, uint64_t *t4, uint64_t *t5, uint64_t *t6, uint64_t *t31, uint64_t *x1, uint8_t *ks, size_t n);
 static void Hacl_Curve25519_ladder(uint64_t *x2, uint64_t *z2, uint64_t *x3, uint64_t *z3, uint64_t *t0, uint64_t *t1, uint64_t *t2, uint64_t *t3, uint64_t *t4, uint64_t *t5, uint64_t *t6, uint64_t *t31, uint64_t *x1, uint8_t *ks);
 static void Hacl_Curve25519_set_basepoint(uint8_t *b);
-static void Hacl_HKDF_Core_round_one__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml);
+static uint8_t Hacl_RSAPSS_zero8 = 0;
+static void Hacl_RSAPSS_PSS_fill_range(uint8_t *dst, size_t base, size_t n, uint8_t x);
+static void Hacl_RSAPSS_bn_from_be(uint32_t *res, size_t nn, uint8_t *b, size_t len);
+static void Hacl_RSAPSS_bn_one(uint32_t *res, size_t nn);
+static void Hacl_RSAPSS_mod_exp_be(uint32_t *res, uint32_t *a, uint8_t *eb, size_t eLen, size_t en, uint32_t *nmod, size_t nn, bool ct);
+static bool Hacl_RSAPSS_PSS_all_zero(uint8_t *a, size_t n);
+static bool Hacl_RSAPSS_rsa_exp(uint8_t *out, size_t outLen, uint8_t *inp, size_t inLen, uint8_t *nb, size_t kLen, uint8_t *eb, size_t eLen, bool ct);
+static uint8_t Hacl_RSAPSS_PSS_top_mask_of(uint32_t emBits);
+static uint8_t Hacl_Secret_UInt8_lognot(uint8_t x);
+static void Hacl_RSAPSS_MGF_round__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *m, size_t ml, uint32_t i);
 static void Hacl_Impl_Copy_write_chunk(uint8_t *out, size_t ol, size_t base, uint8_t *dg, size_t dl);
+static void Hacl_RSAPSS_MGF_mgf_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *res, size_t maskLen, uint8_t *seed, size_t slen);
+static void Hacl_RSAPSS_PSS_xor_range(uint8_t *dst, size_t n, uint8_t *src);
+static void Hacl_RSAPSS_PSS_hash_m_prime__t(uint64_t *kt, uint64_t *ivt, uint8_t *out, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_PSS_eq_range(uint8_t *a, uint8_t *b, size_t base, size_t n);
+static bool Hacl_RSAPSS_PSS_pss_verify_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_rsapss_verify__t(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg);
+static void Hacl_RSAPSS_MGF_round__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *m, size_t ml, uint32_t i);
+static void Hacl_RSAPSS_MGF_mgf_impl__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *res, size_t maskLen, uint8_t *seed, size_t slen);
+static void Hacl_RSAPSS_PSS_hash_m_prime__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *out, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_PSS_pss_verify_impl__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_rsapss_verify__t_1(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg);
+static void Hacl_RSAPSS_MGF_round__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *dg, uint8_t *m, size_t ml, uint32_t i);
+static void Hacl_RSAPSS_MGF_mgf_impl__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *res, size_t maskLen, uint8_t *seed, size_t slen);
+static void Hacl_RSAPSS_PSS_hash_m_prime__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_PSS_pss_verify_impl__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_rsapss_verify__t_2(uint32_t *kt, uint32_t *ivt, uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg);
+static void Hacl_RSAPSS_PSS_pss_encode_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_rsapss_sign__t(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt);
+static void Hacl_RSAPSS_PSS_pss_encode_impl__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_rsapss_sign__t_1(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt);
+static void Hacl_RSAPSS_PSS_pss_encode_impl__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen);
+static bool Hacl_RSAPSS_rsapss_sign__t_2(uint32_t *kt, uint32_t *ivt, uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt);
+static void Hacl_HKDF_Core_round_one__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml);
 static void Hacl_HKDF_Core_round_step__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml, uint8_t ci);
 static void Hacl_HKDF_Core_expand_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *out, size_t len, uint8_t *prk, size_t plen, uint8_t *info, size_t ilen);
 static void Hacl_HKDF_Core_round_one__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml);
@@ -7401,11 +7433,142 @@ void Hacl_Curve25519_secret_to_public(uint8_t *out, uint8_t *k) {
   Hacl_Curve25519_scalarmult(out, k, ba);
 }
 
-static void Hacl_HKDF_Core_round_one__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml) {
-  size_t hb = 64;
-  msg[(ml - 1)] = 1;
-  uint8_t *sub = Hacl_Impl_Sub_sub__t(msg, hb, ml);
-  Hacl_HMAC_Core_hmac_impl__t(kt, ivt, dg, prk, plen, sub, (ml - hb));
+static void Hacl_RSAPSS_PSS_fill_range(uint8_t *dst, size_t base, size_t n, uint8_t x) {
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    dst[(base + vi)] = x;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_RSAPSS_bn_from_be(uint32_t *res, size_t nn, uint8_t *b, size_t len) {
+  size_t width = (4 * nn);
+  size_t off = (width - len);
+  uint8_t tmp[width];
+  for (size_t _ci1 = 0; _ci1 < (width); _ci1++) {
+    tmp[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  Hacl_RSAPSS_PSS_fill_range(tmp, 0, off, Hacl_RSAPSS_zero8);
+  Hacl_Impl_Copy_copy_at(tmp, off, b, len);
+  Hacl_Bignum_Convert_from_bytes_be(res, nn, tmp);
+}
+
+static void Hacl_RSAPSS_bn_one(uint32_t *res, size_t nn) {
+  Hacl_Bignum_Base_zero(res, nn);
+  uint32_t one = 1;
+  res[0] = one;
+}
+
+static void Hacl_RSAPSS_mod_exp_be(uint32_t *res, uint32_t *a, uint8_t *eb, size_t eLen, size_t en, uint32_t *nmod, size_t nn, bool ct) {
+  uint32_t z32 = Hacl_Secret_UInt32_zero;
+  uint32_t ebn[en];
+  for (size_t _ci1 = 0; _ci1 < (en); _ci1++) {
+    ebn[_ci1] = z32;
+  }
+  uint32_t r2[nn];
+  for (size_t _ci2 = 0; _ci2 < (nn); _ci2++) {
+    r2[_ci2] = z32;
+  }
+  uint32_t aM[nn];
+  for (size_t _ci3 = 0; _ci3 < (nn); _ci3++) {
+    aM[_ci3] = z32;
+  }
+  uint32_t accu[nn];
+  for (size_t _ci4 = 0; _ci4 < (nn); _ci4++) {
+    accu[_ci4] = z32;
+  }
+  uint32_t tn[nn];
+  for (size_t _ci5 = 0; _ci5 < (nn); _ci5++) {
+    tn[_ci5] = z32;
+  }
+  uint32_t wide[(nn + nn)];
+  for (size_t _ci6 = 0; _ci6 < (nn + nn); _ci6++) {
+    wide[_ci6] = z32;
+  }
+  Hacl_RSAPSS_bn_from_be(ebn, en, eb, eLen);
+  Hacl_Bignum_Montgomery_precomp(r2, nmod, nn);
+  uint32_t n0 = nmod[0];
+  uint32_t mu = Hacl_Bignum_Montgomery_mont_mu(n0);
+  size_t bbits = (32 * en);
+  if (ct) Hacl_Bignum_Exponentiation_mod_exp_consttime(res, a, ebn, bbits, r2, nmod, nn, mu, aM, accu, tn, wide);
+  else Hacl_Bignum_Exponentiation_mod_exp_vartime(res, a, ebn, bbits, r2, nmod, nn, mu, aM, accu, tn, wide);
+}
+
+static bool Hacl_RSAPSS_PSS_all_zero(uint8_t *a, size_t n) {
+  bool acc = true;
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint8_t __anf0 = a[vi];
+    bool vacc = acc;
+    acc = (vacc && (__anf0 == 0));
+    i = (vi + 1);
+  }
+  return acc;
+}
+
+static bool Hacl_RSAPSS_rsa_exp(uint8_t *out, size_t outLen, uint8_t *inp, size_t inLen, uint8_t *nb, size_t kLen, uint8_t *eb, size_t eLen, bool ct) {
+  size_t nn = ((kLen + 3) / 4);
+  size_t en = ((eLen + 3) / 4);
+  uint32_t z32 = Hacl_Secret_UInt32_zero;
+  uint32_t nbn[nn];
+  for (size_t _ci1 = 0; _ci1 < (nn); _ci1++) {
+    nbn[_ci1] = z32;
+  }
+  uint32_t mbn[nn];
+  for (size_t _ci2 = 0; _ci2 < (nn); _ci2++) {
+    mbn[_ci2] = z32;
+  }
+  uint32_t sbn[nn];
+  for (size_t _ci3 = 0; _ci3 < (nn); _ci3++) {
+    sbn[_ci3] = z32;
+  }
+  uint32_t onebn[nn];
+  for (size_t _ci4 = 0; _ci4 < (nn); _ci4++) {
+    onebn[_ci4] = z32;
+  }
+  Hacl_RSAPSS_bn_from_be(nbn, nn, nb, kLen);
+  Hacl_RSAPSS_bn_from_be(mbn, nn, inp, inLen);
+  Hacl_RSAPSS_bn_one(onebn, nn);
+  uint32_t n0 = nbn[0];
+  bool odd = ((n0 % 2) == 1);
+  uint32_t __anf0 = Hacl_Bignum_Base_lt_mask(onebn, nbn, nn);
+  bool gt1 = (__anf0 == 4294967295U);
+  uint32_t __anf01 = Hacl_Bignum_Base_lt_mask(mbn, nbn, nn);
+  bool below = (__anf01 == 4294967295U);
+  if ((odd && gt1) && below) {
+    Hacl_RSAPSS_mod_exp_be(sbn, mbn, eb, eLen, en, nbn, nn, ct);
+    size_t width = (4 * nn);
+    size_t off = (width - outLen);
+    uint8_t tmp[width];
+    for (size_t _ci5 = 0; _ci5 < (width); _ci5++) {
+      tmp[_ci5] = Hacl_RSAPSS_zero8;
+    }
+    Hacl_Bignum_Convert_to_bytes_be(tmp, sbn, nn);
+    bool fits = Hacl_RSAPSS_PSS_all_zero(tmp, off);
+    if (fits) {
+      Hacl_Impl_Copy_copy_range(out, 0, tmp, off, outLen);
+      return true;
+    }
+    else return false;
+  }
+  else return false;
+}
+
+static uint8_t Hacl_RSAPSS_PSS_top_mask_of(uint32_t emBits) {
+  uint32_t spare = ((8 * ((emBits + 7) / 8)) - emBits);
+  return (((uint8_t)255U) >> spare);
+}
+
+static uint8_t Hacl_Secret_UInt8_lognot(uint8_t x) {
+  return ((uint8_t)(~(x)));
+}
+
+static void Hacl_RSAPSS_MGF_round__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *m, size_t ml, uint32_t i) {
+  size_t sl = (ml - 4);
+  Hacl_Impl_Bytes_store_be__t(m, sl, i);
+  Hacl_Hash_SHA2_Core_hash_impl__t(kt, ivt, dg, m, ml);
 }
 
 static void Hacl_Impl_Copy_write_chunk(uint8_t *out, size_t ol, size_t base, uint8_t *dg, size_t dl) {
@@ -7413,6 +7576,458 @@ static void Hacl_Impl_Copy_write_chunk(uint8_t *out, size_t ol, size_t base, uin
   if (dl <= (ol - base)) cnt = dl;
   else cnt = (ol - base);
   Hacl_Impl_Copy_copy_at(out, base, dg, cnt);
+}
+
+static void Hacl_RSAPSS_MGF_mgf_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *res, size_t maskLen, uint8_t *seed, size_t slen) {
+  size_t hb = 64;
+  uint8_t z8 = 0;
+  size_t ml = (slen + 4);
+  uint8_t marr[ml];
+  for (size_t _ci1 = 0; _ci1 < (ml); _ci1++) {
+    marr[_ci1] = z8;
+  }
+  uint8_t darr[hb];
+  for (size_t _ci2 = 0; _ci2 < (hb); _ci2++) {
+    darr[_ci2] = z8;
+  }
+  Hacl_Impl_Copy_copy_at(marr, 0, seed, slen);
+  size_t base = 0;
+  uint32_t ci = 0;
+  while (base < maskLen) {
+    size_t vb = base;
+    uint32_t vc = ci;
+    Hacl_RSAPSS_MGF_round__t(kt, ivt, darr, marr, ml, vc);
+    Hacl_Impl_Copy_write_chunk(res, maskLen, vb, darr, hb);
+    base = (vb + hb);
+    ci = (vc + 1);
+  }
+}
+
+static void Hacl_RSAPSS_PSS_xor_range(uint8_t *dst, size_t n, uint8_t *src) {
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint8_t a = dst[vi];
+    uint8_t b = src[vi];
+    dst[vi] = Hacl_Secret_UInt8_logxor(a, b);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_RSAPSS_PSS_hash_m_prime__t(uint64_t *kt, uint64_t *ivt, uint8_t *out, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 64;
+  uint8_t z8 = 0;
+  size_t mpLen = ((8 + hLen) + sLen);
+  uint8_t mp[mpLen];
+  for (size_t _ci1 = 0; _ci1 < (mpLen); _ci1++) {
+    mp[_ci1] = z8;
+  }
+  uint8_t *mw = Hacl_Impl_Sub_sub__t(mp, 8, (8 + hLen));
+  Hacl_Hash_SHA2_Core_hash_impl__t(kt, ivt, mw, msg, mLen);
+  Hacl_Impl_Copy_copy_at(mp, (8 + hLen), salt, sLen);
+  Hacl_Hash_SHA2_Core_hash_impl__t(kt, ivt, out, mp, mpLen);
+}
+
+static bool Hacl_RSAPSS_PSS_eq_range(uint8_t *a, uint8_t *b, size_t base, size_t n) {
+  bool acc = true;
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint8_t __anf0 = a[vi];
+    uint8_t __anf01 = b[(base + vi)];
+    bool vacc = acc;
+    acc = (vacc && (__anf0 == __anf01));
+    i = (vi + 1);
+  }
+  return acc;
+}
+
+static bool Hacl_RSAPSS_PSS_pss_verify_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 64;
+  size_t dbLen = ((emLen - hLen) - 1);
+  uint8_t z8 = 0;
+  uint8_t tm = Hacl_RSAPSS_PSS_top_mask_of(emBits);
+  uint8_t __anf0 = em[(emLen - 1)];
+  uint8_t e0 = em[0];
+  uint8_t topbits = Hacl_Secret_UInt8_logand(e0, Hacl_Secret_UInt8_lognot(tm));
+  uint8_t db[dbLen];
+  for (size_t _ci1 = 0; _ci1 < (dbLen); _ci1++) {
+    db[_ci1] = z8;
+  }
+  Hacl_Impl_Copy_copy_at(db, 0, em, dbLen);
+  uint8_t mask[dbLen];
+  for (size_t _ci2 = 0; _ci2 < (dbLen); _ci2++) {
+    mask[_ci2] = z8;
+  }
+  uint8_t *hw = Hacl_Impl_Sub_sub__t(em, dbLen, (dbLen + hLen));
+  Hacl_RSAPSS_MGF_mgf_impl__t(kt, ivt, mask, dbLen, hw, hLen);
+  Hacl_RSAPSS_PSS_xor_range(db, dbLen, mask);
+  uint8_t d0 = db[0];
+  db[0] = Hacl_Secret_UInt8_logand(d0, tm);
+  bool zeros = Hacl_RSAPSS_PSS_all_zero(db, ((dbLen - sLen) - 1));
+  uint8_t __anf01 = db[((dbLen - sLen) - 1)];
+  uint8_t hp[hLen];
+  for (size_t _ci3 = 0; _ci3 < (hLen); _ci3++) {
+    hp[_ci3] = z8;
+  }
+  uint8_t *sw = Hacl_Impl_Sub_sub__t(db, (dbLen - sLen), dbLen);
+  Hacl_RSAPSS_PSS_hash_m_prime__t(kt, ivt, hp, sw, sLen, msg, mLen);
+  bool heq = Hacl_RSAPSS_PSS_eq_range(hp, em, dbLen, hLen);
+  return (((((__anf0 == 0xbc) && (topbits == 0)) && zeros) && (__anf01 == 1)) && heq);
+}
+
+static bool Hacl_RSAPSS_rsapss_verify__t(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg) {
+  size_t mb = (size_t)modBits;
+  size_t kLen = ((mb + 7) / 8);
+  size_t emLen = ((mb + 6) / 8);
+  uint32_t emBits = (modBits - 1);
+  uint8_t em[emLen];
+  for (size_t _ci1 = 0; _ci1 < (emLen); _ci1++) {
+    em[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  bool good = Hacl_RSAPSS_rsa_exp(em, emLen, sgnt, kLen, nb, kLen, eb, eLen, false);
+  if (good) return Hacl_RSAPSS_PSS_pss_verify_impl__t(kt, ivt, em, emBits, emLen, sLen, msg, mLen);
+  else return false;
+}
+
+bool Hacl_RSAPSS_verify_sha512(uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg) {
+  uint64_t *kt = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
+  uint64_t *ivt = (uint64_t *)Hacl_Hash_SHA2_Tables_iv512_arr;
+  return Hacl_RSAPSS_rsapss_verify__t(kt, ivt, modBits, nb, eLen, eb, sLen, sgnt, mLen, msg);
+}
+
+static void Hacl_RSAPSS_MGF_round__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *m, size_t ml, uint32_t i) {
+  size_t sl = (ml - 4);
+  Hacl_Impl_Bytes_store_be__t(m, sl, i);
+  Hacl_Hash_SHA2_Core_hash_impl__t_1(kt, ivt, dg, m, ml);
+}
+
+static void Hacl_RSAPSS_MGF_mgf_impl__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *res, size_t maskLen, uint8_t *seed, size_t slen) {
+  size_t hb = 48;
+  uint8_t z8 = 0;
+  size_t ml = (slen + 4);
+  uint8_t marr[ml];
+  for (size_t _ci1 = 0; _ci1 < (ml); _ci1++) {
+    marr[_ci1] = z8;
+  }
+  uint8_t darr[hb];
+  for (size_t _ci2 = 0; _ci2 < (hb); _ci2++) {
+    darr[_ci2] = z8;
+  }
+  Hacl_Impl_Copy_copy_at(marr, 0, seed, slen);
+  size_t base = 0;
+  uint32_t ci = 0;
+  while (base < maskLen) {
+    size_t vb = base;
+    uint32_t vc = ci;
+    Hacl_RSAPSS_MGF_round__t_1(kt, ivt, darr, marr, ml, vc);
+    Hacl_Impl_Copy_write_chunk(res, maskLen, vb, darr, hb);
+    base = (vb + hb);
+    ci = (vc + 1);
+  }
+}
+
+static void Hacl_RSAPSS_PSS_hash_m_prime__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *out, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 48;
+  uint8_t z8 = 0;
+  size_t mpLen = ((8 + hLen) + sLen);
+  uint8_t mp[mpLen];
+  for (size_t _ci1 = 0; _ci1 < (mpLen); _ci1++) {
+    mp[_ci1] = z8;
+  }
+  uint8_t *mw = Hacl_Impl_Sub_sub__t(mp, 8, (8 + hLen));
+  Hacl_Hash_SHA2_Core_hash_impl__t_1(kt, ivt, mw, msg, mLen);
+  Hacl_Impl_Copy_copy_at(mp, (8 + hLen), salt, sLen);
+  Hacl_Hash_SHA2_Core_hash_impl__t_1(kt, ivt, out, mp, mpLen);
+}
+
+static bool Hacl_RSAPSS_PSS_pss_verify_impl__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 48;
+  size_t dbLen = ((emLen - hLen) - 1);
+  uint8_t z8 = 0;
+  uint8_t tm = Hacl_RSAPSS_PSS_top_mask_of(emBits);
+  uint8_t __anf0 = em[(emLen - 1)];
+  uint8_t e0 = em[0];
+  uint8_t topbits = Hacl_Secret_UInt8_logand(e0, Hacl_Secret_UInt8_lognot(tm));
+  uint8_t db[dbLen];
+  for (size_t _ci1 = 0; _ci1 < (dbLen); _ci1++) {
+    db[_ci1] = z8;
+  }
+  Hacl_Impl_Copy_copy_at(db, 0, em, dbLen);
+  uint8_t mask[dbLen];
+  for (size_t _ci2 = 0; _ci2 < (dbLen); _ci2++) {
+    mask[_ci2] = z8;
+  }
+  uint8_t *hw = Hacl_Impl_Sub_sub__t(em, dbLen, (dbLen + hLen));
+  Hacl_RSAPSS_MGF_mgf_impl__t_1(kt, ivt, mask, dbLen, hw, hLen);
+  Hacl_RSAPSS_PSS_xor_range(db, dbLen, mask);
+  uint8_t d0 = db[0];
+  db[0] = Hacl_Secret_UInt8_logand(d0, tm);
+  bool zeros = Hacl_RSAPSS_PSS_all_zero(db, ((dbLen - sLen) - 1));
+  uint8_t __anf01 = db[((dbLen - sLen) - 1)];
+  uint8_t hp[hLen];
+  for (size_t _ci3 = 0; _ci3 < (hLen); _ci3++) {
+    hp[_ci3] = z8;
+  }
+  uint8_t *sw = Hacl_Impl_Sub_sub__t(db, (dbLen - sLen), dbLen);
+  Hacl_RSAPSS_PSS_hash_m_prime__t_1(kt, ivt, hp, sw, sLen, msg, mLen);
+  bool heq = Hacl_RSAPSS_PSS_eq_range(hp, em, dbLen, hLen);
+  return (((((__anf0 == 0xbc) && (topbits == 0)) && zeros) && (__anf01 == 1)) && heq);
+}
+
+static bool Hacl_RSAPSS_rsapss_verify__t_1(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg) {
+  size_t mb = (size_t)modBits;
+  size_t kLen = ((mb + 7) / 8);
+  size_t emLen = ((mb + 6) / 8);
+  uint32_t emBits = (modBits - 1);
+  uint8_t em[emLen];
+  for (size_t _ci1 = 0; _ci1 < (emLen); _ci1++) {
+    em[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  bool good = Hacl_RSAPSS_rsa_exp(em, emLen, sgnt, kLen, nb, kLen, eb, eLen, false);
+  if (good) return Hacl_RSAPSS_PSS_pss_verify_impl__t_1(kt, ivt, em, emBits, emLen, sLen, msg, mLen);
+  else return false;
+}
+
+bool Hacl_RSAPSS_verify_sha384(uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg) {
+  uint64_t *kt = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
+  uint64_t *ivt = (uint64_t *)Hacl_Hash_SHA2_Tables_iv384_arr;
+  return Hacl_RSAPSS_rsapss_verify__t_1(kt, ivt, modBits, nb, eLen, eb, sLen, sgnt, mLen, msg);
+}
+
+static void Hacl_RSAPSS_MGF_round__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *dg, uint8_t *m, size_t ml, uint32_t i) {
+  size_t sl = (ml - 4);
+  Hacl_Impl_Bytes_store_be__t(m, sl, i);
+  Hacl_Hash_SHA2_Core_hash_impl__t_2(kt, ivt, dg, m, ml);
+}
+
+static void Hacl_RSAPSS_MGF_mgf_impl__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *res, size_t maskLen, uint8_t *seed, size_t slen) {
+  size_t hb = 32;
+  uint8_t z8 = 0;
+  size_t ml = (slen + 4);
+  uint8_t marr[ml];
+  for (size_t _ci1 = 0; _ci1 < (ml); _ci1++) {
+    marr[_ci1] = z8;
+  }
+  uint8_t darr[hb];
+  for (size_t _ci2 = 0; _ci2 < (hb); _ci2++) {
+    darr[_ci2] = z8;
+  }
+  Hacl_Impl_Copy_copy_at(marr, 0, seed, slen);
+  size_t base = 0;
+  uint32_t ci = 0;
+  while (base < maskLen) {
+    size_t vb = base;
+    uint32_t vc = ci;
+    Hacl_RSAPSS_MGF_round__t_2(kt, ivt, darr, marr, ml, vc);
+    Hacl_Impl_Copy_write_chunk(res, maskLen, vb, darr, hb);
+    base = (vb + hb);
+    ci = (vc + 1);
+  }
+}
+
+static void Hacl_RSAPSS_PSS_hash_m_prime__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 32;
+  uint8_t z8 = 0;
+  size_t mpLen = ((8 + hLen) + sLen);
+  uint8_t mp[mpLen];
+  for (size_t _ci1 = 0; _ci1 < (mpLen); _ci1++) {
+    mp[_ci1] = z8;
+  }
+  uint8_t *mw = Hacl_Impl_Sub_sub__t(mp, 8, (8 + hLen));
+  Hacl_Hash_SHA2_Core_hash_impl__t_2(kt, ivt, mw, msg, mLen);
+  Hacl_Impl_Copy_copy_at(mp, (8 + hLen), salt, sLen);
+  Hacl_Hash_SHA2_Core_hash_impl__t_2(kt, ivt, out, mp, mpLen);
+}
+
+static bool Hacl_RSAPSS_PSS_pss_verify_impl__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 32;
+  size_t dbLen = ((emLen - hLen) - 1);
+  uint8_t z8 = 0;
+  uint8_t tm = Hacl_RSAPSS_PSS_top_mask_of(emBits);
+  uint8_t __anf0 = em[(emLen - 1)];
+  uint8_t e0 = em[0];
+  uint8_t topbits = Hacl_Secret_UInt8_logand(e0, Hacl_Secret_UInt8_lognot(tm));
+  uint8_t db[dbLen];
+  for (size_t _ci1 = 0; _ci1 < (dbLen); _ci1++) {
+    db[_ci1] = z8;
+  }
+  Hacl_Impl_Copy_copy_at(db, 0, em, dbLen);
+  uint8_t mask[dbLen];
+  for (size_t _ci2 = 0; _ci2 < (dbLen); _ci2++) {
+    mask[_ci2] = z8;
+  }
+  uint8_t *hw = Hacl_Impl_Sub_sub__t(em, dbLen, (dbLen + hLen));
+  Hacl_RSAPSS_MGF_mgf_impl__t_2(kt, ivt, mask, dbLen, hw, hLen);
+  Hacl_RSAPSS_PSS_xor_range(db, dbLen, mask);
+  uint8_t d0 = db[0];
+  db[0] = Hacl_Secret_UInt8_logand(d0, tm);
+  bool zeros = Hacl_RSAPSS_PSS_all_zero(db, ((dbLen - sLen) - 1));
+  uint8_t __anf01 = db[((dbLen - sLen) - 1)];
+  uint8_t hp[hLen];
+  for (size_t _ci3 = 0; _ci3 < (hLen); _ci3++) {
+    hp[_ci3] = z8;
+  }
+  uint8_t *sw = Hacl_Impl_Sub_sub__t(db, (dbLen - sLen), dbLen);
+  Hacl_RSAPSS_PSS_hash_m_prime__t_2(kt, ivt, hp, sw, sLen, msg, mLen);
+  bool heq = Hacl_RSAPSS_PSS_eq_range(hp, em, dbLen, hLen);
+  return (((((__anf0 == 0xbc) && (topbits == 0)) && zeros) && (__anf01 == 1)) && heq);
+}
+
+static bool Hacl_RSAPSS_rsapss_verify__t_2(uint32_t *kt, uint32_t *ivt, uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg) {
+  size_t mb = (size_t)modBits;
+  size_t kLen = ((mb + 7) / 8);
+  size_t emLen = ((mb + 6) / 8);
+  uint32_t emBits = (modBits - 1);
+  uint8_t em[emLen];
+  for (size_t _ci1 = 0; _ci1 < (emLen); _ci1++) {
+    em[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  bool good = Hacl_RSAPSS_rsa_exp(em, emLen, sgnt, kLen, nb, kLen, eb, eLen, false);
+  if (good) return Hacl_RSAPSS_PSS_pss_verify_impl__t_2(kt, ivt, em, emBits, emLen, sLen, msg, mLen);
+  else return false;
+}
+
+bool Hacl_RSAPSS_verify_sha256(uint32_t modBits, uint8_t *nb, size_t eLen, uint8_t *eb, size_t sLen, uint8_t *sgnt, size_t mLen, uint8_t *msg) {
+  uint32_t *kt = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
+  uint32_t *ivt = (uint32_t *)Hacl_Hash_SHA2_Tables_iv256_arr;
+  return Hacl_RSAPSS_rsapss_verify__t_2(kt, ivt, modBits, nb, eLen, eb, sLen, sgnt, mLen, msg);
+}
+
+static void Hacl_RSAPSS_PSS_pss_encode_impl__t(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 64;
+  if (!((emLen < ((hLen + sLen) + 2)) || (65536ULL < emLen))) {
+    size_t dbLen = ((emLen - hLen) - 1);
+    uint8_t z8 = 0;
+    uint8_t mask[dbLen];
+    for (size_t _ci1 = 0; _ci1 < (dbLen); _ci1++) {
+      mask[_ci1] = z8;
+    }
+    uint8_t *hw = Hacl_Impl_Sub_sub__t(em, dbLen, (dbLen + hLen));
+    Hacl_RSAPSS_PSS_hash_m_prime__t(kt, ivt, hw, salt, sLen, msg, mLen);
+    Hacl_RSAPSS_MGF_mgf_impl__t(kt, ivt, mask, dbLen, hw, hLen);
+    size_t padLen = ((dbLen - sLen) - 1);
+    Hacl_RSAPSS_PSS_fill_range(em, 0, padLen, z8);
+    em[padLen] = 1;
+    Hacl_Impl_Copy_copy_at(em, (dbLen - sLen), salt, sLen);
+    Hacl_RSAPSS_PSS_xor_range(em, dbLen, mask);
+    uint8_t tm = Hacl_RSAPSS_PSS_top_mask_of(emBits);
+    uint8_t e0 = em[0];
+    em[0] = Hacl_Secret_UInt8_logand(e0, tm);
+    em[(emLen - 1)] = 0xbc;
+  }
+}
+
+static bool Hacl_RSAPSS_rsapss_sign__t(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt) {
+  size_t mb = (size_t)modBits;
+  size_t kLen = ((mb + 7) / 8);
+  size_t emLen = ((mb + 6) / 8);
+  uint32_t emBits = (modBits - 1);
+  uint8_t em[emLen];
+  for (size_t _ci1 = 0; _ci1 < (emLen); _ci1++) {
+    em[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  Hacl_RSAPSS_PSS_pss_encode_impl__t(kt, ivt, em, emBits, emLen, salt, sLen, msg, mLen);
+  return Hacl_RSAPSS_rsa_exp(sgnt, kLen, em, emLen, nb, kLen, db, dLen, true);
+}
+
+bool Hacl_RSAPSS_sign_sha512(uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt) {
+  uint64_t *kt = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
+  uint64_t *ivt = (uint64_t *)Hacl_Hash_SHA2_Tables_iv512_arr;
+  return Hacl_RSAPSS_rsapss_sign__t(kt, ivt, modBits, nb, dLen, db, sLen, salt, mLen, msg, sgnt);
+}
+
+static void Hacl_RSAPSS_PSS_pss_encode_impl__t_1(uint64_t *kt, uint64_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 48;
+  if (!((emLen < ((hLen + sLen) + 2)) || (65536ULL < emLen))) {
+    size_t dbLen = ((emLen - hLen) - 1);
+    uint8_t z8 = 0;
+    uint8_t mask[dbLen];
+    for (size_t _ci1 = 0; _ci1 < (dbLen); _ci1++) {
+      mask[_ci1] = z8;
+    }
+    uint8_t *hw = Hacl_Impl_Sub_sub__t(em, dbLen, (dbLen + hLen));
+    Hacl_RSAPSS_PSS_hash_m_prime__t_1(kt, ivt, hw, salt, sLen, msg, mLen);
+    Hacl_RSAPSS_MGF_mgf_impl__t_1(kt, ivt, mask, dbLen, hw, hLen);
+    size_t padLen = ((dbLen - sLen) - 1);
+    Hacl_RSAPSS_PSS_fill_range(em, 0, padLen, z8);
+    em[padLen] = 1;
+    Hacl_Impl_Copy_copy_at(em, (dbLen - sLen), salt, sLen);
+    Hacl_RSAPSS_PSS_xor_range(em, dbLen, mask);
+    uint8_t tm = Hacl_RSAPSS_PSS_top_mask_of(emBits);
+    uint8_t e0 = em[0];
+    em[0] = Hacl_Secret_UInt8_logand(e0, tm);
+    em[(emLen - 1)] = 0xbc;
+  }
+}
+
+static bool Hacl_RSAPSS_rsapss_sign__t_1(uint64_t *kt, uint64_t *ivt, uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt) {
+  size_t mb = (size_t)modBits;
+  size_t kLen = ((mb + 7) / 8);
+  size_t emLen = ((mb + 6) / 8);
+  uint32_t emBits = (modBits - 1);
+  uint8_t em[emLen];
+  for (size_t _ci1 = 0; _ci1 < (emLen); _ci1++) {
+    em[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  Hacl_RSAPSS_PSS_pss_encode_impl__t_1(kt, ivt, em, emBits, emLen, salt, sLen, msg, mLen);
+  return Hacl_RSAPSS_rsa_exp(sgnt, kLen, em, emLen, nb, kLen, db, dLen, true);
+}
+
+bool Hacl_RSAPSS_sign_sha384(uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt) {
+  uint64_t *kt = (uint64_t *)Hacl_Hash_SHA2_Tables_k512_arr;
+  uint64_t *ivt = (uint64_t *)Hacl_Hash_SHA2_Tables_iv384_arr;
+  return Hacl_RSAPSS_rsapss_sign__t_1(kt, ivt, modBits, nb, dLen, db, sLen, salt, mLen, msg, sgnt);
+}
+
+static void Hacl_RSAPSS_PSS_pss_encode_impl__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *em, uint32_t emBits, size_t emLen, uint8_t *salt, size_t sLen, uint8_t *msg, size_t mLen) {
+  size_t hLen = 32;
+  if (!((emLen < ((hLen + sLen) + 2)) || (65536ULL < emLen))) {
+    size_t dbLen = ((emLen - hLen) - 1);
+    uint8_t z8 = 0;
+    uint8_t mask[dbLen];
+    for (size_t _ci1 = 0; _ci1 < (dbLen); _ci1++) {
+      mask[_ci1] = z8;
+    }
+    uint8_t *hw = Hacl_Impl_Sub_sub__t(em, dbLen, (dbLen + hLen));
+    Hacl_RSAPSS_PSS_hash_m_prime__t_2(kt, ivt, hw, salt, sLen, msg, mLen);
+    Hacl_RSAPSS_MGF_mgf_impl__t_2(kt, ivt, mask, dbLen, hw, hLen);
+    size_t padLen = ((dbLen - sLen) - 1);
+    Hacl_RSAPSS_PSS_fill_range(em, 0, padLen, z8);
+    em[padLen] = 1;
+    Hacl_Impl_Copy_copy_at(em, (dbLen - sLen), salt, sLen);
+    Hacl_RSAPSS_PSS_xor_range(em, dbLen, mask);
+    uint8_t tm = Hacl_RSAPSS_PSS_top_mask_of(emBits);
+    uint8_t e0 = em[0];
+    em[0] = Hacl_Secret_UInt8_logand(e0, tm);
+    em[(emLen - 1)] = 0xbc;
+  }
+}
+
+static bool Hacl_RSAPSS_rsapss_sign__t_2(uint32_t *kt, uint32_t *ivt, uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt) {
+  size_t mb = (size_t)modBits;
+  size_t kLen = ((mb + 7) / 8);
+  size_t emLen = ((mb + 6) / 8);
+  uint32_t emBits = (modBits - 1);
+  uint8_t em[emLen];
+  for (size_t _ci1 = 0; _ci1 < (emLen); _ci1++) {
+    em[_ci1] = Hacl_RSAPSS_zero8;
+  }
+  Hacl_RSAPSS_PSS_pss_encode_impl__t_2(kt, ivt, em, emBits, emLen, salt, sLen, msg, mLen);
+  return Hacl_RSAPSS_rsa_exp(sgnt, kLen, em, emLen, nb, kLen, db, dLen, true);
+}
+
+bool Hacl_RSAPSS_sign_sha256(uint32_t modBits, uint8_t *nb, size_t dLen, uint8_t *db, size_t sLen, uint8_t *salt, size_t mLen, uint8_t *msg, uint8_t *sgnt) {
+  uint32_t *kt = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
+  uint32_t *ivt = (uint32_t *)Hacl_Hash_SHA2_Tables_iv256_arr;
+  return Hacl_RSAPSS_rsapss_sign__t_2(kt, ivt, modBits, nb, dLen, db, sLen, salt, mLen, msg, sgnt);
+}
+
+static void Hacl_HKDF_Core_round_one__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml) {
+  size_t hb = 64;
+  msg[(ml - 1)] = 1;
+  uint8_t *sub = Hacl_Impl_Sub_sub__t(msg, hb, ml);
+  Hacl_HMAC_Core_hmac_impl__t(kt, ivt, dg, prk, plen, sub, (ml - hb));
 }
 
 static void Hacl_HKDF_Core_round_step__t(uint64_t *kt, uint64_t *ivt, uint8_t *dg, uint8_t *prk, size_t plen, uint8_t *msg, size_t ml, uint8_t ci) {

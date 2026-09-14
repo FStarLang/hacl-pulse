@@ -46,6 +46,10 @@ open Hacl.Spec.Bytes
 open Hacl.Bignum.Base
 open Hacl.Impl.Copy
 open Hacl.Hash.SHA2.Core
+open Spec.SHA2.Constants
+open Hacl.Hash.SHA2
+open Hacl.Hash.SHA2.Tables
+open Hacl.Impl.Table
 open Hacl.RSAPSS.PSS
 
 module A = Pulse.Lib.Array
@@ -56,6 +60,7 @@ module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
+module S64 = Hacl.Secret.UInt64
 module Declassify = Hacl.Secret.Declassify
 module Conv = Hacl.Bignum.Convert
 module Mont = Hacl.Bignum.Montgomery
@@ -541,3 +546,259 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
 }
 
 #pop-options
+
+(** {2 The entry points}
+
+    One pair per hash, as everywhere else in this library.  A caller that
+    wants SHA-256 calls the SHA-256 function; there is no algorithm
+    argument, no table of function pointers and no way to ask for a
+    combination that does not exist.
+
+    [modBits] is the bit length of the modulus, so [nb] and [sgnt] are
+    [ceil(modBits/8)] bytes.  The exponents are big-endian strings of
+    whatever length the caller has them in.  The salt length must leave room
+    in the encoding: [emLen >= hLen + sLen + 2], where [emLen] is
+    [ceil((modBits-1)/8)]. *)
+
+(** RSASSA-PSS-SIGN with sha256. *)
+fn sign_sha256 (modBits: (m: U32.t { 1 < U32.v m }))
+               (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
+               (sLen: SZ.t) (salt: A.array S8.t)
+               (mLen: SZ.t) (msg: A.array S8.t)
+               (sgnt: A.array S8.t)
+               (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+               (#pdb: perm) (#vdb: erased (Seq.seq S8.t))
+               (#psa: perm)
+               (#vsalt: erased (s: Seq.seq S8.t { pss_ok sha2_256 (Seq.length s) (U32.v modBits - 1) }))
+               (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #S32.t }))
+               (#vsg: erased (Seq.seq S8.t))
+requires A.pts_to nb #pnb vnb ** A.pts_to db #pdb vdb **
+         A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg ** A.pts_to sgnt vsg **
+  pure (U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length vdb == SZ.v dLen /\
+        0 < SZ.v dLen /\ SZ.v dLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v sLen == Seq.length vsalt /\ SZ.v mLen == Seq.length vmsg /\
+        Seq.length vmsg < pow2 61 /\ Seq.length vsalt < pow2 32 /\
+        SZ.fits (8 + (hash_bytes sha2_256) + Seq.length vsalt))
+returns ok: bool
+ensures exists* (vsg': Seq.seq S8.t).
+  A.pts_to nb #pnb vnb ** A.pts_to db #pdb vdb **
+  A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg ** A.pts_to sgnt vsg' **
+  pure (Seq.length vsg' == (U32.v modBits + 7) / 8 /\
+        (ok ==> be_nat vsg' ==
+                  rsa_pow (be_nat (pss_encode sha2_256 (Seq.length vsalt) (U32.v modBits - 1) vsalt vmsg))
+                          (be_nat vdb) (be_nat vnb)))
+{
+  A.pts_to_len salt;
+  A.pts_to_len msg;
+  max_input_bound ();
+  assert_norm (8 + 64 + pow2 32 < pow2 61);
+  let kt = table k256_arr 64sz;
+  let ivt = table iv256_arr 8sz;
+  let r = rsapss_sign sha2_256 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
+  drop_table ivt;
+  drop_table kt;
+  r
+}
+
+(** RSASSA-PSS-VERIFY with sha256. *)
+fn verify_sha256 (modBits: (m: U32.t { 1 < U32.v m }))
+                 (nb: A.array S8.t) (eLen: SZ.t) (eb: A.array S8.t)
+                 (sLen: (n: SZ.t { pss_ok sha2_256 (SZ.v n) (U32.v modBits - 1) }))
+                 (sgnt: A.array S8.t)
+                 (mLen: SZ.t) (msg: A.array S8.t)
+                 (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+                 (#peb: perm) (#veb: erased (Seq.seq S8.t))
+                 (#psg: perm) (#vsg: erased (Seq.seq S8.t))
+                 (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #S32.t }))
+requires A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+         A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+  pure (U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length veb == SZ.v eLen /\
+        0 < SZ.v eLen /\ SZ.v eLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v mLen == Seq.length vmsg /\ Seq.length vmsg < pow2 61 /\
+        SZ.v sLen < pow2 32 /\ SZ.fits (8 + (hash_bytes sha2_256) + SZ.v sLen))
+returns ok: bool
+ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+        A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+        pure (ok <==> (1 < be_nat vnb /\ be_nat vnb % 2 == 1 /\ be_nat vsg < be_nat vnb /\
+                       (exists (e: Seq.lseq S8.t (em_len (U32.v modBits - 1))).
+                          be_nat e == rsa_pow (be_nat vsg) (be_nat veb) (be_nat vnb) /\
+                          pss_valid sha2_256 (SZ.v sLen) (U32.v modBits - 1) vmsg e)))
+{
+  A.pts_to_len msg;
+  max_input_bound ();
+  assert_norm (8 + 64 + pow2 32 < pow2 61);
+  let kt = table k256_arr 64sz;
+  let ivt = table iv256_arr 8sz;
+  let r = rsapss_verify sha2_256 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
+  drop_table ivt;
+  drop_table kt;
+  r
+}
+
+(** RSASSA-PSS-SIGN with sha384. *)
+fn sign_sha384 (modBits: (m: U32.t { 1 < U32.v m }))
+               (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
+               (sLen: SZ.t) (salt: A.array S8.t)
+               (mLen: SZ.t) (msg: A.array S8.t)
+               (sgnt: A.array S8.t)
+               (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+               (#pdb: perm) (#vdb: erased (Seq.seq S8.t))
+               (#psa: perm)
+               (#vsalt: erased (s: Seq.seq S8.t { pss_ok sha2_384 (Seq.length s) (U32.v modBits - 1) }))
+               (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #S64.t }))
+               (#vsg: erased (Seq.seq S8.t))
+requires A.pts_to nb #pnb vnb ** A.pts_to db #pdb vdb **
+         A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg ** A.pts_to sgnt vsg **
+  pure (U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length vdb == SZ.v dLen /\
+        0 < SZ.v dLen /\ SZ.v dLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v sLen == Seq.length vsalt /\ SZ.v mLen == Seq.length vmsg /\
+        Seq.length vmsg < pow2 61 /\ Seq.length vsalt < pow2 32 /\
+        SZ.fits (8 + (hash_bytes sha2_384) + Seq.length vsalt))
+returns ok: bool
+ensures exists* (vsg': Seq.seq S8.t).
+  A.pts_to nb #pnb vnb ** A.pts_to db #pdb vdb **
+  A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg ** A.pts_to sgnt vsg' **
+  pure (Seq.length vsg' == (U32.v modBits + 7) / 8 /\
+        (ok ==> be_nat vsg' ==
+                  rsa_pow (be_nat (pss_encode sha2_384 (Seq.length vsalt) (U32.v modBits - 1) vsalt vmsg))
+                          (be_nat vdb) (be_nat vnb)))
+{
+  A.pts_to_len salt;
+  A.pts_to_len msg;
+  max_input_bound ();
+  assert_norm (8 + 64 + pow2 32 < pow2 61);
+  let kt = table k512_arr 80sz;
+  let ivt = table iv384_arr 8sz;
+  let r = rsapss_sign sha2_384 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
+  drop_table ivt;
+  drop_table kt;
+  r
+}
+
+(** RSASSA-PSS-VERIFY with sha384. *)
+fn verify_sha384 (modBits: (m: U32.t { 1 < U32.v m }))
+                 (nb: A.array S8.t) (eLen: SZ.t) (eb: A.array S8.t)
+                 (sLen: (n: SZ.t { pss_ok sha2_384 (SZ.v n) (U32.v modBits - 1) }))
+                 (sgnt: A.array S8.t)
+                 (mLen: SZ.t) (msg: A.array S8.t)
+                 (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+                 (#peb: perm) (#veb: erased (Seq.seq S8.t))
+                 (#psg: perm) (#vsg: erased (Seq.seq S8.t))
+                 (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #S64.t }))
+requires A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+         A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+  pure (U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length veb == SZ.v eLen /\
+        0 < SZ.v eLen /\ SZ.v eLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v mLen == Seq.length vmsg /\ Seq.length vmsg < pow2 61 /\
+        SZ.v sLen < pow2 32 /\ SZ.fits (8 + (hash_bytes sha2_384) + SZ.v sLen))
+returns ok: bool
+ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+        A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+        pure (ok <==> (1 < be_nat vnb /\ be_nat vnb % 2 == 1 /\ be_nat vsg < be_nat vnb /\
+                       (exists (e: Seq.lseq S8.t (em_len (U32.v modBits - 1))).
+                          be_nat e == rsa_pow (be_nat vsg) (be_nat veb) (be_nat vnb) /\
+                          pss_valid sha2_384 (SZ.v sLen) (U32.v modBits - 1) vmsg e)))
+{
+  A.pts_to_len msg;
+  max_input_bound ();
+  assert_norm (8 + 64 + pow2 32 < pow2 61);
+  let kt = table k512_arr 80sz;
+  let ivt = table iv384_arr 8sz;
+  let r = rsapss_verify sha2_384 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
+  drop_table ivt;
+  drop_table kt;
+  r
+}
+
+(** RSASSA-PSS-SIGN with sha512. *)
+fn sign_sha512 (modBits: (m: U32.t { 1 < U32.v m }))
+               (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
+               (sLen: SZ.t) (salt: A.array S8.t)
+               (mLen: SZ.t) (msg: A.array S8.t)
+               (sgnt: A.array S8.t)
+               (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+               (#pdb: perm) (#vdb: erased (Seq.seq S8.t))
+               (#psa: perm)
+               (#vsalt: erased (s: Seq.seq S8.t { pss_ok sha2_512 (Seq.length s) (U32.v modBits - 1) }))
+               (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #S64.t }))
+               (#vsg: erased (Seq.seq S8.t))
+requires A.pts_to nb #pnb vnb ** A.pts_to db #pdb vdb **
+         A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg ** A.pts_to sgnt vsg **
+  pure (U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length vdb == SZ.v dLen /\
+        0 < SZ.v dLen /\ SZ.v dLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v sLen == Seq.length vsalt /\ SZ.v mLen == Seq.length vmsg /\
+        Seq.length vmsg < pow2 61 /\ Seq.length vsalt < pow2 32 /\
+        SZ.fits (8 + (hash_bytes sha2_512) + Seq.length vsalt))
+returns ok: bool
+ensures exists* (vsg': Seq.seq S8.t).
+  A.pts_to nb #pnb vnb ** A.pts_to db #pdb vdb **
+  A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg ** A.pts_to sgnt vsg' **
+  pure (Seq.length vsg' == (U32.v modBits + 7) / 8 /\
+        (ok ==> be_nat vsg' ==
+                  rsa_pow (be_nat (pss_encode sha2_512 (Seq.length vsalt) (U32.v modBits - 1) vsalt vmsg))
+                          (be_nat vdb) (be_nat vnb)))
+{
+  A.pts_to_len salt;
+  A.pts_to_len msg;
+  max_input_bound ();
+  assert_norm (8 + 64 + pow2 32 < pow2 61);
+  let kt = table k512_arr 80sz;
+  let ivt = table iv512_arr 8sz;
+  let r = rsapss_sign sha2_512 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
+  drop_table ivt;
+  drop_table kt;
+  r
+}
+
+(** RSASSA-PSS-VERIFY with sha512. *)
+fn verify_sha512 (modBits: (m: U32.t { 1 < U32.v m }))
+                 (nb: A.array S8.t) (eLen: SZ.t) (eb: A.array S8.t)
+                 (sLen: (n: SZ.t { pss_ok sha2_512 (SZ.v n) (U32.v modBits - 1) }))
+                 (sgnt: A.array S8.t)
+                 (mLen: SZ.t) (msg: A.array S8.t)
+                 (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+                 (#peb: perm) (#veb: erased (Seq.seq S8.t))
+                 (#psg: perm) (#vsg: erased (Seq.seq S8.t))
+                 (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #S64.t }))
+requires A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+         A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+  pure (U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length veb == SZ.v eLen /\
+        0 < SZ.v eLen /\ SZ.v eLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v mLen == Seq.length vmsg /\ Seq.length vmsg < pow2 61 /\
+        SZ.v sLen < pow2 32 /\ SZ.fits (8 + (hash_bytes sha2_512) + SZ.v sLen))
+returns ok: bool
+ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+        A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+        pure (ok <==> (1 < be_nat vnb /\ be_nat vnb % 2 == 1 /\ be_nat vsg < be_nat vnb /\
+                       (exists (e: Seq.lseq S8.t (em_len (U32.v modBits - 1))).
+                          be_nat e == rsa_pow (be_nat vsg) (be_nat veb) (be_nat vnb) /\
+                          pss_valid sha2_512 (SZ.v sLen) (U32.v modBits - 1) vmsg e)))
+{
+  A.pts_to_len msg;
+  max_input_bound ();
+  assert_norm (8 + 64 + pow2 32 < pow2 61);
+  let kt = table k512_arr 80sz;
+  let ivt = table iv512_arr 8sz;
+  let r = rsapss_verify sha2_512 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
+  drop_table ivt;
+  drop_table kt;
+  r
+}
