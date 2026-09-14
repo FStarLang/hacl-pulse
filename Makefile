@@ -110,6 +110,9 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Convert., \
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Montgomery., \
   mont_mu precomp reduction mont_mul from_mont modulo)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Exponentiation., \
+  mod_exp_consttime mod_exp_vartime mod_inv_prime_vartime)
+
 include mk/extract.mk
 
 .DEFAULT_GOAL := all
