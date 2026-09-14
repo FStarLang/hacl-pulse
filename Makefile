@@ -72,6 +72,10 @@ CUSTARD_ENTRIES += $(addprefix Hacl.HKDF., \
   extract_sha224 extract_sha256 extract_sha384 extract_sha512 \
   expand_sha224 expand_sha256 expand_sha384 expand_sha512)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.RSAPSS., \
+  sign_sha256 sign_sha384 sign_sha512 \
+  verify_sha256 verify_sha384 verify_sha512)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.Curve25519., \
   scalarmult secret_to_public ecdh)
 

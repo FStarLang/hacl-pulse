@@ -207,6 +207,7 @@ requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to em vem **
          pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
                U32.v emBits + 7 < pow2 32 /\
                SZ.v emLen == em_len (U32.v emBits) /\ Seq.length vem == SZ.v emLen /\
+               SZ.v emLen <= 65536 /\
                SZ.v sLen == Seq.length vsalt /\ SZ.v mLen == Seq.length vmsg /\
                Seq.length vmsg < pow2 61 /\
                SZ.fits (8 + (hash_bytes p) + Seq.length vsalt) /\
@@ -223,6 +224,14 @@ ensures exists* vem'.
   A.pts_to_len salt;
   A.pts_to_len msg;
   let hLen = p.nhash_bytes;
+  SZ.fits_lte (SZ.v hLen + SZ.v sLen + 2) (8 + (hash_bytes p) + Seq.length vsalt);
+  (* Neither disjunct can happen: [pss_ok] rules out the first and the
+     caller's bound on [emLen] the second.  They are tested anyway so that
+     the C compiler, which sees neither, can bound the buffer below. *)
+  if (SZ.lt emLen (SZ.add (SZ.add hLen sLen) 2sz) ||
+      SZ.lt (Hacl.SizeT.big 65536) emLen) {
+    ()
+  } else {
   let dbLen = SZ.sub (SZ.sub emLen hLen) 1sz;
   let z8 = S8.classify 0uy;
 
@@ -261,6 +270,7 @@ ensures exists* vem'.
   pss_encode_pointwise p (Seq.length vsalt) (U32.v emBits) (reveal vsalt) (reveal vmsg)
                        (reveal vh) (reveal vmask) (reveal vem2) (reveal vem4);
   ()
+  }
 }
 
 #pop-options
