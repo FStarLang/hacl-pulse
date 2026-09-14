@@ -536,4 +536,306 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
 
 #pop-options
 
+(** {2 Copying into the wide accumulator} *)
+
+fn embed (tmp: A.array S32.t) (a: A.array S32.t) (nn: SZ.t)
+         (#vtmp: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+requires A.pts_to tmp vtmp ** A.pts_to a #pa va **
+  pure (Seq.length vtmp == SZ.v nn + SZ.v nn /\ Seq.length va == SZ.v nn /\
+        SZ.fits (SZ.v nn + SZ.v nn))
+ensures exists* (v: Seq.seq S32.t).
+  A.pts_to tmp v ** A.pts_to a #pa va **
+  pure (Seq.length v == SZ.v nn + SZ.v nn /\ num v == num va)
+{
+  A.pts_to_len tmp;
+  A.pts_to_len a;
+  zero tmp (SZ.add nn nn);
+  pre_zero va;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi nn)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+    pts_to i vi ** A.pts_to tmp v ** A.pts_to a #pa va **
+    pure (SZ.v vi <= SZ.v nn /\ Seq.length v == SZ.v nn + SZ.v nn /\
+          (forall (k: nat). SZ.v vi <= k /\ k < Seq.length v ==>
+             S32.v (Seq.index v k) == 0) /\
+          pre v (SZ.v vi) == pre va (SZ.v vi))
+  decreases (SZ.v nn - SZ.v (!i))
+  {
+    with v. assert (A.pts_to tmp v);
+    let vi = !i;
+    let ai = A.(a.(vi));
+    A.((tmp.(vi) <- ai));
+    pre_upd v (SZ.v vi) ai (SZ.v vi);
+    pre_snoc (Seq.upd v (SZ.v vi) ai) (SZ.v vi);
+    pre_snoc va (SZ.v vi);
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to tmp v);
+  num_zeros_above v (SZ.v nn);
+  pre_full va;
+  ()
+}
+
+(** {2 Montgomery multiplication}
+
+    [mont_mul res a b] is [a * b / R] modulo the modulus: the product in
+    Montgomery form of two numbers in Montgomery form.  The [2n]-limb
+    scratch is the caller's, because this library never allocates. *)
+
+let mul_bnd (a b nN rr: nat)
+  : Lemma (requires a < nN /\ b < rr) (ensures a * b < nN * rr)
+  = Math.lemma_mult_le_right b a (nN - 1);
+    Math.lemma_mult_le_left (nN - 1) b (rr - 1);
+    Math.distributivity_sub_right (nN - 1) rr 1;
+    Math.distributivity_sub_left nN 1 rr
+
+#push-options "--z3rlimit 300"
+
+fn mont_mul (res: A.array S32.t) (a b: A.array S32.t) (tmp: A.array S32.t)
+            (nmod: A.array S32.t) (nn: SZ.t) (mu: S32.t)
+            (#vres #vtmp: erased (Seq.seq S32.t)) (#pa #pb #pn: perm)
+            (#va #vb: erased (Seq.seq S32.t))
+            (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+         A.pts_to tmp vtmp ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
+        Seq.length vb == SZ.v nn /\ Seq.length vtmp == SZ.v nn + SZ.v nn /\
+        Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\
+        SZ.fits (SZ.v nn + SZ.v nn) /\ num va < num vn /\
+        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S32.t) (vt: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  A.pts_to tmp vt ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ Seq.length vt == SZ.v nn + SZ.v nn /\
+        num v < num vn /\
+        (num v * wt (SZ.v nn)) % num vn == (num va * num vb) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  A.pts_to_len b;
+  A.pts_to_len tmp;
+  A.pts_to_len nmod;
+  mul tmp a b nn;
+  eval_bnd (vals vb);
+  mul_bnd (num va) (num vb) (num vn) (wt (SZ.v nn));
+  reduction res tmp nmod nn mu;
+  ()
+}
+
+(** [from_mont res a] leaves Montgomery form: the result is [a / R] modulo
+    the modulus.  Entering it is {!mont_mul} against the precomputed
+    [precomp] square, so there is no separate function for that direction. *)
+fn from_mont (res: A.array S32.t) (a: A.array S32.t) (tmp: A.array S32.t)
+             (nmod: A.array S32.t) (nn: SZ.t) (mu: S32.t)
+             (#vres #vtmp: erased (Seq.seq S32.t)) (#pa #pn: perm)
+             (#va: erased (Seq.seq S32.t))
+             (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to tmp vtmp **
+         A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
+        Seq.length vtmp == SZ.v nn + SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        0 < SZ.v nn /\ SZ.fits (SZ.v nn + SZ.v nn) /\
+        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S32.t) (vt: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a #pa va ** A.pts_to tmp vt **
+  A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ Seq.length vt == SZ.v nn + SZ.v nn /\
+        num v < num vn /\ (num v * wt (SZ.v nn)) % num vn == num va % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  A.pts_to_len tmp;
+  A.pts_to_len nmod;
+  embed tmp a nn;
+  eval_bnd (vals va);
+  Math.lemma_mult_le_right (wt (SZ.v nn)) 1 (num vn);
+  reduction res tmp nmod nn mu;
+  ()
+}
+
+#pop-options
+
+(** {2 The Montgomery constant}
+
+    [precomp] is [R^2] modulo the modulus, the one number needed to enter
+    Montgomery form.  HACL* starts from a power of two just below the
+    modulus and doubles the remaining way; here we start from one and double
+    all the way, which is the same asymptotic cost and half the code. *)
+
+let dbl_mod (nN: pos) (i: nat)
+  : Lemma (((pow2 i % nN) + (pow2 i % nN)) % nN == pow2 (i + 1) % nN)
+  = Math.lemma_mod_add_distr (pow2 i % nN) (pow2 i) nN;
+    Math.lemma_mod_add_distr (pow2 i) (pow2 i) nN;
+    Math.pow2_double_sum i
+
+#push-options "--z3rlimit 300"
+
+fn precomp (res: A.array S32.t) (nmod: A.array S32.t) (nn: SZ.t)
+           (#vres: erased (Seq.seq S32.t)) (#pn: perm)
+           (#vn: erased (s: Seq.seq S32.t { 1 < num s }))
+requires A.pts_to res vres ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        0 < SZ.v nn /\ SZ.fits (2 * rad * SZ.v nn))
+ensures exists* (v: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\
+        num v == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len nmod;
+  zero res nn;
+  with v0. assert (A.pts_to res v0);
+  pre_zeros v0 (SZ.v nn);
+  pre_full v0;
+  let one = S32.classify 1ul;
+  A.((res.(0sz) <- one));
+  num_upd v0 0 one;
+  wt_zero ();
+  Math.small_mod 1 (num vn);
+  let steps = SZ.mul 64sz nn;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi steps)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+    pts_to i vi ** A.pts_to res v ** A.pts_to nmod #pn vn **
+    pure (SZ.v vi <= SZ.v steps /\ Seq.length v == SZ.v nn /\
+          num v == pow2 (SZ.v vi) % num vn)
+  decreases (SZ.v steps - SZ.v (!i))
+  {
+    let vi = !i;
+    double_mod res nmod nn;
+    dbl_mod (num vn) (SZ.v vi);
+    i := SZ.add vi 1sz;
+  };
+  wt_add (SZ.v nn) (SZ.v nn);
+  ()
+}
+
+#pop-options
+
+(** {2 The inverse of the radix}
+
+    Montgomery arithmetic computes with an extra factor of [R] throughout,
+    and taking it off at the end is only legitimate because [R] is
+    invertible modulo the modulus.  It is, and [mu] hands us the witness:
+    [1 + mu * N] is a multiple of [base] by the very equation that defines
+    [mu], so its quotient is an inverse of [base], and a power of that is an
+    inverse of [R].  No appeal to Bezout, and nothing to compute at run
+    time. *)
+
+let base_inv (nN mu m0: nat)
+  : Ghost nat (requires 0 < nN /\ (mu * m0 + 1) % base == 0 /\ nN % base == m0)
+              (ensures fun b1 -> (base * b1) % nN == 1 % nN)
+  = Math.lemma_mod_mul_distr_r mu nN base;
+    Math.lemma_mod_mul_distr_r mu m0 base;
+    Math.lemma_mod_add_distr 1 (mu * nN) base;
+    Math.lemma_mod_add_distr 1 (mu * m0) base;
+    let b1 = (1 + mu * nN) / base in
+    Math.euclidean_division_definition (1 + mu * nN) base;
+    Math.lemma_mod_plus 1 mu nN;
+    b1
+
+let rec wt_inv (nN: pos) (b1: nat { (base * b1) % nN == 1 % nN }) (k: nat)
+  : GTot (u: nat { (wt k * u) % nN == 1 % nN }) (decreases k)
+  = if k = 0 then begin wt_zero (); 1 end
+    else begin
+      let u = wt_inv nN b1 (k - 1) in
+      wt_succ (k - 1);
+      Math.paren_mul_right base (wt (k - 1)) (b1 * u);
+      Math.paren_mul_right (wt (k - 1)) b1 u;
+      Math.swap_mul (wt (k - 1)) b1;
+      Math.paren_mul_right b1 (wt (k - 1)) u;
+      Math.paren_mul_right base b1 (wt (k - 1) * u);
+      Math.lemma_mod_mul_distr_l (base * b1) (wt (k - 1) * u) nN;
+      Math.lemma_mod_mul_distr_l 1 (wt (k - 1) * u) nN;
+      b1 * u
+    end
+
+let cancel_mod (x y rr u nN: nat)
+  : Lemma (requires 0 < nN /\ x < nN /\ y < nN /\
+                    (x * rr) % nN == (y * rr) % nN /\ (rr * u) % nN == 1 % nN)
+          (ensures x == y)
+  = Math.lemma_mod_mul_distr_l (x * rr) u nN;
+    Math.lemma_mod_mul_distr_l (y * rr) u nN;
+    Math.paren_mul_right x rr u;
+    Math.paren_mul_right y rr u;
+    Math.lemma_mod_mul_distr_r x (rr * u) nN;
+    Math.lemma_mod_mul_distr_r y (rr * u) nN;
+    Math.lemma_mod_mul_distr_r x 1 nN;
+    Math.lemma_mod_mul_distr_r y 1 nN;
+    Math.small_mod x nN;
+    Math.small_mod y nN
+
+(** Two reduced numbers that agree once scaled by [R] are equal. *)
+let mont_cancel (x y nN mu m0: nat) (k: nat)
+  : Lemma (requires 0 < nN /\ x < nN /\ y < nN /\
+                    (mu * m0 + 1) % base == 0 /\ nN % base == m0 /\
+                    (x * wt k) % nN == (y * wt k) % nN)
+          (ensures x == y)
+  = let b1 = base_inv nN mu m0 in
+    let u = wt_inv nN b1 k in
+    cancel_mod x y (wt k) u nN
+
+(** {2 Plain remainder}
+
+    With the constant in hand, reducing a [2n]-limb number modulo the
+    modulus is two Montgomery steps: one takes a factor of [R] out, the
+    other puts it back. *)
+
+let mod_chain (r acc rr nN va: nat)
+  : Lemma (requires 0 < nN /\ (r * rr) % nN == (acc * ((rr * rr) % nN)) % nN /\
+                    (acc * rr) % nN == va % nN)
+          (ensures (r * rr) % nN == ((va % nN) * rr) % nN)
+  = Math.lemma_mod_mul_distr_r acc (rr * rr) nN;
+    Math.paren_mul_right acc rr rr;
+    Math.lemma_mod_mul_distr_l (acc * rr) rr nN;
+    Math.lemma_mod_mul_distr_l (va % nN) rr nN;
+    Math.lemma_mod_twice va nN
+
+#push-options "--z3rlimit 300"
+
+(** [modulo res a acc r2 nmod nn mu] is [res = a mod nmod], for a [2n]-limb
+    [a] below the modulus times [R].  [a] is clobbered -- it doubles as the
+    scratch of the second step -- and [acc] is [n] limbs of scratch. *)
+fn modulo (res: A.array S32.t) (a: A.array S32.t) (acc: A.array S32.t)
+          (r2: A.array S32.t) (nmod: A.array S32.t) (nn: SZ.t) (mu: S32.t)
+          (#vres #vacc: erased (Seq.seq S32.t)) (#va: erased (Seq.seq S32.t))
+          (#pr #pn: perm) (#vr2: erased (Seq.seq S32.t))
+          (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to a va ** A.pts_to acc vacc **
+         A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn + SZ.v nn /\
+        Seq.length vacc == SZ.v nn /\ Seq.length vr2 == SZ.v nn /\
+        Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\
+        SZ.fits (SZ.v nn + SZ.v nn) /\
+        num va < num vn * wt (SZ.v nn) /\
+        num vr2 == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn /\
+        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t) (v3: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a v2 ** A.pts_to acc v3 **
+  A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ Seq.length v2 == SZ.v nn + SZ.v nn /\
+        Seq.length v3 == SZ.v nn /\ num v == num va % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  A.pts_to_len acc;
+  A.pts_to_len r2;
+  A.pts_to_len nmod;
+  wt_zero ();
+  wt_succ 0;
+  pre_zero vn;
+  pre_snoc vn 0;
+  pre_mod vn 1;
+  reduction acc a nmod nn mu;
+  with vacc1. assert (A.pts_to acc vacc1);
+  mont_mul res acc r2 a nmod nn mu;
+  with v. assert (A.pts_to res v);
+  mod_chain (num v) (num vacc1) (wt (SZ.v nn)) (num vn) (num va);
+  mont_cancel (num v) (num va % num vn) (num vn) (S32.v mu)
+              (S32.v (Seq.index vn 0)) (SZ.v nn);
+  ()
+}
+
+#pop-options
+
 #pop-options
