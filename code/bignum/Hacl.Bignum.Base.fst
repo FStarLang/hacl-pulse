@@ -99,6 +99,41 @@ let pre_zeros (v: Seq.seq S32.t) (j: nat { j <= Seq.length v })
           (ensures pre v j == 0)
   = eval_zeros (Seq.slice (vals v) 0 j)
 
+(** A prefix is the number modulo its weight: the low limbs are the low
+    digits.  What a reduction loop needs in order to say that the limbs it
+    has zeroed really did divide out. *)
+let pre_mod (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
+  : Lemma (pre v k == num v % wt k)
+  = let n = Seq.length v in
+    eval_split (vals v) k;
+    eval_bnd_prefix (vals v) k;
+    Math.lemma_mod_plus (eval (Seq.slice (vals v) 0 k))
+      (eval (Seq.slice (vals v) k n)) (wt k);
+    Math.small_mod (eval (Seq.slice (vals v) 0 k)) (wt k)
+
+(** Writing one limb changes the number by the weight of that position
+    times the difference.  Stated additively so both sides stay natural. *)
+let num_upd (v: Seq.seq S32.t) (k: nat { k < Seq.length v }) (x: S32.t)
+  : Lemma (num (Seq.upd v k x) + wt k * S32.v (Seq.index v k) ==
+           num v + wt k * S32.v x)
+  = vals_upd v k x;
+    eval_upd (vals v) k (S32.v x)
+
+(** Two arrays that agree above limb [k] denote numbers differing by exactly
+    what their prefixes differ by.  Stated additively so both sides stay
+    natural numbers. *)
+let num_above (u v: Seq.seq S32.t) (k: nat { k <= Seq.length u })
+  : Lemma (requires Seq.length u == Seq.length v /\
+                    (forall (j: nat). k <= j /\ j < Seq.length u ==>
+                       Seq.index v j == Seq.index u j))
+          (ensures num v + pre u k == num u + pre v k)
+  = let n = Seq.length u in
+    eval_split (vals v) k;
+    eval_split (vals u) k;
+    Seq.lemma_eq_intro (Seq.slice v k n) (Seq.slice u k n);
+    vals_slice v k n;
+    vals_slice u k n
+
 (** {2 The two step lemmas}
 
     Both are pure algebra about one column, stated separately because the
@@ -665,7 +700,7 @@ ensures exists* (v: Seq.seq S32.t).
   invariant exists* (vj: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
     pts_to j vj ** pts_to c vc ** A.pts_to res v ** A.pts_to a #pa va **
     pure (SZ.v vj <= SZ.v n /\ Seq.length v == Seq.length vres /\
-          (forall (k: nat). SZ.v off + SZ.v vj <= k /\ k < Seq.length v ==>
+            (forall (k: nat). SZ.v off + SZ.v vj <= k /\ k < Seq.length v ==>
              Seq.index v k == Seq.index vres k) /\
           pre v (SZ.v off + SZ.v vj) + S32.v vc * wt (SZ.v off + SZ.v vj) ==
             pre vres (SZ.v off + SZ.v vj) + (pre va (SZ.v vj) * S32.v bi) * wt (SZ.v off))
