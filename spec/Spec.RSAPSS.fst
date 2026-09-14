@@ -59,6 +59,18 @@ unfold let seed_ok (#t: Type0) {| word t |} (seed: Seq.seq S8.t) =
     scope, so anything mentioning [mgf] has to carry the bound on its binder. *)
 let seed_t (t: Type0) {| word t |} = s: Seq.seq S8.t { seed_ok #t s }
 
+(** Refinement subtyping does not fire through [erased], so a call site that
+    has to produce a refined sequence goes through one of these. *)
+let as_mp_salt (#t: Type0) {| word t |} (p: params t) (s: Seq.seq S8.t)
+  : Pure (s: Seq.seq S8.t { 8 + (hash_bytes p) + Seq.length s < max_input #t })
+         (requires 8 + (hash_bytes p) + Seq.length s < max_input #t)
+         (ensures fun r -> r == s)
+  = s
+
+let as_seed (#t: Type0) {| word t |} (s: Seq.seq S8.t)
+  : Pure (seed_t t) (requires seed_ok #t s) (ensures fun r -> r == s)
+  = s
+
 (** The counter, four big-endian bytes. *)
 let counter (i: nat) : Seq.lseq S8.t 4 = nat_to_be 4 i
 
@@ -225,5 +237,293 @@ let mgf_round_index (#t: Type0) {| word t |} (p: params t) (seed: seed_t t)
         end
     in
     FStar.Classical.forall_intro aux
+
+
+(** {2 EMSA-PSS, RFC 8017 section 9.1}
+
+    The encoded message is [emLen = ceil(emBits/8)] bytes laid out as
+
+      maskedDB (emLen - hLen - 1) | H (hLen) | 0xbc
+
+    where [DB = 0^k | 0x01 | salt] and [maskedDB] is [DB] masked with
+    [MGF1(H, |DB|)] and then truncated to [emBits] bits.  [H] itself is the
+    hash of eight zero bytes, the message digest, and the salt.
+
+    [emBits] is [modBits - 1], so the top byte of the encoding always has at
+    least one spare bit; that is what makes the encoded number smaller than
+    the modulus.
+
+    Encoding and verification are two separate definitions, not
+    encode-then-compare.  A verifier has to reject encodings that no encoder
+    would ever produce -- a wrong trailer byte, spare bits that are not
+    clear, a padding string that is not zero -- and those rejections are the
+    entire content of the format. *)
+
+(** [ceil(emBits/8)], and the fact that it leaves fewer than eight spare
+    bits, which is what makes the masking shift legal. *)
+let em_len (emBits: pos) : pos =
+  div_ceil_ok emBits 8;
+  Math.lemma_div_le 8 (emBits + 7) 8;
+  (emBits + 7) / 8
+
+let em_len_ok (emBits: pos) : Lemma (8 * em_len emBits - emBits < 8)
+  = Math.euclidean_division_definition (emBits + 7) 8;
+    Math.lemma_mod_lt (emBits + 7) 8
+
+(** The mask that keeps the bits of the top byte that belong to the number. *)
+let top_mask (emBits: pos) : S8.t =
+  em_len_ok emBits;
+  S8.classify (U8.uint_to_t (255 / pow2 (8 * em_len emBits - emBits)))
+
+let clear_top (emBits: pos) (s: Seq.seq S8.t { 0 < Seq.length s })
+  : Seq.lseq S8.t (Seq.length s)
+  = Seq.upd s 0 (S8.logand (Seq.index s 0) (top_mask emBits))
+
+(** Pointwise exclusive or. *)
+let xor_seq (a: Seq.seq S8.t) (b: Seq.seq S8.t { Seq.length b == Seq.length a })
+  : Seq.lseq S8.t (Seq.length a)
+  = Seq.init (Seq.length a) (fun i -> S8.logxor (Seq.index a i) (Seq.index b i))
+
+(** Everything the encoding needs to be well defined: room for the salt, and
+    hash inputs within range.  Both hold for every modulus and salt anyone
+    uses; they are stated because [hash] and [mgf] demand them. *)
+unfold let pss_ok (#t: Type0) {| word t |} (p: params t) (sLen: nat) (emBits: pos) =
+  (hash_bytes p) + sLen + 2 <= em_len emBits /\
+  8 + (hash_bytes p) + sLen < max_input #t /\
+  (hash_bytes p) + 4 < max_input #t
+
+(** A digest is a legal MGF1 seed. *)
+let seed_ok_hash (#t: Type0) {| word t |} (p: params t) (s: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == (hash_bytes p) /\ (hash_bytes p) + 4 < max_input #t)
+          (ensures seed_ok #t s)
+  = ()
+
+(** [M' = 0^8 | mHash | salt]. *)
+let m_prime (#t: Type0) {| word t |} (p: params t)
+            (mHash: Seq.lseq S8.t (hash_bytes p)) (salt: Seq.seq S8.t)
+  : Seq.lseq S8.t (8 + (hash_bytes p) + Seq.length salt)
+  = Seq.append (Seq.append (Seq.create 8 S8.zero) mHash) salt
+
+let pss_h (#t: Type0) {| word t |} (p: params t) (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+          (mHash: Seq.lseq S8.t (hash_bytes p)) (salt: Seq.lseq S8.t sLen)
+  : GTot (Seq.lseq S8.t (hash_bytes p))
+  = hash p (m_prime p mHash salt)
+
+(** [DB = 0^k | 0x01 | salt], of length [emLen - hLen - 1]. *)
+let pss_db (#t: Type0) {| word t |} (p: params t) (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+           (salt: Seq.lseq S8.t sLen)
+  : Seq.lseq S8.t (em_len emBits - (hash_bytes p) - 1)
+  = let dbLen = em_len emBits - (hash_bytes p) - 1 in
+    Seq.append (Seq.append (Seq.create (dbLen - sLen - 1) S8.zero)
+                           (Seq.create 1 (S8.classify 1uy)))
+               salt
+
+(** EMSA-PSS-ENCODE. *)
+let pss_encode (#t: Type0) {| word t |} (p: params t)
+               (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+               (salt: Seq.lseq S8.t sLen)
+               (msg: Seq.seq S8.t { Seq.length msg < max_input #t })
+  : GTot (Seq.lseq S8.t (em_len emBits))
+  = let hLen = hash_bytes p in
+    let dbLen = em_len emBits - hLen - 1 in
+    let h = pss_h p sLen emBits (hash p msg) salt in
+    seed_ok_hash p h;
+    let masked = clear_top emBits (xor_seq (pss_db p sLen emBits salt) (mgf p h dbLen)) in
+    let trailer = Seq.create 1 (S8.classify 0xbcuy) in
+    Seq.lemma_len_append masked h;
+    Seq.lemma_len_append (Seq.append masked h) trailer;
+    Seq.append (Seq.append masked h) trailer
+
+(** EMSA-PSS-VERIFY, as a predicate: the implementation returns a [bool] and
+    proves it equivalent to this. *)
+let pss_valid (#t: Type0) {| word t |} (p: params t)
+              (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+              (msg: Seq.seq S8.t { Seq.length msg < max_input #t })
+              (em: Seq.lseq S8.t (em_len emBits))
+  : GTot prop
+  = let hLen = hash_bytes p in
+    let emLen = em_len emBits in
+    let dbLen = emLen - hLen - 1 in
+    let masked = Seq.slice em 0 dbLen in
+    let h = Seq.slice em dbLen (dbLen + hLen) in
+    seed_ok_hash p h;
+    let db = clear_top emBits (xor_seq masked (mgf p h dbLen)) in
+    let salt = Seq.slice db (dbLen - sLen) dbLen in
+    S8.v (Seq.index em (emLen - 1)) == 0xbc /\
+    S8.v (S8.logand (Seq.index masked 0) (S8.lognot (top_mask emBits))) == 0 /\
+    (forall (k: nat). k < dbLen - sLen - 1 ==> S8.v (Seq.index db k) == 0) /\
+    S8.v (Seq.index db (dbLen - sLen - 1)) == 1 /\
+    h == pss_h p sLen emBits (hash p msg) salt
+
+
+(** {2 Lemmas for the implementation}
+
+    The implementation builds the encoding in place, byte by byte, and never
+    materializes [pss_db] or the mask.  These say what each byte has to be
+    and that getting them all right is the same as being the encoding. *)
+
+(** [DB] byte by byte. *)
+let pss_db_index (#t: Type0) {| word t |} (p: params t)
+                 (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+                 (salt: Seq.lseq S8.t sLen) (k: nat { k < em_len emBits - (hash_bytes p) - 1 })
+  : Lemma (let dbLen = em_len emBits - (hash_bytes p) - 1 in
+           Seq.index (pss_db p sLen emBits salt) k ==
+             (if k < dbLen - sLen - 1 then S8.zero
+              else if k = dbLen - sLen - 1 then S8.classify 1uy
+              else Seq.index salt (k - (dbLen - sLen))))
+  = let dbLen = em_len emBits - (hash_bytes p) - 1 in
+    let pad = Seq.create (dbLen - sLen - 1) S8.zero in
+    let one = Seq.create 1 (S8.classify 1uy) in
+    let head = Seq.append pad one in
+    Seq.lemma_len_append pad one;
+    if k < dbLen - sLen
+    then begin
+      Seq.lemma_index_app1 head salt k;
+      if k < dbLen - sLen - 1 then Seq.lemma_index_app1 pad one k
+                              else Seq.lemma_index_app2 pad one k
+    end
+    else Seq.lemma_index_app2 head salt k
+
+(** The masked block, byte by byte. *)
+let masked_index (emBits: pos) (db: Seq.seq S8.t { 0 < Seq.length db })
+                 (mask: Seq.seq S8.t { Seq.length mask == Seq.length db })
+                 (k: nat { k < Seq.length db })
+  : Lemma (Seq.index (clear_top emBits (xor_seq db mask)) k ==
+             (if k = 0
+              then S8.logand (S8.logxor (Seq.index db 0) (Seq.index mask 0)) (top_mask emBits)
+              else S8.logxor (Seq.index db k) (Seq.index mask k)))
+  = ()
+
+#push-options "--z3rlimit 600"
+
+(** Concatenation of three pieces, pointwise: pure sequence reasoning, kept
+    away from any context mentioning [mgf] or [em_len]. *)
+let append3_index (#a: Type) (x: Seq.seq a) (y: Seq.seq a) (z: Seq.seq a) (w: Seq.seq a)
+  : Lemma (requires
+      Seq.length z == 1 /\
+      Seq.length w == Seq.length x + Seq.length y + 1 /\
+      (forall (k: nat). k < Seq.length x ==> Seq.index w k == Seq.index x k) /\
+      (forall (k: nat). k < Seq.length y ==>
+         Seq.index w (Seq.length x + k) == Seq.index y k) /\
+      Seq.index w (Seq.length w - 1) == Seq.index z 0)
+    (ensures w == Seq.append (Seq.append x y) z)
+  = let head = Seq.append x y in
+    Seq.lemma_len_append x y;
+    Seq.lemma_len_append head z;
+    let aux (k: nat { k < Seq.length w })
+      : Lemma (Seq.index w k == Seq.index (Seq.append head z) k)
+      = if k < Seq.length head
+        then begin
+          Seq.lemma_index_app1 head z k;
+          if k < Seq.length x then Seq.lemma_index_app1 x y k
+                              else Seq.lemma_index_app2 x y k
+        end
+        else Seq.lemma_index_app2 head z k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro w (Seq.append head z)
+
+(** Three pointwise facts make an encoding. *)
+let pss_encode_index (#t: Type0) {| word t |} (p: params t)
+                     (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+                     (salt: Seq.lseq S8.t sLen)
+                     (msg: Seq.seq S8.t { Seq.length msg < max_input #t })
+                     (em: Seq.lseq S8.t (em_len emBits))
+  : Lemma (requires
+      (let hLen = hash_bytes p in
+       let dbLen = em_len emBits - hLen - 1 in
+       let h = pss_h p sLen emBits (hash p msg) salt in
+       seed_ok_hash p h;
+       (forall (k: nat). k < dbLen ==>
+          Seq.index em k ==
+            Seq.index (clear_top emBits (xor_seq (pss_db p sLen emBits salt) (mgf p h dbLen))) k) /\
+       (forall (k: nat). k < hLen ==> Seq.index em (dbLen + k) == Seq.index h k) /\
+       Seq.index em (em_len emBits - 1) == S8.classify 0xbcuy))
+    (ensures em == pss_encode p sLen emBits salt msg)
+  = let hLen = hash_bytes p in
+    let emLen = em_len emBits in
+    let dbLen = emLen - hLen - 1 in
+    let h = pss_h p sLen emBits (hash p msg) salt in
+    seed_ok_hash p h;
+    let masked = clear_top emBits (xor_seq (pss_db p sLen emBits salt) (mgf p h dbLen)) in
+    let trailer = Seq.create 1 (S8.classify 0xbcuy) in
+    Seq.lemma_index_create 1 (S8.classify 0xbcuy) 0;
+    append3_index masked h trailer em
+
+(** [M'] byte by byte: the implementation zeroes eight bytes, hashes into the
+    middle, and copies the salt after it. *)
+let m_prime_index (#t: Type0) {| word t |} (p: params t)
+                  (mHash: Seq.lseq S8.t (hash_bytes p)) (salt: Seq.seq S8.t)
+                  (m: Seq.seq S8.t)
+  : Lemma (requires
+      Seq.length m == 8 + (hash_bytes p) + Seq.length salt /\
+      (forall (k: nat). k < 8 ==> Seq.index m k == S8.zero) /\
+      (forall (k: nat). k < (hash_bytes p) ==> Seq.index m (8 + k) == Seq.index mHash k) /\
+      (forall (k: nat). k < Seq.length salt ==>
+         Seq.index m (8 + (hash_bytes p) + k) == Seq.index salt k))
+    (ensures m == m_prime p mHash salt)
+  = let pad = Seq.create 8 S8.zero in
+    let head = Seq.append pad mHash in
+    Seq.lemma_len_append pad mHash;
+    Seq.lemma_len_append head salt;
+    let aux (k: nat { k < Seq.length m })
+      : Lemma (Seq.index m k == Seq.index (Seq.append head salt) k)
+      = if k < 8 + (hash_bytes p)
+        then begin
+          Seq.lemma_index_app1 head salt k;
+          if k < 8 then Seq.lemma_index_app1 pad mHash k
+                   else Seq.lemma_index_app2 pad mHash k
+        end
+        else Seq.lemma_index_app2 head salt k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro m (m_prime p mHash salt)
+
+
+(** The encoder's final step, as sequence reasoning: [pre] holds [DB] over
+    its front and [H] behind it, [post] is [pre] masked, top-truncated and
+    stamped with the trailer. *)
+let pss_encode_pointwise (#t: Type0) {| word t |} (p: params t)
+                         (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+                         (salt: Seq.lseq S8.t sLen)
+                         (msg: Seq.seq S8.t { Seq.length msg < max_input #t })
+                         (h: Seq.seq S8.t)
+                         (mask: Seq.seq S8.t)
+                         (pre: Seq.seq S8.t)
+                         (post: Seq.seq S8.t)
+  : Lemma (requires
+      (let hLen = hash_bytes p in
+       let emLen = em_len emBits in
+       let dbLen = emLen - hLen - 1 in
+       Seq.length h == hLen /\ Seq.length mask == dbLen /\
+       Seq.length pre == emLen /\ Seq.length post == emLen /\
+       seed_ok #t h /\
+       h == pss_h p sLen emBits (hash p msg) salt /\
+       mask == mgf p h dbLen /\
+       (forall (k: nat). k < dbLen ==>
+          Seq.index pre k == Seq.index (pss_db p sLen emBits salt) k) /\
+       (forall (k: nat). k < hLen ==> Seq.index pre (dbLen + k) == Seq.index h k) /\
+       Seq.index post 0 ==
+         S8.logand (S8.logxor (Seq.index pre 0) (Seq.index mask 0)) (top_mask emBits) /\
+       (forall (k: nat). 0 < k /\ k < dbLen ==>
+          Seq.index post k == S8.logxor (Seq.index pre k) (Seq.index mask k)) /\
+       (forall (k: nat). dbLen <= k /\ k < emLen - 1 ==> Seq.index post k == Seq.index pre k) /\
+       Seq.index post (emLen - 1) == S8.classify 0xbcuy))
+    (ensures post == pss_encode p sLen emBits salt msg)
+  = let hLen = hash_bytes p in
+    let emLen = em_len emBits in
+    let dbLen = emLen - hLen - 1 in
+    let h : Seq.lseq S8.t hLen = h in
+    let post : Seq.lseq S8.t emLen = post in
+    let db = pss_db p sLen emBits salt in
+    let aux (k: nat { k < dbLen })
+      : Lemma (Seq.index post k ==
+                 Seq.index (clear_top emBits (xor_seq db (mgf p h dbLen))) k)
+      = masked_index emBits db (mgf p h dbLen) k
+    in
+    FStar.Classical.forall_intro aux;
+    pss_encode_index p sLen emBits salt msg post
+
+#pop-options
 
 #pop-options
