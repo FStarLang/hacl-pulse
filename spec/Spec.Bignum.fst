@@ -294,3 +294,31 @@ let diff_mod_cases (x y m: nat)
     end
 
 #pop-options
+
+(** {2 Powers}
+
+    Exponentiation walks the exponent's bits from the top, squaring at every
+    step and multiplying in the base when the bit is set.  These three
+    lemmas are all the arithmetic that step needs. *)
+
+#push-options "--fuel 1 --ifuel 1"
+
+let rec pw (a: nat) (k: nat) : Tot nat (decreases k) =
+  if k = 0 then 1 else a * pw a (k - 1)
+
+let rec pw_add (a: nat) (m n: nat)
+  : Lemma (ensures pw a (m + n) == pw a m * pw a n) (decreases m)
+  = if m = 0 then ()
+    else begin
+      pw_add a (m - 1) n;
+      Math.paren_mul_right a (pw a (m - 1)) (pw a n)
+    end
+
+(** One step down the exponent: the bits above position [i] are twice the
+    bits above position [i+1], plus the bit at [i] itself. *)
+let pw_step (a: nat) (e: nat) (b: nat { b < 2 })
+  : Lemma (pw a (e + e + b) == (pw a e * pw a e) * (if b = 0 then 1 else a))
+  = pw_add a e e;
+    pw_add a (e + e) b
+
+#pop-options

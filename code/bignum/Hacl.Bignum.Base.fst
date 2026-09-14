@@ -58,6 +58,7 @@ module Math = FStar.Math.Lemmas
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 
+module UInt = FStar.UInt
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
 (** {2 The number an array denotes, and its prefixes}
@@ -943,3 +944,160 @@ ensures exists* (v: Seq.seq S32.t).
 
 
 #pop-options
+
+(** {2 Copying, choosing, and reading a bit}
+
+    What an exponentiation ladder needs on top of arithmetic: move a number,
+    move it only if a mask says so, and look at one bit of the exponent
+    without letting its value reach the control flow. *)
+
+(** [copy res a n] is [res = a]. *)
+fn copy (res: A.array S32.t) (a: A.array S32.t) (n: SZ.t)
+        (#vres: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+requires A.pts_to res vres ** A.pts_to a #pa va **
+  pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n)
+ensures exists* (v: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a #pa va ** pure (v == reveal va)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+    pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
+          (forall (k: nat). k < SZ.v vi /\ k < Seq.length v ==>
+             Seq.index v k == Seq.index va k))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let ai = A.(a.(vi));
+    A.((res.(vi) <- ai));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to res v);
+  Seq.lemma_eq_intro v (reveal va);
+  ()
+}
+
+let sel_eq (v va vres: Seq.seq S32.t) (k: nat)
+  : Lemma (requires Seq.length v == Seq.length va /\
+                    Seq.length v == Seq.length vres /\
+                    (forall (j: nat). j < Seq.length v ==>
+                       Seq.index v j ==
+                         (if k = 1 then Seq.index va j else Seq.index vres j)))
+          (ensures (k == 1 ==> v == va) /\ (k == 0 ==> v == vres))
+  = if k = 1 then Seq.lemma_eq_intro v va else Seq.lemma_eq_intro v vres
+
+(** [cselect res a n m k] is [res = a] if the mask is all ones and leaves
+    [res] alone if it is all zeroes, in the same time either way. *)
+fn cselect (res: A.array S32.t) (a: A.array S32.t) (n: SZ.t) (m: S32.t) (k: erased nat)
+           (#vres: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+requires A.pts_to res vres ** A.pts_to a #pa va **
+  pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n /\
+        is_mask m /\ stands_for m (reveal k))
+ensures exists* (v: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a #pa va **
+  pure ((reveal k == 1 ==> v == reveal va) /\
+        (reveal k == 0 ==> v == reveal vres))
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+    pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
+          (forall (k2: nat). k2 < SZ.v vi /\ k2 < Seq.length v ==>
+             Seq.index v k2 ==
+               (if reveal k = 1 then Seq.index va k2 else Seq.index vres k2)) /\
+          (forall (k2: nat). SZ.v vi <= k2 /\ k2 < Seq.length v ==>
+             Seq.index v k2 == Seq.index vres k2))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    with v. assert (A.pts_to res v);
+    let vi = !i;
+    let ai = A.(a.(vi));
+    let ri = A.(res.(vi));
+    A.((res.(vi) <- S32.select m ai ri));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to res v);
+  sel_eq v va vres (reveal k);
+  ()
+}
+
+(** Limb [q] is the number divided by that limb's weight, modulo the
+    radix: exactly the digit it looks like. *)
+let num_digit (v: Seq.seq S32.t) (q: nat { q < Seq.length v })
+  : Lemma (num v / wt q % base == S32.v (Seq.index v q))
+  = let n = Seq.length v in
+    let hi = S32.v (Seq.index v q) + base * eval (Seq.slice (vals v) (q + 1) n) in
+    eval_at (vals v) q;
+    pre_bnd v q;
+    Math.lemma_div_plus (pre v q) hi (wt q);
+    Math.small_div (pre v q) (wt q);
+    Math.lemma_mod_plus (S32.v (Seq.index v q))
+      (eval (Seq.slice (vals v) (q + 1) n)) base;
+    Math.small_mod (S32.v (Seq.index v q)) base
+
+(** Shifting a limb out of the number and shifting inside the limb are
+    the same shift. *)
+let shift_in_limb (x: nat) (r: nat { r < 32 })
+  : Lemma ((x % pow2 32) / pow2 r % 2 == x / pow2 r % 2)
+  = assert_norm (pow2 1 == 2);
+    Math.pow2_modulo_division_lemma_1 x r 32;
+    Math.pow2_modulo_modulo_lemma_1 (x / pow2 r) 1 (32 - r)
+
+(** Shifting down by [i] is shifting down to limb [i / 32] and then by the
+    remainder. *)
+let shift_num (n: nat) (q: nat) (r: nat)
+  : Lemma (n / pow2 (rad * q + r) == (n / wt q) / pow2 r)
+  = Math.pow2_plus (rad * q) r;
+    Math.division_multiplication_lemma n (wt q) (pow2 r)
+
+(** Bit [i] of the number is bit [i mod 32] of limb [i / 32]. *)
+let num_bit (v: Seq.seq S32.t) (i: nat { i / 32 < Seq.length v })
+  : Lemma (S32.v (Seq.index v (i / 32)) / pow2 (i % 32) % 2 == num v / pow2 i % 2)
+  = let q = i / 32 in
+    let r = i % 32 in
+    num_digit v q;
+    shift_in_limb (num v / wt q) r;
+    Math.euclidean_division_definition i 32;
+    shift_num (num v) q r
+
+(** Comparing a limb known to be zero or one against one turns it into a
+    mask standing for that very value. *)
+let bit_mask (bit one m: S32.t) (k: nat)
+  : Lemma (requires k < 2 /\ S32.v bit == k /\ S32.v one == 1 /\
+                    (S32.v bit == S32.v one ==> S32.v m == pow2 32 - 1) /\
+                    (S32.v bit =!= S32.v one ==> S32.v m == 0))
+          (ensures is_mask m /\ stands_for m k)
+  = assert_norm (pow2 32 - 1 =!= 0)
+
+(** [get_bit b i] is the all-ones mask when bit [i] of [b] is set.  The
+    index is a loop counter and public; the bit itself never is. *)
+fn get_bit (b: A.array S32.t) (i: SZ.t) (#pb: perm) (#vb: erased (Seq.seq S32.t))
+requires A.pts_to b #pb vb ** pure (SZ.v i / 32 < Seq.length vb)
+returns m: S32.t
+ensures A.pts_to b #pb vb **
+  pure (is_mask m /\ stands_for m (num vb / pow2 (SZ.v i) % 2))
+{
+  A.pts_to_len b;
+  let q = SZ.div i (SZ.uint_to_t 32);
+  let r = SZ.rem i (SZ.uint_to_t 32);
+  let w = A.(b.(q));
+  let x = S32.shift_right w (SZ.sizet_to_uint32 r);
+  assert_norm (pow2 1 == 2);
+  assert_norm (pow2 1 - 1 == 1);
+  UInt.logand_mask #32 (S32.v x) 1;
+  let one = S32.classify 1ul;
+  let bit = S32.logand x one;
+  assert (pure (S32.v bit ==
+    S32.v (Seq.index vb (SZ.v i / 32)) / pow2 (SZ.v i % 32) % 2));
+  num_bit vb (SZ.v i);
+  assert (pure (S32.v bit == num vb / pow2 (SZ.v i) % 2));
+  let m = S32.eq_mask bit one;
+  bit_mask bit one m (num vb / pow2 (SZ.v i) % 2);
+  m
+}
