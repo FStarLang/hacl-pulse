@@ -1215,6 +1215,79 @@ from its caller.
 keys, the shared secret computed from either side, and the rejection of the
 two boundary peer keys `1` and `p - 1`.
 
+### RSA-PSS, where the key is just bytes
+
+`code/rsapss/` is PKCS#1 v2.2 signing and verification: `Spec.RSAPSS` for
+the encoding, `Hacl.RSAPSS.MGF` for MGF1, `Hacl.RSAPSS.PSS` for the EMSA-PSS
+encoder and verifier, and `Hacl.RSAPSS` for the modular exponentiation and
+the six entry points.
+
+    bool Hacl_RSAPSS_sign_sha256(uint32_t modBits, uint8_t *nb,
+                                 size_t dLen, uint8_t *db,
+                                 size_t sLen, uint8_t *salt,
+                                 size_t mLen, uint8_t *msg, uint8_t *sgnt);
+    bool Hacl_RSAPSS_verify_sha256(uint32_t modBits, uint8_t *nb,
+                                   size_t eLen, uint8_t *eb,
+                                   size_t sLen, uint8_t *sgnt,
+                                   size_t mLen, uint8_t *msg);
+    /* and the same pair for sha384 and sha512 */
+
+**The key is a byte string, and that is the whole key type.**  HACL* has a
+`Hacl_RSAPSS_new_rsapss_load_pkey` that mallocs a flat `uint64_t` array
+holding the modulus, `R^2 mod n` and the exponent at agreed offsets, hands
+back a bare pointer with no type and no length, and leaves the caller to
+free it; every operation then re-derives the bit lengths from the same
+`modBits` that was already passed in.  Here the modulus is `ceil(modBits/8)`
+big-endian bytes -- the form it arrives in, from a certificate or a
+`SubjectPublicKeyInfo` -- and the exponent is however many bytes the caller
+has.  There is no key object, no loader, no allocation and no free.  The
+conversion to limbs happens on the stack inside the call, which is also
+where `R^2 mod n` is computed, exactly as in the Diffie-Hellman groups and
+for the same reason.
+
+**Nothing is trusted.**  `rsa_exp`, the primitive both directions go
+through, checks at run time that the modulus is odd, that it is greater than
+one, that the base is below it and that the result fits the output width,
+and returns `false` otherwise.  A caller cannot reach Montgomery reduction
+with an even modulus, which is the one way to make the bignum layer produce
+nonsense rather than an error.  `tests/test_rsapss.c` clears the low bit of
+each modulus and checks that both directions refuse it.
+
+**Verification is a predicate, not a comparison.**  The postcondition is not
+"the signature equals what signing would produce" -- that would be false,
+because the salt is not recoverable from a signature by the verifier alone.
+It is
+
+    ok <==> 1 < n /\ n odd /\ s < n /\
+            (exists em. be_nat em == s^e mod n /\ pss_valid p sLen msg em)
+
+The existential is what avoids `nat_to_be`'s precondition, and `be_nat_inj`
+-- a big-endian string of a given length is determined by the number it
+denotes -- is what makes it as strong as naming the encoding outright.  The
+six lemmas around it (`be_nat_zeros`, `be_nat_pad`, `be_nat_trunc`,
+`be_nat_zeros_inv`, `be_nat_prefix_zero`, `be_nat_inj`) are the entire
+bridge between "a number modulo `n`" and "a padded byte string", and they
+are the only part of the spec that is not a direct transcription of the RFC.
+
+**`modBits <= 65536` is a precondition**, and it is the one that makes every
+`size_t` arithmetic obligation in the module discharge from `fits_u32`
+alone, instead of threading explicit `SZ.fits` conjuncts through a dozen
+signatures.  No real key is anywhere near it.
+
+**The exponent is consumed as bytes, at full width.**  `mod_exp_be` passes
+the exponent's whole bit length to the ladder rather than its significant
+bit length, so nothing about a private exponent leaks through a loop bound;
+the constant-time ladder is selected for signing and the variable-time one
+for verification, where the exponent is public and is usually `65537`.
+
+**One `if` in `pss_encode_impl` exists only for GCC.**  The scratch buffer
+there is `emLen - hLen - 1` bytes, a difference of caller-supplied sizes,
+and `-Werror=vla-larger-than=` fires on the path where it underflows or is
+astronomically large.  `pss_ok` and the `modBits` bound rule both out, but
+Custard emits each Pulse `fn` as its own C function, so the facts are not
+visible at the point of the declaration.  The test is unreachable and proves
+vacuously; it is cheaper than teaching the C compiler about the proof.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1508,8 +1581,9 @@ incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
 an OS entropy shim, and AES-GCM.  Past it, the generic bignum has its
 arithmetic, its conversions, its Montgomery layer and its modular
 exponentiation -- both ladders and Fermat inversion -- and on top of those
-the five RFC 7919 finite-field Diffie-Hellman groups.
+the five RFC 7919 finite-field Diffie-Hellman groups and PKCS#1 v2.2
+RSA-PSS signing and verification.
 
 Beyond the subset, in rough order of how often they are asked for: AES-NI and
-carry-less-multiply intrinsics under the portable AES-GCM, RSA-PSS, secp256k1,
+carry-less-multiply intrinsics under the portable AES-GCM, secp256k1,
 Salsa20/NaCl, FrodoKEM, and the legacy hashes.
