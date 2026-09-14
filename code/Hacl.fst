@@ -60,3 +60,4 @@ module Bignum = Hacl.Bignum.Base
 module Bignum_Convert = Hacl.Bignum.Convert
 module Bignum_Montgomery = Hacl.Bignum.Montgomery
 module Bignum_Exponentiation = Hacl.Bignum.Exponentiation
+module FFDHE = Hacl.FFDHE

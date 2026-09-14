@@ -113,6 +113,13 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Montgomery., \
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Exponentiation., \
   mod_exp_consttime mod_exp_vartime mod_inv_prime_vartime)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.FFDHE., \
+  ffdhe2048_secret_to_public ffdhe2048_shared_secret \
+  ffdhe3072_secret_to_public ffdhe3072_shared_secret \
+  ffdhe4096_secret_to_public ffdhe4096_shared_secret \
+  ffdhe6144_secret_to_public ffdhe6144_shared_secret \
+  ffdhe8192_secret_to_public ffdhe8192_shared_secret)
+
 include mk/extract.mk
 
 .DEFAULT_GOAL := all
