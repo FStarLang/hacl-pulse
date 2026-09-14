@@ -71,6 +71,10 @@ let as_seed (#t: Type0) {| word t |} (s: Seq.seq S8.t)
   : Pure (seed_t t) (requires seed_ok #t s) (ensures fun r -> r == s)
   = s
 
+let as_lseq (n: nat) (s: Seq.seq S8.t)
+  : Pure (Seq.lseq S8.t n) (requires Seq.length s == n) (ensures fun r -> r == s)
+  = s
+
 (** The counter, four big-endian bytes. *)
 let counter (i: nat) : Seq.lseq S8.t 4 = nat_to_be 4 i
 
@@ -394,6 +398,23 @@ let masked_index (emBits: pos) (db: Seq.seq S8.t { 0 < Seq.length db })
               else S8.logxor (Seq.index db k) (Seq.index mask k)))
   = ()
 
+(** ... and the same fact read backwards: an array that was xored and then
+    truncated in place *is* the masked sequence. *)
+let clear_top_xor_index (emBits: pos) (n: pos) (a: Seq.lseq S8.t n)
+                        (b: Seq.lseq S8.t n) (r: Seq.lseq S8.t n)
+  : Lemma (requires
+      Seq.index r 0 ==
+        S8.logand (S8.logxor (Seq.index a 0) (Seq.index b 0)) (top_mask emBits) /\
+      (forall (k: nat). 0 < k /\ k < n ==>
+         Seq.index r k == S8.logxor (Seq.index a k) (Seq.index b k)))
+    (ensures r == clear_top emBits (xor_seq a b))
+  = let e = clear_top emBits (xor_seq a b) in
+    let aux (k: nat { k < n }) : Lemma (Seq.index r k == Seq.index e k)
+      = masked_index emBits a b k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro r e
+
 #push-options "--z3rlimit 600"
 
 (** Concatenation of three pieces, pointwise: pure sequence reasoning, kept
@@ -523,6 +544,47 @@ let pss_encode_pointwise (#t: Type0) {| word t |} (p: params t)
     in
     FStar.Classical.forall_intro aux;
     pss_encode_index p sLen emBits salt msg post
+
+
+(** What the verifier actually checks.  [db] is the unmasked data block and
+    [hp] the hash of [M'] rebuilt from the salt found in it; the five
+    machine-checkable facts on the right are exactly [pss_valid]. *)
+let pss_valid_intro (#t: Type0) {| word t |} (p: params t)
+                    (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+                    (msg: Seq.seq S8.t { Seq.length msg < max_input #t })
+                    (em: Seq.lseq S8.t (em_len emBits))
+                    (db: Seq.lseq S8.t (em_len emBits - (hash_bytes p) - 1))
+                    (hp: Seq.lseq S8.t (hash_bytes p))
+  : Lemma (requires
+      (let hLen = hash_bytes p in
+       let dbLen = em_len emBits - hLen - 1 in
+       db == clear_top emBits (xor_seq (Seq.slice em 0 dbLen)
+                                       (mgf p (Seq.slice em dbLen (dbLen + hLen)) dbLen)) /\
+       hp == hash p (m_prime p (hash p msg) (Seq.slice db (dbLen - sLen) dbLen))))
+    (ensures
+      (let hLen = hash_bytes p in
+       let emLen = em_len emBits in
+       let dbLen = emLen - hLen - 1 in
+       pss_valid p sLen emBits msg em <==>
+         (S8.v (Seq.index em (emLen - 1)) == 0xbc /\
+          S8.v (S8.logand (Seq.index em 0) (S8.lognot (top_mask emBits))) == 0 /\
+          (forall (k: nat). k < dbLen - sLen - 1 ==> S8.v (Seq.index db k) == 0) /\
+          S8.v (Seq.index db (dbLen - sLen - 1)) == 1 /\
+          (forall (k: nat). k < hLen ==>
+             S8.v (Seq.index hp k) == S8.v (Seq.index em (dbLen + k))))))
+  = let hLen = hash_bytes p in
+    let emLen = em_len emBits in
+    let dbLen = emLen - hLen - 1 in
+    let masked = Seq.slice em 0 dbLen in
+    let h = Seq.slice em dbLen (dbLen + hLen) in
+    seed_ok_hash p h;
+    let salt = Seq.slice db (dbLen - sLen) dbLen in
+    assert (Seq.index masked 0 == Seq.index em 0);
+    assert (hp == pss_h p sLen emBits (hash p msg) salt);
+    assert (forall (k: nat). k < hLen ==> Seq.index h k == Seq.index em (dbLen + k));
+    introduce (forall (k: nat). k < hLen ==>
+                 S8.v (Seq.index hp k) == S8.v (Seq.index em (dbLen + k))) ==> h == hp
+    with Seq.lemma_eq_intro h hp
 
 #pop-options
 

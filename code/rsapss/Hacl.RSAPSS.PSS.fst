@@ -47,6 +47,7 @@ module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
+module Declassify = Hacl.Secret.Declassify
 
 (** {2 Two small helpers} *)
 
@@ -260,6 +261,179 @@ ensures exists* vem'.
   pss_encode_pointwise p (Seq.length vsalt) (U32.v emBits) (reveal vsalt) (reveal vmsg)
                        (reveal vh) (reveal vmask) (reveal vem2) (reveal vem4);
   ()
+}
+
+#pop-options
+
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
+
+(** {2 Verification} *)
+
+(** Everything an EMSA-PSS verifier looks at is public: the encoded message
+    was transmitted in the clear and the answer is a single bit the caller
+    asked for.  So the checks below declassify and return a plain [bool]
+    rather than accumulating a constant-time mask. *)
+
+(** [forall k < n. a[k] == 0]. *)
+fn all_zero (a: A.array S8.t) (n: SZ.t) (#pa: perm) (#va: erased (Seq.seq S8.t))
+requires A.pts_to a #pa va ** pure (SZ.v n <= Seq.length va)
+returns ok: bool
+ensures A.pts_to a #pa va **
+        pure (SZ.v n <= Seq.length va /\
+              (ok <==> (forall (k: nat). k < SZ.v n ==> S8.v (Seq.index va k) == 0)))
+{
+  A.pts_to_len a;
+  let mut acc = true;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (vacc: bool).
+    pts_to i vi ** pts_to acc vacc ** A.pts_to a #pa va **
+    pure (SZ.v vi <= SZ.v n /\ SZ.v n <= Seq.length va /\
+          (vacc <==> (forall (k: nat). k < SZ.v vi ==> S8.v (Seq.index va k) == 0)))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = Declassify.u8 (A.(a.(vi)));
+    let vacc = !acc;
+    acc := vacc && (x = 0uy);
+    i := SZ.add vi 1sz;
+  };
+  !acc
+}
+
+(** [a[0..n) == b[base .. base+n)]. *)
+fn eq_range (a: A.array S8.t) (b: A.array S8.t) (base: SZ.t) (n: SZ.t)
+            (#pa: perm) (#va: erased (Seq.seq S8.t))
+            (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
+         pure (SZ.v n <= Seq.length va /\ SZ.v base + SZ.v n <= Seq.length vb)
+returns ok: bool
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
+        pure (SZ.v n <= Seq.length va /\ SZ.v base + SZ.v n <= Seq.length vb /\
+              (ok <==> (forall (k: nat). k < SZ.v n ==>
+                         S8.v (Seq.index va k) == S8.v (Seq.index vb (SZ.v base + k)))))
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  let mut acc = true;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (vacc: bool).
+    pts_to i vi ** pts_to acc vacc ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= SZ.v n /\ SZ.v n <= Seq.length va /\
+          SZ.v base + SZ.v n <= Seq.length vb /\
+          (vacc <==> (forall (k: nat). k < SZ.v vi ==>
+                        S8.v (Seq.index va k) == S8.v (Seq.index vb (SZ.v base + k)))))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = Declassify.u8 (A.(a.(vi)));
+    let y = Declassify.u8 (A.(b.(SZ.add base vi)));
+    let vacc = !acc;
+    acc := vacc && (x = y);
+    i := SZ.add vi 1sz;
+  };
+  !acc
+}
+
+(** EMSA-PSS-VERIFY, RFC 8017 section 9.1.2.
+
+    This is not the encoder run backwards and compared: a verifier has to
+    reject encodings an encoder would never produce, so the two directions
+    are separate spec functions and this one proves itself equivalent to
+    [Spec.RSAPSS.pss_valid]. *)
+fn pss_verify_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+                   (kt: A.array t) (ivt: A.array t)
+                   (em: A.array S8.t) (emBits: (e: U32.t { 0 < U32.v e })) (emLen: SZ.t)
+                   (sLen: (n: SZ.t { pss_ok p (SZ.v n) (U32.v emBits) }))
+                   (msg: A.array S8.t) (mLen: SZ.t)
+                   (#pk: perm) (#vk: erased (Seq.seq t))
+                   (#pi: perm) (#vi: erased (Seq.seq t))
+                   (#pe: perm) (#vem: erased (Seq.lseq S8.t (em_len (U32.v emBits))))
+                   (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #t }))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to em #pe vem **
+         A.pts_to msg #pm vmsg **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+               U32.v emBits + 7 < pow2 32 /\
+               SZ.v emLen == em_len (U32.v emBits) /\
+               SZ.v mLen == Seq.length vmsg /\ Seq.length vmsg < pow2 61 /\
+               SZ.fits (8 + (hash_bytes p) + SZ.v sLen) /\
+               8 + (hash_bytes p) + SZ.v sLen < pow2 61)
+returns ok: bool
+ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to em #pe vem **
+        A.pts_to msg #pm vmsg **
+        pure (ok <==> pss_valid p (SZ.v sLen) (U32.v emBits) vmsg vem)
+{
+  A.pts_to_len kt;
+  A.pts_to_len ivt;
+  A.pts_to_len em;
+  A.pts_to_len msg;
+  let hLen = p.nhash_bytes;
+  let dbLen = SZ.sub (SZ.sub emLen hLen) 1sz;
+  let z8 = S8.classify 0uy;
+  let tm = top_mask_of emBits;
+
+  (* The trailer and the bits above the modulus. *)
+  let trailer = Declassify.u8 (A.(em.(SZ.sub emLen 1sz)));
+  let e0 = A.(em.(0sz));
+  let topbits = Declassify.u8 (S8.logand e0 (S8.lognot tm));
+
+  (* Unmask the data block into scratch. *)
+  let mut db = [| z8; dbLen |];
+  A.pts_to_len db;
+  copy_at db 0sz em dbLen;
+  with vdb0. assert (A.pts_to db vdb0);
+  assert (pure (Seq.length vdb0 == SZ.v dbLen /\
+                (forall (k: nat). k < SZ.v dbLen ==>
+                   Seq.index vdb0 k == Seq.index (Seq.slice (reveal vem) 0 (SZ.v dbLen)) k)));
+  let mut mask = [| z8; dbLen |];
+  A.pts_to_len mask;
+
+  let hw = Sub.sub em dbLen (SZ.add dbLen hLen);
+  with vh. assert (A.pts_to hw #pe vh);
+  seed_ok_hash p (reveal vh);
+  mgf_impl p kt ivt mask dbLen hw hLen
+           #pk #vk #pi #vi #_ #pe #(hide (as_seed #t (reveal vh)));
+  Sub.unsub_id em (SZ.v dbLen) (SZ.v (SZ.add dbLen hLen)) hw;
+
+  with vmask. assert (A.pts_to mask vmask);
+  xor_range db dbLen mask;
+  with vdb1. assert (A.pts_to db vdb1);
+  assert (pure (Seq.length vdb1 == SZ.v dbLen /\
+                (forall (k: nat). k < SZ.v dbLen ==>
+                   Seq.index vdb1 k ==
+                     S8.logxor (Seq.index (Seq.slice (reveal vem) 0 (SZ.v dbLen)) k)
+                               (Seq.index vmask k))));
+  let d0 = A.(db.(0sz));
+  A.((db.(0sz) <- S8.logand d0 tm));
+  with vdb. assert (A.pts_to db vdb);
+  assert (pure (Seq.length vdb == SZ.v dbLen /\
+                Seq.index vdb 0 == S8.logand (Seq.index vdb1 0) tm /\
+                (forall (k: nat). 0 < k /\ k < SZ.v dbLen ==>
+                   Seq.index vdb k == Seq.index vdb1 k)));
+  clear_top_xor_index (U32.v emBits) (SZ.v dbLen)
+                      (as_lseq (SZ.v dbLen) (Seq.slice (reveal vem) 0 (SZ.v dbLen)))
+                      (as_lseq (SZ.v dbLen) (reveal vmask))
+                      (as_lseq (SZ.v dbLen) (reveal vdb));
+
+  (* The padding string, the 0x01 separator, and the salt. *)
+  let zeros = all_zero db (SZ.sub (SZ.sub dbLen sLen) 1sz);
+  let sep = Declassify.u8 (A.(db.(SZ.sub (SZ.sub dbLen sLen) 1sz)));
+
+  let mut hp = [| z8; hLen |];
+  A.pts_to_len hp;
+  let sw = Sub.sub db (SZ.sub dbLen sLen) dbLen;
+  hash_m_prime p kt ivt hp sw sLen msg mLen
+               #pk #vk #pi #vi #_ #pm #vmsg #1.0R
+               #(hide (as_mp_salt p (Seq.slice (reveal vdb) (SZ.v dbLen - SZ.v sLen) (SZ.v dbLen))));
+  Sub.unsub_id db (SZ.v (SZ.sub dbLen sLen)) (SZ.v dbLen) sw;
+
+  let heq = eq_range hp em dbLen hLen;
+  with vhp. assert (A.pts_to hp vhp);
+  pss_valid_intro p (SZ.v sLen) (U32.v emBits) (reveal vmsg) (reveal vem)
+                  (as_lseq (SZ.v dbLen) (reveal vdb)) (as_lseq (SZ.v hLen) (reveal vhp));
+
+  (trailer = 0xbcuy) && (topbits = 0uy) && zeros && (sep = 1uy) && heq
 }
 
 #pop-options
