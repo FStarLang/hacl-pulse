@@ -134,6 +134,16 @@ let num_above (u v: Seq.seq S32.t) (k: nat { k <= Seq.length u })
     vals_slice v k n;
     vals_slice u k n
 
+(** Zeroes above limb [k] contribute nothing, so the number is its own
+    prefix.  The dual of {!pre_zeros}. *)
+let num_zeros_above (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
+  : Lemma (requires forall (j: nat). k <= j /\ j < Seq.length v ==>
+                      S32.v (Seq.index v j) == 0)
+          (ensures num v == pre v k)
+  = let n = Seq.length v in
+    eval_split (vals v) k;
+    eval_zeros (Seq.slice (vals v) k n)
+
 (** {2 The two step lemmas}
 
     Both are pure algebra about one column, stated separately because the
@@ -269,6 +279,56 @@ ensures exists* (v: Seq.seq S32.t).
   pre_full v;
   pre_full va;
   pre_full vb;
+  !c
+}
+
+(** [double res n] is [res += res], returning the limb that did not fit.
+    In place, because that is what the doubling chain of {!precomp} wants
+    and because the library never allocates. *)
+fn double (res: A.array S32.t) (n: SZ.t) (#vres: erased (Seq.seq S32.t))
+requires A.pts_to res vres ** pure (Seq.length vres == SZ.v n)
+returns c: S32.t
+ensures exists* (v: Seq.seq S32.t).
+  A.pts_to res v **
+  pure (Seq.length v == SZ.v n /\ S32.v c <= 1 /\
+        num v + S32.v c * wt (SZ.v n) == num vres + num vres)
+{
+  A.pts_to_len res;
+  pre_zero vres;
+  let mut i = 0sz;
+  let mut c = S32.zero;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+    pts_to i vi ** pts_to c vc ** A.pts_to res v **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S32.v vc <= 1 /\
+          (forall (k: nat). SZ.v vi <= k /\ k < Seq.length v ==>
+             Seq.index v k == Seq.index vres k) /\
+          pre v (SZ.v vi) + S32.v vc * wt (SZ.v vi) ==
+            pre vres (SZ.v vi) + pre vres (SZ.v vi))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    with v. assert (A.pts_to res v);
+    let vi = !i;
+    let vc = !c;
+    let xi = A.(res.(vi));
+    let t = sum xi xi vc;
+    carry_bit t;
+    lo_hi t;
+    let r = lo t;
+    let co = hi t;
+    carry_fact xi xi vc r co t;
+    A.((res.(vi) <- r));
+    pre_upd v (SZ.v vi) r (SZ.v vi);
+    pre_snoc (Seq.upd v (SZ.v vi) r) (SZ.v vi);
+    pre_snoc vres (SZ.v vi);
+    add_step (pre v (SZ.v vi)) (pre vres (SZ.v vi)) (pre vres (SZ.v vi))
+             (S32.v xi) (S32.v xi) (S32.v vc) (S32.v r) (S32.v co) (SZ.v vi);
+    c := co;
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to res v);
+  pre_full v;
+  pre_full vres;
   !c
 }
 
@@ -535,6 +595,34 @@ ensures exists* (v: Seq.seq S32.t).
   with v3. assert (A.pts_to res v3);
   eval_bnd (vals v3);
   sum_mod_cases (num va) (num vb) (num vm);
+  ()
+}
+
+(** [double_mod res m n] is [res = (res + res) mod m], in place. *)
+fn double_mod (res: A.array S32.t) (m: A.array S32.t) (n: SZ.t)
+              (#vres: erased (Seq.seq S32.t)) (#pm: perm)
+              (#vm: erased (s: Seq.seq S32.t { 0 < num s }))
+requires A.pts_to res vres ** A.pts_to m #pm vm **
+  pure (Seq.length vres == SZ.v n /\ Seq.length vm == SZ.v n /\ num vres < num vm)
+ensures exists* (v: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to m #pm vm **
+  pure (Seq.length v == SZ.v n /\ num v == (num vres + num vres) % num vm)
+{
+  A.pts_to_len res;
+  A.pts_to_len m;
+  eval_bnd (vals vm);
+  let c0 = double res n;
+  with v1. assert (A.pts_to res v1);
+  eval_bnd (vals v1);
+  let c1 = sub_from res m n;
+  with v2. assert (A.pts_to res v2);
+  eval_bnd (vals v2);
+  let mask = S32.lt_mask c0 c1;
+  mask_bit_ok mask;
+  let c2 = add_masked res m n mask (hide (mask_bit mask));
+  with v3. assert (A.pts_to res v3);
+  eval_bnd (vals v3);
+  sum_mod_cases (num vres) (num vres) (num vm);
   ()
 }
 
