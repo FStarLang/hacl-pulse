@@ -47,6 +47,7 @@ module SZ = FStar.SizeT
 module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
 module S32 = Hacl.Secret.UInt32
+module Declassify = Hacl.Secret.Declassify
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -179,6 +180,11 @@ let exp_column (acc0 sq pr aMv anum e bn rr nN mu m0: nat) (j k: nat)
     exp_mul_step sq pr aMv anum e rr nN mu m0 k;
     bit_split bn j
 
+(** Decoding the ladder's exit test.  Stated as a lemma because at the foot
+    of the loop the solver has the whole function's context to sift through,
+    and it does not find this by itself. *)
+let sz_zero (x: SZ.t) : Lemma (requires SZ.gt x 0sz == false) (ensures SZ.v x == 0) = ()
+
 (** At the bottom of the ladder the truncated exponent is the whole one. *)
 let exp_top (bn: nat) : Lemma (bn / pow2 0 == bn) = assert_norm (pow2 0 == 1)
 
@@ -285,7 +291,149 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S32.t).
     i := j;
   };
   let vend = !i;
-  assert (pure (SZ.v vend == 0));
+  sz_zero vend;
+  exp_top (num vbb);
+  with vaccf. assert (A.pts_to acc vaccf);
+  assert (pure (num vaccf ==
+    (pw (num va) (num vbb / pow2 (SZ.v vend)) * wt (SZ.v nn)) % num vn));
+  assert (pure (num vaccf ==
+    (pw (num va) (num vbb) * wt (SZ.v nn)) % num vn));
+  from_mont res acc wide nmod nn mu;
+  with vf. assert (A.pts_to res vf);
+  exp_end (num vf) (num vaccf) (pw (num va) (num vbb)) (wt (SZ.v nn)) (num vn)
+          (S32.v mu) (S32.v (Seq.index vn 0)) (SZ.v nn);
+  ()
+}
+
+#pop-options
+
+
+(** {2 A variable-time ladder}
+
+    When the exponent is public -- an RSA verification exponent, or the
+    [n-2] of an inversion -- there is no reason to compute a product and
+    throw it away.  This is the same ladder with the multiply under a
+    branch, which is why the module that provides the branch is named for
+    what it gives up. *)
+
+#push-options "--z3rlimit 200"
+
+(** [mod_exp_vartime] is {!mod_exp_consttime} with the multiply skipped on
+    zero bits.  Its timing reveals the exponent, so the exponent must be
+    public. *)
+fn mod_exp_vartime (res: A.array S32.t) (a: A.array S32.t)
+                   (bb: A.array S32.t) (bbits: SZ.t)
+                   (r2: A.array S32.t) (nmod: A.array S32.t)
+                   (nn: SZ.t) (mu: S32.t)
+                   (aM: A.array S32.t) (acc: A.array S32.t)
+                   (t: A.array S32.t) (wide: A.array S32.t)
+                   (#vres #vaM #vacc #vt #vwide: erased (Seq.seq S32.t))
+                   (#pa #pb #pr #pn: perm)
+                   (#va #vbb #vr2: erased (Seq.seq S32.t))
+                   (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to bb #pb vbb **
+         A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
+         A.pts_to aM vaM ** A.pts_to acc vacc ** A.pts_to t vt **
+         A.pts_to wide vwide **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
+        Seq.length vr2 == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        Seq.length vaM == SZ.v nn /\ Seq.length vacc == SZ.v nn /\
+        Seq.length vt == SZ.v nn /\
+        Seq.length vwide == SZ.v nn + SZ.v nn /\
+        0 < SZ.v nn /\ SZ.fits (SZ.v nn + SZ.v nn) /\
+        SZ.v bbits <= 32 * Seq.length vbb /\
+        num vbb < pow2 (SZ.v bbits) /\ num va < num vn /\
+        num vr2 == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn /\
+        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v v1 v2 v3 v4: Seq.seq S32.t).
+  A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bb #pb vbb **
+  A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
+  A.pts_to aM v1 ** A.pts_to acc v2 ** A.pts_to t v3 ** A.pts_to wide v4 **
+  pure (Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
+        Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn /\
+        Seq.length v4 == SZ.v nn + SZ.v nn /\
+        num v == pw (num va) (num vbb) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  A.pts_to_len bb;
+  A.pts_to_len r2;
+  A.pts_to_len nmod;
+  A.pts_to_len aM;
+  A.pts_to_len acc;
+  A.pts_to_len t;
+  A.pts_to_len wide;
+  modulus_low vn;
+  mont_mul aM a r2 wide nmod nn mu;
+  from_mont acc r2 wide nmod nn mu;
+  with vaM1. assert (A.pts_to aM vaM1);
+  with vacc1. assert (A.pts_to acc vacc1);
+  exp_start (num vaM1) (num vacc1) (num va) (wt (SZ.v nn)) (num vn)
+            (S32.v mu) (S32.v (Seq.index vn 0)) (SZ.v nn);
+  Math.small_div (num vbb) (pow2 (SZ.v bbits));
+  let mut i = bbits;
+  while (let vi = !i; SZ.gt vi 0sz)
+  invariant exists* (vi: SZ.t) (v v1 v2 v3 v4: Seq.seq S32.t).
+    pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bb #pb vbb **
+    A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
+    A.pts_to aM v1 ** A.pts_to acc v2 ** A.pts_to t v3 ** A.pts_to wide v4 **
+    pure (SZ.v vi <= SZ.v bbits /\
+          Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
+          Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn /\
+          Seq.length v4 == SZ.v nn + SZ.v nn /\
+          num v1 == (num va * wt (SZ.v nn)) % num vn /\
+          num v2 < num vn /\
+          num v2 == (pw (num va) (num vbb / pow2 (SZ.v vi)) * wt (SZ.v nn))
+                    % num vn)
+  decreases (SZ.v (!i))
+  {
+    let vi = !i;
+    let j = SZ.sub vi 1sz;
+    assert (pure (SZ.v j + 1 == SZ.v vi));
+    with vacc0. assert (A.pts_to acc vacc0);
+    with vaMc. assert (A.pts_to aM vaMc);
+    copy t acc nn;
+    mont_mul res acc t wide nmod nn mu;
+    with vsq. assert (A.pts_to res vsq);
+    exp_sq_step (num vacc0) (num vsq) (num va) (num vbb / pow2 (SZ.v vi))
+                (wt (SZ.v nn)) (num vn) (S32.v mu) (S32.v (Seq.index vn 0))
+                (SZ.v nn);
+    bit_split (num vbb) (SZ.v j);
+    copy acc res nn;
+    let msk = get_bit bb j;
+    let bit = Declassify.u32 msk;
+    if (U32.eq bit 0ul) {
+      assert (pure (num vbb / pow2 (SZ.v j) % 2 == 0));
+      assert (pure (num vbb / pow2 (SZ.v j + 1) == num vbb / pow2 (SZ.v vi)));
+      assert (pure (num vbb / pow2 (SZ.v j) ==
+        num vbb / pow2 (SZ.v j + 1) + num vbb / pow2 (SZ.v j + 1)));
+      assert (pure (num vbb / pow2 (SZ.v j) ==
+        num vbb / pow2 (SZ.v vi) + num vbb / pow2 (SZ.v vi)));
+      with vaccz. assert (A.pts_to acc vaccz);
+      assert (pure (num vaccz ==
+        (pw (num va) (num vbb / pow2 (SZ.v j)) * wt (SZ.v nn)) % num vn));
+      i := j;
+    } else {
+      assert (pure (num vbb / pow2 (SZ.v j) % 2 == 1));
+      mont_mul t acc aM wide nmod nn mu;
+      with vpr. assert (A.pts_to t vpr);
+      exp_mul_step (num vsq) (num vpr) (num vaMc) (num va)
+                   (num vbb / pow2 (SZ.v vi)) (wt (SZ.v nn)) (num vn)
+                   (S32.v mu) (S32.v (Seq.index vn 0)) (SZ.v nn);
+      copy acc t nn;
+      assert (pure (num vbb / pow2 (SZ.v j + 1) == num vbb / pow2 (SZ.v vi)));
+      assert (pure (num vbb / pow2 (SZ.v j) ==
+        num vbb / pow2 (SZ.v j + 1) + num vbb / pow2 (SZ.v j + 1) + 1));
+      assert (pure (num vbb / pow2 (SZ.v j) ==
+        num vbb / pow2 (SZ.v vi) + num vbb / pow2 (SZ.v vi) + 1));
+      with vaccn. assert (A.pts_to acc vaccn);
+      assert (pure (num vaccn ==
+        (pw (num va) (num vbb / pow2 (SZ.v j)) * wt (SZ.v nn)) % num vn));
+      i := j;
+    }
+  };
+  let vend = !i;
+  sz_zero vend;
   exp_top (num vbb);
   with vaccf. assert (A.pts_to acc vaccf);
   assert (pure (num vaccf ==
