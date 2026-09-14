@@ -98,15 +98,15 @@ fn keccak_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
                  (out: A.array S8.t) (out_len: SZ.t) (r: SZ.t) (suffix: U8.t)
                  (seen: erased (Seq.seq S8.t))
                  (#pst: perm) (#vst0: erased (Seq.seq S64.t))
-                 (#vbuf: erased (Seq.seq S8.t))
+                 (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
                  (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                  (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok r vst0 vbuf vtot seen)
          ** pure (SZ.v out_len == Seq.length vout0)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (rate_ok r /\ Seq.length vout == Seq.length vout0 /\ vout == keccak (SZ.v r) suffix seen (Seq.length vout0))
 {
@@ -169,14 +169,15 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha3_224_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
           (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-          (#pst: perm) (#vst0: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+          (#pst: perm) (#vst0: erased (Seq.seq S64.t))
+          (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
           (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
           (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok 144sz vst0 vbuf vtot seen /\ Seq.length vout0 == 28)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (vout == sha3_224 seen)
 {
@@ -220,14 +221,15 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha3_256_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
           (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-          (#pst: perm) (#vst0: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+          (#pst: perm) (#vst0: erased (Seq.seq S64.t))
+          (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
           (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
           (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok 136sz vst0 vbuf vtot seen /\ Seq.length vout0 == 32)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (vout == sha3_256 seen)
 {
@@ -271,14 +273,15 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha3_384_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
           (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-          (#pst: perm) (#vst0: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+          (#pst: perm) (#vst0: erased (Seq.seq S64.t))
+          (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
           (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
           (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok 104sz vst0 vbuf vtot seen /\ Seq.length vout0 == 48)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (vout == sha3_384 seen)
 {
@@ -322,14 +325,15 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
 (** The digest of everything seen so far.  The state is left usable. *)
 fn sha3_512_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
           (out: A.array S8.t) (seen: erased (Seq.seq S8.t))
-          (#pst: perm) (#vst0: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+          (#pst: perm) (#vst0: erased (Seq.seq S64.t))
+          (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
           (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
           (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok 72sz vst0 vbuf vtot seen /\ Seq.length vout0 == 64)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (vout == sha3_512 seen)
 {
@@ -375,15 +379,16 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
     the same output stream. *)
 fn shake128_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
           (out: A.array S8.t) (out_len: SZ.t) (seen: erased (Seq.seq S8.t))
-          (#pst: perm) (#vst0: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+          (#pst: perm) (#vst0: erased (Seq.seq S64.t))
+          (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
           (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
           (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok 168sz vst0 vbuf vtot seen)
          ** pure (SZ.v out_len == Seq.length vout0)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (Seq.length vout == Seq.length vout0 /\
         vout == shake128 seen (Seq.length vout0))
@@ -430,15 +435,16 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
     the same output stream. *)
 fn shake256_digest (st: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
           (out: A.array S8.t) (out_len: SZ.t) (seen: erased (Seq.seq S8.t))
-          (#pst: perm) (#vst0: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+          (#pst: perm) (#vst0: erased (Seq.seq S64.t))
+          (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
           (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
           (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to st #pst vst0 ** A.pts_to buf vbuf ** A.pts_to tot #ptot vtot **
+requires A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
          A.pts_to out vout0 **
          pure (stream_ok 136sz vst0 vbuf vtot seen)
          ** pure (SZ.v out_len == Seq.length vout0)
-ensures exists* (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
-  A.pts_to st #pst vst0 ** A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot **
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to st #pst vst0 ** A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot **
   A.pts_to out vout **
   pure (Seq.length vout == Seq.length vout0 /\
         vout == shake256 seen (Seq.length vout0))

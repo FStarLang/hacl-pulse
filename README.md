@@ -389,7 +389,10 @@ data.
 `digest` is where the sponge differs.  It copies the 25 lanes to the stack,
 builds the padded final block there out of the buffered tail (the same
 `last_block` the one-shot uses), absorbs it into the copy and squeezes from
-the copy, so the real state is untouched.  That is what lets a SHAKE state be
+the copy, so the real state is untouched -- and, as in SHA-2, the buffer is
+taken at a fractional permission and handed back with the same contents, so
+`stream_ok` survives a digest rather than being existentially thrown away.
+That is what lets a SHAKE state be
 squeezed at 16 bytes and then at 200 and get the same stream twice, and lets
 an `update` after a `digest` carry on with the same message.
 `tests/test_sha3_streaming.c` checks all three, plus the FIPS 202 messages fed
