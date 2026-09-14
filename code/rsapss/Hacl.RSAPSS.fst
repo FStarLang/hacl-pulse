@@ -234,3 +234,310 @@ ensures exists* (v: Seq.seq S32.t).
 }
 
 #pop-options
+
+(** {2 The RSA primitive}
+
+    Both directions of RSASSA-PSS are the same three steps: read a
+    big-endian number, raise it to an exponent modulo the modulus, write a
+    big-endian number of a possibly different length.  The differences are
+    which exponent, which lengths, and whether the ladder has to be
+    constant-time.  So it is written once.
+
+    Every hypothesis the arithmetic needs is checked here rather than
+    assumed of the caller: that the modulus is odd and exceeds one, that the
+    base is below it, and that the result fits the output.  The answer is a
+    [bool] and the specification says exactly when it is [true]. *)
+
+#push-options "--z3rlimit 600 --fuel 0 --ifuel 0"
+
+(** [s ^ e mod n], total in [n].  A postcondition names this value in the
+    same breath as it says that [n] is not zero, and a quantifier does not
+    carry the one fact into the other. *)
+let rsa_pow (s e n: nat) : nat = if n = 0 then 0 else pw s e % n
+
+(** The parity of a number is the parity of its bottom limb. *)
+let num_parity (v: Seq.seq S32.t { 0 < Seq.length v })
+  : Lemma (num v % 2 == S32.v (Seq.index v 0) % 2)
+  = pre_mod v 1;
+    pre_snoc v 0;
+    pre_zero v;
+    wt_zero ();
+    assert (pre v 1 == S32.v (Seq.index v 0));
+    assert (wt 1 == pow2 32);
+    Math.pow2_modulo_modulo_lemma_1 (num v) 1 32
+
+(** [(len + 3) / 4] limbs hold [len] bytes and no more than [len] limbs do. *)
+let limbs_le (len: pos) : Lemma (0 < (len + 3) / 4 /\ (len + 3) / 4 <= len /\
+                                 len <= 4 * ((len + 3) / 4)) = ()
+
+let as_modulus0 (s: Seq.seq S32.t)
+  : Pure (r: Seq.seq S32.t { 0 < num r /\ 0 < Seq.length r })
+         (requires 0 < num s /\ 0 < Seq.length s) (ensures fun r -> r == s)
+  = s
+
+(** [out <- (be_nat inp) ^ (be_nat eb) mod (be_nat nb)], or [false]. *)
+fn rsa_exp (out: A.array S8.t) (outLen: SZ.t)
+           (inp: A.array S8.t) (inLen: SZ.t)
+           (nb: A.array S8.t) (kLen: SZ.t)
+           (eb: A.array S8.t) (eLen: SZ.t) (ct: bool)
+           (#vout: erased (Seq.seq S8.t)) (#pin #pnb #peb: perm)
+           (#vin #vnb #veb: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to inp #pin vin **
+         A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+  pure (Seq.length vout == SZ.v outLen /\ Seq.length vin == SZ.v inLen /\
+        Seq.length vnb == SZ.v kLen /\ Seq.length veb == SZ.v eLen /\
+        0 < SZ.v kLen /\ 0 < SZ.v eLen /\
+        SZ.v outLen <= SZ.v kLen /\ SZ.v inLen <= SZ.v kLen /\
+        SZ.fits (SZ.v kLen + 3) /\ SZ.fits (128 * SZ.v kLen) /\
+        SZ.fits (SZ.v eLen + 3) /\ SZ.fits (32 * SZ.v eLen))
+returns ok: bool
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to out vout' ** A.pts_to inp #pin vin **
+  A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
+  pure (Seq.length vout' == SZ.v outLen /\
+        (ok <==> (1 < be_nat vnb /\ be_nat vnb % 2 == 1 /\ be_nat vin < be_nat vnb /\
+                  rsa_pow (be_nat vin) (be_nat veb) (be_nat vnb) < pow2 (8 * SZ.v outLen))) /\
+        (ok ==> be_nat vout' == rsa_pow (be_nat vin) (be_nat veb) (be_nat vnb)))
+{
+  A.pts_to_len out;
+  A.pts_to_len inp;
+  A.pts_to_len nb;
+  A.pts_to_len eb;
+  limbs_le (SZ.v kLen);
+  limbs_le (SZ.v eLen);
+  let nn = SZ.div (SZ.add kLen 3sz) 4sz;
+  let en = SZ.div (SZ.add eLen 3sz) 4sz;
+  SZ.fits_lte (4 * SZ.v nn) (128 * SZ.v kLen);
+  SZ.fits_lte (2 * rad * SZ.v nn) (128 * SZ.v kLen);
+  SZ.fits_lte (4 * SZ.v en) (32 * SZ.v eLen);
+  SZ.fits_lte (32 * SZ.v en) (32 * SZ.v eLen);
+  let z32 = S32.zero;
+  let mut nbn = [| z32; nn |];
+  let mut mbn = [| z32; nn |];
+  let mut sbn = [| z32; nn |];
+  let mut onebn = [| z32; nn |];
+  A.pts_to_len nbn;
+  A.pts_to_len mbn;
+  A.pts_to_len sbn;
+  A.pts_to_len onebn;
+
+  bn_from_be nbn nn nb kLen;
+  bn_from_be mbn nn inp inLen;
+  bn_one onebn nn;
+  with vnbn. assert (A.pts_to nbn vnbn);
+  num_parity vnbn;
+  assert_norm (pow2 32 - 1 == 4294967295);
+
+  let n0 = A.(nbn.(0sz));
+  let odd = U32.eq (U32.rem (Declassify.u32 n0) 2ul) 1ul;
+  let gt1 = U32.eq (Declassify.u32 (lt_mask onebn nbn nn)) 4294967295ul;
+  let below = U32.eq (Declassify.u32 (lt_mask mbn nbn nn)) 4294967295ul;
+
+  if (odd && gt1 && below) {
+    mod_exp_be sbn mbn eb eLen en nbn nn ct
+               #_ #_ #_ #_ #_ #_ #(hide (as_modulus0 (reveal vnbn)));
+    (* The result is written at full limb width and the bytes above the
+       output are checked, rather than assumed, to be zero. *)
+    let width = SZ.mul 4sz nn;
+    let off = SZ.sub width outLen;
+    let mut tmp = [| (zero8 <: S8.t); width |];
+    A.pts_to_len tmp;
+    Conv.to_bytes_be tmp sbn nn;
+    with vt. assert (A.pts_to tmp vt);
+    be_nat_prefix_zero vt (SZ.v outLen);
+    let fits = all_zero tmp off;
+    if fits {
+      be_nat_trunc vt (SZ.v outLen);
+      copy_range out 0sz tmp off outLen;
+      with vo. assert (A.pts_to out vo);
+      assert (pure (Seq.length vo == SZ.v outLen));
+      assert (pure (forall (k: nat). k < SZ.v outLen ==>
+                      Seq.index vo k == Seq.index vt (SZ.v off + k)));
+      Seq.lemma_eq_intro (Seq.slice vt (SZ.v off) (SZ.v width)) vo;
+      true
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+
+#pop-options
+
+(** {2 Signing and verifying} *)
+
+#push-options "--z3rlimit 600 --fuel 0 --ifuel 1"
+
+(** Naming the encoding is the same as saying one exists.  A verifier
+    computes [s^e mod n] and then asks whether {i that} number, written in
+    [emLen] bytes, is a valid encoding; since big-endian writing is
+    injective at a fixed width, the two readings agree. *)
+let verify_intro (#t: Type0) {| word t |} (p: params t) (sLen: nat)
+                 (emBits: (b: pos { pss_ok p sLen b }))
+                 (msg: (s: Seq.seq S8.t { Seq.length s < max_input #t }))
+                 (em: Seq.lseq S8.t (em_len emBits))
+                 (m: nat) (ok: bool)
+  : Lemma (requires be_nat em == m /\ (ok <==> pss_valid p sLen emBits msg em))
+          (ensures ok <==> (exists (e: Seq.lseq S8.t (em_len emBits)).
+                              be_nat e == m /\ pss_valid p sLen emBits msg e))
+  = introduce (exists (e: Seq.lseq S8.t (em_len emBits)).
+                 be_nat e == m /\ pss_valid p sLen emBits msg e) ==> ok
+    with begin
+      eliminate exists (e: Seq.lseq S8.t (em_len emBits)).
+                  be_nat e == m /\ pss_valid p sLen emBits msg e
+      with be_nat_inj e em
+    end
+
+(** When the arithmetic step refuses, there is nothing to verify: either
+    the key is not a key, or the result of the exponentiation is too wide to
+    be an encoding at all, and a number has no [emLen]-byte encoding when it
+    does not fit in [emLen] bytes. *)
+let verify_reject (#t: Type0) {| word t |} (p: params t) (sLen: nat)
+                  (emBits: (b: pos { pss_ok p sLen b }))
+                  (msg: (s: Seq.seq S8.t { Seq.length s < max_input #t }))
+                  (n s e: nat)
+  : Lemma (requires ~(1 < n /\ n % 2 == 1 /\ s < n /\
+                      rsa_pow s e n < pow2 (8 * em_len emBits)))
+          (ensures ~(1 < n /\ n % 2 == 1 /\ s < n /\
+                     (exists (x: Seq.lseq S8.t (em_len emBits)).
+                        be_nat x == rsa_pow s e n /\ pss_valid p sLen emBits msg x)))
+  = introduce (1 < n /\ n % 2 == 1 /\ s < n /\
+               (exists (x: Seq.lseq S8.t (em_len emBits)).
+                  be_nat x == rsa_pow s e n /\ pss_valid p sLen emBits msg x)) ==> False
+    with begin
+      eliminate exists (x: Seq.lseq S8.t (em_len emBits)).
+                  be_nat x == rsa_pow s e n /\ pss_valid p sLen emBits msg x
+      with be_nat_bound x
+    end
+
+(** RSASSA-PSS-SIGN, RFC 8017 section 8.1.1.
+
+    [nb] and [db] are the modulus and the private exponent, big-endian;
+    [sgnt] receives [ceil(modBits/8)] bytes.  The result is [false] exactly
+    when the key does not make sense, which a caller that got its key from
+    somewhere trustworthy will never see. *)
+fn rsapss_sign (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+               (kt: A.array t) (ivt: A.array t)
+               (modBits: (m: U32.t { 1 < U32.v m }))
+               (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
+               (sLen: SZ.t) (salt: A.array S8.t)
+               (mLen: SZ.t) (msg: A.array S8.t)
+               (sgnt: A.array S8.t)
+               (#pk: perm) (#vk: erased (Seq.seq t))
+               (#pi: perm) (#vi: erased (Seq.seq t))
+               (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+               (#pdb: perm) (#vdb: erased (Seq.seq S8.t))
+               (#psa: perm)
+               (#vsalt: erased (s: Seq.seq S8.t { pss_ok p (Seq.length s) (U32.v modBits - 1) }))
+               (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #t }))
+               (#vsg: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
+         A.pts_to db #pdb vdb ** A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg **
+         A.pts_to sgnt vsg **
+  pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+        U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length vdb == SZ.v dLen /\
+        0 < SZ.v dLen /\ SZ.v dLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v sLen == Seq.length vsalt /\ SZ.v mLen == Seq.length vmsg /\
+        Seq.length vmsg < pow2 61 /\
+        SZ.fits (8 + (hash_bytes p) + Seq.length vsalt) /\
+        8 + (hash_bytes p) + Seq.length vsalt < pow2 61)
+returns ok: bool
+ensures exists* (vsg': Seq.seq S8.t).
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
+  A.pts_to db #pdb vdb ** A.pts_to salt #psa vsalt ** A.pts_to msg #pm vmsg **
+  A.pts_to sgnt vsg' **
+  pure (Seq.length vsg' == (U32.v modBits + 7) / 8 /\
+        (ok ==> be_nat vsg' ==
+                  rsa_pow (be_nat (pss_encode p (Seq.length vsalt) (U32.v modBits - 1) vsalt vmsg))
+                          (be_nat vdb) (be_nat vnb)))
+{
+  A.pts_to_len nb;
+  A.pts_to_len db;
+  A.pts_to_len sgnt;
+  Hacl.SizeT.fits32 ();
+  SZ.fits_u32_implies_fits (U32.v modBits + 7);
+  let mb = sz_of_u32 modBits;
+  let kLen = SZ.div (SZ.add mb 7sz) 8sz;
+  SZ.fits_lte (SZ.v mb + 6) (SZ.v mb + 7);
+  let emLen = SZ.div (SZ.add mb 6sz) 8sz;
+  SZ.fits_u32_implies_fits (SZ.v kLen + 3);
+  SZ.fits_u32_implies_fits (128 * SZ.v kLen);
+  SZ.fits_u32_implies_fits (SZ.v dLen + 3);
+  SZ.fits_u32_implies_fits (32 * SZ.v dLen);
+  let emBits = U32.sub modBits 1ul;
+  let mut em = [| (zero8 <: S8.t); emLen |];
+  A.pts_to_len em;
+  pss_encode_impl p kt ivt em emBits emLen salt sLen msg mLen;
+  rsa_exp sgnt kLen em emLen nb kLen db dLen true
+}
+
+(** RSASSA-PSS-VERIFY, RFC 8017 section 8.1.2. *)
+fn rsapss_verify (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+                 (kt: A.array t) (ivt: A.array t)
+                 (modBits: (m: U32.t { 1 < U32.v m }))
+                 (nb: A.array S8.t) (eLen: SZ.t) (eb: A.array S8.t)
+                 (sLen: (n: SZ.t { pss_ok p (SZ.v n) (U32.v modBits - 1) }))
+                 (sgnt: A.array S8.t)
+                 (mLen: SZ.t) (msg: A.array S8.t)
+                 (#pk: perm) (#vk: erased (Seq.seq t))
+                 (#pi: perm) (#vi: erased (Seq.seq t))
+                 (#pnb: perm) (#vnb: erased (Seq.seq S8.t))
+                 (#peb: perm) (#veb: erased (Seq.seq S8.t))
+                 (#psg: perm) (#vsg: erased (Seq.seq S8.t))
+                 (#pm: perm) (#vmsg: erased (m: Seq.seq S8.t { Seq.length m < max_input #t }))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
+         A.pts_to eb #peb veb ** A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+  pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+        U32.v modBits <= 65536 /\
+        Seq.length vnb == (U32.v modBits + 7) / 8 /\
+        Seq.length vsg == (U32.v modBits + 7) / 8 /\
+        Seq.length veb == SZ.v eLen /\
+        0 < SZ.v eLen /\ SZ.v eLen <= (U32.v modBits + 7) / 8 /\
+        SZ.v mLen == Seq.length vmsg /\ Seq.length vmsg < pow2 61 /\
+        SZ.fits (8 + (hash_bytes p) + SZ.v sLen) /\
+        8 + (hash_bytes p) + SZ.v sLen < pow2 61)
+returns ok: bool
+ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
+        A.pts_to eb #peb veb ** A.pts_to sgnt #psg vsg ** A.pts_to msg #pm vmsg **
+        pure (ok <==> (1 < be_nat vnb /\ be_nat vnb % 2 == 1 /\ be_nat vsg < be_nat vnb /\
+                       (exists (e: Seq.lseq S8.t (em_len (U32.v modBits - 1))).
+                          be_nat e == rsa_pow (be_nat vsg) (be_nat veb) (be_nat vnb) /\
+                          pss_valid p (SZ.v sLen) (U32.v modBits - 1) vmsg e)))
+{
+  A.pts_to_len nb;
+  A.pts_to_len eb;
+  A.pts_to_len sgnt;
+  Hacl.SizeT.fits32 ();
+  SZ.fits_u32_implies_fits (U32.v modBits + 7);
+  let mb = sz_of_u32 modBits;
+  let kLen = SZ.div (SZ.add mb 7sz) 8sz;
+  SZ.fits_lte (SZ.v mb + 6) (SZ.v mb + 7);
+  let emLen = SZ.div (SZ.add mb 6sz) 8sz;
+  SZ.fits_u32_implies_fits (SZ.v kLen + 3);
+  SZ.fits_u32_implies_fits (128 * SZ.v kLen);
+  SZ.fits_u32_implies_fits (SZ.v eLen + 3);
+  SZ.fits_u32_implies_fits (32 * SZ.v eLen);
+  let emBits = U32.sub modBits 1ul;
+  let mut em = [| (zero8 <: S8.t); emLen |];
+  A.pts_to_len em;
+  let good = rsa_exp em emLen sgnt kLen nb kLen eb eLen false;
+  if good {
+    with vem. assert (A.pts_to em vem);
+    let r = pss_verify_impl p kt ivt em emBits emLen sLen msg mLen
+                            #_ #_ #_ #_ #_ #(hide (as_lseq (em_len (U32.v emBits)) (reveal vem)));
+    verify_intro p (SZ.v sLen) (U32.v emBits) (reveal vmsg)
+                 (as_lseq (em_len (U32.v emBits)) (reveal vem))
+                 (rsa_pow (be_nat vsg) (be_nat veb) (be_nat vnb)) r;
+    r
+  } else {
+    verify_reject p (SZ.v sLen) (U32.v emBits) (reveal vmsg)
+                  (be_nat vnb) (be_nat vsg) (be_nat veb);
+    false
+  }
+}
+
+#pop-options
