@@ -1038,6 +1038,61 @@ library implements fails to be a multiple of four.
 `tests/test_bignum.c` checks all of it against values computed in Python,
 which shares no code with the implementation.
 
+### Montgomery arithmetic
+
+Reducing modulo an arbitrary `n` costs a trial division per limb.
+Montgomery's observation is that if you carry `a * R mod n` instead of `a`,
+where `R` is `2^(32n)` -- a power of the radix, so that dividing by it is
+dropping limbs -- the reduction becomes a multiply and a shift.
+`code/bignum/Hacl.Bignum.Montgomery.fst` is that.
+
+    uint32_t Hacl_Bignum_Montgomery_mont_mu (uint32_t m0);
+    void Hacl_Bignum_Montgomery_precomp     (uint32_t *res, uint32_t *n, size_t nn);
+    void Hacl_Bignum_Montgomery_reduction   (uint32_t *res, uint32_t *c,
+                                             uint32_t *n, size_t nn, uint32_t mu);
+    void Hacl_Bignum_Montgomery_mont_mul    (uint32_t *res, uint32_t *a, uint32_t *b,
+                                             uint32_t *tmp, uint32_t *n, size_t nn,
+                                             uint32_t mu);
+    void Hacl_Bignum_Montgomery_from_mont   (uint32_t *res, uint32_t *a,
+                                             uint32_t *tmp, uint32_t *n, size_t nn,
+                                             uint32_t mu);
+    void Hacl_Bignum_Montgomery_modulo      (uint32_t *res, uint32_t *a, uint32_t *acc,
+                                             uint32_t *r2, uint32_t *n, size_t nn,
+                                             uint32_t mu);
+
+`mu` is a single limb with `mu * m0 + 1 = 0 mod 2^32`, `m0` being the lowest
+limb of the modulus; it exists exactly when the modulus is odd.  HACL*
+computes it with a thirty-two iteration bit loop.  Here it is five steps of
+Hensel lifting from one, `x := x * (2 - m0 * x)`, which doubles the number
+of correct bits each time: one, two, four, eight, sixteen, thirty-two.
+Shorter, and the proof is a two-line algebraic identity per step.
+
+`precomp` is `R^2 mod n`, the constant that takes a number *into* Montgomery
+form -- entering is `mont_mul` against it, so there is no separate
+`to_mont`.  HACL* starts the doubling chain at a power of two just below the
+modulus; here it starts at one and doubles all the way, which costs the same
+asymptotically and needs neither a bit-length nor a set-bit primitive.
+
+**One carry bit, not a propagated carry.**  The reduction loop clears one
+limb per step by adding a multiple of the modulus.  Each step spills a carry
+into the limb above the window -- and that limb is exactly where the next
+step adds its own column, so the carry is consumed one step later and never
+accumulates.  A single bit suffices for the whole loop, and the final
+conditional subtraction reads its decision off that bit and the borrow,
+with no temporary.
+
+**Why dropping the factor of `R` is legitimate.**  `modulo` is two
+Montgomery steps, one taking a factor of `R` out and one putting it back,
+and it ends by concluding `x = y` from `x * R = y * R (mod n)`.  That needs
+`R` invertible modulo `n`.  It is, and `mu` hands over the witness for free:
+`1 + mu * n` is a multiple of the radix by the very equation defining `mu`,
+so its quotient is an explicit inverse of the radix, and a power of that
+inverts `R`.  No appeal to Bezout, no gcd, and nothing computed at run time
+-- the inverse only ever exists in the proof.
+
+`tests/test_montgomery.c` checks every one of these against Python, which
+inverts the radix with `pow(R, -1, n)` and multiplies out.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1329,10 +1384,10 @@ Following `design/reimplementation.md` §9, the minimum viable subset is
 complete: the hashes and their streaming layers, HMAC one-shot and
 incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
 an OS entropy shim, and AES-GCM.  Past it, the generic bignum has its
-arithmetic and its conversions; Montgomery reduction and modular
-exponentiation are next.
+arithmetic, its conversions and its Montgomery layer; modular
+exponentiation is next.
 
 Beyond the subset, in rough order of how often they are asked for: AES-NI and
 carry-less-multiply intrinsics under the portable AES-GCM, modular
-exponentiation on top of the generic bignum, RSA-PSS, FFDHE, secp256k1, Salsa20/NaCl, FrodoKEM, and the legacy
-hashes.
+exponentiation on top of the generic bignum, RSA-PSS, FFDHE, secp256k1,
+Salsa20/NaCl, FrodoKEM, and the legacy hashes.

@@ -125,7 +125,6 @@ let negate (mv xv r: nat)
 
 (** [mont_mu m0] is the [mu] with [mu * m0 + 1 = 0 mod base].  The modulus
     must be odd; every modulus Montgomery arithmetic applies to is. *)
-inline_for_extraction
 let mont_mu (m0: S32.t)
   : Pure S32.t (requires S32.v m0 % 2 == 1)
                (ensures fun r -> (S32.v r * S32.v m0 + 1) % base == 0)
