@@ -56,3 +56,5 @@ module P256_Sec1 = Hacl.P256.Sec1
 module P256_Ecdh = Hacl.P256.Ecdh
 module DRBG = Hacl.HMAC.DRBG
 module AES_GCM = Hacl.AES.GCM
+module Bignum = Hacl.Bignum.Base
+module Bignum_Convert = Hacl.Bignum.Convert
