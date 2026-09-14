@@ -1145,6 +1145,76 @@ fourth while the loop runs.
 inverts the radix with `pow(R, -1, n)` and multiplies out, and compares
 both ladders against `pow(a, b, n)`.
 
+### Finite-field Diffie-Hellman
+
+`code/ffdhe/Hacl.FFDHE.fst` is RFC 7919, the five named finite-field groups
+that TLS negotiates.  It is the first thing built on the bignum stack that
+a caller would actually reach for, and it is where that stack's "nothing
+allocates, nothing is hidden" discipline finally gets to pay for itself.
+
+    void Hacl_FFDHE_ffdhe2048_secret_to_public(uint8_t *pk, uint8_t *sk);
+    bool Hacl_FFDHE_ffdhe2048_shared_secret(uint8_t *ss, uint8_t *sk,
+                                            uint8_t *pk);
+    /* and the same pair for 3072, 4096, 6144 and 8192 */
+
+Every array is exactly the group's size in big-endian bytes -- 256 for
+FFDHE-2048, up to 1024 for FFDHE-8192 -- so there is no length to pass and
+no length to get wrong.
+
+**One pair of entry points per group.**  HACL* has a single set of
+functions that take an `ffdhe_alg` enum, dispatch on it at run time, and
+hand back a heap-allocated precomputation context that the caller has to
+remember to free.  Here the group *is* the entry point.  The size is a
+compile-time constant at every call, the primes live in `static const`
+tables that the linker drops if you do not use them, there is no context to
+allocate or free, and there is no enum to get wrong.  The cost is ten
+symbols instead of four; the benefit is that the C API has no lifetime
+rules at all.
+
+**The primes are computed, not transcribed.**  Section 3 of the RFC gives
+each prime by a formula -- `p = 2^b - 2^(b-64) + (floor(2^(b-130) e) + X) 2^64 - 1`
+-- and then prints it.  `files/gen_ffdhe.py` evaluates the formula, and
+checks the result three ways before emitting it: against the top 128 bits
+the RFC prints, against the stated bit length, and with Miller-Rabin on
+both `p` and `(p-1)/2`.  A transcription error in a 8192-bit constant is
+exactly the kind of thing that no test built from the same constant would
+ever catch.
+
+**Two literals are all the proof needs.**  `Spec.FFDHE` gives, for each
+group, that limb `0` and the top limb are both `2^32 - 1`.  The first says
+the modulus is odd, which is Montgomery's precondition; the second, with
+`num_top`, says the modulus is bigger than two, which is what makes the
+exponentiation's modulus non-zero and the key-validation range non-empty.
+Nothing anywhere evaluates the other 254 limbs.
+
+**Peer keys are validated, and the answer is a `bool`.**  `shared_secret`
+checks `1 < pk < p - 1` -- the RFC's own range -- with two `lt_mask`s, and
+then *declassifies*: the peer's public key arrived over the wire, so
+branching on a fact about it leaks nothing the adversary did not send.  The
+branch has to happen anyway, because `mod_exp_consttime` requires its base
+to be reduced.  HACL* returns an all-ones `uint64_t` mask; we return a
+`bool`, because the value is public by construction and a mask that callers
+have to remember to use in constant time is a footgun, not a feature.  On a
+bad key the output is zeroed, so a caller who ignores the return value
+still does not get a usable secret.
+
+**`R^2 mod p` is recomputed on every call** rather than tabulated.  It is a
+doubling chain of `2 * bits` steps, against an exponentiation of `bits`
+rungs each of which is a full multiply: a few tenths of a percent, for
+several kilobytes of table per group and no precomputation context in the
+API.
+
+This is also the one place in the library that allocates.  The scratch is
+seven `nn`-limb arrays and one `2*nn`, on the *stack*, in the per-group
+wrapper -- about 9 KB for FFDHE-8192.  An entry point named for its group
+knows its size, which is precisely the condition under which a stack array
+is legitimate; the generic layer underneath it still takes every temporary
+from its caller.
+
+`tests/test_ffdhe.c` checks all five groups against Python: both public
+keys, the shared secret computed from either side, and the rejection of the
+two boundary peer keys `1` and `p - 1`.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1437,8 +1507,9 @@ complete: the hashes and their streaming layers, HMAC one-shot and
 incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
 an OS entropy shim, and AES-GCM.  Past it, the generic bignum has its
 arithmetic, its conversions, its Montgomery layer and its modular
-exponentiation -- both ladders and Fermat inversion.
+exponentiation -- both ladders and Fermat inversion -- and on top of those
+the five RFC 7919 finite-field Diffie-Hellman groups.
 
 Beyond the subset, in rough order of how often they are asked for: AES-NI and
-carry-less-multiply intrinsics under the portable AES-GCM, RSA-PSS, FFDHE, secp256k1,
+carry-less-multiply intrinsics under the portable AES-GCM, RSA-PSS, secp256k1,
 Salsa20/NaCl, FrodoKEM, and the legacy hashes.
