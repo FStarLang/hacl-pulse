@@ -586,6 +586,107 @@ let pss_valid_intro (#t: Type0) {| word t |} (p: params t)
                  S8.v (Seq.index hp k) == S8.v (Seq.index em (dbLen + k))) ==> h == hp
     with Seq.lemma_eq_intro h hp
 
+
+(** {2 Big-endian strings of a fixed width}
+
+    An RSA key part is a byte string whose length is fixed by the modulus,
+    not a multiple of the limb width, so loading and storing go through a
+    zero-padded scratch buffer.  These two lemmas say that the padding does
+    not change the number. *)
+
+let rec be_nat_zeros (s: Seq.seq S8.t)
+  : Lemma (requires forall (i: nat). i < Seq.length s ==> S8.v (Seq.index s i) == 0)
+          (ensures be_nat s == 0)
+          (decreases Seq.length s)
+  = let n = Seq.length s in
+    if n = 0 then ()
+    else begin
+      let t = Seq.slice s 0 (n - 1) in
+      assert (forall (i: nat). i < Seq.length t ==> Seq.index t i == Seq.index s i);
+      be_nat_zeros t
+    end
+
+let be_nat_pad (s: Seq.seq S8.t) (k: nat { k <= Seq.length s })
+  : Lemma (requires forall (i: nat). i < Seq.length s - k ==> S8.v (Seq.index s i) == 0)
+          (ensures be_nat s == be_nat (Seq.slice s (Seq.length s - k) (Seq.length s)))
+  = let n = Seq.length s in
+    be_nat_split s k;
+    be_nat_zeros (Seq.slice s 0 (n - k))
+
+let be_nat_trunc (s: Seq.seq S8.t) (k: nat { k <= Seq.length s })
+  : Lemma (requires be_nat s < pow2 (8 * k))
+          (ensures be_nat (Seq.slice s (Seq.length s - k) (Seq.length s)) == be_nat s)
+  = let n = Seq.length s in
+    be_nat_split s k;
+    let hi = be_nat (Seq.slice s 0 (n - k)) in
+    let lo = be_nat (Seq.slice s (n - k) n) in
+    if hi = 0 then ()
+    else begin
+      Math.lemma_mult_le_right (pow2 (8 * k)) 1 hi;
+      assert (hi * pow2 (8 * k) >= pow2 (8 * k));
+      assert (be_nat s >= pow2 (8 * k))
+    end
+
+
+(** A big-endian string is short enough to fit in [k] bytes exactly when the
+    bytes above those [k] are zero.  This is the equivalence a verifier
+    needs: it cannot compare against [pow2] at run time, but it can look at
+    the leading bytes, and the two tests are the same test. *)
+
+let rec be_nat_zeros_inv (s: Seq.seq S8.t)
+  : Lemma (requires be_nat s == 0)
+          (ensures forall (i: nat). i < Seq.length s ==> S8.v (Seq.index s i) == 0)
+          (decreases Seq.length s)
+  = let n = Seq.length s in
+    if n = 0 then ()
+    else begin
+      let t = Seq.slice s 0 (n - 1) in
+      be_nat_zeros_inv t;
+      assert (forall (i: nat). i < n - 1 ==> Seq.index t i == Seq.index s i)
+    end
+
+let be_nat_prefix_zero (s: Seq.seq S8.t) (k: nat { k <= Seq.length s })
+  : Lemma (be_nat s < pow2 (8 * k) <==>
+           (forall (i: nat). i < Seq.length s - k ==> S8.v (Seq.index s i) == 0))
+  = let n = Seq.length s in
+    be_nat_split s k;
+    be_nat_bound (Seq.slice s (n - k) n);
+    introduce be_nat s < pow2 (8 * k) ==>
+              (forall (i: nat). i < n - k ==> S8.v (Seq.index s i) == 0)
+    with begin
+      be_nat_trunc s k;
+      be_nat_zeros_inv (Seq.slice s 0 (n - k));
+      assert (forall (i: nat). i < n - k ==> Seq.index (Seq.slice s 0 (n - k)) i == Seq.index s i)
+    end;
+    introduce (forall (i: nat). i < n - k ==> S8.v (Seq.index s i) == 0) ==>
+              be_nat s < pow2 (8 * k)
+    with be_nat_pad s k
+
+(** Big-endian reading is injective at a fixed width, so a number has at
+    most one encoding of a given length.  The verifier states its result as
+    "there is an [emLen]-byte encoding of [s^e mod n] that passes", and this
+    is what makes that statement as strong as naming the encoding. *)
+let rec be_nat_inj (s1 s2: Seq.seq S8.t)
+  : Lemma (requires Seq.length s1 == Seq.length s2 /\ be_nat s1 == be_nat s2)
+          (ensures Seq.equal s1 s2)
+          (decreases Seq.length s1)
+  = let n = Seq.length s1 in
+    if n = 0 then ()
+    else begin
+      let t1 = Seq.slice s1 0 (n - 1) in
+      let t2 = Seq.slice s2 0 (n - 1) in
+      let x1 = S8.v (Seq.index s1 (n - 1)) in
+      let x2 = S8.v (Seq.index s2 (n - 1)) in
+      Math.lemma_mod_plus x1 (be_nat t1) 256;
+      Math.lemma_mod_plus x2 (be_nat t2) 256;
+      Math.small_mod x1 256;
+      Math.small_mod x2 256;
+      assert (x1 == x2);
+      be_nat_inj t1 t2;
+      assert (forall (i: nat). i < n - 1 ==> Seq.index s1 i == Seq.index t1 i);
+      assert (forall (i: nat). i < n - 1 ==> Seq.index s2 i == Seq.index t2 i)
+    end
+
 #pop-options
 
 #pop-options
