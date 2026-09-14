@@ -145,6 +145,16 @@ let num_zeros_above (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
     eval_split (vals v) k;
     eval_zeros (Seq.slice (vals v) k n)
 
+(** A number is at least any one of its columns.  What a caller needs in
+    order to conclude that a modulus with its top limb set is large, without
+    evaluating the other two hundred and fifty-five limbs. *)
+let num_top (v: Seq.seq S32.t) (k: nat { k < Seq.length v })
+  : Lemma (num v >= wt k * S32.v (Seq.index v k))
+  = pre_mod v (k + 1);
+    pre_snoc v k;
+    Math.lemma_div_mod (num v) (wt (k + 1));
+    Math.lemma_mult_le_right (wt (k + 1)) 0 (num v / wt (k + 1))
+
 (** {2 The two step lemmas}
 
     Both are pure algebra about one column, stated separately because the
@@ -1062,9 +1072,13 @@ let num_bit (v: Seq.seq S32.t) (i: nat { i / 32 < Seq.length v })
   = let q = i / 32 in
     let r = i % 32 in
     num_digit v q;
+    assert (num v / wt q % pow2 32 == S32.v (Seq.index v q));
     shift_in_limb (num v / wt q) r;
+    assert (S32.v (Seq.index v q) / pow2 r % 2 == (num v / wt q) / pow2 r % 2);
     Math.euclidean_division_definition i 32;
-    shift_num (num v) q r
+    assert (rad * q + r == i);
+    shift_num (num v) q r;
+    assert (num v / pow2 i == (num v / wt q) / pow2 r)
 
 (** Comparing a limb known to be zero or one against one turns it into a
     mask standing for that very value. *)
