@@ -973,6 +973,71 @@ leak the xor of the plaintexts and enough of the hash subkey to forge
 arbitrary messages.  Nothing in the interface can prevent that.
 
 
+### The generic bignum, where the length is a run-time value
+
+Everything above works at a fixed width.  RSA and finite-field
+Diffie-Hellman do not: the modulus is whatever the key says it is.
+`code/bignum/` is arithmetic on arrays of `uint32_t` limbs, least
+significant first, with the limb count passed in.
+
+**The radix is 2^32.**  It is the widest radix for which a
+multiply-accumulate is exact in a double word: `(2^32-1)^2 + 2*(2^32-1)` is
+`2^64-1`, using every bit and no more.  Custard has no `uint128`, so 2^64 is
+not available, and 2^16 -- what Curve25519 and P-256 use -- would double the
+memory and the loop counts for no gain, because those two want room to
+accumulate a whole product before carrying and this does not.  It also
+happens to be the limb type of HACL*'s `Hacl_Bignum32`.
+
+**The postconditions are relational.**  There is no specification sequence
+and no `add_spec`.  Addition says
+
+    num res + v c * wt n == num a + num b
+
+where `num` is the number an array of limbs denotes.  That is the whole
+contract.  A caller wants to hear that the array is the sum, not that it is
+equal to a second definition of addition which is in turn equal to the sum.
+
+**Nothing aliases and nothing allocates.**  Separation logic gives each
+argument its own permission, so `res` is disjoint from the inputs by
+construction and no precondition has to say so.  Where HACL* allows `res`
+and `a` to be the same pointer there are explicit in-place variants,
+`sub_from` and `add_masked`, which is also what lets `add_mod` and `sub_mod`
+correct their result without a temporary -- necessary here, because the
+length is a run-time value and a temporary would have to be a
+variable-length array.
+
+    uint32_t Hacl_Bignum_Base_add    (uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+    uint32_t Hacl_Bignum_Base_sub    (uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+    void     Hacl_Bignum_Base_add_mod(uint32_t *res, uint32_t *a, uint32_t *b,
+                                      uint32_t *m, size_t n);
+    void     Hacl_Bignum_Base_sub_mod(uint32_t *res, uint32_t *a, uint32_t *b,
+                                      uint32_t *m, size_t n);
+    void     Hacl_Bignum_Base_mul    (uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+    void     Hacl_Bignum_Base_sqr    (uint32_t *res, uint32_t *a, size_t n);
+    uint32_t Hacl_Bignum_Base_lt_mask(uint32_t *a, uint32_t *b, size_t n);
+    uint32_t Hacl_Bignum_Base_eq_mask(uint32_t *a, uint32_t *b, size_t n);
+    void     Hacl_Bignum_Base_zero   (uint32_t *res, size_t n);
+
+`add` and `sub` return the carry or borrow; `mul` and `sqr` write `2n`
+limbs; `add_mod` and `sub_mod` require their inputs already reduced, as
+HACL* does.  The two comparisons return an all-ones or all-zero mask and
+look at every limb whatever the answer is.
+
+Conversion is four functions, both byte orders both ways:
+
+    void Hacl_Bignum_Convert_from_bytes_be(uint32_t *res, size_t n, uint8_t *b);
+    void Hacl_Bignum_Convert_from_bytes_le(uint32_t *res, size_t n, uint8_t *b);
+    void Hacl_Bignum_Convert_to_bytes_be  (uint8_t *b, uint32_t *a, size_t n);
+    void Hacl_Bignum_Convert_to_bytes_le  (uint8_t *b, uint32_t *a, size_t n);
+
+each on exactly `4n` bytes.  HACL* takes a byte count and left-pads to a
+whole number of limbs; here that rounding is the caller's, who has to own a
+buffer of the right size anyway, and no key length in any standard this
+library implements fails to be a multiple of four.
+
+`tests/test_bignum.c` checks all of it against values computed in Python,
+which shares no code with the implementation.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1263,9 +1328,11 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 Following `design/reimplementation.md` §9, the minimum viable subset is
 complete: the hashes and their streaming layers, HMAC one-shot and
 incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
-an OS entropy shim, and AES-GCM.
+an OS entropy shim, and AES-GCM.  Past it, the generic bignum has its
+arithmetic and its conversions; Montgomery reduction and modular
+exponentiation are next.
 
 Beyond the subset, in rough order of how often they are asked for: AES-NI and
-carry-less-multiply intrinsics under the portable AES-GCM, the generic bignum
-API, RSA-PSS, FFDHE, secp256k1, Salsa20/NaCl, FrodoKEM, and the legacy
+carry-less-multiply intrinsics under the portable AES-GCM, modular
+exponentiation on top of the generic bignum, RSA-PSS, FFDHE, secp256k1, Salsa20/NaCl, FrodoKEM, and the legacy
 hashes.

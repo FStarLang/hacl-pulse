@@ -20,6 +20,19 @@ typedef uint8_t custard_unit;
 extern "C" {
 #endif
 
+void Hacl_Bignum_Convert_to_bytes_le(uint8_t *b, uint32_t *a, size_t n);
+void Hacl_Bignum_Convert_to_bytes_be(uint8_t *b, uint32_t *a, size_t n);
+void Hacl_Bignum_Convert_from_bytes_le(uint32_t *res, size_t n, uint8_t *b);
+void Hacl_Bignum_Convert_from_bytes_be(uint32_t *res, size_t n, uint8_t *b);
+uint32_t Hacl_Bignum_Base_eq_mask(uint32_t *a, uint32_t *b, size_t n);
+uint32_t Hacl_Bignum_Base_lt_mask(uint32_t *a, uint32_t *b, size_t n);
+void Hacl_Bignum_Base_zero(uint32_t *res, size_t n);
+void Hacl_Bignum_Base_sqr(uint32_t *res, uint32_t *a, size_t n);
+void Hacl_Bignum_Base_mul(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+uint32_t Hacl_Bignum_Base_sub(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+void Hacl_Bignum_Base_sub_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n);
+uint32_t Hacl_Bignum_Base_add(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
+void Hacl_Bignum_Base_add_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n);
 bool Hacl_AES_GCM_aes256_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 void Hacl_AES_GCM_aes256_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 bool Hacl_AES_GCM_aes128_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
