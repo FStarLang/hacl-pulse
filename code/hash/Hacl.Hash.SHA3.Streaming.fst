@@ -372,22 +372,21 @@ fn digest_impl (st: A.array S64.t) (b: A.array S64.t) (c: A.array S64.t)
                (#vb0: erased (Seq.seq S64.t)) (#vc0: erased (Seq.seq S64.t))
                (#pr: perm) (#vr: erased (Seq.seq U32.t))
                (#prc: perm) (#vrc: erased (Seq.seq S64.t))
-               (#vbuf: erased (Seq.seq S8.t))
+               (#pbuf: perm) (#vbuf: erased (Seq.seq S8.t))
                (#ptot: perm) (#vtot: erased (Seq.seq SZ.t))
                (#vout0: erased (Seq.seq S8.t))
 requires A.pts_to st #pst vst0 ** A.pts_to b vb0 ** A.pts_to c vc0 **
          A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc **
-         A.pts_to buf vbuf ** A.pts_to tot #ptot vtot ** A.pts_to out vout0 **
+         A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot ** A.pts_to out vout0 **
          pure (Seq.length vb0 == 25 /\ Seq.length vc0 == 5 /\ Seq.length vr == 25 /\
                reveal vrc == (rc <: Seq.seq S64.t) /\
                (forall (j: nat). j < 25 ==> U32.v (Seq.index vr j) == rotc j) /\
                stream_ok r vst0 vbuf vtot seen)
          ** pure (SZ.v olen == Seq.length vout0)
-ensures exists* (vb: Seq.seq S64.t) (vc: Seq.seq S64.t)
-                (vbuf': Seq.seq S8.t) (vout: Seq.seq S8.t).
+ensures exists* (vb: Seq.seq S64.t) (vc: Seq.seq S64.t) (vout: Seq.seq S8.t).
   A.pts_to st #pst vst0 ** A.pts_to b vb ** A.pts_to c vc **
   A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc **
-  A.pts_to buf vbuf' ** A.pts_to tot #ptot vtot ** A.pts_to out vout **
+  A.pts_to buf #pbuf vbuf ** A.pts_to tot #ptot vtot ** A.pts_to out vout **
   pure (rate_ok r /\ Seq.length vb == 25 /\ Seq.length vc == 5 /\
         Seq.length vout == Seq.length vout0 /\
         vout == keccak (SZ.v r) suffix seen (Seq.length vout0))
@@ -413,7 +412,8 @@ ensures exists* (vb: Seq.seq S64.t) (vc: Seq.seq S64.t)
      the last block of the padded [seen]. *)
   split3 (reveal vbuf) 0 (SZ.v blen);
   let tail = Sub.sub buf 0sz blen;
-  with vtail. assert (A.pts_to tail vtail);
+  let vtail : erased (Seq.seq S8.t) = hide (Seq.slice (reveal vbuf) 0 (SZ.v blen));
+  assert (A.pts_to tail #pbuf vtail);
   assert (pure (Seq.length vtail == SZ.v blen /\
                 (forall (k: nat). k < SZ.v blen ==>
                    Seq.index vtail k ==
@@ -433,7 +433,7 @@ ensures exists* (vb: Seq.seq S64.t) (vc: Seq.seq S64.t)
 
   (* Two subslices are live here -- the buffered tail and the last block -- so
      the resource to unfold has to be named. *)
-  Sub.unsub buf 0 (SZ.v blen) tail;
+  Sub.unsub_id buf 0 (SZ.v blen) tail;
 
   xor_block_at starr blk 0sz r;
   permute_impl starr b c rotc_tbl rc_tbl;
