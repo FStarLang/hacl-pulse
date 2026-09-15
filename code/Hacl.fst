@@ -37,6 +37,7 @@ module Hacl
 
 module Hash_SHA1 = Hacl.Hash.SHA1
 module Streaming_SHA1 = Hacl.Streaming.SHA1
+module HMAC_SHA1 = Hacl.HMAC.SHA1
 module Hash_SHA2 = Hacl.Hash.SHA2
 module Streaming_SHA2 = Hacl.Streaming.SHA2
 module Hash_SHA3 = Hacl.Hash.SHA3
