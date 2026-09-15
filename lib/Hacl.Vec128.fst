@@ -188,7 +188,8 @@ assume val clmul_hh (a b: t)
 
 [@@custard_extern "Hacl_Vec128_shift_left_bytes_4"; custard_c_header "Hacl_Vec128.h"]
 assume val shift_left_bytes_4 (a: t)
-  : r: t { forall (k: int). CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 32) }
+  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
+                            CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 32) }
 
 [@@custard_extern "Hacl_Vec128_shift_right_bytes_4"; custard_c_header "Hacl_Vec128.h"]
 assume val shift_right_bytes_4 (a: t)
@@ -197,7 +198,8 @@ assume val shift_right_bytes_4 (a: t)
 
 [@@custard_extern "Hacl_Vec128_shift_left_bytes_8"; custard_c_header "Hacl_Vec128.h"]
 assume val shift_left_bytes_8 (a: t)
-  : r: t { forall (k: int). CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 64) }
+  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
+                            CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 64) }
 
 [@@custard_extern "Hacl_Vec128_shift_right_bytes_8"; custard_c_header "Hacl_Vec128.h"]
 assume val shift_right_bytes_8 (a: t)
