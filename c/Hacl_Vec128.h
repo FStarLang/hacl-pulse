@@ -128,6 +128,12 @@ HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_bswap(Hacl_Vec128_t a) {
   return _mm_shuffle_epi8(a, rev);
 }
 
+/* The GHASH reduction constant: byte zero is 0xe1 and the rest are zero.
+ * `_mm_set_epi8` takes its arguments from the high byte down. */
+HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_reduction(void) {
+  return _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char)0xe1);
+}
+
 static inline bool Hacl_Vec128_supported(void) {
 #if defined(__GNUC__)
   __builtin_cpu_init();
@@ -192,6 +198,12 @@ static inline Hacl_Vec128_t Hacl_Vec128_shift_right_lanes64(Hacl_Vec128_t a,
                                                             uint32_t n) {
   (void)n;
   return a;
+}
+static inline Hacl_Vec128_t Hacl_Vec128_reduction(void) {
+  Hacl_Vec128_t r;
+  memset(&r, 0, sizeof r);
+  r.b[0] = 0xe1;
+  return r;
 }
 static inline bool Hacl_Vec128_supported(void) { return false; }
 

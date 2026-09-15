@@ -228,3 +228,12 @@ assume val shift_right_lanes64 (a: t) (n: U32.t { U32.v n < 64 })
 
 [@@custard_extern "Hacl_Vec128_bswap"; custard_c_header "Hacl_Vec128.h"]
 assume val bswap (a: t) : r: t { bv r == CL.bswap (bv a) }
+
+(** {2 The GHASH reduction constant}
+
+    [Spec.GF128.r_block] is [0xe1] followed by fifteen zero bytes, and the
+    multiplication by it is two thirds of a GHASH multiply, so it is worth a
+    register-materializing constant rather than a load from the stack. *)
+
+[@@custard_extern "Hacl_Vec128_reduction"; custard_c_header "Hacl_Vec128.h"]
+assume val reduction (_: unit) : r: t { bv r == Spec.GF128.r_block }
