@@ -35,6 +35,7 @@ open Hacl.Secret.Word.Instances
 open Spec.SHA2
 open Spec.SHA2.Constants
 open Hacl.Hash.SHA2.Core
+open Spec.SHANI
 open Hacl.Impl.Table
 open Hacl.Hash.SHA2.Tables
 
@@ -45,6 +46,8 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module Vec = Hacl.Vec128
+module NI = Hacl.Hash.SHA2.NI
 
 (** [Spec.SHA2.max_input] is [2^61] for the thirty-two bit family and [2^125]
     for the sixty-four bit one, so the [2^61] the callers promise is enough for
@@ -76,7 +79,19 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
-  hash_impl sha2_224 kt ivt out input input_len;
+  let ni = Vec.sha_supported ();
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if ni
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to input #pin vin **
+    pure (Seq.length vin < max_input #S32.t /\ vout' == hash sha2_224 vin)
+  {
+    NI.hash_impl_ni sha2_224 kt ivt out input input_len;
+  } else {
+    hash_impl sha2_224 kt ivt out input input_len;
+  };
   drop_table kt;
   drop_table ivt;
 }
@@ -95,7 +110,19 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
-  hash_impl sha2_256 kt ivt out input input_len;
+  let ni = Vec.sha_supported ();
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if ni
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to input #pin vin **
+    pure (Seq.length vin < max_input #S32.t /\ vout' == hash sha2_256 vin)
+  {
+    NI.hash_impl_ni sha2_256 kt ivt out input input_len;
+  } else {
+    hash_impl sha2_256 kt ivt out input input_len;
+  };
   drop_table kt;
   drop_table ivt;
 }
