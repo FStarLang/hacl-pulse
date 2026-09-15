@@ -518,3 +518,105 @@ let gmul_is_pmod (x y: block)
     pmod_pmul x y
 
 #pop-options
+
+(** {2 Splitting a product, which is what a carry-less multiplier gives}
+
+    A 128x128 carry-less multiplier produces 255 coefficients, and the
+    hardware hands them over as two registers.  The bottom 128 of them are
+    already the answer, because [x^k] for [k < 128] is its own reduction; the
+    top 127 have to be brought down, and [x^128] is the reduction constant, so
+    bringing them down is another multiplication by exactly that constant.
+
+    [gmul_split] says this without ever constructing the two halves: it takes
+    two blocks and the hypothesis that their bits {i are} the two halves,
+    which is what an implementation can prove about its registers. *)
+
+let pcoef (x y: block) (k: int) : bool = pget (pmul (pbits x) (pbits y)) k
+
+let pterm2 (x y: block) (i: nat { i < 128 }) (k: int) : bool =
+  pcoef x y k && bit (xpowi k) i
+
+(** [x^n] advanced [m] more times is [x^(n+m)]. *)
+let rec xpow_add (n m: nat)
+  : Lemma (ensures xpow (n + m) == xt (xpow n) m) (decreases m)
+  = if m = 0 then () else xpow_add n (m - 1)
+
+(** [x^127] has only its top bit, so one more step is the reduction constant
+    and nothing else: [x^128 == R]. *)
+let xpow_128 (_: unit) : Lemma (xpow 128 == r_block)
+  = let aux (i: nat { i < 128 }) : Lemma (bit (xpow 128) i == bit r_block i)
+      = xtimes_bit (xpow 127) i;
+        xpow_mono 127 127;
+        (if i = 0 then () else xpow_mono 127 (i - 1));
+        r_bit i
+    in
+    FStar.Classical.forall_intro aux;
+    bits_inj (xpow 128) r_block
+
+let xpow_high (m: nat { m < 128 }) : Lemma (xpowi (m + 128) == xti r_block m)
+  = xpow_128 ();
+    xpow_add 128 m
+
+#push-options "--z3rlimit 150 --fuel 1 --ifuel 1"
+
+(** Below [x^128] the reduction is the identity, so the bottom half of the
+    product is read off unchanged. *)
+let gmul_split_low (x y u: block) (i: nat { i < 128 })
+  : Lemma (requires forall (k: nat). k < 128 ==> bit u k == pcoef x y k)
+          (ensures xsum (fun k -> pterm2 x y i k) 0 128 == bit u i)
+  = let aux (k: int)
+      : Lemma (0 <= k /\ k < 128 /\ k <> i ==> pterm2 x y i k == false)
+      = if 0 <= k && k < 128 then xpow_mono k i else ()
+    in
+    FStar.Classical.forall_intro aux;
+    xpow_mono i i;
+    xsum_one (fun k -> pterm2 x y i k) 0 128 i
+
+(** Above it, the reduction of [x^(128+m)] is [R] advanced [m] times, so the
+    top half is accumulated against [R] -- which is a multiplication by [R]. *)
+let gmul_split_high (x y v: block) (i: nat { i < 128 })
+  : Lemma (requires forall (k: nat). k < 128 ==> bit v k == pcoef x y (128 + k))
+          (ensures xsum (fun k -> pterm2 x y i k) 128 128 ==
+                   bit (gmul v r_block) i)
+  = let aux (m: int)
+      : Lemma (0 <= m /\ m < 128 ==>
+               pterm2 x y i (m + 128) ==
+                 (pget (pbits v) m && bit (xti r_block m) i))
+      = if 0 <= m && m < 128 then xpow_high m else ()
+    in
+    FStar.Classical.forall_intro aux;
+    xsum_shift (fun k -> pterm2 x y i k) 128 128 128;
+    xsum_ext (fun m -> pterm2 x y i (m + 128))
+             (fun m -> pget (pbits v) m && bit (xti r_block m) i) 0 128;
+    accum_bit v r_block 128 i;
+    pmod_pmul v r_block;
+    gmul_is_pmod v r_block
+
+let gmul_split_bit (x y u v: block) (i: nat { i < 128 })
+  : Lemma (requires (forall (k: nat). k < 128 ==> bit u k == pcoef x y k) /\
+                    (forall (k: nat). k < 128 ==> bit v k == pcoef x y (128 + k)))
+          (ensures bit (gmul x y) i == (bit u i <> bit (gmul v r_block) i))
+  = gmul_is_pmod x y;
+    pmod_bit (pmul (pbits x) (pbits y)) 256 i;
+    xsum_ext (fun k -> pget (pmul (pbits x) (pbits y)) k && bit (xpowi k) i)
+             (fun k -> pterm2 x y i k) 0 256;
+    xsum_split (fun k -> pterm2 x y i k) 0 128 128;
+    gmul_split_low x y u i;
+    gmul_split_high x y v i
+
+(** The whole of the reduction step, as an implementation can use it: given
+    the two halves of the carry-less product, the field product is the low
+    half exclusive-ored with the high half times the reduction constant. *)
+let gmul_split (x y u v: block)
+  : Lemma (requires (forall (k: nat). k < 128 ==> bit u k == pcoef x y k) /\
+                    (forall (k: nat). k < 128 ==> bit v k == pcoef x y (128 + k)))
+          (ensures gmul x y == gadd u (gmul v r_block))
+  = let aux (i: nat { i < 128 })
+      : Lemma (bit (gmul x y) i == bit (gadd u (gmul v r_block)) i)
+      = gmul_split_bit x y u v i;
+        gadd_bit u (gmul v r_block) i
+    in
+    FStar.Classical.forall_intro aux;
+    bits_inj (gmul x y) (gadd u (gmul v r_block))
+
+#pop-options
