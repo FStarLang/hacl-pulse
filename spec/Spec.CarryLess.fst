@@ -220,6 +220,16 @@ let conv_def_n (a b: poly) (k: int) (f: int -> bool) (n: nat { Seq.length a <= n
   = conv_def a b k f;
     xsum_trim_hi f 0 (Seq.length a) n
 
+(** Outside the degree range there is nothing: below zero every term is
+    [false] on the right, and above the sum of the degrees on the left. *)
+let conv_zero_lo (a b: poly) (k: int)
+  : Lemma (requires k < 0) (ensures conv a b k == false)
+  = xsum_zero (fun i -> pget a i && pget b (k - i)) 0 (Seq.length a)
+
+let conv_zero_hi (a b: poly) (k: int)
+  : Lemma (requires Seq.length a + Seq.length b <= k) (ensures conv a b k == false)
+  = xsum_zero (fun i -> pget a i && pget b (k - i)) 0 (Seq.length a)
+
 (** {2 Shifting, which is multiplication by a monomial} *)
 
 let pshift (a: poly) (d: nat) : poly =

@@ -54,7 +54,12 @@ module Poly = Spec.GF128.Poly
 
 (** {2 The little-endian bit view} *)
 
-(** Bit [k] of the block read as a 128-bit little-endian integer. *)
+(** Bit [k] of the block read as a 128-bit little-endian integer.
+
+    Opaque, because this is the only place a division and a [pow2] appear:
+    three lemmas below need the definition and every other proof in the
+    library is far better off without it. *)
+[@@"opaque_to_smt"]
 let lebit (a: block) (k: nat { k < 128 }) : bool =
   (Seq.index a (k / 8) / pow2 (k % 8)) % 2 = 1
 
@@ -76,7 +81,8 @@ let lepoly_len (a: block) : Lemma (Seq.length (lepoly a) == 128) = ()
     every fact about [Spec.GF128.bit] transfers. *)
 let lebit_is_bit (a: block) (k: nat { k < 128 })
   : Lemma (lebit a k == bit a (8 * (k / 8) + 7 - k % 8))
-  = let q = k / 8 in
+  = reveal_opaque (`%lebit) lebit;
+    let q = k / 8 in
     let r = k % 8 in
     Math.lemma_div_plus (7 - r) q 8;
     Math.lemma_mod_plus (7 - r) q 8;
@@ -91,7 +97,8 @@ let lexor (a b: block) (k: nat { k < 128 })
     lebit_is_bit b k;
     Poly.gadd_bit a b (8 * (k / 8) + 7 - k % 8)
 
-let lezero (k: nat { k < 128 }) : Lemma (lebit Spec.GF128.zero k == false) = ()
+let lezero (k: nat { k < 128 }) : Lemma (lebit Spec.GF128.zero k == false)
+  = reveal_opaque (`%lebit) lebit
 
 let lexori (a b: block) (k: int)
   : Lemma (lebiti (gadd a b) k == (lebiti a k <> lebiti b k))
@@ -126,7 +133,8 @@ let bswap (a: block) : block =
 (** The whole point: reversing the bytes reverses the bit numbering. *)
 let bswap_lebit (a: block) (k: nat { k < 128 })
   : Lemma (lebit (bswap a) k == bit a (127 - k))
-  = let q = k / 8 in
+  = reveal_opaque (`%lebit) lebit;
+    let q = k / 8 in
     let r = k % 8 in
     Math.lemma_div_mod k 8;
     Math.small_division_lemma_1 (7 - r) 8;
@@ -213,5 +221,223 @@ let bswap_conv (x y: block) (m: int)
              (lepoly (bswap y)) (prev (Poly.pbits y) 128) m 128;
     conv_rev (Poly.pbits x) (Poly.pbits y) m;
     pmul_get (Poly.pbits x) (Poly.pbits y) (254 - m)
+
+#pop-options
+
+(** {2 The implementation, at the level of registers}
+
+    Everything below is a statement about eight 128-bit values and nothing
+    else, so the Pulse code that computes them has only to name its registers
+    and to quote the instruction axioms.  The three stages are: four
+    multiplies assembled into a 256-bit product; a one-bit left shift of that
+    pair; and the byte reversal that turns it back into GCM's numbering. *)
+
+(** Coefficient [m] of the product the multiplier actually computes. *)
+let pprod (x y: block) (m: int) : bool =
+  conv (lepoly (bswap x)) (lepoly (bswap y)) m
+
+let is_lo (x y a: block) =
+  forall (m: int). 0 <= m /\ m < 128 ==> lebiti a m == pprod x y m
+
+let is_hi (x y a: block) =
+  forall (m: int). 0 <= m /\ m < 128 ==> lebiti a m == pprod x y (m + 128)
+
+let is_qlo (x y a: block) =
+  forall (m: int). 0 <= m /\ m < 128 ==> lebiti a m == pprod x y (m - 1)
+
+let is_qhi (x y a: block) =
+  forall (m: int). 0 <= m /\ m < 128 ==> lebiti a m == pprod x y (m + 127)
+
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 1"
+
+(** {3 Stage one: four multiplies}
+
+    [mid] is the two crossed products added; it contributes to the low
+    register shifted up eight bytes and to the high register shifted down. *)
+
+let lo_of_lanes (x y ll mid lo: block)
+  : Lemma (requires
+      (forall (k: int). lebiti ll k ==
+         conv (lane (bswap x) false) (lane (bswap y) false) k) /\
+      (forall (k: int). lebiti mid k ==
+         (conv (lane (bswap x) false) (lane (bswap y) true) k <>
+          conv (lane (bswap x) true) (lane (bswap y) false) k)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti lo k == (lebiti ll k <> lebiti mid (k - 64))))
+    (ensures is_lo x y lo)
+  = let aux (m: int) : Lemma (0 <= m /\ m < 128 ==> lebiti lo m == pprod x y m)
+      = if 0 <= m && m < 128 then begin
+          conv_lanes (bswap x) (bswap y) m;
+          conv_zero_lo (lane (bswap x) true) (lane (bswap y) true) (m - 128)
+        end else ()
+    in
+    FStar.Classical.forall_intro aux
+
+let hi_of_lanes (x y hh mid hi: block)
+  : Lemma (requires
+      (forall (k: int). lebiti hh k ==
+         conv (lane (bswap x) true) (lane (bswap y) true) k) /\
+      (forall (k: int). lebiti mid k ==
+         (conv (lane (bswap x) false) (lane (bswap y) true) k <>
+          conv (lane (bswap x) true) (lane (bswap y) false) k)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti hi k == (lebiti hh k <> lebiti mid (k + 64))))
+    (ensures is_hi x y hi)
+  = let aux (m: int)
+      : Lemma (0 <= m /\ m < 128 ==> lebiti hi m == pprod x y (m + 128))
+      = if 0 <= m && m < 128 then begin
+          conv_lanes (bswap x) (bswap y) (m + 128);
+          conv_zero_hi (lane (bswap x) false) (lane (bswap y) false) (m + 128)
+        end else ()
+    in
+    FStar.Classical.forall_intro aux
+
+(** {3 Stage two: the one-bit left shift}
+
+    The multiplier's result is one place short of the reversal GCM wants --
+    this is the [>> 1] of [Spec.CarryLess.conv_rev] -- so the 256-bit pair is
+    shifted up by one.  The hardware shifts 64-bit lanes, so each register
+    needs the bit that falls out of its low lane carried into its high lane,
+    and the low register needs its top bit carried into the high one. *)
+
+(** The shift is pure index arithmetic, so it is proved about bit functions
+    rather than about registers: nothing here needs to know that [flo] came
+    out of a multiplier.  Keeping the polynomials out of these two queries is
+    the difference between seconds and hours. *)
+let bounded (f: int -> bool) = forall (k: int). (k < 0 \/ 128 <= k) ==> f k == false
+
+#push-options "--fuel 0 --ifuel 0"
+
+(** The whole of the case analysis, with no quantifier anywhere: it is
+    handing the solver the four instantiations that matters, not the
+    arithmetic, which is why these two are instant and the same reasoning
+    inside a quantified context is not. *)
+
+let step_lo (p flo fc fq: int -> bool) (m: nat { m < 128 })
+  : Lemma (requires
+      fq m == ((m % 64 >= 1 && flo (m - 1)) <> fc (m - 64)) /\
+      (m < 64 ==> (m % 64 == m /\ fc (m - 64) == false)) /\
+      (64 <= m ==> (m % 64 == m - 64 /\
+                    fc (m - 64) == (m - 64 < 1 && flo (m - 1)))) /\
+      (1 <= m ==> flo (m - 1) == p (m - 1)) /\ p (-1) == false)
+    (ensures fq m == p (m - 1)) = ()
+
+let step_hi (p flo fhi fc fd fq: int -> bool) (m: nat { m < 128 })
+  : Lemma (requires
+      fq m == (((m % 64 >= 1 && fhi (m - 1)) <> fd (m - 64)) <> fc (m + 64)) /\
+      (m < 64 ==> (m % 64 == m /\ fd (m - 64) == false /\
+                   fc (m + 64) == (m < 1 && flo (m + 127)))) /\
+      (64 <= m ==> (m % 64 == m - 64 /\ fc (m + 64) == false /\
+                    fd (m - 64) == (m - 64 < 1 && fhi (m - 1)))) /\
+      (1 <= m ==> fhi (m - 1) == p (m + 127)) /\ flo 127 == p 127)
+    (ensures fq m == p (m + 127)) = ()
+
+#pop-options
+
+#push-options "--z3rlimit 60 --fuel 0 --ifuel 0"
+
+let shift_lo_gen (p flo fc fq: int -> bool)
+  : Lemma (requires
+      bounded fc /\ p (-1) == false /\
+      (forall (m: int). 0 <= m /\ m < 128 ==> flo m == p m) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fc k == (k % 64 + 63 < 64 && flo (k + 63))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fq k == ((k % 64 >= 1 && flo (k - 1)) <> fc (k - 64))))
+    (ensures forall (m: int). 0 <= m /\ m < 128 ==> fq m == p (m - 1))
+  = let aux (m: int) : Lemma (0 <= m /\ m < 128 ==> fq m == p (m - 1))
+      = if 0 <= m && m < 128 then begin
+          assert (fq m == ((m % 64 >= 1 && flo (m - 1)) <> fc (m - 64)));
+          assert (1 <= m ==> flo (m - 1) == p (m - 1));
+          if m < 64 then begin
+            Math.small_mod m 64;
+            assert (fc (m - 64) == false)
+          end else begin
+            Math.small_mod (m - 64) 64;
+            Math.lemma_mod_plus (m - 64) 1 64;
+            assert (fc (m - 64) == (m - 64 < 1 && flo (m - 1)))
+          end;
+          step_lo p flo fc fq m
+        end else ()
+    in
+    FStar.Classical.forall_intro aux
+
+let shift_hi_gen (p flo fhi fc fd fq: int -> bool)
+  : Lemma (requires
+      bounded fc /\ bounded fd /\
+      (forall (m: int). 0 <= m /\ m < 128 ==> flo m == p m) /\
+      (forall (m: int). 0 <= m /\ m < 128 ==> fhi m == p (m + 128)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fc k == (k % 64 + 63 < 64 && flo (k + 63))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fd k == (k % 64 + 63 < 64 && fhi (k + 63))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fq k == (((k % 64 >= 1 && fhi (k - 1)) <> fd (k - 64)) <> fc (k + 64))))
+    (ensures forall (m: int). 0 <= m /\ m < 128 ==> fq m == p (m + 127))
+  = let aux (m: int) : Lemma (0 <= m /\ m < 128 ==> fq m == p (m + 127))
+      = if 0 <= m && m < 128 then begin
+          assert (fq m ==
+            (((m % 64 >= 1 && fhi (m - 1)) <> fd (m - 64)) <> fc (m + 64)));
+          assert (1 <= m ==> fhi (m - 1) == p (m + 127));
+          assert (flo 127 == p 127);
+          if m < 64 then begin
+            Math.small_mod m 64;
+            Math.lemma_mod_plus m 1 64;
+            assert (fd (m - 64) == false);
+            assert (fc (m + 64) == (m < 1 && flo (m + 127)))
+          end else begin
+            Math.small_mod (m - 64) 64;
+            Math.lemma_mod_plus (m - 64) 1 64;
+            assert (fc (m + 64) == false);
+            assert (fd (m - 64) == (m - 64 < 1 && fhi (m - 1)))
+          end;
+          step_hi p flo fhi fc fd fq m
+        end else ()
+    in
+    FStar.Classical.forall_intro aux
+
+#pop-options
+
+let shift_lo (x y lo c qlo: block)
+  : Lemma (requires is_lo x y lo /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti c k == (k % 64 + 63 < 64 && lebiti lo (k + 63))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti qlo k == ((k % 64 >= 1 && lebiti lo (k - 1)) <> lebiti c (k - 64))))
+    (ensures is_qlo x y qlo)
+  = conv_zero_lo (lepoly (bswap x)) (lepoly (bswap y)) (-1);
+    shift_lo_gen (pprod x y) (lebiti lo) (lebiti c) (lebiti qlo)
+
+let shift_hi (x y lo hi c d qhi: block)
+  : Lemma (requires is_lo x y lo /\ is_hi x y hi /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti c k == (k % 64 + 63 < 64 && lebiti lo (k + 63))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti d k == (k % 64 + 63 < 64 && lebiti hi (k + 63))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti qhi k ==
+           (((k % 64 >= 1 && lebiti hi (k - 1)) <> lebiti d (k - 64)) <>
+            lebiti c (k + 64))))
+    (ensures is_qhi x y qhi)
+  = shift_hi_gen (pprod x y) (lebiti lo) (lebiti hi) (lebiti c) (lebiti d)
+                 (lebiti qhi)
+
+(** {3 Stage three: back to GCM's numbering}
+
+    Reversing the bytes of the shifted pair, high register first, gives
+    exactly the two halves [Spec.GF128.Poly.gmul_three] asks for. *)
+
+let clmul_halves (x y qlo qhi: block)
+  : Lemma (requires is_qlo x y qlo /\ is_qhi x y qhi)
+          (ensures Poly.halves x y (bswap qhi) (bswap qlo))
+  = let aux (k: nat { k < 128 })
+      : Lemma (bit (bswap qhi) k == Poly.pcoef x y k /\
+               bit (bswap qlo) k == Poly.pcoef x y (128 + k))
+      = bswap_bit qhi k;
+        bswap_bit qlo k;
+        bswap_conv x y (254 - k);
+        bswap_conv x y (126 - k)
+    in
+    FStar.Classical.forall_intro aux
 
 #pop-options
