@@ -209,6 +209,24 @@ let one_arr : (a: G.static_array S64.t
     lit_limbs one_list (1);
     G.mk_static_array one_list
 
+(** Half the group order, rounded down: the low-S boundary. *)
+let qhalf_list : list S64.t = [
+  S64.classify 8352uL; S64.classify 26651uL; S64.classify 12102uL; S64.classify 57321uL;
+  S64.classify 20509uL; S64.classify 22436uL; S64.classify 28275uL; S64.classify 23895uL;
+  S64.classify 65535uL; S64.classify 65535uL; S64.classify 65535uL; S64.classify 65535uL;
+  S64.classify 65535uL; S64.classify 65535uL; S64.classify 65535uL; S64.classify 32767uL
+]
+
+let qhalf_arr : (a: G.static_array S64.t
+                  { vals (G.static_array_elems a) == limbs K.q_half })
+  = assert_norm (L.length qhalf_list == nl);
+    assert_norm (lbnd qhalf_list);
+    assert_norm (leval qhalf_list == 57896044618658097711785492504343953926418782139537452191302581570759080747168);
+    assert_norm (K.q_half == 57896044618658097711785492504343953926418782139537452191302581570759080747168);
+    assert_norm (57896044618658097711785492504343953926418782139537452191302581570759080747168 < pow2 256);
+    lit_limbs qhalf_list (K.q_half);
+    G.mk_static_array qhalf_list
+
 (** {2 The exponents} *)
 
 (** [p - 2], the inversion exponent. *)
@@ -422,6 +440,12 @@ fn qr2 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r2)
 { table qr2_arr 16sz }
+
+inline_for_extraction
+fn qhalf () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs K.q_half)
+{ table qhalf_arr 16sz }
 
 (** The Montgomery constants; neither of K-256's moduli has one as
     convenient as P-256's prime. *)

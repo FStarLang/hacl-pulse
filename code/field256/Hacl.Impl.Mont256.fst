@@ -255,6 +255,35 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
 
 #pop-options
 
+(** {2 Ordering}
+
+    Equality is enough for every curve operation, but a policy like
+    secp256k1's low-S rule needs an ordering.  The subtraction [msub]
+    already performs computes one: its carry out is one exactly when the
+    difference did not go negative. *)
+
+fn ageq (a b: A.array S64.t) (d: erased modulus)
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (modulus_ok d /\ res d (vals va) /\ res d (vals vb))
+returns r: bool
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (r == (eval (vals va) >= eval (vals vb)))
+{
+  A.pts_to_len a; A.pts_to_len b;
+  let z = S64.zero;
+  let mut at = [| z; 16sz |]; A.pts_to_len at; A.pts_to_len at;
+  let co = negsub_op at a b;
+  msub_pre d (vals va) (vals vb);
+  ebnd (carry_low (addw (vals va) (negw (vals vb))));
+  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+  let m = S64.eq_mask co S64.zero;
+  let m8 = Cast.u64_to_u8 m;
+  let lo = Declassify.bool_of_mask m8;
+  not lo
+}
+
 (** {2 Range check}
 
     A decoder gets thirty-two bytes and has to say whether they are below
