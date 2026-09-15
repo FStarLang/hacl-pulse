@@ -1,0 +1,433 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** One SHA-256 block on the SHA instructions.
+
+    [Hacl.Hash.SHA2.Core.update_block_impl] is sixty-four rounds of scalar
+    code.  This is the same function with [SHA256RNDS2] doing two rounds at a
+    time and [SHA256MSG1]/[SHA256MSG2] doing four schedule slots at a time,
+    and it is what runs on a machine with the SHA extensions.
+
+    It has the same signature as the scalar version, including the message
+    schedule array: the schedule is computed into that array first and the
+    rounds read it back, rather than being kept in registers across the whole
+    block.  That costs a store and a few loads per group of four and buys
+    three plain loops -- one per stage -- instead of a hundred-line unrolled
+    body whose register roles rotate with period four.  The instructions are
+    where the time goes, and they are unaffected.
+
+    [Spec.SHANI] is the dictionary: it says what each instruction does in
+    terms of [Spec.SHA2], so that everything below is bookkeeping about which
+    lane holds which word. *)
+module Hacl.Hash.SHA2.NI
+
+#lang-pulse
+
+open FStar.Attributes
+open Pulse.Lib.Pervasives
+open Hacl.Secret.Word
+open Hacl.Secret.Word.Instances
+open Hacl.Spec.Bytes
+open Hacl.Spec.Loops
+open Spec.SHA2
+open Spec.SHANI
+
+module A = Pulse.Lib.Array
+module Sub = Hacl.Impl.Sub
+module Vec = Hacl.Vec128
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+module Math = FStar.Math.Lemmas
+module S8 = Hacl.Secret.UInt8
+module S32 = Hacl.Secret.UInt32
+module G = FStar.Ghost
+
+unfold let sha_prologue : string = "__attribute__((target(\"ssse3,sse4.1,sha\")))"
+
+(** {2 Four words at a time, to and from memory} *)
+
+inline_for_extraction
+fn load4 (a: A.array S32.t) (off: SZ.t) (#pm: perm) (#v: erased (Seq.seq S32.t))
+requires A.pts_to a #pm v **
+         pure (SZ.v off + 4 <= Seq.length v /\ Seq.length v == A.length a)
+returns r: Vec.t
+ensures A.pts_to a #pm v **
+        pure (SZ.v off + 4 <= Seq.length v /\
+              (forall (m: nat). m < 4 ==>
+                 lane (Vec.vv r) m == Seq.index v (SZ.v off + m)))
+{
+  A.pts_to_len a;
+  let e = SZ.add off 4sz;
+  let b = Sub.sub a off e;
+  let r = Vec.load32 b;
+  Sub.unsub_id a (SZ.v off) (SZ.v e) b;
+  r
+}
+
+inline_for_extraction
+fn store4 (a: A.array S32.t) (off: SZ.t) (x: Vec.t) (#v: erased (Seq.seq S32.t))
+requires A.pts_to a v **
+         pure (SZ.v off + 4 <= Seq.length v /\ Seq.length v == A.length a)
+ensures exists* (w: Seq.seq S32.t). A.pts_to a w **
+  pure (Seq.length w == Seq.length v /\
+        (forall (k: nat). k < Seq.length w ==>
+           Seq.index w k == (if SZ.v off <= k && k < SZ.v off + 4
+                             then lane (Vec.vv x) (k - SZ.v off)
+                             else Seq.index v k)))
+{
+  A.pts_to_len a;
+  let e = SZ.add off 4sz;
+  let b = Sub.sub a off e;
+  Vec.store32 b x;
+  Sub.unsub a (SZ.v off) (SZ.v e) b;
+}
+
+(** Sixteen bytes of the message block, read big-endian. *)
+inline_for_extraction
+fn load_group (block: A.array S8.t) (off: SZ.t) (q: SZ.t)
+              (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to block #pb vb **
+         pure (SZ.v q < 4 /\ SZ.v off + block_len #S32.t <= Seq.length vb /\
+               Seq.length vb == A.length block)
+returns r: Vec.t
+ensures A.pts_to block #pb vb **
+        pure (SZ.v q < 4 /\ (forall (m: nat). m < 4 ==>
+                lane (Vec.vv r) m ==
+                  Seq.index (words_from_be block_words (block_at #S32.t vb (SZ.v off)))
+                            (4 * SZ.v q + m)))
+{
+  A.pts_to_len block;
+  let i0 = SZ.add off (SZ.mul 16sz q);
+  block_group vb (SZ.v off) (SZ.v q);
+  let i1 = SZ.add i0 16sz;
+  let s = Sub.sub block i0 i1;
+  let r = Vec.load_be32 s;
+  Sub.unsub_id block (SZ.v i0) (SZ.v i1) s;
+  r
+}
+
+(** Storing a group extends the run of final slots by four.  A lemma of its
+    own because the store's postcondition is pointwise over the whole array
+    and the invariant is about a prefix. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
+let extend (p: params S32.t) (bw: Seq.lseq S32.t 16) (j: nat)
+           (vw vw': Seq.seq S32.t) (r: reg)
+  : Lemma (requires
+             Seq.length vw' == Seq.length vw /\ j + 4 <= Seq.length vw /\
+             (forall (i: nat). i < j ==> Seq.index vw i == ws_at p bw i) /\
+             holds_ws p bw j r /\
+             (forall (k: nat). k < Seq.length vw' ==>
+                Seq.index vw' k == (if j <= k && k < j + 4
+                                    then lane r (k - j) else Seq.index vw k)))
+          (ensures forall (i: nat). i < j + 4 ==> Seq.index vw' i == ws_at p bw i)
+  = ()
+#pop-options
+
+(** {2 One group of four schedule slots}
+
+    Factored out so that its proof is a query of its own: the block function
+    below is long, and Z3 does far better on three small goals than on one
+    that has all of them in scope at once. *)
+#push-options "--z3rlimit 200 --fuel 0 --ifuel 1"
+inline_for_extraction
+fn sched_group ([@@@FStar.Attributes.monomorphize] p: params S32.t)
+               (wsb: A.array S32.t) (j: SZ.t)
+               (#bw: erased (Seq.lseq S32.t 16)) (#vw: erased (Seq.seq S32.t))
+requires A.pts_to wsb vw **
+         pure (is_sha256 p /\ 16 <= SZ.v j /\ SZ.v j + 4 <= rounds p /\
+               Seq.length vw == rounds p /\ Seq.length vw == A.length wsb /\
+               (forall (i: nat). i < SZ.v j ==> Seq.index vw i == ws_at p bw i))
+ensures exists* (vw': Seq.seq S32.t). A.pts_to wsb vw' **
+  pure (Seq.length vw' == Seq.length vw /\ SZ.v j + 4 <= Seq.length vw' /\
+        (forall (i: nat). i < SZ.v j + 4 ==> Seq.index vw' i == ws_at p bw i))
+{
+  A.pts_to_len wsb;
+  let x = load4 wsb (SZ.sub j 16sz);
+  let y = load4 wsb (SZ.sub j 12sz);
+  let bb = Vec.sha256msg1 x y;
+  let c = load4 wsb (SZ.sub j 8sz);
+  let a = load4 wsb (SZ.sub j 4sz);
+  let tmp = Vec.align_right_4 a c;
+  let bt = Vec.add32 bb tmp;
+  let rb = Vec.sha256msg2 bt a;
+  four (Vec.vv tmp)
+       (fun m -> if m < 3 then lane (Vec.vv c) (m + 1) else lane (Vec.vv a) 0);
+  assert (pure (holds_ws p (reveal bw) (SZ.v j - 16) (Vec.vv x)));
+  assert (pure (holds_ws p (reveal bw) (SZ.v j - 12) (Vec.vv y)));
+  assert (pure (holds_ws p (reveal bw) (SZ.v j - 8) (Vec.vv c)));
+  assert (pure (holds_ws p (reveal bw) (SZ.v j - 4) (Vec.vv a)));
+  msg1_holds p (reveal bw) (SZ.v j - 16) (Vec.vv x) (Vec.vv y) (Vec.vv bb);
+  quad_holds p (reveal bw) (SZ.v j) (Vec.vv a) (Vec.vv c) (Vec.vv bb)
+               (Vec.vv tmp) (Vec.vv bt) (Vec.vv rb);
+  store4 wsb j rb;
+  with vw'. assert (A.pts_to wsb vw');
+  extend p (reveal bw) (SZ.v j) (reveal vw) vw' (Vec.vv rb);
+}
+#pop-options
+
+(** {2 Four rounds}
+
+    The two registers are passed as references rather than returned, which
+    keeps the caller's loop a plain [while] over two locals. *)
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+inline_for_extraction
+fn rnds_group ([@@@FStar.Attributes.monomorphize] p: params S32.t)
+              (kt: A.array S32.t) (wsb: A.array S32.t) (j: SZ.t)
+              (s0: ref Vec.t) (s1: ref Vec.t)
+              (#pk: perm) (#vk: erased (Seq.seq S32.t))
+              (#vw: erased (Seq.seq S32.t)) (#w: erased (Seq.lseq S32.t (rounds p)))
+              (#h0: erased (Seq.lseq S32.t 8))
+              (#vs0: erased Vec.t) (#vs1: erased Vec.t)
+requires A.pts_to kt #pk vk ** A.pts_to wsb vw ** pts_to s0 vs0 ** pts_to s1 vs1 **
+         pure (is_sha256 p /\ SZ.v j + 4 <= rounds p /\
+               reveal vk == (reveal p.k <: Seq.seq S32.t) /\
+               Seq.length vk == rounds p /\ Seq.length vk == A.length kt /\
+               Seq.length vw == rounds p /\ Seq.length vw == A.length wsb /\
+               (forall (i: nat). i < rounds p ==> Seq.index vw i == Seq.index w i) /\
+               unpack (Vec.vv vs0) (Vec.vv vs1) ==
+                 repeati_g (SZ.v j) (shuffle_core p w) h0)
+ensures exists* (n0: Vec.t) (n1: Vec.t).
+  A.pts_to kt #pk vk ** A.pts_to wsb vw ** pts_to s0 n0 ** pts_to s1 n1 **
+  pure (unpack (Vec.vv n0) (Vec.vv n1) ==
+          repeati_g (SZ.v j + 4) (shuffle_core p w) h0)
+{
+  A.pts_to_len kt;
+  A.pts_to_len wsb;
+  let mw = load4 wsb j;
+  let kw = load4 kt j;
+  let m = Vec.add32 kw mw;
+  let a = !s0;
+  let c = !s1;
+  let n1 = Vec.sha256rnds2 c a m;
+  let m2 = Vec.shuffle_high_pair m;
+  let n0 = Vec.sha256rnds2 a n1 m2;
+  rnds4 p (reveal w) (reveal h0) (SZ.v j)
+        (Vec.vv a) (Vec.vv c) (Vec.vv n0) (Vec.vv n1) (Vec.vv m) (Vec.vv m2);
+  s0 := n0;
+  s1 := n1;
+}
+#pop-options
+
+(** The tail: unpack the shuffled state, add the saved state back and write
+    it out.  A helper of its own so that the main function's query stays
+    small. *)
+inline_for_extraction
+fn store_state (st: A.array S32.t) (f0: Vec.t) (f1: Vec.t)
+               (#vst0: erased (Seq.lseq S32.t 8))
+               (#hs: erased (Seq.lseq S32.t 8))
+requires A.pts_to st vst0 **
+         pure (Seq.length vst0 == A.length st /\ unpack (Vec.vv f0) (Vec.vv f1) == reveal hs)
+ensures A.pts_to st (add_state (reveal vst0) (reveal hs))
+{
+  A.pts_to_len st;
+  let lo = load4 st 0sz;
+  let hi = load4 st 4sz;
+  let t = Vec.shuffle_swap_pairs lo;
+  let u = Vec.shuffle_reverse hi;
+  let a0 = Vec.align_right_8 t u;
+  let c0 = Vec.blend_high u t;
+  pack_state (Vec.vv lo) (Vec.vv hi) (Vec.vv a0) (Vec.vv c0) (reveal vst0);
+  let r0 = Vec.add32 a0 f0;
+  let r1 = Vec.add32 c0 f1;
+  add_state_packed (reveal vst0) (reveal hs)
+                   (Vec.vv a0) (Vec.vv c0) (Vec.vv f0) (Vec.vv f1)
+                   (Vec.vv r0) (Vec.vv r1);
+  let t2 = Vec.shuffle_reverse r0;
+  let u2 = Vec.shuffle_swap_pairs r1;
+  let lo2 = Vec.blend_high t2 u2;
+  let hi2 = Vec.align_right_8 u2 t2;
+  unpack_state (Vec.vv r0) (Vec.vv r1) (Vec.vv lo2) (Vec.vv hi2)
+               (add_state (reveal vst0) (reveal hs));
+  store4 st 0sz lo2;
+  store4 st 4sz hi2;
+  with vfin. assert (A.pts_to st vfin);
+  Seq.lemma_eq_intro vfin (add_state (reveal vst0) (reveal hs));
+  Seq.lemma_eq_elim vfin (add_state (reveal vst0) (reveal hs));
+}
+
+(** {2 The three loops}
+
+    Each loop is a function of its own: a Pulse [fn] is a single SMT query,
+    and the three of them together are far beyond what Z3 will chew. *)
+
+(** The block itself, sixteen bytes at a time. *)
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
+inline_for_extraction
+fn load_all (block: A.array S8.t) (off: SZ.t) (wsb: A.array S32.t)
+            (#pb: perm) (#vb: erased (Seq.seq S8.t))
+            (#vw0: erased (Seq.seq S32.t))
+requires A.pts_to block #pb vb ** A.pts_to wsb vw0 **
+         pure (Seq.length vw0 == 64 /\ Seq.length vw0 == A.length wsb /\
+               Seq.length vb == A.length block /\
+               SZ.v off + block_len #S32.t <= Seq.length vb)
+ensures exists* (vw: Seq.seq S32.t). A.pts_to block #pb vb ** A.pts_to wsb vw **
+  pure (Seq.length vw == 64 /\
+        (forall (i: nat). i < 16 ==>
+           Seq.index vw i ==
+             Seq.index (words_from_be block_words (block_at #S32.t vb (SZ.v off))) i))
+{
+  A.pts_to_len block;
+  A.pts_to_len wsb;
+  let mut q = 0sz;
+  while (let vq = !q; SZ.lt vq 4sz)
+  invariant exists* (vq: SZ.t) (vw: Seq.seq S32.t).
+    pts_to q vq ** A.pts_to block #pb vb ** A.pts_to wsb vw **
+    pure (SZ.v vq <= 4 /\ Seq.length vw == 64 /\
+          (forall (i: nat). i < 4 * SZ.v vq ==>
+             Seq.index vw i ==
+               Seq.index (words_from_be block_words (block_at #S32.t vb (SZ.v off))) i))
+  decreases (4 - SZ.v (!q))
+  {
+    let vq = !q;
+    let r = load_group block off vq;
+    store4 wsb (SZ.mul 4sz vq) r;
+    q := SZ.add vq 1sz;
+  };
+}
+#pop-options
+
+(** The first sixteen slots of the schedule are the block itself; stated as a
+    lemma because [sched_all] runs at [--fuel 0]. *)
+let ws_at_low (p: params S32.t) (b: Seq.lseq S32.t 16)
+  : Lemma (forall (i: nat). i < 16 ==> ws_at p b i == Seq.index b i)
+  = ()
+
+(** The schedule.  Group [j] needs the four preceding groups. *)
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
+inline_for_extraction
+fn sched_all ([@@@FStar.Attributes.monomorphize] p: params S32.t)
+             (wsb: A.array S32.t)
+             (#bw: erased (Seq.lseq S32.t 16)) (#vw0: erased (Seq.seq S32.t))
+requires A.pts_to wsb vw0 **
+         pure (is_sha256 p /\ Seq.length vw0 == rounds p /\
+               Seq.length vw0 == A.length wsb /\
+               (forall (i: nat). i < 16 ==> Seq.index vw0 i == Seq.index bw i))
+ensures exists* (vw: Seq.seq S32.t). A.pts_to wsb vw **
+  pure (Seq.length vw == rounds p /\
+        (forall (i: nat). i < rounds p ==>
+           Seq.index vw i == Seq.index (ws p (reveal bw)) i))
+{
+  A.pts_to_len wsb;
+  ws_at_low p (reveal bw);
+  let mut q = 16sz;
+  while (let vj = !q; SZ.lt vj 64sz)
+  invariant exists* (vj: SZ.t) (vw: Seq.seq S32.t).
+    pts_to q vj ** A.pts_to wsb vw **
+    pure (16 <= SZ.v vj /\ SZ.v vj <= 64 /\ SZ.v vj % 4 == 0 /\
+          Seq.length vw == rounds p /\
+          (forall (i: nat). i < SZ.v vj ==> Seq.index vw i == ws_at p (reveal bw) i))
+  decreases (64 - SZ.v (!q))
+  {
+    let vj = !q;
+    sched_group p wsb vj #bw;
+    Math.lemma_mod_plus (SZ.v vj) 1 4;
+    q := SZ.add vj 4sz;
+  };
+}
+#pop-options
+
+(** The rounds: load the state, pack it, shuffle, add and store.  The two
+    packed registers never leave this function. *)
+#push-options "--z3rlimit 150 --fuel 0 --ifuel 1"
+inline_for_extraction
+fn shuffle_block ([@@@FStar.Attributes.monomorphize] p: params S32.t)
+                 (kt: A.array S32.t) (wsb: A.array S32.t) (st: A.array S32.t)
+                 (#pk: perm) (#vk: erased (Seq.seq S32.t))
+                 (#vw: erased (Seq.seq S32.t))
+                 (#w: erased (Seq.lseq S32.t (rounds p)))
+                 (#vst0: erased (Seq.lseq S32.t 8))
+requires A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to st vst0 **
+         pure (is_sha256 p /\ reveal vk == (reveal p.k <: Seq.seq S32.t) /\
+               Seq.length vk == rounds p /\ Seq.length vk == A.length kt /\
+               Seq.length vw == rounds p /\ Seq.length vw == A.length wsb /\
+               Seq.length vst0 == A.length st /\
+               (forall (i: nat). i < rounds p ==> Seq.index vw i == Seq.index w i))
+ensures A.pts_to kt #pk vk ** A.pts_to wsb vw **
+        A.pts_to st (add_state (reveal vst0) (shuffle p (reveal w) (reveal vst0)))
+{
+  A.pts_to_len kt;
+  A.pts_to_len wsb;
+  A.pts_to_len st;
+  let lo = load4 st 0sz;
+  let hi = load4 st 4sz;
+  let t = Vec.shuffle_swap_pairs lo;
+  let u = Vec.shuffle_reverse hi;
+  let a0 = Vec.align_right_8 t u;
+  let c0 = Vec.blend_high u t;
+  pack_state (Vec.vv lo) (Vec.vv hi) (Vec.vv a0) (Vec.vv c0) (reveal vst0);
+  repeati_g_zero (shuffle_core p (reveal w)) (reveal vst0);
+
+  let mut s0 = a0;
+  let mut s1 = c0;
+  let mut q = 0sz;
+  while (let vj = !q; SZ.lt vj 64sz)
+  invariant exists* (vj: SZ.t) (vs0: Vec.t) (vs1: Vec.t).
+    pts_to q vj ** pts_to s0 vs0 ** pts_to s1 vs1 **
+    A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to st vst0 **
+    pure (SZ.v vj <= 64 /\ SZ.v vj % 4 == 0 /\
+          unpack (Vec.vv vs0) (Vec.vv vs1) ==
+            repeati_g (SZ.v vj) (shuffle_core p (reveal w)) (reveal vst0))
+  decreases (64 - SZ.v (!q))
+  {
+    let vj = !q;
+    rnds_group p kt wsb vj s0 s1 #pk #vk #vw #(reveal w) #(reveal vst0);
+    Math.lemma_mod_plus (SZ.v vj) 1 4;
+    q := SZ.add vj 4sz;
+  };
+
+  let f0 = !s0;
+  let f1 = !s1;
+  assert (pure (shuffle p (reveal w) (reveal vst0) ==
+                repeati_g 64 (shuffle_core p (reveal w)) (reveal vst0)));
+  store_state st f0 f1 #vst0 #(hide (shuffle p (reveal w) (reveal vst0)));
+}
+#pop-options
+
+(** {2 The block} *)
+
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
+
+[@@CPrologue "__attribute__((target(\"ssse3,sse4.1,sha\")))";
+  custard_c_closure_prologue "__attribute__((target(\"ssse3,sse4.1,sha\")))" ""]
+fn update_block_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
+                   (kt: A.array S32.t) (wsb: A.array S32.t) (st: A.array S32.t)
+                   (block: A.array S8.t) (off: SZ.t)
+                   (#pk: perm) (#vk: erased (Seq.seq S32.t))
+                   (#vw0: erased (Seq.seq S32.t)) (#vst0: erased (Seq.lseq S32.t 8))
+                   (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to wsb vw0 ** A.pts_to st vst0 **
+         A.pts_to block #pb vb **
+         pure (is_sha256 p /\ reveal vk == (reveal p.k <: Seq.seq S32.t) /\
+               Seq.length vw0 == rounds p /\
+               SZ.v off + block_len #S32.t <= Seq.length vb)
+ensures exists* (vw: Seq.seq S32.t).
+  A.pts_to kt #pk vk ** A.pts_to wsb vw **
+  A.pts_to st (update_block p (block_at #S32.t vb (SZ.v off)) vst0) **
+  A.pts_to block #pb vb ** pure (Seq.length vw == rounds p)
+{
+  A.pts_to_len kt;
+  A.pts_to_len wsb;
+  A.pts_to_len st;
+  A.pts_to_len block;
+
+  let bw : erased (Seq.lseq S32.t 16) =
+    hide (words_from_be block_words (block_at #S32.t vb (SZ.v off)));
+
+  load_all block off wsb;
+  sched_all p wsb #bw;
+  shuffle_block p kt wsb st #pk #vk #_ #(hide (ws p (reveal bw))) #vst0;
+}
+#pop-options

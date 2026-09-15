@@ -426,3 +426,27 @@ let add_state_packed (h hs: Seq.lseq S32.t 8) (a0 c0 st0 st1 ra rc: reg)
           (ensures unpack ra rc == add_state h hs)
   = Seq.lemma_eq_intro (unpack ra rc) (add_state h hs)
 #pop-options
+
+(** {2 A block, four words at a time}
+
+    The implementation loads sixteen bytes at a time; [Spec.SHA2.update_block]
+    reads the whole sixty-four byte block at once.  Both are [word_from_be] of
+    the same four bytes. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
+let block_group (s: Seq.seq S8.t) (off: nat) (q: nat { q < 4 })
+  : Lemma (requires off + 64 <= Seq.length s)
+          (ensures (Seq.length (Seq.slice s (off + 16 * q) (off + 16 * q + 16)) == 16 /\
+                    (forall (m: nat). m < 4 ==>
+                       Seq.index (words_from_be block_words (block_at #S32.t s off)) (4 * q + m) ==
+                       Seq.index (words_from_be 4 (Seq.slice s (off + 16 * q) (off + 16 * q + 16))) m)))
+  = let blk = block_at #S32.t s off in
+    assert (blk == Seq.slice s off (off + 64));
+    let sl = Seq.slice s (off + 16 * q) (off + 16 * q + 16) in
+    Seq.slice_slice s off (off + 64) (16 * q) (16 * q + 16);
+    let aux (m: nat { m < 4 }) : Lemma (sub_block #S32.t block_words blk (4 * q + m) == sub_block #S32.t 4 sl m)
+      = Seq.slice_slice s off (off + 64) (4 * (4 * q + m)) (4 * (4 * q + m) + 4);
+        Seq.slice_slice s (off + 16 * q) (off + 16 * q + 16) (4 * m) (4 * m + 4);
+        Seq.lemma_eq_intro (sub_block #S32.t block_words blk (4 * q + m)) (sub_block #S32.t 4 sl m)
+    in
+    aux 0; aux 1; aux 2; aux 3
+#pop-options

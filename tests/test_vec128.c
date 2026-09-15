@@ -378,6 +378,12 @@ TEST_SHA static int one_sha(const uint8_t a[16], const uint8_t b[16],
                 ((uint32_t)a[4 * i + 2] << 8) | (uint32_t)a[4 * i + 3]);
   r |= quiet(what, got, expected);
 
+  /* load_be32 is the load and the shuffle together, which is the only way
+     either is used. */
+  Hacl_Vec128_store32((uint32_t *)(void *)got,
+                      Hacl_Vec128_load_be32((uint8_t *)a));
+  r |= quiet(what, got, expected);
+
   Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_sha256msg1(va, vb));
   ref_msg1(expected, a, b);
   r |= quiet(what, got, expected);

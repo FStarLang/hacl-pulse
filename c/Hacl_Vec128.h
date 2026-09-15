@@ -192,6 +192,10 @@ HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_bswap32(Hacl_Vec128_t a) {
   return _mm_shuffle_epi8(a, rev);
 }
 
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_load_be32(uint8_t *p) {
+  return Hacl_Vec128_bswap32(_mm_loadu_si128((const __m128i *)(const void *)p));
+}
+
 HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha256rnds2(Hacl_Vec128_t cdgh,
                                                       Hacl_Vec128_t abef,
                                                       Hacl_Vec128_t k) {
@@ -313,6 +317,11 @@ static inline Hacl_Vec128_t Hacl_Vec128_sha256rnds2(Hacl_Vec128_t cdgh,
   (void)abef;
   (void)k;
   return cdgh;
+}
+static inline Hacl_Vec128_t Hacl_Vec128_load_be32(uint8_t *p) {
+  Hacl_Vec128_t r;
+  memcpy(&r, p, 16);
+  return r;
 }
 static inline bool Hacl_Vec128_sha_supported(void) { return false; }
 static inline bool Hacl_Vec128_supported(void) { return false; }

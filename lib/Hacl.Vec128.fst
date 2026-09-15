@@ -337,12 +337,15 @@ assume val blend_high (a b: t)
            SHANI.lane (vv r) 2 == SHANI.lane (vv b) 2 /\
            SHANI.lane (vv r) 3 == SHANI.lane (vv b) 3 }
 
-(** [PSHUFB] with a fixed mask: reverse the bytes within each word, which
-    turns the big-endian reading FIPS 180-4 applies to a message block into
-    the little-endian one the lanes have. *)
-[@@custard_extern "Hacl_Vec128_bswap32"; custard_c_header "Hacl_Vec128.h"]
-assume val bswap32 (a: t)
-  : r: t { SHANI.lanes (vv r) == Hacl.Spec.Bytes.words_from_be 4 (vv a) }
+(** A load followed by [PSHUFB] with a fixed mask, which reverses the bytes
+    within each word: a message block is read big-endian by FIPS 180-4 and
+    the lanes are little-endian.  The two are bound together because the
+    shuffle is never wanted on its own. *)
+[@@custard_extern "Hacl_Vec128_load_be32"; custard_c_header "Hacl_Vec128.h"]
+assume val load_be32 (p: A.array S8.t) (#v: erased (Seq.lseq S8.t 16)) (#pm: perm)
+  : stt t (requires A.pts_to p #pm v)
+          (ensures fun r -> A.pts_to p #pm v **
+                            pure (SHANI.lanes (vv r) == Hacl.Spec.Bytes.words_from_be 4 v))
 
 (** {3 The hash instructions} *)
 
