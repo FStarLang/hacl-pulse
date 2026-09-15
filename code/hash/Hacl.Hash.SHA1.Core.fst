@@ -42,6 +42,8 @@ open Hacl.Spec.Bytes
 open Hacl.Impl.Bytes
 open Spec.SHA1
 open Hacl.Spec.Loops
+open Spec.SHA1.Lemmas
+open Spec.SHA2.Lemmas
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -50,6 +52,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module U32 = FStar.UInt32
+module C2 = Hacl.Hash.SHA2.Core
 
 (** {2 Sizes as machine values} *)
 
@@ -220,6 +223,256 @@ ensures exists* vw.
   A.((st.(2sz) <- S32.add_mod c0 c1));
   A.((st.(3sz) <- S32.add_mod d0 d1));
   A.((st.(4sz) <- S32.add_mod e0 e1));
+}
+
+#pop-options
+
+(** {2 The digest}
+
+    Five whole words, twenty bytes, no truncation: unlike SHA-224 and SHA-384
+    the digest is exactly the state, so this writes straight into the caller's
+    buffer with no scratch copy. *)
+
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+
+fn write_digest (out: A.array S8.t) (st: A.array S32.t)
+                (#vout: erased (Seq.seq S8.t)) (#pst: perm)
+                (#vst: erased (Seq.lseq S32.t state_words))
+requires A.pts_to out vout ** A.pts_to st #pst vst **
+         pure (Seq.length vout == hash_bytes)
+ensures A.pts_to out (finish vst) ** A.pts_to st #pst vst
+{
+  A.pts_to_len out;
+  A.pts_to_len st;
+  let mut j = 0sz;
+  while (let vj = !j; SZ.lt vj 5sz)
+  invariant exists* (vj: SZ.t) (vo: Seq.seq S8.t).
+    pts_to j vj ** A.pts_to out vo ** A.pts_to st #pst vst **
+    pure (SZ.v vj <= 5 /\ Seq.length vo == hash_bytes /\
+          (forall (i: nat). i < SZ.v vj * 4 ==>
+             Seq.index vo i == Seq.index (words_to_be #S32.t state_words vst) i))
+  decreases (5 - SZ.v (!j))
+  {
+    let vj = !j;
+    Math.lemma_mult_le_right 4 (SZ.v vj + 1) 5;
+    Math.distributivity_add_left (SZ.v vj) 1 4;
+    let x = A.(st.(vj));
+    store_be #S32.t out (SZ.mul vj 4sz) x;
+    with vo. assert (A.pts_to out vo);
+    digest_step #S32.t state_words vst (SZ.v vj) (SZ.v (SZ.mul vj 4sz)) vo;
+    j := SZ.add vj 1sz;
+  };
+  with vo. assert (A.pts_to out vo);
+  Seq.lemma_eq_intro vo (finish vst);
+  Seq.lemma_eq_elim vo (finish vst);
+  ()
+}
+
+#pop-options
+
+(** {2 The whole hash}
+
+    The same two-phase drive as SHA-2: one loop over the whole blocks of the
+    message, then a two-block scratch buffer holding the last partial block
+    together with the padding.  Because SHA-1's padding {i is} SHA-2's padding
+    at 32 bits ([Spec.SHA1.Lemmas]), both the byte-level lemmas and
+    [build_tail] itself are reused rather than restated. *)
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+
+(** The padding blocks and the digest.  Separated from [hash_impl] only so
+    that each proof obligation sees a small context. *)
+
+fn tail_and_finish (wsb: A.array S32.t) (st: A.array S32.t)
+                   (out: A.array S8.t) (input: A.array S8.t)
+                   (len: SZ.t) (nblocks: SZ.t) (base_in: SZ.t)
+                   (rem: (r: SZ.t { SZ.v r < block_len }))
+                   (pre: erased (Seq.seq S8.t))
+                   (#vw0: erased (Seq.seq S32.t))
+                   (#vst0: erased (Seq.lseq S32.t state_words))
+                   (#vout: erased (Seq.seq S8.t)) (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to wsb vw0 ** A.pts_to st vst0 **
+         A.pts_to out vout ** A.pts_to input #pin vin **
+         pure (Seq.length vw0 == rounds /\ Seq.length vout == hash_bytes /\
+               Seq.length pre + Seq.length vin == SZ.v len /\
+               Seq.length vin == SZ.v base_in + SZ.v rem /\
+               SZ.v len < max_input /\
+               SZ.v rem == SZ.v len % block_len /\
+               SZ.v len - SZ.v rem == SZ.v nblocks * block_len /\
+               reveal vst0 == repeati_g (SZ.v nblocks)
+                                (update_step (padded (Seq.append pre vin))) iv)
+ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Seq.seq S8.t).
+  A.pts_to wsb vw ** A.pts_to st vst **
+  A.pts_to out vout' ** A.pts_to input #pin vin **
+  pure (Seq.length vw == rounds /\ Seq.length pre + Seq.length vin < max_input /\
+        vout' == hash (Seq.append pre vin))
+{
+  A.pts_to_len input;
+  A.pts_to_len out;
+  A.pts_to_len st;
+  A.pts_to_len wsb;
+  Seq.lemma_len_append (reveal pre) (reveal vin);
+  padded_shape #S32.t (Seq.append pre vin);
+  let ntail = C2.tail_len #S32.t rem;
+  let base = SZ.sub len rem;
+  let z8 = S8.classify 0uy;
+  let mut tarr = [| z8; 128sz |];
+  A.pts_to_len tarr;
+  A.pts_to_len tarr;
+  C2.len_fits (SZ.v len);
+  Math.euclidean_division_definition (SZ.v len) block_len;
+  C2.build_tail #S32.t tarr input len base_in rem ntail;
+  with vt. assert (A.pts_to tarr vt);
+  pad_zeros_alt #S32.t (SZ.v len);
+  append_index_at (reveal pre) (reveal vin) (SZ.v base) (SZ.v base_in) (SZ.v rem);
+  tail_bytes #S32.t (Seq.append pre vin) vt (SZ.v ntail) (SZ.v base);
+  Math.multiple_division_lemma (SZ.v ntail / block_len) block_len;
+  Math.multiply_fractions (SZ.v ntail) block_len;
+  let ntb = SZ.div ntail 64sz;
+
+  let mut j = 0sz;
+  while (let vj = !j; SZ.lt vj ntb)
+  invariant exists* (vj: SZ.t) (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words).
+    pts_to j vj ** A.pts_to wsb vw ** A.pts_to st vst ** A.pts_to tarr vt **
+    pure (SZ.v vj <= SZ.v ntb /\ Seq.length vw == rounds /\
+          SZ.v ntb * block_len <= SZ.v ntail /\
+          SZ.v base == SZ.v nblocks * block_len /\
+          Seq.length (padded (Seq.append pre vin)) == SZ.v base + SZ.v ntail /\
+          (forall (o: nat). o + block_len <= SZ.v ntail ==>
+             block_at (padded (Seq.append pre vin)) (SZ.v base + o) == block_at vt o) /\
+          vst == repeati_g (SZ.v nblocks + SZ.v vj)
+                   (update_step (padded (Seq.append pre vin))) iv)
+  decreases (SZ.v ntb - SZ.v (!j))
+  {
+    let vj = !j;
+    Math.lemma_mult_le_right block_len (SZ.v vj) (SZ.v ntb);
+    C2.small_fits (SZ.v vj * block_len);
+    Math.lemma_mult_le_right block_len (SZ.v vj + 1) (SZ.v ntb);
+    Math.distributivity_add_left (SZ.v vj) 1 block_len;
+    Math.distributivity_add_left (SZ.v nblocks) (SZ.v vj) block_len;
+    Math.distributivity_add_left (SZ.v nblocks + SZ.v vj) 1 block_len;
+    unfold_repeati_g (SZ.v nblocks + SZ.v vj)
+      (update_step (padded (Seq.append pre vin))) iv;
+    assert (pure (block_at (padded (Seq.append pre vin))
+                    ((SZ.v nblocks + SZ.v vj) * block_len) ==
+                  block_at vt (SZ.v vj * block_len)));
+    assert (pure ((SZ.v nblocks + SZ.v vj + 1) * block_len <=
+                  Seq.length (padded (Seq.append pre vin))));
+    update_block_impl wsb st tarr (SZ.mul vj 64sz);
+    j := SZ.add vj 1sz;
+  };
+  Math.multiple_modulo_lemma 1 block_len;
+  Math.multiple_modulo_lemma 2 block_len;
+  Math.euclidean_division_definition (SZ.v ntail) block_len;
+  assert (pure (SZ.v ntb * block_len == SZ.v ntail));
+  Math.distributivity_add_left (SZ.v nblocks) (SZ.v ntb) block_len;
+  Math.multiple_division_lemma (SZ.v nblocks + SZ.v ntb) block_len;
+  assert (pure (Seq.length (padded (Seq.append pre vin)) / block_len ==
+                SZ.v nblocks + SZ.v ntb));
+  assert (pure (update_all (padded (Seq.append pre vin)) iv ==
+                repeati_g (SZ.v nblocks + SZ.v ntb)
+                  (update_step (padded (Seq.append pre vin))) iv));
+  write_digest out st;
+  ()
+}
+
+#pop-options
+
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+
+(** The full blocks of the message, in place. *)
+
+fn hash_blocks (wsb: A.array S32.t) (st: A.array S32.t) (input: A.array S8.t)
+               (nprev: SZ.t) (nfull: SZ.t) (pre: erased (Seq.seq S8.t))
+               (#vw0: erased (Seq.seq S32.t))
+               (#vst0: erased (Seq.lseq S32.t state_words))
+               (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to wsb vw0 ** A.pts_to st vst0 ** A.pts_to input #pin vin **
+         pure (Seq.length vw0 == rounds /\
+               Seq.length pre == SZ.v nprev * block_len /\
+               Seq.length pre + Seq.length vin < max_input /\
+               SZ.v nfull == Seq.length vin / block_len /\
+               reveal vst0 == repeati_g (SZ.v nprev)
+                                (update_step (padded (Seq.append pre vin))) iv)
+ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words).
+  A.pts_to wsb vw ** A.pts_to st vst ** A.pts_to input #pin vin **
+  pure (Seq.length pre + Seq.length vin < max_input /\ Seq.length vw == rounds /\
+        vst == repeati_g (SZ.v nprev + SZ.v nfull)
+                 (update_step (padded (Seq.append pre vin))) iv)
+{
+  A.pts_to_len input;
+  Seq.lemma_len_append (reveal pre) (reveal vin);
+  padded_shape #S32.t (Seq.append pre vin);
+  let mut i = 0sz;
+  while (let vi2 = !i; SZ.lt vi2 nfull)
+  invariant exists* (vi2: SZ.t) (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words).
+    pts_to i vi2 ** A.pts_to wsb vw ** A.pts_to st vst ** A.pts_to input #pin vin **
+    pure (SZ.v vi2 <= SZ.v nfull /\ Seq.length vw == rounds /\
+          vst == repeati_g (SZ.v nprev + SZ.v vi2)
+                   (update_step (padded (Seq.append pre vin))) iv)
+  decreases (SZ.v nfull - SZ.v (!i))
+  {
+    let vi2 = !i;
+    Math.lemma_mult_le_right block_len (SZ.v vi2 + 1) (SZ.v nfull);
+    Math.lemma_mult_le_right block_len (SZ.v nfull) (Seq.length vin / block_len);
+    padded_index_block_shift #S32.t (reveal pre) (reveal vin) (SZ.v vi2 * block_len);
+    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2) block_len;
+    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2 + 1) block_len;
+    unfold_repeati_g (SZ.v nprev + SZ.v vi2)
+      (update_step (padded (Seq.append pre vin))) iv;
+    assert (pure (block_at (padded (Seq.append pre vin))
+                    ((SZ.v nprev + SZ.v vi2) * block_len) ==
+                  block_at vin (SZ.v vi2 * block_len)));
+    assert (pure ((SZ.v nprev + SZ.v vi2 + 1) * block_len <=
+                  Seq.length (padded (Seq.append pre vin))));
+    update_block_impl wsb st input (SZ.mul vi2 64sz);
+    i := SZ.add vi2 1sz;
+  };
+}
+
+#pop-options
+
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+
+(** The whole hash of a whole message. *)
+
+fn hash_impl (out: A.array S8.t) (input: A.array S8.t) (len: SZ.t)
+             (#vout: erased (Seq.seq S8.t)) (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to input #pin vin **
+         pure (Seq.length vout == hash_bytes /\ Seq.length vin < max_input /\
+               SZ.v len == Seq.length vin)
+ensures exists* vout'.
+  A.pts_to out vout' ** A.pts_to input #pin vin **
+  pure (Seq.length vin < max_input /\ vout' == hash vin)
+{
+  A.pts_to_len out;
+  A.pts_to_len input;
+  let nfull = SZ.div len 64sz;
+  let rem = SZ.rem len 64sz;
+  let z0 = S32.classify 0ul;
+
+  let mut starr = [| z0; 5sz |];
+  A.pts_to_len starr;
+  A.pts_to_len starr;
+  A.((starr.(0sz) <- S32.classify 0x67452301ul));
+  A.((starr.(1sz) <- S32.classify 0xefcdab89ul));
+  A.((starr.(2sz) <- S32.classify 0x98badcfeul));
+  A.((starr.(3sz) <- S32.classify 0x10325476ul));
+  A.((starr.(4sz) <- S32.classify 0xc3d2e1f0ul));
+  with vst_init. assert (A.pts_to starr vst_init);
+  Seq.lemma_eq_intro vst_init (iv <: Seq.seq S32.t);
+  Seq.lemma_eq_elim vst_init (iv <: Seq.seq S32.t);
+
+  let mut wsarr = [| z0; rounds_sz |];
+  A.pts_to_len wsarr;
+  A.pts_to_len wsarr;
+
+  let empty : erased (Seq.seq S8.t) = hide (Seq.empty #S8.t);
+  Seq.lemma_eq_elim (Seq.append (reveal empty) (reveal vin)) (reveal vin);
+  Math.euclidean_division_definition (SZ.v len) block_len;
+  hash_blocks wsarr starr input 0sz nfull empty;
+  tail_and_finish wsarr starr out input len nfull (SZ.sub len rem) rem empty;
+  ()
 }
 
 #pop-options
