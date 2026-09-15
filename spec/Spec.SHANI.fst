@@ -54,6 +54,7 @@ open Hacl.Secret.Word
 open Hacl.Spec.Bytes
 open Spec.SHA2
 open Hacl.Secret.Word.Instances
+open Hacl.Spec.Loops
 
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
@@ -336,4 +337,92 @@ let quad_holds (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j })
     quad_lane p b j bt 3 (ws_at p b (j + 1));
     assert (lane res 3 == ws_at p b (j + 3));
     four res (fun i -> ws_at p b (j + i))
+#pop-options
+
+(** {2 Four rounds}
+
+    [SHA256RNDS2] twice, which is what the implementation does per iteration:
+    the first call reads the round input from the low two lanes of [msg] and
+    the second from the high two, brought down by [shuffle_high_pair].  The
+    two registers swap roles in between, so no state is permuted.
+
+    The hypotheses are the postconditions of the [Hacl.Vec128] axioms written
+    out; the conclusion is four more steps of [Spec.SHA2.shuffle]. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+let rnds4 (p: params S32.t) (w: Seq.lseq S32.t (rounds p)) (h0: Seq.lseq S32.t 8)
+          (i: nat { i + 4 <= rounds p }) (st0 st1 st0' st1' msg msg': reg)
+  : Lemma (requires
+             is_sha256 p /\
+             unpack st0 st1 == repeati_g i (shuffle_core p w) h0 /\
+             (forall (m: nat). m < 4 ==>
+                lane msg m == S32.add_mod (Seq.index (G.reveal p.k) (i + m))
+                                          (Seq.index w (i + m))) /\
+             lane msg' 0 == lane msg 2 /\ lane msg' 1 == lane msg 3 /\
+             unpack st1' st0 ==
+               round (round (unpack st0 st1) (lane msg 0)) (lane msg 1) /\
+             unpack st0' st1' ==
+               round (round (unpack st1' st0) (lane msg' 0)) (lane msg' 1))
+          (ensures unpack st0' st1' == repeati_g (i + 4) (shuffle_core p w) h0)
+  = let f = shuffle_core p w in
+    let h1 = repeati_g i f h0 in
+    round_is_core p w i h1;
+    unfold_repeati_g i f h0;
+    let h2 = repeati_g (i + 1) f h0 in
+    assert (h2 == round h1 (lane msg 0));
+    round_is_core p w (i + 1) h2;
+    unfold_repeati_g (i + 1) f h0;
+    let h3 = repeati_g (i + 2) f h0 in
+    assert (h3 == round h2 (lane msg 1));
+    round_is_core p w (i + 2) h3;
+    unfold_repeati_g (i + 2) f h0;
+    let h4 = repeati_g (i + 3) f h0 in
+    assert (h4 == round h3 (lane msg 2));
+    round_is_core p w (i + 3) h4;
+    unfold_repeati_g (i + 3) f h0;
+    assert (repeati_g (i + 4) f h0 == round h4 (lane msg 3))
+#pop-options
+
+(** {2 Packing and unpacking the state}
+
+    The eight words arrive as two registers holding [a b c d] and [e f g h],
+    and four permutations turn them into [ABEF] and [CDGH].  These two lemmas
+    say the permutations are inverse to [unpack], so the implementation only
+    has to quote the axioms. *)
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 200"
+let pack_state (lo hi st0 st1: reg) (h: Seq.lseq S32.t 8)
+  : Lemma (requires
+             (forall (m: nat). m < 4 ==> lane lo m == Seq.index h m) /\
+             (forall (m: nat). m < 4 ==> lane hi m == Seq.index h (m + 4)) /\
+             lane st0 0 == lane hi 1 /\ lane st0 1 == lane hi 0 /\
+             lane st0 2 == lane lo 1 /\ lane st0 3 == lane lo 0 /\
+             lane st1 0 == lane hi 3 /\ lane st1 1 == lane hi 2 /\
+             lane st1 2 == lane lo 3 /\ lane st1 3 == lane lo 2)
+          (ensures unpack st0 st1 == h)
+  = Seq.lemma_eq_intro (unpack st0 st1) h
+
+let unpack_state (st0 st1 lo hi: reg) (h: Seq.lseq S32.t 8)
+  : Lemma (requires
+             unpack st0 st1 == h /\
+             lane lo 0 == lane st0 3 /\ lane lo 1 == lane st0 2 /\
+             lane lo 2 == lane st1 3 /\ lane lo 3 == lane st1 2 /\
+             lane hi 0 == lane st0 1 /\ lane hi 1 == lane st0 0 /\
+             lane hi 2 == lane st1 1 /\ lane hi 3 == lane st1 0)
+          (ensures (forall (m: nat). m < 4 ==> lane lo m == Seq.index h m) /\
+                   (forall (m: nat). m < 4 ==> lane hi m == Seq.index h (m + 4)))
+  = ()
+
+(** {2 Adding the saved state back}
+
+    [add_state] is slotwise, and the slots of a pair of registers are the
+    slots of the state, so this is [add32] on each register. *)
+let add_state_packed (h hs: Seq.lseq S32.t 8) (a0 c0 st0 st1 ra rc: reg)
+  : Lemma (requires
+             unpack a0 c0 == h /\ unpack st0 st1 == hs /\
+             (forall (m: nat). m < 4 ==>
+                lane ra m == S32.add_mod (lane a0 m) (lane st0 m)) /\
+             (forall (m: nat). m < 4 ==>
+                lane rc m == S32.add_mod (lane c0 m) (lane st1 m)))
+          (ensures unpack ra rc == add_state h hs)
+  = Seq.lemma_eq_intro (unpack ra rc) (add_state h hs)
 #pop-options
