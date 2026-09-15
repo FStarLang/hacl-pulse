@@ -196,6 +196,24 @@ let conv_widen (a b: poly) (k: int) (n: nat { Seq.length a <= n })
   : Lemma (conv a b k == xsum (fun i -> pget a i && pget b (k - i)) 0 n)
   = xsum_trim_hi (fun i -> pget a i && pget b (k - i)) 0 (Seq.length a) n
 
+(** Recognizing a convolution: any function agreeing with the summand on the
+    range computes it.  This is the only reliable way to bring [conv] and a
+    hand-written [xsum] into contact, because the solver sees two distinct
+    closures otherwise. *)
+let conv_def (a b: poly) (k: int) (f: int -> bool)
+  : Lemma (requires forall (i: int). 0 <= i /\ i < Seq.length a ==>
+                                    f i == (pget a i && pget b (k - i)))
+          (ensures conv a b k == xsum f 0 (Seq.length a))
+  = xsum_ext (fun i -> pget a i && pget b (k - i)) f 0 (Seq.length a)
+
+(** The same over a wider range, the extra terms being zero. *)
+let conv_def_n (a b: poly) (k: int) (f: int -> bool) (n: nat { Seq.length a <= n })
+  : Lemma (requires forall (i: int). 0 <= i /\ i < n ==>
+                                    f i == (pget a i && pget b (k - i)))
+          (ensures conv a b k == xsum f 0 n)
+  = conv_def a b k f;
+    xsum_trim_hi f 0 (Seq.length a) n
+
 (** {2 Shifting, which is multiplication by a monomial} *)
 
 let pshift (a: poly) (d: nat) : poly =
@@ -203,6 +221,64 @@ let pshift (a: poly) (d: nat) : poly =
 
 let pshift_get (a: poly) (d: nat) (i: int)
   : Lemma (pget (pshift a d) i == pget a (i - d)) = ()
+
+(** {2 The convolution is bilinear}
+
+    These four are what turns "multiply two 128-bit polynomials" into "call
+    the 64x64 multiplier four times": split each operand into a low and a
+    high half, and the product is four convolutions at three offsets. *)
+
+(** Only the coefficients matter, not the representation. *)
+let conv_peq (a a' b b': poly) (k: int) (n: nat)
+  : Lemma (requires peq a a' /\ peq b b' /\
+                    Seq.length a <= n /\ Seq.length a' <= n)
+          (ensures conv a b k == conv a' b' k)
+  = conv_widen a b k n;
+    conv_widen a' b' k n;
+    xsum_ext (fun i -> pget a i && pget b (k - i))
+             (fun i -> pget a' i && pget b' (k - i)) 0 n
+
+let conv_add_left (a1 a2 b: poly) (k: int) (n: nat)
+  : Lemma (requires Seq.length a1 <= n /\ Seq.length a2 <= n /\
+                    Seq.length (padd a1 a2) <= n)
+          (ensures conv (padd a1 a2) b k == (conv a1 b k <> conv a2 b k))
+  = let f1 : int -> bool = fun i -> pget a1 i && pget b (k - i) in
+    let f2 : int -> bool = fun i -> pget a2 i && pget b (k - i) in
+    FStar.Classical.forall_intro (padd_get a1 a2);
+    conv_def_n a1 b k f1 n;
+    conv_def_n a2 b k f2 n;
+    conv_def_n (padd a1 a2) b k (fun i -> f1 i <> f2 i) n;
+    xsum_xor f1 f2 0 n
+
+(** On the right there is nothing to do: the summation range is [a]'s length
+    either way. *)
+let conv_add_right (a b1 b2: poly) (k: int)
+  : Lemma (conv a (padd b1 b2) k == (conv a b1 k <> conv a b2 k))
+  = let n = Seq.length a in
+    let f1 : int -> bool = fun i -> pget a i && pget b1 (k - i) in
+    let f2 : int -> bool = fun i -> pget a i && pget b2 (k - i) in
+    FStar.Classical.forall_intro (padd_get b1 b2);
+    conv_def a b1 k f1;
+    conv_def a b2 k f2;
+    conv_def a (padd b1 b2) k (fun i -> f1 i <> f2 i);
+    xsum_xor f1 f2 0 n
+
+let conv_shift_left (a b: poly) (d: nat) (k: int)
+  : Lemma (conv (pshift a d) b k == conv a b (k - d))
+  = let n = Seq.length a + d in
+    let f : int -> bool = fun i -> pget a (i - d) && pget b (k - i) in
+    let g : int -> bool = fun m -> pget a m && pget b (k - d - m) in
+    conv_def (pshift a d) b k f;
+    xsum_shift f 0 n d;
+    xsum_ext (fun m -> f (m + d)) g (0 - d) n;
+    xsum_trim_lo g (0 - d) d n;
+    conv_def a b (k - d) g
+
+let conv_shift_right (a b: poly) (d: nat) (k: int)
+  : Lemma (conv a (pshift b d) k == conv a b (k - d))
+  = let f : int -> bool = fun i -> pget a i && pget b (k - d - i) in
+    conv_def a (pshift b d) k f;
+    conv_def a b (k - d) f
 
 (** {2 Reversal, and the identity that makes PCLMULQDQ usable}
 
