@@ -22,6 +22,13 @@ typedef uint8_t custard_unit;
 extern "C" {
 #endif
 
+typedef struct FStar_Pervasives_Native_tuple2__t_t_s FStar_Pervasives_Native_tuple2__t_t;
+
+struct FStar_Pervasives_Native_tuple2__t_t_s {
+  Hacl_Vec128_t _1;
+  Hacl_Vec128_t _2;
+};
+
 uint32_t Hacl_Bignum_Montgomery_mont_mu(uint32_t m0);
 void Hacl_Bignum_Base_zero(uint32_t *res, size_t n);
 void Hacl_Bignum_Montgomery_precomp(uint32_t *res, uint32_t *nmod, size_t nn);

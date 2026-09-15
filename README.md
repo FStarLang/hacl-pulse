@@ -917,13 +917,33 @@ once by `assert_norm`, and never unfolded again: `sbox_list` is
 `opaque_to_smt`, because a 256-element literal in the solver's context makes
 every subsequent query slow.
 
-GHASH is the literal 128-step algorithm 1 of SP 800-38D, with both branches of
-each step turned into a mask rather than taken.  A field multiplication is
-about a hundred instructions per bit of input; the result is roughly a
-megabyte a second.  That is slow, and deliberately so: carry-less multiply
-(`PCLMULQDQ`, `PMULL`) is the real answer on hardware that has it and is the
-documented upgrade path, as bitslicing is for the cipher.  A correct, portable
-and constant-time implementation comes first.
+The portable GHASH is the literal 128-step algorithm 1 of SP 800-38D, with
+both branches of each step turned into a mask rather than taken.  A field
+multiplication is about a hundred instructions per bit of input.  That is
+slow, and deliberately so: a correct, portable and constant-time
+implementation comes first, and the carry-less multiplier is layered on top
+of it the way AES-NI is layered on the portable cipher.  On a machine with
+`PCLMULQDQ`, `Hacl.AES.GMul.gmul_impl` picks `Hacl.AES.GF128.NI.gmul_ni`
+instead: four multiplies, a shift, a byte reversal, three times over.
+
+**The carry-less GHASH is verified, not assumed.**  The instruction is bound
+in `Hacl.Vec128` by a postcondition about polynomials -- bit *k* of the
+result is `Spec.CarryLess.conv` of the two 64-bit lanes -- and everything
+above it is proof.  `Spec.CarryLess` is a small theory of GF(2) polynomials:
+exclusive-or over a range, convolution, its bilinearity, and Gueron's
+reflection identity, that reversing two degree-<128 operands and multiplying
+gives coefficient *254 - m* of the true product.  `Spec.GF128.Poly` defines
+reduction as the linear extension of *x^k* mod *P* -- so linearity is the
+definition rather than a lemma, and the multiplicativity of polynomial
+multiplication is never needed -- and proves `gmul_is_pmod`, that SP
+800-38D's shift-and-add loop computes exactly the reduced carry-less product.
+`Spec.CLMUL` bridges GCM's bit numbering, which runs down from the top of
+byte zero, to the machine's, which runs up from the bottom, and states the
+implementation as three lemmas about eight registers.  The final piece is
+that the reduction constant has degree seven: the high half of a product by
+it has degree at most six, and *that* product's high half is empty, so the
+same four-multiply routine run three times is the whole multiplication and
+there is no separate reduction step to write or to verify.
 
 **Everything counts in bytes.**  FIPS 197 describes the key expansion in
 four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
@@ -1712,12 +1732,12 @@ exponentiation -- both ladders and Fermat inversion -- and on top of those
 the five RFC 7919 finite-field Diffie-Hellman groups and PKCS#1 v2.2
 RSA-PSS signing and verification.
 
-AES-NI sits under the portable AES, chosen at run time.
-
 The two legacy hashes are there too: SHA-1 one-shot, incremental and under
 HMAC, and MD5 one-shot and incremental, which is everything HACL\* offers
 for it.
 
-Beyond the subset, in rough order of how often they are asked for: the
-carry-less-multiply GHASH under AES-GCM, SHA-NI under SHA-2, secp256k1,
-Salsa20/NaCl, and FrodoKEM.
+AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, each chosen
+at run time.
+
+Beyond the subset, in rough order of how often they are asked for: SHA-NI
+under SHA-2, secp256k1, Salsa20/NaCl, and FrodoKEM.

@@ -107,6 +107,10 @@ TEST_NI static void vzero(uint8_t *dst) {
   Hacl_Vec128_store(dst, Hacl_Vec128_zero());
 }
 
+TEST_NI static void vreduction(uint8_t *dst) {
+  Hacl_Vec128_store(dst, Hacl_Vec128_reduction());
+}
+
 TEST_NI static int one(const uint8_t st[16], const uint8_t k[16], const char *what) {
   uint8_t got[16], expected[16];
   int r = 0;
@@ -247,6 +251,13 @@ int main(void) {
 
   int r = 0;
   uint8_t st[16], k[16];
+
+  /* The reduction constant is 0xe1 followed by fifteen zero bytes, which is
+     Spec.GF128.r_block in memory order. */
+  memset(k, 0, 16);
+  k[0] = 0xe1;
+  vreduction(st);
+  r |= check("vec128 reduction constant", st, k, 16);
 
   /* Load and store must be the identity on the sixteen bytes in memory
      order, which is the assumption every other axiom is stated on top of. */

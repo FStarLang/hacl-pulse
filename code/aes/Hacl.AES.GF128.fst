@@ -310,7 +310,7 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to z v1 ** A.pts_to v vb ** pure (
     [a := a * h].  The accumulator and the running multiple of [h] are
     scratch; the bits of [a] are read before anything is written to it. *)
 
-fn gmul_impl (a: A.array S8.t) (h: A.array S8.t)
+fn gmul_portable (a: A.array S8.t) (h: A.array S8.t)
              (#va #vh: erased (Seq.seq S8.t))
 requires A.pts_to a va ** A.pts_to h vh ** pure (
   Seq.length va == blocklen /\ Seq.length vh == blocklen)
