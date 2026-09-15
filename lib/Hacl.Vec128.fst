@@ -78,6 +78,8 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module U32 = FStar.UInt32
 module CL = Spec.CLMUL
+module S32 = Hacl.Secret.UInt32
+module SHANI = Spec.SHANI
 module CLess = Spec.CarryLess
 
 (** {2 The type} *)
@@ -237,3 +239,132 @@ assume val bswap (a: t) : r: t { bv r == CL.bswap (bv a) }
 
 [@@custard_extern "Hacl_Vec128_reduction"; custard_c_header "Hacl_Vec128.h"]
 assume val reduction (_: unit) : r: t { bv r == Spec.GF128.r_block }
+
+(** {2 SHA-256}
+
+    A second instruction set, with a target and a feature test of its own: a
+    machine may have AES without SHA or the other way round, and a function
+    compiled for one must not be reached by a caller compiled for the other.
+    [sha_target] is what [Hacl.Hash.SHA2.NI] carries and [sha_supported] is
+    what guards it.
+
+    The axioms below are stated with [Spec.SHANI], which reads a register as
+    four 32-bit words and says what the packing is; they are claims about
+    [Spec.SHA2] and not a second definition of the hash. *)
+
+unfold let sha_target : string = "__attribute__((target(\"ssse3,sse4.1,sha\")))"
+
+[@@custard_extern "Hacl_Vec128_sha_supported"; custard_c_header "Hacl_Vec128.h"]
+assume val sha_supported (_: unit) : bool
+
+(** {3 Memory, four words at a time}
+
+    The SHA-2 state is an array of words, not of bytes, so these take one
+    rather than the other.  [Spec.SHANI.lanes] is the register read as four
+    words, lane zero lowest in memory, which is what a little-endian load of
+    four [uint32_t]s gives. *)
+
+[@@custard_extern "Hacl_Vec128_load32"; custard_c_header "Hacl_Vec128.h"]
+assume val load32 (p: A.array S32.t) (#v: erased (Seq.lseq S32.t 4)) (#pm: perm)
+  : stt t (requires A.pts_to p #pm v)
+          (ensures fun r -> A.pts_to p #pm v ** pure (SHANI.lanes (vv r) == reveal v))
+
+[@@custard_extern "Hacl_Vec128_store32"; custard_c_header "Hacl_Vec128.h"]
+assume val store32 (p: A.array S32.t) (x: t) (#v: erased (Seq.lseq S32.t 4))
+  : stt unit (requires A.pts_to p v)
+             (ensures fun _ -> A.pts_to p (SHANI.lanes (vv x)))
+
+(** {3 Lane arithmetic and permutation}
+
+    Each of these is one instruction with one immediate, so there is one
+    binding per immediate rather than one taking a selector, as for [clmul].
+    The postconditions are written lane by lane; [Spec.SHANI.lane] numbers
+    them from the low end. *)
+
+[@@custard_extern "Hacl_Vec128_add32"; custard_c_header "Hacl_Vec128.h"]
+assume val add32 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             SHANI.lane (vv r) i ==
+               S32.add_mod (SHANI.lane (vv a) i) (SHANI.lane (vv b) i) }
+
+(** [PSHUFD] with [0xB1]: exchange the lanes within each pair. *)
+[@@custard_extern "Hacl_Vec128_shuffle_swap_pairs"; custard_c_header "Hacl_Vec128.h"]
+assume val shuffle_swap_pairs (a: t)
+  : r: t { SHANI.lane (vv r) 0 == SHANI.lane (vv a) 1 /\
+           SHANI.lane (vv r) 1 == SHANI.lane (vv a) 0 /\
+           SHANI.lane (vv r) 2 == SHANI.lane (vv a) 3 /\
+           SHANI.lane (vv r) 3 == SHANI.lane (vv a) 2 }
+
+(** [PSHUFD] with [0x1B]: reverse all four. *)
+[@@custard_extern "Hacl_Vec128_shuffle_reverse"; custard_c_header "Hacl_Vec128.h"]
+assume val shuffle_reverse (a: t)
+  : r: t { SHANI.lane (vv r) 0 == SHANI.lane (vv a) 3 /\
+           SHANI.lane (vv r) 1 == SHANI.lane (vv a) 2 /\
+           SHANI.lane (vv r) 2 == SHANI.lane (vv a) 1 /\
+           SHANI.lane (vv r) 3 == SHANI.lane (vv a) 0 }
+
+(** [PSHUFD] with [0x0E]: bring the high pair down.  Only the low two lanes
+    are ever read afterwards, but the instruction is total and the axiom says
+    what it leaves in the other two. *)
+[@@custard_extern "Hacl_Vec128_shuffle_high_pair"; custard_c_header "Hacl_Vec128.h"]
+assume val shuffle_high_pair (a: t)
+  : r: t { SHANI.lane (vv r) 0 == SHANI.lane (vv a) 2 /\
+           SHANI.lane (vv r) 1 == SHANI.lane (vv a) 3 /\
+           SHANI.lane (vv r) 2 == SHANI.lane (vv a) 0 /\
+           SHANI.lane (vv r) 3 == SHANI.lane (vv a) 0 }
+
+(** [PALIGNR] by four bytes: one word of [a] follows three of [b]. *)
+[@@custard_extern "Hacl_Vec128_align_right_4"; custard_c_header "Hacl_Vec128.h"]
+assume val align_right_4 (a b: t)
+  : r: t { SHANI.lane (vv r) 0 == SHANI.lane (vv b) 1 /\
+           SHANI.lane (vv r) 1 == SHANI.lane (vv b) 2 /\
+           SHANI.lane (vv r) 2 == SHANI.lane (vv b) 3 /\
+           SHANI.lane (vv r) 3 == SHANI.lane (vv a) 0 }
+
+(** [PALIGNR] by eight bytes. *)
+[@@custard_extern "Hacl_Vec128_align_right_8"; custard_c_header "Hacl_Vec128.h"]
+assume val align_right_8 (a b: t)
+  : r: t { SHANI.lane (vv r) 0 == SHANI.lane (vv b) 2 /\
+           SHANI.lane (vv r) 1 == SHANI.lane (vv b) 3 /\
+           SHANI.lane (vv r) 2 == SHANI.lane (vv a) 0 /\
+           SHANI.lane (vv r) 3 == SHANI.lane (vv a) 1 }
+
+(** [PBLENDW] with [0xF0]: the low pair from [a] and the high pair from [b]. *)
+[@@custard_extern "Hacl_Vec128_blend_high"; custard_c_header "Hacl_Vec128.h"]
+assume val blend_high (a b: t)
+  : r: t { SHANI.lane (vv r) 0 == SHANI.lane (vv a) 0 /\
+           SHANI.lane (vv r) 1 == SHANI.lane (vv a) 1 /\
+           SHANI.lane (vv r) 2 == SHANI.lane (vv b) 2 /\
+           SHANI.lane (vv r) 3 == SHANI.lane (vv b) 3 }
+
+(** [PSHUFB] with a fixed mask: reverse the bytes within each word, which
+    turns the big-endian reading FIPS 180-4 applies to a message block into
+    the little-endian one the lanes have. *)
+[@@custard_extern "Hacl_Vec128_bswap32"; custard_c_header "Hacl_Vec128.h"]
+assume val bswap32 (a: t)
+  : r: t { SHANI.lanes (vv r) == Hacl.Spec.Bytes.words_from_be 4 (vv a) }
+
+(** {3 The hash instructions} *)
+
+(** [SHA256RNDS2]: two rounds.  The result is the new [ABEF]; the [ABEF] that
+    went in is already the new [CDGH], which is why the two registers
+    alternate and nothing is permuted between rounds.  The round input is
+    [k + w], already summed, in the low two lanes of [k]. *)
+[@@custard_extern "Hacl_Vec128_sha256rnds2"; custard_c_header "Hacl_Vec128.h"]
+assume val sha256rnds2 (cdgh abef k: t)
+  : r: t { SHANI.unpack (vv r) (vv abef) ==
+             SHANI.round (SHANI.round (SHANI.unpack (vv abef) (vv cdgh))
+                                      (SHANI.lane (vv k) 0))
+                         (SHANI.lane (vv k) 1) }
+
+(** [SHA256MSG1]: four [w + sigma0 w'] at once. *)
+[@@custard_extern "Hacl_Vec128_sha256msg1"; custard_c_header "Hacl_Vec128.h"]
+assume val sha256msg1 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             SHANI.lane (vv r) i == SHANI.msg1 (vv a) (vv b) i }
+
+(** [SHA256MSG2]: the [sigma1] half, serial within the group of four. *)
+[@@custard_extern "Hacl_Vec128_sha256msg2"; custard_c_header "Hacl_Vec128.h"]
+assume val sha256msg2 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             SHANI.lane (vv r) i == SHANI.msg2 (vv a) (vv b) i }
