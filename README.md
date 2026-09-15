@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
@@ -719,10 +719,13 @@ one-shot `sign`.
 P-256 is the first curve here whose field is not Curve25519's, and the first
 whose group order matters arithmetically rather than only as a range check.
 Both are 256-bit primes with no special shape, so both are done in Montgomery
-form over sixteen 16-bit limbs by one shared `Hacl.P256.Mont`:
-`Spec.Bignum256` fixes the representation, `mont_mul` does
+form over sixteen 16-bit limbs by one shared layer in `code/field256/`:
+`Spec.Bignum256` fixes the representation, `Hacl.Impl.Mont256` does
 Coarsely-Integrated Operand Scanning, and `Hacl.P256.Field` and
-`Hacl.P256.Scalar` are two instantiations that never meet.
+`Hacl.P256.Scalar` are two instantiations that never meet.  **That layer
+takes its modulus as data**, a record of the modulus, its two's complement
+and the Montgomery constants, passed at run time.  Nothing in it mentions a
+curve, which is what made secp256k1 almost free.
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
@@ -730,7 +733,7 @@ mentions both takes minutes.  So `code/p256` is twenty modules: the on-curve
 test and the scalar reduction never appear in the same verification context,
 and `Hacl.P256.Key` (private keys, the scalar field) and
 `Hacl.P256.Key.Public` (public keys, the field) are separate files for no
-other reason.
+other reason.  `code/k256` is the same twenty for the same reason.
 
 **`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
 addition formulas are Renes-Costello-Batina, twelve field multiplications
@@ -773,6 +776,61 @@ single-bit tampering of a signature, verification under a wrong message,
 private keys that are zero or above the order, a public key that is not on
 the curve, all four SEC1 conversions and their round trips, and ECDH from
 both ends.
+
+
+### secp256k1, which is P-256 with two numbers changed
+
+Bitcoin's curve has a different prime, a different order, and `a = 0`
+instead of `a = -3`.  Everything else about it is P-256, and the
+implementation says so: `code/k256` is a module-for-module copy of
+`code/p256` in which only three files differ in substance.
+
+**`Hacl.K256.Tables` is the whole of the difference for the field.**  The
+two moduli, their complements, the four Montgomery constants, the three
+exponents and the curve constants in Montgomery form -- about three hundred
+lines of generated literals, and the only place in the implementation where
+secp256k1's actual numbers appear.  `Hacl.K256.Field`, `Hacl.K256.Scalar`
+and `Hacl.K256.Inverse` are then the P-256 modules with those tables
+underneath, and **none of them adds a line to the emitted C**: the
+Montgomery layer takes its modulus as an argument, so the two curves share
+every field operation and differ only in the table they pass.
+
+**`a = 0` is a shorter addition law, not a special case of the same one.**
+Renes-Costello-Batina give separate algorithms for `a = -3` (4 and 6) and
+`a = 0` (7 and 9); K-256 uses the second pair.  Doubling drops from eight
+multiplications to six, addition keeps its twelve but loses several
+additions, and the constant `3` that P-256 has to keep in Montgomery form
+disappears -- the only coefficient K-256 needs is `3b = 21`.  The curve
+equation loses its linear term with it: `y^2 = x^3 + 7` is three field
+operations where P-256's is six.  Both formulas verified on the first
+attempt, which is the clearest evidence that separating `code/field256` was
+worth doing.
+
+**Low-S is the one thing with no P-256 counterpart.**  `(r, s)` and
+`(r, q - s)` verify against the same key and message, so an ECDSA signature
+is malleable as a byte string; Bitcoin's consensus rules forbid the upper
+half, and HACL\* exposes that as a second family of entry points rather
+than as a flag.  Deciding which half `s` falls in needs an *ordering*, and
+every other test in this library is an equality.  `Hacl.Impl.Mont256.ageq`
+supplies it by reading the answer out of the carry that the modular
+subtraction already computes -- `msub_pre` says that carry is one exactly
+when the difference did not go negative -- so the ordering costs one
+sixteen-limb subtraction and no new arithmetic.  Half the order joins the
+tables, and `Hacl.K256.LowS` is sixty lines.
+
+**The message representative has no truncation question.**  P-256 must say
+what to do with a 384- or 512-bit digest; K-256's API only ever takes a
+thirty-two byte hash, so `msg_as_qelem` reads all of it and reduces, and
+there is one hashed front end instead of three.
+
+There is no RFC with published secp256k1 signatures, so
+`tests/test_k256.c` is generated from a short independent Python
+implementation of the curve whose group law is anchored on the published
+coordinates of 2G.  A hundred and thirty-three checks: five signatures
+reproduced byte for byte in both families, the prehashed path, the four
+SEC1 conversions and their round trips, four ECDH agreements, and eleven
+rejections -- including a high-S signature, which the plain family must
+accept and the low-S family must refuse.
 
 
 ### HMAC-DRBG, where the state belongs to the caller
@@ -1764,7 +1822,8 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 Following `design/reimplementation.md` §9, the minimum viable subset is
 complete: the hashes and their streaming layers, HMAC one-shot and
 incremental, HKDF, ChaCha20-Poly1305, X25519, Ed25519, P-256, HMAC-DRBG with
-an OS entropy shim, and AES-GCM.  Past it, the generic bignum has its
+an OS entropy shim, and AES-GCM.  secp256k1 sits beside P-256 on the
+shared 256-bit Montgomery layer, with the low-S rule Bitcoin needs.  Past it, the generic bignum has its
 arithmetic, its conversions, its Montgomery layer and its modular
 exponentiation -- both ladders and Fermat inversion -- and on top of those
 the five RFC 7919 finite-field Diffie-Hellman groups and PKCS#1 v2.2
@@ -1778,4 +1837,4 @@ AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, and the
 Intel SHA extensions sit under SHA-256 and SHA-224, each chosen at run time.
 
 Beyond the subset, in rough order of how often they are asked for:
-secp256k1, Salsa20/NaCl, and FrodoKEM.
+Salsa20/NaCl and FrodoKEM.
