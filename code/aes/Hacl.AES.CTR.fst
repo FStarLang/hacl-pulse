@@ -35,6 +35,7 @@ open Spec.Byte
 open Spec.AES
 open Hacl.AES.Core
 open Hacl.AES.Cipher
+open Hacl.AES.Block
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT

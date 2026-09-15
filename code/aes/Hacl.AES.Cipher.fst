@@ -77,9 +77,12 @@ let rounds_last (v: variant) (w: Seq.lseq elem (xkeylen v)) (st: block)
 
 #pop-options
 
-(** {2 The cipher} *)
+(** {2 The cipher}
 
-fn cipher_impl ([@@@FStar.Attributes.monomorphize] p: params)
+    This is the portable path.  [Hacl.AES.Block.cipher_impl] is what callers
+    use: it picks between this and [Hacl.AES.NI.cipher_ni] at run time. *)
+
+fn cipher_portable ([@@@FStar.Attributes.monomorphize] p: params)
                (st: A.array S8.t) (w: A.array S8.t)
                (#v0 #vw: erased (Seq.seq S8.t))
 requires A.pts_to st v0 ** A.pts_to w vw ** pure (
