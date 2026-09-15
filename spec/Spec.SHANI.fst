@@ -224,3 +224,116 @@ let sched_step (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j })
     add_mod_comm w7 (S32.add_mod w16 s0);
     add_mod_assoc w16 s0 w7;
     add_mod_comm s1 (S32.add_mod (S32.add_mod w16 s0) w7)
+
+(** {2 What the four schedule registers hold}
+
+    The implementation keeps four registers whose roles rotate with period
+    four: at the step that produces [w.[j] .. w.[j+3]] they hold
+    [w.[j-8..j-5]], [w.[j-4..j-1]] and the two partial sums for [j] and
+    [j+4].  [holds_ws] and [holds_half] name those two conditions. *)
+
+let holds_ws (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat) (r: reg) : GTot prop =
+  forall (i: nat). i < 4 ==> lane r i == ws_at p b (j + i)
+
+(** The [w.[j-16] + sigma0 w.[j-15]] half of slot [j], which [SHA256MSG1]
+    produces twelve rounds before it is needed. *)
+let half (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j }) (i: nat { i < 4 })
+  : GTot S32.t
+  = S32.add_mod (ws_at p b (j - 16 + i)) (sig0 (ws_at p b (j - 15 + i)))
+
+let holds_half (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j }) (r: reg) : GTot prop =
+  forall (i: nat). i < 4 ==> lane r i == half p b j i
+
+(** [SHA256MSG1] on two consecutive groups is the half for the group twelve
+    slots on.  [align_right_4] has the same shape -- three lanes of one
+    register followed by lane zero of the other -- so this also says what the
+    rotate contributes, one group earlier. *)
+(** Four quantifier-free facts make a quantified one.  Stating it separately
+    keeps the hypotheses of the lemmas below -- which are themselves
+    quantified, over a recursively defined [ws_at] -- out of the query that
+    has to introduce the quantifier. *)
+let four (r: reg) (f: (i: nat { i < 4 }) -> GTot S32.t)
+  : Lemma (requires lane r 0 == f 0 /\ lane r 1 == f 1 /\
+                    lane r 2 == f 2 /\ lane r 3 == f 3)
+          (ensures forall (i: nat). i < 4 ==> lane r i == f i)
+  = ()
+
+let msg1_lane (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat) (x y: reg)
+                (i: nat { i < 4 })
+  : Lemma (requires
+             is_sha256 p /\
+             lane x i == ws_at p b (j + i) /\
+             (if i < 3 then lane x (i + 1) == ws_at p b (j + i + 1)
+                       else lane y 0 == ws_at p b (j + i + 1)))
+          (ensures msg1 x y i == half p b (j + 16) i)
+  = ()
+
+let msg1_holds (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat) (x y r: reg)
+  : Lemma (requires is_sha256 p /\ holds_ws p b j x /\ holds_ws p b (j + 4) y /\
+                    (forall (m: nat). m < 4 ==> lane r m == msg1 x y m))
+          (ensures holds_half p b (j + 16) r)
+  = assert (lane y 0 == ws_at p b (j + 4));
+    msg1_lane p b j x y 0;
+    assert (lane r 0 == half p b (j + 16) 0);
+    msg1_lane p b j x y 1;
+    assert (lane r 1 == half p b (j + 16) 1);
+    msg1_lane p b j x y 2;
+    assert (lane r 2 == half p b (j + 16) 2);
+    msg1_lane p b j x y 3;
+    assert (lane r 3 == half p b (j + 16) 3);
+    four r (half p b (j + 16))
+
+(** {2 One group of four schedule slots}
+
+    [res] is what [SHA256MSG2] leaves after the rotate has been added in.
+    The hypotheses are written as what each register holds rather than as the
+    instructions that produced it, so that this lemma says nothing about
+    [Hacl.Vec128]; the implementation supplies them from the axioms.
+
+    Stated one lane at a time: the conclusion needs four instantiations of
+    each hypothesis at once, and a single query with all four quantified
+    hypotheses in scope does not close. *)
+
+let quad_lane (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j })
+              (bt: reg) (i: nat { i < 4 }) (s1arg: S32.t)
+  : Lemma (requires
+             is_sha256 p /\
+             s1arg == ws_at p b (j + i - 2) /\
+             lane bt i == S32.add_mod (half p b j i) (ws_at p b (j + i - 7)))
+          (ensures S32.add_mod (lane bt i) (sig1 s1arg) == ws_at p b (j + i))
+  = sched_step p b (j + i)
+
+(** The four lanes together.  [msg2] is serial -- lanes two and three read
+    lanes zero and one of the result -- so the last two applications of
+    [quad_lane] are given the slots just produced rather than a lane of an
+    input register. *)
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 100"
+let quad_holds (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j })
+               (a d bb tmp bt res: reg)
+  : Lemma (requires
+             is_sha256 p /\
+             holds_ws p b (j - 8) d /\ holds_ws p b (j - 4) a /\
+             holds_half p b j bb /\
+             (forall (m: nat). m < 4 ==>
+                lane tmp m == (if m < 3 then lane d (m + 1) else lane a 0)) /\
+             (forall (m: nat). m < 4 ==>
+                lane bt m == S32.add_mod (lane bb m) (lane tmp m)) /\
+             (forall (m: nat). m < 4 ==> lane res m == msg2 bt a m))
+          (ensures holds_ws p b j res)
+  = (* What the rotate contributed: lane m of [tmp] is slot [j + m - 7]. *)
+    assert (lane bt 0 == S32.add_mod (half p b j 0) (ws_at p b (j - 7)));
+    assert (lane bt 1 == S32.add_mod (half p b j 1) (ws_at p b (j - 6)));
+    assert (lane bt 2 == S32.add_mod (half p b j 2) (ws_at p b (j - 5)));
+    assert (lane bt 3 == S32.add_mod (half p b j 3) (ws_at p b (j - 4)));
+    assert (lane a 2 == ws_at p b (j - 2));
+    assert (lane a 3 == ws_at p b (j - 1));
+    quad_lane p b j bt 0 (lane a 2);
+    assert (lane res 0 == ws_at p b j);
+    quad_lane p b j bt 1 (lane a 3);
+    assert (lane res 1 == ws_at p b (j + 1));
+    quad_lane p b j bt 2 (ws_at p b j);
+    assert (lane res 2 == ws_at p b (j + 2));
+    quad_lane p b j bt 3 (ws_at p b (j + 1));
+    assert (lane res 3 == ws_at p b (j + 3));
+    four res (fun i -> ws_at p b (j + i))
+#pop-options
