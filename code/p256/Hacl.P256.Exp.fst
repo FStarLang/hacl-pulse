@@ -173,6 +173,7 @@ ensures exists* (vo': Seq.seq S64.t)
 (** [out := a^(eval e)], with [a] in Montgomery form and [e] sixteen public
     limbs.  [r1] is the Montgomery one, which is where the accumulator
     starts. *)
+#push-options "--z3rlimit 600"
 fn mexp (out a: A.array S64.t) (e: A.array U64.t) (r1 ms nm: A.array S64.t)
         (mu: S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
@@ -229,5 +230,6 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (pow2 0 == 1);
   ()
 }
+#pop-options
 
 #pop-options
