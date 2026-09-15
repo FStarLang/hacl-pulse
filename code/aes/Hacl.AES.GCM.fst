@@ -38,6 +38,7 @@ open Hacl.AES.GF128
 open Hacl.AES.GHash
 open Hacl.AES.Key
 open Hacl.AES.Cipher
+open Hacl.AES.Block
 open Hacl.AES.CTR
 
 module A = Pulse.Lib.Array
