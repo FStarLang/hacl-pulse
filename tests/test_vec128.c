@@ -135,6 +135,110 @@ TEST_NI static int one(const uint8_t st[16], const uint8_t k[16], const char *wh
   return r;
 }
 
+
+/* ---- the carry-less multiplier, the shifts and the byte reversal ----
+ *
+ * These axioms are stated in Hacl.Vec128 against Spec.CLMUL's little-endian
+ * bit view: bit k of a register is bit k%8 of byte k/8.  The reference below
+ * is that definition read literally -- one bit at a time, a convolution
+ * written as a double loop -- which is slow and obviously right.
+ */
+
+static bool refbit(const uint8_t a[16], int k) {
+  if (k < 0 || k >= 128) return false;
+  return ((a[k / 8] >> (k % 8)) & 1) != 0;
+}
+
+static void refset(uint8_t a[16], int k, bool v) {
+  if (v) a[k / 8] |= (uint8_t)(1u << (k % 8));
+}
+
+/* conv (lane a ha) (lane b hb) k, for every k in the register. */
+static void ref_clmul(uint8_t out[16], const uint8_t a[16], const uint8_t b[16],
+                      int ha, int hb) {
+  memset(out, 0, 16);
+  for (int k = 0; k < 128; k++) {
+    bool acc = false;
+    for (int i = 0; i < 64; i++)
+      if (refbit(a, ha * 64 + i) && k - i >= 0 && k - i < 64 &&
+          refbit(b, hb * 64 + k - i))
+        acc = !acc;
+    refset(out, k, acc);
+  }
+}
+
+/* out bit k is a bit k - d, which for d a multiple of eight is a byte shift. */
+static void ref_shift(uint8_t out[16], const uint8_t a[16], int d) {
+  memset(out, 0, 16);
+  for (int k = 0; k < 128; k++) refset(out, k, refbit(a, k - d));
+}
+
+/* The same within each 64-bit half. */
+static void ref_lane_shift(uint8_t out[16], const uint8_t a[16], int d) {
+  memset(out, 0, 16);
+  for (int k = 0; k < 128; k++) {
+    int r = k % 64;
+    if (r - d >= 0 && r - d < 64) refset(out, k, refbit(a, k - d));
+  }
+}
+
+static void ref_bswap(uint8_t out[16], const uint8_t a[16]) {
+  for (int j = 0; j < 16; j++) out[j] = a[15 - j];
+}
+
+/* Quiet unless something is wrong: this runs a hundred-odd comparisons per
+ * call and there are hundreds of calls. */
+static int quiet(const char *what, const uint8_t got[16], const uint8_t exp[16]) {
+  if (memcmp(got, exp, 16) == 0) return 0;
+  return check(what, got, exp, 16);
+}
+
+TEST_NI static int one_clmul(const uint8_t a[16], const uint8_t b[16],
+                             const char *what) {
+  uint8_t got[16], expected[16];
+  int r = 0;
+  Hacl_Vec128_t va = Hacl_Vec128_load((uint8_t *)a);
+  Hacl_Vec128_t vb = Hacl_Vec128_load((uint8_t *)b);
+
+#define CLMUL_CASE(name, ha, hb)                                             \
+  do {                                                                       \
+    Hacl_Vec128_store(got, Hacl_Vec128_clmul_##name(va, vb));                \
+    ref_clmul(expected, a, b, ha, hb);                                       \
+    r |= quiet(what, got, expected);                                     \
+  } while (0)
+  CLMUL_CASE(ll, 0, 0);
+  CLMUL_CASE(lh, 0, 1);
+  CLMUL_CASE(hl, 1, 0);
+  CLMUL_CASE(hh, 1, 1);
+#undef CLMUL_CASE
+
+#define SHIFT_CASE(name, d)                                                  \
+  do {                                                                       \
+    Hacl_Vec128_store(got, Hacl_Vec128_##name(va));                          \
+    ref_shift(expected, a, d);                                               \
+    r |= quiet(what, got, expected);                                     \
+  } while (0)
+  SHIFT_CASE(shift_left_bytes_4, 32);
+  SHIFT_CASE(shift_right_bytes_4, -32);
+  SHIFT_CASE(shift_left_bytes_8, 64);
+  SHIFT_CASE(shift_right_bytes_8, -64);
+#undef SHIFT_CASE
+
+  for (uint32_t n = 0; n < 64; n++) {
+    Hacl_Vec128_store(got, Hacl_Vec128_shift_left_lanes64(va, n));
+    ref_lane_shift(expected, a, (int)n);
+    r |= quiet(what, got, expected);
+    Hacl_Vec128_store(got, Hacl_Vec128_shift_right_lanes64(va, n));
+    ref_lane_shift(expected, a, -(int)n);
+    r |= quiet(what, got, expected);
+  }
+
+  Hacl_Vec128_store(got, Hacl_Vec128_bswap(va));
+  ref_bswap(expected, a);
+  r |= quiet(what, got, expected);
+  return r;
+}
+
 int main(void) {
   if (!Hacl_Vec128_supported()) {
     printf("  skip vec128: no AES instructions on this machine\n");
@@ -179,6 +283,30 @@ int main(void) {
     r |= one(st, k, "vec128 AES round on random input");
   }
 
-  if (r == 0) printf("all vec128 axioms agree with FIPS 197\n");
+
+  /* The carry-less multiplier and its neighbours, on edge cases and then on
+     pseudo-random input.  A one-bit operand checks the indexing, all-ones
+     checks the carry-less part -- the answer has holes an integer multiply
+     would not. */
+  memset(st, 0, 16);
+  memset(k, 0, 16);
+  r |= one_clmul(st, k, "vec128 clmul on zeroes");
+  memset(st, 0xff, 16);
+  memset(k, 0xff, 16);
+  r |= one_clmul(st, k, "vec128 clmul on ones");
+  for (int bit = 0; bit < 128; bit++) {
+    memset(st, 0, 16);
+    memset(k, 0, 16);
+    st[bit / 8] = (uint8_t)(1u << (bit % 8));
+    k[(127 - bit) / 8] = (uint8_t)(1u << ((127 - bit) % 8));
+    r |= one_clmul(st, k, "vec128 clmul on single bits");
+  }
+  for (int i = 0; i < 512; i++) {
+    fill(st, 16);
+    fill(k, 16);
+    r |= one_clmul(st, k, "vec128 clmul on random input");
+  }
+
+  if (r == 0) printf("all vec128 axioms agree with FIPS 197 and with a bitwise reference\n");
   return r;
 }

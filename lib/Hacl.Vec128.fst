@@ -77,6 +77,8 @@ module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module U32 = FStar.UInt32
+module CL = Spec.CLMUL
+module CLess = Spec.CarryLess
 
 (** {2 The type} *)
 
@@ -144,10 +146,83 @@ assume val aesenc (st k: t) : r: t { bv r == round (bv k) (bv st) }
 [@@custard_extern "Hacl_Vec128_aesenclast"; custard_c_header "Hacl_Vec128.h"]
 assume val aesenclast (st k: t) : r: t { bv r == last_round (bv k) (bv st) }
 
-(** {2 Not yet bound}
+(** {2 Carry-less multiplication}
 
-    [c/Hacl_Vec128.h] also realizes the carry-less multiplier, the byte and
-    lane shifts and the byte reversal, which is the vocabulary GHASH needs.
-    They are not declared here yet: the GF(2^128) side wants a specification
-    of a carry-less product related to [Spec.GF128], and that belongs with the
-    GHASH implementation rather than ahead of it. *)
+    [PCLMULQDQ] multiplies one 64-bit lane of each operand, reading both as
+    little-endian integers, and writes the 127-bit product into the whole
+    register.  [Spec.CLMUL.lane] is that 64-bit operand as a polynomial and
+    [Spec.CarryLess.conv] is the coefficient of [x^k] in the product, so each
+    axiom is one line and each is a statement about polynomials rather than
+    about a second model of the instruction.
+
+    Note that the axioms are written with [Spec.CLMUL.lebiti], which is bit
+    [k] for any integer [k] at all and [false] outside the register.  That
+    makes every shift below a plain reindexing with no side condition. *)
+
+[@@custard_extern "Hacl_Vec128_clmul_ll"; custard_c_header "Hacl_Vec128.h"]
+assume val clmul_ll (a b: t)
+  : r: t { forall (k: int). CL.lebiti (bv r) k ==
+                            CLess.conv (CL.lane (bv a) false) (CL.lane (bv b) false) k }
+
+[@@custard_extern "Hacl_Vec128_clmul_lh"; custard_c_header "Hacl_Vec128.h"]
+assume val clmul_lh (a b: t)
+  : r: t { forall (k: int). CL.lebiti (bv r) k ==
+                            CLess.conv (CL.lane (bv a) false) (CL.lane (bv b) true) k }
+
+[@@custard_extern "Hacl_Vec128_clmul_hl"; custard_c_header "Hacl_Vec128.h"]
+assume val clmul_hl (a b: t)
+  : r: t { forall (k: int). CL.lebiti (bv r) k ==
+                            CLess.conv (CL.lane (bv a) true) (CL.lane (bv b) false) k }
+
+[@@custard_extern "Hacl_Vec128_clmul_hh"; custard_c_header "Hacl_Vec128.h"]
+assume val clmul_hh (a b: t)
+  : r: t { forall (k: int). CL.lebiti (bv r) k ==
+                            CLess.conv (CL.lane (bv a) true) (CL.lane (bv b) true) k }
+
+(** {2 Shifts}
+
+    A shift of the whole register by whole bytes is multiplication of the
+    little-endian bit string by [x^(8n)], and the axiom says exactly that.
+    The lane shifts do the same within each half, which is the one place the
+    hardware's notion of "128-bit value" is not a single integer. *)
+
+[@@custard_extern "Hacl_Vec128_shift_left_bytes_4"; custard_c_header "Hacl_Vec128.h"]
+assume val shift_left_bytes_4 (a: t)
+  : r: t { forall (k: int). CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 32) }
+
+[@@custard_extern "Hacl_Vec128_shift_right_bytes_4"; custard_c_header "Hacl_Vec128.h"]
+assume val shift_right_bytes_4 (a: t)
+  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
+                            CL.lebiti (bv r) k == CL.lebiti (bv a) (k + 32) }
+
+[@@custard_extern "Hacl_Vec128_shift_left_bytes_8"; custard_c_header "Hacl_Vec128.h"]
+assume val shift_left_bytes_8 (a: t)
+  : r: t { forall (k: int). CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 64) }
+
+[@@custard_extern "Hacl_Vec128_shift_right_bytes_8"; custard_c_header "Hacl_Vec128.h"]
+assume val shift_right_bytes_8 (a: t)
+  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
+                            CL.lebiti (bv r) k == CL.lebiti (bv a) (k + 64) }
+
+[@@custard_extern "Hacl_Vec128_shift_left_lanes64"; custard_c_header "Hacl_Vec128.h"]
+assume val shift_left_lanes64 (a: t) (n: U32.t { U32.v n < 64 })
+  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
+             CL.lebiti (bv r) k ==
+               (k % 64 >= U32.v n && CL.lebiti (bv a) (k - U32.v n)) }
+
+[@@custard_extern "Hacl_Vec128_shift_right_lanes64"; custard_c_header "Hacl_Vec128.h"]
+assume val shift_right_lanes64 (a: t) (n: U32.t { U32.v n < 64 })
+  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
+             CL.lebiti (bv r) k ==
+               (k % 64 + U32.v n < 64 && CL.lebiti (bv a) (k + U32.v n)) }
+
+(** {2 Byte reversal}
+
+    GHASH numbers the bits of a block from the top of byte zero downwards and
+    the multiplier numbers them from the bottom of byte zero upwards, so every
+    GHASH operand crosses this once on the way in and once on the way out.
+    [Spec.CLMUL.bswap_lebit] is the statement that the round trip is a bit
+    reversal, which is what makes [Spec.CarryLess.conv_rev] applicable. *)
+
+[@@custard_extern "Hacl_Vec128_bswap"; custard_c_header "Hacl_Vec128.h"]
+assume val bswap (a: t) : r: t { bv r == CL.bswap (bv a) }

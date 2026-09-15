@@ -58,12 +58,65 @@ module Poly = Spec.GF128.Poly
 let lebit (a: block) (k: nat { k < 128 }) : bool =
   (Seq.index a (k / 8) / pow2 (k % 8)) % 2 = 1
 
+(** The same at any index at all, which is what the instruction axioms are
+    stated with: a shift then needs no side condition, because the bits that
+    move in from outside are [false] by definition. *)
+let lebiti (a: block) (k: int) : bool = 0 <= k && k < 128 && lebit a k
+
 let lepoly (a: block) : poly = Seq.init 128 (fun k -> lebit a k)
+
+let lepoly_geti (a: block) (k: int) : Lemma (pget (lepoly a) k == lebiti a k) = ()
 
 let lepoly_get (a: block) (k: int)
   : Lemma (pget (lepoly a) k == (0 <= k && k < 128 && lebit a k)) = ()
 
 let lepoly_len (a: block) : Lemma (Seq.length (lepoly a) == 128) = ()
+
+(** The two numberings differ by reversing the bits within each byte, so
+    every fact about [Spec.GF128.bit] transfers. *)
+let lebit_is_bit (a: block) (k: nat { k < 128 })
+  : Lemma (lebit a k == bit a (8 * (k / 8) + 7 - k % 8))
+  = let q = k / 8 in
+    let r = k % 8 in
+    Math.lemma_div_plus (7 - r) q 8;
+    Math.lemma_mod_plus (7 - r) q 8;
+    Math.small_division_lemma_1 (7 - r) 8;
+    Math.small_mod (7 - r) 8;
+    Poly.nth_div_mod #8 (Seq.index a q) (7 - r)
+
+let lexor (a b: block) (k: nat { k < 128 })
+  : Lemma (lebit (gadd a b) k == (lebit a k <> lebit b k))
+  = lebit_is_bit (gadd a b) k;
+    lebit_is_bit a k;
+    lebit_is_bit b k;
+    Poly.gadd_bit a b (8 * (k / 8) + 7 - k % 8)
+
+let lezero (k: nat { k < 128 }) : Lemma (lebit Spec.GF128.zero k == false) = ()
+
+let lexori (a b: block) (k: int)
+  : Lemma (lebiti (gadd a b) k == (lebiti a k <> lebiti b k))
+  = if 0 <= k && k < 128 then lexor a b k else ()
+
+(** [Spec.AES.xor_block] and [Spec.GF128.gadd] are the same function under two
+    names; the AES side is what [Hacl.Vec128.vxor] is stated with. *)
+let xor_is_gadd (a b: block)
+  : Lemma (Spec.AES.xor_block a b == gadd a b)
+  = Seq.lemma_eq_intro (Spec.AES.xor_block a b) (gadd a b)
+
+(** Blocks with the same little-endian bits are the same block. *)
+let lebits_inj (a b: block)
+  : Lemma (requires forall (k: nat). k < 128 ==> lebit a k == lebit b k)
+          (ensures a == b)
+  = let aux (i: nat { i < 128 }) : Lemma (bit a i == bit b i)
+      = Math.lemma_div_plus (7 - i % 8) (i / 8) 8;
+        Math.lemma_mod_plus (7 - i % 8) (i / 8) 8;
+        Math.small_division_lemma_1 (7 - i % 8) 8;
+        Math.small_mod (7 - i % 8) 8;
+        lebit_is_bit a (8 * (i / 8) + 7 - i % 8);
+        lebit_is_bit b (8 * (i / 8) + 7 - i % 8)
+    in
+    FStar.Classical.forall_intro aux;
+    Poly.bits_inj a b
 
 (** {2 Byte reversal} *)
 

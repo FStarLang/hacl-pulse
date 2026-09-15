@@ -293,62 +293,113 @@ let rec xt (v: block) (j: nat) : Tot block (decreases j) =
 let xti (v: block) (j: int) : block = if j < 0 then zero else xt v j
 
 (** The key step: [y * x^j] is the linear extension applied to [y] shifted,
-    which is the same sum with [xpow] carrying the shift. *)
+    which is the same sum with [xpow] carrying the shift.
 
-#push-options "--z3rlimit 300 --fuel 2 --ifuel 1"
+    The three cases are separate lemmas, and so is the unfolding of [xpowi]
+    under the summation sign.  Written as one recursive function with the
+    helpers nested it is a single query of several hundred thousand terms and
+    takes the better part of an hour; split up it is under a minute. *)
+
+#push-options "--z3rlimit 150 --fuel 1 --ifuel 1"
+
+(** [x^(m+j) == x * x^(m+j-1)], at bit [0].  Below the summation range
+    [m + j] may be zero, where the step does not hold and there is nothing to
+    prove. *)
+let xpow_step_zero (j: pos) (m: int)
+  : Lemma (m + j >= 1 ==> bit (xpowi (m + j)) 0 == bit (xpowi (m + (j - 1))) 127)
+  = if m + j >= 1 then xtimes_bit (xpow (m + (j - 1))) 0 else ()
+
+let xpow_step_pos (j: pos) (i: nat { 0 < i /\ i < 128 }) (m: int)
+  : Lemma (m + j >= 1 ==>
+           bit (xpowi (m + j)) i ==
+             (bit (xpowi (m + (j - 1))) (i - 1) <>
+              (bit (xpowi (m + (j - 1))) 127 && (i = 1 || i = 2 || i = 7))))
+  = if m + j >= 1 then xtimes_bit (xpow (m + (j - 1))) i else ()
+
+(** The summand at [m], which is where the step above is used: below the
+    range [pbits y] is zero and there is nothing to prove. *)
+let xt_term_zero (y: block) (j: pos) (i: nat { i == 0 }) (m: int)
+  : Lemma ((pget (pbits y) m && bit (xpowi (m + j)) i) ==
+           (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127))
+  = if m >= 0 then xpow_step_zero j m else ()
+
+let xt_term_pos (y: block) (j: pos) (i: nat { 0 < i /\ i < 128 }) (m: int)
+  : Lemma ((pget (pbits y) m && bit (xpowi (m + j)) i) ==
+           ((pget (pbits y) m && bit (xpowi (m + (j - 1))) (i - 1)) <>
+            ((i = 1 || i = 2 || i = 7) &&
+             (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127))))
+  = if m >= 0 then xpow_step_pos j i m else ()
+
+(** At [j = 0] exactly one term of the sum survives. *)
+let xt_bit_zero (y: block) (j: nat { j == 0 }) (i: nat { i < 128 })
+  : Lemma (bit (xt y j) i ==
+           xsum (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128)
+  = let aux (m: int)
+      : Lemma (0 <= m /\ m < 128 /\ m <> i ==>
+               (pget (pbits y) m && bit (xpowi (m + j)) i) == false)
+      = if 0 <= m && m < 128 then xpow_mono m i else ()
+    in
+    FStar.Classical.forall_intro aux;
+    xpow_mono i i;
+    xsum_one (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128 i
+
+(** One unfolding of [xt], done here so that the two step lemmas below can
+    run with no fuel at all: with fuel, [xpowi (m + j)] under a quantifier
+    unfolds [xpow] for every [m] and the query never terminates. *)
+let xt_unfold (y: block) (j: pos) : Lemma (xt y j == xtimes (xt y (j - 1))) = ()
+
+#push-options "--fuel 0 --ifuel 0"
+
+(** The step at bit [0], where the only contribution is the bit that wrapped
+    round from the top. *)
+let xt_bit_step_zero (y: block) (j: pos) (i: nat { i == 0 })
+  : Lemma (requires bit (xt y (j - 1)) 127 ==
+                    xsum (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128)
+          (ensures bit (xt y j) i ==
+                   xsum (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128)
+  = xt_unfold y j;
+    FStar.Classical.forall_intro (xt_term_zero y j i);
+    xtimes_bit (xt y (j - 1)) i;
+    xsum_ext (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i)
+             (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128
+
+(** The step above bit [0]: the shifted bit, plus the wrapped bit where the
+    reduction constant has a term. *)
+let xt_bit_step_pos (y: block) (j: pos) (i: nat { 0 < i /\ i < 128 })
+  : Lemma (requires (bit (xt y (j - 1)) 127 ==
+                     xsum (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128) /\
+                    (bit (xt y (j - 1)) (i - 1) ==
+                     xsum (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) (i - 1)) 0 128))
+          (ensures bit (xt y j) i ==
+                   xsum (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128)
+  = let rb = (i = 1 || i = 2 || i = 7) in
+    xt_unfold y j;
+    FStar.Classical.forall_intro (xt_term_pos y j i);
+    xtimes_bit (xt y (j - 1)) i;
+    xsum_ext (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i)
+             (fun m -> (pget (pbits y) m && bit (xpowi (m + (j - 1))) (i - 1)) <>
+                       (rb && (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127)))
+             0 128;
+    xsum_xor (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) (i - 1))
+             (fun m -> rb && (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127))
+             0 128;
+    xsum_and rb (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128
+
+#pop-options
 
 let rec xt_bit (y: block) (j: nat) (i: nat { i < 128 })
   : Lemma (ensures bit (xt y j) i ==
              xsum (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128)
           (decreases j)
-  = if j = 0
-    then begin
-      let aux (m: int)
-        : Lemma (0 <= m /\ m < 128 /\ m <> i ==>
-                 (pget (pbits y) m && bit (xpowi (m + j)) i) == false)
-        = if 0 <= m && m < 128 then xpow_mono m i else ()
-      in
-      FStar.Classical.forall_intro aux;
-      xpow_mono i i;
-      xsum_one (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128 i
-    end
-    else if i = 0
-    then begin
-      let e (m: int)
-        : Lemma (m + j >= 1 ==>
-                 bit (xpowi (m + j)) 0 == bit (xpowi (m + j - 1)) 127)
-        = if m + j >= 1 then xtimes_bit (xpow (m + j - 1)) 0 else ()
-      in
-      FStar.Classical.forall_intro e;
-      xtimes_bit (xt y (j - 1)) 0;
-      xt_bit y (j - 1) 127;
-      xsum_ext (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i)
-               (fun m -> pget (pbits y) m && bit (xpowi (m + j - 1)) 127) 0 128
-    end
+  = if j = 0 then xt_bit_zero y j i
     else begin
-      let rb = (i = 1 || i = 2 || i = 7) in
-      let e (m: int)
-        : Lemma (m + j >= 1 ==>
-                 bit (xpowi (m + j)) i ==
-                   (bit (xpowi (m + j - 1)) (i - 1) <>
-                    (bit (xpowi (m + j - 1)) 127 && rb)))
-        = if m + j >= 1 then xtimes_bit (xpow (m + j - 1)) i else ()
-      in
-      FStar.Classical.forall_intro e;
-      xtimes_bit (xt y (j - 1)) i;
       xt_bit y (j - 1) 127;
-      xt_bit y (j - 1) (i - 1);
-      xsum_ext (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i)
-               (fun m -> (pget (pbits y) m && bit (xpowi (m + j - 1)) (i - 1)) <>
-                         (rb && (pget (pbits y) m && bit (xpowi (m + j - 1)) 127)))
-               0 128;
-      xsum_xor (fun m -> pget (pbits y) m && bit (xpowi (m + j - 1)) (i - 1))
-               (fun m -> rb && (pget (pbits y) m && bit (xpowi (m + j - 1)) 127))
-               0 128;
-      xsum_and rb (fun m -> pget (pbits y) m && bit (xpowi (m + j - 1)) 127) 0 128
+      if i = 0 then xt_bit_step_zero y j i
+      else begin
+        xt_bit y (j - 1) (i - 1);
+        xt_bit_step_pos y j i
+      end
     end
-
-#pop-options
 
 (** {2 The accumulation [gmul_loop] performs} *)
 
@@ -371,76 +422,83 @@ let rec accum_bit (x y: block) (n: nat { n <= 128 }) (i: nat { i < 128 })
 
 (** {2 Reduction of a shifted polynomial} *)
 
-#push-options "--z3rlimit 200"
+let pmod_shift_bit (y: block) (j: nat { j <= 128 }) (i: nat { i < 128 })
+  : Lemma (bit (pmod (pshift (pbits y) j) 256) i == bit (xt y j) i)
+  = let f : int -> bool = fun k -> pget (pbits y) (k - j) && bit (xpowi k) i in
+    let g : int -> bool = fun m -> pget (pbits y) m && bit (xpowi (m + j)) i in
+    pmod_bit (pshift (pbits y) j) 256 i;
+    xsum_ext (fun k -> pget (pshift (pbits y) j) k && bit (xpowi k) i) f 0 256;
+    xsum_shift f 0 256 j;
+    xsum_ext (fun m -> f (m + j)) g (0 - j) 256;
+    xsum_trim_lo g (0 - j) j 256;
+    xsum_trim_hi g 0 128 (256 - j);
+    xsum_ext g (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128;
+    xt_bit y j i
 
 let pmod_shift (y: block) (j: nat { j <= 128 })
   : Lemma (pmod (pshift (pbits y) j) 256 == xt y j)
-  = let b = pbits y in
-    let aux (i: nat { i < 128 })
-      : Lemma (bit (pmod (pshift b j) 256) i == bit (xt y j) i)
-      = let f : int -> bool = fun k -> pget b (k - j) && bit (xpowi k) i in
-        let g : int -> bool = fun m -> pget b m && bit (xpowi (m + j)) i in
-        pmod_bit (pshift b j) 256 i;
-        xsum_ext (fun k -> pget (pshift b j) k && bit (xpowi k) i) f 0 256;
-        xsum_shift f 0 256 j;
-        xsum_ext (fun m -> f (m + j)) g (0 - j) 256;
-        xsum_trim_lo g (0 - j) j 256;
-        xsum_trim_hi g 0 128 (256 - j);
-        xt_bit y j i
-    in
-    FStar.Classical.forall_intro aux;
-    bits_inj (pmod (pshift b j) 256) (xt y j)
-
-#pop-options
+  = FStar.Classical.forall_intro (pmod_shift_bit y j);
+    bits_inj (pmod (pshift (pbits y) j) 256) (xt y j)
 
 (** {2 Reduction of a product}
 
     Exchanging the two sums turns "reduce the product" into "for each bit of
     [x], reduce [y] shifted", which is exactly what the loop accumulates. *)
 
-#push-options "--z3rlimit 400"
+(** The term of the doubly-indexed sum: bit [j] of [x], bit [k - j] of [y],
+    and bit [i] of [x^k] reduced. *)
+let pterm (x y: block) (i: nat { i < 128 }) (j k: int) : bool =
+  pget (pbits x) j && (pget (pbits y) (k - j) && bit (xpowi k) i)
+
+(** For a fixed [k], the coefficient of the product times bit [i] of [x^k]. *)
+let pmod_pmul_inner (x y: block) (i: nat { i < 128 }) (k: int)
+  : Lemma ((pget (pmul (pbits x) (pbits y)) k && bit (xpowi k) i) ==
+           xsum (fun j -> pterm x y i j k) 0 128)
+  = pmul_get (pbits x) (pbits y) k;
+    pbits_len x;
+    conv_def (pbits x) (pbits y) k
+             (fun j -> pget (pbits x) j && pget (pbits y) (k - j));
+    xsum_and (bit (xpowi k) i)
+             (fun j -> pget (pbits x) j && pget (pbits y) (k - j)) 0 128;
+    xsum_ext (fun j -> bit (xpowi k) i &&
+                       (pget (pbits x) j && pget (pbits y) (k - j)))
+             (fun j -> pterm x y i j k) 0 128
+
+(** For a fixed [j], the whole of [y] shifted up by [j] and reduced, which is
+    [y] advanced [j] times. *)
+let pmod_pmul_outer (x y: block) (i: nat { i < 128 }) (j: int)
+  : Lemma (xsum (fun k -> pterm x y i j k) 0 256 ==
+           (pget (pbits x) j && bit (xti y j) i))
+  = xsum_ext (fun k -> pterm x y i j k)
+             (fun k -> pget (pbits x) j &&
+                       (pget (pbits y) (k - j) && bit (xpowi k) i)) 0 256;
+    xsum_and (pget (pbits x) j)
+             (fun k -> pget (pbits y) (k - j) && bit (xpowi k) i) 0 256;
+    if 0 <= j && j < 128
+    then begin
+      pmod_bit (pshift (pbits y) j) 256 i;
+      xsum_ext (fun k -> pget (pshift (pbits y) j) k && bit (xpowi k) i)
+               (fun k -> pget (pbits y) (k - j) && bit (xpowi k) i) 0 256;
+      pmod_shift y j
+    end
+    else ()
+
+let pmod_pmul_bit (x y: block) (i: nat { i < 128 })
+  : Lemma (bit (pmod (pmul (pbits x) (pbits y)) 256) i == bit (accum x y 128) i)
+  = pmod_bit (pmul (pbits x) (pbits y)) 256 i;
+    FStar.Classical.forall_intro (pmod_pmul_inner x y i);
+    xsum_ext (fun k -> pget (pmul (pbits x) (pbits y)) k && bit (xpowi k) i)
+             (fun k -> xsum (fun j -> pterm x y i j k) 0 128) 0 256;
+    xsum_swap (pterm x y i) 0 128 0 256;
+    FStar.Classical.forall_intro (pmod_pmul_outer x y i);
+    xsum_ext (fun j -> xsum (fun k -> pterm x y i j k) 0 256)
+             (fun j -> pget (pbits x) j && bit (xti y j) i) 0 128;
+    accum_bit x y 128 i
 
 let pmod_pmul (x y: block)
   : Lemma (pmod (pmul (pbits x) (pbits y)) 256 == accum x y 128)
-  = let a = pbits x in
-    let b = pbits y in
-    let aux (i: nat { i < 128 })
-      : Lemma (bit (pmod (pmul a b) 256) i == bit (accum x y 128) i)
-      = let h : int -> int -> bool =
-          fun j k -> pget a j && (pget b (k - j) && bit (xpowi k) i) in
-        pmod_bit (pmul a b) 256 i;
-        FStar.Classical.forall_intro_2 (pmul_get a);
-        let inner (k: int)
-          : Lemma (pget (pmul a b) k && bit (xpowi k) i == xsum (fun j -> h j k) 0 128)
-          = xsum_and (bit (xpowi k) i) (fun j -> pget a j && pget b (k - j)) 0 128;
-            xsum_ext (fun j -> bit (xpowi k) i && (pget a j && pget b (k - j)))
-                     (fun j -> h j k) 0 128
-        in
-        FStar.Classical.forall_intro inner;
-        xsum_ext (fun k -> pget (pmul a b) k && bit (xpowi k) i)
-                 (fun k -> xsum (fun j -> h j k) 0 128) 0 256;
-        xsum_swap h 0 128 0 256;
-        let outer (j: int)
-          : Lemma (xsum (fun k -> h j k) 0 256 == (pget a j && bit (xti y j) i))
-          = xsum_and (pget a j) (fun k -> pget b (k - j) && bit (xpowi k) i) 0 256;
-            if 0 <= j && j < 128
-            then begin
-              pmod_bit (pshift b j) 256 i;
-              xsum_ext (fun k -> pget (pshift b j) k && bit (xpowi k) i)
-                       (fun k -> pget b (k - j) && bit (xpowi k) i) 0 256;
-              pmod_shift y j
-            end
-            else ()
-        in
-        FStar.Classical.forall_intro outer;
-        xsum_ext (fun j -> xsum (fun k -> h j k) 0 256)
-                 (fun j -> pget a j && bit (xti y j) i) 0 128;
-        accum_bit x y 128 i
-    in
-    FStar.Classical.forall_intro aux;
-    bits_inj (pmod (pmul a b) 256) (accum x y 128)
-
-#pop-options
+  = FStar.Classical.forall_intro (pmod_pmul_bit x y);
+    bits_inj (pmod (pmul (pbits x) (pbits y)) 256) (accum x y 128)
 
 (** {2 Unrolling algorithm 1} *)
 
@@ -458,3 +516,5 @@ let gmul_is_pmod (x y: block)
   : Lemma (gmul x y == pmod (pmul (pbits x) (pbits y)) 256)
   = gmul_loop_accum x y 0;
     pmod_pmul x y
+
+#pop-options
