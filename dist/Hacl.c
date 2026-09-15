@@ -762,6 +762,10 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t_7(uint32_t *kt, uint32_t *ws
 static void Hacl_Hash_SHA2_Streaming_update_impl__t_7(uint32_t *kt, uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Hash_SHA2_Streaming_init_impl__t_7(uint32_t *ivt, uint32_t *acc, uint8_t *buf, size_t *tot);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_7(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
+static void Hacl_Hash_SHA1_Streaming_copy5(uint32_t *dst, uint32_t *src);
+static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_2 = (((size_t)16ULL) * ((size_t)4ULL));
+static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_2 = (((size_t)2ULL) * ((size_t)4ULL));
+static void Hacl_Hash_SHA2_Core_build_tail__t_2(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail);
 static size_t Hacl_Hash_SHA1_Core_rounds_sz = 80;
 static void Hacl_Hash_SHA1_Core_ws_expand(uint32_t *wsb, uint8_t *block, size_t off);
 static uint32_t Spec_SHA1__Ch(uint32_t x, uint32_t y, uint32_t z);
@@ -770,12 +774,14 @@ static uint32_t Spec_SHA1__Maj(uint32_t x, uint32_t y, uint32_t z);
 static uint32_t Hacl_Hash_SHA1_Core_f_impl(size_t i, uint32_t x, uint32_t y, uint32_t z);
 static uint32_t Hacl_Hash_SHA1_Core_k_impl(size_t i);
 static void Hacl_Hash_SHA1_Core_update_block_impl(uint32_t *wsb, uint32_t *st, uint8_t *block, size_t off);
-static void Hacl_Hash_SHA1_Core_hash_blocks(uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull);
-static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_2 = (((size_t)16ULL) * ((size_t)4ULL));
-static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_2 = (((size_t)2ULL) * ((size_t)4ULL));
-static void Hacl_Hash_SHA2_Core_build_tail__t_2(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail);
 static void Hacl_Hash_SHA1_Core_write_digest(uint8_t *out, uint32_t *st);
 static void Hacl_Hash_SHA1_Core_tail_and_finish(uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem);
+static void Hacl_Hash_SHA1_Streaming_digest_impl(uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_SHA1_Core_hash_blocks(uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull);
+static void Hacl_Hash_SHA1_Streaming_absorb_blocks(uint32_t *wsb, uint32_t *acc, uint8_t *input, size_t base_in, size_t nfull, size_t nb);
+static void Hacl_Hash_SHA1_Streaming_update_full(uint32_t *wsb, uint32_t *acc, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill);
+static void Hacl_Hash_SHA1_Streaming_update_impl(uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_SHA1_Streaming_init_impl(uint32_t *acc, uint8_t *buf, size_t *tot);
 static void Hacl_Hash_SHA1_Core_hash_impl(uint8_t *out, uint8_t *input, size_t len);
 
 static uint32_t Hacl_Secret_UInt32_mul_mod(uint32_t x, uint32_t y) {
@@ -13177,6 +13183,29 @@ void Hacl_Hash_SHA2_sha224(uint8_t *out, uint8_t *input, size_t input_len) {
   Hacl_Hash_SHA2_Core_hash_impl__t_7(kt, ivt, out, input, input_len);
 }
 
+static void Hacl_Hash_SHA1_Streaming_copy5(uint32_t *dst, uint32_t *src) {
+  size_t i = 0;
+  while (i < 5) {
+    size_t vi = i;
+    uint32_t x = src[vi];
+    dst[vi] = x;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Hash_SHA2_Core_build_tail__t_2(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail) {
+  size_t c = 0;
+  while (c < rem) {
+    size_t vc = c;
+    uint8_t x = input[(base + vc)];
+    tl[vc] = x;
+    c = (vc + 1);
+  }
+  uint8_t x80 = 0x80;
+  tl[rem] = x80;
+  Hacl_Hash_SHA2_Core_write_len_be(tl, (ntail - 8), len);
+}
+
 static void Hacl_Hash_SHA1_Core_ws_expand(uint32_t *wsb, uint8_t *block, size_t off) {
   size_t i = 0;
   while (i < 16) {
@@ -13270,29 +13299,6 @@ static void Hacl_Hash_SHA1_Core_update_block_impl(uint32_t *wsb, uint32_t *st, u
   st[4] = Hacl_Secret_UInt32_add_mod(e0, e1);
 }
 
-static void Hacl_Hash_SHA1_Core_hash_blocks(uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull) {
-  (void)nprev;
-  size_t i = 0;
-  while (i < nfull) {
-    size_t vi2 = i;
-    Hacl_Hash_SHA1_Core_update_block_impl(wsb, st, input, (vi2 * 64));
-    i = (vi2 + 1);
-  }
-}
-
-static void Hacl_Hash_SHA2_Core_build_tail__t_2(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail) {
-  size_t c = 0;
-  while (c < rem) {
-    size_t vc = c;
-    uint8_t x = input[(base + vc)];
-    tl[vc] = x;
-    c = (vc + 1);
-  }
-  uint8_t x80 = 0x80;
-  tl[rem] = x80;
-  Hacl_Hash_SHA2_Core_write_len_be(tl, (ntail - 8), len);
-}
-
 static void Hacl_Hash_SHA1_Core_write_digest(uint8_t *out, uint32_t *st) {
   size_t j = 0;
   while (j < 5) {
@@ -13324,6 +13330,90 @@ static void Hacl_Hash_SHA1_Core_tail_and_finish(uint32_t *wsb, uint32_t *st, uin
     j = (vj + 1);
   }
   Hacl_Hash_SHA1_Core_write_digest(out, st);
+}
+
+static void Hacl_Hash_SHA1_Streaming_digest_impl(uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
+  size_t tlen = tot[0];
+  size_t blen = (tlen % 64);
+  size_t nb0 = (tlen / 64);
+  uint32_t z0 = 0;
+  uint32_t starr[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    starr[_ci1] = z0;
+  }
+  Hacl_Hash_SHA1_Streaming_copy5(starr, acc);
+  uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
+  Hacl_Hash_SHA1_Core_tail_and_finish(wsb, starr, out, sub, tlen, nb0, 0, blen);
+}
+
+void Hacl_Streaming_SHA1_sha1_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
+  uint32_t z = 0;
+  uint32_t wsarr[80];
+  for (size_t _ci1 = 0; _ci1 < 80; _ci1++) {
+    wsarr[_ci1] = z;
+  }
+  Hacl_Hash_SHA1_Streaming_digest_impl(wsarr, acc, buf, tot, out);
+}
+
+static void Hacl_Hash_SHA1_Core_hash_blocks(uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull) {
+  (void)nprev;
+  size_t i = 0;
+  while (i < nfull) {
+    size_t vi2 = i;
+    Hacl_Hash_SHA1_Core_update_block_impl(wsb, st, input, (vi2 * 64));
+    i = (vi2 + 1);
+  }
+}
+
+static void Hacl_Hash_SHA1_Streaming_absorb_blocks(uint32_t *wsb, uint32_t *acc, uint8_t *input, size_t base_in, size_t nfull, size_t nb) {
+  size_t hi = (base_in + (nfull * 64));
+  uint8_t *sub = Hacl_Impl_Sub_sub__t(input, base_in, hi);
+  Hacl_Hash_SHA1_Core_hash_blocks(wsb, acc, sub, nb, nfull);
+}
+
+static void Hacl_Hash_SHA1_Streaming_update_full(uint32_t *wsb, uint32_t *acc, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill) {
+  (void)blen;
+  Hacl_Hash_SHA1_Streaming_absorb_blocks(wsb, acc, buf, 0, 1, nb0);
+  size_t restlen = (dlen - fill);
+  size_t nfull = (restlen / 64);
+  size_t tl = (restlen % 64);
+  Hacl_Hash_SHA1_Streaming_absorb_blocks(wsb, acc, data, fill, nfull, (nb0 + 1));
+  Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
+}
+
+static void Hacl_Hash_SHA1_Streaming_update_impl(uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+  size_t tlen = tot[0];
+  size_t blen = (tlen % 64);
+  size_t nb0 = (tlen / 64);
+  size_t fill;
+  if ((64 - blen) <= dlen) fill = (64 - blen);
+  else fill = dlen;
+  Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
+  if ((blen + fill) == 64) Hacl_Hash_SHA1_Streaming_update_full(wsb, acc, buf, data, dlen, blen, nb0, fill);
+  tot[0] = (tlen + dlen);
+}
+
+void Hacl_Streaming_SHA1_sha1_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
+  uint32_t z = 0;
+  uint32_t wsarr[80];
+  for (size_t _ci1 = 0; _ci1 < 80; _ci1++) {
+    wsarr[_ci1] = z;
+  }
+  Hacl_Hash_SHA1_Streaming_update_impl(wsarr, acc, buf, tot, data, data_len);
+}
+
+static void Hacl_Hash_SHA1_Streaming_init_impl(uint32_t *acc, uint8_t *buf, size_t *tot) {
+  (void)buf;
+  acc[0] = 0x67452301U;
+  acc[1] = 0xefcdab89U;
+  acc[2] = 0x98badcfeU;
+  acc[3] = 0x10325476U;
+  acc[4] = 0xc3d2e1f0U;
+  tot[0] = 0;
+}
+
+void Hacl_Streaming_SHA1_sha1_init(uint32_t *acc, uint8_t *buf, size_t *tot) {
+  Hacl_Hash_SHA1_Streaming_init_impl(acc, buf, tot);
 }
 
 static void Hacl_Hash_SHA1_Core_hash_impl(uint8_t *out, uint8_t *input, size_t len) {
