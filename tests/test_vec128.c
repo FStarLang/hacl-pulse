@@ -243,6 +243,162 @@ TEST_NI static int one_clmul(const uint8_t a[16], const uint8_t b[16],
   return r;
 }
 
+
+/* The SHA-256 axioms, against FIPS 180-4 transcribed here from the standard.
+ *
+ * A register is read as four 32-bit words, lane zero lowest in memory.  The
+ * packing the instructions use is ABEF/CDGH, which is not the order the
+ * standard writes the state in, so the reference below unpacks explicitly
+ * rather than trusting the naming. */
+
+static uint32_t lane(const uint8_t a[16], int i) {
+  return (uint32_t)a[4 * i] | ((uint32_t)a[4 * i + 1] << 8) |
+         ((uint32_t)a[4 * i + 2] << 16) | ((uint32_t)a[4 * i + 3] << 24);
+}
+
+static void setlane(uint8_t a[16], int i, uint32_t v) {
+  a[4 * i] = (uint8_t)v;
+  a[4 * i + 1] = (uint8_t)(v >> 8);
+  a[4 * i + 2] = (uint8_t)(v >> 16);
+  a[4 * i + 3] = (uint8_t)(v >> 24);
+}
+
+static uint32_t ror(uint32_t x, int n) {
+  return (x >> n) | (uint32_t)(x << (32 - n));
+}
+static uint32_t big_s0(uint32_t x) { return ror(x, 2) ^ ror(x, 13) ^ ror(x, 22); }
+static uint32_t big_s1(uint32_t x) { return ror(x, 6) ^ ror(x, 11) ^ ror(x, 25); }
+static uint32_t sml_s0(uint32_t x) { return ror(x, 7) ^ ror(x, 18) ^ (x >> 3); }
+static uint32_t sml_s1(uint32_t x) { return ror(x, 17) ^ ror(x, 19) ^ (x >> 10); }
+static uint32_t ch(uint32_t x, uint32_t y, uint32_t z) {
+  return (x & y) ^ (~x & z);
+}
+static uint32_t maj(uint32_t x, uint32_t y, uint32_t z) {
+  return (x & y) ^ (x & z) ^ (y & z);
+}
+
+/* One round of the compression function on the eight words a..h. */
+static void ref_sha_round(uint32_t s[8], uint32_t wk) {
+  uint32_t t1 = s[7] + big_s1(s[4]) + ch(s[4], s[5], s[6]) + wk;
+  uint32_t t2 = big_s0(s[0]) + maj(s[0], s[1], s[2]);
+  s[7] = s[6]; s[6] = s[5]; s[5] = s[4]; s[4] = s[3] + t1;
+  s[3] = s[2]; s[2] = s[1]; s[1] = s[0]; s[0] = t1 + t2;
+}
+
+static void ref_rnds2(uint8_t out[16], const uint8_t cdgh[16],
+                      const uint8_t abef[16], const uint8_t k[16]) {
+  uint32_t s[8];
+  s[0] = lane(abef, 3); s[1] = lane(abef, 2);   /* A B */
+  s[2] = lane(cdgh, 3); s[3] = lane(cdgh, 2);   /* C D */
+  s[4] = lane(abef, 1); s[5] = lane(abef, 0);   /* E F */
+  s[6] = lane(cdgh, 1); s[7] = lane(cdgh, 0);   /* G H */
+  ref_sha_round(s, lane(k, 0));
+  ref_sha_round(s, lane(k, 1));
+  setlane(out, 3, s[0]); setlane(out, 2, s[1]);
+  setlane(out, 1, s[4]); setlane(out, 0, s[5]);
+}
+
+static void ref_msg1(uint8_t out[16], const uint8_t a[16], const uint8_t b[16]) {
+  for (int i = 0; i < 4; i++) {
+    uint32_t nxt = i < 3 ? lane(a, i + 1) : lane(b, 0);
+    setlane(out, i, lane(a, i) + sml_s0(nxt));
+  }
+}
+
+static void ref_msg2(uint8_t out[16], const uint8_t a[16], const uint8_t b[16]) {
+  uint32_t r0 = lane(a, 0) + sml_s1(lane(b, 2));
+  uint32_t r1 = lane(a, 1) + sml_s1(lane(b, 3));
+  uint32_t r2 = lane(a, 2) + sml_s1(r0);
+  uint32_t r3 = lane(a, 3) + sml_s1(r1);
+  setlane(out, 0, r0); setlane(out, 1, r1);
+  setlane(out, 2, r2); setlane(out, 3, r3);
+}
+
+/* Lane permutations, each written as the list of source lanes. */
+static void ref_perm(uint8_t out[16], const uint8_t a[16], const uint8_t b[16],
+                     const int src[4], const int from_b[4]) {
+  for (int i = 0; i < 4; i++)
+    setlane(out, i, lane(from_b[i] ? b : a, src[i]));
+}
+
+#if defined(__x86_64__) || defined(__i386__)
+#define TEST_SHA __attribute__((target("ssse3,sse4.1,sha")))
+#else
+#define TEST_SHA
+#endif
+
+TEST_SHA static int one_sha(const uint8_t a[16], const uint8_t b[16],
+                            const char *what) {
+  uint8_t got[16], expected[16];
+  int r = 0;
+  Hacl_Vec128_t va = Hacl_Vec128_load32((uint32_t *)(void *)a);
+  Hacl_Vec128_t vb = Hacl_Vec128_load32((uint32_t *)(void *)b);
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got, va);
+  r |= quiet(what, got, a);
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_add32(va, vb));
+  for (int i = 0; i < 4; i++) setlane(expected, i, lane(a, i) + lane(b, i));
+  r |= quiet(what, got, expected);
+
+  static const int zero[4] = {0, 0, 0, 0};
+
+#define PERM1(fn, s0, s1, s2, s3)                                            \
+  do {                                                                       \
+    const int src[4] = {s0, s1, s2, s3};                                     \
+    Hacl_Vec128_store32((uint32_t *)(void *)got, fn(va));                    \
+    ref_perm(expected, a, b, src, zero);                                     \
+    r |= quiet(what, got, expected);                                         \
+  } while (0)
+  PERM1(Hacl_Vec128_shuffle_swap_pairs, 1, 0, 3, 2);
+  PERM1(Hacl_Vec128_shuffle_reverse, 3, 2, 1, 0);
+  PERM1(Hacl_Vec128_shuffle_high_pair, 2, 3, 0, 0);
+#undef PERM1
+
+#define PERM2(fn, s0, w0, s1, w1, s2, w2, s3, w3)                            \
+  do {                                                                       \
+    const int src[4] = {s0, s1, s2, s3};                                     \
+    const int wb[4] = {w0, w1, w2, w3};                                      \
+    Hacl_Vec128_store32((uint32_t *)(void *)got, fn(va, vb));                \
+    ref_perm(expected, a, b, src, wb);                                       \
+    r |= quiet(what, got, expected);                                         \
+  } while (0)
+  /* align_right_4(a, b) is one word of a after three of b. */
+  PERM2(Hacl_Vec128_align_right_4, 1, 1, 2, 1, 3, 1, 0, 0);
+  PERM2(Hacl_Vec128_align_right_8, 2, 1, 3, 1, 0, 0, 1, 0);
+  PERM2(Hacl_Vec128_blend_high, 0, 0, 1, 0, 2, 1, 3, 1);
+#undef PERM2
+
+  /* bswap32 reverses the bytes within each lane: lane i of the result is
+     the big-endian reading of bytes 4i..4i+3 of the input. */
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_bswap32(va));
+  for (int i = 0; i < 4; i++)
+    setlane(expected, i,
+            ((uint32_t)a[4 * i] << 24) | ((uint32_t)a[4 * i + 1] << 16) |
+                ((uint32_t)a[4 * i + 2] << 8) | (uint32_t)a[4 * i + 3]);
+  r |= quiet(what, got, expected);
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_sha256msg1(va, vb));
+  ref_msg1(expected, a, b);
+  r |= quiet(what, got, expected);
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_sha256msg2(va, vb));
+  ref_msg2(expected, a, b);
+  r |= quiet(what, got, expected);
+
+  /* rnds2 takes three registers; the third is k + w, of which only the low
+     two lanes are read, so b serves for both. */
+  Hacl_Vec128_store32((uint32_t *)(void *)got,
+                      Hacl_Vec128_sha256rnds2(va, vb, vb));
+  ref_rnds2(expected, a, b, b);
+  r |= quiet(what, got, expected);
+  Hacl_Vec128_store32((uint32_t *)(void *)got,
+                      Hacl_Vec128_sha256rnds2(vb, va, va));
+  ref_rnds2(expected, b, a, a);
+  r |= quiet(what, got, expected);
+  return r;
+}
+
 int main(void) {
   if (!Hacl_Vec128_supported()) {
     printf("  skip vec128: no AES instructions on this machine\n");
@@ -316,6 +472,29 @@ int main(void) {
     fill(st, 16);
     fill(k, 16);
     r |= one_clmul(st, k, "vec128 clmul on random input");
+  }
+
+  if (!Hacl_Vec128_sha_supported()) {
+    printf("  skip vec128 SHA: no SHA instructions on this machine\n");
+  } else {
+    memset(st, 0, 16);
+    memset(k, 0, 16);
+    r |= one_sha(st, k, "vec128 sha on zeroes");
+    memset(st, 0xff, 16);
+    memset(k, 0xff, 16);
+    r |= one_sha(st, k, "vec128 sha on ones");
+    for (int bit = 0; bit < 128; bit++) {
+      memset(st, 0, 16);
+      memset(k, 0, 16);
+      st[bit / 8] = (uint8_t)(1u << (bit % 8));
+      k[(127 - bit) / 8] = (uint8_t)(1u << ((127 - bit) % 8));
+      r |= one_sha(st, k, "vec128 sha on single bits");
+    }
+    for (int i = 0; i < 1024; i++) {
+      fill(st, 16);
+      fill(k, 16);
+      r |= one_sha(st, k, "vec128 sha on random input");
+    }
   }
 
   if (r == 0) printf("all vec128 axioms agree with FIPS 197 and with a bitwise reference\n");
