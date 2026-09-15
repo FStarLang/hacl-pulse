@@ -181,3 +181,37 @@ let conv_lanes (a b: block) (k: int)
     conv_shift_right (lane a true) (lane b true) 64 (k - 64)
 
 #pop-options
+
+(** {2 The product, as the registers hold it}
+
+    Byte reversal is its own inverse, so a block can be recovered from its
+    reversed form; and the reversed operands' convolution is the true
+    product read backwards from [254].  Together these say what the four
+    [clmul]s compute in terms of the polynomials GCM cares about. *)
+
+let bswap_involutive (a: block) : Lemma (bswap (bswap a) == a)
+  = Seq.lemma_eq_intro (bswap (bswap a)) a
+
+(** The mirror of [bswap_lebit]: the GCM bits of a reversed block are the
+    little-endian bits of the original, backwards. *)
+let bswap_bit (a: block) (j: nat { j < 128 })
+  : Lemma (bit (bswap a) j == lebit a (127 - j))
+  = bswap_lebit (bswap a) (127 - j);
+    bswap_involutive a
+
+#push-options "--z3rlimit 100"
+
+(** What a 128x128 carry-less multiplier on the byte-reversed operands
+    computes: coefficient [m] of it is coefficient [254 - m] of the product
+    of the two GCM polynomials.  The one-off is Gueron's [>> 1]. *)
+let bswap_conv (x y: block) (m: int)
+  : Lemma (conv (lepoly (bswap x)) (lepoly (bswap y)) m ==
+           pget (pmul (Poly.pbits x) (Poly.pbits y)) (254 - m))
+  = bswap_lepoly x;
+    bswap_lepoly y;
+    conv_peq (lepoly (bswap x)) (prev (Poly.pbits x) 128)
+             (lepoly (bswap y)) (prev (Poly.pbits y) 128) m 128;
+    conv_rev (Poly.pbits x) (Poly.pbits y) m;
+    pmul_get (Poly.pbits x) (Poly.pbits y) (254 - m)
+
+#pop-options
