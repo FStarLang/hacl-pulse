@@ -1043,6 +1043,44 @@ The key schedule is still the portable one.  It runs once per message rather
 than once per block, and `AESKEYGENASSIST` takes a round constant as an
 immediate, so it would need one extern per round.
 
+### SHA-NI, where the instruction is four rounds wide
+
+`SHA256RNDS2` does two rounds of the compression function and `SHA256MSG1`
+and `SHA256MSG2` do the message schedule four words at a time.
+`spec/Spec.SHANI.fst` is the dictionary between them and `Spec.SHA2`, and
+`code/hash/Hacl.Hash.SHA2.NI.fst` is one block written on them.
+
+**The state is packed, and the packing is the whole trick.**  The
+instructions want the eight working variables as two registers, `ABEF` and
+`CDGH`, in an order that is neither the state's nor its reverse.  Two rounds
+send `a` to `c`, `b` to `d`, `e` to `g` and `f` to `h`, which is why
+`SHA256RNDS2` returns only the new `ABEF`: the old `ABEF` *is* the new
+`CDGH`.  So `unpack abef cdgh == round (round ...)` pins all eight slots and
+no injectivity argument is needed anywhere.  `pack_state` and `unpack_state`
+say what the four shuffles around the loop do, and each is one
+`Seq.lemma_eq_intro`.
+
+**Three loops, not a hundred unrolled lines.**  The reference C keeps the
+schedule in four registers whose roles rotate with period four and writes the
+body out sixteen times.  Here the schedule is written into the `wsb` array
+the portable code already allocates and read back by the rounds, so the block
+is a loop over the message, a loop over the schedule and a loop over the
+rounds -- one proof step each instead of sixteen.  That costs a store and a
+few loads per group of four and it is not where the time goes.  Each loop is
+its own `fn`: a Pulse `fn` is a single SMT query, and the three of them
+together are far past what Z3 will chew.
+
+**The dispatch is a copy, and the copy is the price of parametricity.**
+`Hacl.Hash.SHA2.Core` is generic in the word type -- the same code is
+SHA-512 -- so it cannot branch on "this is SHA-256 with thirty-two bit
+words".  `hash_blocks_ni` and `hash_impl_ni` are those two functions
+specialized, and `sha256`/`sha224` pick between them and the portable ones on
+`__builtin_cpu_supports("sha")`.  The padding blocks still go through the
+generic `tail_and_finish`: there are at most two of them.  The eleven new
+axioms are checked in `tests/test_vec128.c` against a fresh transcription of
+FIPS 180-4 on every single-bit input and on a thousand random ones, the same
+way the AES ones are.
+
 ### The generic bignum, where the length is a run-time value
 
 Everything above works at a fixed width.  RSA and finite-field
@@ -1736,8 +1774,8 @@ The two legacy hashes are there too: SHA-1 one-shot, incremental and under
 HMAC, and MD5 one-shot and incremental, which is everything HACL\* offers
 for it.
 
-AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, each chosen
-at run time.
+AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, and the
+Intel SHA extensions sit under SHA-256 and SHA-224, each chosen at run time.
 
-Beyond the subset, in rough order of how often they are asked for: SHA-NI
-under SHA-2, secp256k1, Salsa20/NaCl, and FrodoKEM.
+Beyond the subset, in rough order of how often they are asked for:
+secp256k1, Salsa20/NaCl, and FrodoKEM.
