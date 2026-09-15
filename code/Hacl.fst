@@ -35,6 +35,7 @@
     underscores. *)
 module Hacl
 
+module Hash_MD5 = Hacl.Hash.MD5
 module Hash_SHA1 = Hacl.Hash.SHA1
 module Streaming_SHA1 = Hacl.Streaming.SHA1
 module HMAC_SHA1 = Hacl.HMAC.SHA1
