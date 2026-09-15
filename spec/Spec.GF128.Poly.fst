@@ -620,3 +620,103 @@ let gmul_split (x y u v: block)
     bits_inj (gmul x y) (gadd u (gmul v r_block))
 
 #pop-options
+
+(** {2 The recursion closes after three steps}
+
+    [gmul_split] turns one field multiplication into a low half plus another
+    field multiplication, by the reduction constant.  That constant has
+    degree seven, so the high half shrinks fast: after one step by [R] the
+    remainder has degree at most six, and after a second it is gone
+    altogether.  Three applications of the same routine therefore compute the
+    whole product, with no separate reduction step to write or to verify. *)
+
+let small_deg (a: block) = forall (k: nat). 6 < k /\ k < 128 ==> bit a k == false
+
+(** The high half of anything times [R] has degree at most six. *)
+let mul_r_high (a: block) (k: nat { 6 < k /\ k < 128 })
+  : Lemma (pcoef a r_block (128 + k) == false)
+  = let f : int -> bool =
+      fun i -> pget (pbits a) i && pget (pbits r_block) (128 + k - i) in
+    let aux (i: int) : Lemma (0 <= i /\ i < 128 ==> f i == false)
+      = if 0 <= i && i < 128 && 128 + k - i < 128 then r_bit (128 + k - i)
+        else ()
+    in
+    FStar.Classical.forall_intro aux;
+    pmul_get (pbits a) (pbits r_block) (128 + k);
+    conv_def (pbits a) (pbits r_block) (128 + k) f;
+    xsum_ext f (fun _ -> false) 0 128;
+    xsum_zero (fun _ -> false) 0 128
+
+(** And the high half of a degree-six thing times [R] is nothing at all. *)
+let mul_r_zero (a: block) (k: nat { k < 128 })
+  : Lemma (requires small_deg a) (ensures pcoef a r_block (128 + k) == false)
+  = let f : int -> bool =
+      fun i -> pget (pbits a) i && pget (pbits r_block) (128 + k - i) in
+    let aux (i: int) : Lemma (0 <= i /\ i < 128 ==> f i == false)
+      = if 0 <= i && i < 128 && i > 6 && 128 + k - i < 128 then
+          r_bit (128 + k - i)
+        else ()
+    in
+    FStar.Classical.forall_intro aux;
+    pmul_get (pbits a) (pbits r_block) (128 + k);
+    conv_def (pbits a) (pbits r_block) (128 + k) f;
+    xsum_ext f (fun _ -> false) 0 128;
+    xsum_zero (fun _ -> false) 0 128
+
+let zero_pmul (y: block) (k: int)
+  : Lemma (pget (pmul (pbits zero) (pbits y)) k == false)
+  = pmul_get (pbits zero) (pbits y) k;
+    conv_def (pbits zero) (pbits y) k
+      (fun j -> pget (pbits zero) j && pget (pbits y) (k - j));
+    xsum_ext (fun j -> pget (pbits zero) j && pget (pbits y) (k - j))
+             (fun _ -> false) 0 128;
+    xsum_zero (fun _ -> false) 0 128
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let gmul_zero_bit (y: block) (i: nat { i < 128 })
+  : Lemma (bit (gmul zero y) i == false)
+  = FStar.Classical.forall_intro (zero_pmul y);
+    gmul_is_pmod zero y;
+    pmod_bit (pmul (pbits zero) (pbits y)) 256 i;
+    xsum_ext (fun k -> pget (pmul (pbits zero) (pbits y)) k && bit (xpowi k) i)
+             (fun _ -> false) 0 256;
+    xsum_zero (fun _ -> false) 0 256
+
+#pop-options
+
+let gmul_zero (y: block) : Lemma (gmul zero y == zero)
+  = FStar.Classical.forall_intro (gmul_zero_bit y);
+    FStar.Classical.forall_intro zero_bit;
+    bits_inj (gmul zero y) zero
+
+let gadd_zero (a: block) : Lemma (gadd a zero == a)
+  = FStar.Classical.forall_intro (gadd_bit a zero);
+    bits_inj (gadd a zero) a
+
+let halves (x y u v: block) =
+  (forall (k: nat). k < 128 ==> bit u k == pcoef x y k) /\
+  (forall (k: nat). k < 128 ==> bit v k == pcoef x y (128 + k))
+
+#push-options "--z3rlimit 200"
+
+(** The whole multiplication, in the shape the implementation has it: three
+    carry-less products, six registers, and the answer is the exclusive-or of
+    the three low halves. *)
+let gmul_three (x y u1 v1 u2 v2 u3 v3: block)
+  : Lemma (requires halves x y u1 v1 /\ halves v1 r_block u2 v2 /\
+                    halves v2 r_block u3 v3)
+          (ensures gmul x y == gadd u1 (gadd u2 u3))
+  = gmul_split x y u1 v1;
+    gmul_split v1 r_block u2 v2;
+    FStar.Classical.forall_intro (FStar.Classical.move_requires (mul_r_high v1));
+    assert (small_deg v2);
+    FStar.Classical.forall_intro
+      (FStar.Classical.move_requires (mul_r_zero v2));
+    FStar.Classical.forall_intro zero_bit;
+    bits_inj v3 zero;
+    gmul_split v2 r_block u3 v3;
+    gmul_zero r_block;
+    gadd_zero u3
+
+#pop-options
