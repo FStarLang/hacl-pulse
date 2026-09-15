@@ -476,3 +476,78 @@ ensures exists* vout'.
 }
 
 #pop-options
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+
+(** {2 Hashing a message with a one-block prefix}
+
+    [hash (blk || input)] where [blk] is exactly one block, computed without
+    ever building the concatenation: the prefix block is absorbed first and
+    the rest of the message is read straight out of the caller's buffer.
+    This is what HMAC's inner hash needs -- the prefix is [K0 ^ ipad] -- and
+    it is why [hash_blocks] and [tail_and_finish] above are stated for a ghost
+    block-aligned prefix rather than for the empty one. *)
+
+fn hash_prefixed (out: A.array S8.t) (blk: A.array S8.t) (input: A.array S8.t) (lin: SZ.t)
+                 (#vout: erased (Seq.seq S8.t))
+                 (#pb: perm) (#vb: erased (Seq.seq S8.t))
+                 (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to blk #pb vb ** A.pts_to input #pin vin **
+         pure (Seq.length vout == hash_bytes /\ Seq.length vb == block_len /\
+               SZ.fits (block_len + Seq.length vin) /\
+               block_len + Seq.length vin < max_input)
+         ** pure (SZ.v lin == Seq.length vin)
+ensures exists* vout'.
+  A.pts_to out vout' ** A.pts_to blk #pb vb ** A.pts_to input #pin vin **
+  pure (Seq.length vb + Seq.length vin < max_input /\ vout' == hash (Seq.append vb vin))
+{
+  A.pts_to_len out;
+  A.pts_to_len blk;
+  A.pts_to_len input;
+  let len = SZ.add 64sz lin;
+  let nfull = SZ.div lin 64sz;
+  let rem = SZ.rem lin 64sz;
+  let z0 = S32.classify 0ul;
+
+  let mut starr = [| z0; 5sz |];
+  A.pts_to_len starr;
+  A.pts_to_len starr;
+  A.((starr.(0sz) <- S32.classify 0x67452301ul));
+  A.((starr.(1sz) <- S32.classify 0xefcdab89ul));
+  A.((starr.(2sz) <- S32.classify 0x98badcfeul));
+  A.((starr.(3sz) <- S32.classify 0x10325476ul));
+  A.((starr.(4sz) <- S32.classify 0xc3d2e1f0ul));
+  with vst_init. assert (A.pts_to starr vst_init);
+  Seq.lemma_eq_intro vst_init (iv <: Seq.seq S32.t);
+  Seq.lemma_eq_elim vst_init (iv <: Seq.seq S32.t);
+
+  let mut wsarr = [| z0; rounds_sz |];
+  A.pts_to_len wsarr;
+  A.pts_to_len wsarr;
+
+  Seq.lemma_len_append (reveal vb) (reveal vin);
+  padded_shape #S32.t (Seq.append vb vin);
+  padded_index_block #S32.t (Seq.append vb vin) 0;
+  append_first_block #S32.t (reveal vb) (reveal vin);
+  update_block_impl wsarr starr blk 0sz;
+  repeati_g_zero (update_step (padded (Seq.append vb vin))) iv;
+  unfold_repeati_g 0 (update_step (padded (Seq.append vb vin))) iv;
+
+  Math.lemma_mod_plus (SZ.v lin) 1 block_len;
+  assert (pure (SZ.v rem == SZ.v len % block_len));
+  Math.euclidean_division_definition (SZ.v lin) block_len;
+  Math.distributivity_add_left 1 (SZ.v nfull) block_len;
+  assert (pure (SZ.v len - SZ.v rem == (1 + SZ.v nfull) * block_len));
+  Math.multiply_fractions (SZ.v lin) block_len;
+  Math.lemma_mult_le_left (SZ.v nfull) 1 block_len;
+  SZ.fits_lte (1 + SZ.v nfull) (block_len + SZ.v lin);
+
+  hash_blocks wsarr starr input 1sz nfull vb;
+  let nb = SZ.add 1sz nfull;
+  let base_in = SZ.sub lin rem;
+  tail_and_finish wsarr starr out input len nb base_in rem vb;
+
+  ()
+}
+
+#pop-options
