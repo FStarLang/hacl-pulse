@@ -786,6 +786,9 @@ static void Hacl_Hash_SHA1_Streaming_absorb_blocks(uint32_t *wsb, uint32_t *acc,
 static void Hacl_Hash_SHA1_Streaming_update_full(uint32_t *wsb, uint32_t *acc, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill);
 static void Hacl_Hash_SHA1_Streaming_update_impl(uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Hash_SHA1_Streaming_init_impl(uint32_t *acc, uint8_t *buf, size_t *tot);
+static void Hacl_Hash_MD5_Streaming_copy4(uint32_t *dst, uint32_t *src);
+static void Hacl_Hash_MD5_Core_write_len_le(uint8_t *b, size_t off, size_t len);
+static void Hacl_Hash_MD5_Core_build_tail(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail);
 static const uint32_t Hacl_Hash_MD5_Tables_k_arr[64] = { 0xd76aa478U, 0xe8c7b756U, 0x242070dbU, 0xc1bdceeeU, 0xf57c0fafU, 0x4787c62aU, 0xa8304613U, 0xfd469501U, 0x698098d8U, 0x8b44f7afU, 0xffff5bb1U, 0x895cd7beU, 0x6b901122U, 0xfd987193U, 0xa679438eU, 0x49b40821U, 0xf61e2562U, 0xc040b340U, 0x265e5a51U, 0xe9b6c7aaU, 0xd62f105dU, 0x2441453U, 0xd8a1e681U, 0xe7d3fbc8U, 0x21e1cde6U, 0xc33707d6U, 0xf4d50d87U, 0x455a14edU, 0xa9e3e905U, 0xfcefa3f8U, 0x676f02d9U, 0x8d2a4c8aU, 0xfffa3942U, 0x8771f681U, 0x6d9d6122U, 0xfde5380cU, 0xa4beea44U, 0x4bdecfa9U, 0xf6bb4b60U, 0xbebfbc70U, 0x289b7ec6U, 0xeaa127faU, 0xd4ef3085U, 0x4881d05U, 0xd9d4d039U, 0xe6db99e5U, 0x1fa27cf8U, 0xc4ac5665U, 0xf4292244U, 0x432aff97U, 0xab9423a7U, 0xfc93a039U, 0x655b59c3U, 0x8f0ccc92U, 0xffeff47dU, 0x85845dd1U, 0x6fa87e4fU, 0xfe2ce6e0U, 0xa3014314U, 0x4e0811a1U, 0xf7537e82U, 0xbd3af235U, 0x2ad7d2bbU, 0xeb86d391U };
 static const uint32_t Hacl_Hash_MD5_Tables_s_arr[64] = { 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21 };
 static void Hacl_Hash_MD5_Core_block_load(uint32_t *wb, uint8_t *block, size_t off);
@@ -796,11 +799,14 @@ static uint32_t Spec_MD5__I(uint32_t x, uint32_t y, uint32_t z);
 static uint32_t Hacl_Hash_MD5_Core_f_impl(size_t i, uint32_t b, uint32_t c, uint32_t d);
 static size_t Hacl_Hash_MD5_Core_g_impl(size_t i);
 static void Hacl_Hash_MD5_Core_update_block_impl(uint32_t *kt, uint32_t *st, uint32_t *wb, uint32_t *state, uint8_t *block, size_t off);
-static void Hacl_Hash_MD5_Core_hash_blocks(uint32_t *wb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull);
-static void Hacl_Hash_MD5_Core_write_len_le(uint8_t *b, size_t off, size_t len);
-static void Hacl_Hash_MD5_Core_build_tail(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail);
 static void Hacl_Hash_MD5_Core_write_digest(uint8_t *out, uint32_t *state);
 static void Hacl_Hash_MD5_Core_tail_and_finish(uint32_t *wb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem);
+static void Hacl_Hash_MD5_Streaming_digest_impl(uint32_t *wb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_MD5_Core_hash_blocks(uint32_t *wb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull);
+static void Hacl_Hash_MD5_Streaming_absorb_blocks(uint32_t *wb, uint32_t *acc, uint8_t *input, size_t base_in, size_t nfull, size_t nb);
+static void Hacl_Hash_MD5_Streaming_update_full(uint32_t *wb, uint32_t *acc, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill);
+static void Hacl_Hash_MD5_Streaming_update_impl(uint32_t *wb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_MD5_Streaming_init_impl(uint32_t *acc, uint8_t *buf, size_t *tot);
 static void Hacl_Hash_MD5_Core_hash_impl(uint8_t *out, uint8_t *input, size_t len);
 
 static uint32_t Hacl_Secret_UInt32_mul_mod(uint32_t x, uint32_t y) {
@@ -13525,6 +13531,43 @@ void Hacl_Hash_SHA1_sha1(uint8_t *out, uint8_t *input, size_t len) {
   Hacl_Hash_SHA1_Core_hash_impl(out, input, len);
 }
 
+static void Hacl_Hash_MD5_Streaming_copy4(uint32_t *dst, uint32_t *src) {
+  size_t i = 0;
+  while (i < 4) {
+    size_t vi = i;
+    uint32_t x = src[vi];
+    dst[vi] = x;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Hash_MD5_Core_write_len_le(uint8_t *b, size_t off, size_t len) {
+  uint64_t bits8 = (8 * (uint64_t)len);
+  size_t d = 0;
+  uint32_t sh = 0;
+  while (d < 8) {
+    size_t vd = d;
+    uint32_t vsh = sh;
+    uint8_t c = (uint8_t)(bits8 >> vsh);
+    b[(off + vd)] = c;
+    d = (vd + 1);
+    sh = (vsh + 8);
+  }
+}
+
+static void Hacl_Hash_MD5_Core_build_tail(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail) {
+  size_t c = 0;
+  while (c < rem) {
+    size_t vc = c;
+    uint8_t x = input[(base + vc)];
+    tl[vc] = x;
+    c = (vc + 1);
+  }
+  uint8_t x80 = 0x80;
+  tl[rem] = x80;
+  Hacl_Hash_MD5_Core_write_len_le(tl, (ntail - 8), len);
+}
+
 static void Hacl_Hash_MD5_Core_block_load(uint32_t *wb, uint8_t *block, size_t off) {
   size_t i = 0;
   while (i < 16) {
@@ -13604,45 +13647,6 @@ static void Hacl_Hash_MD5_Core_update_block_impl(uint32_t *kt, uint32_t *st, uin
   state[3] = Hacl_Secret_UInt32_add_mod(d0, d1);
 }
 
-static void Hacl_Hash_MD5_Core_hash_blocks(uint32_t *wb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull) {
-  (void)nprev;
-  size_t i = 0;
-  while (i < nfull) {
-    size_t vi2 = i;
-    uint32_t *kt = (uint32_t *)Hacl_Hash_MD5_Tables_k_arr;
-    uint32_t *stt = (uint32_t *)Hacl_Hash_MD5_Tables_s_arr;
-    Hacl_Hash_MD5_Core_update_block_impl(kt, stt, wb, st, input, (vi2 * 64));
-    i = (vi2 + 1);
-  }
-}
-
-static void Hacl_Hash_MD5_Core_write_len_le(uint8_t *b, size_t off, size_t len) {
-  uint64_t bits8 = (8 * (uint64_t)len);
-  size_t d = 0;
-  uint32_t sh = 0;
-  while (d < 8) {
-    size_t vd = d;
-    uint32_t vsh = sh;
-    uint8_t c = (uint8_t)(bits8 >> vsh);
-    b[(off + vd)] = c;
-    d = (vd + 1);
-    sh = (vsh + 8);
-  }
-}
-
-static void Hacl_Hash_MD5_Core_build_tail(uint8_t *tl, uint8_t *input, size_t len, size_t base, size_t rem, size_t ntail) {
-  size_t c = 0;
-  while (c < rem) {
-    size_t vc = c;
-    uint8_t x = input[(base + vc)];
-    tl[vc] = x;
-    c = (vc + 1);
-  }
-  uint8_t x80 = 0x80;
-  tl[rem] = x80;
-  Hacl_Hash_MD5_Core_write_len_le(tl, (ntail - 8), len);
-}
-
 static void Hacl_Hash_MD5_Core_write_digest(uint8_t *out, uint32_t *state) {
   size_t j = 0;
   while (j < 4) {
@@ -13674,6 +13678,91 @@ static void Hacl_Hash_MD5_Core_tail_and_finish(uint32_t *wb, uint32_t *st, uint8
     j = (vj + 1);
   }
   Hacl_Hash_MD5_Core_write_digest(out, st);
+}
+
+static void Hacl_Hash_MD5_Streaming_digest_impl(uint32_t *wb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
+  size_t tlen = tot[0];
+  size_t blen = (tlen % 64);
+  size_t nb0 = (tlen / 64);
+  uint32_t z0 = 0;
+  uint32_t starr[4];
+  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+    starr[_ci1] = z0;
+  }
+  Hacl_Hash_MD5_Streaming_copy4(starr, acc);
+  uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
+  Hacl_Hash_MD5_Core_tail_and_finish(wb, starr, out, sub, tlen, nb0, 0, blen);
+}
+
+void Hacl_Streaming_MD5_md5_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
+  uint32_t z = 0;
+  uint32_t warr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    warr[_ci1] = z;
+  }
+  Hacl_Hash_MD5_Streaming_digest_impl(warr, acc, buf, tot, out);
+}
+
+static void Hacl_Hash_MD5_Core_hash_blocks(uint32_t *wb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull) {
+  (void)nprev;
+  size_t i = 0;
+  while (i < nfull) {
+    size_t vi2 = i;
+    uint32_t *kt = (uint32_t *)Hacl_Hash_MD5_Tables_k_arr;
+    uint32_t *stt = (uint32_t *)Hacl_Hash_MD5_Tables_s_arr;
+    Hacl_Hash_MD5_Core_update_block_impl(kt, stt, wb, st, input, (vi2 * 64));
+    i = (vi2 + 1);
+  }
+}
+
+static void Hacl_Hash_MD5_Streaming_absorb_blocks(uint32_t *wb, uint32_t *acc, uint8_t *input, size_t base_in, size_t nfull, size_t nb) {
+  size_t hi = (base_in + (nfull * 64));
+  uint8_t *sub = Hacl_Impl_Sub_sub__t(input, base_in, hi);
+  Hacl_Hash_MD5_Core_hash_blocks(wb, acc, sub, nb, nfull);
+}
+
+static void Hacl_Hash_MD5_Streaming_update_full(uint32_t *wb, uint32_t *acc, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill) {
+  (void)blen;
+  Hacl_Hash_MD5_Streaming_absorb_blocks(wb, acc, buf, 0, 1, nb0);
+  size_t restlen = (dlen - fill);
+  size_t nfull = (restlen / 64);
+  size_t tl = (restlen % 64);
+  Hacl_Hash_MD5_Streaming_absorb_blocks(wb, acc, data, fill, nfull, (nb0 + 1));
+  Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
+}
+
+static void Hacl_Hash_MD5_Streaming_update_impl(uint32_t *wb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+  size_t tlen = tot[0];
+  size_t blen = (tlen % 64);
+  size_t nb0 = (tlen / 64);
+  size_t fill;
+  if ((64 - blen) <= dlen) fill = (64 - blen);
+  else fill = dlen;
+  Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
+  if ((blen + fill) == 64) Hacl_Hash_MD5_Streaming_update_full(wb, acc, buf, data, dlen, blen, nb0, fill);
+  tot[0] = (tlen + dlen);
+}
+
+void Hacl_Streaming_MD5_md5_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
+  uint32_t z = 0;
+  uint32_t warr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    warr[_ci1] = z;
+  }
+  Hacl_Hash_MD5_Streaming_update_impl(warr, acc, buf, tot, data, data_len);
+}
+
+static void Hacl_Hash_MD5_Streaming_init_impl(uint32_t *acc, uint8_t *buf, size_t *tot) {
+  (void)buf;
+  acc[0] = 0x67452301U;
+  acc[1] = 0xefcdab89U;
+  acc[2] = 0x98badcfeU;
+  acc[3] = 0x10325476U;
+  tot[0] = 0;
+}
+
+void Hacl_Streaming_MD5_md5_init(uint32_t *acc, uint8_t *buf, size_t *tot) {
+  Hacl_Hash_MD5_Streaming_init_impl(acc, buf, tot);
 }
 
 static void Hacl_Hash_MD5_Core_hash_impl(uint8_t *out, uint8_t *input, size_t len) {

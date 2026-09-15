@@ -203,6 +203,9 @@ void Hacl_Streaming_SHA1_sha1_digest(uint32_t *acc, uint8_t *buf, size_t *tot, u
 void Hacl_Streaming_SHA1_sha1_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 void Hacl_Streaming_SHA1_sha1_init(uint32_t *acc, uint8_t *buf, size_t *tot);
 void Hacl_Hash_SHA1_sha1(uint8_t *out, uint8_t *input, size_t len);
+void Hacl_Streaming_MD5_md5_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
+void Hacl_Streaming_MD5_md5_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
+void Hacl_Streaming_MD5_md5_init(uint32_t *acc, uint8_t *buf, size_t *tot);
 void Hacl_Hash_MD5_md5(uint8_t *out, uint8_t *input, size_t len);
 
 
