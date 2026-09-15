@@ -35,7 +35,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
@@ -1378,6 +1378,44 @@ Every module in the chain -- compression function, driver, streaming
 layer, HMAC -- verified on the first attempt, which is the payoff for
 having shaped `Spec.SHA1` on `Spec.SHA2` deliberately.
 
+### MD5, and where the reuse runs out
+
+MD5 is worse than broken -- collisions are minutes on a laptop, and
+chosen-prefix collisions are a well-trodden attack on real certificate
+chains -- but it is still what a protocol that predates 2004 says, so
+HACL\* has it and so does this.  HACL\* gives it as a one-shot and as a
+streaming state and *not* under HMAC; that is the parity target, and it is
+met.
+
+The same bridge lemmas work: MD5's padding is SHA-2's at 32 bits too, so
+`Spec.MD5.Lemmas` opens with two `SMTPat` equalities and then inherits
+`block_at_pointwise` and the shape lemmas.  Everything above the block --
+`hash_blocks`, `tail_and_finish`, `hash_impl`, and the whole streaming
+layer -- is SHA-1's code with the lemma module swapped.
+
+Where it runs out is byte order.  MD5 is little-endian in three separate
+places: the sixteen block words, the four digest words, and the 64-bit
+length in the padding.  The first two were free, because
+`Hacl.Spec.Bytes` was written symmetrically from the start and already had
+`words_from_le`, `words_to_le` and `digest_step_le`.  The third needed
+`write_len_le`, which differs from `write_len_be` in exactly one index --
+byte *j* goes at `off + j` rather than `off + 7 - j` -- and a
+`tail_generic_le` to match.  That lemma is *shorter* than the big-endian
+one: SHA-2's length field can be sixteen bytes of which only the low eight
+are written, so it carries an argument that the high bytes are zero, and
+MD5's is eight bytes all of which are written.
+
+Two smaller things.  MD5 has no message schedule; each of the sixty-four
+rounds reads one of the sixteen block words through an index function, so
+`g_impl` is a run-time `%` and the scratch buffer is sixteen words rather
+than eighty.  And the rotation amounts come from a table, which means
+`rotate_left` needs to know each one is in `(0, 32)`.  Rather than prove
+that at the point of use, the table's *element type* is the refinement:
+`s_arr : G.static_array rot` where `rot = r:U32.t{0 < v r /\ v r < 32}`.
+Reading the array hands the caller the bound, the refinement erases, and
+the C is still a `uint32_t[64]`.  The alternative -- an `assert_norm` of a
+`forall` over a sixty-four-element `seq_of_list` -- times out.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1676,8 +1714,10 @@ RSA-PSS signing and verification.
 
 AES-NI sits under the portable AES, chosen at run time.
 
-SHA-1 is there too, one-shot, incremental and under HMAC.
+The two legacy hashes are there too: SHA-1 one-shot, incremental and under
+HMAC, and MD5 one-shot and incremental, which is everything HACL\* offers
+for it.
 
 Beyond the subset, in rough order of how often they are asked for: the
-carry-less-multiply GHASH under AES-GCM, SHA-NI under SHA-2, MD5,
-secp256k1, Salsa20/NaCl, and FrodoKEM.
+carry-less-multiply GHASH under AES-GCM, SHA-NI under SHA-2, secp256k1,
+Salsa20/NaCl, and FrodoKEM.
