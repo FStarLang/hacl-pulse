@@ -131,10 +131,42 @@ let rec xsum_rev (f: int -> bool) (lo: int) (n: nat)
       assert (xsum fd (lo + 1) (n - 1) == xsum f lo (n - 1))
     end
 
+(** A factor that does not depend on the summation index comes out. *)
+let rec xsum_and (c: bool) (f: int -> bool) (lo: int) (n: nat)
+  : Lemma (ensures xsum (fun i -> c && f i) lo n == (c && xsum f lo n))
+          (decreases n)
+  = if n = 0 then () else xsum_and c f lo (n - 1)
+
+(** Exactly one term may be nonzero, and then the sum is that term. *)
+let rec xsum_one (f: int -> bool) (lo: int) (n: nat) (j: int)
+  : Lemma (requires lo <= j /\ j < lo + n /\
+                    (forall (i: int). lo <= i /\ i < lo + n /\ i <> j ==> f i == false))
+          (ensures xsum f lo n == f j)
+          (decreases n)
+  = if lo + n - 1 = j
+    then xsum_zero f lo (n - 1)
+    else xsum_one f lo (n - 1) j
+
 let rec xsum_xor (f g: int -> bool) (lo: int) (n: nat)
   : Lemma (ensures xsum (fun i -> f i <> g i) lo n == (xsum f lo n <> xsum g lo n))
           (decreases n)
   = if n = 0 then () else xsum_xor f g lo (n - 1)
+
+(** Two nested sums may be taken in either order. *)
+let rec xsum_swap (h: int -> int -> bool) (lo1: int) (n1: nat) (lo2: int) (n2: nat)
+  : Lemma (ensures xsum (fun j -> xsum (fun k -> h j k) lo2 n2) lo1 n1 ==
+                   xsum (fun k -> xsum (fun j -> h j k) lo1 n1) lo2 n2)
+          (decreases n1)
+  = if n1 = 0
+    then xsum_zero (fun k -> xsum (fun j -> h j k) lo1 n1) lo2 n2
+    else begin
+      let top = lo1 + n1 - 1 in
+      xsum_swap h lo1 (n1 - 1) lo2 n2;
+      xsum_xor (fun k -> h top k) (fun k -> xsum (fun j -> h j k) lo1 (n1 - 1)) lo2 n2;
+      xsum_ext (fun k -> xsum (fun j -> h j k) lo1 n1)
+               (fun k -> h top k <> xsum (fun j -> h j k) lo1 (n1 - 1))
+               lo2 n2
+    end
 
 (** {2 The operations} *)
 
