@@ -22,7 +22,7 @@
     that insists the scalar is a proper private key, and one that reduces
     a hash modulo the order.
 
-    Because [Hacl.P256.Mont] takes its modulus as data, none of this
+    Because [Hacl.Impl.Mont256] takes its modulus as data, none of this
     duplicates any code in the emitted C: the two fields share every
     operation and differ only in the table they pass. *)
 module Hacl.P256.Scalar
@@ -32,14 +32,14 @@ module Hacl.P256.Scalar
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.P256.Field
-open Spec.P256.Mont
+open Spec.Mont256
 open Hacl.Spec.Bytes
 open Hacl.Impl.Limb
 open Hacl.Impl.Table
-open Hacl.P256.Bignum
-open Hacl.P256.Mont
+open Hacl.Impl.Bignum256
+open Hacl.Impl.Mont256
 open Hacl.P256.Tables
-open Hacl.P256.Exp
+open Hacl.Impl.Exp256
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq

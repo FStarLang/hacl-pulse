@@ -16,7 +16,7 @@
 
 (** Montgomery form as an interface.
 
-    [Spec.P256.Field] says what the four operations do to {i sequences}:
+    [Spec.Field256] says what the four operations do to {i sequences}:
     [madd d a b] is the residue whose value is [(eval a + eval b) mod m].
     Everything above the field -- the curve formulas, ECDSA -- wants to
     speak of numbers instead, and it wants the [R] that the representation
@@ -30,10 +30,10 @@
     bundle carries a witness [ri] with [R ri = 1 (mod m)], checked by
     [assert_norm] at each instance.  [rcancel] is the one place it is used;
     everything else here is ordinary modular algebra. *)
-module Spec.P256.Mont
+module Spec.Mont256
 
 open Spec.Bignum256
-open Spec.P256.Field
+open Spec.Field256
 
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas

@@ -29,7 +29,7 @@ open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.P256.Field
 open Hacl.Impl.Limb
-open Hacl.P256.Mont
+open Hacl.Impl.Mont256
 open Hacl.P256.Field
 open Hacl.P256.Point
 

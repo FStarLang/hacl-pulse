@@ -36,9 +36,9 @@ open Spec.P256.Field
 open Hacl.Spec.Bytes
 open Hacl.Impl.Limb
 open Hacl.Impl.Table
-open Hacl.P256.Bignum
-open Hacl.P256.Mont
-open Spec.P256.Mont
+open Hacl.Impl.Bignum256
+open Hacl.Impl.Mont256
+open Spec.Mont256
 open Hacl.P256.Tables
 open Hacl.P256.Scalar
 

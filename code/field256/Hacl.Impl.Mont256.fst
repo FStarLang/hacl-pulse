@@ -16,7 +16,7 @@
 
 (** The modular operations, with their scratch.
 
-    [Hacl.P256.Bignum] allocates nothing: its workspace is eighty words and
+    [Hacl.Impl.Bignum256] allocates nothing: its workspace is eighty words and
     it takes them as arguments, because that is the only way to prove
     anything about a loop that reuses them.  Nobody wants to write that at a
     call site, so each operation gets a wrapper here that declares the
@@ -28,17 +28,17 @@
     field share the code, and the emitted C has one [amul] rather than two.
     Specialising the two moduli would buy the multiplier nothing -- the
     limbs it reads are data either way -- and would double the object. *)
-module Hacl.P256.Mont
+module Hacl.Impl.Mont256
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.Montgomery256
-open Spec.P256.Field
+open Spec.Field256
 open Hacl.Impl.Limb
-open Spec.P256.Mont
-open Hacl.P256.Bignum
+open Spec.Mont256
+open Hacl.Impl.Bignum256
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq

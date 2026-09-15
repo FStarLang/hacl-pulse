@@ -17,12 +17,12 @@
 (** The field [F_p].
 
     Sixteen limbs holding [x R mod p].  [felem] is the invariant and [fev]
-    is the number: after [Spec.P256.Mont] the Montgomery factor is not
+    is the number: after [Spec.Mont256] the Montgomery factor is not
     visible in any statement below, and each operation says exactly what
     [Spec.P256] says it does.
 
     Every function here is four lines -- fetch the constant tables, call the
-    operation from [Hacl.P256.Mont], apply the one lemma that turns the
+    operation from [Hacl.Impl.Mont256], apply the one lemma that turns the
     representation-level equation into a numeric one.  The tables are
     [static const] arrays and the permission on them is never returned,
     which is what [drop_table] records. *)
@@ -33,12 +33,12 @@ module Hacl.P256.Field
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.P256.Field
-open Spec.P256.Mont
+open Spec.Mont256
 open Hacl.Spec.Bytes
 open Hacl.Impl.Limb
 open Hacl.Impl.Table
-open Hacl.P256.Bignum
-open Hacl.P256.Mont
+open Hacl.Impl.Bignum256
+open Hacl.Impl.Mont256
 open Hacl.P256.Tables
 
 module A = Pulse.Lib.Array
