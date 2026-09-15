@@ -37,7 +37,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
 | `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`) |
-| `c/` | handwritten C, and the whole of the trusted computing base on the C side: currently the platform entropy shim |
+| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -976,6 +976,53 @@ leak the xor of the plaintexts and enough of the hash subkey to forge
 arbitrary messages.  Nothing in the interface can prevent that.
 
 
+### AES-NI, and how a trusted intrinsic is kept honest
+
+`Hacl.AES.Core` computes the S-box as inversion in GF(2^8) followed by an
+affine map, because a table lookup at a secret index leaks through the cache.
+That is about a megabyte a second.  `AESENC` does a whole round in one
+constant-time instruction.  `code/aes/Hacl.AES.NI.fst` is the cipher written
+on it, and `code/aes/Hacl.AES.Block.fst` picks between the two.
+
+**The dispatch is per block, and no caller knows about it.**
+`Hacl.AES.NI.cipher_ni` and `Hacl.AES.Cipher.cipher_portable` have the *same*
+postcondition, so the dispatcher has nothing to prove -- both branches leave
+the same specification value behind.  One perfectly predicted branch per block
+is not measurable next to a block encryption, and in exchange CTR, GCM and
+anything added later get the fast path with no dispatching variant of their
+own.  `test_gcm.c`'s 450 CAVP cases run through the new path unchanged.
+
+**One translation unit, two instruction sets.**  AES-NI code has to be
+compiled with `-maes`, and the rest of the library must not be, or it would
+fault on a machine without the instructions; GCC and Clang both refuse to
+inline a `target`-attributed intrinsic into a caller without the attribute, so
+a wrapper in a header is not enough.  Custard's `CPrologue` puts a verbatim
+string on a declaration and `custard_c_closure_prologue` puts one on
+everything that declaration *exclusively* reaches, which is exactly the set
+that needs it -- a helper the baseline path also calls is deliberately left
+alone.  So `cipher_ni` and its subtree get
+`__attribute__((target("aes,pclmul,ssse3,sse4.1")))` and the dispatcher, one
+call up, does not.  Feature detection is `__builtin_cpu_supports`.
+
+**The intrinsics are axioms, and they are tested.**  `lib/Hacl.Vec128.fst` is
+all `assume val`s, realized by `c/Hacl_Vec128.h`; the postcondition of
+`aesenc` *is* the claim that the hardware computes `Spec.AES.round`, and
+nothing in F\* can check it.  This is the second entry in the trusted
+computing base after the entropy shim, and much the bigger one.  Two things
+keep it honest.  Each axiom is stated against the specification the rest of
+the library is already verified against, so there is one notion of what AES
+is and the axiom either matches it or is visibly wrong.  And
+`tests/test_vec128.c` evaluates every axiom against a fresh transcription of
+FIPS 197 -- its own S-box table, its own ShiftRows, its own MixColumns,
+sharing nothing with the library -- on every constant block, on edge cases and
+on four thousand random inputs.  Perturbing one coefficient of the reference
+makes all 4097 cases fail, which is the check that the test is checking
+something.
+
+The key schedule is still the portable one.  It runs once per message rather
+than once per block, and `AESKEYGENASSIST` takes a round constant as an
+immediate, so it would need one extern per round.
+
 ### The generic bignum, where the length is a run-time value
 
 Everything above works at a fixed width.  RSA and finite-field
@@ -1584,6 +1631,8 @@ exponentiation -- both ladders and Fermat inversion -- and on top of those
 the five RFC 7919 finite-field Diffie-Hellman groups and PKCS#1 v2.2
 RSA-PSS signing and verification.
 
-Beyond the subset, in rough order of how often they are asked for: AES-NI and
-carry-less-multiply intrinsics under the portable AES-GCM, secp256k1,
+AES-NI sits under the portable AES, chosen at run time.
+
+Beyond the subset, in rough order of how often they are asked for: the
+carry-less-multiply GHASH under AES-GCM, SHA-NI under SHA-2, secp256k1,
 Salsa20/NaCl, FrodoKEM, and the legacy hashes.
