@@ -16,7 +16,7 @@
 
 (** Montgomery arithmetic modulo a generic 256-bit modulus.
 
-    [Spec.P256.Field] says what the four operations are; this module runs
+    [Spec.Field256] says what the four operations are; this module runs
     them.  Everything is parameterised by the modulus bundle, which arrives
     as two sixteen-limb slices -- the modulus [ms] and its two's complement
     [nm] -- and one word [mu].  P-256 has two such bundles, the field prime
@@ -26,20 +26,20 @@
     needs thirty-one columns for the schoolbook product, thirty-three for
     the reduction to run in, and sixteen for the conditional subtraction to
     keep its second candidate; an addition or a subtraction needs only the
-    last of those three.  They are passed in, and {!Hacl.P256.Field} is
+    last of those three.  They are passed in, and {!Hacl.P256.Field} and {!Hacl.K256.Field} is
     where they acquire names.
 
     {b Constant time.}  The only decisions are on loop counters.  The
     conditional subtractions compare with [gte_mask] and commit with
     [Hacl.Impl.Limb.cselect]; no secret ever reaches an [if]. *)
-module Hacl.P256.Bignum
+module Hacl.Impl.Bignum256
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.Montgomery256
-open Spec.P256.Field
+open Spec.Field256
 open Hacl.Impl.Limb
 open Hacl.Spec.Bytes
 
@@ -477,7 +477,7 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
 
 #pop-options
 
-#push-options "--z3rlimit 600"
+#push-options "--z3rlimit 1200"
 
 fn msub_op (out a b s ms: A.array S64.t) (d: erased modulus)
            (#vo: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
@@ -571,7 +571,7 @@ ensures exists* (vt': Seq.seq S64.t) (vp': Seq.seq S64.t).
 
 #pop-options
 
-(** [Spec.P256.Field.redc] only makes sense on a full-width accumulator,
+(** [Spec.Field256.redc] only makes sense on a full-width accumulator,
     and a Pulse [ensures] is elaborated with no [requires] in scope, so the
     postcondition below goes through a total version of it. *)
 let redcn (d: modulus) (t: Seq.seq nat) : (r: Seq.seq nat { Seq.length r == nl + 1 }) =

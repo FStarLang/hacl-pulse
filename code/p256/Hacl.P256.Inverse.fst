@@ -27,12 +27,13 @@ module Hacl.P256.Inverse
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.P256.Field
-open Spec.P256.Mont
+open Spec.Mont256
 open Hacl.Impl.Limb
 open Hacl.Impl.Table
-open Hacl.P256.Mont
+open Hacl.Impl.Mont256
+open Hacl.Impl.Lit256
 open Hacl.P256.Tables
-open Hacl.P256.Exp
+open Hacl.Impl.Exp256
 open Hacl.P256.Field
 
 module A = Pulse.Lib.Array

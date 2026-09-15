@@ -44,6 +44,7 @@ open Pulse.Lib.Pervasives
 open Spec.Bignum256
 open Spec.P256.Field
 open Hacl.Impl.Limb
+open Hacl.Impl.Lit256
 open Hacl.Impl.Table
 
 module Seq = FStar.Seq
@@ -56,95 +57,6 @@ module P = Spec.P256
 module U64 = FStar.UInt64
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
-
-(** {2 A list of limbs} *)
-
-let rec leval (l: list S64.t) : GTot nat =
-  match l with
-  | [] -> 0
-  | h :: t -> S64.v h + base * leval t
-
-let rec lbnd (l: list S64.t) : GTot bool =
-  match l with
-  | [] -> true
-  | h :: t -> S64.v h < base && lbnd t
-
-(** One induction carries both across [Seq.seq_of_list]. *)
-let rec lit_ok (l: list S64.t)
-  : Lemma (ensures eval (vals (Seq.seq_of_list l)) == leval l /\
-                   (lbnd l ==> bnd (vals (Seq.seq_of_list l)) base))
-          (decreases l)
-  = match l with
-    | [] -> Seq.lemma_eq_intro (Seq.seq_of_list l) Seq.empty
-    | h :: t ->
-      lit_ok t;
-      let s = vals (Seq.seq_of_list l) in
-      let n = Seq.length s in
-      Classical.forall_intro (Seq.lemma_seq_of_list_index l);
-      Classical.forall_intro (Seq.lemma_seq_of_list_index t);
-      Seq.lemma_eq_intro (Seq.slice s 1 n) (vals (Seq.seq_of_list t))
-
-(** A bounded sequence is determined by the number it evaluates to, so the
-    literals are the limbs as soon as they add up. *)
-let lit_limbs (l: list S64.t) (x: nat)
-  : Lemma (requires L.length l == nl /\ lbnd l /\ leval l == x /\ x < pow2 256)
-          (ensures vals (Seq.seq_of_list l) == limbs x)
-  = lit_ok l;
-    let s = vals (Seq.seq_of_list l) in
-    let aux (k: nat { k < nl }) : Lemma (Seq.index s k == Seq.index (limbs x) k)
-      = eval_digit s k;
-        Seq.init_index_ #nat nl (fun i -> x / pow2 (rad * i) % base) k in
-    Classical.forall_intro aux;
-    Seq.lemma_eq_intro s (limbs x)
-
-(** {2 Public limbs}
-
-    An exponent is not a secret: the three that appear here -- [p - 2],
-    [(p + 1) / 4] and [n - 2] -- are in the standard.  Keeping them public
-    is what lets the exponentiation loop branch on a bit rather than
-    multiply unconditionally, which halves it.  The machinery is the same
-    as above with [U64] in place of [S64]. *)
-
-let pvals (v: Seq.seq U64.t)
-  : GTot (s: Seq.seq nat { Seq.length s == Seq.length v /\
-                           (forall (i: nat). i < Seq.length v ==>
-                              Seq.index s i == U64.v (Seq.index v i)) })
-  = Seq.init_ghost (Seq.length v) (fun i -> (U64.v (Seq.index v i) <: nat))
-
-let rec uleval (l: list U64.t) : GTot nat =
-  match l with
-  | [] -> 0
-  | h :: t -> U64.v h + base * uleval t
-
-let rec ulbnd (l: list U64.t) : GTot bool =
-  match l with
-  | [] -> true
-  | h :: t -> U64.v h < base && ulbnd t
-
-let rec ulit_ok (l: list U64.t)
-  : Lemma (ensures eval (pvals (Seq.seq_of_list l)) == uleval l /\
-                   (ulbnd l ==> bnd (pvals (Seq.seq_of_list l)) base))
-          (decreases l)
-  = match l with
-    | [] -> Seq.lemma_eq_intro (Seq.seq_of_list l) Seq.empty
-    | h :: t ->
-      ulit_ok t;
-      let s = pvals (Seq.seq_of_list l) in
-      let n = Seq.length s in
-      Classical.forall_intro (Seq.lemma_seq_of_list_index l);
-      Classical.forall_intro (Seq.lemma_seq_of_list_index t);
-      Seq.lemma_eq_intro (Seq.slice s 1 n) (pvals (Seq.seq_of_list t))
-
-let ulit_limbs (l: list U64.t) (x: nat)
-  : Lemma (requires L.length l == nl /\ ulbnd l /\ uleval l == x /\ x < pow2 256)
-          (ensures pvals (Seq.seq_of_list l) == limbs x)
-  = ulit_ok l;
-    let s = pvals (Seq.seq_of_list l) in
-    let aux (k: nat { k < nl }) : Lemma (Seq.index s k == Seq.index (limbs x) k)
-      = eval_digit s k;
-        Seq.init_index_ #nat nl (fun i -> x / pow2 (rad * i) % base) k in
-    Classical.forall_intro aux;
-    Seq.lemma_eq_intro s (limbs x)
 
 #push-options "--fuel 0 --ifuel 0"
 

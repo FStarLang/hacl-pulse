@@ -29,17 +29,17 @@
     when the bit is clear.  That is the whole reason the exponent tables
     are [uint64] rather than the library's secret [S64]: the type is the
     declassification. *)
-module Hacl.P256.Exp
+module Hacl.Impl.Exp256
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
 open Spec.Bignum256
-open Spec.P256.Field
-open Spec.P256.Mont
+open Spec.Field256
+open Spec.Mont256
 open Hacl.Impl.Limb
-open Hacl.P256.Mont
-open Hacl.P256.Tables
+open Hacl.Impl.Mont256
+open Hacl.Impl.Lit256
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
