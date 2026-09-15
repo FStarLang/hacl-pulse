@@ -109,6 +109,24 @@ CUSTARD_ENTRIES += $(addprefix Hacl.P256.Sec1., \
 
 CUSTARD_ENTRIES += $(addprefix Hacl.P256.Ecdh., dh_initiator dh_responder)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.K256., \
+  ecdsa_sign_hashed_msg ecdsa_sign_sha256 \
+  ecdsa_verify_hashed_msg ecdsa_verify_sha256 \
+  secp256k1_ecdsa_sign_hashed_msg secp256k1_ecdsa_sign_sha256 \
+  secp256k1_ecdsa_verify_hashed_msg secp256k1_ecdsa_verify_sha256)
+
+CUSTARD_ENTRIES += Hacl.K256.Key.validate_private_key \
+                   Hacl.K256.Key.Public.validate_public_key
+
+CUSTARD_ENTRIES += $(addprefix Hacl.K256.LowS., \
+  is_signature_normalized signature_normalize)
+
+CUSTARD_ENTRIES += $(addprefix Hacl.K256.Sec1., \
+  raw_to_uncompressed raw_to_compressed \
+  uncompressed_to_raw compressed_to_raw)
+
+CUSTARD_ENTRIES += $(addprefix Hacl.K256.Ecdh., dh_initiator dh_responder)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.HMAC.DRBG., \
   instantiate_sha256 reseed_sha256 generate_sha256 \
   instantiate_sha384 reseed_sha384 generate_sha384 \
