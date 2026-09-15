@@ -35,7 +35,7 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
+| `spec/` | pure specifications: `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/p256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
@@ -1335,6 +1335,49 @@ Custard emits each Pulse `fn` as its own C function, so the facts are not
 visible at the point of the declaration.  The test is unreachable and proves
 vacuously; it is cheaper than teaching the C compiler about the proof.
 
+### SHA-1, where the interesting part is how little of it is SHA-1
+
+SHA-1 is broken -- collisions since 2017, chosen-prefix collisions since
+2020 -- and it is here for the same reason HACL\* has it: TLS 1.0/1.1
+transcripts, PBKDF2, TOTP, Git object names and a great deal of deployed
+X.509 have to be *read*.  HMAC-SHA1 additionally still has a security
+proof, because HMAC rests on the compression function being a PRF rather
+than on collision resistance.
+
+What is worth writing down is how much of it was already there.  Outside
+the compression function, SHA-1 and SHA-2-at-32-bits are the same
+algorithm: sixty-four byte blocks, an `0x80`, zeros, a 64-bit big-endian
+bit length, a `2^61` bound, and the same way of cutting blocks out of the
+padded message.  `Spec.SHA1` states those definitions again rather than
+instantiating `Spec.SHA2.params` -- a record covering a five-word state,
+eighty rounds, a round function that changes every twenty and constants
+indexed by quarter would describe neither algorithm -- but the definitions
+are *equal*, and `Spec.SHA1.Lemmas` proves it in four lemmas that
+discharge by computation, since both sides are `unfold`.
+
+With `SMTPat`s on those equalities the implementation inherits the whole
+of `Spec.SHA2.Lemmas` (`padded_index`, `padded_shape`, `pad_zeros_alt`,
+`tail_bytes`, `padded_index_block_shift`) and calls SHA-2's
+`write_len_be` and `build_tail` unchanged.  The same trick then covers
+HMAC: `Spec.HMAC`'s `zeros`, `xor_byte`, `ipad`/`opad` and both pointwise
+lemmas, and `Hacl.HMAC.Core`'s `fill_xor`, are all block-shaped and are
+reused at `S32.t`.  The chunking lemmas behind the incremental interface
+never needed a bridge at all -- `Hacl.Spec.Chunks` takes the block length
+as an argument rather than a word type.
+
+The genuinely SHA-1-specific code is the message schedule, the eighty
+rounds, `key_block`, and a five-word digest that, unlike SHA-224 and
+SHA-384, needs no truncating copy.  Two things are even simpler than
+SHA-2's: there is no round-constant table, since `K` is one of four
+values chosen by quarter, so `k_impl` branches on the round number and no
+caller passes an array; and `f_impl`/`k_impl` test exactly the boundaries
+`Spec.SHA1._f` and `k` use, so each branch's obligation closes by
+unfolding rather than by a case split the solver has to invent.
+
+Every module in the chain -- compression function, driver, streaming
+layer, HMAC -- verified on the first attempt, which is the payoff for
+having shaped `Spec.SHA1` on `Spec.SHA2` deliberately.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1633,6 +1676,8 @@ RSA-PSS signing and verification.
 
 AES-NI sits under the portable AES, chosen at run time.
 
+SHA-1 is there too, one-shot, incremental and under HMAC.
+
 Beyond the subset, in rough order of how often they are asked for: the
-carry-less-multiply GHASH under AES-GCM, SHA-NI under SHA-2, secp256k1,
-Salsa20/NaCl, FrodoKEM, and the legacy hashes.
+carry-less-multiply GHASH under AES-GCM, SHA-NI under SHA-2, MD5,
+secp256k1, Salsa20/NaCl, and FrodoKEM.
