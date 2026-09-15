@@ -90,6 +90,12 @@ let rec xsum_shift (f: int -> bool) (lo: int) (n: nat) (d: int)
           (decreases n)
   = if n = 0 then () else xsum_shift f lo (n - 1) d
 
+(** A range may be cut in two. *)
+let rec xsum_split (f: int -> bool) (lo: int) (m n: nat)
+  : Lemma (ensures xsum f lo (m + n) == (xsum f lo m <> xsum f (lo + m) n))
+          (decreases n)
+  = if n = 0 then () else xsum_split f lo m (n - 1)
+
 (** {2 Trimming}
 
     Terms that are [false] may be dropped from either end. *)
