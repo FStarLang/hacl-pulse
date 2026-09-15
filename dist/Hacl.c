@@ -355,6 +355,14 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_3(uint64_t *kt, uint64_t *ivt, uint
 static void Hacl_P256_Msg_sha512_qelem(uint64_t *mq, uint8_t *msg, size_t msg_len);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_4(uint64_t *kt, uint64_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 static void Hacl_P256_Msg_sha384_qelem(uint64_t *mq, uint8_t *msg, size_t msg_len);
+static uint32_t Hacl_Secret_Word_zero__t_2 = 0;
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static uint32_t *Hacl_Impl_Sub_sub__t_1(uint32_t *a, size_t i, size_t j);
+__attribute__((target("ssse3,sse4.1,sha")))
+static void Hacl_Hash_SHA2_NI_update_block_ni__Mkparams(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *block, size_t off);
+static void Hacl_Hash_SHA2_NI_hash_blocks_ni__Mkparams(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem);
+static void Hacl_Hash_SHA2_NI_hash_impl_ni__Mkparams(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_5(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 static void Hacl_P256_Msg_sha256_qelem(uint64_t *mq, uint8_t *msg, size_t msg_len);
 static void Hacl_P256_Scalar_qadd(uint64_t *out, uint64_t *a, uint64_t *b);
@@ -481,7 +489,7 @@ static uint32_t Spec_SHA2__Sigma0__t_3(uint32_t x);
 static void Hacl_Hash_SHA2_Core_update_block_impl__t_3(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *block, size_t off);
 static void Hacl_Hash_SHA2_Core_hash_blocks__t_3(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *input, size_t bl, size_t nprev, size_t nfull);
 static void Hacl_Hash_SHA2_Core_write_digest__t_3(uint8_t *out, uint32_t *st);
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_4(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_6(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 static void Hacl_HMAC_Core_key_block_impl__t_3(uint32_t *kt, uint32_t *ivt, uint8_t *k0, uint8_t *dg, uint8_t *key, size_t lk);
 static void Hacl_Hash_SHA2_Core_hash_prefixed__t_3(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *blk, uint8_t *input, size_t lin);
@@ -786,6 +794,11 @@ static void Hacl_Hash_SHA2_Streaming_init_impl__t_6(uint32_t *ivt, uint32_t *acc
 static void Hacl_Hash_SHA2_Streaming_digest_impl__t_7(uint32_t *kt, uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Hash_SHA2_Streaming_update_impl__t_7(uint32_t *kt, uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Hash_SHA2_Streaming_init_impl__t_7(uint32_t *ivt, uint32_t *acc, uint8_t *buf, size_t *tot);
+__attribute__((target("ssse3,sse4.1,sha")))
+static void Hacl_Hash_SHA2_NI_update_block_ni__Mkparams_1(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *block, size_t off);
+static void Hacl_Hash_SHA2_NI_hash_blocks_ni__Mkparams_1(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull);
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_5(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem);
+static void Hacl_Hash_SHA2_NI_hash_impl_ni__Mkparams_1(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 static void Hacl_Hash_SHA2_Core_hash_impl__t_7(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len);
 static void Hacl_Hash_SHA1_Streaming_copy5(uint32_t *dst, uint32_t *src);
 static void Hacl_Hash_SHA1_Streaming_digest_impl(uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -5832,6 +5845,163 @@ bool Hacl_P256_ecdsa_verify_sha384(uint8_t *msg, size_t msg_len, uint8_t *pk, ui
   return Hacl_P256_Verify_verify(c0, pk, sig_r, sig_s);
 }
 
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static uint32_t *Hacl_Impl_Sub_sub__t_1(uint32_t *a, size_t i, size_t j) {
+  (void)j;
+  return (a + i);
+}
+
+__attribute__((target("ssse3,sse4.1,sha")))
+static void Hacl_Hash_SHA2_NI_update_block_ni__Mkparams(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *block, size_t off) {
+  size_t q = 0;
+  while (q < 4) {
+    size_t vq = q;
+    size_t i0 = (off + (16 * vq));
+    size_t i1 = (i0 + 16);
+    uint8_t *s = Hacl_Impl_Sub_sub__t(block, i0, i1);
+    Hacl_Vec128_t r = Hacl_Vec128_load_be32(s);
+    size_t e = ((4 * vq) + 4);
+    uint32_t *b = Hacl_Impl_Sub_sub__t_1(wsb, (4 * vq), e);
+    Hacl_Vec128_store32(b, r);
+    q = (vq + 1);
+  }
+  size_t q1 = 16;
+  while (q1 < 64) {
+    size_t vj = q1;
+    size_t e_1 = ((vj - 16) + 4);
+    uint32_t *b_1 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 16), e_1);
+    Hacl_Vec128_t x = Hacl_Vec128_load32(b_1);
+    size_t e1 = ((vj - 12) + 4);
+    uint32_t *b1 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 12), e1);
+    Hacl_Vec128_t y = Hacl_Vec128_load32(b1);
+    Hacl_Vec128_t bb = Hacl_Vec128_sha256msg1(x, y);
+    size_t e2 = ((vj - 8) + 4);
+    uint32_t *b2 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 8), e2);
+    Hacl_Vec128_t c = Hacl_Vec128_load32(b2);
+    size_t e3 = ((vj - 4) + 4);
+    uint32_t *b3 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 4), e3);
+    Hacl_Vec128_t a = Hacl_Vec128_load32(b3);
+    Hacl_Vec128_t tmp = Hacl_Vec128_align_right_4(a, c);
+    Hacl_Vec128_t bt = Hacl_Vec128_add32(bb, tmp);
+    Hacl_Vec128_t rb = Hacl_Vec128_sha256msg2(bt, a);
+    size_t e4 = (vj + 4);
+    uint32_t *b4 = Hacl_Impl_Sub_sub__t_1(wsb, vj, e4);
+    Hacl_Vec128_store32(b4, rb);
+    q1 = (vj + 4);
+  }
+  size_t e_2 = 4;
+  uint32_t *b_2 = Hacl_Impl_Sub_sub__t_1(st, 0, e_2);
+  Hacl_Vec128_t lo = Hacl_Vec128_load32(b_2);
+  size_t e1_1 = 8;
+  uint32_t *b1_1 = Hacl_Impl_Sub_sub__t_1(st, 4, e1_1);
+  Hacl_Vec128_t hi = Hacl_Vec128_load32(b1_1);
+  Hacl_Vec128_t t = Hacl_Vec128_shuffle_swap_pairs(lo);
+  Hacl_Vec128_t u = Hacl_Vec128_shuffle_reverse(hi);
+  Hacl_Vec128_t a0 = Hacl_Vec128_align_right_8(t, u);
+  Hacl_Vec128_t c0 = Hacl_Vec128_blend_high(u, t);
+  Hacl_Vec128_t s0 = a0;
+  Hacl_Vec128_t s1 = c0;
+  size_t q2 = 0;
+  while (q2 < 64) {
+    size_t vj_1 = q2;
+    size_t e2_1 = (vj_1 + 4);
+    uint32_t *b2_1 = Hacl_Impl_Sub_sub__t_1(wsb, vj_1, e2_1);
+    Hacl_Vec128_t mw = Hacl_Vec128_load32(b2_1);
+    size_t e3_1 = (vj_1 + 4);
+    uint32_t *b3_1 = Hacl_Impl_Sub_sub__t_1(kt, vj_1, e3_1);
+    Hacl_Vec128_t kw = Hacl_Vec128_load32(b3_1);
+    Hacl_Vec128_t m = Hacl_Vec128_add32(kw, mw);
+    Hacl_Vec128_t a_1 = s0;
+    Hacl_Vec128_t c_1 = s1;
+    Hacl_Vec128_t n1 = Hacl_Vec128_sha256rnds2(c_1, a_1, m);
+    Hacl_Vec128_t m2 = Hacl_Vec128_shuffle_high_pair(m);
+    Hacl_Vec128_t n0 = Hacl_Vec128_sha256rnds2(a_1, n1, m2);
+    s0 = n0;
+    s1 = n1;
+    q2 = (vj_1 + 4);
+  }
+  size_t e2_2 = 4;
+  uint32_t *b2_2 = Hacl_Impl_Sub_sub__t_1(st, 0, e2_2);
+  Hacl_Vec128_t lo1 = Hacl_Vec128_load32(b2_2);
+  size_t e3_2 = 8;
+  uint32_t *b3_2 = Hacl_Impl_Sub_sub__t_1(st, 4, e3_2);
+  Hacl_Vec128_t hi1 = Hacl_Vec128_load32(b3_2);
+  Hacl_Vec128_t t1 = Hacl_Vec128_shuffle_swap_pairs(lo1);
+  Hacl_Vec128_t u1 = Hacl_Vec128_shuffle_reverse(hi1);
+  Hacl_Vec128_t a01 = Hacl_Vec128_align_right_8(t1, u1);
+  Hacl_Vec128_t c01 = Hacl_Vec128_blend_high(u1, t1);
+  Hacl_Vec128_t r0 = Hacl_Vec128_add32(a01, s0);
+  Hacl_Vec128_t r1 = Hacl_Vec128_add32(c01, s1);
+  Hacl_Vec128_t t2 = Hacl_Vec128_shuffle_reverse(r0);
+  Hacl_Vec128_t u2 = Hacl_Vec128_shuffle_swap_pairs(r1);
+  Hacl_Vec128_t lo2 = Hacl_Vec128_blend_high(t2, u2);
+  Hacl_Vec128_t hi2 = Hacl_Vec128_align_right_8(u2, t2);
+  size_t e4_1 = 4;
+  uint32_t *b4_1 = Hacl_Impl_Sub_sub__t_1(st, 0, e4_1);
+  Hacl_Vec128_store32(b4_1, lo2);
+  size_t e5 = 8;
+  uint32_t *b5 = Hacl_Impl_Sub_sub__t_1(st, 4, e5);
+  Hacl_Vec128_store32(b5, hi2);
+}
+
+static void Hacl_Hash_SHA2_NI_hash_blocks_ni__Mkparams(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull) {
+  (void)nprev;
+  size_t i = 0;
+  while (i < nfull) {
+    size_t vi2 = i;
+    Hacl_Hash_SHA2_NI_update_block_ni__Mkparams(kt, wsb, st, input, (vi2 * 64));
+    i = (vi2 + 1);
+  }
+}
+
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+  (void)nblocks;
+  size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
+  size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
+  size_t ll = Hacl_Hash_SHA2_Core_len_len_sz__t_1;
+  size_t ntail;
+  if ((rem + (1 + ll)) <= bl1) ntail = bl1;
+  else ntail = (2 * bl1);
+  size_t bl2 = (2 * bl);
+  uint8_t z8 = 0;
+  uint8_t tarr[bl2];
+  for (size_t _ci1 = 0; _ci1 < (bl2); _ci1++) {
+    tarr[_ci1] = z8;
+  }
+  Hacl_Hash_SHA2_Core_build_tail__t_1(tarr, input, len, base_in, rem, ntail);
+  size_t ntb = (ntail / bl);
+  size_t j = 0;
+  while (j < ntb) {
+    size_t vj = j;
+    Hacl_Hash_SHA2_Core_update_block_impl__t_2(kt, wsb, st, tarr, (vj * bl));
+    j = (vj + 1);
+  }
+  Hacl_Hash_SHA2_Core_write_digest__t_2(out, st);
+}
+
+static void Hacl_Hash_SHA2_NI_hash_impl_ni__Mkparams(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len) {
+  size_t nfull = (len / 64);
+  size_t rem = (len % 64);
+  uint32_t z0 = Hacl_Secret_Word_zero__t_2;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
+  }
+  size_t c = 0;
+  while (c < 8) {
+    size_t vc = c;
+    uint32_t x = ivt[vc];
+    starr[vc] = x;
+    c = (vc + 1);
+  }
+  uint32_t wsarr[64];
+  for (size_t _ci3 = 0; _ci3 < 64; _ci3++) {
+    wsarr[_ci3] = z0;
+  }
+  Hacl_Hash_SHA2_NI_hash_blocks_ni__Mkparams(kt, wsarr, starr, input, 0, nfull);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsarr, starr, out, input, len, nfull, (len - rem), rem);
+}
+
 static void Hacl_Hash_SHA2_Core_hash_impl__t_5(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len) {
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t nfull = (len / bl);
@@ -5859,7 +6029,9 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_5(uint32_t *kt, uint32_t *ivt, uint
 void Hacl_Hash_SHA2_sha256(uint8_t *out, uint8_t *input, size_t input_len) {
   uint32_t *kt = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
   uint32_t *ivt = (uint32_t *)Hacl_Hash_SHA2_Tables_iv256_arr;
-  Hacl_Hash_SHA2_Core_hash_impl__t_5(kt, ivt, out, input, input_len);
+  bool ni = Hacl_Vec128_sha_supported();
+  if (ni) Hacl_Hash_SHA2_NI_hash_impl_ni__Mkparams(kt, ivt, out, input, input_len);
+  else Hacl_Hash_SHA2_Core_hash_impl__t_5(kt, ivt, out, input, input_len);
 }
 
 static void Hacl_P256_Msg_sha256_qelem(uint64_t *mq, uint8_t *msg, size_t msg_len) {
@@ -8494,7 +8666,7 @@ static void Hacl_Hash_SHA2_Core_write_digest__t_3(uint8_t *out, uint32_t *st) {
   }
 }
 
-static void Hacl_Hash_SHA2_Core_tail_and_finish__t_3(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_4(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
   (void)nblocks;
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
@@ -8540,7 +8712,7 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_6(uint32_t *kt, uint32_t *ivt, uint
     wsarr[_ci3] = z0;
   }
   Hacl_Hash_SHA2_Core_hash_blocks__t_3(kt, wsarr, starr, input, bl, 0, nfull);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsarr, starr, out, input, len, nfull, (len - rem), rem);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_4(kt, wsarr, starr, out, input, len, nfull, (len - rem), rem);
 }
 
 static void Hacl_HMAC_Core_key_block_impl__t_3(uint32_t *kt, uint32_t *ivt, uint8_t *k0, uint8_t *dg, uint8_t *key, size_t lk) {
@@ -8577,7 +8749,7 @@ static void Hacl_Hash_SHA2_Core_hash_prefixed__t_3(uint32_t *kt, uint32_t *ivt, 
   Hacl_Hash_SHA2_Core_hash_blocks__t_3(kt, wsarr, starr, input, bl, 1, nfull);
   size_t nb = (1 + nfull);
   size_t base_in = (lin - rem);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsarr, starr, out, input, len, nb, base_in, rem);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_4(kt, wsarr, starr, out, input, len, nb, base_in, rem);
 }
 
 static void Hacl_HMAC_Core_hmac_impl__t_3(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *key, size_t lk, uint8_t *msg, size_t lm) {
@@ -8996,7 +9168,7 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t_4(uint32_t *kt, uint32_t *ws
   }
   Hacl_Hash_SHA2_Streaming_copy8__t_1(starr, acc);
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsb, starr, out, sub, tlen, nb0, 0, blen);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_4(kt, wsb, starr, out, sub, tlen, nb0, 0, blen);
 }
 
 static void Hacl_Streaming_HMAC_Core_digest_impl__t_3(uint32_t *kt, uint32_t *ivt, uint32_t *wsb, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *opadb, uint8_t *out) {
@@ -13445,7 +13617,7 @@ static void Hacl_Hash_SHA2_Streaming_digest_impl__t_7(uint32_t *kt, uint32_t *ws
   }
   Hacl_Hash_SHA2_Streaming_copy8__t_1(starr, acc);
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsb, starr, out, sub, tlen, nb0, 0, blen);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_4(kt, wsb, starr, out, sub, tlen, nb0, 0, blen);
 }
 
 void Hacl_Streaming_SHA2_sha224_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -13492,6 +13664,157 @@ void Hacl_Streaming_SHA2_sha224_init(uint32_t *acc, uint8_t *buf, size_t *tot) {
   Hacl_Hash_SHA2_Streaming_init_impl__t_7(ivt, acc, buf, tot);
 }
 
+__attribute__((target("ssse3,sse4.1,sha")))
+static void Hacl_Hash_SHA2_NI_update_block_ni__Mkparams_1(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *block, size_t off) {
+  size_t q = 0;
+  while (q < 4) {
+    size_t vq = q;
+    size_t i0 = (off + (16 * vq));
+    size_t i1 = (i0 + 16);
+    uint8_t *s = Hacl_Impl_Sub_sub__t(block, i0, i1);
+    Hacl_Vec128_t r = Hacl_Vec128_load_be32(s);
+    size_t e = ((4 * vq) + 4);
+    uint32_t *b = Hacl_Impl_Sub_sub__t_1(wsb, (4 * vq), e);
+    Hacl_Vec128_store32(b, r);
+    q = (vq + 1);
+  }
+  size_t q1 = 16;
+  while (q1 < 64) {
+    size_t vj = q1;
+    size_t e_1 = ((vj - 16) + 4);
+    uint32_t *b_1 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 16), e_1);
+    Hacl_Vec128_t x = Hacl_Vec128_load32(b_1);
+    size_t e1 = ((vj - 12) + 4);
+    uint32_t *b1 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 12), e1);
+    Hacl_Vec128_t y = Hacl_Vec128_load32(b1);
+    Hacl_Vec128_t bb = Hacl_Vec128_sha256msg1(x, y);
+    size_t e2 = ((vj - 8) + 4);
+    uint32_t *b2 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 8), e2);
+    Hacl_Vec128_t c = Hacl_Vec128_load32(b2);
+    size_t e3 = ((vj - 4) + 4);
+    uint32_t *b3 = Hacl_Impl_Sub_sub__t_1(wsb, (vj - 4), e3);
+    Hacl_Vec128_t a = Hacl_Vec128_load32(b3);
+    Hacl_Vec128_t tmp = Hacl_Vec128_align_right_4(a, c);
+    Hacl_Vec128_t bt = Hacl_Vec128_add32(bb, tmp);
+    Hacl_Vec128_t rb = Hacl_Vec128_sha256msg2(bt, a);
+    size_t e4 = (vj + 4);
+    uint32_t *b4 = Hacl_Impl_Sub_sub__t_1(wsb, vj, e4);
+    Hacl_Vec128_store32(b4, rb);
+    q1 = (vj + 4);
+  }
+  size_t e_2 = 4;
+  uint32_t *b_2 = Hacl_Impl_Sub_sub__t_1(st, 0, e_2);
+  Hacl_Vec128_t lo = Hacl_Vec128_load32(b_2);
+  size_t e1_1 = 8;
+  uint32_t *b1_1 = Hacl_Impl_Sub_sub__t_1(st, 4, e1_1);
+  Hacl_Vec128_t hi = Hacl_Vec128_load32(b1_1);
+  Hacl_Vec128_t t = Hacl_Vec128_shuffle_swap_pairs(lo);
+  Hacl_Vec128_t u = Hacl_Vec128_shuffle_reverse(hi);
+  Hacl_Vec128_t a0 = Hacl_Vec128_align_right_8(t, u);
+  Hacl_Vec128_t c0 = Hacl_Vec128_blend_high(u, t);
+  Hacl_Vec128_t s0 = a0;
+  Hacl_Vec128_t s1 = c0;
+  size_t q2 = 0;
+  while (q2 < 64) {
+    size_t vj_1 = q2;
+    size_t e2_1 = (vj_1 + 4);
+    uint32_t *b2_1 = Hacl_Impl_Sub_sub__t_1(wsb, vj_1, e2_1);
+    Hacl_Vec128_t mw = Hacl_Vec128_load32(b2_1);
+    size_t e3_1 = (vj_1 + 4);
+    uint32_t *b3_1 = Hacl_Impl_Sub_sub__t_1(kt, vj_1, e3_1);
+    Hacl_Vec128_t kw = Hacl_Vec128_load32(b3_1);
+    Hacl_Vec128_t m = Hacl_Vec128_add32(kw, mw);
+    Hacl_Vec128_t a_1 = s0;
+    Hacl_Vec128_t c_1 = s1;
+    Hacl_Vec128_t n1 = Hacl_Vec128_sha256rnds2(c_1, a_1, m);
+    Hacl_Vec128_t m2 = Hacl_Vec128_shuffle_high_pair(m);
+    Hacl_Vec128_t n0 = Hacl_Vec128_sha256rnds2(a_1, n1, m2);
+    s0 = n0;
+    s1 = n1;
+    q2 = (vj_1 + 4);
+  }
+  size_t e2_2 = 4;
+  uint32_t *b2_2 = Hacl_Impl_Sub_sub__t_1(st, 0, e2_2);
+  Hacl_Vec128_t lo1 = Hacl_Vec128_load32(b2_2);
+  size_t e3_2 = 8;
+  uint32_t *b3_2 = Hacl_Impl_Sub_sub__t_1(st, 4, e3_2);
+  Hacl_Vec128_t hi1 = Hacl_Vec128_load32(b3_2);
+  Hacl_Vec128_t t1 = Hacl_Vec128_shuffle_swap_pairs(lo1);
+  Hacl_Vec128_t u1 = Hacl_Vec128_shuffle_reverse(hi1);
+  Hacl_Vec128_t a01 = Hacl_Vec128_align_right_8(t1, u1);
+  Hacl_Vec128_t c01 = Hacl_Vec128_blend_high(u1, t1);
+  Hacl_Vec128_t r0 = Hacl_Vec128_add32(a01, s0);
+  Hacl_Vec128_t r1 = Hacl_Vec128_add32(c01, s1);
+  Hacl_Vec128_t t2 = Hacl_Vec128_shuffle_reverse(r0);
+  Hacl_Vec128_t u2 = Hacl_Vec128_shuffle_swap_pairs(r1);
+  Hacl_Vec128_t lo2 = Hacl_Vec128_blend_high(t2, u2);
+  Hacl_Vec128_t hi2 = Hacl_Vec128_align_right_8(u2, t2);
+  size_t e4_1 = 4;
+  uint32_t *b4_1 = Hacl_Impl_Sub_sub__t_1(st, 0, e4_1);
+  Hacl_Vec128_store32(b4_1, lo2);
+  size_t e5 = 8;
+  uint32_t *b5 = Hacl_Impl_Sub_sub__t_1(st, 4, e5);
+  Hacl_Vec128_store32(b5, hi2);
+}
+
+static void Hacl_Hash_SHA2_NI_hash_blocks_ni__Mkparams_1(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *input, size_t nprev, size_t nfull) {
+  (void)nprev;
+  size_t i = 0;
+  while (i < nfull) {
+    size_t vi2 = i;
+    Hacl_Hash_SHA2_NI_update_block_ni__Mkparams_1(kt, wsb, st, input, (vi2 * 64));
+    i = (vi2 + 1);
+  }
+}
+
+static void Hacl_Hash_SHA2_Core_tail_and_finish__t_5(uint32_t *kt, uint32_t *wsb, uint32_t *st, uint8_t *out, uint8_t *input, size_t len, size_t nblocks, size_t base_in, size_t rem) {
+  (void)nblocks;
+  size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
+  size_t bl1 = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
+  size_t ll = Hacl_Hash_SHA2_Core_len_len_sz__t_1;
+  size_t ntail;
+  if ((rem + (1 + ll)) <= bl1) ntail = bl1;
+  else ntail = (2 * bl1);
+  size_t bl2 = (2 * bl);
+  uint8_t z8 = 0;
+  uint8_t tarr[bl2];
+  for (size_t _ci1 = 0; _ci1 < (bl2); _ci1++) {
+    tarr[_ci1] = z8;
+  }
+  Hacl_Hash_SHA2_Core_build_tail__t_1(tarr, input, len, base_in, rem, ntail);
+  size_t ntb = (ntail / bl);
+  size_t j = 0;
+  while (j < ntb) {
+    size_t vj = j;
+    Hacl_Hash_SHA2_Core_update_block_impl__t_3(kt, wsb, st, tarr, (vj * bl));
+    j = (vj + 1);
+  }
+  Hacl_Hash_SHA2_Core_write_digest__t_3(out, st);
+}
+
+static void Hacl_Hash_SHA2_NI_hash_impl_ni__Mkparams_1(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len) {
+  size_t nfull = (len / 64);
+  size_t rem = (len % 64);
+  uint32_t z0 = Hacl_Secret_Word_zero__t_2;
+  uint32_t starr[8];
+  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
+    starr[_ci1] = z0;
+  }
+  size_t c = 0;
+  while (c < 8) {
+    size_t vc = c;
+    uint32_t x = ivt[vc];
+    starr[vc] = x;
+    c = (vc + 1);
+  }
+  uint32_t wsarr[64];
+  for (size_t _ci3 = 0; _ci3 < 64; _ci3++) {
+    wsarr[_ci3] = z0;
+  }
+  Hacl_Hash_SHA2_NI_hash_blocks_ni__Mkparams_1(kt, wsarr, starr, input, 0, nfull);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_5(kt, wsarr, starr, out, input, len, nfull, (len - rem), rem);
+}
+
 static void Hacl_Hash_SHA2_Core_hash_impl__t_7(uint32_t *kt, uint32_t *ivt, uint8_t *out, uint8_t *input, size_t len) {
   size_t bl = Hacl_Hash_SHA2_Core_block_len_sz__t_1;
   size_t nfull = (len / bl);
@@ -13513,13 +13836,15 @@ static void Hacl_Hash_SHA2_Core_hash_impl__t_7(uint32_t *kt, uint32_t *ivt, uint
     wsarr[_ci3] = z0;
   }
   Hacl_Hash_SHA2_Core_hash_blocks__t_3(kt, wsarr, starr, input, bl, 0, nfull);
-  Hacl_Hash_SHA2_Core_tail_and_finish__t_3(kt, wsarr, starr, out, input, len, nfull, (len - rem), rem);
+  Hacl_Hash_SHA2_Core_tail_and_finish__t_4(kt, wsarr, starr, out, input, len, nfull, (len - rem), rem);
 }
 
 void Hacl_Hash_SHA2_sha224(uint8_t *out, uint8_t *input, size_t input_len) {
   uint32_t *kt = (uint32_t *)Hacl_Hash_SHA2_Tables_k256_arr;
   uint32_t *ivt = (uint32_t *)Hacl_Hash_SHA2_Tables_iv224_arr;
-  Hacl_Hash_SHA2_Core_hash_impl__t_7(kt, ivt, out, input, input_len);
+  bool ni = Hacl_Vec128_sha_supported();
+  if (ni) Hacl_Hash_SHA2_NI_hash_impl_ni__Mkparams_1(kt, ivt, out, input, input_len);
+  else Hacl_Hash_SHA2_Core_hash_impl__t_7(kt, ivt, out, input, input_len);
 }
 
 static void Hacl_Hash_SHA1_Streaming_copy5(uint32_t *dst, uint32_t *src) {
