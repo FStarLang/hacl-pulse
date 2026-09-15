@@ -21,6 +21,9 @@ C_ROOT := Hacl
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Hash.SHA1., sha1)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.SHA1., \
+  sha1_init sha1_update sha1_digest)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.Hash.SHA2., \
   sha224 sha256 sha384 sha512)
 
