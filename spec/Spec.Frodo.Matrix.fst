@@ -91,6 +91,24 @@ let init (r: nat) (c: pos) (f: (i: nat { i < r }) -> (j: nat { j < c }) -> S16.t
   : matrix r c
   = Seq.init (r * c) (fun t -> div_lt t r c; f (t / c) (t % c))
 
+(** The same for a step that is only ghostly computable.  The error
+    distribution's table lives in an [erased] field of the parameter record --
+    the implementation keeps its own copy and proves it equal -- so every
+    specification that samples is [GTot]. *)
+let init_g (r: nat) (c: pos) (f: (i: nat { i < r }) -> (j: nat { j < c }) -> GTot S16.t)
+  : GTot (matrix r c)
+  = Seq.init_ghost (r * c) (fun t -> div_lt t r c; f (t / c) (t % c))
+
+let init_g_index (r: nat) (c: pos) (f: (i: nat { i < r }) -> (j: nat { j < c }) -> GTot S16.t)
+                 (i: nat { i < r }) (j: nat { j < c })
+  : Lemma (get r c (init_g r c f) i j == f i j)
+          [SMTPat (get r c (init_g r c f) i j)]
+  = index_bound r c i j;
+    Math.lemma_div_plus j i c;
+    Math.small_div j c;
+    Math.lemma_mod_plus j i c;
+    Math.small_mod j c
+
 let init_index (r: nat) (c: pos) (f: (i: nat { i < r }) -> (j: nat { j < c }) -> S16.t)
                (i: nat { i < r }) (j: nat { j < c })
   : Lemma (get r c (init r c f) i j == f i j)
