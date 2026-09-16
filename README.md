@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/nacl/`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/nacl/`, `code/frodo/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
@@ -1624,6 +1624,65 @@ not what memory said it was, and the resulting mismatch looked exactly like
 a construction bug for a while.  Fetching the vector settled it in a
 minute.
 
+### FrodoKEM, where the matrix never exists
+
+FrodoKEM is a lattice KEM with no structure in the lattice: the public
+matrix `A` is an `n x n` matrix of sixteen-bit entries, drawn from a SHAKE
+expansion of a sixteen-byte seed, and the security argument is plain LWE
+rather than a ring or module variant.  The price is size -- at
+FrodoKEM-1344 `A` is 3.6 megabytes -- and that size is the one interesting
+implementation decision.
+
+`A` is never assembled.  `Hacl.Frodo.Gen` expands one row at a time and
+accumulates it into whichever of the two products the caller wants, so the
+working set is a single row and the two small operands: about twenty-one
+kilobytes at FrodoKEM-1344, instead of 3.6 megabytes, for exactly the same
+arithmetic.  Row `i` is `shake128(le16(i) || seed, 2n)` -- SHAKE-128 in
+every parameter set, including the two whose other hashing is SHAKE-256,
+which is a detail of the specification that is easy to get wrong and that
+the known-answer tests catch immediately.
+
+One implementation serves all four parameter sets.  The parameters are a
+record --- `n`, `log q`, the extracted bits, the shared-secret length, the
+error table and the SHAKE choice --- passed as an ordinary argument and
+tagged `[@@@monomorphize]`, and every buffer is a stack allocation whose
+width is computed from it.  `nbar`, the width of the small matrices, is a
+constant rather than a field: it is eight in every parameter set ever
+proposed, and making it one turns `publicmatrixbytes` into `log q * n`
+rather than `log q * n * nbar / 8`, which removes a division the solver
+would otherwise have to reason about at every use.  The four wrappers ---
+`Hacl.Frodo64`, `Hacl.Frodo640`, `Hacl.Frodo976`, `Hacl.Frodo1344` --- are
+a table and three one-line calls each, and Custard emits four separate sets
+of C functions with the dimensions as literals.
+
+The variant implemented is the one HACL\* implements, which the 2021
+revision of the submission renamed **eFrodoKEM**: ephemeral, with no salt
+in the ciphertext.  `Hacl.Frodo64` is in the public API because it is in
+HACL\*'s, and it is a toy: sixty-four is not a security level, and the
+module header says so.
+
+*Randomness is the caller's.*  HACL\*'s `crypto_kem_keypair` and
+`crypto_kem_enc` call a platform entropy shim internally, store the `bool`
+it returns and discard it, and then `return 0U` unconditionally --- so an
+entropy failure is invisible.  Here, as for HMAC-DRBG, the coins are an
+argument: `keypair pk sk coins` takes `2 * crypto_bytes + 16` bytes and
+`enc ct ss pk mu` takes the `bytes_mu` of the message.  Nothing returns a
+status code, because with the randomness supplied nothing can fail.  It
+also means the known-answer tests can drive the real entry points rather
+than a deterministic back door.
+
+Decapsulation is the FO transform, and its two halves are both
+constant-time.  `Hacl.Frodo.KEM.eq_mask_arr` compares two matrices into a
+mask rather than a `bool` --- secret integers have no decidable equality,
+so the loop is stated against a ghost `agree` predicate and the mask is
+related to it only at full length --- and `select_copy` then chooses
+between the real key stream and the secret key's rejection value without a
+branch.  The specification says the same thing with
+`FStar.IndefiniteDescription.strong_excluded_middle`, so the postcondition
+is an equality with a spec-level `if` whose scrutinee never exists at run
+time.
+
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1933,4 +1992,7 @@ and so is the whole of the original NaCl interface: `crypto_secretbox`,
 `crypto_box`, and the `beforenm`/`afternm` split for callers that talk to
 the same peer more than once.
 
-That leaves FrodoKEM.
+FrodoKEM closes it: all four parameter sets, with the public matrix
+streamed a row at a time rather than assembled.
+
+Nothing is left.
