@@ -172,6 +172,15 @@ let core (st: state) (ctr: U32.t) : state = core_of (with_counter st ctr)
 let keystream (st: state) (ctr: U32.t) : GTot block =
   words_to_le #S32.t size_state (core st ctr)
 
+(** The counter in the initial state is dead: [with_counter] overwrites it
+    before the block function ever looks.  This is what lets an implementation
+    build the state once and then sweep the counter, and it is what makes
+    "encrypt from counter one" and "skip the first block of the keystream"
+    the same thing. *)
+let keystream_init (k: key) (n: nonce) (a b c: U32.t)
+  : Lemma (keystream (init k n a) c == keystream (init k n b) c)
+  = Seq.lemma_eq_elim (with_counter (init k n a) c) (with_counter (init k n b) c)
+
 (** {2 Encryption}
 
     Identical in shape to ChaCha20's, down to the names. *)
