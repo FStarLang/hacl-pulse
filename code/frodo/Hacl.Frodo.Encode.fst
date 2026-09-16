@@ -81,7 +81,7 @@ let key_decode_eq (p: params) (m: M.matrix nbar nbar) (res: Seq.lseq S8.t (bytes
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro res (F.key_decode p m)
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 1000 --fuel 1 --ifuel 1"
 
 (** [mu[base .. base + nb)] as a little-endian integer, read from the top
     down so that each step is one application of [le_nat]'s own recursion. *)
