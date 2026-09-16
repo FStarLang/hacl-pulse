@@ -331,7 +331,7 @@ ensures exists* (vo: Seq.seq S8.t).
 
     with vs0. assert (A.pts_to starr vs0);
     core_impl ksarr starr c;
-    write_keystream kbarr ksarr;
+    store_words_le #S32.t kbarr ksarr 16sz;
 
     xor_chunk out msg kbarr b n st0 ctr0 c (G.hide vs0);
 
