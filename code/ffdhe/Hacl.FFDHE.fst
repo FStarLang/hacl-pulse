@@ -55,9 +55,10 @@ module G = Pulse.Lib.GlobalArray
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U32 = FStar.UInt32
+module U64 = FStar.UInt64
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
-module S32 = Hacl.Secret.UInt32
+module S64 = Hacl.Secret.UInt64
 module Declassify = Hacl.Secret.Declassify
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -73,11 +74,11 @@ module Declassify = Hacl.Secret.Declassify
 
 (** A modulus with a full top limb is bigger than the generator, without
     anyone having to evaluate the other limbs. *)
-let modulus_big (v: Seq.seq S32.t) (k: nat { k < Seq.length v })
-  : Lemma (requires S32.v (Seq.index v k) == pow2 32 - 1)
+let modulus_big (v: Seq.seq S64.t) (k: nat { k < Seq.length v })
+  : Lemma (requires S64.v (Seq.index v k) == pow2 64 - 1)
           (ensures 2 < num v)
   = num_top v k;
-    Math.lemma_mult_le_right (pow2 32 - 1) 1 (wt k)
+    Math.lemma_mult_le_right (pow2 64 - 1) 1 (wt k)
 
 (** [p - 1] comes out of a subtraction with no borrow, because [p] is at
     least two. *)
@@ -88,12 +89,12 @@ let no_borrow (pN e c w: int)
   = ()
 
 (** The declassified comparison mask is a [bool] with the obvious meaning. *)
-let mask_ones () : Lemma (pow2 32 - 1 == 4294967295) = assert_norm (pow2 32 - 1 == 4294967295)
+let mask_ones () : Lemma (pow2 64 - 1 == 18446744073709551615) = assert_norm (pow2 64 - 1 == 18446744073709551615)
 
 
 (** {2 The two operations, over any group}
 
-    [nn] is the modulus length in limbs and the byte strings are [4 * nn]
+    [nn] is the modulus length in limbs and the byte strings are [8 * nn]
     bytes, which is the group size: FFDHE fixes both, so there is no
     length negotiation and no short encoding. *)
 
@@ -103,40 +104,40 @@ let mask_ones () : Lemma (pow2 32 - 1 == 4294967295) = assert_norm (pow2 32 - 1 
     the public key for the secret [sk].  Both byte strings are big-endian
     and exactly the group size. *)
 fn secret_to_public_precomp (pk: A.array S8.t) (sk: A.array S8.t)
-                            (p: A.array S32.t) (r2: A.array S32.t)
-                            (nn: SZ.t) (mu: S32.t)
-                            (g: A.array S32.t) (e: A.array S32.t)
-                            (res: A.array S32.t)
-                            (aM: A.array S32.t) (acc: A.array S32.t)
-                            (t: A.array S32.t) (wide: A.array S32.t)
+                            (p: A.array S64.t) (r2: A.array S64.t)
+                            (nn: SZ.t) (mu: S64.t)
+                            (g: A.array S64.t) (e: A.array S64.t)
+                            (res: A.array S64.t)
+                            (aM: A.array S64.t) (acc: A.array S64.t)
+                            (t: A.array S64.t) (wide: A.array S64.t)
                             (#vpk: erased (Seq.seq S8.t))
                             (#psk: perm) (#vsk: erased (Seq.seq S8.t))
-                            (#pp #pr: perm) (#vr2: erased (Seq.seq S32.t))
-                            (#vg #ve #vres #vaM #vacc #vt #vwide: erased (Seq.seq S32.t))
-                            (#vp: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+                            (#pp #pr: perm) (#vr2: erased (Seq.seq S64.t))
+                            (#vg #ve #vres #vaM #vacc #vt #vwide: erased (Seq.seq S64.t))
+                            (#vp: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to pk vpk ** A.pts_to sk #psk vsk **
          A.pts_to p #pp vp ** A.pts_to r2 #pr vr2 **
          A.pts_to g vg ** A.pts_to e ve ** A.pts_to res vres **
          A.pts_to aM vaM ** A.pts_to acc vacc ** A.pts_to t vt **
          A.pts_to wide vwide **
-  pure (Seq.length vpk == 4 * SZ.v nn /\ Seq.length vsk == 4 * SZ.v nn /\
+  pure (Seq.length vpk == 8 * SZ.v nn /\ Seq.length vsk == 8 * SZ.v nn /\
         Seq.length vp == SZ.v nn /\ Seq.length vr2 == SZ.v nn /\
         Seq.length vg == SZ.v nn /\ Seq.length ve == SZ.v nn /\
         Seq.length vres == SZ.v nn /\ Seq.length vaM == SZ.v nn /\
         Seq.length vacc == SZ.v nn /\ Seq.length vt == SZ.v nn /\
         Seq.length vwide == SZ.v nn + SZ.v nn /\
-        0 < SZ.v nn /\ SZ.fits (4 * SZ.v nn) /\ SZ.fits (32 * SZ.v nn) /\
+        0 < SZ.v nn /\ SZ.fits (8 * SZ.v nn) /\ SZ.fits (64 * SZ.v nn) /\
         SZ.fits (SZ.v nn + SZ.v nn) /\
         2 < num vp /\
         num vr2 == (wt (SZ.v nn) * wt (SZ.v nn)) % num vp /\
-        (S32.v mu * S32.v (Seq.index vp 0) + 1) % base == 0)
+        (S64.v mu * S64.v (Seq.index vp 0) + 1) % base == 0)
 ensures exists* (v: Seq.seq S8.t)
-                (v0 v1 v2 v3 v4 v5 v6: Seq.seq S32.t).
+                (v0 v1 v2 v3 v4 v5 v6: Seq.seq S64.t).
   A.pts_to pk v ** A.pts_to sk #psk vsk **
   A.pts_to p #pp vp ** A.pts_to r2 #pr vr2 **
   A.pts_to g v0 ** A.pts_to e v1 ** A.pts_to res v2 **
   A.pts_to aM v3 ** A.pts_to acc v4 ** A.pts_to t v5 ** A.pts_to wide v6 **
-  pure (Seq.length v == 4 * SZ.v nn /\ Seq.length v0 == SZ.v nn /\
+  pure (Seq.length v == 8 * SZ.v nn /\ Seq.length v0 == SZ.v nn /\
         Seq.length v1 == SZ.v nn /\ Seq.length v2 == SZ.v nn /\
         Seq.length v3 == SZ.v nn /\ Seq.length v4 == SZ.v nn /\
         Seq.length v5 == SZ.v nn /\ Seq.length v6 == SZ.v nn + SZ.v nn /\
@@ -159,18 +160,18 @@ ensures exists* (v: Seq.seq S8.t)
   with vg0. assert (A.pts_to g vg0);
   num_zeros_above vg0 0;
   pre_zero vg0;
-  A.((g.(0sz) <- S32.classify 2ul));
-  num_upd vg0 0 (S32.classify 2ul);
+  A.((g.(0sz) <- S64.classify 2uL));
+  num_upd vg0 0 (S64.classify 2uL);
   with vg1. assert (A.pts_to g vg1);
   assert (pure (num vg1 == 2));
 
-  (* The secret, as a bignum: [4 * nn] big-endian bytes are [nn] limbs. *)
+  (* The secret, as a bignum: [8 * nn] big-endian bytes are [nn] limbs. *)
   from_bytes_be e nn sk;
   with ve1. assert (A.pts_to e ve1);
   pre_bnd ve1 (SZ.v nn);
   pre_full ve1;
 
-  mod_exp_consttime res g e (SZ.mul 32sz nn) r2 p nn mu aM acc t wide;
+  mod_exp_consttime res g e (SZ.mul 64sz nn) r2 p nn mu aM acc t wide;
   with vres1. assert (A.pts_to res vres1);
   to_bytes_be pk res nn;
   ()
@@ -184,43 +185,43 @@ ensures exists* (v: Seq.seq S8.t)
     out the three elements of small order, which is what stops a peer from
     forcing a shared secret it already knows. *)
 fn shared_secret_precomp (ss: A.array S8.t) (sk: A.array S8.t) (pk: A.array S8.t)
-                         (p: A.array S32.t) (r2: A.array S32.t)
-                         (nn: SZ.t) (mu: S32.t)
-                         (a: A.array S32.t) (e: A.array S32.t)
-                         (res: A.array S32.t)
-                         (aM: A.array S32.t) (acc: A.array S32.t)
-                         (t: A.array S32.t) (wide: A.array S32.t)
+                         (p: A.array S64.t) (r2: A.array S64.t)
+                         (nn: SZ.t) (mu: S64.t)
+                         (a: A.array S64.t) (e: A.array S64.t)
+                         (res: A.array S64.t)
+                         (aM: A.array S64.t) (acc: A.array S64.t)
+                         (t: A.array S64.t) (wide: A.array S64.t)
                          (#vss: erased (Seq.seq S8.t))
                          (#psk #ppk: perm)
                          (#vsk #vpk: erased (Seq.seq S8.t))
-                         (#pp #pr: perm) (#vr2: erased (Seq.seq S32.t))
-                         (#va #ve #vres #vaM #vacc #vt #vwide: erased (Seq.seq S32.t))
-                         (#vp: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+                         (#pp #pr: perm) (#vr2: erased (Seq.seq S64.t))
+                         (#va #ve #vres #vaM #vacc #vt #vwide: erased (Seq.seq S64.t))
+                         (#vp: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to ss vss ** A.pts_to sk #psk vsk ** A.pts_to pk #ppk vpk **
          A.pts_to p #pp vp ** A.pts_to r2 #pr vr2 **
          A.pts_to a va ** A.pts_to e ve ** A.pts_to res vres **
          A.pts_to aM vaM ** A.pts_to acc vacc ** A.pts_to t vt **
          A.pts_to wide vwide **
-  pure (Seq.length vss == 4 * SZ.v nn /\ Seq.length vsk == 4 * SZ.v nn /\
-        Seq.length vpk == 4 * SZ.v nn /\
+  pure (Seq.length vss == 8 * SZ.v nn /\ Seq.length vsk == 8 * SZ.v nn /\
+        Seq.length vpk == 8 * SZ.v nn /\
         Seq.length vp == SZ.v nn /\ Seq.length vr2 == SZ.v nn /\
         Seq.length va == SZ.v nn /\ Seq.length ve == SZ.v nn /\
         Seq.length vres == SZ.v nn /\ Seq.length vaM == SZ.v nn /\
         Seq.length vacc == SZ.v nn /\ Seq.length vt == SZ.v nn /\
         Seq.length vwide == SZ.v nn + SZ.v nn /\
-        0 < SZ.v nn /\ SZ.fits (4 * SZ.v nn) /\ SZ.fits (32 * SZ.v nn) /\
+        0 < SZ.v nn /\ SZ.fits (8 * SZ.v nn) /\ SZ.fits (64 * SZ.v nn) /\
         SZ.fits (SZ.v nn + SZ.v nn) /\
         2 < num vp /\
         num vr2 == (wt (SZ.v nn) * wt (SZ.v nn)) % num vp /\
-        (S32.v mu * S32.v (Seq.index vp 0) + 1) % base == 0)
+        (S64.v mu * S64.v (Seq.index vp 0) + 1) % base == 0)
 returns ok: bool
 ensures exists* (v: Seq.seq S8.t)
-                (v0 v1 v2 v3 v4 v5 v6: Seq.seq S32.t).
+                (v0 v1 v2 v3 v4 v5 v6: Seq.seq S64.t).
   A.pts_to ss v ** A.pts_to sk #psk vsk ** A.pts_to pk #ppk vpk **
   A.pts_to p #pp vp ** A.pts_to r2 #pr vr2 **
   A.pts_to a v0 ** A.pts_to e v1 ** A.pts_to res v2 **
   A.pts_to aM v3 ** A.pts_to acc v4 ** A.pts_to t v5 ** A.pts_to wide v6 **
-  pure (Seq.length v == 4 * SZ.v nn /\ Seq.length v0 == SZ.v nn /\
+  pure (Seq.length v == 8 * SZ.v nn /\ Seq.length v0 == SZ.v nn /\
         Seq.length v1 == SZ.v nn /\ Seq.length v2 == SZ.v nn /\
         Seq.length v3 == SZ.v nn /\ Seq.length v4 == SZ.v nn /\
         Seq.length v5 == SZ.v nn /\ Seq.length v6 == SZ.v nn + SZ.v nn /\
@@ -252,8 +253,8 @@ ensures exists* (v: Seq.seq S8.t)
   with vone0. assert (A.pts_to aM vone0);
   num_zeros_above vone0 0;
   pre_zero vone0;
-  A.((aM.(0sz) <- S32.classify 1ul));
-  num_upd vone0 0 (S32.classify 1ul);
+  A.((aM.(0sz) <- S64.classify 1uL));
+  num_upd vone0 0 (S64.classify 1uL);
   with vone. assert (A.pts_to aM vone);
   assert (pure (num vone == 1));
 
@@ -261,13 +262,13 @@ ensures exists* (v: Seq.seq S8.t)
   with vpm1. assert (A.pts_to acc vpm1);
   pre_bnd vpm1 (SZ.v nn);
   pre_full vpm1;
-  no_borrow (num vp) (num vpm1) (S32.v c) (wt (SZ.v nn));
+  no_borrow (num vp) (num vpm1) (S64.v c) (wt (SZ.v nn));
   assert (pure (num vpm1 == num vp - 1));
 
   let m1 = lt_mask aM a nn;
   let m2 = lt_mask a acc nn;
-  let ok1 = U32.eq (Declassify.u32 m1) 4294967295ul;
-  let ok2 = U32.eq (Declassify.u32 m2) 4294967295ul;
+  let ok1 = U64.eq (Declassify.u64 m1) 18446744073709551615uL;
+  let ok2 = U64.eq (Declassify.u64 m2) 18446744073709551615uL;
   let good = ok1 && ok2;
 
   if good
@@ -276,7 +277,7 @@ ensures exists* (v: Seq.seq S8.t)
     with ve1. assert (A.pts_to e ve1);
     pre_bnd ve1 (SZ.v nn);
     pre_full ve1;
-    mod_exp_consttime res a e (SZ.mul 32sz nn) r2 p nn mu aM acc t wide;
+    mod_exp_consttime res a e (SZ.mul 64sz nn) r2 p nn mu aM acc t wide;
     to_bytes_be ss res nn;
     true
   }
@@ -318,7 +319,7 @@ ensures exists* (v: Seq.seq S8.t)
 
 let ffdhe2048_mod () : GTot (p: pos { p == num ffdhe2048 /\ 2 < p }) =
   ffdhe2048_ends ();
-  modulus_big ffdhe2048 63;
+  modulus_big ffdhe2048 31;
   num ffdhe2048
 
 #push-options "--z3rlimit 200"
@@ -335,23 +336,23 @@ ensures exists* (v: Seq.seq S8.t).
   pure (Seq.length v == 256 /\ be_nat v == pw 2 (be_nat vsk) % ffdhe2048_mod ())
 {
   ffdhe2048_ends ();
-  modulus_big ffdhe2048 63;
-  let p = table ffdhe2048_arr 64sz;
+  modulus_big ffdhe2048 31;
+  let p = table ffdhe2048_arr 32sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 64sz |];
-  let mut g = [| z; 64sz |];
-  let mut e = [| z; 64sz |];
-  let mut res = [| z; 64sz |];
-  let mut aM = [| z; 64sz |];
-  let mut acc = [| z; 64sz |];
-  let mut t = [| z; 64sz |];
-  let mut wide = [| z; 128sz |];
-  precomp r2 p 64sz;
-  secret_to_public_precomp pk sk p r2 64sz mu g e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 32sz |];
+  let mut g = [| z; 32sz |];
+  let mut e = [| z; 32sz |];
+  let mut res = [| z; 32sz |];
+  let mut aM = [| z; 32sz |];
+  let mut acc = [| z; 32sz |];
+  let mut t = [| z; 32sz |];
+  let mut wide = [| z; 64sz |];
+  precomp r2 p 32sz;
+  secret_to_public_precomp pk sk p r2 32sz mu g e res aM acc t wide;
   drop_table p;
 }
 
@@ -373,23 +374,23 @@ ensures exists* (v: Seq.seq S8.t).
          else be_nat v == 0))
 {
   ffdhe2048_ends ();
-  modulus_big ffdhe2048 63;
-  let p = table ffdhe2048_arr 64sz;
+  modulus_big ffdhe2048 31;
+  let p = table ffdhe2048_arr 32sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 64sz |];
-  let mut a = [| z; 64sz |];
-  let mut e = [| z; 64sz |];
-  let mut res = [| z; 64sz |];
-  let mut aM = [| z; 64sz |];
-  let mut acc = [| z; 64sz |];
-  let mut t = [| z; 64sz |];
-  let mut wide = [| z; 128sz |];
-  precomp r2 p 64sz;
-  let ok = shared_secret_precomp ss sk pk p r2 64sz mu a e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 32sz |];
+  let mut a = [| z; 32sz |];
+  let mut e = [| z; 32sz |];
+  let mut res = [| z; 32sz |];
+  let mut aM = [| z; 32sz |];
+  let mut acc = [| z; 32sz |];
+  let mut t = [| z; 32sz |];
+  let mut wide = [| z; 64sz |];
+  precomp r2 p 32sz;
+  let ok = shared_secret_precomp ss sk pk p r2 32sz mu a e res aM acc t wide;
   drop_table p;
   ok
 }
@@ -400,7 +401,7 @@ ensures exists* (v: Seq.seq S8.t).
 
 let ffdhe3072_mod () : GTot (p: pos { p == num ffdhe3072 /\ 2 < p }) =
   ffdhe3072_ends ();
-  modulus_big ffdhe3072 95;
+  modulus_big ffdhe3072 47;
   num ffdhe3072
 
 #push-options "--z3rlimit 200"
@@ -417,23 +418,23 @@ ensures exists* (v: Seq.seq S8.t).
   pure (Seq.length v == 384 /\ be_nat v == pw 2 (be_nat vsk) % ffdhe3072_mod ())
 {
   ffdhe3072_ends ();
-  modulus_big ffdhe3072 95;
-  let p = table ffdhe3072_arr 96sz;
+  modulus_big ffdhe3072 47;
+  let p = table ffdhe3072_arr 48sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 96sz |];
-  let mut g = [| z; 96sz |];
-  let mut e = [| z; 96sz |];
-  let mut res = [| z; 96sz |];
-  let mut aM = [| z; 96sz |];
-  let mut acc = [| z; 96sz |];
-  let mut t = [| z; 96sz |];
-  let mut wide = [| z; 192sz |];
-  precomp r2 p 96sz;
-  secret_to_public_precomp pk sk p r2 96sz mu g e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 48sz |];
+  let mut g = [| z; 48sz |];
+  let mut e = [| z; 48sz |];
+  let mut res = [| z; 48sz |];
+  let mut aM = [| z; 48sz |];
+  let mut acc = [| z; 48sz |];
+  let mut t = [| z; 48sz |];
+  let mut wide = [| z; 96sz |];
+  precomp r2 p 48sz;
+  secret_to_public_precomp pk sk p r2 48sz mu g e res aM acc t wide;
   drop_table p;
 }
 
@@ -455,23 +456,23 @@ ensures exists* (v: Seq.seq S8.t).
          else be_nat v == 0))
 {
   ffdhe3072_ends ();
-  modulus_big ffdhe3072 95;
-  let p = table ffdhe3072_arr 96sz;
+  modulus_big ffdhe3072 47;
+  let p = table ffdhe3072_arr 48sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 96sz |];
-  let mut a = [| z; 96sz |];
-  let mut e = [| z; 96sz |];
-  let mut res = [| z; 96sz |];
-  let mut aM = [| z; 96sz |];
-  let mut acc = [| z; 96sz |];
-  let mut t = [| z; 96sz |];
-  let mut wide = [| z; 192sz |];
-  precomp r2 p 96sz;
-  let ok = shared_secret_precomp ss sk pk p r2 96sz mu a e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 48sz |];
+  let mut a = [| z; 48sz |];
+  let mut e = [| z; 48sz |];
+  let mut res = [| z; 48sz |];
+  let mut aM = [| z; 48sz |];
+  let mut acc = [| z; 48sz |];
+  let mut t = [| z; 48sz |];
+  let mut wide = [| z; 96sz |];
+  precomp r2 p 48sz;
+  let ok = shared_secret_precomp ss sk pk p r2 48sz mu a e res aM acc t wide;
   drop_table p;
   ok
 }
@@ -482,7 +483,7 @@ ensures exists* (v: Seq.seq S8.t).
 
 let ffdhe4096_mod () : GTot (p: pos { p == num ffdhe4096 /\ 2 < p }) =
   ffdhe4096_ends ();
-  modulus_big ffdhe4096 127;
+  modulus_big ffdhe4096 63;
   num ffdhe4096
 
 #push-options "--z3rlimit 200"
@@ -499,23 +500,23 @@ ensures exists* (v: Seq.seq S8.t).
   pure (Seq.length v == 512 /\ be_nat v == pw 2 (be_nat vsk) % ffdhe4096_mod ())
 {
   ffdhe4096_ends ();
-  modulus_big ffdhe4096 127;
-  let p = table ffdhe4096_arr 128sz;
+  modulus_big ffdhe4096 63;
+  let p = table ffdhe4096_arr 64sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 128sz |];
-  let mut g = [| z; 128sz |];
-  let mut e = [| z; 128sz |];
-  let mut res = [| z; 128sz |];
-  let mut aM = [| z; 128sz |];
-  let mut acc = [| z; 128sz |];
-  let mut t = [| z; 128sz |];
-  let mut wide = [| z; 256sz |];
-  precomp r2 p 128sz;
-  secret_to_public_precomp pk sk p r2 128sz mu g e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 64sz |];
+  let mut g = [| z; 64sz |];
+  let mut e = [| z; 64sz |];
+  let mut res = [| z; 64sz |];
+  let mut aM = [| z; 64sz |];
+  let mut acc = [| z; 64sz |];
+  let mut t = [| z; 64sz |];
+  let mut wide = [| z; 128sz |];
+  precomp r2 p 64sz;
+  secret_to_public_precomp pk sk p r2 64sz mu g e res aM acc t wide;
   drop_table p;
 }
 
@@ -537,23 +538,23 @@ ensures exists* (v: Seq.seq S8.t).
          else be_nat v == 0))
 {
   ffdhe4096_ends ();
-  modulus_big ffdhe4096 127;
-  let p = table ffdhe4096_arr 128sz;
+  modulus_big ffdhe4096 63;
+  let p = table ffdhe4096_arr 64sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 128sz |];
-  let mut a = [| z; 128sz |];
-  let mut e = [| z; 128sz |];
-  let mut res = [| z; 128sz |];
-  let mut aM = [| z; 128sz |];
-  let mut acc = [| z; 128sz |];
-  let mut t = [| z; 128sz |];
-  let mut wide = [| z; 256sz |];
-  precomp r2 p 128sz;
-  let ok = shared_secret_precomp ss sk pk p r2 128sz mu a e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 64sz |];
+  let mut a = [| z; 64sz |];
+  let mut e = [| z; 64sz |];
+  let mut res = [| z; 64sz |];
+  let mut aM = [| z; 64sz |];
+  let mut acc = [| z; 64sz |];
+  let mut t = [| z; 64sz |];
+  let mut wide = [| z; 128sz |];
+  precomp r2 p 64sz;
+  let ok = shared_secret_precomp ss sk pk p r2 64sz mu a e res aM acc t wide;
   drop_table p;
   ok
 }
@@ -564,7 +565,7 @@ ensures exists* (v: Seq.seq S8.t).
 
 let ffdhe6144_mod () : GTot (p: pos { p == num ffdhe6144 /\ 2 < p }) =
   ffdhe6144_ends ();
-  modulus_big ffdhe6144 191;
+  modulus_big ffdhe6144 95;
   num ffdhe6144
 
 #push-options "--z3rlimit 200"
@@ -581,23 +582,23 @@ ensures exists* (v: Seq.seq S8.t).
   pure (Seq.length v == 768 /\ be_nat v == pw 2 (be_nat vsk) % ffdhe6144_mod ())
 {
   ffdhe6144_ends ();
-  modulus_big ffdhe6144 191;
-  let p = table ffdhe6144_arr 192sz;
+  modulus_big ffdhe6144 95;
+  let p = table ffdhe6144_arr 96sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 192sz |];
-  let mut g = [| z; 192sz |];
-  let mut e = [| z; 192sz |];
-  let mut res = [| z; 192sz |];
-  let mut aM = [| z; 192sz |];
-  let mut acc = [| z; 192sz |];
-  let mut t = [| z; 192sz |];
-  let mut wide = [| z; 384sz |];
-  precomp r2 p 192sz;
-  secret_to_public_precomp pk sk p r2 192sz mu g e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 96sz |];
+  let mut g = [| z; 96sz |];
+  let mut e = [| z; 96sz |];
+  let mut res = [| z; 96sz |];
+  let mut aM = [| z; 96sz |];
+  let mut acc = [| z; 96sz |];
+  let mut t = [| z; 96sz |];
+  let mut wide = [| z; 192sz |];
+  precomp r2 p 96sz;
+  secret_to_public_precomp pk sk p r2 96sz mu g e res aM acc t wide;
   drop_table p;
 }
 
@@ -619,23 +620,23 @@ ensures exists* (v: Seq.seq S8.t).
          else be_nat v == 0))
 {
   ffdhe6144_ends ();
-  modulus_big ffdhe6144 191;
-  let p = table ffdhe6144_arr 192sz;
+  modulus_big ffdhe6144 95;
+  let p = table ffdhe6144_arr 96sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 192sz |];
-  let mut a = [| z; 192sz |];
-  let mut e = [| z; 192sz |];
-  let mut res = [| z; 192sz |];
-  let mut aM = [| z; 192sz |];
-  let mut acc = [| z; 192sz |];
-  let mut t = [| z; 192sz |];
-  let mut wide = [| z; 384sz |];
-  precomp r2 p 192sz;
-  let ok = shared_secret_precomp ss sk pk p r2 192sz mu a e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 96sz |];
+  let mut a = [| z; 96sz |];
+  let mut e = [| z; 96sz |];
+  let mut res = [| z; 96sz |];
+  let mut aM = [| z; 96sz |];
+  let mut acc = [| z; 96sz |];
+  let mut t = [| z; 96sz |];
+  let mut wide = [| z; 192sz |];
+  precomp r2 p 96sz;
+  let ok = shared_secret_precomp ss sk pk p r2 96sz mu a e res aM acc t wide;
   drop_table p;
   ok
 }
@@ -646,7 +647,7 @@ ensures exists* (v: Seq.seq S8.t).
 
 let ffdhe8192_mod () : GTot (p: pos { p == num ffdhe8192 /\ 2 < p }) =
   ffdhe8192_ends ();
-  modulus_big ffdhe8192 255;
+  modulus_big ffdhe8192 127;
   num ffdhe8192
 
 #push-options "--z3rlimit 200"
@@ -663,23 +664,23 @@ ensures exists* (v: Seq.seq S8.t).
   pure (Seq.length v == 1024 /\ be_nat v == pw 2 (be_nat vsk) % ffdhe8192_mod ())
 {
   ffdhe8192_ends ();
-  modulus_big ffdhe8192 255;
-  let p = table ffdhe8192_arr 256sz;
+  modulus_big ffdhe8192 127;
+  let p = table ffdhe8192_arr 128sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 256sz |];
-  let mut g = [| z; 256sz |];
-  let mut e = [| z; 256sz |];
-  let mut res = [| z; 256sz |];
-  let mut aM = [| z; 256sz |];
-  let mut acc = [| z; 256sz |];
-  let mut t = [| z; 256sz |];
-  let mut wide = [| z; 512sz |];
-  precomp r2 p 256sz;
-  secret_to_public_precomp pk sk p r2 256sz mu g e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 128sz |];
+  let mut g = [| z; 128sz |];
+  let mut e = [| z; 128sz |];
+  let mut res = [| z; 128sz |];
+  let mut aM = [| z; 128sz |];
+  let mut acc = [| z; 128sz |];
+  let mut t = [| z; 128sz |];
+  let mut wide = [| z; 256sz |];
+  precomp r2 p 128sz;
+  secret_to_public_precomp pk sk p r2 128sz mu g e res aM acc t wide;
   drop_table p;
 }
 
@@ -701,23 +702,23 @@ ensures exists* (v: Seq.seq S8.t).
          else be_nat v == 0))
 {
   ffdhe8192_ends ();
-  modulus_big ffdhe8192 255;
-  let p = table ffdhe8192_arr 256sz;
+  modulus_big ffdhe8192 127;
+  let p = table ffdhe8192_arr 128sz;
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
-  assert (pure ((S32.v mu * S32.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
-  let z = S32.zero;
-  let mut r2 = [| z; 256sz |];
-  let mut a = [| z; 256sz |];
-  let mut e = [| z; 256sz |];
-  let mut res = [| z; 256sz |];
-  let mut aM = [| z; 256sz |];
-  let mut acc = [| z; 256sz |];
-  let mut t = [| z; 256sz |];
-  let mut wide = [| z; 512sz |];
-  precomp r2 p 256sz;
-  let ok = shared_secret_precomp ss sk pk p r2 256sz mu a e res aM acc t wide;
+  assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
+  let z = S64.zero;
+  let mut r2 = [| z; 128sz |];
+  let mut a = [| z; 128sz |];
+  let mut e = [| z; 128sz |];
+  let mut res = [| z; 128sz |];
+  let mut aM = [| z; 128sz |];
+  let mut acc = [| z; 128sz |];
+  let mut t = [| z; 128sz |];
+  let mut wide = [| z; 256sz |];
+  precomp r2 p 128sz;
+  let ok = shared_secret_precomp ss sk pk p r2 128sz mu a e res aM acc t wide;
   drop_table p;
   ok
 }

@@ -14,33 +14,34 @@
    limitations under the License.
 *)
 
-(** A number of any length, as limbs of thirty-two bits.
+(** A number of any length, as limbs of sixty-four bits.
 
     This is the specification side of the arbitrary-precision bignum: what
     it means for a sequence of limbs to denote a number, and the six or
     seven facts about that meaning which the implementation loops need.
 
-    {b Why thirty-two bits.}  The product of two limbs plus two more limbs
-    is at most [(2^32-1)^2 + 2*(2^32-1) = 2^64 - 1], so a schoolbook inner
-    step is exact in a [uint64] with not one bit to spare.  That is the
+    {b Why sixty-four bits.}  The product of two limbs plus two more limbs
+    is at most [(2^64-1)^2 + 2*(2^64-1) = 2^128 - 1], so a schoolbook inner
+    step is exact in a [uint128] with not one bit to spare.  That is the
     largest radix with that property, and it is the reason the limb type is
-    [Hacl.Secret.UInt32] and the accumulator type [Hacl.Secret.UInt64].
-    (Custard has no [uint128], so radix 2^64 is not on the table; see
-    {!Spec.Bignum256}, which makes the opposite trade for the curves, where
-    the length is known and the reduction matters more than the memory.)
+    [Hacl.Secret.UInt64] and the accumulator type [Hacl.Secret.UInt128].
+    (Until Custard grew a [uint128] the same argument one notch down forced
+    radix [2^32]; see {!Spec.Bignum256}, which still makes the opposite
+    trade for the curves, where the length is known and the reduction
+    matters more than the memory.)
 
     {b Everything here is relational.}  There is deliberately no [add_spec]
     returning a sequence.  An implementation of addition says
 
-    {[ eval vres + carry * pow2 (32 * n) == eval va + eval vb ]}
+    {[ eval vres + carry * pow2 (64 * n) == eval va + eval vb ]}
 
     which is the whole contract, is what a caller wants to hear, and needs
     no lemma connecting it to a second definition of addition.  So this
     module defines exactly one function on sequences -- [eval] -- and the
     operations appear only in the postconditions of the code.
 
-    Limbs are [nat], not machine words: {!Hacl.Impl.Limb32.vals} is what
-    turns an array of [Hacl.Secret.UInt32] into a sequence of [nat], and
+    Limbs are [nat], not machine words: {!Hacl.Impl.Limb64.vals} is what
+    turns an array of [Hacl.Secret.UInt64] into a sequence of [nat], and
     every statement below is about the mathematical value. *)
 module Spec.Bignum
 
@@ -48,7 +49,7 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 
 (** Bits per limb. *)
-let rad : pos = 32
+let rad : pos = 64
 
 let base : pos = pow2 rad
 
@@ -141,8 +142,8 @@ let eval_full (s: Seq.seq nat)
 (** {2 Well-formedness}
 
     A limb sequence is {i normal} when every limb is a real limb.  This is
-    the only invariant an array of [Hacl.Secret.UInt32] can violate, and it
-    cannot: [vals] of a [uint32] array is normal by construction.  The
+    the only invariant an array of [Hacl.Secret.UInt64] can violate, and it
+    cannot: [vals] of a [uint64] array is normal by construction.  The
     predicate is still worth naming, because the statements below are about
     arbitrary [nat] sequences. *)
 

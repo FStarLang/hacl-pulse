@@ -25,9 +25,9 @@
     {b What [mu] is.}  The one precomputed quantity is a single limb [mu]
     with [mu * m0 + 1 = 0 mod base], where [m0] is the lowest limb of the
     modulus.  It exists exactly when the modulus is odd, and {!mont_mu}
-    computes it with five steps of Hensel lifting -- [x := x * (2 - m0 * x)]
+    computes it with six steps of Hensel lifting -- [x := x * (2 - m0 * x)]
     doubles the number of correct bits each time, so one, two, four, eight,
-    sixteen, thirty-two.
+    sixteen, thirty-two, sixty-four.
 
     {b Why [res] and [c] are separate.}  The reduction consumes a [2n]-limb
     number and produces an [n]-limb one.  HACL* reduces in place and then
@@ -39,7 +39,7 @@ module Hacl.Bignum.Montgomery
 
 open Pulse.Lib.Pervasives
 open Spec.Bignum
-open Hacl.Impl.Limb32
+open Hacl.Impl.Limb64
 open Hacl.Bignum.Base
 
 module A = Pulse.Lib.Array
@@ -47,8 +47,8 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
-module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -57,13 +57,13 @@ module S64 = Hacl.Secret.UInt64
     Hensel's lemma in two lines: if [m0 * x = 1] to [k] bits then
     [m0 * (x * (2 - m0 * x)) = 1 - (1 - m0 * x)^2] is [1] to [2k] bits.
     Starting from [x = 1], which is correct to one bit because the modulus
-    is odd, five steps reach thirty-two. *)
+    is odd, six steps reach sixty-four. *)
 
 inline_for_extraction
-let inv_step (m0 x: S32.t)
-  : r: S32.t { S32.v r ==
-                 (S32.v x * ((2 - (S32.v m0 * S32.v x) % pow2 32) % pow2 32)) % pow2 32 }
-  = S32.mul_mod x (S32.sub_mod (S32.classify 2ul) (S32.mul_mod m0 x))
+let inv_step (m0 x: S64.t)
+  : r: S64.t { S64.v r ==
+                 (S64.v x * ((2 - (S64.v m0 * S64.v x) % pow2 64) % pow2 64)) % pow2 64 }
+  = S64.mul_mod x (S64.sub_mod (S64.classify 2uL) (S64.mul_mod m0 x))
 
 (** [(1 + a)(1 - a) = 1 - a^2], which is the whole content of the step. *)
 let sq_id (a: int) : Lemma ((1 + a) * (2 - (1 + a)) == 1 - a * a) = ()
@@ -87,20 +87,20 @@ let hensel (p: nat) (m: pos)
     Math.lemma_mod_plus 1 (- (e * e)) (pow2 (2 * m));
     Math.small_mod 1 (pow2 (2 * m))
 
-(** What holds modulo [2^32] holds modulo any power of two below it. *)
-let narrow (a b: int) (k: nat { k <= 32 })
-  : Lemma (requires a % pow2 32 == b % pow2 32)
+(** What holds modulo [2^64] holds modulo any power of two below it. *)
+let narrow (a b: int) (k: nat { k <= 64 })
+  : Lemma (requires a % pow2 64 == b % pow2 64)
           (ensures a % pow2 k == b % pow2 k)
-  = Math.pow2_plus k (32 - k);
-    Math.modulo_modulo_lemma a (pow2 k) (pow2 (32 - k));
-    Math.modulo_modulo_lemma b (pow2 k) (pow2 (32 - k))
+  = Math.pow2_plus k (64 - k);
+    Math.modulo_modulo_lemma a (pow2 k) (pow2 (64 - k));
+    Math.modulo_modulo_lemma b (pow2 k) (pow2 (64 - k))
 
 let inv_step_ok (mv xv: nat) (m: pos) (r: nat)
-  : Lemma (requires 2 * m <= 32 /\ (mv * xv) % pow2 m == 1 /\
-                    r == (xv * ((2 - (mv * xv) % pow2 32) % pow2 32)) % pow2 32)
+  : Lemma (requires 2 * m <= 64 /\ (mv * xv) % pow2 m == 1 /\
+                    r == (xv * ((2 - (mv * xv) % pow2 64) % pow2 64)) % pow2 64)
           (ensures (mv * r) % pow2 (2 * m) == 1)
   = let p = mv * xv in
-    let bq = pow2 32 in
+    let bq = pow2 64 in
     (* [(mv * r) % bq == (p * (2 - p)) % bq]: three distributions of [%]. *)
     Math.lemma_mod_sub_distr 2 p bq;
     Math.lemma_mod_mul_distr_r xv (2 - p) bq;
@@ -112,33 +112,34 @@ let inv_step_ok (mv xv: nat) (m: pos) (r: nat)
 
 (** Negating the inverse: if [m0 * x = 1] then [m0 * (-x) + 1 = 0]. *)
 let negate (mv xv r: nat)
-  : Lemma (requires (mv * xv) % pow2 32 == 1 /\ r == (0 - xv) % pow2 32)
+  : Lemma (requires (mv * xv) % pow2 64 == 1 /\ r == (0 - xv) % pow2 64)
           (ensures (r * mv + 1) % base == 0)
-  = assert (base == pow2 32);
-    Math.lemma_mod_mul_distr_l (0 - xv) mv (pow2 32);
+  = assert (base == pow2 64);
+    Math.lemma_mod_mul_distr_l (0 - xv) mv (pow2 64);
     Math.paren_mul_right 0 xv mv;
     Math.swap_mul xv mv;
-    assert ((r * mv) % pow2 32 == (- (mv * xv)) % pow2 32);
-    Math.lemma_mod_add_distr 1 (r * mv) (pow2 32);
-    Math.lemma_mod_add_distr 1 (- (mv * xv)) (pow2 32);
-    Math.lemma_mod_plus 0 1 (pow2 32)
+    assert ((r * mv) % pow2 64 == (- (mv * xv)) % pow2 64);
+    Math.lemma_mod_add_distr 1 (r * mv) (pow2 64);
+    Math.lemma_mod_add_distr 1 (- (mv * xv)) (pow2 64);
+    Math.lemma_mod_plus 0 1 (pow2 64)
 
 (** [mont_mu m0] is the [mu] with [mu * m0 + 1 = 0 mod base].  The modulus
     must be odd; every modulus Montgomery arithmetic applies to is. *)
-let mont_mu (m0: S32.t)
-  : Pure S32.t (requires S32.v m0 % 2 == 1)
-               (ensures fun r -> (S32.v r * S32.v m0 + 1) % base == 0)
-  = let x0 = S32.classify 1ul in
+let mont_mu (m0: S64.t)
+  : Pure S64.t (requires S64.v m0 % 2 == 1)
+               (ensures fun r -> (S64.v r * S64.v m0 + 1) % base == 0)
+  = let x0 = S64.classify 1uL in
     assert_norm (pow2 1 == 2);
-    assert (S32.v m0 * S32.v x0 == S32.v m0);
-    let x1 = inv_step m0 x0 in inv_step_ok (S32.v m0) (S32.v x0) 1 (S32.v x1);
-    let x2 = inv_step m0 x1 in inv_step_ok (S32.v m0) (S32.v x1) 2 (S32.v x2);
-    let x3 = inv_step m0 x2 in inv_step_ok (S32.v m0) (S32.v x2) 4 (S32.v x3);
-    let x4 = inv_step m0 x3 in inv_step_ok (S32.v m0) (S32.v x3) 8 (S32.v x4);
-    let x5 = inv_step m0 x4 in inv_step_ok (S32.v m0) (S32.v x4) 16 (S32.v x5);
-    (* [x5] inverts [m0]; negating it gives the [mu] a reduction wants. *)
-    let r = S32.sub_mod S32.zero x5 in
-    negate (S32.v m0) (S32.v x5) (S32.v r);
+    assert (S64.v m0 * S64.v x0 == S64.v m0);
+    let x1 = inv_step m0 x0 in inv_step_ok (S64.v m0) (S64.v x0) 1 (S64.v x1);
+    let x2 = inv_step m0 x1 in inv_step_ok (S64.v m0) (S64.v x1) 2 (S64.v x2);
+    let x3 = inv_step m0 x2 in inv_step_ok (S64.v m0) (S64.v x2) 4 (S64.v x3);
+    let x4 = inv_step m0 x3 in inv_step_ok (S64.v m0) (S64.v x3) 8 (S64.v x4);
+    let x5 = inv_step m0 x4 in inv_step_ok (S64.v m0) (S64.v x4) 16 (S64.v x5);
+    let x6 = inv_step m0 x5 in inv_step_ok (S64.v m0) (S64.v x5) 32 (S64.v x6);
+    (* [x6] inverts [m0]; negating it gives the [mu] a reduction wants. *)
+    let r = S64.sub_mod S64.zero x6 in
+    negate (S64.v m0) (S64.v x6) (S64.v r);
     r
 
 (** {2 The arithmetic of one reduction column}
@@ -326,13 +327,13 @@ let copy_step (pc pcn pv ci: int) (nn i: nat)
     Math.distributivity_add_right (wt nn) pv (wt i * ci);
     Math.paren_mul_right (wt nn) (wt i) ci
 
-fn copy_upper (res: A.array S32.t) (c: A.array S32.t) (nn: SZ.t)
-              (#vres: erased (Seq.seq S32.t)) (#pc: perm)
-              (#vc: erased (Seq.seq S32.t))
+fn copy_upper (res: A.array S64.t) (c: A.array S64.t) (nn: SZ.t)
+              (#vres: erased (Seq.seq S64.t)) (#pc: perm)
+              (#vc: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to c #pc vc **
   pure (Seq.length vres == SZ.v nn /\ Seq.length vc == SZ.v nn + SZ.v nn /\
         SZ.fits (SZ.v nn + SZ.v nn))
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to c #pc vc **
   pure (Seq.length v == SZ.v nn /\
         num vc == pre vc (SZ.v nn) + wt (SZ.v nn) * num v)
@@ -343,7 +344,7 @@ ensures exists* (v: Seq.seq S32.t).
   wt_zero ();
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi nn)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to c #pc vc **
     pure (SZ.v vi <= SZ.v nn /\ Seq.length v == SZ.v nn /\
           pre vc (SZ.v nn + SZ.v vi) ==
@@ -358,7 +359,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc (Seq.upd v (SZ.v vi) ci) (SZ.v vi);
     pre_snoc vc (SZ.v nn + SZ.v vi);
     copy_step (pre vc (SZ.v nn + SZ.v vi)) (pre vc (SZ.v nn)) (pre v (SZ.v vi))
-              (S32.v ci) (SZ.v nn) (SZ.v vi);
+              (S64.v ci) (SZ.v nn) (SZ.v vi);
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to res v);
@@ -414,17 +415,17 @@ let mont_top (na nva ov nn: nat)
 (** The mask that decides whether the subtraction has to be undone.  It is
     all ones exactly when the subtraction borrowed and no carry came out of
     the loop, which is the one case where the value was already reduced. *)
-let flag_mask (borrow ov m: S32.t)
-  : Lemma (requires S32.v borrow <= 1 /\ S32.v ov <= 1 /\
-                    m == S32.eq_mask (S32.sub_mod borrow ov) (S32.classify 1ul))
+let flag_mask (borrow ov m: S64.t)
+  : Lemma (requires S64.v borrow <= 1 /\ S64.v ov <= 1 /\
+                    m == S64.eq_mask (S64.sub_mod borrow ov) (S64.classify 1uL))
           (ensures is_mask m /\
-                   (S32.v borrow == 1 /\ S32.v ov == 0 ==> mask_bit m == 1) /\
-                   (~(S32.v borrow == 1 /\ S32.v ov == 0) ==> mask_bit m == 0))
+                   (S64.v borrow == 1 /\ S64.v ov == 0 ==> mask_bit m == 1) /\
+                   (~(S64.v borrow == 1 /\ S64.v ov == 0) ==> mask_bit m == 0))
   = assert_norm (pow2 32 == 4294967296);
     Math.small_mod (pow2 32 - 1) (pow2 32);
-    Math.lemma_mod_plus (S32.v borrow - S32.v ov) 1 (pow2 32);
-    if S32.v borrow >= S32.v ov then
-      Math.small_mod (S32.v borrow - S32.v ov) (pow2 32)
+    Math.lemma_mod_plus (S64.v borrow - S64.v ov) 1 (pow2 32);
+    if S64.v borrow >= S64.v ov then
+      Math.small_mod (S64.v borrow - S64.v ov) (pow2 32)
 
 (** The value at the end of the loop is below twice the modulus, so its
     top half is a valid input to one conditional subtraction. *)
@@ -442,18 +443,18 @@ let mont_split (vv v1 nc nN wnn: nat)
     modulo the [n]-limb modulus, leaving the result in [res].  [c] is
     clobbered.  [mu] must be the inverse computed by {!mont_mu}, and [c]
     must be below the modulus times [base^n]. *)
-fn reduction (res: A.array S32.t) (c: A.array S32.t) (nmod: A.array S32.t)
-             (nn: SZ.t) (mu: S32.t)
-             (#vres: erased (Seq.seq S32.t)) (#vc: erased (Seq.seq S32.t))
+fn reduction (res: A.array S64.t) (c: A.array S64.t) (nmod: A.array S64.t)
+             (nn: SZ.t) (mu: S64.t)
+             (#vres: erased (Seq.seq S64.t)) (#vc: erased (Seq.seq S64.t))
              (#pn: perm)
-             (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+             (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to res vres ** A.pts_to c vc ** A.pts_to nmod #pn vn **
   pure (Seq.length vres == SZ.v nn /\ Seq.length vc == SZ.v nn + SZ.v nn /\
         Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\
         SZ.fits (SZ.v nn + SZ.v nn) /\
         num vc < num vn * wt (SZ.v nn) /\
-        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S64.t) (v2: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to c v2 ** A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ Seq.length v2 == SZ.v nn + SZ.v nn /\
         num v < num vn /\
@@ -469,15 +470,15 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
   pre_mod vn 1;
   eval_bnd (vals vn);
   let mut i = 0sz;
-  let mut ov = S32.zero;
+  let mut ov = S64.zero;
   while (let vi = !i; SZ.lt vi nn)
-  invariant exists* (vi: SZ.t) (vov: S32.t) (varr: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (vov: S64.t) (varr: Seq.seq S64.t).
     pts_to i vi ** pts_to ov vov ** A.pts_to c varr ** A.pts_to nmod #pn vn **
     pure (SZ.v vi <= SZ.v nn /\ Seq.length varr == SZ.v nn + SZ.v nn /\
-          S32.v vov <= 1 /\ num varr % wt (SZ.v vi) == 0 /\
-          (num varr + S32.v vov * wt (SZ.v vi + SZ.v nn)) % num vn ==
+          S64.v vov <= 1 /\ num varr % wt (SZ.v vi) == 0 /\
+          (num varr + S64.v vov * wt (SZ.v vi + SZ.v nn)) % num vn ==
             num vc % num vn /\
-          num varr + S32.v vov * wt (SZ.v vi + SZ.v nn) <
+          num varr + S64.v vov * wt (SZ.v vi + SZ.v nn) <
             num vc + wt (SZ.v vi) * num vn)
   decreases (SZ.v nn - SZ.v (!i))
   {
@@ -485,7 +486,7 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
     let vi = !i;
     let vov = !ov;
     let ci = A.(c.(vi));
-    let qi = S32.mul_mod ci mu;
+    let qi = S64.mul_mod ci mu;
     pre_mod varr (SZ.v vi);
     pre_mod varr (SZ.v vi + 1);
     pre_snoc varr (SZ.v vi);
@@ -502,9 +503,9 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
     A.((c.(pos) <- lot));
     num_upd v1 (SZ.v pos) lot;
     with v2. assert (A.pts_to c v2);
-    red_column (num v2) (num v1) (num varr) (S32.v ov2) (S32.v vov) (S32.v cr)
-               (S32.v old) (S32.v lot) (S32.v qi) (num vn) (S32.v ci) (S32.v mu)
-               (S32.v (Seq.index vn 0)) (num vc) (SZ.v vi) (SZ.v nn);
+    red_column (num v2) (num v1) (num varr) (S64.v ov2) (S64.v vov) (S64.v cr)
+               (S64.v old) (S64.v lot) (S64.v qi) (num vn) (S64.v ci) (S64.v mu)
+               (S64.v (Seq.index vn 0)) (num vc) (SZ.v vi) (SZ.v nn);
     ov := ov2;
     i := SZ.add vi 1sz;
   };
@@ -514,22 +515,22 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
   copy_upper res c nn;
   with va. assert (A.pts_to res va);
   eval_bnd (vals va);
-  mont_top (num varr) (num va) (S32.v vov) (SZ.v nn);
-  mont_split (num varr + S32.v vov * wt (SZ.v nn + SZ.v nn))
-             (num va + S32.v vov * wt (SZ.v nn)) (num vc) (num vn) (wt (SZ.v nn));
+  mont_top (num varr) (num va) (S64.v vov) (SZ.v nn);
+  mont_split (num varr + S64.v vov * wt (SZ.v nn + SZ.v nn))
+             (num va + S64.v vov * wt (SZ.v nn)) (num vc) (num vn) (wt (SZ.v nn));
   let borrow = sub_from res nmod nn;
   with v1. assert (A.pts_to res v1);
   eval_bnd (vals v1);
-  let mask = S32.eq_mask (S32.sub_mod borrow vov) (S32.classify 1ul);
+  let mask = S64.eq_mask (S64.sub_mod borrow vov) (S64.classify 1uL);
   flag_mask borrow vov mask;
   mask_bit_ok mask;
   let c2 = add_masked res nmod nn mask (hide (mask_bit mask));
   with v2. assert (A.pts_to res v2);
   eval_bnd (vals v2);
-  final_cases (num va) (num vn) (S32.v vov) (S32.v borrow) (num v1)
-              (mask_bit mask) (num v2) (S32.v c2) (wt (SZ.v nn));
-  mont_result (num v2) (num va + S32.v vov * wt (SZ.v nn)) (num vn)
-              (wt (SZ.v nn)) (num varr + S32.v vov * wt (SZ.v nn + SZ.v nn));
+  final_cases (num va) (num vn) (S64.v vov) (S64.v borrow) (num v1)
+              (mask_bit mask) (num v2) (S64.v c2) (wt (SZ.v nn));
+  mont_result (num v2) (num va + S64.v vov * wt (SZ.v nn)) (num vn)
+              (wt (SZ.v nn)) (num varr + S64.v vov * wt (SZ.v nn + SZ.v nn));
   ()
 }
 
@@ -537,12 +538,12 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t).
 
 (** {2 Copying into the wide accumulator} *)
 
-fn embed (tmp: A.array S32.t) (a: A.array S32.t) (nn: SZ.t)
-         (#vtmp: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+fn embed (tmp: A.array S64.t) (a: A.array S64.t) (nn: SZ.t)
+         (#vtmp: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to tmp vtmp ** A.pts_to a #pa va **
   pure (Seq.length vtmp == SZ.v nn + SZ.v nn /\ Seq.length va == SZ.v nn /\
         SZ.fits (SZ.v nn + SZ.v nn))
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to tmp v ** A.pts_to a #pa va **
   pure (Seq.length v == SZ.v nn + SZ.v nn /\ num v == num va)
 {
@@ -552,11 +553,11 @@ ensures exists* (v: Seq.seq S32.t).
   pre_zero va;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi nn)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to tmp v ** A.pts_to a #pa va **
     pure (SZ.v vi <= SZ.v nn /\ Seq.length v == SZ.v nn + SZ.v nn /\
           (forall (k: nat). SZ.v vi <= k /\ k < Seq.length v ==>
-             S32.v (Seq.index v k) == 0) /\
+             S64.v (Seq.index v k) == 0) /\
           pre v (SZ.v vi) == pre va (SZ.v vi))
   decreases (SZ.v nn - SZ.v (!i))
   {
@@ -590,19 +591,19 @@ let mul_bnd (a b nN rr: nat)
 
 #push-options "--z3rlimit 300"
 
-fn mont_mul (res: A.array S32.t) (a b: A.array S32.t) (tmp: A.array S32.t)
-            (nmod: A.array S32.t) (nn: SZ.t) (mu: S32.t)
-            (#vres #vtmp: erased (Seq.seq S32.t)) (#pa #pb #pn: perm)
-            (#va #vb: erased (Seq.seq S32.t))
-            (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+fn mont_mul (res: A.array S64.t) (a b: A.array S64.t) (tmp: A.array S64.t)
+            (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
+            (#vres #vtmp: erased (Seq.seq S64.t)) (#pa #pb #pn: perm)
+            (#va #vb: erased (Seq.seq S64.t))
+            (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb **
          A.pts_to tmp vtmp ** A.pts_to nmod #pn vn **
   pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
         Seq.length vb == SZ.v nn /\ Seq.length vtmp == SZ.v nn + SZ.v nn /\
         Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\
         SZ.fits (SZ.v nn + SZ.v nn) /\ num va < num vn /\
-        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S32.t) (vt: Seq.seq S32.t).
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S64.t) (vt: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.pts_to tmp vt ** A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ Seq.length vt == SZ.v nn + SZ.v nn /\
@@ -624,18 +625,18 @@ ensures exists* (v: Seq.seq S32.t) (vt: Seq.seq S32.t).
 (** [from_mont res a] leaves Montgomery form: the result is [a / R] modulo
     the modulus.  Entering it is {!mont_mul} against the precomputed
     [precomp] square, so there is no separate function for that direction. *)
-fn from_mont (res: A.array S32.t) (a: A.array S32.t) (tmp: A.array S32.t)
-             (nmod: A.array S32.t) (nn: SZ.t) (mu: S32.t)
-             (#vres #vtmp: erased (Seq.seq S32.t)) (#pa #pn: perm)
-             (#va: erased (Seq.seq S32.t))
-             (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+fn from_mont (res: A.array S64.t) (a: A.array S64.t) (tmp: A.array S64.t)
+             (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
+             (#vres #vtmp: erased (Seq.seq S64.t)) (#pa #pn: perm)
+             (#va: erased (Seq.seq S64.t))
+             (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to tmp vtmp **
          A.pts_to nmod #pn vn **
   pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
         Seq.length vtmp == SZ.v nn + SZ.v nn /\ Seq.length vn == SZ.v nn /\
         0 < SZ.v nn /\ SZ.fits (SZ.v nn + SZ.v nn) /\
-        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S32.t) (vt: Seq.seq S32.t).
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S64.t) (vt: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to tmp vt **
   A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ Seq.length vt == SZ.v nn + SZ.v nn /\
@@ -669,13 +670,13 @@ let dbl_mod (nN: pos) (i: nat)
 
 #push-options "--z3rlimit 300"
 
-fn precomp (res: A.array S32.t) (nmod: A.array S32.t) (nn: SZ.t)
-           (#vres: erased (Seq.seq S32.t)) (#pn: perm)
-           (#vn: erased (s: Seq.seq S32.t { 1 < num s }))
+fn precomp (res: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t)
+           (#vres: erased (Seq.seq S64.t)) (#pn: perm)
+           (#vn: erased (s: Seq.seq S64.t { 1 < num s }))
 requires A.pts_to res vres ** A.pts_to nmod #pn vn **
   pure (Seq.length vres == SZ.v nn /\ Seq.length vn == SZ.v nn /\
         0 < SZ.v nn /\ SZ.fits (2 * rad * SZ.v nn))
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\
         num v == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn)
@@ -686,15 +687,15 @@ ensures exists* (v: Seq.seq S32.t).
   with v0. assert (A.pts_to res v0);
   pre_zeros v0 (SZ.v nn);
   pre_full v0;
-  let one = S32.classify 1ul;
+  let one = S64.classify 1uL;
   A.((res.(0sz) <- one));
   num_upd v0 0 one;
   wt_zero ();
   Math.small_mod 1 (num vn);
-  let steps = SZ.mul 64sz nn;
+  let steps = SZ.mul 128sz nn;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi steps)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to nmod #pn vn **
     pure (SZ.v vi <= SZ.v steps /\ Seq.length v == SZ.v nn /\
           num v == pow2 (SZ.v vi) % num vn)
@@ -795,11 +796,11 @@ let mod_chain (r acc rr nN va: nat)
 (** [modulo res a acc r2 nmod nn mu] is [res = a mod nmod], for a [2n]-limb
     [a] below the modulus times [R].  [a] is clobbered -- it doubles as the
     scratch of the second step -- and [acc] is [n] limbs of scratch. *)
-fn modulo (res: A.array S32.t) (a: A.array S32.t) (acc: A.array S32.t)
-          (r2: A.array S32.t) (nmod: A.array S32.t) (nn: SZ.t) (mu: S32.t)
-          (#vres #vacc: erased (Seq.seq S32.t)) (#va: erased (Seq.seq S32.t))
-          (#pr #pn: perm) (#vr2: erased (Seq.seq S32.t))
-          (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+fn modulo (res: A.array S64.t) (a: A.array S64.t) (acc: A.array S64.t)
+          (r2: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
+          (#vres #vacc: erased (Seq.seq S64.t)) (#va: erased (Seq.seq S64.t))
+          (#pr #pn: perm) (#vr2: erased (Seq.seq S64.t))
+          (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to res vres ** A.pts_to a va ** A.pts_to acc vacc **
          A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
   pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn + SZ.v nn /\
@@ -808,8 +809,8 @@ requires A.pts_to res vres ** A.pts_to a va ** A.pts_to acc vacc **
         SZ.fits (SZ.v nn + SZ.v nn) /\
         num va < num vn * wt (SZ.v nn) /\
         num vr2 == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn /\
-        (S32.v mu * S32.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t) (v3: Seq.seq S32.t).
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S64.t) (v2: Seq.seq S64.t) (v3: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a v2 ** A.pts_to acc v3 **
   A.pts_to r2 #pr vr2 ** A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ Seq.length v2 == SZ.v nn + SZ.v nn /\
@@ -830,8 +831,8 @@ ensures exists* (v: Seq.seq S32.t) (v2: Seq.seq S32.t) (v3: Seq.seq S32.t).
   mont_mul res acc r2 a nmod nn mu;
   with v. assert (A.pts_to res v);
   mod_chain (num v) (num vacc1) (wt (SZ.v nn)) (num vn) (num va);
-  mont_cancel (num v) (num va % num vn) (num vn) (S32.v mu)
-              (S32.v (Seq.index vn 0)) (SZ.v nn);
+  mont_cancel (num v) (num va % num vn) (num vn) (S64.v mu)
+              (S64.v (Seq.index vn 0)) (SZ.v nn);
   ()
 }
 
