@@ -111,3 +111,15 @@ val select (mask x y: t)
   : Pure t
       (requires v mask == 0 \/ v mask == pow2 64 - 1)
       (ensures fun r -> r == (if v mask = 0 then y else x))
+
+(** {2 Truncation}
+
+    [mask_low n] is the constant with exactly its [n] least significant bits
+    set, so that [logand x (mask_low n)] keeps the bottom [n] bits of [x].
+    Both ends of the range are covered: at zero the mask is empty and at
+    sixty-four it is all ones. *)
+
+val mask_low (n: U32.t { U32.v n <= 64 }) : r: t { v r == pow2 (U32.v n) - 1 }
+
+val logand_mask_low (x: t) (n: U32.t { U32.v n <= 64 })
+  : Lemma (v (logand x (mask_low n)) == v x % pow2 (U32.v n))

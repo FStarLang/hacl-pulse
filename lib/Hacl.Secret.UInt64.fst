@@ -173,3 +173,27 @@ let select mask x y =
   UInt.logor_commutative #64 (v l) (v r);
   U64.logor l r
 #pop-options
+
+(* At sixty-four the shift that builds the mask would be undefined, so that
+   end is the all-ones constant; [UInt.logand_mask] does not cover either
+   end and both have their own lemma. *)
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
+let mask_low (n: U32.t { U32.v n <= 64 }) : r: t { v r == pow2 (U32.v n) - 1 } =
+  if U32.v n = 64 then U64.sub_mod 0UL 1UL
+  else begin
+    UInt.shift_left_value_lemma #64 1 (U32.v n);
+    Math.pow2_lt_compat 64 (U32.v n);
+    Math.small_modulo_lemma_1 (pow2 (U32.v n)) (pow2 64);
+    U64.sub (U64.shift_left 1UL n) 1UL
+  end
+
+let logand_mask_low (x: t) (n: U32.t { U32.v n <= 64 })
+  : Lemma (v (logand x (mask_low n)) == v x % pow2 (U32.v n)) =
+  if U32.v n = 0 then
+    UInt.logand_lemma_1 #64 (v x)
+  else if U32.v n = 64 then begin
+    UInt.logand_lemma_2 #64 (v x);
+    Math.small_modulo_lemma_1 (v x) (pow2 64)
+  end else
+    UInt.logand_mask #64 (v x) (U32.v n)
+#pop-options
