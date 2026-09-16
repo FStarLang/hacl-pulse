@@ -252,4 +252,189 @@ ensures exists* vpk vsk.
   assert (pure (vpk == fst (F.keypair p vcoins) /\ vsk == snd (F.keypair p vcoins)));
 }
 
+
+(** Encapsulation's public half, spelled out.  Unlike [keypair_eq] this
+    one names every intermediate, because the Pulse function proves them
+    one at a time and asking the solver to fold them back into a single
+    nested term is what runs out of rlimit. *)
+let enc_ct_eq (p: params)
+              (mu: Seq.lseq S8.t (bytes_mu p))
+              (pk: Seq.lseq S8.t (crypto_publickeybytes p))
+              (seed_se: Seq.lseq S8.t (crypto_bytes p))
+              (vct: Seq.lseq S8.t (crypto_ciphertextbytes p))
+              (vbp: M.matrix nbar (n p)) (vv: M.matrix nbar nbar)
+              (seed_a: Seq.lseq S8.t bytes_seed_a)
+              (r: Seq.lseq S8.t (2 * secretmatrixbytes p + 2 * (nbar * nbar)))
+              (sp: M.matrix nbar (n p)) (ep: M.matrix nbar (n p))
+              (epp: M.matrix nbar nbar) (bm: M.matrix (n p) nbar)
+              (bpu: M.matrix nbar (n p)) (vu: M.matrix nbar nbar)
+  : Lemma
+      (requires
+        (let smb = secretmatrixbytes p in
+         seed_a == Seq.slice pk 0 bytes_seed_a /\
+         r == shake p (Seq.cons (S8.classify 0x96uy) seed_se)
+                    (2 * smb + 2 * (nbar * nbar)) /\
+         sp == F.sample_matrix p nbar (n p) (Seq.slice r 0 smb) /\
+         ep == F.sample_matrix p nbar (n p) (Seq.slice r smb (2 * smb)) /\
+         epp == F.sample_matrix p nbar nbar
+                  (Seq.slice r (2 * smb) (2 * smb + 2 * (nbar * nbar))) /\
+         bm == F.unpack_n p (Seq.slice pk bytes_seed_a (crypto_publickeybytes p)) /\
+         bpu == M.add nbar (n p)
+                  (M.mul nbar (n p) (n p) sp (F.gen_matrix p seed_a)) ep /\
+         vu == M.add nbar nbar
+                 (M.add nbar nbar (M.mul nbar (n p) nbar sp bm) epp)
+                 (F.key_encode p mu) /\
+         vct == Seq.append (F.pack_n p bpu) (F.pack_8 p vu) /\
+         vbp == M.mod_pow2 nbar (n p) p.logq bpu /\
+         vv == M.mod_pow2 nbar nbar p.logq vu))
+      (ensures (let ct, b2, v2 = F.enc_ct p mu pk seed_se in
+                vct == ct /\ vbp == b2 /\ vv == v2))
+  = ()
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+
+(** The ciphertext, and the two matrices that went into it reduced to
+    [logq] bits.  Decapsulation re-runs this and compares those two against
+    what it received, which is why they are returned rather than dropped. *)
+fn enc_ct ([@@@FStar.Attributes.monomorphize] p: params)
+          (cdf: A.array U16.t) (ct: A.array S8.t) (bp: A.array S16.t) (v: A.array S16.t)
+          (mu: A.array S8.t) (pk: A.array S8.t) (seed_se: A.array S8.t)
+          (#pcd: perm) (#pmu: perm) (#ppk: perm) (#pss: perm)
+          (#vcdf: erased (Seq.lseq U16.t (cdf_len p)))
+          (#vct0: erased (Seq.lseq S8.t (crypto_ciphertextbytes p)))
+          (#vbp0: erased (Seq.lseq S16.t (nbar * n p)))
+          (#vv0: erased (Seq.lseq S16.t (nbar * nbar)))
+          (#vmu: erased (Seq.lseq S8.t (bytes_mu p)))
+          (#vpk: erased (Seq.lseq S8.t (crypto_publickeybytes p)))
+          (#vss: erased (Seq.lseq S8.t (crypto_bytes p)))
+requires A.pts_to cdf #pcd vcdf ** A.pts_to ct vct0 ** A.pts_to bp vbp0 **
+         A.pts_to v vv0 ** A.pts_to mu #pmu vmu ** A.pts_to pk #ppk vpk **
+         A.pts_to seed_se #pss vss ** pure (reveal vcdf == reveal p.cdf)
+ensures exists* vct vbp vv.
+        A.pts_to cdf #pcd vcdf ** A.pts_to ct vct ** A.pts_to bp vbp **
+        A.pts_to v vv ** A.pts_to mu #pmu vmu ** A.pts_to pk #ppk vpk **
+        A.pts_to seed_se #pss vss **
+        pure (Seq.length vbp == nbar * n p /\ Seq.length vv == nbar * nbar /\
+              (let c, b2, v2 = F.enc_ct p vmu vpk vss in
+               vct == c /\ vbp == b2 /\ vv == v2))
+{
+  A.pts_to_len cdf;
+  A.pts_to_len ct;
+  A.pts_to_len bp;
+  A.pts_to_len v;
+  A.pts_to_len mu;
+  A.pts_to_len pk;
+  A.pts_to_len seed_se;
+  Hacl.SizeT.fits32 ();
+  let cb = p.cbytes;
+  let nn = p.nn;
+  let d = SZ.uint32_to_sizet p.logq;
+  let ents = SZ.mul 8sz nn;
+  let smb = SZ.mul 2sz ents;
+  let pmb = SZ.mul d nn;
+  let pkb = SZ.add 16sz pmb;
+  let two_smb = SZ.mul 2sz smb;
+  let rlen = SZ.add two_smb 128sz;
+  let c2 = SZ.mul d 8sz;
+  assert_norm (16 * 1344 < pow2 32);
+  assert (pure (SZ.v ents == nbar * n p /\ SZ.v smb == secretmatrixbytes p /\
+                SZ.v pmb == publicmatrixbytes p /\
+                SZ.v pkb == crypto_publickeybytes p /\
+                SZ.v c2 == ct2bytes p /\
+                SZ.v rlen == 2 * secretmatrixbytes p + 2 * (nbar * nbar) /\
+                SZ.v rlen < pow2 32));
+
+  let mut sa = [| (S8.zero <: S8.t); 16sz |];
+  Copy.copy_range sa 0sz pk 0sz 16sz;
+  A.pts_to_len sa;
+  with vsa. assert (A.pts_to sa vsa);
+  slice_eq vpk 0 vsa;
+  assert (pure (vsa == Seq.slice vpk 0 bytes_seed_a));
+
+  let mut bb = [| (S8.zero <: S8.t); pmb |];
+  Copy.copy_range bb 0sz pk 16sz pmb;
+  A.pts_to_len bb;
+  with vbb. assert (A.pts_to bb vbb);
+  slice_eq vpk 16 vbb;
+  assert (pure (vbb == Seq.slice vpk bytes_seed_a (crypto_publickeybytes p)));
+  let mut bm = [| (S16.zero <: S16.t); ents |];
+  Pack.unpack bm bb d ents;
+  with vbm. assert (A.pts_to bm vbm);
+  assert (pure (vbm == F.unpack_n p vbb));
+
+  let mut mbuf = [| (S8.zero <: S8.t); SZ.add 1sz cb |];
+  A.((mbuf.(0sz) <- S8.classify 0x96uy));
+  Copy.copy_range mbuf 1sz seed_se 0sz cb;
+  with vmbuf. assert (A.pts_to mbuf vmbuf);
+  cons_eq (S8.classify 0x96uy) vss vmbuf;
+
+  let mut r = [| (S8.zero <: S8.t); rlen |];
+  shake_p p r rlen mbuf (SZ.add 1sz cb);
+  with vr. assert (A.pts_to r vr);
+  assert (pure (vr == shake p (Seq.cons (S8.classify 0x96uy) vss)
+                            (2 * secretmatrixbytes p + 2 * (nbar * nbar))));
+  slice_eq vr 0 (Seq.slice vr 0 (secretmatrixbytes p));
+  slice_eq vr (secretmatrixbytes p)
+           (Seq.slice vr (secretmatrixbytes p) (2 * secretmatrixbytes p));
+  slice_eq vr (2 * secretmatrixbytes p)
+           (Seq.slice vr (2 * secretmatrixbytes p)
+                         (2 * secretmatrixbytes p + 2 * (nbar * nbar)));
+
+  let mut sp = [| (S16.zero <: S16.t); ents |];
+  let mut ep = [| (S16.zero <: S16.t); ents |];
+  let mut epp = [| (S16.zero <: S16.t); 64sz |];
+  Sample.sample_matrix p cdf sp r 8sz nn rlen 0sz;
+  Sample.sample_matrix p cdf ep r 8sz nn rlen smb;
+  Sample.sample_matrix p cdf epp r 8sz 8sz rlen two_smb;
+  with vsp. assert (A.pts_to sp vsp);
+  with vep. assert (A.pts_to ep vep);
+  with vepp. assert (A.pts_to epp vepp);
+  assert (pure (vsp == F.sample_matrix p nbar (n p)
+                         (Seq.slice vr 0 (secretmatrixbytes p))));
+  assert (pure (vep == F.sample_matrix p nbar (n p)
+                         (Seq.slice vr (secretmatrixbytes p)
+                                       (2 * secretmatrixbytes p))));
+  assert (pure (vepp == F.sample_matrix p nbar nbar
+                          (Seq.slice vr (2 * secretmatrixbytes p)
+                                        (2 * secretmatrixbytes p + 2 * (nbar * nbar)))));
+
+  Gen.mul_sa p sa sp bp;
+  Mat.add bp ep ents #nbar #(n p);
+  with vbpu. assert (A.pts_to bp vbpu);
+  assert (pure (vbpu == M.add nbar (n p)
+                          (M.mul nbar (n p) (n p) vsp (F.gen_matrix p vsa)) vep));
+
+  Mat.mul v sp bm 8sz nn 8sz;
+  Mat.add v epp 64sz #nbar #nbar;
+  let mut enc = [| (S16.zero <: S16.t); 64sz |];
+  Encode.key_encode p enc mu;
+  Mat.add v enc 64sz #nbar #nbar;
+  with vvu. assert (A.pts_to v vvu);
+  assert (pure (vvu == M.add nbar nbar
+                         (M.add nbar nbar (M.mul nbar (n p) nbar vsp vbm) vepp)
+                         (F.key_encode p vmu)));
+
+  let mut c1b = [| (S8.zero <: S8.t); pmb |];
+  let mut c2b = [| (S8.zero <: S8.t); c2 |];
+  Pack.pack c1b bp d ents;
+  Pack.pack c2b v d 64sz;
+  A.pts_to_len c1b;
+  A.pts_to_len c2b;
+  Copy.copy_at ct 0sz c1b pmb;
+  Copy.copy_at ct pmb c2b c2;
+  with vct. assert (A.pts_to ct vct);
+  append2_eq (F.pack_n p vbpu) (F.pack_8 p vvu) vct;
+  assert (pure (vct == Seq.append (F.pack_n p vbpu) (F.pack_8 p vvu)));
+
+  Mat.mod_pow2 bp ents p.logq #nbar #(n p);
+  Mat.mod_pow2 v 64sz p.logq #nbar #nbar;
+  with vbp. assert (A.pts_to bp vbp);
+  with vv. assert (A.pts_to v vv);
+  assert (pure (vbp == M.mod_pow2 nbar (n p) p.logq vbpu));
+  assert (pure (vv == M.mod_pow2 nbar nbar p.logq vvu));
+  enc_ct_eq p vmu vpk vss vct vbp vv vsa vr vsp vep vepp vbm vbpu vvu;
+  assert (pure (let c, b2, v2 = F.enc_ct p vmu vpk vss in
+                vct == c /\ vbp == b2 /\ vv == v2));
+}
+
 #pop-options
