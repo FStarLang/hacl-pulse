@@ -163,6 +163,11 @@ CUSTARD_ENTRIES += $(addprefix Hacl.FFDHE., \
   ffdhe6144_secret_to_public ffdhe6144_shared_secret \
   ffdhe8192_secret_to_public ffdhe8192_shared_secret)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.Frodo64., keypair enc dec)
+CUSTARD_ENTRIES += $(addprefix Hacl.Frodo640., keypair enc dec)
+CUSTARD_ENTRIES += $(addprefix Hacl.Frodo976., keypair enc dec)
+CUSTARD_ENTRIES += $(addprefix Hacl.Frodo1344., keypair enc dec)
+
 include mk/extract.mk
 
 .DEFAULT_GOAL := all

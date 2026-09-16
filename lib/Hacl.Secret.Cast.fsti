@@ -35,3 +35,4 @@ val u32_to_u8 (x: S32.t) : r: S8.t { S8.v r == S32.v x % pow2 8 }
 val u64_to_u8 (x: S64.t) : r: S8.t { S8.v r == S64.v x % pow2 8 }
 val u64_to_u32 (x: S64.t) : r: S32.t { S32.v r == S64.v x % pow2 32 }
 val u64_to_u16 (x: S64.t) : r: S16.t { S16.v r == S64.v x % pow2 16 }
+val u16_to_u8 (x: S16.t) : r: S8.t { S8.v r == S16.v x % pow2 8 }

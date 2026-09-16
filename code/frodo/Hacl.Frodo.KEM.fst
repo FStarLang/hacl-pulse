@@ -53,6 +53,8 @@ module Mat = Hacl.Frodo.Matrix
 module Sample = Hacl.Frodo.Sample
 module Encode = Hacl.Frodo.Encode
 module Gen = Hacl.Frodo.Gen
+module Cast = Hacl.Secret.Cast
+module SEM = FStar.IndefiniteDescription
 
 (** {2 Reading a concatenation back}
 
@@ -435,6 +437,515 @@ ensures exists* vct vbp vv.
   enc_ct_eq p vmu vpk vss vct vbp vv vsa vr vsp vep vepp vbm vbpu vvu;
   assert (pure (let c, b2, v2 = F.enc_ct p vmu vpk vss in
                 vct == c /\ vbp == b2 /\ vv == v2));
+}
+
+
+(** {2 Encapsulation} *)
+
+(** Encapsulation from an explicit message.  The API draws [mu] at random;
+    decapsulation supplies the message it recovered. *)
+fn enc_mu ([@@@FStar.Attributes.monomorphize] p: params)
+          (cdf: A.array U16.t) (ct: A.array S8.t) (ss: A.array S8.t)
+          (mu: A.array S8.t) (pk: A.array S8.t)
+          (#pcd: perm) (#pmu: perm) (#ppk: perm)
+          (#vcdf: erased (Seq.lseq U16.t (cdf_len p)))
+          (#vct0: erased (Seq.lseq S8.t (crypto_ciphertextbytes p)))
+          (#vss0: erased (Seq.lseq S8.t (crypto_bytes p)))
+          (#vmu: erased (Seq.lseq S8.t (bytes_mu p)))
+          (#vpk: erased (Seq.lseq S8.t (crypto_publickeybytes p)))
+requires A.pts_to cdf #pcd vcdf ** A.pts_to ct vct0 ** A.pts_to ss vss0 **
+         A.pts_to mu #pmu vmu ** A.pts_to pk #ppk vpk **
+         pure (reveal vcdf == reveal p.cdf)
+ensures exists* vct vss.
+        A.pts_to cdf #pcd vcdf ** A.pts_to ct vct ** A.pts_to ss vss **
+        A.pts_to mu #pmu vmu ** A.pts_to pk #ppk vpk **
+        pure (vct == fst (F.enc p vmu vpk) /\ vss == snd (F.enc p vmu vpk))
+{
+  A.pts_to_len cdf;
+  A.pts_to_len ct;
+  A.pts_to_len ss;
+  A.pts_to_len mu;
+  A.pts_to_len pk;
+  Hacl.SizeT.fits32 ();
+  let cb = p.cbytes;
+  let nn = p.nn;
+  let d = SZ.uint32_to_sizet p.logq;
+  let ents = SZ.mul 8sz nn;
+  let pmb = SZ.mul d nn;
+  let pkb = SZ.add 16sz pmb;
+  let mub = SZ.mul (SZ.uint32_to_sizet p.bits) 8sz;
+  let ctb = SZ.add pmb (SZ.mul d 8sz);
+  let two_cb = SZ.mul 2sz cb;
+  let kbl = SZ.add ctb cb;
+  assert_norm (16 * 1344 < pow2 32);
+  assert (pure (SZ.v ents == nbar * n p /\ SZ.v pkb == crypto_publickeybytes p /\
+                SZ.v mub == bytes_mu p /\ SZ.v ctb == crypto_ciphertextbytes p /\
+                SZ.v two_cb == SZ.v cb + SZ.v cb /\ SZ.v kbl == SZ.v ctb + SZ.v cb));
+
+  let mut pkh = [| (S8.zero <: S8.t); cb |];
+  shake_p p pkh cb pk pkb;
+  A.pts_to_len pkh;
+  with vpkh. assert (A.pts_to pkh vpkh);
+  assert (pure (vpkh == shake p vpk (crypto_bytes p)));
+
+  let mut hm = [| (S8.zero <: S8.t); SZ.add cb mub |];
+  A.pts_to_len hm;
+  Copy.copy_at hm 0sz pkh cb;
+  Copy.copy_at hm cb mu mub;
+  with vhm. assert (A.pts_to hm vhm);
+  append2_eq vpkh vmu vhm;
+
+  let mut sek = [| (S8.zero <: S8.t); two_cb |];
+  shake_p p sek two_cb hm (SZ.add cb mub);
+  A.pts_to_len sek;
+  with vsek. assert (A.pts_to sek vsek);
+  assert (pure (vsek == shake p (Seq.append vpkh vmu) (2 * crypto_bytes p)));
+
+  let mut se = [| (S8.zero <: S8.t); cb |];
+  A.pts_to_len se;
+  Copy.copy_range se 0sz sek 0sz cb;
+  with vse. assert (A.pts_to se vse);
+  slice_eq vsek 0 vse;
+
+  let mut bp = [| (S16.zero <: S16.t); ents |];
+  let mut vm = [| (S16.zero <: S16.t); 64sz |];
+  enc_ct p cdf ct bp vm mu pk se;
+  with vct. assert (A.pts_to ct vct);
+
+  let mut kb = [| (S8.zero <: S8.t); kbl |];
+  A.pts_to_len kb;
+  Copy.copy_at kb 0sz ct ctb;
+  A.pts_to_len kb;
+  A.pts_to_len sek;
+  Copy.copy_range kb ctb sek cb cb;
+  with vkb. assert (A.pts_to kb vkb);
+  slice_eq vsek (crypto_bytes p)
+           (Seq.slice vsek (crypto_bytes p) (2 * crypto_bytes p));
+  append2_eq vct (Seq.slice vsek (crypto_bytes p) (2 * crypto_bytes p)) vkb;
+  shake_p p ss cb kb kbl;
+  with vss. assert (A.pts_to ss vss);
+  assert (pure (vct == fst (F.enc p vmu vpk) /\ vss == snd (F.enc p vmu vpk)));
+}
+
+(** {2 Decapsulation} *)
+
+(** Prefix agreement between two matrices, as a ghost boolean. *)
+let agree (va vb: Seq.seq S16.t) (i: nat) : GTot bool =
+  SEM.strong_excluded_middle
+    (forall (k: nat). k < i /\ k < Seq.length va /\ k < Seq.length vb ==>
+       Seq.index va k == Seq.index vb k)
+
+(** At full length, agreement is equality. *)
+let eq_from_agree (va vb: Seq.seq S16.t)
+  : Lemma (requires Seq.length va == Seq.length vb)
+          (ensures (agree va vb (Seq.length va) <==> va == vb))
+  = if agree va vb (Seq.length va) then Seq.lemma_eq_intro va vb
+
+(** Whether two matrices agree, as a mask rather than as a [bool]: the
+    comparison decides whether the real shared secret or the rejection
+    value is returned, and which of those happened must not be observable
+    from the outside.  Secret integers carry no decidable equality -- that
+    is the point of them -- so the loop is stated with {!agree}. *)
+fn eq_mask_arr (a: A.array S16.t) (b: A.array S16.t) (len: SZ.t)
+               (#pa: perm) (#pb: perm)
+               (#va: erased (Seq.seq S16.t)) (#vb: erased (Seq.seq S16.t))
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
+         pure (Seq.length va == SZ.v len /\ Seq.length vb == SZ.v len)
+returns m: S16.t
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
+        pure ((S16.v m == 0 \/ S16.v m == pow2 16 - 1) /\
+              (S16.v m == pow2 16 - 1 <==> reveal va == reveal vb))
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  let mut acc = S16.ones;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi len)
+  invariant exists* (vi: SZ.t) (vacc: S16.t).
+    pts_to i vi ** pts_to acc vacc ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= SZ.v len /\
+          S16.v vacc == (if agree va vb (SZ.v vi) then pow2 16 - 1 else 0))
+  decreases (SZ.v len - SZ.v (!i))
+  {
+    let vi = !i;
+    let vacc = !acc;
+    let x = A.(a.(vi));
+    let y = A.(b.(vi));
+    let m = S16.eq_mask x y;
+    UInt.logand_lemma_1 #16 (S16.v vacc);
+    UInt.logand_lemma_2 #16 (S16.v vacc);
+    UInt.logand_commutative #16 (S16.v vacc) (S16.v m);
+    UInt.logand_lemma_1 #16 (S16.v m);
+    UInt.logand_lemma_2 #16 (S16.v m);
+    acc := S16.logand vacc m;
+    i := SZ.add vi 1sz;
+  };
+  let r = !acc;
+  eq_from_agree va vb;
+  r
+}
+
+(** Copying a matrix; [Hacl.Impl.Copy] is about bytes.  Decapsulation needs
+    one, because the received [c] is both subtracted from and compared. *)
+fn copy16 (dst: A.array S16.t) (src: A.array S16.t) (len: SZ.t)
+          (#ps: perm) (#vd: erased (Seq.seq S16.t)) (#vs: erased (Seq.seq S16.t))
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
+         pure (Seq.length vd == SZ.v len /\ Seq.length vs == SZ.v len)
+ensures exists* v. A.pts_to dst v ** A.pts_to src #ps vs ** pure (v == reveal vs)
+{
+  A.pts_to_len dst;
+  A.pts_to_len src;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi len)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S16.t).
+    pts_to i vi ** A.pts_to dst v ** A.pts_to src #ps vs **
+    pure (SZ.v vi <= SZ.v len /\ Seq.length v == SZ.v len /\
+          (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
+  decreases (SZ.v len - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = A.(src.(vi));
+    A.((dst.(vi) <- x));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to dst v);
+  Seq.lemma_eq_intro v (reveal vs);
+  assert (pure (v == reveal vs));
+}
+
+(** Writing [dst[dbase + k] <- select mask x[k] y[k]], for a mask that is
+    all ones or all zeroes.  This is the implicit rejection: whether the
+    real key or the rejection value came out must not be branched on. *)
+fn select_copy (dst: A.array S8.t) (dbase: SZ.t) (x: A.array S8.t) (y: A.array S8.t)
+               (len: SZ.t) (mask: S8.t { S8.v mask == 0 \/ S8.v mask == pow2 8 - 1 })
+               (#px: perm) (#py: perm) (#vd: erased (Seq.seq S8.t))
+               (#vx: erased (Seq.seq S8.t)) (#vy: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to x #px vx ** A.pts_to y #py vy **
+         pure (SZ.v dbase + SZ.v len <= Seq.length vd /\
+               Seq.length vx == SZ.v len /\ Seq.length vy == SZ.v len)
+ensures exists* v. A.pts_to dst v ** A.pts_to x #px vx ** A.pts_to y #py vy **
+        pure (Seq.length v == Seq.length vd /\
+              SZ.v dbase + SZ.v len <= Seq.length v /\
+              Seq.length vx == SZ.v len /\ Seq.length vy == SZ.v len /\
+              (forall (k: nat). k < SZ.v len ==>
+                 Seq.index v (SZ.v dbase + k) ==
+                   (if S8.v mask = 0 then Seq.index vy k else Seq.index vx k)) /\
+              (forall (k: nat). k < Seq.length vd /\
+                               (k < SZ.v dbase \/ SZ.v dbase + SZ.v len <= k) ==>
+                 Seq.index v k == Seq.index vd k))
+{
+  A.pts_to_len dst;
+  A.pts_to_len x;
+  A.pts_to_len y;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi len)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
+    pts_to i vi ** A.pts_to dst v ** A.pts_to x #px vx ** A.pts_to y #py vy **
+    pure (SZ.v vi <= SZ.v len /\ Seq.length v == Seq.length vd /\
+          SZ.v dbase + SZ.v len <= Seq.length v /\
+          Seq.length vx == SZ.v len /\ Seq.length vy == SZ.v len /\
+          (forall (k: nat). k < SZ.v vi ==>
+             Seq.index v (SZ.v dbase + k) ==
+               (if S8.v mask = 0 then Seq.index vy k else Seq.index vx k)) /\
+          (forall (k: nat). k < Seq.length vd /\
+                           (k < SZ.v dbase \/ SZ.v dbase + SZ.v vi <= k) ==>
+             Seq.index v k == Seq.index vd k))
+  decreases (SZ.v len - SZ.v (!i))
+  {
+    let vi = !i;
+    let a = A.(x.(vi));
+    let b = A.(y.(vi));
+    A.((dst.(SZ.add dbase vi) <- S8.select mask a b));
+    i := SZ.add vi 1sz;
+  };
+}
+
+(** Whether the re-encryption matched.  This is a ghost boolean: the
+    implementation only ever has the mask. *)
+let okb (p: params) (vbpr vbp2: M.matrix nbar (n p)) (vcr vv2: M.matrix nbar nbar)
+  : GTot bool
+  = SEM.strong_excluded_middle (Seq.equal vbpr vbp2 /\ Seq.equal vcr vv2)
+
+(** The two comparisons, combined and narrowed to a byte.  All of it is
+    bit-level reasoning about two values that are each all ones or all
+    zeroes, and none of it has anything to do with the heap, so it is a
+    pure lemma: inside [dec] the context is far too large for the solver
+    to get through it. *)
+let mask_ok (p: params) (a b: M.matrix nbar (n p)) (c e: M.matrix nbar nbar)
+            (m1 m2 m16: S16.t) (mask: S8.t)
+  : Lemma
+      (requires (S16.v m1 == 0 \/ S16.v m1 == pow2 16 - 1) /\
+                (S16.v m1 == pow2 16 - 1 <==> a == b) /\
+                (S16.v m2 == 0 \/ S16.v m2 == pow2 16 - 1) /\
+                (S16.v m2 == pow2 16 - 1 <==> c == e) /\
+                S16.v m16 == UInt.logand #16 (S16.v m1) (S16.v m2) /\
+                S8.v mask == S16.v m16 % pow2 8)
+      (ensures (S8.v mask == 0 \/ S8.v mask == pow2 8 - 1) /\
+               (S8.v mask == pow2 8 - 1 <==> okb p a b c e))
+  = UInt.logand_lemma_1 #16 (S16.v m1);
+    UInt.logand_lemma_2 #16 (S16.v m1);
+    UInt.logand_commutative #16 (S16.v m1) (S16.v m2);
+    UInt.logand_lemma_1 #16 (S16.v m2);
+    UInt.logand_lemma_2 #16 (S16.v m2);
+    assert_norm (pow2 16 - 1 == 65535);
+    assert_norm (pow2 8 - 1 == 255);
+    assert_norm (65535 % pow2 8 == 255);
+    assert_norm (0 % pow2 8 == 0)
+
+(** The pre-image of the final hash: the ciphertext, then either the real
+    key stream or the rejection value, chosen by a mask that the caller has
+    related to [ok].  Pure, for the same reason {!mask_ok} is. *)
+let kb_eq (ok: bool) (mask: S8.t) (ctv x y res: Seq.seq S8.t)
+  : Lemma
+      (requires (S8.v mask == 0 \/ S8.v mask == pow2 8 - 1) /\
+                (S8.v mask == pow2 8 - 1 <==> ok) /\
+                Seq.length x == Seq.length y /\
+                Seq.length res == Seq.length ctv + Seq.length x /\
+                (forall (k: nat). k < Seq.length ctv ==>
+                   Seq.index res k == Seq.index ctv k) /\
+                (forall (k: nat). k < Seq.length x ==>
+                   Seq.index res (Seq.length ctv + k) ==
+                     (if S8.v mask = 0 then Seq.index y k else Seq.index x k)))
+      (ensures res == Seq.append ctv (if ok then x else y))
+  = assert_norm (pow2 8 - 1 == 255);
+    if ok then Seq.lemma_eq_intro res (Seq.append ctv x)
+    else Seq.lemma_eq_intro res (Seq.append ctv y)
+
+(** Decapsulation, spelled out; the same idiom as [enc_ct_eq]. *)
+let dec_eq (p: params)
+           (vct: Seq.lseq S8.t (crypto_ciphertextbytes p))
+           (vsk: Seq.lseq S8.t (crypto_secretkeybytes p))
+           (vs: Seq.lseq S8.t (crypto_bytes p))
+           (vpk: Seq.lseq S8.t (crypto_publickeybytes p))
+           (vsbytes: Seq.lseq S8.t (secretmatrixbytes p))
+           (vpkh: Seq.lseq S8.t (crypto_bytes p))
+           (vbpm: M.matrix nbar (n p)) (vcm: M.matrix nbar nbar)
+           (vst: M.matrix nbar (n p)) (vprod: M.matrix nbar nbar)
+           (vmdiff: M.matrix nbar nbar)
+           (vmu: Seq.lseq S8.t (bytes_mu p))
+           (vsek: Seq.lseq S8.t (2 * crypto_bytes p))
+           (vse: Seq.lseq S8.t (crypto_bytes p))
+           (vct2: Seq.lseq S8.t (crypto_ciphertextbytes p))
+           (vbp2: M.matrix nbar (n p)) (vv2: M.matrix nbar nbar)
+           (vbpr: M.matrix nbar (n p)) (vcr: M.matrix nbar nbar)
+           (vkb: Seq.lseq S8.t (crypto_ciphertextbytes p + crypto_bytes p))
+           (vss: Seq.lseq S8.t (crypto_bytes p))
+  : Lemma
+      (requires
+        (let cb = crypto_bytes p in
+         let pkb = crypto_publickeybytes p in
+         let smb = secretmatrixbytes p in
+         vs == Seq.slice vsk 0 cb /\
+         vpk == Seq.slice vsk cb (cb + pkb) /\
+         vsbytes == Seq.slice vsk (cb + pkb) (cb + pkb + smb) /\
+         vpkh == Seq.slice vsk (cb + pkb + smb) (crypto_secretkeybytes p) /\
+         vbpm == F.unpack_n p (Seq.slice vct 0 (ct1bytes p)) /\
+         vcm == F.unpack_8 p (Seq.slice vct (ct1bytes p) (crypto_ciphertextbytes p)) /\
+         vst == M.from_bytes nbar (n p) vsbytes /\
+         vprod == M.mul_t nbar (n p) nbar vbpm vst /\
+         vmdiff == M.sub nbar nbar vcm vprod /\
+         vmu == F.key_decode p vmdiff /\
+         vsek == shake p (Seq.append vpkh vmu) (2 * cb) /\
+         vse == Seq.slice vsek 0 cb /\
+         (let c, b2, v2 = F.enc_ct p vmu vpk vse in
+          vct2 == c /\ vbp2 == b2 /\ vv2 == v2) /\
+         vbpr == M.mod_pow2 nbar (n p) p.logq vbpm /\
+         vcr == M.mod_pow2 nbar nbar p.logq vcm /\
+         vkb == Seq.append vct
+                  (if okb p vbpr vbp2 vcr vv2
+                   then Seq.slice vsek cb (2 * cb) else vs) /\
+         vss == shake p vkb cb))
+      (ensures vss == F.dec p vct vsk)
+  = ()
+
+(** Decapsulation.  Recover [mu] from the ciphertext with the secret
+    matrix, re-run encapsulation on it, and return the real shared secret
+    if -- and a pseudorandom function of the rejection value [s] if not --
+    the result reproduces what was received. *)
+fn dec ([@@@FStar.Attributes.monomorphize] p: params)
+       (cdf: A.array U16.t) (ss: A.array S8.t)
+       (ct: A.array S8.t) (sk: A.array S8.t)
+       (#pcd: perm) (#pct: perm) (#psk: perm)
+       (#vcdf: erased (Seq.lseq U16.t (cdf_len p)))
+       (#vss0: erased (Seq.lseq S8.t (crypto_bytes p)))
+       (#vct: erased (Seq.lseq S8.t (crypto_ciphertextbytes p)))
+       (#vsk: erased (Seq.lseq S8.t (crypto_secretkeybytes p)))
+requires A.pts_to cdf #pcd vcdf ** A.pts_to ss vss0 **
+         A.pts_to ct #pct vct ** A.pts_to sk #psk vsk **
+         pure (reveal vcdf == reveal p.cdf)
+ensures exists* vss.
+        A.pts_to cdf #pcd vcdf ** A.pts_to ss vss **
+        A.pts_to ct #pct vct ** A.pts_to sk #psk vsk **
+        pure (vss == F.dec p vct vsk)
+{
+  A.pts_to_len cdf;
+  A.pts_to_len ss;
+  A.pts_to_len ct;
+  A.pts_to_len sk;
+  Hacl.SizeT.fits32 ();
+  let cb = p.cbytes;
+  let nn = p.nn;
+  let d = SZ.uint32_to_sizet p.logq;
+  let ents = SZ.mul 8sz nn;
+  let smb = SZ.mul 2sz ents;
+  let pmb = SZ.mul d nn;
+  let pkb = SZ.add 16sz pmb;
+  let c2 = SZ.mul d 8sz;
+  let ctb = SZ.add pmb c2;
+  let mub = SZ.mul (SZ.uint32_to_sizet p.bits) 8sz;
+  let two_cb = SZ.mul 2sz cb;
+  let hml = SZ.add cb mub;
+  let kbl = SZ.add ctb cb;
+  let off1 = SZ.add cb pkb;
+  let off2 = SZ.add off1 smb;
+  assert_norm (16 * 1344 < pow2 32);
+  assert (pure (SZ.v ents == nbar * n p /\ SZ.v smb == secretmatrixbytes p /\
+                SZ.v pmb == ct1bytes p /\ SZ.v c2 == ct2bytes p /\
+                SZ.v pkb == crypto_publickeybytes p /\
+                SZ.v ctb == crypto_ciphertextbytes p /\
+                SZ.v mub == bytes_mu p /\
+                SZ.v two_cb == SZ.v cb + SZ.v cb /\
+                SZ.v hml == SZ.v cb + SZ.v mub /\
+                SZ.v kbl == SZ.v ctb + SZ.v cb /\
+                SZ.v off1 == SZ.v cb + SZ.v pkb /\
+                SZ.v off2 == SZ.v cb + SZ.v pkb + SZ.v smb /\
+                SZ.v off2 + SZ.v cb == crypto_secretkeybytes p /\
+                SZ.fits (2 * SZ.v ents) /\ SZ.v d * SZ.v ents < pow2 32 /\
+                SZ.v d * 64 < pow2 32 /\ SZ.v ents % 8 == 0 /\
+                SZ.v ents / 8 == SZ.v nn /\
+                SZ.v d * (SZ.v ents / 8) == SZ.v pmb /\
+                SZ.v d * (64 / 8) == SZ.v c2));
+
+  (* The four pieces of the secret key. *)
+  let mut sv = [| (S8.zero <: S8.t); cb |];
+  A.pts_to_len sv;
+  let mut pkv = [| (S8.zero <: S8.t); pkb |];
+  A.pts_to_len pkv;
+  let mut sbytes = [| (S8.zero <: S8.t); smb |];
+  A.pts_to_len sbytes;
+  let mut pkh = [| (S8.zero <: S8.t); cb |];
+  A.pts_to_len pkh;
+  Copy.copy_range sv 0sz sk 0sz cb;
+  Copy.copy_range pkv 0sz sk cb pkb;
+  Copy.copy_range sbytes 0sz sk off1 smb;
+  Copy.copy_range pkh 0sz sk off2 cb;
+  with vs. assert (A.pts_to sv vs);
+  with vpk. assert (A.pts_to pkv vpk);
+  with vsb. assert (A.pts_to sbytes vsb);
+  with vpkh. assert (A.pts_to pkh vpkh);
+  slice_eq vsk 0 vs;
+  slice_eq vsk (crypto_bytes p) vpk;
+  slice_eq vsk (crypto_bytes p + crypto_publickeybytes p) vsb;
+  slice_eq vsk (crypto_bytes p + crypto_publickeybytes p + secretmatrixbytes p) vpkh;
+  assert (pure (vs == Seq.slice vsk 0 (crypto_bytes p) /\
+                vpk == Seq.slice vsk (crypto_bytes p)
+                                 (crypto_bytes p + crypto_publickeybytes p)));
+
+  (* The two pieces of the ciphertext. *)
+  let mut c1b = [| (S8.zero <: S8.t); pmb |];
+  A.pts_to_len c1b;
+  let mut c2b = [| (S8.zero <: S8.t); c2 |];
+  A.pts_to_len c2b;
+  Copy.copy_range c1b 0sz ct 0sz pmb;
+  Copy.copy_range c2b 0sz ct pmb c2;
+  with vc1. assert (A.pts_to c1b vc1);
+  with vc2. assert (A.pts_to c2b vc2);
+  slice_eq vct 0 vc1;
+  slice_eq vct (ct1bytes p) vc2;
+
+  let mut bpm = [| (S16.zero <: S16.t); ents |];
+  A.pts_to_len bpm;
+  let mut cm = [| (S16.zero <: S16.t); 64sz |];
+  A.pts_to_len cm;
+  Pack.unpack bpm c1b d ents;
+  Pack.unpack cm c2b d 64sz;
+  with vbpm. assert (A.pts_to bpm vbpm);
+  with vcm. assert (A.pts_to cm vcm);
+  assert (pure (vbpm == F.unpack_n p (Seq.slice vct 0 (ct1bytes p))));
+  assert (pure (vcm == F.unpack_8 p
+                  (Seq.slice vct (ct1bytes p) (crypto_ciphertextbytes p))));
+
+  (* mu = key_decode (c - bp * S^T). *)
+  let mut st = [| (S16.zero <: S16.t); ents |];
+  A.pts_to_len st;
+  Mat.from_bytes st sbytes ents #nbar #(n p);
+  with vst. assert (A.pts_to st vst);
+  let mut prod = [| (S16.zero <: S16.t); 64sz |];
+  A.pts_to_len prod;
+  Mat.mul_t prod bpm st 8sz nn 8sz;
+  with vprod. assert (A.pts_to prod vprod);
+  let mut mdiff = [| (S16.zero <: S16.t); 64sz |];
+  A.pts_to_len mdiff;
+  copy16 mdiff cm 64sz;
+  Mat.sub mdiff prod 64sz #nbar #nbar;
+  with vmdiff. assert (A.pts_to mdiff vmdiff);
+  assert (pure (vmdiff == M.sub nbar nbar vcm vprod));
+  let mut mu = [| (S8.zero <: S8.t); mub |];
+  A.pts_to_len mu;
+  Encode.key_decode p mu mdiff;
+  with vmu. assert (A.pts_to mu vmu);
+
+  (* Re-derive the encapsulation randomness from mu and re-encrypt. *)
+  let mut hm = [| (S8.zero <: S8.t); hml |];
+  A.pts_to_len hm;
+  Copy.copy_at hm 0sz pkh cb;
+  Copy.copy_at hm cb mu mub;
+  with vhm. assert (A.pts_to hm vhm);
+  append2_eq vpkh vmu vhm;
+
+  let mut sek = [| (S8.zero <: S8.t); two_cb |];
+  A.pts_to_len sek;
+  shake_p p sek two_cb hm hml;
+  with vsek. assert (A.pts_to sek vsek);
+  assert (pure (vsek == shake p (Seq.append vpkh vmu) (2 * crypto_bytes p)));
+
+  let mut se = [| (S8.zero <: S8.t); cb |];
+  A.pts_to_len se;
+  Copy.copy_range se 0sz sek 0sz cb;
+  with vse. assert (A.pts_to se vse);
+  slice_eq vsek 0 vse;
+
+  let mut ct2 = [| (S8.zero <: S8.t); ctb |];
+  A.pts_to_len ct2;
+  let mut bp2 = [| (S16.zero <: S16.t); ents |];
+  let mut v2 = [| (S16.zero <: S16.t); 64sz |];
+  enc_ct p cdf ct2 bp2 v2 mu pkv se;
+  with vct2. assert (A.pts_to ct2 vct2);
+  with vbp2. assert (A.pts_to bp2 vbp2);
+  with vv2. assert (A.pts_to v2 vv2);
+
+  (* The comparison, as a mask. *)
+  Mat.mod_pow2 bpm ents p.logq #nbar #(n p);
+  Mat.mod_pow2 cm 64sz p.logq #nbar #nbar;
+  with vbpr. assert (A.pts_to bpm vbpr);
+  with vcr. assert (A.pts_to cm vcr);
+  let m1 = eq_mask_arr bpm bp2 ents;
+  let m2 = eq_mask_arr cm v2 64sz;
+  let m16 = S16.logand m1 m2;
+  let mask = Cast.u16_to_u8 m16;
+  mask_ok p vbpr vbp2 vcr vv2 m1 m2 m16 mask;
+  assert (pure ((S8.v mask == 0 \/ S8.v mask == pow2 8 - 1) /\
+                (S8.v mask == pow2 8 - 1 <==> okb p vbpr vbp2 vcr vv2)));
+
+  let mut kb = [| (S8.zero <: S8.t); kbl |];
+  A.pts_to_len kb;
+  Copy.copy_at kb 0sz ct ctb;
+  A.pts_to_len kb;
+  let mut sk2 = [| (S8.zero <: S8.t); cb |];
+  A.pts_to_len sk2;
+  Copy.copy_range sk2 0sz sek cb cb;
+  with vk2. assert (A.pts_to sk2 vk2);
+  slice_eq vsek (crypto_bytes p) vk2;
+  select_copy kb ctb sk2 sv cb mask;
+  with vkb. assert (A.pts_to kb vkb);
+  kb_eq (okb p vbpr vbp2 vcr vv2) mask vct vk2 vs vkb;
+  assert (pure (vkb == Seq.append vct
+                  (if okb p vbpr vbp2 vcr vv2 then vk2 else vs)));
+  shake_p p ss cb kb kbl;
+  with vss. assert (A.pts_to ss vss);
+  dec_eq p vct vsk vs vpk vsb vpkh vbpm vcm vst vprod vmdiff vmu vsek vse
+         vct2 vbp2 vv2 vbpr vcr vkb vss;
+  assert (pure (vss == F.dec p vct vsk));
 }
 
 #pop-options

@@ -38,3 +38,4 @@ let u32_to_u8 x = Cast.uint32_to_uint8 x
 let u64_to_u8 x = Cast.uint64_to_uint8 x
 let u64_to_u32 x = Cast.uint64_to_uint32 x
 let u64_to_u16 x = Cast.uint64_to_uint16 x
+let u16_to_u8 x = Cast.uint16_to_uint8 x

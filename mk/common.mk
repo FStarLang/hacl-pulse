@@ -79,6 +79,7 @@ SOURCE_DIRS += code/aes
 SOURCE_DIRS += code/bignum
 SOURCE_DIRS += code/ffdhe
 SOURCE_DIRS += code/rsapss
+SOURCE_DIRS += code/frodo
 SOURCE_DIRS += code
 SOURCE_DIRS += tests
 
