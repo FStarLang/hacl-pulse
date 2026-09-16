@@ -190,15 +190,31 @@ let dc (p: params) (c: S16.t) : GTot nat =
   (((S16.v c + pow2 (logq p - bits p - 1)) % pow2 16) / pow2 (logq p - bits p))
     % pow2 (bits p)
 
+(** Row [i] of the matrix, read back as the integer whose [bits]-wide
+    fields are the rounded entries, least significant first.  Written as a
+    fold rather than as eight terms because the implementation accumulates
+    it one entry at a time and needs a name for the partial sum. *)
+let rec row_head (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar })
+                 (k: nat { k <= nbar })
+  : GTot nat (decreases k)
+  = if k = 0 then 0
+    else row_head p m i (k - 1)
+         + dc p (M.get nbar nbar m i (k - 1)) * pow2 (bits p * (k - 1))
+
+let rec row_head_bound (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar })
+                       (k: nat { k <= nbar })
+  : Lemma (ensures row_head p m i k < pow2 (bits p * k)) (decreases k)
+  = if k = 0 then ()
+    else begin
+      row_head_bound p m i (k - 1);
+      Math.lemma_mult_le_right (pow2 (bits p * (k - 1)))
+        (dc p (M.get nbar nbar m i (k - 1))) (pow2 (bits p) - 1);
+      Math.distributivity_sub_left (pow2 (bits p)) 1 (pow2 (bits p * (k - 1)));
+      Math.pow2_plus (bits p) (bits p * (k - 1))
+    end
+
 let row_val (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) : GTot nat =
-    dc p (M.get nbar nbar m i 0)
-  + dc p (M.get nbar nbar m i 1) * pow2 (bits p * 1)
-  + dc p (M.get nbar nbar m i 2) * pow2 (bits p * 2)
-  + dc p (M.get nbar nbar m i 3) * pow2 (bits p * 3)
-  + dc p (M.get nbar nbar m i 4) * pow2 (bits p * 4)
-  + dc p (M.get nbar nbar m i 5) * pow2 (bits p * 5)
-  + dc p (M.get nbar nbar m i 6) * pow2 (bits p * 6)
-  + dc p (M.get nbar nbar m i 7) * pow2 (bits p * 7)
+  row_head p m i nbar
 
 let key_decode (p: params) (m: M.matrix nbar nbar) : GTot (Seq.lseq S8.t (bytes_mu p)) =
   Seq.init_ghost (bytes_mu p) (fun t ->

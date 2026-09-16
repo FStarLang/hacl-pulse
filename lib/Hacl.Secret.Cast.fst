@@ -23,15 +23,18 @@ module Hacl.Secret.Cast
    modules that say [friend Hacl.Secret.*], and it is this one and
    [Hacl.Secret.Declassify]. *)
 friend Hacl.Secret.UInt8
+friend Hacl.Secret.UInt16
 friend Hacl.Secret.UInt32
 friend Hacl.Secret.UInt64
 
 module Cast = FStar.Int.Cast
 
 let u8_to_u32 x = Cast.uint8_to_uint32 x
+let u16_to_u64 x = Cast.uint16_to_uint64 x
 let u8_to_u64 x = Cast.uint8_to_uint64 x
 let u32_to_u64 x = Cast.uint32_to_uint64 x
 
 let u32_to_u8 x = Cast.uint32_to_uint8 x
 let u64_to_u8 x = Cast.uint64_to_uint8 x
 let u64_to_u32 x = Cast.uint64_to_uint32 x
+let u64_to_u16 x = Cast.uint64_to_uint16 x
