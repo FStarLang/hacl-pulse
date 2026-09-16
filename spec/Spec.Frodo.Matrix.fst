@@ -133,6 +133,36 @@ let sub (r: nat) (c: pos) (a b: matrix r c) : matrix r c =
 let mod_pow2 (r: nat) (c: pos) (d: U32.t { U32.v d <= 16 }) (m: matrix r c) : matrix r c =
   init r c (fun i j -> S16.logand (get r c m i j) (S16.mask_low d))
 
+(** The three pointwise operations, read at a flat index: this is the form
+    the implementations' loop invariants are in, since they walk the entries
+    in storage order and never divide. *)
+
+let flat_index (r: nat) (c: pos) (f: (i: nat { i < r }) -> (j: nat { j < c }) -> S16.t)
+               (t: nat { t < r * c })
+  : Lemma (div_lt t r c; Seq.index (init r c f) t == f (t / c) (t % c))
+  = ()
+
+let get_flat (r: nat) (c: pos) (m: matrix r c) (t: nat { t < r * c })
+  : Lemma (div_lt t r c; get r c m (t / c) (t % c) == Seq.index m t)
+  = div_lt t r c;
+    Math.euclidean_division_definition t c
+
+let add_index (r: nat) (c: pos) (a b: matrix r c) (t: nat { t < r * c })
+  : Lemma (Seq.index (add r c a b) t ==
+           S16.add_mod (Seq.index a t) (Seq.index b t))
+  = div_lt t r c; get_flat r c a t; get_flat r c b t
+
+let sub_index (r: nat) (c: pos) (a b: matrix r c) (t: nat { t < r * c })
+  : Lemma (Seq.index (sub r c a b) t ==
+           S16.sub_mod (Seq.index a t) (Seq.index b t))
+  = div_lt t r c; get_flat r c a t; get_flat r c b t
+
+let mod_pow2_index (r: nat) (c: pos) (d: U32.t { U32.v d <= 16 }) (m: matrix r c)
+                   (t: nat { t < r * c })
+  : Lemma (Seq.index (mod_pow2 r c d m) t ==
+           S16.logand (Seq.index m t) (S16.mask_low d))
+  = div_lt t r c; get_flat r c m t
+
 (** {2 Products}
 
     The accumulation order is the implementation's: start at zero and add
