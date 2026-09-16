@@ -104,21 +104,23 @@ ensures A.pts_to cdf #pc vcdf ** pure (x == F.sample p r)
   S16.select m neg e
 }
 
-(** [m <- sample_matrix p r c b].  The bytes come from SHAKE and are read
-    two at a time, little-endian. *)
+(** [m <- sample_matrix p r c (slice b base ...)].  The offset is there
+    because the KEM draws two or three matrices from a single SHAKE output
+    and there is no reason to copy each slice out first. *)
 fn sample_matrix ([@@@FStar.Attributes.monomorphize] p: params)
                  (cdf: A.array U16.t) (m: A.array S16.t) (b: A.array S8.t)
-                 (r: SZ.t) (c: SZ.t { 0 < SZ.v c })
+                 (r: SZ.t) (c: SZ.t { 0 < SZ.v c }) (blen: SZ.t)
+                 (base: SZ.t { SZ.v base + 2 * (SZ.v r * SZ.v c) <= SZ.v blen })
                  (#pc: perm) (#pb: perm)
                  (#vcdf: erased (Seq.lseq U16.t (cdf_len p)))
                  (#vm: erased (Seq.seq S16.t))
-                 (#vb: erased (Seq.lseq S8.t (2 * (SZ.v r * SZ.v c))))
+                 (#vb: erased (Seq.lseq S8.t (SZ.v blen)))
 requires A.pts_to cdf #pc vcdf ** A.pts_to m vm ** A.pts_to b #pb vb **
          pure (reveal vcdf == reveal p.cdf /\
-               Seq.length vm == SZ.v r * SZ.v c /\
-               2 * (SZ.v r * SZ.v c) < pow2 32)
+               Seq.length vm == SZ.v r * SZ.v c /\ SZ.v blen < pow2 32)
 ensures exists* v. A.pts_to cdf #pc vcdf ** A.pts_to m v ** A.pts_to b #pb vb **
-        pure (v == F.sample_matrix p (SZ.v r) (SZ.v c) vb)
+        pure (v == F.sample_matrix p (SZ.v r) (SZ.v c)
+                     (Seq.slice vb (SZ.v base) (SZ.v base + 2 * (SZ.v r * SZ.v c))))
 {
   A.pts_to_len m;
   A.pts_to_len b;
@@ -133,12 +135,12 @@ ensures exists* v. A.pts_to cdf #pc vcdf ** A.pts_to m v ** A.pts_to b #pb vb **
     pure (SZ.v vi <= SZ.v len /\ Seq.length v == SZ.v len /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index v k ==
-               F.sample p (S16.of_bytes_le (Seq.index vb (2 * k))
-                                           (Seq.index vb (2 * k + 1)))))
+               F.sample p (S16.of_bytes_le (Seq.index vb (SZ.v base + 2 * k))
+                                           (Seq.index vb (SZ.v base + 2 * k + 1)))))
   decreases (SZ.v len - SZ.v (!i))
   {
     let vi = !i;
-    let j = SZ.mul 2sz vi;
+    let j = SZ.add base (SZ.mul 2sz vi);
     let lo = A.(b.(j));
     let hi = A.(b.(SZ.add j 1sz));
     let x = sample p cdf (S16.of_bytes_le lo hi);
@@ -146,13 +148,14 @@ ensures exists* v. A.pts_to cdf #pc vcdf ** A.pts_to m v ** A.pts_to b #pb vb **
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to m v);
+  let sl = G.hide (Seq.slice (reveal vb) (SZ.v base) (SZ.v base + 2 * (SZ.v r * SZ.v c)));
   assert (pure (Seq.length v == SZ.v r * SZ.v c /\
                 (forall (k: nat). k < SZ.v r * SZ.v c ==>
                    Seq.index v k ==
-                     F.sample p (S16.of_bytes_le (Seq.index vb (2 * k))
-                                                 (Seq.index vb (2 * k + 1))))));
-  sample_matrix_eq p (SZ.v r) (SZ.v c) vb v;
-  assert (pure (v == F.sample_matrix p (SZ.v r) (SZ.v c) vb));
+                     F.sample p (S16.of_bytes_le (Seq.index (reveal sl) (2 * k))
+                                                 (Seq.index (reveal sl) (2 * k + 1))))));
+  sample_matrix_eq p (SZ.v r) (SZ.v c) sl v;
+  assert (pure (v == F.sample_matrix p (SZ.v r) (SZ.v c) sl));
 }
 
 #pop-options
