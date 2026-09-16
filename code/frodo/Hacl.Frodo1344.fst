@@ -56,6 +56,8 @@ let cdf_arr : (a: GA.static_array U16.t
       [ 9142us; 23462us; 30338us; 32361us; 32725us; 32765us;
         32767us ]
 
+#push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
+
 (** Key generation.  [coins] is [s || seed_se || z], 80 uniform bytes. *)
 fn keypair (pk: A.array S8.t) (sk: A.array S8.t) (coins: A.array S8.t)
            (#pc: perm)
@@ -110,3 +112,5 @@ ensures exists* vss.
   KEM.dec frodo1344 cdf ss ct sk;
   drop_table cdf;
 }
+
+#pop-options
