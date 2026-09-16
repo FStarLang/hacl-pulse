@@ -50,6 +50,7 @@ module Chacha20 = Hacl.Chacha20
 module Poly1305 = Hacl.Poly1305
 module Chacha20Poly1305 = Hacl.Chacha20Poly1305
 module Salsa20 = Hacl.Salsa20
+module NaCl = Hacl.NaCl
 module HMAC = Hacl.HMAC
 module Streaming_HMAC = Hacl.Streaming.HMAC
 module HKDF = Hacl.HKDF

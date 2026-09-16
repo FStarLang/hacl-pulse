@@ -265,59 +265,6 @@ ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
 
 #pop-options
 
-(** {2 The tag comparison}
-
-    Sixteen [eq_mask]s folded with [logand]: all-ones exactly when every byte
-    agrees, and the loop's shape does not depend on where a mismatch is.  The
-    resulting bit is the answer the caller asked for, so it is declassified
-    here and nowhere else. *)
-
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
-
-fn tag_eq (a: A.array S8.t) (b: A.array S8.t)
-          (#pa: perm) (#va: erased (Seq.seq S8.t))
-          (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires A.pts_to a #pa va ** A.pts_to b #pb vb **
-         pure (Seq.length va == 16 /\ Seq.length vb == 16)
-returns res: bool
-ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
-        pure (Seq.length va == 16 /\ Seq.length vb == 16 /\
-              (res <==> Seq.equal va vb))
-{
-  A.pts_to_len a;
-  A.pts_to_len b;
-  let mut acc = S8.ones;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
-  invariant exists* (vi: SZ.t) (m: S8.t).
-    pts_to i vi ** pts_to acc m ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\ Seq.length va == 16 /\ Seq.length vb == 16 /\
-          (S8.v m == 0 \/ S8.v m == pow2 8 - 1) /\
-          (S8.v m == pow2 8 - 1 <==>
-           (forall (k: nat). k < SZ.v vi ==>
-              S8.v (Seq.index va k) == S8.v (Seq.index vb k))))
-  decreases (16 - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = A.(a.(vi));
-    let y = A.(b.(vi));
-    let m = !acc;
-    let eq = S8.eq_mask x y;
-    let m' = S8.logand m eq;
-    UInt.logand_lemma_1 #8 (S8.v m);
-    UInt.logand_lemma_2 #8 (S8.v m);
-    UInt.logand_commutative #8 (S8.v m) (S8.v eq);
-    UInt.logand_lemma_1 #8 (S8.v eq);
-    UInt.logand_lemma_2 #8 (S8.v eq);
-    acc := m';
-    i := SZ.add vi 1sz;
-  };
-  let m = !acc;
-  D.bool_of_mask m
-}
-
-#pop-options
-
 (** {2 Decryption}
 
     Nothing is written to [msg] unless the tag is right. *)
@@ -367,7 +314,7 @@ ensures exists* (vmsg': Seq.seq S8.t).
 
   derive_otk karr key nonce;
   aead_tag tarr aad alen ct clen karr;
-  let ok = tag_eq tarr tag;
+  let ok = bytes_eq tarr tag 16sz;
 
   if ok {
     Hacl.Chacha20.encrypt msg ct clen key nonce 1ul;
