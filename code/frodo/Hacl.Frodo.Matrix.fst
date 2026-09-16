@@ -272,27 +272,43 @@ ensures exists* v. A.pts_to m v ** A.pts_to b #p vb **
 
 let mul_eq (r k: nat) (c: pos) (a: M.matrix r k) (b: M.matrix k c) (res: M.matrix r c)
   : Lemma (requires forall (i: nat) (j: nat). i < r /\ j < c ==>
-                      Seq.index res (i * c + j) == M.dot r k c a b i j)
+                      M.get r c res i j == M.dot r k c a b i j)
           (ensures res == M.mul r k c a b)
   = let aux (t: nat { t < r * c })
       : Lemma (Seq.index res t == Seq.index (M.mul r k c a b) t)
       = M.div_lt t r c;
-        FStar.Math.Lemmas.euclidean_division_definition t c
+        M.get_flat r c res t;
+        M.get_flat r c (M.mul r k c a b) t
     in
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro res (M.mul r k c a b)
 
 let mul_t_eq (r k: nat) (c: pos) (a: M.matrix r k) (bt: M.matrix c k) (res: M.matrix r c)
   : Lemma (requires forall (i: nat) (j: nat). i < r /\ j < c ==>
-                      Seq.index res (i * c + j) == M.dot_t r k c a bt i j)
+                      M.get r c res i j == M.dot_t r k c a bt i j)
           (ensures res == M.mul_t r k c a bt)
   = let aux (t: nat { t < r * c })
       : Lemma (Seq.index res t == Seq.index (M.mul_t r k c a bt) t)
       = M.div_lt t r c;
-        FStar.Math.Lemmas.euclidean_division_definition t c
+        M.get_flat r c res t;
+        M.get_flat r c (M.mul_t r k c a bt) t
     in
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro res (M.mul_t r k c a bt)
+
+(** [M.get_upd] carries no pattern, and the product loops need it at every
+    index at once.  [i * c + j] is nonlinear in [c], so stating the loop
+    invariants with [Seq.index] instead would make the *typing* of the
+    invariant a nonlinear query, which is what runs out of rlimit. *)
+let upd_other (r: nat) (c: pos) (m: M.matrix r c)
+              (i: nat { i < r }) (j: nat { j < c }) (x: S16.t)
+  : Lemma (forall (i': nat) (j': nat). i' < r /\ j' < c ==>
+             M.get r c (M.upd r c m i j x) i' j' ==
+               (if i' = i && j' = j then x else M.get r c m i' j'))
+  = FStar.Classical.forall_intro_2
+      (fun (i': nat { i' < r }) (j': nat { j' < c }) -> M.get_upd r c m i j x i' j'
+         <: Lemma (M.get r c (M.upd r c m i j x) i' j' ==
+                     (if i' = i && j' = j then x else M.get r c m i' j')))
 
 #push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
 
@@ -379,30 +395,33 @@ ensures exists* v. A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.pts_to_len res;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi r)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S16.t).
+  invariant exists* (vi: SZ.t) (v: Seq.lseq S16.t (SZ.v r * SZ.v c)).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= SZ.v r /\ Seq.length v == SZ.v r * SZ.v c /\
+    pure (SZ.v vi <= SZ.v r /\
           (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < SZ.v c ==>
-             Seq.index v (ii * SZ.v c + jj) ==
+             M.get (SZ.v r) (SZ.v c) v ii jj ==
                M.dot (SZ.v r) (SZ.v k) (SZ.v c) va vb ii jj))
   decreases (SZ.v r - SZ.v (!i))
   {
     let vi = !i;
     let mut j = 0sz;
     while (let vj = !j; SZ.lt vj c)
-    invariant exists* (vj: SZ.t) (v: Seq.seq S16.t).
+    invariant exists* (vj: SZ.t) (v: Seq.lseq S16.t (SZ.v r * SZ.v c)).
       pts_to i vi ** pts_to j vj ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-      pure (SZ.v vi < SZ.v r /\ SZ.v vj <= SZ.v c /\ Seq.length v == SZ.v r * SZ.v c /\
+      pure (SZ.v vi < SZ.v r /\ SZ.v vj <= SZ.v c /\
             (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < SZ.v c ==>
-               Seq.index v (ii * SZ.v c + jj) ==
+               M.get (SZ.v r) (SZ.v c) v ii jj ==
                  M.dot (SZ.v r) (SZ.v k) (SZ.v c) va vb ii jj) /\
             (forall (jj: nat). jj < SZ.v vj ==>
-               Seq.index v (SZ.v vi * SZ.v c + jj) ==
+               M.get (SZ.v r) (SZ.v c) v (SZ.v vi) jj ==
                  M.dot (SZ.v r) (SZ.v k) (SZ.v c) va vb (SZ.v vi) jj))
     decreases (SZ.v c - SZ.v (!j))
     {
       let vj = !j;
       let x = dot a b r k c vi vj;
+      with vcur. assert (A.pts_to res vcur);
+      M.index_bound (SZ.v r) (SZ.v c) (SZ.v vi) (SZ.v vj);
+      upd_other (SZ.v r) (SZ.v c) vcur (SZ.v vi) (SZ.v vj) x;
       A.((res.(SZ.add (SZ.mul vi c) vj) <- x));
       j := SZ.add vj 1sz;
     };
@@ -411,7 +430,7 @@ ensures exists* v. A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   with v. assert (A.pts_to res v);
   assert (pure (Seq.length v == SZ.v r * SZ.v c /\
                 (forall (ii: nat) (jj: nat). ii < SZ.v r /\ jj < SZ.v c ==>
-                   Seq.index v (ii * SZ.v c + jj) ==
+                   M.get (SZ.v r) (SZ.v c) v ii jj ==
                      M.dot (SZ.v r) (SZ.v k) (SZ.v c) va vb ii jj)));
   mul_eq (SZ.v r) (SZ.v k) (SZ.v c) va vb v;
   assert (pure (v == M.mul (SZ.v r) (SZ.v k) (SZ.v c) va vb));
@@ -432,30 +451,33 @@ ensures exists* v. A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bt #pb vb **
   A.pts_to_len res;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi r)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S16.t).
+  invariant exists* (vi: SZ.t) (v: Seq.lseq S16.t (SZ.v r * SZ.v c)).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bt #pb vb **
-    pure (SZ.v vi <= SZ.v r /\ Seq.length v == SZ.v r * SZ.v c /\
+    pure (SZ.v vi <= SZ.v r /\
           (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < SZ.v c ==>
-             Seq.index v (ii * SZ.v c + jj) ==
+             M.get (SZ.v r) (SZ.v c) v ii jj ==
                M.dot_t (SZ.v r) (SZ.v k) (SZ.v c) va vb ii jj))
   decreases (SZ.v r - SZ.v (!i))
   {
     let vi = !i;
     let mut j = 0sz;
     while (let vj = !j; SZ.lt vj c)
-    invariant exists* (vj: SZ.t) (v: Seq.seq S16.t).
+    invariant exists* (vj: SZ.t) (v: Seq.lseq S16.t (SZ.v r * SZ.v c)).
       pts_to i vi ** pts_to j vj ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bt #pb vb **
-      pure (SZ.v vi < SZ.v r /\ SZ.v vj <= SZ.v c /\ Seq.length v == SZ.v r * SZ.v c /\
+      pure (SZ.v vi < SZ.v r /\ SZ.v vj <= SZ.v c /\
             (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < SZ.v c ==>
-               Seq.index v (ii * SZ.v c + jj) ==
+               M.get (SZ.v r) (SZ.v c) v ii jj ==
                  M.dot_t (SZ.v r) (SZ.v k) (SZ.v c) va vb ii jj) /\
             (forall (jj: nat). jj < SZ.v vj ==>
-               Seq.index v (SZ.v vi * SZ.v c + jj) ==
+               M.get (SZ.v r) (SZ.v c) v (SZ.v vi) jj ==
                  M.dot_t (SZ.v r) (SZ.v k) (SZ.v c) va vb (SZ.v vi) jj))
     decreases (SZ.v c - SZ.v (!j))
     {
       let vj = !j;
       let x = dot_t a bt r k c vi vj;
+      with vcur. assert (A.pts_to res vcur);
+      M.index_bound (SZ.v r) (SZ.v c) (SZ.v vi) (SZ.v vj);
+      upd_other (SZ.v r) (SZ.v c) vcur (SZ.v vi) (SZ.v vj) x;
       A.((res.(SZ.add (SZ.mul vi c) vj) <- x));
       j := SZ.add vj 1sz;
     };
@@ -464,7 +486,7 @@ ensures exists* v. A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bt #pb vb **
   with v. assert (A.pts_to res v);
   assert (pure (Seq.length v == SZ.v r * SZ.v c /\
                 (forall (ii: nat) (jj: nat). ii < SZ.v r /\ jj < SZ.v c ==>
-                   Seq.index v (ii * SZ.v c + jj) ==
+                   M.get (SZ.v r) (SZ.v c) v ii jj ==
                      M.dot_t (SZ.v r) (SZ.v k) (SZ.v c) va vb ii jj)));
   mul_t_eq (SZ.v r) (SZ.v k) (SZ.v c) va vb v;
   assert (pure (v == M.mul_t (SZ.v r) (SZ.v k) (SZ.v c) va vb));
