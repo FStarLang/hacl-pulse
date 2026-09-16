@@ -213,3 +213,50 @@ ensures exists* vb'. A.pts_to b vb' **
     j := SZ.add vj 1sz;
   }
 }
+
+(** {2 A whole array of words}
+
+    [store_words_le out ws n] writes [n] words little-endian end to end, which
+    is what every keystream and every digest does at the last step.  It is
+    here rather than in one of the ciphers because two of them want it. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+fn store_words_le (#t: Type0) {| w: word t |}
+                  (out: A.array S8.t) (ws: A.array t) (n: SZ.t)
+                  (#vout: erased (Seq.seq S8.t)) (#pw: perm)
+                  (#vw: erased (Seq.seq t))
+requires A.pts_to out vout ** A.pts_to ws #pw vw **
+         pure (Seq.length vw == SZ.v n /\ Seq.length vout == SZ.v n * bytes #t)
+ensures exists* (vo: Seq.seq S8.t). A.pts_to out vo ** A.pts_to ws #pw vw **
+  pure (Seq.length vw == SZ.v n /\ Seq.length vo == SZ.v n * bytes #t /\
+        vo == words_to_le #t (SZ.v n) vw)
+{
+  A.pts_to_len out;
+  A.pts_to_len ws;
+  let nb = nbytes #t #w;
+  let mut j = 0sz;
+  while (let vj = !j; SZ.lt vj n)
+  invariant exists* (vj: SZ.t) (vo: Seq.seq S8.t).
+    pts_to j vj ** A.pts_to out vo ** A.pts_to ws #pw vw **
+    pure (SZ.v vj <= SZ.v n /\ Seq.length vw == SZ.v n /\
+          Seq.length vo == SZ.v n * bytes #t /\
+          (forall (i: nat). i < SZ.v vj * bytes #t ==>
+             Seq.index vo i == Seq.index (words_to_le #t (SZ.v n) vw) i))
+  decreases (SZ.v n - SZ.v (!j))
+  {
+    let vj = !j;
+    Math.lemma_mult_le_right (bytes #t) (SZ.v vj + 1) (SZ.v n);
+    Math.distributivity_add_left (SZ.v vj) 1 (bytes #t);
+    let x = A.(ws.(vj));
+    store_le #t out (SZ.mul vj nb) x;
+    with vo. assert (A.pts_to out vo);
+    digest_step_le #t (SZ.v n) vw (SZ.v vj) (SZ.v (SZ.mul vj nb)) vo;
+    j := SZ.add vj 1sz;
+  };
+  with vo. assert (A.pts_to out vo);
+  Seq.lemma_eq_intro vo (words_to_le #t (SZ.v n) vw);
+  Seq.lemma_eq_elim vo (words_to_le #t (SZ.v n) vw);
+}
+
+#pop-options

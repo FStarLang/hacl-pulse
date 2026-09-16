@@ -600,6 +600,23 @@ static void Hacl_Hash_SHA1_Core_hash_impl(uint8_t *out, uint8_t *input, size_t l
 static void Hacl_HMAC_SHA1_key_block_impl(uint8_t *k0, uint8_t *dg, uint8_t *key, size_t lk);
 static void Hacl_HMAC_Core_fill_xor__t_2(uint8_t *pad, uint8_t *k0, uint8_t c);
 static void Hacl_Hash_SHA1_Core_hash_prefixed(uint8_t *out, uint8_t *blk, uint8_t *input, size_t lin);
+static uint32_t Spec_Salsa20_c0 = 0x61707865U;
+static uint32_t Spec_Salsa20_c1 = 0x3320646eU;
+static uint32_t Spec_Salsa20_c2 = 0x79622d32U;
+static uint32_t Spec_Salsa20_c3 = 0x6b206574U;
+static void Hacl_Salsa20_setup_base(uint32_t *st, uint8_t *key);
+static void Hacl_Salsa20_hinit_state(uint32_t *st, uint8_t *key, uint8_t *nonce);
+static void Hacl_Salsa20_Core_line_impl(uint32_t *st, size_t a, size_t b, size_t c, uint32_t s);
+static void Hacl_Salsa20_Core_quarter_round_impl(uint32_t *st, size_t a, size_t b, size_t c, size_t d);
+static void Hacl_Salsa20_Core_column_round_impl(uint32_t *st);
+static void Hacl_Salsa20_Core_row_round_impl(uint32_t *st);
+static void Hacl_Salsa20_Core_double_round_impl(uint32_t *st);
+static void Hacl_Salsa20_Core_rounds_impl(uint32_t *st);
+static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint32_t x);
+static void Hacl_Impl_Bytes_store_words_le__t(uint8_t *out, uint32_t *ws, size_t n);
+static void Hacl_Salsa20_init_state(uint32_t *st, uint8_t *key, uint8_t *nonce, uint32_t ctr0);
+static void Hacl_Salsa20_Core_core_impl(uint32_t *ks, uint32_t *st, uint32_t ctr);
+static void Hacl_Salsa20_xor_chunk(uint8_t *out, uint8_t *msg, uint8_t *kb, size_t b, size_t n, uint32_t ctr0, uint32_t c);
 static uint32_t Spec_Chacha20_c0 = 0x61707865U;
 static uint32_t Spec_Chacha20_c1 = 0x3320646eU;
 static uint32_t Spec_Chacha20_c2 = 0x79622d32U;
@@ -612,13 +629,12 @@ static void Hacl_Chacha20_Core_diagonal_round_impl(uint32_t *st);
 static void Hacl_Chacha20_Core_double_round_impl(uint32_t *st);
 static void Hacl_Chacha20_Core_rounds_impl(uint32_t *st);
 static void Hacl_Chacha20_Core_core_impl(uint32_t *ks, uint32_t *st, uint32_t ctr);
-static void Hacl_Chacha20_Core_write_keystream(uint8_t *out, uint32_t *ks);
 static void Hacl_Chacha20_xor_chunk(uint8_t *out, uint8_t *msg, uint8_t *kb, size_t b, size_t n, uint32_t ctr0, uint32_t c);
 static void Hacl_Chacha20Poly1305_derive_otk(uint8_t *otk, uint8_t *key, uint8_t *nonce);
 static uint64_t Hacl_Secret_Word_Instances_sz64(size_t x);
 static uint64_t Hacl_Secret_Word_Instances_sz_lo_64(size_t x);
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t(size_t x);
-static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint64_t x);
+static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint64_t x);
 static void Hacl_Chacha20Poly1305_write_len_block(uint8_t *lb, size_t la, size_t lc);
 static uint64_t Hacl_Impl_Bytes_load_le__t_1(uint8_t *b, size_t off);
 static void Hacl_Poly1305_Load_load_r(uint64_t *r, uint8_t *k);
@@ -660,7 +676,6 @@ static void Hacl_Hash_Blake2_Core_round_impl__t(uint32_t *vv, uint32_t *m, size_
 static void Hacl_Hash_Blake2_Core_rounds_impl__t(uint32_t *vv, uint32_t *m, size_t *sg);
 static void Hacl_Hash_Blake2_Core_mix_state_impl__t(uint32_t *h, uint32_t *vv);
 static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
-static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint32_t x);
 static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *vv, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -10698,6 +10713,229 @@ void Hacl_HMAC_SHA1_hmac_sha1(uint8_t *out, uint8_t *key, size_t key_len, uint8_
   Hacl_Hash_SHA1_Core_hash_prefixed(out, padarr, dgarr, 20);
 }
 
+static void Hacl_Salsa20_setup_base(uint32_t *st, uint8_t *key) {
+  st[0] = Spec_Salsa20_c0;
+  st[5] = Spec_Salsa20_c1;
+  st[10] = Spec_Salsa20_c2;
+  st[15] = Spec_Salsa20_c3;
+  size_t i = 0;
+  while (i < 4) {
+    size_t vi = i;
+    uint32_t x = Hacl_Impl_Bytes_load_le__t(key, (vi * 4));
+    st[(1 + vi)] = x;
+    i = (vi + 1);
+  }
+  size_t n = 0;
+  while (n < 4) {
+    size_t vn = n;
+    uint32_t x_1 = Hacl_Impl_Bytes_load_le__t(key, ((4 + vn) * 4));
+    st[(11 + vn)] = x_1;
+    n = (vn + 1);
+  }
+}
+
+static void Hacl_Salsa20_hinit_state(uint32_t *st, uint8_t *key, uint8_t *nonce) {
+  Hacl_Salsa20_setup_base(st, key);
+  size_t n = 0;
+  while (n < 4) {
+    size_t vn = n;
+    uint32_t x = Hacl_Impl_Bytes_load_le__t(nonce, (vn * 4));
+    st[(6 + vn)] = x;
+    n = (vn + 1);
+  }
+}
+
+static void Hacl_Salsa20_Core_line_impl(uint32_t *st, size_t a, size_t b, size_t c, uint32_t s) {
+  uint32_t rb = st[b];
+  uint32_t rc = st[c];
+  uint32_t ra = st[a];
+  st[a] = Hacl_Secret_UInt32_logxor(ra, Hacl_Secret_UInt32_rotate_left(Hacl_Secret_UInt32_add_mod(rb, rc), s));
+}
+
+static void Hacl_Salsa20_Core_quarter_round_impl(uint32_t *st, size_t a, size_t b, size_t c, size_t d) {
+  Hacl_Salsa20_Core_line_impl(st, b, a, d, 7);
+  Hacl_Salsa20_Core_line_impl(st, c, b, a, 9);
+  Hacl_Salsa20_Core_line_impl(st, d, c, b, 13);
+  Hacl_Salsa20_Core_line_impl(st, a, d, c, 18);
+}
+
+static void Hacl_Salsa20_Core_column_round_impl(uint32_t *st) {
+  Hacl_Salsa20_Core_quarter_round_impl(st, 0, 4, 8, 12);
+  Hacl_Salsa20_Core_quarter_round_impl(st, 5, 9, 13, 1);
+  Hacl_Salsa20_Core_quarter_round_impl(st, 10, 14, 2, 6);
+  Hacl_Salsa20_Core_quarter_round_impl(st, 15, 3, 7, 11);
+}
+
+static void Hacl_Salsa20_Core_row_round_impl(uint32_t *st) {
+  Hacl_Salsa20_Core_quarter_round_impl(st, 0, 1, 2, 3);
+  Hacl_Salsa20_Core_quarter_round_impl(st, 5, 6, 7, 4);
+  Hacl_Salsa20_Core_quarter_round_impl(st, 10, 11, 8, 9);
+  Hacl_Salsa20_Core_quarter_round_impl(st, 15, 12, 13, 14);
+}
+
+static void Hacl_Salsa20_Core_double_round_impl(uint32_t *st) {
+  Hacl_Salsa20_Core_column_round_impl(st);
+  Hacl_Salsa20_Core_row_round_impl(st);
+}
+
+static void Hacl_Salsa20_Core_rounds_impl(uint32_t *st) {
+  size_t i = 0;
+  while (i < 10) {
+    size_t vi = i;
+    Hacl_Salsa20_Core_double_round_impl(st);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint32_t x) {
+  size_t n = Hacl_Secret_Word_nbytes__t;
+  uint32_t cur = x;
+  size_t j = 0;
+  while (j < n) {
+    size_t vj = j;
+    uint32_t c = cur;
+    b[(off + vj)] = Hacl_Secret_Word_to_byte__t(c);
+    cur = Hacl_Secret_Word_shift_right__t(c, 8);
+    j = (vj + 1);
+  }
+}
+
+static void Hacl_Impl_Bytes_store_words_le__t(uint8_t *out, uint32_t *ws, size_t n) {
+  size_t nb = Hacl_Secret_Word_nbytes__t;
+  size_t j = 0;
+  while (j < n) {
+    size_t vj = j;
+    uint32_t x = ws[vj];
+    Hacl_Impl_Bytes_store_le__t_1(out, (vj * nb), x);
+    j = (vj + 1);
+  }
+}
+
+void Hacl_Salsa20_hsalsa20(uint8_t *out, uint8_t *key, uint8_t *nonce) {
+  uint32_t z32 = Hacl_Secret_UInt32_zero;
+  uint32_t starr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    starr[_ci1] = z32;
+  }
+  uint32_t hw[8];
+  for (size_t _ci2 = 0; _ci2 < 8; _ci2++) {
+    hw[_ci2] = z32;
+  }
+  Hacl_Salsa20_hinit_state(starr, key, nonce);
+  Hacl_Salsa20_Core_rounds_impl(starr);
+  uint32_t x0 = starr[0];
+  hw[0] = x0;
+  uint32_t x1 = starr[5];
+  hw[1] = x1;
+  uint32_t x2 = starr[10];
+  hw[2] = x2;
+  uint32_t x3 = starr[15];
+  hw[3] = x3;
+  uint32_t x4 = starr[6];
+  hw[4] = x4;
+  uint32_t x5 = starr[7];
+  hw[5] = x5;
+  uint32_t x6 = starr[8];
+  hw[6] = x6;
+  uint32_t x7 = starr[9];
+  hw[7] = x7;
+  Hacl_Impl_Bytes_store_words_le__t(out, hw, 8);
+}
+
+static void Hacl_Salsa20_init_state(uint32_t *st, uint8_t *key, uint8_t *nonce, uint32_t ctr0) {
+  Hacl_Salsa20_setup_base(st, key);
+  uint32_t n0 = Hacl_Impl_Bytes_load_le__t(nonce, 0);
+  st[6] = n0;
+  uint32_t n1 = Hacl_Impl_Bytes_load_le__t(nonce, 4);
+  st[7] = n1;
+  st[8] = ctr0;
+  st[9] = 0;
+}
+
+static void Hacl_Salsa20_Core_core_impl(uint32_t *ks, uint32_t *st, uint32_t ctr) {
+  st[8] = ctr;
+  size_t j = 0;
+  while (j < 16) {
+    size_t vj = j;
+    uint32_t x = st[vj];
+    ks[vj] = x;
+    j = (vj + 1);
+  }
+  Hacl_Salsa20_Core_rounds_impl(ks);
+  size_t n = 0;
+  while (n < 16) {
+    size_t vn = n;
+    uint32_t x_1 = ks[vn];
+    uint32_t y = st[vn];
+    ks[vn] = Hacl_Secret_UInt32_add_mod(x_1, y);
+    n = (vn + 1);
+  }
+}
+
+void Hacl_Salsa20_key_block0(uint8_t *out, uint8_t *key, uint8_t *nonce) {
+  uint32_t z32 = Hacl_Secret_UInt32_zero;
+  uint32_t starr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    starr[_ci1] = z32;
+  }
+  uint32_t ksarr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    ksarr[_ci2] = z32;
+  }
+  Hacl_Salsa20_init_state(starr, key, nonce, 0);
+  Hacl_Salsa20_Core_core_impl(ksarr, starr, 0);
+  Hacl_Impl_Bytes_store_words_le__t(out, ksarr, 16);
+}
+
+static void Hacl_Salsa20_xor_chunk(uint8_t *out, uint8_t *msg, uint8_t *kb, size_t b, size_t n, uint32_t ctr0, uint32_t c) {
+  (void)ctr0;
+  (void)c;
+  size_t k = 0;
+  while (k < n) {
+    size_t vk = k;
+    uint8_t x = msg[(b + vk)];
+    uint8_t y = kb[vk];
+    out[(b + vk)] = Hacl_Secret_UInt8_logxor(x, y);
+    k = (vk + 1);
+  }
+}
+
+void Hacl_Salsa20_encrypt(uint8_t *out, uint8_t *msg, size_t mlen, uint8_t *key, uint8_t *nonce, uint32_t ctr0) {
+  uint32_t z32 = Hacl_Secret_UInt32_zero;
+  uint8_t z8 = 0;
+  uint32_t starr[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    starr[_ci1] = z32;
+  }
+  uint32_t ksarr[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    ksarr[_ci2] = z32;
+  }
+  uint8_t kbarr[64];
+  for (size_t _ci3 = 0; _ci3 < 64; _ci3++) {
+    kbarr[_ci3] = z8;
+  }
+  Hacl_Salsa20_init_state(starr, key, nonce, ctr0);
+  size_t base = 0;
+  uint32_t ctr = ctr0;
+  while (base < mlen) {
+    size_t b = base;
+    uint32_t c = ctr;
+    size_t n;
+    if (64 <= (mlen - b)) n = 64;
+    else n = (mlen - b);
+    Hacl_Salsa20_Core_core_impl(ksarr, starr, c);
+    Hacl_Impl_Bytes_store_words_le__t(kbarr, ksarr, 16);
+    Hacl_Salsa20_xor_chunk(out, msg, kbarr, b, n, ctr0, c);
+    base = (b + n);
+    ctr = (c + 1);
+  }
+}
+
+void Hacl_Salsa20_decrypt(uint8_t *out, uint8_t *msg, size_t mlen, uint8_t *key, uint8_t *nonce, uint32_t ctr0) {
+  Hacl_Salsa20_encrypt(out, msg, mlen, key, nonce, ctr0);
+}
+
 static void Hacl_Chacha20_init_state(uint32_t *st, uint8_t *key, uint8_t *nonce, uint32_t ctr0) {
   st[0] = Spec_Chacha20_c0;
   st[1] = Spec_Chacha20_c1;
@@ -10784,16 +11022,6 @@ static void Hacl_Chacha20_Core_core_impl(uint32_t *ks, uint32_t *st, uint32_t ct
   }
 }
 
-static void Hacl_Chacha20_Core_write_keystream(uint8_t *out, uint32_t *ks) {
-  size_t j = 0;
-  while (j < 16) {
-    size_t vj = j;
-    uint32_t x = ks[vj];
-    Hacl_Impl_Bytes_store_le__t(out, (vj * 4), x);
-    j = (vj + 1);
-  }
-}
-
 static void Hacl_Chacha20_xor_chunk(uint8_t *out, uint8_t *msg, uint8_t *kb, size_t b, size_t n, uint32_t ctr0, uint32_t c) {
   (void)ctr0;
   (void)c;
@@ -10832,7 +11060,7 @@ void Hacl_Chacha20_encrypt(uint8_t *out, uint8_t *msg, size_t mlen, uint8_t *key
     if (64 <= (mlen - b)) n = 64;
     else n = (mlen - b);
     Hacl_Chacha20_Core_core_impl(ksarr, starr, c);
-    Hacl_Chacha20_Core_write_keystream(kbarr, ksarr);
+    Hacl_Impl_Bytes_store_words_le__t(kbarr, ksarr, 16);
     Hacl_Chacha20_xor_chunk(out, msg, kbarr, b, n, ctr0, c);
     base = (b + n);
     ctr = (c + 1);
@@ -10860,7 +11088,7 @@ static uint64_t Hacl_Secret_Word_of_sizet_lo__t(size_t x) {
   return Hacl_Secret_Word_Instances_sz_lo_64(x);
 }
 
-static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint64_t x) {
+static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint64_t x) {
   size_t n = Hacl_Secret_Word_nbytes__t_1;
   uint64_t cur = x;
   size_t j = 0;
@@ -10876,8 +11104,8 @@ static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint64_t x) {
 static void Hacl_Chacha20Poly1305_write_len_block(uint8_t *lb, size_t la, size_t lc) {
   uint64_t wa = Hacl_Secret_Word_of_sizet_lo__t(la);
   uint64_t wc = Hacl_Secret_Word_of_sizet_lo__t(lc);
-  Hacl_Impl_Bytes_store_le__t_1(lb, 0, wa);
-  Hacl_Impl_Bytes_store_le__t_1(lb, 8, wc);
+  Hacl_Impl_Bytes_store_le__t_2(lb, 0, wa);
+  Hacl_Impl_Bytes_store_le__t_2(lb, 8, wc);
 }
 
 static uint64_t Hacl_Impl_Bytes_load_le__t_1(uint8_t *b, size_t off) {
@@ -11173,8 +11401,8 @@ static void Hacl_Poly1305_Load_store_tag(uint8_t *out, uint64_t *h, uint8_t *k) 
   uint64_t tlo = Hacl_Secret_UInt64_add_mod(lo, slo);
   uint64_t carry = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lt_mask(tlo, lo), 1);
   uint64_t thi = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_add_mod(hi, shi), carry);
-  Hacl_Impl_Bytes_store_le__t_1(out, 0, tlo);
-  Hacl_Impl_Bytes_store_le__t_1(out, 8, thi);
+  Hacl_Impl_Bytes_store_le__t_2(out, 0, tlo);
+  Hacl_Impl_Bytes_store_le__t_2(out, 8, thi);
 }
 
 static void Hacl_Chacha20Poly1305_aead_tag(uint8_t *tag, uint8_t *aad, size_t alen, uint8_t *ct, size_t clen, uint8_t *key) {
@@ -11551,19 +11779,6 @@ static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uin
   Hacl_Hash_Blake2_Core_mix_state_impl__t(h, vv);
 }
 
-static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint32_t x) {
-  size_t n = Hacl_Secret_Word_nbytes__t;
-  uint32_t cur = x;
-  size_t j = 0;
-  while (j < n) {
-    size_t vj = j;
-    uint32_t c = cur;
-    b[(off + vj)] = Hacl_Secret_Word_to_byte__t(c);
-    cur = Hacl_Secret_Word_shift_right__t(c, 8);
-    j = (vj + 1);
-  }
-}
-
 static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st) {
   size_t nb = Hacl_Secret_Word_nbytes__t;
   uint8_t z8 = 0;
@@ -11576,7 +11791,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st) {
   while (j < 8) {
     size_t vj = j;
     uint32_t x = st[vj];
-    Hacl_Impl_Bytes_store_le__t_2(darr, (vj * nb), x);
+    Hacl_Impl_Bytes_store_le__t_1(darr, (vj * nb), x);
     j = (vj + 1);
   }
   size_t hb = 16;
@@ -11842,7 +12057,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_1(uint8_t *out, uint32_t *st) {
   while (j < 8) {
     size_t vj = j;
     uint32_t x = st[vj];
-    Hacl_Impl_Bytes_store_le__t_2(darr, (vj * nb), x);
+    Hacl_Impl_Bytes_store_le__t_1(darr, (vj * nb), x);
     j = (vj + 1);
   }
   size_t hb = 20;
@@ -12108,7 +12323,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_2(uint8_t *out, uint32_t *st) {
   while (j < 8) {
     size_t vj = j;
     uint32_t x = st[vj];
-    Hacl_Impl_Bytes_store_le__t_2(darr, (vj * nb), x);
+    Hacl_Impl_Bytes_store_le__t_1(darr, (vj * nb), x);
     j = (vj + 1);
   }
   size_t hb = 28;
@@ -12374,7 +12589,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_3(uint8_t *out, uint32_t *st) {
   while (j < 8) {
     size_t vj = j;
     uint32_t x = st[vj];
-    Hacl_Impl_Bytes_store_le__t_2(darr, (vj * nb), x);
+    Hacl_Impl_Bytes_store_le__t_1(darr, (vj * nb), x);
     j = (vj + 1);
   }
   size_t hb = 32;

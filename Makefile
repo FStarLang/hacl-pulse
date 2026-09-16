@@ -69,6 +69,8 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Poly1305., mac)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Chacha20Poly1305., encrypt decrypt)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.Salsa20., encrypt decrypt key_block0 hsalsa20)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.HMAC.SHA1., hmac_sha1)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.HMAC., \

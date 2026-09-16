@@ -223,9 +223,19 @@ let hpick (i: nat { i < 8 }) : idx =
   if i = 0 then 0 else if i = 1 then 5 else if i = 2 then 10
   else if i = 3 then 15 else i + 2
 
+(** The projection is named, rather than written as a [Seq.init] inside
+    [hsalsa20], so that the implementation has something to prove its output
+    array equal to. *)
+let hwords (s: state) : Seq.lseq S32.t 8 =
+  Seq.init 8 (fun i -> Seq.index s (hpick i))
+
+let hwords_index (s: state) (i: nat { i < 8 })
+  : Lemma (Seq.index (hwords s) i == Seq.index s (hpick i))
+          [SMTPat (Seq.index (hwords s) i)]
+  = ()
+
 let hsalsa20 (k: key) (n: hnonce) : GTot (Seq.lseq S8.t 32) =
-  let s = rounds (hinit k n) in
-  words_to_le #S32.t 8 (Seq.init_ghost 8 (fun i -> Seq.index s (hpick i)))
+  words_to_le #S32.t 8 (hwords (rounds (hinit k n)))
 
 (** {2 XSalsa20}
 
