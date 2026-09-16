@@ -57,8 +57,10 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
+module U64 = FStar.UInt64
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+(* [S32] is only the SHA-224/256 working word; bignum limbs are [S64]. *)
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Declassify = Hacl.Secret.Declassify
@@ -81,23 +83,23 @@ module Exp = Hacl.Bignum.Exponentiation
 let zero8 : (z: S8.t { S8.v z == 0 }) = S8.zero
 
 (** The limb count that holds a [len]-byte number. *)
-let limbs_of (len: nat) : nat = (len + 3) / 4
+let limbs_of (len: nat) : nat = (len + 7) / 8
 
-let limbs_of_ok (len: nat) : Lemma (len <= 4 * limbs_of len /\ limbs_of len <= (len + 3) / 4) = ()
+let limbs_of_ok (len: nat) : Lemma (len <= 8 * limbs_of len /\ limbs_of len <= (len + 7) / 8) = ()
 
 (** [res <- be_nat b], left-padding [b] to the width of [res]. *)
-fn bn_from_be (res: A.array S32.t) (nn: SZ.t) (b: A.array S8.t) (len: SZ.t)
-              (#p: perm) (#vres: erased (Seq.seq S32.t)) (#vb: erased (Seq.seq S8.t))
+fn bn_from_be (res: A.array S64.t) (nn: SZ.t) (b: A.array S8.t) (len: SZ.t)
+              (#p: perm) (#vres: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to res vres ** A.pts_to b #p vb **
   pure (Seq.length vres == SZ.v nn /\ Seq.length vb == SZ.v len /\
-        SZ.v len <= 4 * SZ.v nn /\ SZ.fits (4 * SZ.v nn))
-ensures exists* (v: Seq.seq S32.t).
+        SZ.v len <= 8 * SZ.v nn /\ SZ.fits (8 * SZ.v nn))
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to b #p vb **
   pure (Seq.length v == SZ.v nn /\ num v == be_nat vb)
 {
   A.pts_to_len res;
   A.pts_to_len b;
-  let width = SZ.mul 4sz nn;
+  let width = SZ.mul 8sz nn;
   let off = SZ.sub width len;
   let mut tmp = [| (zero8 <: S8.t); width |];
   A.pts_to_len tmp;
@@ -113,11 +115,11 @@ ensures exists* (v: Seq.seq S32.t).
 }
 
 (** [b <- the low [len] bytes of [a]], which are all of it. *)
-fn bn_to_be (b: A.array S8.t) (len: SZ.t) (a: A.array S32.t) (nn: SZ.t)
-            (#p: perm) (#vb: erased (Seq.seq S8.t)) (#va: erased (Seq.seq S32.t))
+fn bn_to_be (b: A.array S8.t) (len: SZ.t) (a: A.array S64.t) (nn: SZ.t)
+            (#p: perm) (#vb: erased (Seq.seq S8.t)) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #p va **
   pure (Seq.length vb == SZ.v len /\ Seq.length va == SZ.v nn /\
-        SZ.v len <= 4 * SZ.v nn /\ SZ.fits (4 * SZ.v nn) /\
+        SZ.v len <= 8 * SZ.v nn /\ SZ.fits (8 * SZ.v nn) /\
         num va < pow2 (8 * SZ.v len))
 ensures exists* (v: Seq.seq S8.t).
   A.pts_to b v ** A.pts_to a #p va **
@@ -125,7 +127,7 @@ ensures exists* (v: Seq.seq S8.t).
 {
   A.pts_to_len b;
   A.pts_to_len a;
-  let width = SZ.mul 4sz nn;
+  let width = SZ.mul 8sz nn;
   let off = SZ.sub width len;
   let mut tmp = [| (zero8 <: S8.t); width |];
   A.pts_to_len tmp;
@@ -142,9 +144,9 @@ ensures exists* (v: Seq.seq S8.t).
 }
 
 (** [res <- 1]. *)
-fn bn_one (res: A.array S32.t) (nn: SZ.t) (#vres: erased (Seq.seq S32.t))
+fn bn_one (res: A.array S64.t) (nn: SZ.t) (#vres: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** pure (Seq.length vres == SZ.v nn /\ 0 < SZ.v nn)
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** pure (Seq.length v == SZ.v nn /\ num v == 1)
 {
   A.pts_to_len res;
@@ -152,14 +154,14 @@ ensures exists* (v: Seq.seq S32.t).
   with v0. assert (A.pts_to res v0);
   pre_zeros v0 (SZ.v nn);
   pre_full v0;
-  let one = S32.classify 1ul;
+  let one = S64.classify 1uL;
   A.((res.(0sz) <- one));
   num_upd v0 0 one;
   wt_zero ();
 }
 
 (** A number is below the weight of its own width. *)
-let num_bound (v: Seq.seq S32.t) : Lemma (num v < wt (Seq.length v))
+let num_bound (v: Seq.seq S64.t) : Lemma (num v < wt (Seq.length v))
   = pre_bnd v (Seq.length v); pre_full v
 
 #pop-options
@@ -176,8 +178,8 @@ let sz_of_u32 (x: U32.t) : (r: SZ.t { SZ.v r == U32.v x }) =
 
 (** Refinement subtyping does not fire through [erased]; a modulus argument
     goes through one of these. *)
-let as_modulus (s: Seq.seq S32.t)
-  : Pure (r: Seq.seq S32.t { 1 < num r }) (requires 1 < num s) (ensures fun r -> r == s)
+let as_modulus (s: Seq.seq S64.t)
+  : Pure (r: Seq.seq S64.t { 1 < num r }) (requires 1 < num s) (ensures fun r -> r == s)
   = s
 
 (** [res <- a ^ be_nat eb mod n].
@@ -187,20 +189,20 @@ let as_modulus (s: Seq.seq S32.t)
     number, so that nothing about a private exponent leaks through a loop
     bound.  [ct] chooses the constant-time ladder; a public exponent may
     take the other one. *)
-fn mod_exp_be (res: A.array S32.t) (a: A.array S32.t)
+fn mod_exp_be (res: A.array S64.t) (a: A.array S64.t)
               (eb: A.array S8.t) (eLen: SZ.t) (en: SZ.t)
-              (nmod: A.array S32.t) (nn: SZ.t) (ct: bool)
-              (#vres: erased (Seq.seq S32.t)) (#pa #pe #pn: perm)
-              (#va: erased (Seq.seq S32.t)) (#ve: erased (Seq.seq S8.t))
-              (#vn: erased (s: Seq.seq S32.t { 0 < num s /\ 0 < Seq.length s }))
+              (nmod: A.array S64.t) (nn: SZ.t) (ct: bool)
+              (#vres: erased (Seq.seq S64.t)) (#pa #pe #pn: perm)
+              (#va: erased (Seq.seq S64.t)) (#ve: erased (Seq.seq S8.t))
+              (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to eb #pe ve **
          A.pts_to nmod #pn vn **
   pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
         Seq.length vn == SZ.v nn /\ Seq.length ve == SZ.v eLen /\
-        0 < SZ.v nn /\ 0 < SZ.v en /\ 1 < num vn /\ SZ.v eLen <= 4 * SZ.v en /\
-        SZ.fits (2 * rad * SZ.v nn) /\ SZ.fits (4 * SZ.v en) /\ SZ.fits (32 * SZ.v en) /\
-        num va < num vn /\ S32.v (Seq.index vn 0) % 2 == 1)
-ensures exists* (v: Seq.seq S32.t).
+        0 < SZ.v nn /\ 0 < SZ.v en /\ 1 < num vn /\ SZ.v eLen <= 8 * SZ.v en /\
+        SZ.fits (2 * rad * SZ.v nn) /\ SZ.fits (8 * SZ.v en) /\ SZ.fits (64 * SZ.v en) /\
+        num va < num vn /\ S64.v (Seq.index vn 0) % 2 == 1)
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to eb #pe ve **
   A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ num v == pw (num va) (be_nat ve) % num vn)
@@ -210,13 +212,13 @@ ensures exists* (v: Seq.seq S32.t).
   A.pts_to_len eb;
   A.pts_to_len nmod;
   SZ.fits_lte (SZ.v nn + SZ.v nn) (2 * rad * SZ.v nn);
-  let z32 = S32.zero;
-  let mut ebn = [| z32; en |];
-  let mut r2 = [| z32; nn |];
-  let mut aM = [| z32; nn |];
-  let mut accu = [| z32; nn |];
-  let mut tn = [| z32; nn |];
-  let mut wide = [| z32; SZ.add nn nn |];
+  let z64 = S64.zero;
+  let mut ebn = [| z64; en |];
+  let mut r2 = [| z64; nn |];
+  let mut aM = [| z64; nn |];
+  let mut accu = [| z64; nn |];
+  let mut tn = [| z64; nn |];
+  let mut wide = [| z64; SZ.add nn nn |];
   A.pts_to_len ebn;
   A.pts_to_len r2;
   A.pts_to_len aM;
@@ -229,7 +231,7 @@ ensures exists* (v: Seq.seq S32.t).
   Mont.precomp r2 nmod nn #_ #_ #(hide (as_modulus (reveal vn)));
   let n0 = A.(nmod.(0sz));
   let mu = Mont.mont_mu n0;
-  let bbits = SZ.mul 32sz en;
+  let bbits = SZ.mul 64sz en;
   assert (pure (wt (SZ.v en) == pow2 (SZ.v bbits)));
   if ct {
     Exp.mod_exp_consttime res a ebn bbits r2 nmod nn mu aM accu tn wide;
@@ -261,22 +263,22 @@ ensures exists* (v: Seq.seq S32.t).
 let rsa_pow (s e n: nat) : nat = if n = 0 then 0 else pw s e % n
 
 (** The parity of a number is the parity of its bottom limb. *)
-let num_parity (v: Seq.seq S32.t { 0 < Seq.length v })
-  : Lemma (num v % 2 == S32.v (Seq.index v 0) % 2)
+let num_parity (v: Seq.seq S64.t { 0 < Seq.length v })
+  : Lemma (num v % 2 == S64.v (Seq.index v 0) % 2)
   = pre_mod v 1;
     pre_snoc v 0;
     pre_zero v;
     wt_zero ();
-    assert (pre v 1 == S32.v (Seq.index v 0));
-    assert (wt 1 == pow2 32);
-    Math.pow2_modulo_modulo_lemma_1 (num v) 1 32
+    assert (pre v 1 == S64.v (Seq.index v 0));
+    assert (wt 1 == pow2 64);
+    Math.pow2_modulo_modulo_lemma_1 (num v) 1 64
 
-(** [(len + 3) / 4] limbs hold [len] bytes and no more than [len] limbs do. *)
-let limbs_le (len: pos) : Lemma (0 < (len + 3) / 4 /\ (len + 3) / 4 <= len /\
-                                 len <= 4 * ((len + 3) / 4)) = ()
+(** [(len + 7) / 8] limbs hold [len] bytes and no more than [len] limbs do. *)
+let limbs_le (len: pos) : Lemma (0 < (len + 7) / 8 /\ (len + 7) / 8 <= len /\
+                                 len <= 8 * ((len + 7) / 8)) = ()
 
-let as_modulus0 (s: Seq.seq S32.t)
-  : Pure (r: Seq.seq S32.t { 0 < num r /\ 0 < Seq.length r })
+let as_modulus0 (s: Seq.seq S64.t)
+  : Pure (r: Seq.seq S64.t { 0 < num r /\ 0 < Seq.length r })
          (requires 0 < num s /\ 0 < Seq.length s) (ensures fun r -> r == s)
   = s
 
@@ -293,8 +295,8 @@ requires A.pts_to out vout ** A.pts_to inp #pin vin **
         Seq.length vnb == SZ.v kLen /\ Seq.length veb == SZ.v eLen /\
         0 < SZ.v kLen /\ 0 < SZ.v eLen /\
         SZ.v outLen <= SZ.v kLen /\ SZ.v inLen <= SZ.v kLen /\
-        SZ.fits (SZ.v kLen + 3) /\ SZ.fits (128 * SZ.v kLen) /\
-        SZ.fits (SZ.v eLen + 3) /\ SZ.fits (32 * SZ.v eLen))
+        SZ.fits (SZ.v kLen + 7) /\ SZ.fits (128 * SZ.v kLen) /\
+        SZ.fits (SZ.v eLen + 7) /\ SZ.fits (64 * SZ.v eLen))
 returns ok: bool
 ensures exists* (vout': Seq.seq S8.t).
   A.pts_to out vout' ** A.pts_to inp #pin vin **
@@ -310,17 +312,17 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len eb;
   limbs_le (SZ.v kLen);
   limbs_le (SZ.v eLen);
-  let nn = SZ.div (SZ.add kLen 3sz) 4sz;
-  let en = SZ.div (SZ.add eLen 3sz) 4sz;
-  SZ.fits_lte (4 * SZ.v nn) (128 * SZ.v kLen);
+  let nn = SZ.div (SZ.add kLen 7sz) 8sz;
+  let en = SZ.div (SZ.add eLen 7sz) 8sz;
+  SZ.fits_lte (8 * SZ.v nn) (128 * SZ.v kLen);
   SZ.fits_lte (2 * rad * SZ.v nn) (128 * SZ.v kLen);
-  SZ.fits_lte (4 * SZ.v en) (32 * SZ.v eLen);
-  SZ.fits_lte (32 * SZ.v en) (32 * SZ.v eLen);
-  let z32 = S32.zero;
-  let mut nbn = [| z32; nn |];
-  let mut mbn = [| z32; nn |];
-  let mut sbn = [| z32; nn |];
-  let mut onebn = [| z32; nn |];
+  SZ.fits_lte (8 * SZ.v en) (64 * SZ.v eLen);
+  SZ.fits_lte (64 * SZ.v en) (64 * SZ.v eLen);
+  let z64 = S64.zero;
+  let mut nbn = [| z64; nn |];
+  let mut mbn = [| z64; nn |];
+  let mut sbn = [| z64; nn |];
+  let mut onebn = [| z64; nn |];
   A.pts_to_len nbn;
   A.pts_to_len mbn;
   A.pts_to_len sbn;
@@ -331,19 +333,19 @@ ensures exists* (vout': Seq.seq S8.t).
   bn_one onebn nn;
   with vnbn. assert (A.pts_to nbn vnbn);
   num_parity vnbn;
-  assert_norm (pow2 32 - 1 == 4294967295);
+  assert_norm (pow2 64 - 1 == 18446744073709551615);
 
   let n0 = A.(nbn.(0sz));
-  let odd = U32.eq (U32.rem (Declassify.u32 n0) 2ul) 1ul;
-  let gt1 = U32.eq (Declassify.u32 (lt_mask onebn nbn nn)) 4294967295ul;
-  let below = U32.eq (Declassify.u32 (lt_mask mbn nbn nn)) 4294967295ul;
+  let odd = U64.eq (U64.rem (Declassify.u64 n0) 2uL) 1uL;
+  let gt1 = U64.eq (Declassify.u64 (lt_mask onebn nbn nn)) 18446744073709551615uL;
+  let below = U64.eq (Declassify.u64 (lt_mask mbn nbn nn)) 18446744073709551615uL;
 
   if (odd && gt1 && below) {
     mod_exp_be sbn mbn eb eLen en nbn nn ct
                #_ #_ #_ #_ #_ #_ #(hide (as_modulus0 (reveal vnbn)));
     (* The result is written at full limb width and the bytes above the
        output are checked, rather than assumed, to be zero. *)
-    let width = SZ.mul 4sz nn;
+    let width = SZ.mul 8sz nn;
     let off = SZ.sub width outLen;
     let mut tmp = [| (zero8 <: S8.t); width |];
     A.pts_to_len tmp;
@@ -469,10 +471,10 @@ ensures exists* (vsg': Seq.seq S8.t).
   let kLen = SZ.div (SZ.add mb 7sz) 8sz;
   SZ.fits_lte (SZ.v mb + 6) (SZ.v mb + 7);
   let emLen = SZ.div (SZ.add mb 6sz) 8sz;
-  SZ.fits_u32_implies_fits (SZ.v kLen + 3);
+  SZ.fits_u32_implies_fits (SZ.v kLen + 7);
   SZ.fits_u32_implies_fits (128 * SZ.v kLen);
-  SZ.fits_u32_implies_fits (SZ.v dLen + 3);
-  SZ.fits_u32_implies_fits (32 * SZ.v dLen);
+  SZ.fits_u32_implies_fits (SZ.v dLen + 7);
+  SZ.fits_u32_implies_fits (64 * SZ.v dLen);
   let emBits = U32.sub modBits 1ul;
   let mut em = [| (zero8 <: S8.t); emLen |];
   A.pts_to_len em;
@@ -522,10 +524,10 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
   let kLen = SZ.div (SZ.add mb 7sz) 8sz;
   SZ.fits_lte (SZ.v mb + 6) (SZ.v mb + 7);
   let emLen = SZ.div (SZ.add mb 6sz) 8sz;
-  SZ.fits_u32_implies_fits (SZ.v kLen + 3);
+  SZ.fits_u32_implies_fits (SZ.v kLen + 7);
   SZ.fits_u32_implies_fits (128 * SZ.v kLen);
-  SZ.fits_u32_implies_fits (SZ.v eLen + 3);
-  SZ.fits_u32_implies_fits (32 * SZ.v eLen);
+  SZ.fits_u32_implies_fits (SZ.v eLen + 7);
+  SZ.fits_u32_implies_fits (64 * SZ.v eLen);
   let emBits = U32.sub modBits 1ul;
   let mut em = [| (zero8 <: S8.t); emLen |];
   A.pts_to_len em;

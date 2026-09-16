@@ -2,7 +2,7 @@
  *
  * Every expected value below was computed with Python's arbitrary-precision
  * integers by files/gen_bignum.py, so the two sides share no code.  The
- * numbers are eight limbs -- two hundred and fifty-six bits -- which is the
+ * numbers are four limbs -- two hundred and fifty-six bits -- which is the
  * smallest size at which every loop in the implementation runs more than a
  * couple of times, and the modulus is six bits short of the full width so
  * that the reductions actually reduce.
@@ -10,6 +10,7 @@
  * Inputs and expected results are big-endian byte strings; the conversions
  * are therefore exercised by every case, and tested on their own as well.
  */
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,7 +18,7 @@
 #include "Hacl.h"
 #include "test_util.h"
 
-#define N 8
+#define N 4
 
 static const uint8_t v_a[32] = {
     0x46, 0x5f, 0x89, 0xa6, 0x9d, 0x7b, 0xab, 0xe4, 0x5e, 0x6a, 0x62, 0x3a,
@@ -135,31 +136,32 @@ static const uint8_t v_submod3[32] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
 };
-static const uint32_t add_carry = 0u;
-static const uint32_t sub_borrow = 0u;
+static const uint64_t add_carry = 0u;
+static const uint64_t sub_borrow = 0u;
 
 
-static uint32_t a[N], b[N], m[N], r[N], r2[2 * N];
-static uint8_t out[8 * N];
+static uint64_t a[N], b[N], m[N], r[N], r2[2 * N];
+static uint8_t out[16 * N];
 
 /* Load a big-endian byte string into limbs, run f, and serialize. */
 static int check_bin(const char *name, const uint8_t *x, const uint8_t *y,
-                     uint32_t (*f)(uint32_t *, uint32_t *, uint32_t *, size_t),
-                     const uint8_t *expected, uint32_t expected_carry) {
+                     uint64_t (*f)(uint64_t *, uint64_t *, uint64_t *, size_t),
+                     const uint8_t *expected, uint64_t expected_carry) {
   Hacl_Bignum_Convert_from_bytes_be(a, N, (uint8_t *)x);
   Hacl_Bignum_Convert_from_bytes_be(b, N, (uint8_t *)y);
-  uint32_t c = f(r, a, b, N);
+  uint64_t c = f(r, a, b, N);
   Hacl_Bignum_Convert_to_bytes_be(out, r, N);
-  int bad = check(name, out, expected, 4 * N);
+  int bad = check(name, out, expected, 8 * N);
   if (c != expected_carry) {
-    printf("  FAIL %s carry: got %u expected %u\n", name, c, expected_carry);
+    printf("  FAIL %s carry: got %" PRIu64 " expected %" PRIu64 "\n", name, c,
+           expected_carry);
     bad = 1;
   }
   return bad;
 }
 
 static int check_mod(const char *name, const uint8_t *x, const uint8_t *y,
-                     void (*f)(uint32_t *, uint32_t *, uint32_t *, uint32_t *,
+                     void (*f)(uint64_t *, uint64_t *, uint64_t *, uint64_t *,
                                size_t),
                      const uint8_t *expected) {
   Hacl_Bignum_Convert_from_bytes_be(a, N, (uint8_t *)x);
@@ -167,7 +169,7 @@ static int check_mod(const char *name, const uint8_t *x, const uint8_t *y,
   Hacl_Bignum_Convert_from_bytes_be(m, N, (uint8_t *)v_m);
   f(r, a, b, m, N);
   Hacl_Bignum_Convert_to_bytes_be(out, r, N);
-  return check(name, out, expected, 4 * N);
+  return check(name, out, expected, 8 * N);
 }
 
 int main(void) {
@@ -176,20 +178,22 @@ int main(void) {
   /* Conversion, both orders, both ways. */
   Hacl_Bignum_Convert_from_bytes_be(a, N, (uint8_t *)v_a);
   Hacl_Bignum_Convert_to_bytes_be(out, a, N);
-  bad |= check("from/to_bytes_be", out, v_a, 4 * N);
+  bad |= check("from/to_bytes_be", out, v_a, 8 * N);
 
-  uint8_t rev[4 * N];
-  for (size_t i = 0; i < 4 * N; i++)
-    rev[i] = v_a[4 * N - 1 - i];
+  uint8_t rev[8 * N];
+  for (size_t i = 0; i < 8 * N; i++)
+    rev[i] = v_a[8 * N - 1 - i];
   Hacl_Bignum_Convert_from_bytes_le(b, N, rev);
   Hacl_Bignum_Convert_to_bytes_be(out, b, N);
-  bad |= check("from_bytes_le", out, v_a, 4 * N);
+  bad |= check("from_bytes_le", out, v_a, 8 * N);
   Hacl_Bignum_Convert_to_bytes_le(out, a, N);
-  bad |= check("to_bytes_le", out, rev, 4 * N);
+  bad |= check("to_bytes_le", out, rev, 8 * N);
 
-  /* The limb order is little-endian: limb zero is the low four bytes. */
-  if (a[0] != ((uint32_t)v_a[28] << 24 | (uint32_t)v_a[29] << 16 |
-               (uint32_t)v_a[30] << 8 | (uint32_t)v_a[31])) {
+  /* The limb order is little-endian: limb zero is the low eight bytes. */
+  uint64_t low = 0;
+  for (size_t i = 0; i < 8; i++)
+    low = low << 8 | (uint64_t)v_a[8 * N - 8 + i];
+  if (a[0] != low) {
     printf("  FAIL limb order\n");
     bad = 1;
   } else {
@@ -207,10 +211,10 @@ int main(void) {
   Hacl_Bignum_Convert_from_bytes_be(b, N, (uint8_t *)v_b);
   Hacl_Bignum_Base_mul(r2, a, b, N);
   Hacl_Bignum_Convert_to_bytes_be(out, r2, 2 * N);
-  bad |= check("mul", out, v_mul, 8 * N);
+  bad |= check("mul", out, v_mul, 16 * N);
   Hacl_Bignum_Base_sqr(r2, a, N);
   Hacl_Bignum_Convert_to_bytes_be(out, r2, 2 * N);
-  bad |= check("sqr", out, v_sqr, 8 * N);
+  bad |= check("sqr", out, v_sqr, 16 * N);
 
   /* Modular addition and subtraction.  The three pairs cover both branches
      of each correction: a sum that overflows the modulus and one that does
@@ -229,17 +233,17 @@ int main(void) {
   /* The two constant-time comparisons. */
   Hacl_Bignum_Convert_from_bytes_be(a, N, (uint8_t *)v_a);
   Hacl_Bignum_Convert_from_bytes_be(b, N, (uint8_t *)v_b);
-  struct { const char *name; uint32_t got, want; } cmp[] = {
+  struct { const char *name; uint64_t got, want; } cmp[] = {
       {"lt_mask a b", Hacl_Bignum_Base_lt_mask(a, b, N), 0u},
-      {"lt_mask b a", Hacl_Bignum_Base_lt_mask(b, a, N), 0xffffffffu},
+      {"lt_mask b a", Hacl_Bignum_Base_lt_mask(b, a, N), UINT64_MAX},
       {"lt_mask a a", Hacl_Bignum_Base_lt_mask(a, a, N), 0u},
-      {"eq_mask a a", Hacl_Bignum_Base_eq_mask(a, a, N), 0xffffffffu},
+      {"eq_mask a a", Hacl_Bignum_Base_eq_mask(a, a, N), UINT64_MAX},
       {"eq_mask a b", Hacl_Bignum_Base_eq_mask(a, b, N), 0u},
   };
   for (size_t i = 0; i < sizeof(cmp) / sizeof(cmp[0]); i++) {
     if (cmp[i].got != cmp[i].want) {
-      printf("  FAIL %s: got %08x expected %08x\n", cmp[i].name, cmp[i].got,
-             cmp[i].want);
+      printf("  FAIL %s: got %016" PRIx64 " expected %016" PRIx64 "\n",
+             cmp[i].name, cmp[i].got, cmp[i].want);
       bad = 1;
     } else {
       printf("  ok   %s\n", cmp[i].name);
@@ -249,8 +253,8 @@ int main(void) {
   /* zero really does zero. */
   Hacl_Bignum_Base_zero(r, N);
   Hacl_Bignum_Convert_to_bytes_be(out, r, N);
-  uint8_t zeros[4 * N] = {0};
-  bad |= check("zero", out, zeros, 4 * N);
+  uint8_t zeros[8 * N] = {0};
+  bad |= check("zero", out, zeros, 8 * N);
 
   if (bad != 0) {
     printf("bignum: failure(s)\n");
