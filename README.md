@@ -35,8 +35,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/nacl/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
@@ -1532,6 +1532,98 @@ Reading the array hands the caller the bound, the refinement erases, and
 the C is still a `uint32_t[64]`.  The alternative -- an `assert_norm` of a
 `forall` over a sixty-four-element `seq_of_list` -- times out.
 
+### Salsa20, which is ChaCha20 with the wires crossed
+
+Salsa20 is ChaCha20's predecessor, and the two are near enough that writing
+the second one from the first is mostly a matter of being careful about
+*where* things are rather than *what* they are.  The state is the same
+sixteen words and the same four constants, but the constants sit at words
+0, 5, 10 and 15 instead of 0 through 3, the key is split into two halves
+around them, and the counter is at word 8 rather than 12.  The round
+function is `m[a] ^= (m[b] + m[c]) <<< s` -- an add, a rotate and an xor,
+exactly ChaCha20's, with the operands permuted -- and each quarter round
+starts on the diagonal rather than at the top of a column.
+
+So `code/salsa20/Hacl.Salsa20.Core.fst` is a hand port of the ChaCha20
+core, and `code/salsa20/Hacl.Salsa20.fst` is ChaCha20's driver with `12`
+changed to `8` and the names substituted.  The only part written from
+scratch is the state setup, which is factored as `setup_base` -- the twelve
+words Salsa20 and HSalsa20 agree on -- plus an `init_state` and an
+`hinit_state` that fill words 6 through 9 differently.
+
+The shared keystream writer moved to `lib/`.  `Hacl.Chacha20.Core` used to
+own a `write_keystream`; it is now `Hacl.Impl.Bytes.store_words_le`, which
+writes any `n` words little-endian, and both ciphers call it, so there is
+one copy of that loop in the generated C rather than two.
+
+HSalsa20 is the piece NaCl needs.  It is twenty rounds on a state whose
+nonce is sixteen bytes wide, with **no feedforward** -- the input is not
+added back -- and its output is eight of the sixteen words, namely 0, 5,
+10, 15, 6, 7, 8, 9: the four constant positions and the four nonce
+positions, which are exactly the words the feedforward would have
+contaminated.  Proving the implementation's output array equal to that
+projection is where the one real fight was.  Stating it as
+`Seq.init_ghost 8 (fun i -> Seq.index vs (hpick i))` does not work: the
+solver will not identify that closure with the syntactically different one
+inside the specification.  The fix was to give the projection a name in the
+spec -- `hwords`, with an SMT-patterned index lemma -- so that the
+implementation has a first-order term to prove itself equal to.  *Do not
+ask SMT to identify two lambdas.*
+
+One more spec-side lemma exists only to serve an implementation:
+`keystream_init` says the counter in the *initial* state is dead, because
+`keystream` overwrites word 8 on every block anyway.  NaCl needs it, for
+the reason in the next section.
+
+### NaCl, where the authenticator shares the cipher's keystream
+
+`crypto_secretbox` and `crypto_box` are the original NaCl interface, and
+the reason they get their own module rather than being a wrapper over
+`Hacl.Chacha20Poly1305` is that the construction genuinely differs.
+ChaCha20-Poly1305 generates a fresh block at counter zero for the one-time
+key and starts the ciphertext at counter one.  NaCl does not restart
+anything: it prepends thirty-two zero bytes to the message and encrypts the
+padded whole in one XSalsa20 pass, so keystream bytes 0 through 31 come
+back unchanged -- they *are* the Poly1305 key -- and the ciphertext begins
+at keystream byte 32.  The authenticated input is the ciphertext alone: no
+associated data, no padding, no length block.
+
+`Spec.NaCl` states that pointwise and stays out of the way: `cipher k n m`
+is `m[i] ^ sb_byte k n (32 + i)`.  The implementation cannot run it that
+way, so five bridging lemmas cut the keystream into the pieces it does run.
+`key_block0` produces the first sixty-four bytes; `otk_is_block0` says its
+low half is the Poly1305 key, which is then handed to Poly1305 as a `Sub`
+window rather than copied; `cipher_head` says the first `min(mlen, 32)`
+ciphertext bytes come from its high half; and `cipher_tail` says the rest
+is `Hacl.Salsa20.encrypt` at counter **one** on the message shifted by
+thirty-two.  That last one is what needs `keystream_init`: the encryption
+call builds its state with counter one where the specification's keystream
+was built with counter zero, and the two states differ only at the word the
+block function overwrites.
+
+`crypto_box` is `crypto_secretbox` under a key derived by
+`hsalsa20 (X25519 sk pk) (zeros 16)`.  `beforenm` returns that key together
+with X25519's contributory-behaviour flag, and the key is written even when
+the flag is false, which matches HACL\* and costs nothing since the caller
+is required to check.  All thirteen entry points are exported: four
+`crypto_secretbox_*`, `crypto_box_beforenm`, four `*_afternm`, and four
+full `crypto_box_*` that do the agreement themselves.
+
+Two deliberate deviations, both documented in the module header.  The names
+are NaCl's, because a compatibility layer whose names do not match is not
+one -- so `Hacl_NaCl_crypto_secretbox_easy`, not a HACL\*-style spelling.
+And **`c` and `m` may not alias**: HACL\* permits it, separation logic
+forbids it, and every other input/output pair in this library is disjoint
+already.  Lengths are `size_t` rather than HACL\*'s `uint32_t`, which makes
+`2^38 - 32` -- the largest message XSalsa20 can cover after the
+thirty-two-byte prefix -- a real precondition rather than a vacuous one.
+
+`tests/test_nacl.c` is anchored on libsodium's own files rather than on
+recollection, which mattered: the nonce in `test/default/secretbox.c` is
+not what memory said it was, and the resulting mismatch looked exactly like
+a construction bug for a while.  Fetching the vector settled it in a
+minute.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1836,5 +1928,9 @@ for it.
 AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, and the
 Intel SHA extensions sit under SHA-256 and SHA-224, each chosen at run time.
 
-Beyond the subset, in rough order of how often they are asked for:
-Salsa20/NaCl and FrodoKEM.
+Beyond the subset, Salsa20 is there with HSalsa20 and XSalsa20 under it,
+and so is the whole of the original NaCl interface: `crypto_secretbox`,
+`crypto_box`, and the `beforenm`/`afternm` split for callers that talk to
+the same peer more than once.
+
+That leaves FrodoKEM.

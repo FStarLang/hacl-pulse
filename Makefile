@@ -71,6 +71,13 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Chacha20Poly1305., encrypt decrypt)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Salsa20., encrypt decrypt key_block0 hsalsa20)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.NaCl.crypto_secretbox_, \
+                     detached open_detached easy open_easy)
+CUSTARD_ENTRIES += $(addprefix Hacl.NaCl.crypto_box_, \
+                     beforenm detached open_detached easy open_easy \
+                     detached_afternm open_detached_afternm \
+                     easy_afternm open_easy_afternm)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.HMAC.SHA1., hmac_sha1)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.HMAC., \

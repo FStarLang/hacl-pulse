@@ -32,6 +32,8 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+module UInt = FStar.UInt
+module D = Hacl.Secret.Declassify
 
 (** [be_nat] of a prefix of a window is [be_nat] of the corresponding prefix of
     the underlying sequence: the window is only there to name an offset. *)
@@ -257,6 +259,59 @@ ensures exists* (vo: Seq.seq S8.t). A.pts_to out vo ** A.pts_to ws #pw vw **
   with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (words_to_le #t (SZ.v n) vw);
   Seq.lemma_eq_elim vo (words_to_le #t (SZ.v n) vw);
+}
+
+#pop-options
+
+(** {2 Constant-time equality}
+
+    [n] [eq_mask]s folded with [logand]: all-ones exactly when every byte
+    agrees, and the loop's shape does not depend on where a mismatch is.  The
+    resulting bit is the answer the caller asked for, so it is declassified
+    here -- and, apart from a couple of range checks, nowhere else. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+fn bytes_eq (a: A.array S8.t) (b: A.array S8.t) (n: SZ.t)
+            (#pa: perm) (#va: erased (Seq.seq S8.t))
+            (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
+         pure (Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n)
+returns res: bool
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
+        pure (Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n /\
+              (res <==> Seq.equal va vb))
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  let mut acc = S8.ones;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (m: S8.t).
+    pts_to i vi ** pts_to acc m ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n /\
+          (S8.v m == 0 \/ S8.v m == pow2 8 - 1) /\
+          (S8.v m == pow2 8 - 1 <==>
+           (forall (k: nat). k < SZ.v vi ==>
+              S8.v (Seq.index va k) == S8.v (Seq.index vb k))))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = A.(a.(vi));
+    let y = A.(b.(vi));
+    let m = !acc;
+    let eq = S8.eq_mask x y;
+    let m' = S8.logand m eq;
+    UInt.logand_lemma_1 #8 (S8.v m);
+    UInt.logand_lemma_2 #8 (S8.v m);
+    UInt.logand_commutative #8 (S8.v m) (S8.v eq);
+    UInt.logand_lemma_1 #8 (S8.v eq);
+    UInt.logand_lemma_2 #8 (S8.v eq);
+    acc := m';
+    i := SZ.add vi 1sz;
+  };
+  let m = !acc;
+  D.bool_of_mask m
 }
 
 #pop-options
