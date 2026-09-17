@@ -32,6 +32,7 @@ open Spec.Byte
 open Spec.GF128
 
 module A = Pulse.Lib.Array
+module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module Vec = Hacl.Vec128
@@ -48,6 +49,34 @@ ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   if Vec.supported () {
     Hacl.AES.GF128.NI.gmul_ni a h;
   } else {
+    Hacl.AES.GF128.gmul_portable a h;
+  }
+}
+
+(** [a := gmul (gadd a b@off) h]: the addition and the multiplication
+    together, which is the whole of GHASH's inner loop.  The portable branch
+    is the two separate routines, which is what the caller would have run
+    anyway; the fast branch keeps the accumulator in a register across both,
+    and so avoids sixteen bytes of scalar traffic and a store-forwarding
+    stall on every block. *)
+fn gmul_add_impl (a: A.array S8.t) (h: A.array S8.t) (b: A.array S8.t) (off: SZ.t)
+                 (#va #vh: erased (Seq.seq S8.t))
+                 (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to a va ** A.pts_to h vh ** A.pts_to b #pb vb ** pure (
+  Seq.length va == blocklen /\ Seq.length vh == blocklen /\
+  SZ.v off + blocklen <= Seq.length vb)
+ensures exists* (va': Seq.seq S8.t).
+  A.pts_to a va' ** A.pts_to h vh ** A.pts_to b #pb vb ** pure (
+  Seq.length va == blocklen /\ Seq.length vh == blocklen /\
+  SZ.v off + blocklen <= Seq.length vb /\ Seq.length va' == blocklen /\
+  vals va' == gmul (gadd (vals va)
+                         (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
+                   (vals vh))
+{
+  if Vec.supported () {
+    Hacl.AES.GF128.NI.gmul_add_ni a h b off;
+  } else {
+    Hacl.AES.GF128.gadd_at_impl a b off;
     Hacl.AES.GF128.gmul_portable a h;
   }
 }

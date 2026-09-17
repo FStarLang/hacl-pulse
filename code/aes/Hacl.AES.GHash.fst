@@ -158,8 +158,7 @@ ensures exists* (va1: Seq.seq S8.t).
     let vi = !i;
     with va. assert A.pts_to acc va;
     ghash_body (vals vh) (vals va0) (vals vd) (SZ.v vi);
-    gadd_at_impl acc data vi;
-    Hacl.AES.GMul.gmul_impl acc h;
+    Hacl.AES.GMul.gmul_add_impl acc h data vi;
     i := SZ.add vi 16sz;
   };
 
@@ -180,8 +179,7 @@ ensures exists* (va1: Seq.seq S8.t).
     Seq.lemma_eq_intro (Seq.slice (vals vb) 0 blocklen) (vals vb);
     with va. assert A.pts_to acc va;
     ghash_one (vals vh) (vals va) (tail_block (vals vd));
-    gadd_at_impl acc tb 0sz;
-    Hacl.AES.GMul.gmul_impl acc h;
+    Hacl.AES.GMul.gmul_add_impl acc h tb 0sz;
     } else {
     }
 }

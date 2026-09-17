@@ -81,20 +81,20 @@ static void Hacl_AES_Cipher_cipher_portable__Mkparams(uint8_t *st, uint8_t *w);
 static void Hacl_AES_Block_cipher_impl__Mkparams(uint8_t *st, uint8_t *w);
 static void Hacl_AES_GCM_hkey_impl__Mkparams(uint8_t *hb, uint8_t *w);
 static void Hacl_Impl_Copy_copy_range(uint8_t *dst, size_t dbase, uint8_t *src, size_t sbase, size_t n);
-static void Hacl_AES_GF128_gadd_at_impl(uint8_t *a, uint8_t *b, size_t off);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static Hacl_Vec128_t FStar_Pervasives_Native_snd__t(FStar_Pervasives_Native_tuple2__t_t x);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static Hacl_Vec128_t FStar_Pervasives_Native_fst__t(FStar_Pervasives_Native_tuple2__t_t x);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
-static void Hacl_AES_GF128_NI_gmul_ni(uint8_t *a, uint8_t *h);
+static void Hacl_AES_GF128_NI_gmul_add_ni(uint8_t *a, uint8_t *h, uint8_t *b, size_t off);
+static void Hacl_AES_GF128_gadd_at_impl(uint8_t *a, uint8_t *b, size_t off);
 static void Hacl_Impl_Copy_copy_prefix(uint8_t *dst, uint8_t *src, size_t n);
 static void Hacl_Impl_Copy_copy_exact(uint8_t *dst, uint8_t *src, size_t n);
 static void Hacl_AES_GF128_select_add(uint8_t *z, uint8_t *v, uint8_t mask);
 static uint8_t Hacl_Secret_UInt8_logor(uint8_t x, uint8_t y);
 static void Hacl_AES_GF128_shift_reduce_impl(uint8_t *v);
 static void Hacl_AES_GF128_gmul_portable(uint8_t *a, uint8_t *h);
-static void Hacl_AES_GMul_gmul_impl(uint8_t *a, uint8_t *h);
+static void Hacl_AES_GMul_gmul_add_impl(uint8_t *a, uint8_t *h, uint8_t *b, size_t off);
 static void Hacl_AES_GHash_ghash_upd_impl(uint8_t *acc, uint8_t *h, uint8_t *data, size_t n);
 static void Hacl_AES_GCM_put_lenblock(uint8_t *lb, size_t la, size_t lc);
 static void Hacl_AES_GCM_j0_impl__Mkparams(uint8_t *jb, uint8_t *w, uint8_t *hb, uint8_t *iv, size_t n);
@@ -104,6 +104,10 @@ static bool Hacl_Secret_Declassify_bool_of_mask(uint8_t mask);
 static bool Hacl_AES_GCM_tag_match(uint8_t *a, uint8_t *b);
 static uint8_t Hacl_Secret_UInt8_add_mod(uint8_t x, uint8_t y);
 static void Hacl_AES_CTR_inc32_impl(uint8_t *ctr);
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static void Hacl_AES_NI_ctr_block_ni__Mkparams(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr);
+static void Hacl_AES_Block_xor_at(uint8_t *msg, size_t idx, uint8_t *ka);
+static void Hacl_AES_Block_ctr_block_impl__Mkparams(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr, uint8_t *ka);
 static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams(uint8_t *msg, size_t n, uint8_t *w, uint8_t *ctr);
 static bool Hacl_AES_GCM_decrypt__Mkparams(uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len, uint8_t *msg, size_t msg_len, uint8_t *tag);
 static void Hacl_AES_GCM_encrypt__Mkparams(uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len, uint8_t *msg, size_t msg_len, uint8_t *tag);
@@ -116,6 +120,9 @@ static void Hacl_AES_Block_cipher_impl__Mkparams_1(uint8_t *st, uint8_t *w);
 static void Hacl_AES_GCM_hkey_impl__Mkparams_1(uint8_t *hb, uint8_t *w);
 static void Hacl_AES_GCM_j0_impl__Mkparams_1(uint8_t *jb, uint8_t *w, uint8_t *hb, uint8_t *iv, size_t n);
 static void Hacl_AES_GCM_gtag_impl__Mkparams_1(uint8_t *tag, uint8_t *w, uint8_t *hb, uint8_t *jb, uint8_t *aad, size_t alen, uint8_t *cip, size_t clen);
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static void Hacl_AES_NI_ctr_block_ni__Mkparams_1(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr);
+static void Hacl_AES_Block_ctr_block_impl__Mkparams_1(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr, uint8_t *ka);
 static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams_1(uint8_t *msg, size_t n, uint8_t *w, uint8_t *ctr);
 static bool Hacl_AES_GCM_decrypt__Mkparams_1(uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len, uint8_t *msg, size_t msg_len, uint8_t *tag);
 static void Hacl_AES_GCM_encrypt__Mkparams_1(uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len, uint8_t *msg, size_t msg_len, uint8_t *tag);
@@ -2274,18 +2281,6 @@ static void Hacl_Impl_Copy_copy_range(uint8_t *dst, size_t dbase, uint8_t *src, 
   }
 }
 
-static void Hacl_AES_GF128_gadd_at_impl(uint8_t *a, uint8_t *b, size_t off) {
-  size_t i = 0;
-  while (i < 16) {
-    size_t vi = i;
-    uint8_t x = a[vi];
-    uint8_t y = b[(off + vi)];
-    uint8_t r = Hacl_Secret_UInt8_logxor(x, y);
-    a[vi] = r;
-    i = (vi + 1);
-  }
-}
-
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static Hacl_Vec128_t FStar_Pervasives_Native_snd__t(FStar_Pervasives_Native_tuple2__t_t x) {
   return x._2;
@@ -2297,11 +2292,14 @@ static Hacl_Vec128_t FStar_Pervasives_Native_fst__t(FStar_Pervasives_Native_tupl
 }
 
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
-static void Hacl_AES_GF128_NI_gmul_ni(uint8_t *a, uint8_t *h) {
+static void Hacl_AES_GF128_NI_gmul_add_ni(uint8_t *a, uint8_t *h, uint8_t *b, size_t off) {
   Hacl_Vec128_t x = Hacl_Vec128_load(a);
   Hacl_Vec128_t y = Hacl_Vec128_load(h);
+  size_t off2 = (off + 16);
+  uint8_t *db = Hacl_Impl_Sub_sub__t(b, off, off2);
+  Hacl_Vec128_t dv = Hacl_Vec128_load(db);
   Hacl_Vec128_t rc = Hacl_Vec128_reduction();
-  Hacl_Vec128_t xa = Hacl_Vec128_bswap(x);
+  Hacl_Vec128_t xa = Hacl_Vec128_bswap(Hacl_Vec128_xor(x, dv));
   Hacl_Vec128_t yb = Hacl_Vec128_bswap(y);
   Hacl_Vec128_t ll = Hacl_Vec128_clmul_ll(xa, yb);
   Hacl_Vec128_t lh = Hacl_Vec128_clmul_lh(xa, yb);
@@ -2351,6 +2349,18 @@ static void Hacl_AES_GF128_NI_gmul_ni(uint8_t *a, uint8_t *h) {
   FStar_Pervasives_Native_tuple2__t_t p3 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = Hacl_Vec128_bswap(qhi2), ._2 = Hacl_Vec128_bswap(qlo2) };
   Hacl_Vec128_t r = Hacl_Vec128_xor(FStar_Pervasives_Native_fst__t(p1), Hacl_Vec128_xor(FStar_Pervasives_Native_fst__t(p2), FStar_Pervasives_Native_fst__t(p3)));
   Hacl_Vec128_store(a, r);
+}
+
+static void Hacl_AES_GF128_gadd_at_impl(uint8_t *a, uint8_t *b, size_t off) {
+  size_t i = 0;
+  while (i < 16) {
+    size_t vi = i;
+    uint8_t x = a[vi];
+    uint8_t y = b[(off + vi)];
+    uint8_t r = Hacl_Secret_UInt8_logxor(x, y);
+    a[vi] = r;
+    i = (vi + 1);
+  }
 }
 
 static void Hacl_Impl_Copy_copy_prefix(uint8_t *dst, uint8_t *src, size_t n) {
@@ -2440,17 +2450,19 @@ static void Hacl_AES_GF128_gmul_portable(uint8_t *a, uint8_t *h) {
   Hacl_Impl_Copy_copy_exact(a, za, 16);
 }
 
-static void Hacl_AES_GMul_gmul_impl(uint8_t *a, uint8_t *h) {
-  if (Hacl_Vec128_supported()) Hacl_AES_GF128_NI_gmul_ni(a, h);
-  else Hacl_AES_GF128_gmul_portable(a, h);
+static void Hacl_AES_GMul_gmul_add_impl(uint8_t *a, uint8_t *h, uint8_t *b, size_t off) {
+  if (Hacl_Vec128_supported()) Hacl_AES_GF128_NI_gmul_add_ni(a, h, b, off);
+  else {
+    Hacl_AES_GF128_gadd_at_impl(a, b, off);
+    Hacl_AES_GF128_gmul_portable(a, h);
+  }
 }
 
 static void Hacl_AES_GHash_ghash_upd_impl(uint8_t *acc, uint8_t *h, uint8_t *data, size_t n) {
   size_t i = 0;
   while ((i + 16) <= n) {
     size_t vi = i;
-    Hacl_AES_GF128_gadd_at_impl(acc, data, vi);
-    Hacl_AES_GMul_gmul_impl(acc, h);
+    Hacl_AES_GMul_gmul_add_impl(acc, h, data, vi);
     i = (vi + 16);
   }
   size_t rem = (n - i);
@@ -2461,8 +2473,7 @@ static void Hacl_AES_GHash_ghash_upd_impl(uint8_t *acc, uint8_t *h, uint8_t *dat
   }
   if (rem > 0) {
     Hacl_Impl_Copy_copy_range(tb, 0, data, i, rem);
-    Hacl_AES_GF128_gadd_at_impl(acc, tb, 0);
-    Hacl_AES_GMul_gmul_impl(acc, h);
+    Hacl_AES_GMul_gmul_add_impl(acc, h, tb, 0);
   }
 }
 
@@ -2558,6 +2569,58 @@ static void Hacl_AES_CTR_inc32_impl(uint8_t *ctr) {
   ctr[15] = r15;
 }
 
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static void Hacl_AES_NI_ctr_block_ni__Mkparams(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr) {
+  Hacl_Vec128_t c0 = Hacl_Vec128_load(ctr);
+  uint8_t *k0 = Hacl_Impl_Sub_sub__t(w, 0, 16);
+  Hacl_Vec128_t kv0 = Hacl_Vec128_load(k0);
+  Hacl_Vec128_t s = Hacl_Vec128_xor(c0, kv0);
+  size_t i = 1;
+  size_t off = 16;
+  while (i < 14) {
+    size_t vi = i;
+    size_t vo = off;
+    Hacl_Vec128_t vs = s;
+    size_t vo2 = (vo + 16);
+    uint8_t *kb = Hacl_Impl_Sub_sub__t(w, vo, vo2);
+    Hacl_Vec128_t kv = Hacl_Vec128_load(kb);
+    s = Hacl_Vec128_aesenc(vs, kv);
+    i = (vi + 1);
+    off = (vo + 16);
+  }
+  size_t vo2_1 = (off + 16);
+  uint8_t *kb_1 = Hacl_Impl_Sub_sub__t(w, off, vo2_1);
+  Hacl_Vec128_t kv_1 = Hacl_Vec128_load(kb_1);
+  Hacl_Vec128_t ks = Hacl_Vec128_aesenclast(s, kv_1);
+  size_t idx2 = (idx + 16);
+  uint8_t *mb = Hacl_Impl_Sub_sub__t(msg, idx, idx2);
+  Hacl_Vec128_t mv = Hacl_Vec128_load(mb);
+  Hacl_Vec128_t r = Hacl_Vec128_xor(mv, ks);
+  Hacl_Vec128_store(mb, r);
+}
+
+static void Hacl_AES_Block_xor_at(uint8_t *msg, size_t idx, uint8_t *ka) {
+  size_t t = 0;
+  while (t < 16) {
+    size_t vt = t;
+    size_t i = (idx + vt);
+    uint8_t a = msg[i];
+    uint8_t b = ka[vt];
+    uint8_t y = Hacl_Secret_UInt8_logxor(a, b);
+    msg[i] = y;
+    t = (vt + 1);
+  }
+}
+
+static void Hacl_AES_Block_ctr_block_impl__Mkparams(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr, uint8_t *ka) {
+  if (Hacl_Vec128_supported()) Hacl_AES_NI_ctr_block_ni__Mkparams(msg, idx, w, ctr);
+  else {
+    Hacl_Impl_Copy_copy_exact(ka, ctr, 16);
+    Hacl_AES_Cipher_cipher_portable__Mkparams(ka, w);
+    Hacl_AES_Block_xor_at(msg, idx, ka);
+  }
+}
+
 static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams(uint8_t *msg, size_t n, uint8_t *w, uint8_t *ctr) {
   uint8_t z = Hacl_Secret_UInt8_zero;
   uint8_t ka[16];
@@ -2566,16 +2629,24 @@ static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams(uint8_t *msg, size_t n, uint
   }
   size_t j = 0;
   size_t bi = 0;
-  while (j < n) {
+  while ((j + 16) <= n) {
     size_t vj = j;
     size_t vbi = bi;
+    Hacl_AES_Block_ctr_block_impl__Mkparams(msg, vj, w, ctr, ka);
+    Hacl_AES_CTR_inc32_impl(ctr);
+    j = (vj + 16);
+    bi = (vbi + 1);
+  }
+  while (j < n) {
+    size_t vj_1 = j;
+    size_t vbi_1 = bi;
     Hacl_Impl_Copy_copy_exact(ka, ctr, 16);
     Hacl_AES_Block_cipher_impl__Mkparams(ka, w);
-    size_t rem = (n - vj);
+    size_t rem = (n - vj_1);
     size_t t = 0;
     while ((t < 16) && (t < rem)) {
       size_t vt = t;
-      size_t idx = (vj + vt);
+      size_t idx = (vj_1 + vt);
       uint8_t a = msg[idx];
       uint8_t b = ka[vt];
       uint8_t y = Hacl_Secret_UInt8_logxor(a, b);
@@ -2583,8 +2654,8 @@ static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams(uint8_t *msg, size_t n, uint
       t = (vt + 1);
     }
     Hacl_AES_CTR_inc32_impl(ctr);
-    j = (vj + 16);
-    bi = (vbi + 1);
+    j = (vj_1 + 16);
+    bi = (vbi_1 + 1);
   }
 }
 
@@ -2812,6 +2883,45 @@ static void Hacl_AES_GCM_gtag_impl__Mkparams_1(uint8_t *tag, uint8_t *w, uint8_t
   Hacl_AES_GF128_gadd_at_impl(tag, accarr, 0);
 }
 
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static void Hacl_AES_NI_ctr_block_ni__Mkparams_1(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr) {
+  Hacl_Vec128_t c0 = Hacl_Vec128_load(ctr);
+  uint8_t *k0 = Hacl_Impl_Sub_sub__t(w, 0, 16);
+  Hacl_Vec128_t kv0 = Hacl_Vec128_load(k0);
+  Hacl_Vec128_t s = Hacl_Vec128_xor(c0, kv0);
+  size_t i = 1;
+  size_t off = 16;
+  while (i < 10) {
+    size_t vi = i;
+    size_t vo = off;
+    Hacl_Vec128_t vs = s;
+    size_t vo2 = (vo + 16);
+    uint8_t *kb = Hacl_Impl_Sub_sub__t(w, vo, vo2);
+    Hacl_Vec128_t kv = Hacl_Vec128_load(kb);
+    s = Hacl_Vec128_aesenc(vs, kv);
+    i = (vi + 1);
+    off = (vo + 16);
+  }
+  size_t vo2_1 = (off + 16);
+  uint8_t *kb_1 = Hacl_Impl_Sub_sub__t(w, off, vo2_1);
+  Hacl_Vec128_t kv_1 = Hacl_Vec128_load(kb_1);
+  Hacl_Vec128_t ks = Hacl_Vec128_aesenclast(s, kv_1);
+  size_t idx2 = (idx + 16);
+  uint8_t *mb = Hacl_Impl_Sub_sub__t(msg, idx, idx2);
+  Hacl_Vec128_t mv = Hacl_Vec128_load(mb);
+  Hacl_Vec128_t r = Hacl_Vec128_xor(mv, ks);
+  Hacl_Vec128_store(mb, r);
+}
+
+static void Hacl_AES_Block_ctr_block_impl__Mkparams_1(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr, uint8_t *ka) {
+  if (Hacl_Vec128_supported()) Hacl_AES_NI_ctr_block_ni__Mkparams_1(msg, idx, w, ctr);
+  else {
+    Hacl_Impl_Copy_copy_exact(ka, ctr, 16);
+    Hacl_AES_Cipher_cipher_portable__Mkparams_1(ka, w);
+    Hacl_AES_Block_xor_at(msg, idx, ka);
+  }
+}
+
 static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams_1(uint8_t *msg, size_t n, uint8_t *w, uint8_t *ctr) {
   uint8_t z = Hacl_Secret_UInt8_zero;
   uint8_t ka[16];
@@ -2820,16 +2930,24 @@ static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams_1(uint8_t *msg, size_t n, ui
   }
   size_t j = 0;
   size_t bi = 0;
-  while (j < n) {
+  while ((j + 16) <= n) {
     size_t vj = j;
     size_t vbi = bi;
+    Hacl_AES_Block_ctr_block_impl__Mkparams_1(msg, vj, w, ctr, ka);
+    Hacl_AES_CTR_inc32_impl(ctr);
+    j = (vj + 16);
+    bi = (vbi + 1);
+  }
+  while (j < n) {
+    size_t vj_1 = j;
+    size_t vbi_1 = bi;
     Hacl_Impl_Copy_copy_exact(ka, ctr, 16);
     Hacl_AES_Block_cipher_impl__Mkparams_1(ka, w);
-    size_t rem = (n - vj);
+    size_t rem = (n - vj_1);
     size_t t = 0;
     while ((t < 16) && (t < rem)) {
       size_t vt = t;
-      size_t idx = (vj + vt);
+      size_t idx = (vj_1 + vt);
       uint8_t a = msg[idx];
       uint8_t b = ka[vt];
       uint8_t y = Hacl_Secret_UInt8_logxor(a, b);
@@ -2837,8 +2955,8 @@ static void Hacl_AES_CTR_ctr_encrypt_impl__Mkparams_1(uint8_t *msg, size_t n, ui
       t = (vt + 1);
     }
     Hacl_AES_CTR_inc32_impl(ctr);
-    j = (vj + 16);
-    bi = (vbi + 1);
+    j = (vj_1 + 16);
+    bi = (vbi_1 + 1);
   }
 }
 
