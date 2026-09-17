@@ -263,13 +263,116 @@ let max_input_big (#t: Type0) {| word t |} ()
   : Lemma (max_input #t >= pow2 61 /\ block_len #t <= 256)
   = Math.pow2_le_compat (8 * len_len #t - 3) 61
 
+(** The two byte strings that are hashed, as functions of their pieces.  The
+    implementation lays them out in one scratch buffer, so each comes with a
+    lemma saying that a buffer holding the pieces at the right offsets {i is}
+    the concatenation.  That is the only fact the Pulse code needs, and
+    proving it here keeps [Seq.append]'s associativity out of a heap query. *)
+
+let extract_input (sid label ikm: Seq.seq S8.t) : Seq.seq S8.t =
+  Seq.append (Seq.append (Seq.append version sid) label) ikm
+
+let expand_input (len: nat { len < 65536 }) (sid label info: Seq.seq S8.t) : Seq.seq S8.t =
+  Seq.append (Seq.append (Seq.append (Seq.append (two_bytes len) version) sid) label) info
+
+let extract_input_len (sid label ikm: Seq.seq S8.t)
+  : Lemma (Seq.length (extract_input sid label ikm) ==
+           7 + Seq.length sid + Seq.length label + Seq.length ikm)
+          [SMTPat (Seq.length (extract_input sid label ikm))]
+  = ()
+
+let expand_input_len (len: nat { len < 65536 }) (sid label info: Seq.seq S8.t)
+  : Lemma (Seq.length (expand_input len sid label info) ==
+           9 + Seq.length sid + Seq.length label + Seq.length info)
+          [SMTPat (Seq.length (expand_input len sid label info))]
+  = ()
+
+(** A four-way concatenation, pointwise.  [cat5] below is the same argument
+    with one more layer; both are written out rather than composed, because
+    composing them would need index lemmas about the intermediate
+    concatenations anyway. *)
+let cat4_pointwise (m a b c d: Seq.seq S8.t)
+  : Lemma (requires
+             Seq.length m == Seq.length a + Seq.length b + Seq.length c + Seq.length d /\
+             (forall (k: nat). k < Seq.length a ==> Seq.index m k == Seq.index a k) /\
+             (forall (k: nat). k < Seq.length b ==>
+                Seq.index m (Seq.length a + k) == Seq.index b k) /\
+             (forall (k: nat). k < Seq.length c ==>
+                Seq.index m (Seq.length a + Seq.length b + k) == Seq.index c k) /\
+             (forall (k: nat). k < Seq.length d ==>
+                Seq.index m (Seq.length a + Seq.length b + Seq.length c + k) == Seq.index d k))
+          (ensures m == Seq.append (Seq.append (Seq.append a b) c) d)
+  = let l1 = Seq.append a b in
+    let l2 = Seq.append l1 c in
+    let r = Seq.append l2 d in
+    let aux (k: nat { k < Seq.length m }) : Lemma (Seq.index m k == Seq.index r k)
+      = if k < Seq.length l2
+        then begin
+          Seq.lemma_index_app1 l2 d k;
+          if k < Seq.length l1
+          then begin
+            Seq.lemma_index_app1 l1 c k;
+            if k < Seq.length a
+            then Seq.lemma_index_app1 a b k
+            else Seq.lemma_index_app2 a b k
+          end
+          else Seq.lemma_index_app2 l1 c k
+        end
+        else Seq.lemma_index_app2 l2 d k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro m r
+
+let cat5_pointwise (m a b c d e: Seq.seq S8.t)
+  : Lemma (requires
+             Seq.length m == Seq.length a + Seq.length b + Seq.length c +
+                             Seq.length d + Seq.length e /\
+             (forall (k: nat). k < Seq.length a ==> Seq.index m k == Seq.index a k) /\
+             (forall (k: nat). k < Seq.length b ==>
+                Seq.index m (Seq.length a + k) == Seq.index b k) /\
+             (forall (k: nat). k < Seq.length c ==>
+                Seq.index m (Seq.length a + Seq.length b + k) == Seq.index c k) /\
+             (forall (k: nat). k < Seq.length d ==>
+                Seq.index m (Seq.length a + Seq.length b + Seq.length c + k) ==
+                  Seq.index d k) /\
+             (forall (k: nat). k < Seq.length e ==>
+                Seq.index m (Seq.length a + Seq.length b + Seq.length c +
+                             Seq.length d + k) == Seq.index e k))
+          (ensures m == Seq.append (Seq.append (Seq.append (Seq.append a b) c) d) e)
+  = let l1 = Seq.append a b in
+    let l2 = Seq.append l1 c in
+    let l3 = Seq.append l2 d in
+    let r = Seq.append l3 e in
+    let aux (k: nat { k < Seq.length m }) : Lemma (Seq.index m k == Seq.index r k)
+      = if k < Seq.length l3
+        then begin
+          Seq.lemma_index_app1 l3 e k;
+          if k < Seq.length l2
+          then begin
+            Seq.lemma_index_app1 l2 d k;
+            if k < Seq.length l1
+            then begin
+              Seq.lemma_index_app1 l1 c k;
+              if k < Seq.length a
+              then Seq.lemma_index_app1 a b k
+              else Seq.lemma_index_app2 a b k
+            end
+            else Seq.lemma_index_app2 l1 c k
+          end
+          else Seq.lemma_index_app2 l2 d k
+        end
+        else Seq.lemma_index_app2 l3 e k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro m r
+
 let labeled_extract (#t: Type0) {| word t |} (p: params t)
                     (sid: Seq.seq S8.t { Seq.length sid <= 16 })
                     (salt: Seq.seq S8.t { Seq.length salt <= 64 })
                     (label: Seq.seq S8.t { Seq.length label <= 16 })
                     (ikm: Seq.seq S8.t { fits p (Seq.length ikm) })
   : GTot (Seq.lseq S8.t (hash_bytes p))
-  = HK.extract p salt (Seq.append (Seq.append (Seq.append version sid) label) ikm)
+  = HK.extract p salt (extract_input sid label ikm)
 
 let labeled_expand (#t: Type0) {| word t |} (p: params t)
                    (sid: Seq.seq S8.t { Seq.length sid <= 16 })
@@ -278,9 +381,7 @@ let labeled_expand (#t: Type0) {| word t |} (p: params t)
                    (info: Seq.seq S8.t { fits p (Seq.length info) })
                    (len: nat { len < 65536 /\ len <= 255 * hash_bytes p })
   : GTot (Seq.lseq S8.t len)
-  = HK.expand p prk
-      (Seq.append (Seq.append (Seq.append (Seq.append (two_bytes len) version) sid) label) info)
-      len
+  = HK.expand p prk (expand_input len sid label info) len
 
 (** {2 The key encapsulation mechanism}
 
@@ -550,6 +651,7 @@ let aead_opened (a: aead_alg { ~(ExportOnly? a) })
     context.  Running out of sequence numbers is a failure, not a wrap: a
     repeated nonce would destroy the AEAD's security outright. *)
 
+#push-options "--z3rlimit 100"
 let context_seal (#t: Type0) {| word t |} (#cs: ciphersuite t)
                  (c: context cs { ~(ExportOnly? cs.aead) })
                  (aad: Seq.seq S8.t { aead_ok (Seq.length aad) })
@@ -560,6 +662,7 @@ let context_seal (#t: Type0) {| word t |} (#cs: ciphersuite t)
     else
       let (ct, tag) = aead_seal cs.aead c.ckey (compute_nonce c) aad pt in
       Some (ct, tag, { c with cseq = c.cseq + 1 })
+#pop-options
 
 let context_open_ok (#t: Type0) {| word t |} (#cs: ciphersuite t)
                     (c: context cs { ~(ExportOnly? cs.aead) })
