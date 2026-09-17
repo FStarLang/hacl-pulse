@@ -287,6 +287,46 @@ let expand_input_len (len: nat { len < 65536 }) (sid label info: Seq.seq S8.t)
           [SMTPat (Seq.length (expand_input len sid label info))]
   = ()
 
+let cat2_pointwise (m a b: Seq.seq S8.t)
+  : Lemma (requires
+             Seq.length m == Seq.length a + Seq.length b /\
+             (forall (k: nat). k < Seq.length a ==> Seq.index m k == Seq.index a k) /\
+             (forall (k: nat). k < Seq.length b ==>
+                Seq.index m (Seq.length a + k) == Seq.index b k))
+          (ensures m == Seq.append a b)
+  = let r = Seq.append a b in
+    let aux (k: nat { k < Seq.length m }) : Lemma (Seq.index m k == Seq.index r k)
+      = if k < Seq.length a
+        then Seq.lemma_index_app1 a b k
+        else Seq.lemma_index_app2 a b k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro m r
+
+let cat3_pointwise (m a b c: Seq.seq S8.t)
+  : Lemma (requires
+             Seq.length m == Seq.length a + Seq.length b + Seq.length c /\
+             (forall (k: nat). k < Seq.length a ==> Seq.index m k == Seq.index a k) /\
+             (forall (k: nat). k < Seq.length b ==>
+                Seq.index m (Seq.length a + k) == Seq.index b k) /\
+             (forall (k: nat). k < Seq.length c ==>
+                Seq.index m (Seq.length a + Seq.length b + k) == Seq.index c k))
+          (ensures m == Seq.append (Seq.append a b) c)
+  = let l1 = Seq.append a b in
+    let r = Seq.append l1 c in
+    let aux (k: nat { k < Seq.length m }) : Lemma (Seq.index m k == Seq.index r k)
+      = if k < Seq.length l1
+        then begin
+          Seq.lemma_index_app1 l1 c k;
+          if k < Seq.length a
+          then Seq.lemma_index_app1 a b k
+          else Seq.lemma_index_app2 a b k
+        end
+        else Seq.lemma_index_app2 l1 c k
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro m r
+
 (** A four-way concatenation, pointwise.  [cat5] below is the same argument
     with one more layer; both are written out rather than composed, because
     composing them would need index lemmas about the intermediate
