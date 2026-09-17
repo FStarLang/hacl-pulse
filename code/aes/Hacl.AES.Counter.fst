@@ -1,0 +1,174 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** The counter of counter mode.
+
+    [inc32] is the standard incrementing function of NIST SP 800-38A: the
+    last four bytes of the block, read as a big-endian thirty-two bit
+    number, plus one, wrapping.  It is written here as a carry chain over
+    the four bytes with the carry itself a mask, so that a counter which
+    happens to be secret leaks nothing through a branch.  The alternative --
+    loading the four bytes into a thirty-two bit word -- would need a
+    secret-integer cast for no gain.
+
+    It lives in its own module, below [Hacl.AES.NI], because the vectorised
+    counter-mode step needs to advance the counter itself: it produces four
+    consecutive counter blocks in registers before running any of them
+    through the cipher. *)
+module Hacl.AES.Counter
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+open Spec.Byte
+open Spec.AES
+
+module A = Pulse.Lib.Array
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+module S8 = Hacl.Secret.UInt8
+module Math = FStar.Math.Lemmas
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** {2 The pure side of [inc32]} *)
+
+(** Four bytes, most significant first, are recovered from the number they
+    make: the standard digit extraction, spelled out because the numbers are
+    the only place division appears in this file. *)
+let byte_at_digits (a b c d: elem)
+  : Lemma (let x = a * 16777216 + b * 65536 + c * 256 + d in
+           x < 4294967296 /\
+           byte_at x 0 == d /\ byte_at x 8 == c /\
+           byte_at x 16 == b /\ byte_at x 24 == a)
+  = assert_norm (pow2 0 == 1);
+    assert_norm (pow2 8 == 256);
+    assert_norm (pow2 16 == 65536);
+    assert_norm (pow2 24 == 16777216);
+    let x = a * 16777216 + b * 65536 + c * 256 + d in
+    let y = a * 65536 + b * 256 + c in
+    let z = a * 256 + b in
+    assert (x == d + y * 256);
+    Math.lemma_div_plus d y 256; Math.small_div d 256;
+    Math.lemma_mod_plus d y 256; Math.small_mod d 256;
+    assert (y == c + z * 256);
+    Math.lemma_div_plus c z 256; Math.small_div c 256;
+    Math.lemma_mod_plus c z 256; Math.small_mod c 256;
+    Math.lemma_div_plus b a 256; Math.small_div b 256;
+    Math.lemma_mod_plus b a 256; Math.small_mod b 256;
+    Math.division_multiplication_lemma x 256 256;
+    Math.division_multiplication_lemma x 65536 256;
+    Math.small_mod a 256
+
+#push-options "--z3rlimit 400"
+
+(** The carry chain is the increment.  [c15] is the carry out of the last
+    byte, [c14] out of the last two, and so on: each is the previous carry
+    kept only where the byte was already all ones. *)
+let inc32_bytes (b: block) (r12 r13 r14 r15: elem)
+  : Lemma (requires
+      (let x12 = Seq.index b 12 in let x13 = Seq.index b 13 in
+       let x14 = Seq.index b 14 in let x15 = Seq.index b 15 in
+       let c15 = (if x15 = 255 then 1 else 0) in
+       let c14 = (if x14 = 255 then c15 else 0) in
+       let c13 = (if x13 = 255 then c14 else 0) in
+       r15 == (x15 + 1) % 256 /\ r14 == (x14 + c15) % 256 /\
+       r13 == (x13 + c14) % 256 /\ r12 == (x12 + c13) % 256))
+    (ensures
+      (forall (j: nat). j < 12 ==> Seq.index (inc32 b) j == Seq.index b j) /\
+      Seq.index (inc32 b) 12 == r12 /\ Seq.index (inc32 b) 13 == r13 /\
+      Seq.index (inc32 b) 14 == r14 /\ Seq.index (inc32 b) 15 == r15)
+  = assert_norm (pow2 32 == 4294967296);
+    let x12 = Seq.index b 12 in let x13 = Seq.index b 13 in
+    let x14 = Seq.index b 14 in let x15 = Seq.index b 15 in
+    byte_at_digits x12 x13 x14 x15;
+    let n = be32 b in
+    assert (n == x12 * 16777216 + x13 * 65536 + x14 * 256 + x15);
+    if x15 < 255 then begin
+      byte_at_digits x12 x13 x14 (x15 + 1);
+      Math.small_mod (n + 1) 4294967296
+    end else if x14 < 255 then begin
+      byte_at_digits x12 x13 (x14 + 1) 0;
+      Math.small_mod (n + 1) 4294967296
+    end else if x13 < 255 then begin
+      byte_at_digits x12 (x13 + 1) 0 0;
+      Math.small_mod (n + 1) 4294967296
+    end else if x12 < 255 then begin
+      byte_at_digits (x12 + 1) 0 0 0;
+      Math.small_mod (n + 1) 4294967296
+    end else begin
+      byte_at_digits 0 0 0 0;
+      Math.lemma_mod_plus 0 1 4294967296
+    end
+
+#pop-options
+
+(** {2 The increment} *)
+
+fn inc32_impl (ctr: A.array S8.t) (#v0: erased (Seq.seq S8.t))
+requires A.pts_to ctr v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to ctr v1 ** pure (
+  Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
+  vals v1 == inc32 (vals v0))
+{
+  A.pts_to_len ctr;
+  (* The constants are classified here rather than taken from
+     [Hacl.Secret.UInt8], because this function is reached from the AES-NI
+     path and a global reached from a function with a target attribute is
+     not something Custard will emit. *)
+  let one = S8.classify 1uy;
+  let ff = S8.classify 255uy;
+  let zz = S8.classify 0uy;
+  let x12 = A.(ctr.(12sz));
+  let x13 = A.(ctr.(13sz));
+  let x14 = A.(ctr.(14sz));
+  let x15 = A.(ctr.(15sz));
+  let r15 = S8.add_mod x15 one;
+  let c15 = S8.select (S8.eq_mask x15 ff) one zz;
+  let r14 = S8.add_mod x14 c15;
+  let c14 = S8.select (S8.eq_mask x14 ff) c15 zz;
+  let r13 = S8.add_mod x13 c14;
+  let c13 = S8.select (S8.eq_mask x13 ff) c14 zz;
+  let r12 = S8.add_mod x12 c13;
+  A.((ctr.(12sz) <- r12));
+  A.((ctr.(13sz) <- r13));
+  A.((ctr.(14sz) <- r14));
+  A.((ctr.(15sz) <- r15));
+  with v1. assert A.pts_to ctr v1;
+  assert_norm (pow2 8 == 256);
+  inc32_bytes (vals v0) (S8.v r12) (S8.v r13) (S8.v r14) (S8.v r15);
+  Seq.lemma_eq_intro (vals v1) (inc32 (vals v0));
+  A.pts_to_len ctr;
+}
+
+
+(** {2 Four at a time}
+
+    [Spec.AES.counter_block] is a recursion, and the vectorised driver needs
+    the first five values of it spelled out: it advances the counter four
+    times per step. *)
+
+#push-options "--fuel 5 --ifuel 1"
+let counter_unfold (b: block)
+  : Lemma (counter_block b 0 == b /\
+           counter_block b 1 == inc32 b /\
+           counter_block b 2 == inc32 (inc32 b) /\
+           counter_block b 3 == inc32 (inc32 (inc32 b)) /\
+           counter_block b 4 == inc32 (inc32 (inc32 (inc32 b))))
+  = ()
+#pop-options
+
+#pop-options
