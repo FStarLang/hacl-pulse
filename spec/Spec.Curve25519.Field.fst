@@ -14,10 +14,10 @@
    limitations under the License.
 *)
 
-(** The sixteen-limb representation of [Spec.Curve25519]'s field.
+(** The eight-limb representation of [Spec.Curve25519]'s field.
 
-    An element is sixteen natural numbers standing for
-    [a0 + a1 2^16 + ... + a15 2^240].  Nothing here is a machine integer:
+    An element is eight natural numbers standing for
+    [a0 + a1 2^32 + ... + a7 2^224].  Nothing here is a machine integer:
     this module is the arithmetic, and [Hacl.Curve25519.Field] will be the
     same arithmetic on [Hacl.Secret.UInt64.t].
 
@@ -26,31 +26,32 @@
     in [Spec.Bignum256], which P-256 shares.  This module [include]s it, so
     every name is still available here and no consumer noticed the move.
     What is left below is exactly the prime-specific half: folding column
-    [k + 16] into column [k] with the constant [38], and subtracting the
+    [k + 8] into column [k] with the constant [38], and subtracting the
     prime.
 
-    {b Why sixteen bits.}  The textbook representation of this field is five
-    limbs of fifty-one bits, whose products need a hundred-and-two-bit
-    accumulator; that is why HACL* has both a [_51] field over
-    [uint128] and a [_64] one over assembly.  Custard emits no
-    hundred-and-twenty-eight-bit type, so the limb has to be small enough
-    that a product and a column of products stay inside [uint64].  Sixteen is
-    the choice that makes everything else free: a limb is exactly two bytes,
-    so loading and storing a field element is a byte shuffle with no bit
-    extraction, and [2^256 = 2 * prime + 38] means the reduction constant is
-    the single digit [38].  A column of sixteen products of eighteen-bit
-    limbs is under [2^40], and folding multiplies that by [38], so the widest
-    intermediate is under [2^46] -- seventeen bits of headroom.
+    {b Why thirty-two bits.}  The textbook representation of this field is
+    five limbs of fifty-one bits, whose products need a hundred-and-two-bit
+    accumulator; that is why HACL* has both a [_51] field over [uint128] and
+    a [_64] one over assembly.  Custard now emits [unsigned __int128], so a
+    column of products can be a hundred and twenty-eight bits wide, and the
+    limb only has to be small enough that [nl] products fit there.
+    Thirty-two is the largest such radix, and it makes everything else free:
+    a limb is exactly four bytes, so loading and storing a field element is a
+    byte shuffle with no bit extraction, and [2^256 = 2 * prime + 38] means
+    the reduction constant is the single digit [38].  A column of eight
+    products of thirty-three-bit limbs is under [2^69], and folding
+    multiplies that by [38], so the widest intermediate is under [2^75] --
+    fifty-three bits of headroom.
 
-    The cost is that a multiplication is two hundred and fifty-six word
-    multiplies rather than twenty-five.  That is the price of not having a
-    hundred-and-twenty-eight-bit integer, and it is paid in the one place
-    where this library is not competitive with HACL*.
+    A multiplication is sixty-four word multiplies.  Radix [2^51] would need
+    twenty-five, but it would also need bit extraction on every load and
+    store and a carry chain that is not a byte shuffle; sixty-four schoolbook
+    products with no intermediate reduction is the trade this library makes.
 
     Everything below is stated on [Seq.seq nat] and proved by induction.  The
-    alternative -- naming two hundred and fifty-six products and handing them
-    to the ring tactic, as [Spec.Poly1305.Field] does for twenty-five -- does
-    not scale, and the sequence formulation is also the one the
+    alternative -- naming sixty-four products and handing them to the ring
+    tactic, as [Spec.Poly1305.Field] does for twenty-five -- does not scale
+    as well, and the sequence formulation is also the one the
     implementation's loops need. *)
 module Spec.Curve25519.Field
 
@@ -69,7 +70,7 @@ let prime : pos = Spec.Curve25519.prime
 
 (** {2 Folding the top half down}
 
-    [2^256 = 2 * prime + 38], so column [k + 16] is worth [38] units of
+    [2^256 = 2 * prime + 38], so column [k + 8] is worth [38] units of
     column [k] plus [2 * prime] times its weight -- and the surplus is an
     exact multiple of the prime, so no [%] is needed anywhere. *)
 let fold38 (c: Seq.seq nat) : Seq.seq nat =
@@ -159,11 +160,11 @@ let carry_pass_ble (s: Seq.seq nat) (c d: nat)
     prime.  Applied twice to a number below [2^256] it lands below [2^255],
     and a third application decides the last conditional subtraction. *)
 
-let hi255 (s: Seq.seq nat) : nat = vat s (nl - 1) / pow2 15
+let hi255 (s: Seq.seq nat) : nat = vat s (nl - 1) / pow2 31
 
 let fold255 (s: Seq.seq nat) : Seq.seq nat =
   if Seq.length s = nl then
-    Seq.upd (Seq.upd s (nl - 1) (vat s (nl - 1) % pow2 15)) 0 (vat s 0 + 19 * hi255 s)
+    Seq.upd (Seq.upd s (nl - 1) (vat s (nl - 1) % pow2 31)) 0 (vat s 0 + 19 * hi255 s)
   else s
 
 let fold255_len (s: Seq.seq nat)
@@ -173,39 +174,39 @@ let fold255_ok (s: Seq.seq nat)
   : Lemma (requires Seq.length s == nl)
           (ensures eval (fold255 s) + prime * hi255 s == eval s)
   = let q = hi255 s in
-    let s1 = Seq.upd s (nl - 1) (Seq.index s (nl - 1) % pow2 15) in
-    eval_upd s (nl - 1) (Seq.index s (nl - 1) % pow2 15);
+    let s1 = Seq.upd s (nl - 1) (Seq.index s (nl - 1) % pow2 31) in
+    eval_upd s (nl - 1) (Seq.index s (nl - 1) % pow2 31);
     eval_upd s1 0 (Seq.index s 0 + 19 * q);
-    Math.euclidean_division_definition (Seq.index s (nl - 1)) (pow2 15);
-    Math.pow2_plus (rad * (nl - 1)) 15;
+    Math.euclidean_division_definition (Seq.index s (nl - 1)) (pow2 31);
+    Math.pow2_plus (rad * (nl - 1)) 31;
     Math.distributivity_add_right (pow2 (rad * (nl - 1)))
-      (Seq.index s (nl - 1) % pow2 15) (pow2 15 * q);
-    Math.paren_mul_right (pow2 (rad * (nl - 1))) (pow2 15) q;
-    assert (rad * (nl - 1) + 15 == 255);
+      (Seq.index s (nl - 1) % pow2 31) (pow2 31 * q);
+    Math.paren_mul_right (pow2 (rad * (nl - 1))) (pow2 31) q;
+    assert (rad * (nl - 1) + 31 == 255);
     assert_norm (pow2 255 == prime + 19)
 
 (** Masking off bit 255 is a reduction modulo [2^255], which is what
     decoding a public key asks for. *)
 let mask255 (s: Seq.seq nat) : Seq.seq nat =
-  if Seq.length s = nl then Seq.upd s (nl - 1) (vat s (nl - 1) % pow2 15) else s
+  if Seq.length s = nl then Seq.upd s (nl - 1) (vat s (nl - 1) % pow2 31) else s
 
 let mask255_ok (s: Seq.seq nat)
   : Lemma (requires Seq.length s == nl /\ bnd s base)
           (ensures eval (mask255 s) == eval s % pow2 255 /\ bnd (mask255 s) base)
-  = let q = Seq.index s (nl - 1) / pow2 15 in
-    eval_upd s (nl - 1) (Seq.index s (nl - 1) % pow2 15);
-    Math.euclidean_division_definition (Seq.index s (nl - 1)) (pow2 15);
-    Math.pow2_plus (rad * (nl - 1)) 15;
+  = let q = Seq.index s (nl - 1) / pow2 31 in
+    eval_upd s (nl - 1) (Seq.index s (nl - 1) % pow2 31);
+    Math.euclidean_division_definition (Seq.index s (nl - 1)) (pow2 31);
+    Math.pow2_plus (rad * (nl - 1)) 31;
     Math.distributivity_add_right (pow2 (rad * (nl - 1)))
-      (Seq.index s (nl - 1) % pow2 15) (pow2 15 * q);
-    Math.paren_mul_right (pow2 (rad * (nl - 1))) (pow2 15) q;
-    assert (rad * (nl - 1) + 15 == 255);
+      (Seq.index s (nl - 1) % pow2 31) (pow2 31 * q);
+    Math.paren_mul_right (pow2 (rad * (nl - 1))) (pow2 31) q;
+    assert (rad * (nl - 1) + 31 == 255);
     eval_at (mask255 s) (nl - 1);
     eval_bnd (Seq.slice (mask255 s) 0 (nl - 1));
     eval_zeros (Seq.slice (mask255 s) nl nl);
-    Math.pow2_plus (rad * (nl - 1)) 15;
+    Math.pow2_plus (rad * (nl - 1)) 31;
     Math.lemma_mult_le_left (pow2 (rad * (nl - 1)))
-      (Seq.index s (nl - 1) % pow2 15 + 1) (pow2 15);
+      (Seq.index s (nl - 1) % pow2 31 + 1) (pow2 31);
     Math.lemma_mod_plus (eval (mask255 s)) q (pow2 255);
     Math.small_mod (eval (mask255 s)) (pow2 255)
 
@@ -239,14 +240,14 @@ let eightp_ok (_: unit)
 
     Everything from here down is stated so that a Pulse function can build a
     sequence and then apply exactly one lemma.  The bounds are the concrete
-    ones: a field element in this library has every limb below [2^17], and
+    ones: a field element in this library has every limb below [2^33], and
     each operation restores that with a fixed number of carry passes -- one
-    for an addition or a subtraction, two for a multiplication by a small
-    constant, three for a full multiplication. *)
+    for an addition, a subtraction or a multiplication by a small constant,
+    two for a full multiplication. *)
 
 module C = Spec.Curve25519
 
-let lim : pos = pow2 17 - 1
+let lim : pos = pow2 33 - 1
 
 let felem (s: Seq.seq nat) : prop = Seq.length s == nl /\ ble s lim
 
@@ -352,7 +353,7 @@ let pass (s: Seq.seq nat) (c d c': nat)
 (** {3 Multiplication} *)
 
 let fmul_spec (a b: Seq.seq nat) : Seq.seq nat =
-  carry_pass (carry_pass (carry_pass (fold38 (part a b nl))))
+  carry_pass (carry_pass (fold38 (part a b nl)))
 
 let fold_mod (c: Seq.seq nat)
   : Lemma (requires Seq.length c == nw)
@@ -369,21 +370,17 @@ let fmul_spec_ok (a b: Seq.seq nat)
   = part_ble a b lim lim nl;
     part_len a b nl;
     let p = part a b nl in
-    assert_norm (39 * (nl * (lim * lim)) <= pow2 44);
+    assert_norm (39 * (nl * (lim * lim)) <= pow2 75);
     fold_ble p (nl * (lim * lim));
-    ble_mono (fold38 p) (39 * (nl * (lim * lim))) (pow2 44);
+    ble_mono (fold38 p) (39 * (nl * (lim * lim))) (pow2 75);
     let f = fold38 p in
-    assert_norm (pow2 44 + (pow2 28 + pow2 13) < base * (pow2 28 + pow2 13 + 1));
-    assert_norm (base - 1 + 38 * ((pow2 44 + (pow2 28 + pow2 13)) / base) <= pow2 34);
-    pass f (pow2 44) (pow2 28 + pow2 13) (pow2 34);
+    assert_norm (pow2 75 + (pow2 43 + pow2 28) < base * (pow2 43 + pow2 28 + 1));
+    assert_norm (base - 1 + 38 * ((pow2 75 + (pow2 43 + pow2 28)) / base) <= pow2 49);
+    pass f (pow2 75) (pow2 43 + pow2 28) (pow2 49);
     let g = carry_pass f in
-    assert_norm (pow2 34 + (pow2 18 + pow2 4) < base * (pow2 18 + pow2 4 + 1));
-    assert_norm (base - 1 + 38 * ((pow2 34 + (pow2 18 + pow2 4)) / base) <= pow2 24);
-    pass g (pow2 34) (pow2 18 + pow2 4) (pow2 24);
-    let h = carry_pass g in
-    assert_norm (pow2 24 + 257 < base * 258);
-    assert_norm (base - 1 + 38 * ((pow2 24 + 257) / base) <= lim);
-    pass h (pow2 24) 257 lim;
+    assert_norm (pow2 49 + (pow2 17 + pow2 2) < base * (pow2 17 + pow2 2 + 1));
+    assert_norm (base - 1 + 38 * ((pow2 49 + (pow2 17 + pow2 2)) / base) <= lim);
+    pass g (pow2 49) (pow2 17 + pow2 2) lim;
     fold_mod p;
     mul_ok a b;
     Math.lemma_mod_mul_distr_l (eval a) (eval b) prime;
@@ -392,7 +389,7 @@ let fmul_spec_ok (a b: Seq.seq nat)
 (** {3 Multiplication by a small constant} *)
 
 let fscale_spec (m: nat) (a: Seq.seq nat) : Seq.seq nat =
-  carry_pass (carry_pass (scale m a))
+  carry_pass (scale m a)
 
 let fscale_spec_ok (m: nat) (a: Seq.seq nat)
   : Lemma (requires felem a /\ m <= 121665)
@@ -404,15 +401,11 @@ let fscale_spec_ok (m: nat) (a: Seq.seq nat)
       Math.lemma_mult_le_right lim m 121665 in
     Classical.forall_intro aux;
     assert (ble s (121665 * lim));
-    assert_norm (121665 * lim <= pow2 34);
-    ble_mono s (121665 * lim) (pow2 34);
-    assert_norm (pow2 34 + (pow2 18 + pow2 4) < base * (pow2 18 + pow2 4 + 1));
-    assert_norm (base - 1 + 38 * ((pow2 34 + (pow2 18 + pow2 4)) / base) <= pow2 24);
-    pass s (pow2 34) (pow2 18 + pow2 4) (pow2 24);
-    let g = carry_pass s in
-    assert_norm (pow2 24 + 257 < base * 258);
-    assert_norm (base - 1 + 38 * ((pow2 24 + 257) / base) <= lim);
-    pass g (pow2 24) 257 lim;
+    assert_norm (121665 * lim <= pow2 50);
+    ble_mono s (121665 * lim) (pow2 50);
+    assert_norm (pow2 50 + (pow2 18 + pow2 3) < base * (pow2 18 + pow2 3 + 1));
+    assert_norm (base - 1 + 38 * ((pow2 50 + (pow2 18 + pow2 3)) / base) <= lim);
+    pass s (pow2 50) (pow2 18 + pow2 3) lim;
     eval_scale m a
 
 
@@ -420,7 +413,7 @@ let fscale_spec_ok (m: nat) (a: Seq.seq nat)
 
     Reducing to the unique representative below the prime, which is what
     the caller sees on the way out.  The shape of the argument shrinks in
-    four steps: from limbs under [2^17] to a genuine base-[2^16] number
+    four steps: from limbs under [2^33] to a genuine base-[2^32] number
     below [2^256], then two subtractions of the prime bring it below
     [2^255], and one conditional subtraction finishes. *)
 
@@ -440,9 +433,9 @@ let eval_shaped (s: Seq.seq nat) (c0: nat)
     Classical.forall_intro aux;
     assert (bnd t base);
     eval_bnd t;
-    assert_norm (rad * (nl - 1) == 240);
-    Math.lemma_mult_le_left base (eval t + 1) (pow2 240);
-    Math.pow2_plus rad 240
+    assert_norm (rad * (nl - 1) == 224);
+    Math.lemma_mult_le_left base (eval t + 1) (pow2 224);
+    Math.pow2_plus rad 224
 
 (** One step: carry the whole number, then fold the overflow back in with
     the reduction constant, since [2^256 = 2 * prime + 38]. *)
@@ -476,7 +469,7 @@ let fstep_ok (s: Seq.seq nat) (c d: nat)
     Math.lemma_mult_le_right 38 (carry_out s) d
 
 (** A pass leaves a shaped number: every limb but the lowest is a proper
-    base-[2^16] digit, and the lowest has absorbed the wrap-around. *)
+    base-[2^32] digit, and the lowest has absorbed the wrap-around. *)
 let carry_pass_shaped (s: Seq.seq nat) (c d: nat)
   : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1))
           (ensures shaped (carry_pass s) (base - 1 + 38 * ((c + d) / base)))
@@ -492,21 +485,21 @@ let fstep_is_pass (s: Seq.seq nat)
   = carry_run_len s (nl - 1);
     Seq.lemma_eq_intro (fstep s) (carry_pass s)
 
-(** The last step lands inside base [2^16]: either nothing overflowed, or
+(** The last step lands inside base [2^32]: either nothing overflowed, or
     the overflow was one and what remained was tiny. *)
 let fstep_last (s: Seq.seq nat)
-  : Lemma (requires shaped s 65573)
+  : Lemma (requires shaped s 4294967333)
           (ensures Seq.length (fstep s) == nl /\ bnd (fstep s) base /\
                    eval (fstep s) < pow2 256 /\
                    eval (fstep s) % prime == eval s % prime)
-  = shaped_ble s 65573;
-    assert_norm (65573 + 1 < base * 2);
+  = shaped_ble s 4294967333;
+    assert_norm (4294967333 + 1 < base * 2);
     fstep_val s;
     carry_low_len s;
-    carry_split_bnd s 65573 1;
+    carry_split_bnd s 4294967333 1;
     carry_split_ok s;
-    eval_shaped s 65573;
-    assert_norm (65573 + pow2 256 - base == pow2 256 + 37);
+    eval_shaped s 4294967333;
+    assert_norm (4294967333 + pow2 256 - base == pow2 256 + 37);
     let r = carry_low s in
     if carry_out s = 0 then begin
       Seq.lemma_eq_intro (fstep s) r;
@@ -535,14 +528,14 @@ let freeze_a_ok (s: Seq.seq nat)
   = assert_norm (lim + 2 < base * 3);
     fstep_ok s lim 2;
     let x1 = fstep s in
-    assert_norm (base - 1 + 38 * 2 == 65611);
-    shaped_ble x1 65611;
-    assert_norm (65611 + 1 < base * 2);
-    fstep_ok x1 65611 1;
+    assert_norm (base - 1 + 38 * 2 == 4294967371);
+    shaped_ble x1 4294967371;
+    assert_norm (4294967371 + 1 < base * 2);
+    fstep_ok x1 4294967371 1;
     let x2 = fstep x1 in
-    assert_norm (base - 1 + 38 * 1 == 65573);
-    shaped_ble x2 65573;
-    fstep_ok x2 65573 1;
+    assert_norm (base - 1 + 38 * 1 == 4294967333);
+    shaped_ble x2 4294967333;
+    fstep_ok x2 4294967333 1;
     fstep_last (fstep x2)
 
 (** Four passes, which is what the implementation actually runs, together
@@ -563,20 +556,20 @@ let freeze_a_bounds (s: Seq.seq nat)
           (ensures (let x1 = carry_pass s in
                     let x2 = carry_pass x1 in
                     let x3 = carry_pass x2 in
-                    Seq.length x1 == nl /\ ble x1 65611 /\
-                    Seq.length x2 == nl /\ ble x2 65573 /\
-                    Seq.length x3 == nl /\ ble x3 65573))
+                    Seq.length x1 == nl /\ ble x1 4294967371 /\
+                    Seq.length x2 == nl /\ ble x2 4294967333 /\
+                    Seq.length x3 == nl /\ ble x3 4294967333))
   = assert_norm (lim + 2 < base * 3);
-    assert_norm (base - 1 + 38 * ((lim + 2) / base) == 65611);
-    pass s lim 2 65611;
+    assert_norm (base - 1 + 38 * ((lim + 2) / base) == 4294967371);
+    pass s lim 2 4294967371;
     let x1 = carry_pass s in
-    assert_norm (65611 + 1 < base * 2);
-    assert_norm (base - 1 + 38 * ((65611 + 1) / base) == 65573);
-    pass x1 65611 1 65573;
+    assert_norm (4294967371 + 1 < base * 2);
+    assert_norm (base - 1 + 38 * ((4294967371 + 1) / base) == 4294967333);
+    pass x1 4294967371 1 4294967333;
     let x2 = carry_pass x1 in
-    assert_norm (65573 + 1 < base * 2);
-    assert_norm (base - 1 + 38 * ((65573 + 1) / base) == 65573);
-    pass x2 65573 1 65573
+    assert_norm (4294967333 + 1 < base * 2);
+    assert_norm (base - 1 + 38 * ((4294967333 + 1) / base) == 4294967333);
+    pass x2 4294967333 1 4294967333
 
 (** {3 Subtracting the prime once} *)
 
@@ -587,12 +580,12 @@ let hi255_bit (s: Seq.seq nat)
           (ensures hi255 s == eval s / pow2 255)
   = eval_bnd s;
     assert_norm (rad * nl == 256);
-    assert_norm (rad * (nl - 1) == 240);
-    Math.lemma_div_lt (eval s) 256 240;
+    assert_norm (rad * (nl - 1) == 224);
+    Math.lemma_div_lt (eval s) 256 224;
     eval_digit s (nl - 1);
-    Math.small_mod (eval s / pow2 240) base;
-    Math.division_multiplication_lemma (eval s) (pow2 240) (pow2 15);
-    Math.pow2_plus 240 15
+    Math.small_mod (eval s / pow2 224) base;
+    Math.division_multiplication_lemma (eval s) (pow2 224) (pow2 31);
+    Math.pow2_plus 224 31
 
 let red255_ok (s: Seq.seq nat)
   : Lemma (requires Seq.length s == nl /\ bnd s base)

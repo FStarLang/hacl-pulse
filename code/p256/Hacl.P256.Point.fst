@@ -76,7 +76,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%P.point_add) P.point_add;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let mut a3 = [| z; 16sz |]; A.pts_to_len a3; let mut a4 = [| z; 16sz |]; A.pts_to_len a4; let mut a5 = [| z; 16sz |]; A.pts_to_len a5; let mut aw = [| z; 16sz |]; A.pts_to_len aw; let mut au = [| z; 16sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; let mut a4 = [| z; 8sz |]; A.pts_to_len a4; let mut a5 = [| z; 8sz |]; A.pts_to_len a5; let mut aw = [| z; 8sz |]; A.pts_to_len aw; let mut au = [| z; 8sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len aw; A.pts_to_len au;
   let bc = fb ();
   fmul a0 x1 x2;
@@ -168,7 +168,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%P.point_double) P.point_double;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 16sz |]; A.pts_to_len a0; let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut aw = [| zz; 16sz |]; A.pts_to_len aw; let mut au = [| zz; 16sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| zz; 8sz |]; A.pts_to_len a0; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut aw = [| zz; 8sz |]; A.pts_to_len aw; let mut au = [| zz; 8sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len aw; A.pts_to_len au;
   let bc = fb ();
   fcopy au x;

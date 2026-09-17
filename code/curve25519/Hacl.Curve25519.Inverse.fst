@@ -46,6 +46,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module C = Spec.Curve25519
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -57,15 +58,15 @@ module C = Spec.Curve25519
     the chain allocates them once. *)
 
 (** [a := a * a]. *)
-fn fsqr_ip (a c1 c2 t: A.array S64.t)
+fn fsqr_ip (a c1 c2: A.array S64.t) (t: A.array S128.t)
            (#va: erased (Seq.seq S64.t))
            (#vc1: erased (Seq.seq S64.t)) (#vc2: erased (Seq.seq S64.t))
-           (#vt: erased (Seq.seq S64.t))
+           (#vt: erased (Seq.seq S128.t))
 requires A.pts_to a va ** A.pts_to c1 vc1 ** A.pts_to c2 vc2 ** A.pts_to t vt **
   pure (felem (vals va) /\ Seq.length vc1 == nl /\ Seq.length vc2 == nl /\
         Seq.length vt == nw)
 ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
-                (vc2': Seq.seq S64.t) (vt': Seq.seq S64.t).
+                (vc2': Seq.seq S64.t) (vt': Seq.seq S128.t).
   A.pts_to a va' ** A.pts_to c1 vc1' ** A.pts_to c2 vc2' ** A.pts_to t vt' **
   pure (felem (vals va') /\ Seq.length vc1' == nl /\ Seq.length vc2' == nl /\
         Seq.length vt' == nw /\
@@ -83,14 +84,14 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
 }
 
 (** [a := a * b]. *)
-fn fmul_ip (a b c1 t: A.array S64.t)
+fn fmul_ip (a b c1: A.array S64.t) (t: A.array S128.t)
            (#va: erased (Seq.seq S64.t))
            (#pb: perm) (#vb: erased (Seq.seq S64.t))
-           (#vc1: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
+           (#vc1: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
 requires A.pts_to a va ** A.pts_to b #pb vb ** A.pts_to c1 vc1 ** A.pts_to t vt **
   pure (felem (vals va) /\ felem (vals vb) /\ Seq.length vc1 == nl /\
         Seq.length vt == nw)
-ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t) (vt': Seq.seq S64.t).
+ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t) (vt': Seq.seq S128.t).
   A.pts_to a va' ** A.pts_to b #pb vb ** A.pts_to c1 vc1' ** A.pts_to t vt' **
   pure (felem (vals va') /\ Seq.length vc1' == nl /\ Seq.length vt' == nw /\
         fev (vals va') == C.fmul (fev (vals va)) (fev (vals vb)))
@@ -100,15 +101,15 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t) (vt': Seq.seq S64.t).
 }
 
 (** [a := a^(2^n)], by [n] squarings. *)
-fn fpow2_ip (a c1 c2 t: A.array S64.t) (n: SZ.t)
+fn fpow2_ip (a c1 c2: A.array S64.t) (t: A.array S128.t) (n: SZ.t)
             (#va: erased (Seq.seq S64.t))
             (#vc1: erased (Seq.seq S64.t)) (#vc2: erased (Seq.seq S64.t))
-            (#vt: erased (Seq.seq S64.t))
+            (#vt: erased (Seq.seq S128.t))
 requires A.pts_to a va ** A.pts_to c1 vc1 ** A.pts_to c2 vc2 ** A.pts_to t vt **
   pure (felem (vals va) /\ Seq.length vc1 == nl /\ Seq.length vc2 == nl /\
         Seq.length vt == nw)
 ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
-                (vc2': Seq.seq S64.t) (vt': Seq.seq S64.t).
+                (vc2': Seq.seq S64.t) (vt': Seq.seq S128.t).
   A.pts_to a va' ** A.pts_to c1 vc1' ** A.pts_to c2 vc2' ** A.pts_to t vt' **
   pure (felem (vals va') /\ Seq.length vc1' == nl /\ Seq.length vc2' == nl /\
         Seq.length vt' == nw /\
@@ -119,7 +120,7 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (u1: Seq.seq S64.t)
-                    (u2: Seq.seq S64.t) (w: Seq.seq S64.t).
+                    (u2: Seq.seq S64.t) (w: Seq.seq S128.t).
     pts_to i vi ** A.pts_to a v ** A.pts_to c1 u1 ** A.pts_to c2 u2 ** A.pts_to t w **
     pure (SZ.v vi <= SZ.v n /\ felem (vals v) /\ Seq.length u1 == nl /\
           Seq.length u2 == nl /\ Seq.length w == nw /\
@@ -163,7 +164,8 @@ ensures exists* (vout': Seq.seq S64.t).
   pure (felem (vals vout') /\ fev (vals vout') == C.finv (fev (vals va)))
 {
   let z = S64.zero;
-  let mut arr1 = [| z; 16sz |]; A.pts_to_len arr1; let mut arr2 = [| z; 16sz |]; A.pts_to_len arr2; let mut arr3 = [| z; 16sz |]; A.pts_to_len arr3; let mut arr4 = [| z; 16sz |]; A.pts_to_len arr4; let mut arr5 = [| z; 16sz |]; A.pts_to_len arr5; let mut arr6 = [| z; 16sz |]; A.pts_to_len arr6; let mut arr7 = [| z; 16sz |]; A.pts_to_len arr7; let mut arrc = [| z; 16sz |]; A.pts_to_len arrc; let mut arrd = [| z; 16sz |]; A.pts_to_len arrd; let mut arrt = [| z; 31sz |]; A.pts_to_len arrt; A.pts_to_len arr1; A.pts_to_len arr2; A.pts_to_len arr3; A.pts_to_len arr4;
+  let z128 : S128.t = S128.zero;
+  let mut arr1 = [| z; 8sz |]; A.pts_to_len arr1; let mut arr2 = [| z; 8sz |]; A.pts_to_len arr2; let mut arr3 = [| z; 8sz |]; A.pts_to_len arr3; let mut arr4 = [| z; 8sz |]; A.pts_to_len arr4; let mut arr5 = [| z; 8sz |]; A.pts_to_len arr5; let mut arr6 = [| z; 8sz |]; A.pts_to_len arr6; let mut arr7 = [| z; 8sz |]; A.pts_to_len arr7; let mut arrc = [| z; 8sz |]; A.pts_to_len arrc; let mut arrd = [| z; 8sz |]; A.pts_to_len arrd; let mut arrt = [| z128; 15sz |]; A.pts_to_len arrt; A.pts_to_len arr1; A.pts_to_len arr2; A.pts_to_len arr3; A.pts_to_len arr4;
   A.pts_to_len arr5; A.pts_to_len arr6; A.pts_to_len arr7;
   A.pts_to_len arrc; A.pts_to_len arrd; A.pts_to_len arrt;
   A.pts_to_len out; A.pts_to_len a;

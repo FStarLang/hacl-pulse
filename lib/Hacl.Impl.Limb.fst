@@ -14,25 +14,33 @@
    limitations under the License.
 *)
 
-(** Sixteen-bit limbs in sixty-four-bit secret words.
+(** Thirty-two-bit limbs in sixty-four-bit secret words.
 
     [Spec.Bignum256] says what a sequence of limbs means; this module is the
     small machine layer underneath it, shared by everything that uses that
     representation.  There is nothing modulus-specific here and nothing
     curve-specific: a word is a [uint64] holding a value that the caller has
-    bounded, a limb is one of those under [2^16], and the two loops are the
-    carry pass with and without its carry out.
+    bounded, a limb is one of those under [2^32], and the loops are the
+    carry pass -- with and without its carry out, over words and over the
+    wide columns of a product -- and the schoolbook multiplier.
 
-    {b Why sixteen bits.}  Custard compiles F* straight to C and the only
-    machine integers it knows are the eight-, sixteen-, thirty-two- and
-    sixty-four-bit ones.  With no hundred-and-twenty-eight-bit type there is
-    no room for a radix-[2^51] product, so the radix has to come down far
-    enough that sixteen products of two limbs still fit in a [uint64] with
-    room for a reduction on top.  Sixteen is the largest such radix that
-    also makes a limb exactly two bytes.
+    {b Why thirty-two bits.}  Custard now emits [unsigned __int128], so a
+    limb product of two thirty-two-bit limbs has somewhere to go: eight
+    limbs of thirty-two bits multiply in sixty-four word multiplies rather
+    than the two hundred and fifty-six that sixteen-bit limbs needed.
+    Thirty-two is also the largest radix that keeps a limb a whole number
+    of bytes and a column of [nl] products inside a hundred-and-twenty-eight
+    bit integer with room for the Montgomery reduction on top.
 
-    Every operation below is a sixty-four-bit add, subtract, multiply, shift,
-    mask or select on secret integers.  Nothing branches on a secret.
+    {b Two widths.}  Limbs live in [uint64]: a proper limb is under [2^32],
+    and the lazy sums an addition or a subtraction produces stay far below
+    [2^64], so those loops never need the wide type.  Only the columns of a
+    product do, and they get their own view ({!vals128}) and their own
+    carry pass ({!carry_run128_op}).
+
+    Every operation below is a sixty-four- or hundred-and-twenty-eight-bit
+    add, subtract, multiply, shift, mask or select on secret integers.
+    Nothing branches on a secret.
 
     [Hacl.Curve25519.Field] predates this module and still carries its own
     copy of the word operations; it is otherwise identical, and folding the
@@ -52,6 +60,9 @@ module U64 = FStar.UInt64
 module UInt = FStar.UInt
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
+module Cast = Hacl.Secret.Cast
+module Classical = FStar.Classical
 module Loops = Hacl.Spec.Loops
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -68,6 +79,19 @@ let vals_upd (v: Seq.seq S64.t) (k: nat { k < Seq.length v }) (x: S64.t)
   : Lemma (vals (Seq.upd v k x) == Seq.upd (vals v) k (S64.v x))
   = Seq.lemma_eq_intro (vals (Seq.upd v k x)) (Seq.upd (vals v) k (S64.v x))
 
+(** The columns of a product do not fit in a word, so they get their own
+    view. *)
+
+let vals128 (v: Seq.seq S128.t)
+  : GTot (s: Seq.seq nat { Seq.length s == Seq.length v /\
+                           (forall (i: nat). i < Seq.length v ==>
+                              Seq.index s i == S128.v (Seq.index v i)) })
+  = Seq.init_ghost (Seq.length v) (fun i -> (S128.v (Seq.index v i) <: nat))
+
+let vals128_upd (v: Seq.seq S128.t) (k: nat { k < Seq.length v }) (x: S128.t)
+  : Lemma (vals128 (Seq.upd v k x) == Seq.upd (vals128 v) k (S128.v x))
+  = Seq.lemma_eq_intro (vals128 (Seq.upd v k x)) (Seq.upd (vals128 v) k (S128.v x))
+
 (** {2 The machine operations}
 
     Each is the [uint64] instruction plus the argument that it did not wrap.
@@ -76,18 +100,18 @@ let vals_upd (v: Seq.seq S64.t) (k: nat { k < Seq.length v }) (x: S64.t)
     body that also carries the heap. *)
 
 inline_for_extraction
-let mask16 : m: S64.t { S64.v m == base - 1 } =
-  assert_norm (base - 1 == 0xffff);
-  S64.classify 0xffffuL
+let mask32 : m: S64.t { S64.v m == base - 1 } =
+  assert_norm (base - 1 == 0xffffffff);
+  S64.classify 0xffffffffuL
 
 inline_for_extraction
-let lo16 (x: S64.t) : r: S64.t { S64.v r == S64.v x % base } =
-  UInt.logand_mask #64 (S64.v x) 16;
-  S64.logand x mask16
+let lo32 (x: S64.t) : r: S64.t { S64.v r == S64.v x % base } =
+  UInt.logand_mask #64 (S64.v x) 32;
+  S64.logand x mask32
 
 inline_for_extraction
-let hi16 (x: S64.t) : r: S64.t { S64.v r == S64.v x / base } =
-  S64.shift_right x 16ul
+let hi32 (x: S64.t) : r: S64.t { S64.v r == S64.v x / base } =
+  S64.shift_right x 32ul
 
 inline_for_extraction
 let addw (x y: S64.t)
@@ -117,10 +141,48 @@ let mulk (k: U64.t) (x: S64.t)
   = Math.small_mod (U64.v k * S64.v x) (pow2 64);
     S64.mul_mod (S64.classify k) x
 
+(** {2 The wide operations}
+
+    The same four, one width up.  [Hacl.Secret.UInt128] offers the widening
+    multiply and nothing else that is needed here: a column is built by
+    [mul_wide] and [addd], and taken apart again by [lo32d] and [hi32d]. *)
+
+inline_for_extraction
+let addd (x y: S128.t)
+  : Pure S128.t (requires S128.v x + S128.v y < pow2 128)
+                (ensures fun z -> S128.v z == S128.v x + S128.v y)
+  = Math.small_mod (S128.v x + S128.v y) (pow2 128);
+    S128.add_mod x y
+
+inline_for_extraction
+let lo32d (x: S128.t) : r: S64.t { S64.v r == S128.v x % base } =
+  assert_norm (base == pow2 32);
+  Math.pow2_modulo_modulo_lemma_1 (S128.v x) 32 64;
+  UInt.logand_mask #64 (S128.v x % pow2 64) 32;
+  S64.logand (Cast.u128_to_u64 x) mask32
+
+inline_for_extraction
+let hi32d (x: S128.t) : r: S128.t { S128.v r == S128.v x / base } =
+  assert_norm (base == pow2 32);
+  S128.shift_right x 32ul
+
+inline_for_extraction
+let narrow128 (x: S128.t)
+  : Pure S64.t (requires S128.v x < pow2 64)
+               (ensures fun z -> S64.v z == S128.v x)
+  = Math.small_mod (S128.v x) (pow2 64);
+    Cast.u128_to_u64 x
+
+(** The digit of a wide column, modulo the radix: only the bottom limb of
+    the column takes part, which is what keeps this a word multiply. *)
+let mod_mul_lo (a mu: nat)
+  : Lemma ((a * mu) % base == ((a % base) * mu) % base)
+  = Math.lemma_mod_mul_distr_l a mu base
+
 (** {2 The carry pass}
 
-    Limbs [0] to [14] carry into their neighbour and the top limb keeps its
-    low sixteen bits.  [c] bounds the limbs on entry and [d] the carry; the
+    Limbs [0] to [nl - 2] carry into their neighbour and the top limb keeps
+    its low thirty-two bits.  [c] bounds the limbs on entry and [d] the carry; the
     caller supplies both, and [Spec.Bignum256.carry_run_chained] turns them
     into the bound that makes each division small.
 
@@ -161,8 +223,8 @@ ensures exists* (va': Seq.seq S64.t).
     let t = A.(a.(vk));
     let u = A.(a.(SZ.add vk 1sz));
     Math.lemma_div_le (S64.v t) (reveal c + reveal d) base;
-    let lo = lo16 t;
-    let up = addw u (hi16 t);
+    let lo = lo32 t;
+    let up = addw u (hi32 t);
     A.((a.(vk) <- lo));
     A.((a.(SZ.add vk 1sz) <- up));
     vals_upd v (SZ.v vk) lo;
@@ -173,7 +235,7 @@ ensures exists* (va': Seq.seq S64.t).
   ()
 }
 
-(** Sixteen limbs: the pass, then the top limb's overflow, returned. *)
+(** Eight limbs: the pass, then the top limb's overflow, returned. *)
 fn carry_out_op (a: A.array S64.t) (c: erased nat) (d: erased nat)
                 (#va: erased (Seq.seq S64.t))
 requires A.pts_to a va **
@@ -187,16 +249,16 @@ ensures exists* (va': Seq.seq S64.t).
         S64.v r == carry_out (vals va))
 {
   A.pts_to_len a;
-  carry_run_op a 15sz c d;
+  carry_run_op a 7sz c d;
   with v. assert (A.pts_to a v);
-  carry_run_chained (vals va) c d 15;
-  carry_run_len (vals va) 15;
-  let t = A.(a.(15sz));
-  let lo = lo16 t;
-  let hi = hi16 t;
-  A.((a.(15sz) <- lo));
-  vals_upd v 15 lo;
-  assert (pure (vals (Seq.upd v 15 lo) == carry_low (vals va)));
+  carry_run_chained (vals va) c d 7;
+  carry_run_len (vals va) 7;
+  let t = A.(a.(7sz));
+  let lo = lo32 t;
+  let hi = hi32 t;
+  A.((a.(7sz) <- lo));
+  vals_upd v 7 lo;
+  assert (pure (vals (Seq.upd v 7 lo) == carry_low (vals va)));
   hi
 }
 
@@ -214,6 +276,52 @@ ensures exists* (va': Seq.seq S64.t).
   ()
 }
 
+(** The same pass one width up, over the wide columns the reduction leaves
+    behind.  It is stated over any length and any number of steps, so the
+    caller can use it both for a full [carry_low] and for
+    [Spec.Field256.normalize], which runs [nl] steps over [nl + 1]
+    columns. *)
+fn carry_run128_op (a: A.array S128.t) (n: SZ.t) (c: erased nat) (d: erased nat)
+                   (#va: erased (Seq.seq S128.t))
+requires A.pts_to a va **
+  pure (SZ.v n < Seq.length va /\ ble (vals128 va) c /\
+        reveal c + reveal d < base * (reveal d + 1) /\
+        reveal c + reveal d < pow2 128)
+ensures exists* (va': Seq.seq S128.t).
+  A.pts_to a va' **
+  pure (Seq.length va' == Seq.length va /\
+        vals128 va' == carry_run (vals128 va) (SZ.v n))
+{
+  A.pts_to_len a;
+  div_le_of_lt (reveal c + reveal d) base d;
+  Loops.repeati_zero carry_step (vals128 va);
+  let mut k = 0sz;
+  while (let vk = !k; SZ.lt vk n)
+  invariant exists* (vk: SZ.t) (v: Seq.seq S128.t).
+    pts_to k vk ** A.pts_to a v **
+    pure (SZ.v vk <= SZ.v n /\ Seq.length v == Seq.length va /\
+          vals128 v == carry_run (vals128 va) (SZ.v vk))
+  decreases (SZ.v n - SZ.v (!k))
+  {
+    with v. assert (A.pts_to a v);
+    let vk = !k;
+    carry_run_chained (vals128 va) c d (SZ.v vk);
+    carry_run_len (vals128 va) (SZ.v vk);
+    let t = A.(a.(vk));
+    let u = A.(a.(SZ.add vk 1sz));
+    Math.lemma_div_le (S128.v t) (reveal c + reveal d) base;
+    let lo = Cast.u64_to_u128 (lo32d t);
+    let up = addd u (hi32d t);
+    A.((a.(vk) <- lo));
+    A.((a.(SZ.add vk 1sz) <- up));
+    vals128_upd v (SZ.v vk) lo;
+    vals128_upd (Seq.upd v (SZ.v vk) lo) (SZ.v vk + 1) up;
+    Loops.unfold_repeati (SZ.v vk) carry_step (vals128 va);
+    k := SZ.add vk 1sz;
+  };
+  ()
+}
+
 #pop-options
 
 (** {2 The schoolbook product}
@@ -222,11 +330,12 @@ ensures exists* (va': Seq.seq S64.t).
     anywhere: [Spec.Bignum256.part] says exactly this, one row at a time,
     and the two loops here are its two indices.  Column [i + j] can receive
     at most [nl] products of two limbs, so the caller's bound
-    [nl * lim^2 + lim^2 < 2^64] is what keeps a column inside a word.
+    [nl * lim^2 + lim^2 < 2^128] is what keeps a column inside a wide word.
 
-    Deferring every carry to a single pass afterwards is the whole reason
-    the radix is below half a word: it buys [64 - 2 * 16 = 32] bits of
-    headroom, which is four more than the [nl = 16] rows need. *)
+    Deferring every carry to a single pass afterwards is what the wide
+    column buys: with [lim = 2^32 - 1] a column is under [2^67], leaving
+    sixty-one bits of headroom -- far more than the Montgomery reduction
+    that runs on top of it will ever use. *)
 
 let ble_mono (s: Seq.seq nat) (c c': nat)
   : Lemma (requires ble s c /\ c <= c') (ensures ble s c') = ()
@@ -248,45 +357,45 @@ let acc_ble (a b acc: Seq.seq nat) (lim: nat) (i j: nat)
 
 #push-options "--z3rlimit 300"
 
-fn mul_columns (t a b: A.array S64.t) (lim: erased nat)
-               (#vt: erased (Seq.seq S64.t))
+fn mul_columns (t: A.array S128.t) (a b: A.array S64.t) (lim: erased nat)
+               (#vt: erased (Seq.seq S128.t))
                (#pa: perm) (#va: erased (Seq.seq S64.t))
                (#pb: perm) (#vb: erased (Seq.seq S64.t))
 requires A.pts_to t vt ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vt == nw /\ Seq.length va == nl /\ Seq.length vb == nl /\
         ble (vals va) lim /\ ble (vals vb) lim /\
-        nl * (reveal lim * reveal lim) + reveal lim * reveal lim < pow2 64)
-ensures exists* (vt': Seq.seq S64.t).
+        nl * (reveal lim * reveal lim) + reveal lim * reveal lim < pow2 128)
+ensures exists* (vt': Seq.seq S128.t).
   A.pts_to t vt' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vt' == nw /\ ble (vals vt') (nl * (reveal lim * reveal lim)) /\
-        vals vt' == part (vals va) (vals vb) nl)
+  pure (Seq.length vt' == nw /\ ble (vals128 vt') (nl * (reveal lim * reveal lim)) /\
+        vals128 vt' == part (vals va) (vals vb) nl)
 {
   A.pts_to_len t;
   A.pts_to_len a;
   A.pts_to_len b;
-  let z = S64.zero;
+  let z = S128.zero;
   let mut c = 0sz;
-  while (let vc = !c; SZ.lt vc 31sz)
-  invariant exists* (vc: SZ.t) (v: Seq.seq S64.t).
+  while (let vc = !c; SZ.lt vc 15sz)
+  invariant exists* (vc: SZ.t) (v: Seq.seq S128.t).
     pts_to c vc ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vc <= 31 /\ Seq.length v == nw /\
-          (forall (k: nat). k < SZ.v vc ==> Seq.index (vals v) k == 0))
-  decreases (31 - SZ.v (!c))
+    pure (SZ.v vc <= 15 /\ Seq.length v == nw /\
+          (forall (k: nat). k < SZ.v vc ==> Seq.index (vals128 v) k == 0))
+  decreases (15 - SZ.v (!c))
   {
     let vc = !c;
     A.((t.(vc) <- z));
     c := SZ.add vc 1sz;
   };
   with v0. assert (A.pts_to t v0);
-  assert (pure (vals v0 `Seq.equal` zerow));
+  assert (pure (vals128 v0 `Seq.equal` zerow));
   Loops.repeati_zero (mul_step (vals va) (vals vb)) zerow;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+  while (let vi = !i; SZ.lt vi 8sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S128.t).
     pts_to i vi ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\ Seq.length v == nw /\
-          vals v == part (vals va) (vals vb) (SZ.v vi))
-  decreases (16 - SZ.v (!i))
+    pure (SZ.v vi <= 8 /\ Seq.length v == nw /\
+          vals128 v == part (vals va) (vals vb) (SZ.v vi))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let ai = A.(a.(vi));
@@ -294,25 +403,25 @@ ensures exists* (vt': Seq.seq S64.t).
     rowj_zero (vals va) (vals vb) (SZ.v vi);
     addw_zerow (part (vals va) (vals vb) (SZ.v vi));
     let mut j = 0sz;
-    while (let vj = !j; SZ.lt vj 16sz)
-    invariant exists* (vj: SZ.t) (v: Seq.seq S64.t).
+    while (let vj = !j; SZ.lt vj 8sz)
+    invariant exists* (vj: SZ.t) (v: Seq.seq S128.t).
       pts_to j vj ** pts_to i vi ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-      pure (SZ.v vj <= 16 /\ Seq.length v == nw /\ SZ.v vi < 16 /\
-            vals v == addw (part (vals va) (vals vb) (SZ.v vi))
-                           (rowj (vals va) (vals vb) (SZ.v vi) (SZ.v vj)))
-    decreases (16 - SZ.v (!j))
+      pure (SZ.v vj <= 8 /\ Seq.length v == nw /\ SZ.v vi < 8 /\
+            vals128 v == addw (part (vals va) (vals vb) (SZ.v vi))
+                              (rowj (vals va) (vals vb) (SZ.v vi) (SZ.v vj)))
+    decreases (8 - SZ.v (!j))
     {
       with v. assert (A.pts_to t v);
       let vj = !j;
-      acc_ble (vals va) (vals vb) (vals v) lim (SZ.v vi) (SZ.v vj);
+      acc_ble (vals va) (vals vb) (vals128 v) lim (SZ.v vi) (SZ.v vj);
       let bj = A.(b.(vj));
       let pos = SZ.add vi vj;
       let cur = A.(t.(pos));
       Math.lemma_mult_le_left (S64.v ai) (S64.v bj) lim;
       Math.lemma_mult_le_right lim (S64.v ai) lim;
-      let nw' = addw cur (mulw ai bj);
+      let nw' = addd cur (S128.mul_wide ai bj);
       A.((t.(pos) <- nw'));
-      vals_upd v (SZ.v vi + SZ.v vj) nw';
+      vals128_upd v (SZ.v vi + SZ.v vj) nw';
       addw_rowj_step (part (vals va) (vals vb) (SZ.v vi)) (vals va) (vals vb)
                      (SZ.v vi) (SZ.v vj);
       j := SZ.add vj 1sz;
@@ -349,16 +458,16 @@ ensures exists* (va': Seq.seq S64.t).
   A.pts_to_len a;
   A.pts_to_len b;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to a v ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index (vals v) k ==
                (if S64.v m = 0 then Seq.index (vals va) k else Seq.index (vals vb) k)) /\
           (forall (k: nat). SZ.v vi <= k /\ k < nl ==>
              Seq.index (vals v) k == Seq.index (vals va) k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     with v. assert (A.pts_to a v);
     let vi = !i;

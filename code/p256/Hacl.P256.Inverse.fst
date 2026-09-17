@@ -107,7 +107,7 @@ ensures exists* (vo': Seq.seq S64.t).
   fexp out a e (hide ((P.prime + 1) / 4));
   drop_table e;
   let z = S64.zero;
-  let mut aq = [| z; 16sz |]; A.pts_to_len aq; A.pts_to_len aq;
+  let mut aq = [| z; 8sz |]; A.pts_to_len aq; A.pts_to_len aq;
   fsqr aq out;
   let ok = feq aq a;
   ok

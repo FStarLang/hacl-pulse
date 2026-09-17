@@ -50,18 +50,18 @@ let fmod_ok (_: unit) : Lemma (modulus_ok fmod) =
 
 let qmod : modulus =
   assert_norm (P.order < pow2 256);
-  mk P.order 48207
+  mk P.order 3993025615
      0x60d066334905c1e907f8b6041e607725badef3e243566fafce1bc8f79c197c79
 
 let qmod_ok (_: unit) : Lemma (modulus_ok qmod) =
   assert_norm (P.order < pow2 256);
   assert_norm (1 < P.order);
-  assert_norm (48207 < pow2 rad);
-  assert_norm (((P.order % pow2 rad) * 48207 + 1) % pow2 rad == 0);
+  assert_norm (3993025615 < pow2 rad);
+  assert_norm (((P.order % pow2 rad) * 3993025615 + 1) % pow2 rad == 0);
   assert_norm (pow2 256 *
     0x60d066334905c1e907f8b6041e607725badef3e243566fafce1bc8f79c197c79
     % P.order == 1);
-  mk_ok P.order 48207
+  mk_ok P.order 3993025615
     0x60d066334905c1e907f8b6041e607725badef3e243566fafce1bc8f79c197c79
 
 #pop-options

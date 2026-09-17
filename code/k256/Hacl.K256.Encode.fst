@@ -67,7 +67,7 @@ ensures exists* (wo: Seq.seq S64.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
 
   fsqr a0 x;
   fmul a1 a0 x;
@@ -87,7 +87,7 @@ ensures A.pts_to x #px vx ** A.pts_to y #py vy **
   pure (r == K.is_on_curve (fev vx) (fev vy))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
 
   curve_rhs a1 x;
   fsqr a0 y;
@@ -170,7 +170,7 @@ ensures exists* (wx wy: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy;
   let z0 = S64.zero;
-  let mut a0 = [| z0; 16sz |]; A.pts_to_len a0; A.pts_to_len a0;
+  let mut a0 = [| z0; 8sz |]; A.pts_to_len a0; A.pts_to_len a0;
   finv a0 z;
   fmul ox x a0;
   fmul oy y a0;
@@ -193,7 +193,7 @@ ensures exists* (wb: Seq.seq S8.t).
 {
   A.pts_to_len b;
   let z0 = S64.zero;
-  let mut a0 = [| z0; 16sz |]; A.pts_to_len a0; let mut a1 = [| z0; 16sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
+  let mut a0 = [| z0; 8sz |]; A.pts_to_len a0; let mut a1 = [| z0; 8sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
   to_aff_point a0 a1 x y z;
   with wax. assert (A.pts_to a0 wax);
   with way. assert (A.pts_to a1 way);
