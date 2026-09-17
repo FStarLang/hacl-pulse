@@ -1,0 +1,227 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** HPKE's labelled KDF, RFC 9180 section 4.
+
+    [LabeledExtract] and [LabeledExpand] are HKDF with three or four extra
+    strings in front of the input: the version [HPKE-v1], a suite identifier,
+    a per-use label, and -- for expand -- the output length.  Each is
+    assembled here in one scratch buffer and handed to [Hacl.HMAC.Core] or
+    [Hacl.HKDF.Core] as a single message.
+
+    The suite identifier and the label are arguments rather than constants
+    because both KDF stages go through this code: the KEM passes [KEM] and
+    its own algorithm identifier, the key schedule passes [HPKE] and all
+    three.  The version string is the same for everybody and comes from
+    {!Hacl.HPKE.Tables}. *)
+module Hacl.HPKE.Labeled
+
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+open Hacl.Secret.Word
+open Spec.SHA2
+open Spec.HPKE
+open Hacl.HMAC.Core
+open Hacl.HKDF.Core
+open Hacl.HPKE.Tables
+open Hacl.Impl.Copy
+open Hacl.Impl.Table
+
+module A = Pulse.Lib.Array
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module S8 = Hacl.Secret.UInt8
+module B = Hacl.Spec.Bytes
+module Cast = FStar.Int.Cast
+
+(** The scratch buffer is the version, the suite identifier, the label and
+    the caller's string, and the first three are bounded by construction.
+    Restating the bound as a machine fact once keeps [SZ.fits] obligations out
+    of the two functions below. *)
+let prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
+  : Lemma (requires n < pow2 32)
+          (ensures fits p n /\ block_len #t <= 256 /\ hash_bytes p <= 128 /\
+                   9 + 16 + 16 + n < pow2 61 /\
+                   block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < pow2 61 /\
+                   block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < max_input #t)
+  = FStar.Math.Lemmas.pow2_le_compat (8 * len_len #t - 3) 61;
+    assert_norm (256 + 128 + 41 + pow2 32 + 1 < pow2 61)
+
+(** {2 LabeledExtract} *)
+
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+
+fn labeled_extract_impl (#t: Type0) {| w: word t |}
+                        ([@@@FStar.Attributes.monomorphize] p: params t)
+                        (kt: A.array t) (ivt: A.array t)
+                        (out: A.array S8.t)
+                        (sid: A.array S8.t) (sid_len: SZ.t)
+                        (salt: A.array S8.t) (salt_len: SZ.t)
+                        (lbl: A.array S8.t) (lbl_len: SZ.t)
+                        (ikm: A.array S8.t) (ikm_len: SZ.t)
+                        (#pk: perm) (#vk: erased (Seq.seq t))
+                        (#pi: perm) (#vi: erased (Seq.seq t))
+                        (#vout: erased (Seq.seq S8.t))
+                        (#pd: perm) (#vsid: erased (Seq.seq S8.t))
+                        (#ps: perm) (#vsalt: erased (Seq.seq S8.t))
+                        (#pl: perm) (#vlabel: erased (Seq.seq S8.t))
+                        (#pm: perm) (#vikm: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to sid #pd vsid ** A.pts_to salt #ps vsalt **
+         A.pts_to lbl #pl vlabel ** A.pts_to ikm #pm vikm **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+               Seq.length vout == hash_bytes p /\
+               Seq.length vsid <= 16 /\ Seq.length vsalt <= 64 /\
+               Seq.length vlabel <= 16 /\ Seq.length vikm < pow2 32 /\
+               SZ.fits (block_len #t + 7 + Seq.length vsid + Seq.length vlabel + Seq.length vikm))
+         ** pure (SZ.v sid_len == Seq.length vsid)
+         ** pure (SZ.v salt_len == Seq.length vsalt)
+         ** pure (SZ.v lbl_len == Seq.length vlabel)
+         ** pure (SZ.v ikm_len == Seq.length vikm)
+ensures exists* vout'.
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to sid #pd vsid ** A.pts_to salt #ps vsalt **
+  A.pts_to lbl #pl vlabel ** A.pts_to ikm #pm vikm **
+  pure (Seq.length vsid <= 16 /\ Seq.length vsalt <= 64 /\
+        Seq.length vlabel <= 16 /\ Seq.length vikm < pow2 32 /\ fits p (Seq.length vikm) /\
+        vout' == labeled_extract p vsid vsalt vlabel vikm)
+{
+  A.pts_to_len out;
+  A.pts_to_len sid;
+  A.pts_to_len salt;
+  A.pts_to_len lbl;
+  A.pts_to_len ikm;
+  prefix_bound p (Seq.length vikm);
+
+  let vtab = table version_arr 7sz;
+  A.pts_to_len vtab;
+
+  SZ.fits_lte (7 + Seq.length vsid + Seq.length vlabel + Seq.length vikm)
+              (block_len #t + 7 + Seq.length vsid + Seq.length vlabel + Seq.length vikm);
+  let n1 = SZ.add 7sz sid_len;
+  let n2 = SZ.add n1 lbl_len;
+  let tlen = SZ.add n2 ikm_len;
+
+  let z8 = S8.zero;
+  let mut buf = [| z8; tlen |];
+  A.pts_to_len buf;
+
+  copy_at buf 0sz vtab 7sz;
+  copy_at buf 7sz sid sid_len;
+  copy_at buf n1 lbl lbl_len;
+  copy_at buf n2 ikm ikm_len;
+
+  with vbuf. assert (A.pts_to buf vbuf);
+  cat4_pointwise vbuf version vsid vlabel vikm;
+  assert (pure (reveal vbuf == extract_input vsid vlabel vikm));
+
+  hmac_impl p kt ivt out salt salt_len buf tlen;
+  drop_table vtab;
+}
+
+(** {2 LabeledExpand} *)
+
+fn labeled_expand_impl (#t: Type0) {| w: word t |}
+                       ([@@@FStar.Attributes.monomorphize] p: params t)
+                       (kt: A.array t) (ivt: A.array t)
+                       (out: A.array S8.t) (out_len: SZ.t)
+                       (prk: A.array S8.t) (prk_len: SZ.t)
+                       (sid: A.array S8.t) (sid_len: SZ.t)
+                       (lbl: A.array S8.t) (lbl_len: SZ.t)
+                       (info: A.array S8.t) (info_len: SZ.t)
+                       (#pk: perm) (#vk: erased (Seq.seq t))
+                       (#pi: perm) (#vi: erased (Seq.seq t))
+                       (#vout: erased (Seq.seq S8.t))
+                       (#pp: perm) (#vprk: erased (Seq.seq S8.t))
+                       (#pd: perm) (#vsid: erased (Seq.seq S8.t))
+                       (#pl: perm) (#vlabel: erased (Seq.seq S8.t))
+                       (#pf: perm) (#vinfo: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to prk #pp vprk ** A.pts_to sid #pd vsid **
+         A.pts_to lbl #pl vlabel ** A.pts_to info #pf vinfo **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+               Seq.length vprk <= 64 /\
+               Seq.length vsid <= 16 /\ Seq.length vlabel <= 16 /\
+               Seq.length vinfo < pow2 32 /\
+               Seq.length vout < 65536 /\ Seq.length vout <= 255 * hash_bytes p /\
+               SZ.fits (block_len #t + hash_bytes p + 9 + Seq.length vsid + Seq.length vlabel +
+                        Seq.length vinfo + 1))
+         ** pure (SZ.v out_len == Seq.length vout)
+         ** pure (SZ.v prk_len == Seq.length vprk)
+         ** pure (SZ.v sid_len == Seq.length vsid)
+         ** pure (SZ.v lbl_len == Seq.length vlabel)
+         ** pure (SZ.v info_len == Seq.length vinfo)
+ensures exists* vout'.
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to prk #pp vprk ** A.pts_to sid #pd vsid **
+  A.pts_to lbl #pl vlabel ** A.pts_to info #pf vinfo **
+  pure (Seq.length vsid <= 16 /\ Seq.length vlabel <= 16 /\ Seq.length vprk <= 64 /\
+        Seq.length vinfo < pow2 32 /\ fits p (Seq.length vinfo) /\
+        Seq.length vout' == Seq.length vout /\
+        Seq.length vout' < 65536 /\ Seq.length vout' <= 255 * hash_bytes p /\
+        vout' == labeled_expand p vsid vprk vlabel vinfo (Seq.length vout'))
+{
+  A.pts_to_len out;
+  A.pts_to_len prk;
+  A.pts_to_len sid;
+  A.pts_to_len lbl;
+  A.pts_to_len info;
+  prefix_bound p (Seq.length vinfo);
+  Hacl.SizeT.fits32 ();
+
+  let vtab = table version_arr 7sz;
+  A.pts_to_len vtab;
+
+  SZ.fits_lte (9 + Seq.length vsid + Seq.length vlabel + Seq.length vinfo)
+              (block_len #t + hash_bytes p + 9 + Seq.length vsid + Seq.length vlabel +
+               Seq.length vinfo + 1);
+  let n1 = SZ.add 2sz sid_len;
+  let n2 = SZ.add 9sz sid_len;
+  let n3 = SZ.add n2 lbl_len;
+  let tlen = SZ.add n3 info_len;
+
+  let z8 = S8.zero;
+  let mut buf = [| z8; tlen |];
+  A.pts_to_len buf;
+
+  (* [I2OSP(L, 2)]: the high byte then the low byte. *)
+  let l32 = SZ.sizet_to_uint32 out_len;
+  let hi = Cast.uint32_to_uint8 (U32.div l32 256ul);
+  let lo = Cast.uint32_to_uint8 l32;
+  A.((buf.(0sz) <- S8.classify hi));
+  A.((buf.(1sz) <- S8.classify lo));
+
+  copy_at buf 2sz vtab 7sz;
+  copy_at buf 9sz sid sid_len;
+  copy_at buf n2 lbl lbl_len;
+  copy_at buf n3 info info_len;
+
+  with vbuf. assert (A.pts_to buf vbuf);
+  B.nat_to_be_index 2 (SZ.v out_len) 0;
+  B.nat_to_be_index 2 (SZ.v out_len) 1;
+  assert (pure (Seq.index vbuf 0 == Seq.index (two_bytes (SZ.v out_len)) 0));
+  assert (pure (Seq.index vbuf 1 == Seq.index (two_bytes (SZ.v out_len)) 1));
+  cat5_pointwise vbuf (two_bytes (SZ.v out_len)) version vsid vlabel vinfo;
+  assert (pure (reveal vbuf == expand_input (SZ.v out_len) vsid vlabel vinfo));
+
+  expand_impl p kt ivt out out_len prk prk_len buf tlen;
+  drop_table vtab;
+}
+
+#pop-options
