@@ -65,6 +65,7 @@ module CLess = Spec.CarryLess
 module G = Spec.GF128
 module Poly = Spec.GF128.Poly
 module Classical = FStar.Classical
+module U32 = FStar.UInt32
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -89,10 +90,11 @@ let bounded_lebiti (a: Vec.t) : Lemma (CL.bounded (CL.lebiti (Vec.bv a))) = ()
     back into GHASH's bit order.  Everything here is one instruction. *)
 
 inline_for_extraction
-let shifted_product (x y: Vec.t)
+let raw_product (x y: Vec.t)
   : Pure (Vec.t & Vec.t) (requires True)
          (ensures fun r ->
-            Poly.halves (Vec.bv x) (Vec.bv y) (Vec.bv (fst r)) (Vec.bv (snd r)))
+            Poly.halves (Vec.bv x) (Vec.bv y)
+                        (CL.bswap (Vec.bv (snd r))) (CL.bswap (Vec.bv (fst r))))
   = let xa = Vec.bswap x in
     let yb = Vec.bswap y in
 
@@ -137,7 +139,133 @@ let shifted_product (x y: Vec.t)
                 (Vec.bv c) (Vec.bv d) (Vec.bv qhi);
     CL.clmul_halves (Vec.bv x) (Vec.bv y) (Vec.bv qlo) (Vec.bv qhi);
 
-    (Vec.bswap qhi, Vec.bswap qlo)
+    (qlo, qhi)
+
+(** {2 Multiplying by the reduction constant}
+
+    [Spec.GF128.r_block] is [x^7 + x^2 + x + 1], so a product with it is four
+    copies of the other operand shifted by nought, one, two and seven, added
+    together -- see [Spec.GF128.Poly.mul_r_coef].  A 128-bit shift is not one
+    instruction, because the shift units work a lane at a time and drop no
+    carry between the lanes, but it is two, which beats a [PCLMULQDQ] on both
+    latency and throughput.  The nine shifts and six exclusive-ors here
+    replace eight multiplies in [gmul_vec] below.
+
+    The argument and both results are in the multiplier's little-endian bit
+    order, which is why the [bswap]s are on the specification side: the whole
+    point of doing it this way is that the reduction never leaves that order,
+    so [gmul_vec] reverses bytes three times instead of twelve. *)
+
+(** A full 128-bit right shift by [n]: the lane-wise shift of [a], plus the
+    bits that fall out of the high lane, which reach the low lane through
+    [h].  [m] is [64 - n], passed separately so that both shift counts reach
+    the intrinsics as literals. *)
+inline_for_extraction
+let full_shr (a h: Vec.t) (n m: U32.t)
+  : Pure Vec.t
+         (requires U32.v n >= 1 /\ U32.v n < 64 /\ U32.v m == 64 - U32.v n /\
+                   (forall (k: int). 0 <= k /\ k < 128 ==>
+                      CL.lebiti (Vec.bv h) k == CL.lebiti (Vec.bv a) (k + 64)))
+         (ensures fun r -> forall (k: int). 0 <= k /\ k < 128 ==>
+                        CL.lebiti (Vec.bv r) k ==
+                        CL.lebiti (Vec.bv a) (k + U32.v n))
+  = let sh = Vec.shift_right_lanes64 a n in
+    let c = Vec.shift_left_lanes64 h m in
+    let q = Vec.vxor sh c in
+    Classical.forall_intro (xor_bits sh c);
+    CL.shr_gen (CL.lebiti (Vec.bv a)) (CL.lebiti (Vec.bv h))
+               (CL.lebiti (Vec.bv sh)) (CL.lebiti (Vec.bv q)) (U32.v n);
+    q
+
+(** A full 128-bit left shift by [64 + m], which is one instruction: [l] has
+    already moved the lanes up and zeroed the low one, so nothing carries. *)
+inline_for_extraction
+let full_shl (a l: Vec.t) (m: U32.t)
+  : Pure Vec.t
+         (requires U32.v m < 64 /\ CL.bounded (CL.lebiti (Vec.bv a)) /\
+                   (forall (k: int). 0 <= k /\ k < 128 ==>
+                      CL.lebiti (Vec.bv l) k == CL.lebiti (Vec.bv a) (k - 64)))
+         (ensures fun r -> forall (k: int). 0 <= k /\ k < 128 ==>
+                        CL.lebiti (Vec.bv r) k ==
+                        CL.lebiti (Vec.bv a) (k - 64 - U32.v m))
+  = let t = Vec.shift_left_lanes64 l m in
+    CL.shl_gen (CL.lebiti (Vec.bv a)) (CL.lebiti (Vec.bv l))
+               (CL.lebiti (Vec.bv t)) (U32.v m);
+    t
+
+(** The two four-term sums, over bare bit functions so that the registers'
+    refinements stay out of the query. *)
+
+let rxor_lo (fa f1 f2 f7 fu: int -> bool)
+  : Lemma (requires
+      (forall (k: int). 0 <= k /\ k < 128 ==> f1 k == fa (k + 1)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> f2 k == fa (k + 2)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> f7 k == fa (k + 7)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fu k == ((fa k <> f1 k) <> (f2 k <> f7 k))))
+    (ensures forall (k: int). 0 <= k /\ k < 128 ==> fu k == CL.rxor fa k) = ()
+
+let rxor_hi (fa f1 f2 f7 fw: int -> bool)
+  : Lemma (requires
+      CL.bounded fa /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> f1 k == fa (k - 127)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> f2 k == fa (k - 126)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> f7 k == fa (k - 121)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> fw k == ((f1 k <> f2 k) <> f7 k)))
+    (ensures forall (k: int). 0 <= k /\ k < 128 ==>
+                         fw k == CL.rxor fa (k - 128)) = ()
+
+(** {2 Multiplying by the reduction constant}
+
+    [Spec.GF128.r_block] is [x^7 + x^2 + x + 1], so a product with it is four
+    copies of the other operand shifted by nought, one, two and seven, added
+    together -- see [Spec.GF128.Poly.mul_r_coef].  A 128-bit shift is not one
+    instruction, because the shift units work a lane at a time and carry
+    nothing between the lanes, but it is at most two, which beats a
+    [PCLMULQDQ] on both latency and throughput.  The nine shifts and six
+    exclusive-ors here replace eight multiplies in [gmul_vec] below.
+
+    The argument and both results are in the multiplier's little-endian bit
+    order, which is why the [bswap]s are on the specification side: the point
+    of doing it this way is that the reduction never leaves that order, so
+    [gmul_vec] reverses bytes three times instead of twelve. *)
+
+inline_for_extraction
+let mul_r_vec (a: Vec.t)
+  : Pure (Vec.t & Vec.t) (requires True)
+         (ensures fun r ->
+            Poly.halves (CL.bswap (Vec.bv a)) G.r_block
+                        (CL.bswap (Vec.bv (fst r))) (CL.bswap (Vec.bv (snd r))))
+  = bounded_lebiti a;
+    let h = Vec.shift_right_bytes_8 a in
+    let l = Vec.shift_left_bytes_8 a in
+
+    let q1 = full_shr a h 1ul 63ul in
+    let q2 = full_shr a h 2ul 62ul in
+    let q7 = full_shr a h 7ul 57ul in
+    let ua = Vec.vxor (Vec.vxor a q1) (Vec.vxor q2 q7) in
+
+    (* Shifts by 127, 126 and 121.  The fourth term of the sum would be a
+       shift by 128, which is zero. *)
+    let t1 = full_shl a l 63ul in
+    let t2 = full_shl a l 62ul in
+    let t7 = full_shl a l 57ul in
+    let wa = Vec.vxor (Vec.vxor t1 t2) t7 in
+
+    Classical.forall_intro (xor_bits a q1);
+    Classical.forall_intro (xor_bits q2 q7);
+    Classical.forall_intro (xor_bits (Vec.vxor a q1) (Vec.vxor q2 q7));
+    rxor_lo (CL.lebiti (Vec.bv a)) (CL.lebiti (Vec.bv q1))
+            (CL.lebiti (Vec.bv q2)) (CL.lebiti (Vec.bv q7))
+            (CL.lebiti (Vec.bv ua));
+    Classical.forall_intro (xor_bits t1 t2);
+    Classical.forall_intro (xor_bits (Vec.vxor t1 t2) t7);
+    rxor_hi (CL.lebiti (Vec.bv a)) (CL.lebiti (Vec.bv t1))
+            (CL.lebiti (Vec.bv t2)) (CL.lebiti (Vec.bv t7))
+            (CL.lebiti (Vec.bv wa));
+    CL.mul_r_halves (Vec.bv a) (Vec.bv ua) (Vec.bv wa);
+
+    (ua, wa)
 
 (** {2 The multiplication} *)
 
@@ -145,17 +273,21 @@ inline_for_extraction
 let gmul_vec (x y: Vec.t)
   : Pure Vec.t (requires True)
          (ensures fun r -> Vec.bv r == G.gmul (Vec.bv x) (Vec.bv y))
-  = let rc = Vec.reduction () in
-    let p1 = shifted_product x y in
-    let p2 = shifted_product (snd p1) rc in
-    let p3 = shifted_product (snd p2) rc in
+  = let p1 = raw_product x y in
+    let qlo = fst p1 in
+    let qhi = snd p1 in
+    let p2 = mul_r_vec qlo in
+    let p3 = mul_r_vec (snd p2) in
+    let u1 = Vec.bswap qhi in
+    let u2 = Vec.bswap (fst p2) in
+    let u3 = Vec.bswap (fst p3) in
     Poly.gmul_three (Vec.bv x) (Vec.bv y)
-                    (Vec.bv (fst p1)) (Vec.bv (snd p1))
-                    (Vec.bv (fst p2)) (Vec.bv (snd p2))
-                    (Vec.bv (fst p3)) (Vec.bv (snd p3));
-    xor_block_bv (fst p2) (fst p3);
-    xor_block_bv (fst p1) (Vec.vxor (fst p2) (fst p3));
-    Vec.vxor (fst p1) (Vec.vxor (fst p2) (fst p3))
+                    (Vec.bv u1) (CL.bswap (Vec.bv qlo))
+                    (Vec.bv u2) (CL.bswap (Vec.bv (snd p2)))
+                    (Vec.bv u3) (CL.bswap (Vec.bv (snd p3)));
+    xor_block_bv u2 u3;
+    xor_block_bv u1 (Vec.vxor u2 u3);
+    Vec.vxor u1 (Vec.vxor u2 u3)
 
 (** {2 The driver} *)
 

@@ -441,3 +441,122 @@ let clmul_halves (x y qlo qhi: block)
     FStar.Classical.forall_intro aux
 
 #pop-options
+
+(** {2 Multiplying by the reduction constant without a multiplier}
+
+    [Spec.GF128.Poly.mul_r_coef] says that a product with [r_block] is four
+    shifted copies of the other operand added together.  On the register side
+    a shift of a 128-bit value is not one instruction -- the shift units work
+    on 64-bit lanes and there is no carry between them -- but it is two,
+    which is still a great deal cheaper than [PCLMULQDQ].  This section
+    proves the two shift recipes and then the reduction step itself. *)
+
+(** The four bits of [f] that a multiply by [r_block] adds together. *)
+let rxor (f: int -> bool) (k: int) : bool =
+  ((f k <> f (k + 1)) <> f (k + 2)) <> f (k + 7)
+
+#push-options "--fuel 0 --ifuel 0"
+
+(** A full 128-bit right shift by [n], from a lane-wise right shift by [n] of
+    the value and a lane-wise left shift by [64 - n] of the value with its
+    lanes moved down one.  Exactly one of the two contributes at each bit, so
+    the case analysis is purely boolean once the reindexing is discharged. *)
+let shr_step (fa fh fs fq: int -> bool) (n k: int)
+  : Lemma (requires
+      (k % 64 >= 64 - n ==> fh (k - (64 - n)) == fa (k + n)) /\
+      fs k == (k % 64 + n < 64 && fa (k + n)) /\
+      fq k == (fs k <> ((k % 64 >= 64 - n) && fh (k - (64 - n)))))
+    (ensures fq k == fa (k + n)) = ()
+
+(** A full 128-bit left shift by [64 + m], from a lane-wise left shift by [m]
+    of the value with its lanes moved up one.  There is no carry term because
+    moving the lanes up has already zeroed the low lane. *)
+let shl_step (fa fl fq: int -> bool) (m k: int)
+  : Lemma (requires
+      (k % 64 >= m ==> fl (k - m) == fa (k - 64 - m)) /\
+      (k % 64 < m ==> fa (k - 64 - m) == false) /\
+      fq k == ((k % 64 >= m) && fl (k - m)))
+    (ensures fq k == fa (k - 64 - m)) = ()
+
+#pop-options
+
+#push-options "--z3rlimit 60 --fuel 0 --ifuel 0"
+
+let shr_gen (fa fh fs fq: int -> bool) (n: int)
+  : Lemma (requires
+      1 <= n /\ n < 64 /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> fh k == fa (k + 64)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fs k == (k % 64 + n < 64 && fa (k + n))) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fq k == (fs k <> ((k % 64 >= 64 - n) && fh (k - (64 - n))))))
+    (ensures forall (k: int). 0 <= k /\ k < 128 ==> fq k == fa (k + n))
+  = let aux (k: int) : Lemma (0 <= k /\ k < 128 ==> fq k == fa (k + n))
+      = if 0 <= k && k < 128 then begin
+          if k < 64 then Math.small_mod k 64
+          else (Math.small_mod (k - 64) 64; Math.lemma_mod_plus (k - 64) 1 64);
+          if k % 64 >= 64 - n then begin
+            assert (0 <= k - (64 - n) /\ k - (64 - n) < 128);
+            assert (fh (k - (64 - n)) == fa (k - (64 - n) + 64));
+            assert (k - (64 - n) + 64 == k + n)
+          end;
+          shr_step fa fh fs fq n k
+        end
+    in FStar.Classical.forall_intro aux
+
+let shl_gen (fa fl fq: int -> bool) (m: int)
+  : Lemma (requires
+      0 <= m /\ m < 64 /\ bounded fa /\
+      (forall (k: int). 0 <= k /\ k < 128 ==> fl k == fa (k - 64)) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         fq k == ((k % 64 >= m) && fl (k - m))))
+    (ensures forall (k: int). 0 <= k /\ k < 128 ==> fq k == fa (k - 64 - m))
+  = let aux (k: int) : Lemma (0 <= k /\ k < 128 ==> fq k == fa (k - 64 - m))
+      = if 0 <= k && k < 128 then begin
+          if k < 64 then Math.small_mod k 64
+          else (Math.small_mod (k - 64) 64; Math.lemma_mod_plus (k - 64) 1 64);
+          if k % 64 >= m then begin
+            assert (0 <= k - m /\ k - m < 128);
+            assert (fl (k - m) == fa (k - m - 64));
+            assert (k - m - 64 == k - 64 - m)
+          end;
+          shl_step fa fl fq m k
+        end
+    in FStar.Classical.forall_intro aux
+
+#pop-options
+
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 0"
+
+(** The GCM bits of a reversed block, at any index at all.  This is
+    [bswap_bit] again, extended past both ends where both sides are [false]
+    for different reasons. *)
+let bitk_bswap (a: block) (j: int)
+  : Lemma (Poly.bitk (bswap a) j == lebiti a (127 - j))
+  = if 0 <= j && j < 128 then (bswap_bit a j; lebit_is_bit a (127 - j))
+
+(** The reduction step, in the little-endian numbering the registers use.
+    [ua] is the low half and [wa] the high half of [a * R]; the caller has
+    them as [rxor] of [a]'s bits at four offsets, which is what the shift
+    recipes above deliver. *)
+let mul_r_halves (a ua wa: block)
+  : Lemma (requires
+      (forall (k: int). 0 <= k /\ k < 128 ==> lebiti ua k == rxor (lebiti a) k) /\
+      (forall (k: int). 0 <= k /\ k < 128 ==>
+         lebiti wa k == rxor (lebiti a) (k - 128)))
+    (ensures Poly.halves (bswap a) r_block (bswap ua) (bswap wa))
+  = let aux (k: nat { k < 128 })
+      : Lemma (bit (bswap ua) k == Poly.pcoef (bswap a) r_block k /\
+               bit (bswap wa) k == Poly.pcoef (bswap a) r_block (128 + k))
+      = bswap_bit ua k; lebit_is_bit ua (127 - k);
+        bswap_bit wa k; lebit_is_bit wa (127 - k);
+        Poly.mul_r_coef (bswap a) k;
+        Poly.mul_r_coef (bswap a) (128 + k);
+        bitk_bswap a k; bitk_bswap a (k - 1);
+        bitk_bswap a (k - 2); bitk_bswap a (k - 7);
+        bitk_bswap a (128 + k); bitk_bswap a (127 + k);
+        bitk_bswap a (126 + k); bitk_bswap a (121 + k)
+    in
+    FStar.Classical.forall_intro aux
+
+#pop-options
