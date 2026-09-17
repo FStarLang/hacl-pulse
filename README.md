@@ -9,12 +9,18 @@ port: where HACL\* had to work around the absence of a language feature, this
 library uses the feature.  `design/` records what HACL\* does and
 `design/changes.md` the four commitments this reimplementation starts from.
 
-Status: the SHA-2 family (SHA-224/256/384/512) one-shot and incremental, HMAC
-over it, HKDF over that, and the SHA-3 family (SHA3-224/256/384/512 and
-SHAKE128/256) one-shot and incremental, are specified, implemented, verified,
-extracted, and tested against the FIPS 180-4, FIPS 202, RFC 4231 and RFC 5869
-vectors.  BLAKE2b and BLAKE2s are specified, implemented, verified, extracted
-and tested at all eight standard digest lengths, keyed and unkeyed.
+Status: **feature parity with HACL\* apart from FrodoKEM**, whose matrix
+arithmetic, packing, sampling and message encoding are in but whose KEM is
+not.  Everything else listed in the roadmap below is specified, implemented,
+verified, extracted and tested against the published vectors -- FIPS 180-4,
+FIPS 202, RFC 4231, RFC 5869, RFC 7748, RFC 8032, RFC 7919, FIPS 186-4,
+PKCS#1 v2.2, the NIST CAVP sets for AES-GCM and HMAC-DRBG, and the NaCl
+vectors -- thirty-one C test harnesses in `tests/`.
+
+Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
+SHA-3, ChaCha20, ChaCha20-Poly1305 and the generic bignum are all faster -- to
+an order of magnitude behind it on the elliptic curves, where the field
+representations have not been tuned yet.  See [Performance](#performance).
 
 ```
 make            verify, extract, compile, test
@@ -35,8 +41,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GCM`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/nacl/`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, `Spec.Frodo`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
@@ -48,8 +54,9 @@ make FSTAR_ROOT=$HOME/tools/fstar
 
 HACL\* had a single `int_t t l` indexed by a width and a secrecy level.  Here
 each secret width is its own abstract type in its own module —
-`Hacl.Secret.UInt8.t`, `Hacl.Secret.UInt32.t`, `Hacl.Secret.UInt64.t` — whose
-interface exposes only constant-time operations.  There is no comparison, no
+`Hacl.Secret.UInt8.t`, `Hacl.Secret.UInt32.t`, `Hacl.Secret.UInt64.t`,
+`Hacl.Secret.UInt128.t` — whose interface exposes only constant-time
+operations.  There is no comparison, no
 division, no branch on a secret.  `Hacl.Secret.Cast` widens and truncates;
 `Hacl.Secret.Declassify` is the single, `friend`-based escape hatch, so an
 audit for "where does secret data become public" is a search for one module
@@ -94,8 +101,12 @@ cast at the boundary.
 ### No assembly
 
 There is none, and there is no Vale dependency.  Where a specific
-microarchitecture matters the plan is C intrinsics behind the same `word`-style
-interface; see `design/vale-migration`.
+microarchitecture matters the answer is a C intrinsic behind a narrow,
+axiomatized interface, verified against the same specification as the portable
+code and tested against an independent transcription of the standard: AES-NI
+and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the Intel SHA
+extensions under SHA-256 and SHA-224.  Each is selected at run time by
+`__builtin_cpu_supports`.  See `design/vale-migration`.
 
 ## How a hash is put together
 
@@ -606,24 +617,32 @@ for.  Because a secret byte has no decidable equality, the specification's
 notion of "the tag is right" is a `prop` (`decrypt_ok`) and the recovered
 plaintext is a separate function (`decrypted`), rather than one `option`.
 
-### Curve25519, sixteen limbs because there is no `uint128`
+### Curve25519, eight limbs of thirty-two bits
 
 Every fast X25519 in existence represents a field element in radix 2^51,
-five limbs, because the product of two limbs fits in a 128-bit integer.
-Custard's builtins are `FStar.UInt8/16/32/64`, `FStar.Int8/16/32/64` and
-`FStar.SizeT`; there is no `FStar.UInt128`, and unlike karamel there is no
-compiler-side emulation of one.  Radix 2^51 is therefore not available.
+five limbs, because the product of two limbs fits in a 128-bit integer.  This
+library started without one: Custard's builtins were `FStar.UInt8/16/32/64`
+and `FStar.SizeT`, and unlike karamel there was no compiler-side emulation, so
+the first version used **sixteen limbs of sixteen bits** -- narrow enough that
+a whole schoolbook column, sixteen limb products plus carries, stayed inside a
+64-bit word with no intermediate reduction at all, which is what made the
+proof tractable.  The price was 256 word multiplies per `fmul` against 25 for
+HACL\*'s `_51`.
 
-So this implementation uses **sixteen limbs of sixteen bits** in
-`Hacl.Secret.UInt64.t`.  A limb product is at most `(2^17)^2 = 2^34`, and a
-column of the schoolbook product accumulates sixteen of them plus carries,
-which is comfortably inside 64 bits -- no intermediate reduction inside
-`mul_columns` at all, which is what makes the proof tractable.  The price is
-256 word multiplies per `fmul` against 25 for HACL*'s `_51`, so this is an
-order of magnitude slower than the C fast path; a scalar multiplication runs
-in roughly 470 microseconds here.  That is honest arithmetic, not a
-competitive one, and the reduction `2^256 = 2 * prime + 38` is done once at
-the end of `fmul` rather than woven through it.
+Custard now emits `unsigned __int128`, exposed as `Hacl.Secret.UInt128`, and
+the representation moved up to **eight limbs of thirty-two bits**.  A limb is
+allowed to reach `2^33 - 1` rather than being canonical, so a limb product is
+below `2^66`, an eight-product column below `2^69`, and the accumulator, once
+the high column has been folded in against `38`, below `2^75` -- all
+comfortably inside the wide type -- a quarter of the multiplies
+and a quarter of the carries.  A scalar multiplication went from 461 to 243
+microseconds.  Radix 2^51 would be roughly another factor of two, and is the
+largest single optimization left in the library; it is not hard, it is simply
+not done yet.
+
+The reduction `2^256 = 2 * prime + 38` is still done once at the end of `fmul`
+rather than woven through it, and `fmul` now needs two carry passes rather
+than one.
 
 **Inversion is an addition chain, not square-and-multiply.**  `x^(p-2)` by
 scanning the 255 bits of `p-2` would need a lemma about every one of those
@@ -631,8 +650,8 @@ bits; the classical chain needs only `fexp_add` and `fexp_mul`, applied to
 `x^2, x^8, x^9, x^11, x^22` and then the runs `E5, E10, E20, E40, E50, E100,
 E200, E250`.  It is expressed as three in-place moves -- `a := a^2`,
 `a := a*b`, `a := a^(2^n)` -- each implemented by copying into scratch and
-calling the out-of-place `fmul`.  A sixteen-word copy against 256 multiplies
-is not worth avoiding.
+calling the out-of-place `fmul`.  An eight-word copy against sixty-four
+multiplies is not worth avoiding.
 
 **The ladder's body is its own function.**  The loop invariant of the
 Montgomery ladder mentions thirteen separate `pts_to`, and stating it inside
@@ -656,7 +675,7 @@ for which `ecdh` returns `false` and the shared secret is all zeros.
 ### Ed25519, on top of Curve25519's field
 
 Ed25519 lives on the same prime as X25519, so it reuses
-`Hacl.Curve25519.Field` unchanged -- the same sixteen limbs of sixteen bits,
+`Hacl.Curve25519.Field` unchanged -- the same eight limbs of thirty-two bits,
 the same `fmul`, the same inversion chain.  Nothing in the signature scheme
 needed a second field implementation, which is the main reason the whole of
 `code/ed25519` is six modules.
@@ -981,8 +1000,8 @@ multiplication is about a hundred instructions per bit of input.  That is
 slow, and deliberately so: a correct, portable and constant-time
 implementation comes first, and the carry-less multiplier is layered on top
 of it the way AES-NI is layered on the portable cipher.  On a machine with
-`PCLMULQDQ`, `Hacl.AES.GMul.gmul_impl` picks `Hacl.AES.GF128.NI.gmul_ni`
-instead: four multiplies, a shift, a byte reversal, three times over.
+`PCLMULQDQ`, `Hacl.AES.GF128.NI` takes over instead: four `PCLMULQDQ`s for
+the 256-bit product and a pair of shift-and-xor passes for the reduction.
 
 **The carry-less GHASH is verified, not assumed.**  The instruction is bound
 in `Hacl.Vec128` by a postcondition about polynomials -- bit *k* of the
@@ -997,11 +1016,39 @@ multiplication is never needed -- and proves `gmul_is_pmod`, that SP
 800-38D's shift-and-add loop computes exactly the reduced carry-less product.
 `Spec.CLMUL` bridges GCM's bit numbering, which runs down from the top of
 byte zero, to the machine's, which runs up from the bottom, and states the
-implementation as three lemmas about eight registers.  The final piece is
-that the reduction constant has degree seven: the high half of a product by
-it has degree at most six, and *that* product's high half is empty, so the
-same four-multiply routine run three times is the whole multiplication and
-there is no separate reduction step to write or to verify.
+implementation as three lemmas about eight registers.
+
+The first version needed no reduction step at all: the reduction constant has
+degree seven, so the high half of a product by it has degree at most six and
+*that* product's high half is empty, which makes the same four-multiply
+routine run three times the whole multiplication.  That is an unusually small
+thing to verify, and it was the right place to start, but it costs twelve
+`PCLMULQDQ`s per block.  `Spec.GF128.Poly.mul_r_coef` replaces the two
+reduction multiplies with shifts, by computing the coefficient of the product
+by the reduction constant directly: bit *k* is the xor of bits *k*, *k-1*,
+*k-2* and *k-7* of the operand, which is four shifts and three xors and no
+multiplier.  Four `PCLMULQDQ`s and five `PSHUFB`s per block, down from twelve
+and ten.
+
+**The block loop runs four blocks at a time.**  GHASH is Horner's rule, so
+the obvious loop makes every multiply wait on the one before it -- about
+twenty-two cycles of pure latency per sixteen bytes, which measurement
+confirmed was the entire cost.  `Hacl.AES.GF128.NI.ghash_loop4_ni` uses the
+standard rearrangement
+
+    acc' = (acc + b0) * H^4 + b1 * H^3 + b2 * H^2 + b3 * H
+
+with the four products independent of one another and the extra powers of the
+hash key computed once, in registers, on entry -- and only when there are at
+least four blocks, so short messages pay nothing.  That identity is
+associativity, commutativity and distributivity of GF(2^128) multiplication,
+none of which a one-at-a-time GHASH had ever needed.  `Spec.GF128.Algebra`
+proves them, and it is cheap to do so because `Spec.GF128.Poly` already
+writes `gmul x y` as a sum over the set bits of the *first* operand: in that
+shape multiplication is visibly linear in its first argument, so the only real
+work is that multiplying by *x^j* commutes with multiplication, and
+commutativity of the convolution.  Nothing there ever looks inside the
+reduction polynomial.
 
 **Everything counts in bytes.**  FIPS 197 describes the key expansion in
 four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
@@ -1065,10 +1112,21 @@ on it, and `code/aes/Hacl.AES.Block.fst` picks between the two.
 **The dispatch is per block, and no caller knows about it.**
 `Hacl.AES.NI.cipher_ni` and `Hacl.AES.Cipher.cipher_portable` have the *same*
 postcondition, so the dispatcher has nothing to prove -- both branches leave
-the same specification value behind.  One perfectly predicted branch per block
-is not measurable next to a block encryption, and in exchange CTR, GCM and
-anything added later get the fast path with no dispatching variant of their
-own.  `test_gcm.c`'s 450 CAVP cases run through the new path unchanged.
+the same specification value behind.  In exchange CTR, GCM and anything added
+later get the fast path with no dispatching variant of their own.
+`test_gcm.c`'s 450 CAVP cases run through the new path unchanged.
+
+That is the correctness story; the performance story needed two more steps.
+A block cipher whose interface is "sixteen bytes in, sixteen bytes out" stores
+its result to memory and reloads it, and the feature test runs again for every
+block.  `Hacl.AES.NI.cipher_vec` therefore exposes a register-to-register
+form, and `Hacl.AES.CTR` runs **four counter blocks at once** through
+`Hacl.AES.NI.ctr_block4_ni`: the counter is incremented four times in
+registers, the ten rounds are applied to the four blocks in an interleaved
+order, and `AESENC`'s four-cycle latency is covered by three other blocks
+rather than by nothing.  The feature test happens once per group of four
+blocks rather than once per block.  Together with the GHASH work above
+this took AES-128-GCM on 256 KiB from 875 to 319 microseconds.
 
 **One translation unit, two instruction sets.**  AES-NI code has to be
 compiled with `-maes`, and the rest of the library must not be, or it would
@@ -1143,16 +1201,17 @@ way the AES ones are.
 
 Everything above works at a fixed width.  RSA and finite-field
 Diffie-Hellman do not: the modulus is whatever the key says it is.
-`code/bignum/` is arithmetic on arrays of `uint32_t` limbs, least
+`code/bignum/` is arithmetic on arrays of `uint64_t` limbs, least
 significant first, with the limb count passed in.
 
-**The radix is 2^32.**  It is the widest radix for which a
-multiply-accumulate is exact in a double word: `(2^32-1)^2 + 2*(2^32-1)` is
-`2^64-1`, using every bit and no more.  Custard has no `uint128`, so 2^64 is
-not available, and 2^16 -- what Curve25519 and P-256 use -- would double the
-memory and the loop counts for no gain, because those two want room to
-accumulate a whole product before carrying and this does not.  It also
-happens to be the limb type of HACL*'s `Hacl_Bignum32`.
+**The radix is 2^64.**  It is the widest radix for which a
+multiply-accumulate is exact in a double word: `(2^64-1)^2 + 2*(2^64-1)` is
+`2^128-1`, using every bit and no more, which is what `Hacl.Secret.UInt128`
+provides.  A narrower radix -- 2^32, which this was until Custard grew
+`unsigned __int128` -- would double the memory and quadruple the multiply
+count for no gain, because this layer carries after every column rather than
+accumulating a whole product first, unlike the fixed-width 256-bit core.  It
+is also the limb type of HACL*'s `Hacl_Bignum64`.
 
 **The postconditions are relational.**  There is no specification sequence
 and no `add_spec`.  Addition says
@@ -1172,17 +1231,17 @@ correct their result without a temporary -- necessary here, because the
 length is a run-time value and a temporary would have to be a
 variable-length array.
 
-    uint32_t Hacl_Bignum_Base_add    (uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
-    uint32_t Hacl_Bignum_Base_sub    (uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
-    void     Hacl_Bignum_Base_add_mod(uint32_t *res, uint32_t *a, uint32_t *b,
-                                      uint32_t *m, size_t n);
-    void     Hacl_Bignum_Base_sub_mod(uint32_t *res, uint32_t *a, uint32_t *b,
-                                      uint32_t *m, size_t n);
-    void     Hacl_Bignum_Base_mul    (uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
-    void     Hacl_Bignum_Base_sqr    (uint32_t *res, uint32_t *a, size_t n);
-    uint32_t Hacl_Bignum_Base_lt_mask(uint32_t *a, uint32_t *b, size_t n);
-    uint32_t Hacl_Bignum_Base_eq_mask(uint32_t *a, uint32_t *b, size_t n);
-    void     Hacl_Bignum_Base_zero   (uint32_t *res, size_t n);
+    uint64_t Hacl_Bignum_Base_add    (uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
+    uint64_t Hacl_Bignum_Base_sub    (uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
+    void     Hacl_Bignum_Base_add_mod(uint64_t *res, uint64_t *a, uint64_t *b,
+                                      uint64_t *m, size_t n);
+    void     Hacl_Bignum_Base_sub_mod(uint64_t *res, uint64_t *a, uint64_t *b,
+                                      uint64_t *m, size_t n);
+    void     Hacl_Bignum_Base_mul    (uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
+    void     Hacl_Bignum_Base_sqr    (uint64_t *res, uint64_t *a, size_t n);
+    uint64_t Hacl_Bignum_Base_lt_mask(uint64_t *a, uint64_t *b, size_t n);
+    uint64_t Hacl_Bignum_Base_eq_mask(uint64_t *a, uint64_t *b, size_t n);
+    void     Hacl_Bignum_Base_zero   (uint64_t *res, size_t n);
 
 `add` and `sub` return the carry or borrow; `mul` and `sqr` write `2n`
 limbs; `add_mod` and `sub_mod` require their inputs already reduced, as
@@ -1191,15 +1250,15 @@ look at every limb whatever the answer is.
 
 Conversion is four functions, both byte orders both ways:
 
-    void Hacl_Bignum_Convert_from_bytes_be(uint32_t *res, size_t n, uint8_t *b);
-    void Hacl_Bignum_Convert_from_bytes_le(uint32_t *res, size_t n, uint8_t *b);
-    void Hacl_Bignum_Convert_to_bytes_be  (uint8_t *b, uint32_t *a, size_t n);
-    void Hacl_Bignum_Convert_to_bytes_le  (uint8_t *b, uint32_t *a, size_t n);
+    void Hacl_Bignum_Convert_from_bytes_be(uint64_t *res, size_t n, uint8_t *b);
+    void Hacl_Bignum_Convert_from_bytes_le(uint64_t *res, size_t n, uint8_t *b);
+    void Hacl_Bignum_Convert_to_bytes_be  (uint8_t *b, uint64_t *a, size_t n);
+    void Hacl_Bignum_Convert_to_bytes_le  (uint8_t *b, uint64_t *a, size_t n);
 
-each on exactly `4n` bytes.  HACL* takes a byte count and left-pads to a
+each on exactly `8n` bytes.  HACL* takes a byte count and left-pads to a
 whole number of limbs; here that rounding is the caller's, who has to own a
 buffer of the right size anyway, and no key length in any standard this
-library implements fails to be a multiple of four.
+library implements fails to be a multiple of eight.
 
 `tests/test_bignum.c` checks all of it against values computed in Python,
 which shares no code with the implementation.
@@ -1208,29 +1267,30 @@ which shares no code with the implementation.
 
 Reducing modulo an arbitrary `n` costs a trial division per limb.
 Montgomery's observation is that if you carry `a * R mod n` instead of `a`,
-where `R` is `2^(32n)` -- a power of the radix, so that dividing by it is
+where `R` is `2^(64n)` -- a power of the radix, so that dividing by it is
 dropping limbs -- the reduction becomes a multiply and a shift.
 `code/bignum/Hacl.Bignum.Montgomery.fst` is that.
 
-    uint32_t Hacl_Bignum_Montgomery_mont_mu (uint32_t m0);
-    void Hacl_Bignum_Montgomery_precomp     (uint32_t *res, uint32_t *n, size_t nn);
-    void Hacl_Bignum_Montgomery_reduction   (uint32_t *res, uint32_t *c,
-                                             uint32_t *n, size_t nn, uint32_t mu);
-    void Hacl_Bignum_Montgomery_mont_mul    (uint32_t *res, uint32_t *a, uint32_t *b,
-                                             uint32_t *tmp, uint32_t *n, size_t nn,
-                                             uint32_t mu);
-    void Hacl_Bignum_Montgomery_from_mont   (uint32_t *res, uint32_t *a,
-                                             uint32_t *tmp, uint32_t *n, size_t nn,
-                                             uint32_t mu);
-    void Hacl_Bignum_Montgomery_modulo      (uint32_t *res, uint32_t *a, uint32_t *acc,
-                                             uint32_t *r2, uint32_t *n, size_t nn,
-                                             uint32_t mu);
+    uint64_t Hacl_Bignum_Montgomery_mont_mu (uint64_t m0);
+    void Hacl_Bignum_Montgomery_precomp     (uint64_t *res, uint64_t *n, size_t nn);
+    void Hacl_Bignum_Montgomery_reduction   (uint64_t *res, uint64_t *c,
+                                             uint64_t *n, size_t nn, uint64_t mu);
+    void Hacl_Bignum_Montgomery_mont_mul    (uint64_t *res, uint64_t *a, uint64_t *b,
+                                             uint64_t *tmp, uint64_t *n, size_t nn,
+                                             uint64_t mu);
+    void Hacl_Bignum_Montgomery_from_mont   (uint64_t *res, uint64_t *a,
+                                             uint64_t *tmp, uint64_t *n, size_t nn,
+                                             uint64_t mu);
+    void Hacl_Bignum_Montgomery_modulo      (uint64_t *res, uint64_t *a, uint64_t *acc,
+                                             uint64_t *r2, uint64_t *n, size_t nn,
+                                             uint64_t mu);
 
-`mu` is a single limb with `mu * m0 + 1 = 0 mod 2^32`, `m0` being the lowest
+`mu` is a single limb with `mu * m0 + 1 = 0 mod 2^64`, `m0` being the lowest
 limb of the modulus; it exists exactly when the modulus is odd.  HACL*
-computes it with a thirty-two iteration bit loop.  Here it is five steps of
-Hensel lifting from one, `x := x * (2 - m0 * x)`, which doubles the number
-of correct bits each time: one, two, four, eight, sixteen, thirty-two.
+computes it with a sixty-four iteration bit loop.  Here it is six steps of
+Hensel lifting from one, `x := x * (2 - m0 * x)`, which doubles the number of
+correct bits each time: one, two, four, eight, sixteen, thirty-two,
+sixty-four.
 Shorter, and the proof is a two-line algebraic identity per step.
 
 `precomp` is `R^2 mod n`, the constant that takes a number *into* Montgomery
@@ -1264,14 +1324,14 @@ entirely in Montgomery form: the base goes in once, the accumulator comes
 out once, and every rung in between is two `mont_mul`s.
 
     void Hacl_Bignum_Exponentiation_mod_exp_consttime(
-        uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits,
-        uint32_t *r2, uint32_t *n, size_t nn, uint32_t mu,
-        uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+        uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits,
+        uint64_t *r2, uint64_t *n, size_t nn, uint64_t mu,
+        uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
     void Hacl_Bignum_Exponentiation_mod_exp_vartime(/* the same arguments */);
     void Hacl_Bignum_Exponentiation_mod_inv_prime_vartime(
-        uint32_t *res, uint32_t *a, uint32_t *r2, uint32_t *n,
-        size_t nn, uint32_t mu, uint32_t *e,
-        uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
+        uint64_t *res, uint64_t *a, uint64_t *r2, uint64_t *n,
+        size_t nn, uint64_t mu, uint64_t *e,
+        uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
 
 **The invariant is the whole proof.**  Reading the exponent from the top
 down, the accumulator after `i` bits have been consumed holds
@@ -1344,7 +1404,7 @@ exactly the kind of thing that no test built from the same constant would
 ever catch.
 
 **Two literals are all the proof needs.**  `Spec.FFDHE` gives, for each
-group, that limb `0` and the top limb are both `2^32 - 1`.  The first says
+group, that limb `0` and the top limb are both `2^64 - 1`.  The first says
 the modulus is odd, which is Montgomery's precondition; the second, with
 `num_top`, says the modulus is bigger than two, which is what makes the
 exponentiation's modulus non-zero and the key-validation range non-empty.
@@ -1623,6 +1683,71 @@ recollection, which mattered: the nonce in `test/default/secretbox.c` is
 not what memory said it was, and the resulting mismatch looked exactly like
 a construction bug for a while.  Fetching the vector settled it in a
 minute.
+
+## Performance
+
+Measured on an AMD EPYC 7662 (Zen 2), gcc 15.2.0 `-O3`, pinned to one core,
+three interleaved rounds, per-benchmark minimum.  The reference is HACL\*'s
+**portable scalar C** -- not its AVX2 or AVX-512 variants -- except for
+AES-GCM, where HACL\* has no portable implementation at all and the reference
+is EverCrypt dispatching to Vale assembly.  Ratios below 1.00 are faster than
+the reference.
+
+| primitive | size | hacl-pulse | HACL\* | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| SHA-256 | 256 KiB | 227 us | 1,097 us | **0.21x** |
+| ChaCha20 | 256 KiB | 495 us | 857 us | **0.58x** |
+| SHA-512 | 256 KiB | 771 us | 1,326 us | **0.58x** |
+| SHA3-256 | 256 KiB | 1,144 us | 1,832 us | **0.62x** |
+| RSA-2048 modexp | -- | 9.1 ms | 13.1 ms | **0.70x** |
+| ChaCha20-Poly1305 | 256 KiB | 810 us | 1,074 us | **0.75x** |
+| SHA-1 | 256 KiB | 1,540 us | 1,490 us | 1.03x |
+| HMAC-SHA-256 | 256 KiB | 1,148 us | 1,102 us | 1.04x |
+| NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
+| Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
+| BLAKE2b | 256 KiB | 582 us | 313 us | 1.86x |
+| RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
+| FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
+| AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
+| X25519 | -- | 243 us | 44 us | 5.47x |
+| P-256 ECDSA verify | -- | 4.76 ms | 0.43 ms | 11.0x |
+| Ed25519 sign | -- | 890 us | 64 us | 13.8x |
+| secp256k1 ECDSA sign | -- | 2.10 ms | 0.07 ms | 32x |
+
+Three things account for most of the spread.
+
+**Where the C is at parity or ahead, it is because the algorithm is the same
+and the extraction is clean.**  SHA-256 is ahead because the SHA extensions
+are wired in and HACL\*'s portable C does not use them; ChaCha20, SHA-512 and
+SHA-3 are ahead because Custard's output unrolls and register-allocates at
+least as well as karamel's and the specifications here permitted a flatter
+implementation.  Nothing was hand-tuned.
+
+**Where it is behind by a factor of two, it is the exponent, not the
+arithmetic.**  RSA-PSS and FFDHE use square-and-multiply; HACL\* uses a 4-bit
+window.  The generic bignum itself is *faster* than HACL\*'s, which is what
+the modexp row shows.
+
+**Where it is behind by more, it is the field representation.**  Curve25519
+runs at radix 2^32, eight limbs, where HACL\*'s `_51` runs at radix 2^51,
+five limbs -- so roughly two and a half times the multiplies, and no lazy
+reduction.  P-256 and secp256k1 use the shared general Montgomery core rather
+than the special-prime reductions those two primes admit, and multiply scalars
+one bit at a time rather than through a precomputed window.  These are known,
+localized and unstarted; none of them requires new proof technique, only work.
+
+AES-GCM is the one row that was worked on.  It began at 875 microseconds on
+256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
+flight at a time, four GHASH blocks against the precomputed powers of the hash
+key, and a GF(2^128) reduction by shifts rather than by a second multiply.
+The remaining 4.5x is against hand-written assembly that interleaves six
+blocks and aggregates the GHASH reduction across them, and both of those are
+reachable from here.
+
+The benchmark harness and a long write-up of each optimization are kept
+outside the repository; the numbers above are reproducible with any AEAD/hash
+benchmark that links `dist/Hacl.c` on one side and HACL\*'s `dist/gcc-compatible`
+on the other.
 
 ## Proof engineering notes
 
@@ -1908,6 +2033,34 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   needs `msg_ok`, `blk` needs a bound -- is typechecked without the
   precondition in scope, and fails as "ill-typed term" at the `ensures`
   clause rather than anywhere useful.
+* **When a proof is slow, take the reasoning out of the context.  Do not
+  raise the rlimit.**  This is the same lesson as "keep a hypothesis set
+  small", and optimizing `code/aes` produced four more instances of it in a
+  row, each one sharper than the last.  Anchoring the Keccak indices; lifting
+  the four-block composition out of the counter-mode loop into a pure
+  `ctr4_step`; moving six vector shifts out of `mul_r_vec` into four helpers
+  with tight specifications, which took the module from a two-and-a-half
+  minute timeout to sixteen seconds; and splitting the four-way GHASH into
+  `ghash_loop4_ni`, `ghash_start`, `step4_bounds` and `step1_bounds`, which
+  took it from *not closing at `--z3rlimit 400`* to twenty-five seconds.
+  Nothing about the mathematics changed in any of the four.  If a goal is
+  trivial on its own and times out in place, the answer is never a bigger
+  budget.
+* **A shift count has to reach the intrinsic as a literal.**  Computing
+  `64 - n` inside the Pulse function defeats it, so `full_shr` takes both `n`
+  and `m` with a refinement `U32.v m == 64 - U32.v n` and lets the caller pass
+  two constants.
+* **Match the specification's syntax, not just its meaning, under a binder.**
+  `Spec.GF128.Algebra.conv_comm` needs its reversed summand written
+  `fun i -> pget b i && pget a (k - i)`, with the operands of `&&` in that
+  order, because that is how `conv b a k` is written.  Swap them and the proof
+  fails with every fact it needs in context: functions under a summation are
+  opaque and the solver will not commute `&&` inside a lambda.
+* **Do not guess where the time goes.**  Two predictions during the AES work
+  were badly wrong in opposite directions -- a change forecast at 1.4x
+  delivered 1.11x, and one forecast at 1.3x delivered 1.03x.  Reading the
+  generated assembly, and stubbing a function out to difference the benchmark,
+  were right every time.
 
 ## Roadmap
 
@@ -1933,4 +2086,26 @@ and so is the whole of the original NaCl interface: `crypto_secretbox`,
 `crypto_box`, and the `beforenm`/`afternm` split for callers that talk to
 the same peer more than once.
 
-That leaves FrodoKEM.
+That leaves FrodoKEM, which is under way.  The whole of it is specified --
+`Spec.Frodo` has key generation, encapsulation and decapsulation -- and the
+matrix arithmetic, the bit-serial packing, the CDF sampler and the message
+encoding are also implemented and verified in Pulse.  The KEM that sits on
+top of them is not: there is no Pulse `keygen`, `encaps` or `decaps` yet, and
+nothing Frodo is exported from `code/Hacl.fst`.
+
+Beyond feature parity, the performance work above has a queue of its own, in
+rough order of value:
+
+1. **Curve25519 at radix 2^51.**  Five limbs of fifty-one bits fit an
+   `unsigned __int128` -- `5 * (2^51 - 1)^2 < 2^115` -- and would roughly halve
+   X25519 and Ed25519, the largest single win left.
+2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
+   256-bit products before reducing rather than after.  Needs one new
+   specification fact: additivity of `Spec.GF128.Poly.halves`.
+3. **Special-prime reduction for P-256 and secp256k1** in place of the shared
+   general Montgomery core.
+4. **Windowed modular exponentiation** (4-bit) in
+   `Hacl.Bignum.Exponentiation`, which is the whole of the RSA-PSS and FFDHE
+   gap.
+5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
+   of what is left after (3).
