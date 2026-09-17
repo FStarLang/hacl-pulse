@@ -51,12 +51,21 @@ $(DIST_DIR)/Hacl.h: $(DIST_DIR)/Hacl.c
 $(BUILD_DIR)/Hacl.o: $(DIST_DIR)/Hacl.c
 	$(call msg, "CC", "Hacl")
 	$(Q)mkdir -p $(BUILD_DIR)
-	$(Q)$(CC) $(HACL_CFLAGS) -I $(DIST_DIR) -I $(HACL_ROOT)/c -c $< -o $@
+	$(Q)$(CC) $(HACL_CFLAGS) $(GENERATED_CFLAGS) -I $(DIST_DIR)             \
+	  -I $(HACL_ROOT)/c -c $< -o $@
 
 # A translation unit is compiled with warnings on and warnings fatal: an unused
 # variable or a missing cast in generated code is a bug in the pipeline, not a
 # style question.
 HACL_CFLAGS ?= -std=c11 -O3 -Wall -Wextra -Werror
+
+# One exception, and only for the generated translation unit.  Several
+# routines size a stack array from a run time parameter, and gcc's
+# -Wdangling-pointer gets variable length arrays wrong: it reports the array
+# as dead inside a callee that the array is passed to, while it is plainly
+# still in scope.  The handwritten C below is still compiled with the warning
+# on.
+GENERATED_CFLAGS ?= -Wno-dangling-pointer
 
 # Handwritten C.  Everything in c/ is trusted computing base -- currently just
 # the platform entropy shim -- and is compiled with the same flags and linked

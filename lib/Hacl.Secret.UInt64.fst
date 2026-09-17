@@ -179,7 +179,7 @@ let select mask x y =
    end and both have their own lemma. *)
 #push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
 let mask_low (n: U32.t { U32.v n <= 64 }) : r: t { v r == pow2 (U32.v n) - 1 } =
-  if U32.v n = 64 then U64.sub_mod 0UL 1UL
+  if U32.eq n 64ul then U64.sub_mod 0UL 1UL
   else begin
     UInt.shift_left_value_lemma #64 1 (U32.v n);
     Math.pow2_lt_compat 64 (U32.v n);
