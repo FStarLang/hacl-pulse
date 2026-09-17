@@ -225,3 +225,56 @@ ensures exists* vout'.
 }
 
 #pop-options
+
+(** {2 LabeledExtract with no salt}
+
+    Three of the four uses of [LabeledExtract] pass an empty salt, and an
+    empty array is not something a caller can conveniently produce: a
+    zero-length stack allocation is not a thing C wants to see.  One byte is
+    allocated and a zero-length window taken of it, which costs a stack slot
+    and no instructions. *)
+
+module Sub = Hacl.Impl.Sub
+
+fn labeled_extract_nosalt (#t: Type0) {| w: word t |}
+                          ([@@@FStar.Attributes.monomorphize] p: params t)
+                          (kt: A.array t) (ivt: A.array t)
+                          (out: A.array S8.t)
+                          (sid: A.array S8.t) (sid_len: SZ.t)
+                          (lbl: A.array S8.t) (lbl_len: SZ.t)
+                          (ikm: A.array S8.t) (ikm_len: SZ.t)
+                          (#pk: perm) (#vk: erased (Seq.seq t))
+                          (#pi: perm) (#vi: erased (Seq.seq t))
+                          (#vout: erased (Seq.seq S8.t))
+                          (#pd: perm) (#vsid: erased (Seq.seq S8.t))
+                          (#pl: perm) (#vlabel: erased (Seq.seq S8.t))
+                          (#pm: perm) (#vikm: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to sid #pd vsid ** A.pts_to lbl #pl vlabel ** A.pts_to ikm #pm vikm **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ reveal vi == (reveal p.iv <: Seq.seq t) /\
+               Seq.length vout == hash_bytes p /\
+               Seq.length vsid <= 16 /\
+               Seq.length vlabel <= 16 /\ Seq.length vikm < pow2 32 /\
+               SZ.fits (block_len #t + 7 + Seq.length vsid + Seq.length vlabel + Seq.length vikm))
+         ** pure (SZ.v sid_len == Seq.length vsid)
+         ** pure (SZ.v lbl_len == Seq.length vlabel)
+         ** pure (SZ.v ikm_len == Seq.length vikm)
+ensures exists* vout'.
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to sid #pd vsid ** A.pts_to lbl #pl vlabel ** A.pts_to ikm #pm vikm **
+  pure (Seq.length vsid <= 16 /\
+        Seq.length vlabel <= 16 /\ Seq.length vikm < pow2 32 /\ fits p (Seq.length vikm) /\
+        vout' == labeled_extract p vsid Seq.empty vlabel vikm)
+{
+  prefix_bound p (Seq.length vikm);
+  let z8 = S8.zero;
+  let mut one = [| z8; 1sz |];
+  A.pts_to_len one;
+  with vone. assert (A.pts_to one vone);
+  let nil = Sub.sub one 0sz 0sz;
+  with vnil. assert (A.pts_to nil vnil);
+  A.pts_to_len nil;
+  Seq.lemma_eq_elim (reveal vnil) (Seq.empty #S8.t);
+  labeled_extract_impl p kt ivt out sid sid_len nil 0sz lbl lbl_len ikm ikm_len;
+  Sub.unsub_id one 0 0 nil;
+}
