@@ -116,6 +116,44 @@ let rotc_ok (v: Seq.seq U32.t)
   = ()
 #pop-options
 
+(** The same twenty-five offsets as ground equalities.
+
+    [rotc] is a [match], so any verification condition that mentions it at a
+    symbolic index has to case-split twenty-five ways, and a Pulse context is
+    the worst possible place for that.  Proved here in isolation and then
+    called once per unrolled step, this puts all twenty-five facts into the
+    solver's context as ground terms, which costs nothing. *)
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+let rotc_lit (_: unit)
+  : Lemma (
+                   rotc  0 ==  0 /\
+                   rotc  1 ==  1 /\
+                   rotc  2 == 62 /\
+                   rotc  3 == 28 /\
+                   rotc  4 == 27 /\
+                   rotc  5 == 36 /\
+                   rotc  6 == 44 /\
+                   rotc  7 ==  6 /\
+                   rotc  8 == 55 /\
+                   rotc  9 == 20 /\
+                   rotc 10 ==  3 /\
+                   rotc 11 == 10 /\
+                   rotc 12 == 43 /\
+                   rotc 13 == 25 /\
+                   rotc 14 == 39 /\
+                   rotc 15 == 41 /\
+                   rotc 16 == 45 /\
+                   rotc 17 == 15 /\
+                   rotc 18 == 21 /\
+                   rotc 19 ==  8 /\
+                   rotc 20 == 18 /\
+                   rotc 21 ==  2 /\
+                   rotc 22 == 61 /\
+                   rotc 23 == 56 /\
+                   rotc 24 == 14)
+  = ()
+#pop-options
+
 (** The same twenty-five offsets as a list, for the compile-time table.
 
     Written out a second time rather than derived from [rotc], because a

@@ -846,34 +846,32 @@ static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8
 static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *vv, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static const uint64_t Hacl_Hash_SHA3_rc_arr[24] = { 0x1, 0x8082ULL, 0x800000000000808aULL, 0x8000000080008000ULL, 0x808bULL, 0x80000001ULL, 0x8000000080008081ULL, 0x8000000000008009ULL, 0x8a, 0x88, 0x80008009ULL, 0x8000000aULL, 0x8000808bULL, 0x800000000000008bULL, 0x8000000000008089ULL, 0x8000000000008003ULL, 0x8000000000008002ULL, 0x8000000000000080ULL, 0x800aULL, 0x800000008000000aULL, 0x8000000080008081ULL, 0x8000000000008080ULL, 0x80000001ULL, 0x8000000080008008ULL };
-static const uint32_t Hacl_Hash_SHA3_rotc_arr[25] = { 0, 1, 62, 28, 27, 36, 44, 6, 55, 20, 3, 10, 43, 25, 39, 41, 45, 15, 21, 8, 18, 2, 61, 56, 14 };
 static void Hacl_Hash_SHA3_Streaming_copy25(uint64_t *dst, uint64_t *src);
 static void Hacl_Hash_SHA3_Sponge_last_block(uint8_t *blk, uint8_t *msg, size_t n, size_t r, uint8_t suffix);
 static uint64_t Hacl_Hash_SHA3_Sponge_shiftl_u32(uint64_t x, uint32_t k);
 static uint32_t Hacl_Hash_SHA3_Sponge_shift8(size_t j);
 static uint64_t Hacl_Hash_SHA3_Sponge_lane_at(uint8_t *msg, size_t off);
 static void Hacl_Hash_SHA3_Sponge_xor_block_at(uint64_t *st, uint8_t *msg, size_t off, size_t r);
-static void Hacl_Hash_SHA3_Core_theta_c_impl(uint64_t *st, uint64_t *c);
 static uint64_t Hacl_Secret_UInt64_rotate_left(uint64_t x, uint32_t s);
 static uint64_t Hacl_Hash_SHA3_Core_rotl_u32(uint64_t x, uint32_t k);
-static void Hacl_Hash_SHA3_Core_theta_apply(uint64_t *st, uint64_t *c);
-static void Hacl_Hash_SHA3_Core_rho_pi_impl(uint64_t *st, uint64_t *b, uint32_t *rotc_tbl);
+static void Hacl_Hash_SHA3_Core_theta_impl(uint64_t *st);
+static void Hacl_Hash_SHA3_Core_rho_pi_impl(uint64_t *st, uint64_t *b);
 static void Hacl_Hash_SHA3_Core_chi_impl(uint64_t *b, uint64_t *st);
-static void Hacl_Hash_SHA3_Core_round_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, size_t n);
-static void Hacl_Hash_SHA3_Core_permute_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl);
+static void Hacl_Hash_SHA3_Core_round_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, size_t n);
+static void Hacl_Hash_SHA3_Core_permute_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl);
 static uint64_t Hacl_Hash_SHA3_Sponge_shiftr_u32(uint64_t x, uint32_t k);
 static void Hacl_Hash_SHA3_Sponge_squeeze_block(uint8_t *out, size_t base, size_t cnt, uint64_t *st);
-static void Hacl_Hash_SHA3_Sponge_squeeze_impl(uint8_t *out, size_t outlen, uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, size_t r);
-static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *out, size_t olen, size_t r, uint8_t suffix);
+static void Hacl_Hash_SHA3_Sponge_squeeze_impl(uint8_t *out, size_t outlen, uint64_t *st, uint64_t *b, uint64_t *rc_tbl, size_t r);
+static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *out, size_t olen, size_t r, uint8_t suffix);
 static void Hacl_Streaming_SHA3_keccak_digest(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *out, size_t out_len, size_t r, uint8_t suffix);
-static void Hacl_Hash_SHA3_Streaming_absorb_blocks(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *input, size_t base, size_t nfull, size_t nb, size_t r);
-static void Hacl_Hash_SHA3_Streaming_update_full(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill, size_t r);
-static void Hacl_Hash_SHA3_Streaming_update_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen, size_t r);
+static void Hacl_Hash_SHA3_Streaming_absorb_blocks(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *input, size_t base, size_t nfull, size_t nb, size_t r);
+static void Hacl_Hash_SHA3_Streaming_update_full(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill, size_t r);
+static void Hacl_Hash_SHA3_Streaming_update_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen, size_t r);
 static void Hacl_Streaming_SHA3_keccak_update(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len, size_t r);
 static void Hacl_Hash_SHA3_Sponge_zero_state_impl(uint64_t *st);
 static void Hacl_Hash_SHA3_Streaming_init_impl(uint64_t *st, size_t *tot, size_t r);
-static void Hacl_Hash_SHA3_Sponge_absorb_full(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r);
-static void Hacl_Hash_SHA3_Sponge_absorb_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r, uint8_t suffix);
+static void Hacl_Hash_SHA3_Sponge_absorb_full(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r);
+static void Hacl_Hash_SHA3_Sponge_absorb_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r, uint8_t suffix);
 static void Hacl_Hash_SHA3_keccak_impl(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len, size_t r, uint8_t suffix);
 static void Hacl_Hash_SHA2_Streaming_digest_impl__t_5(uint64_t *kt, uint64_t *wsb, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Hash_SHA2_Streaming_update_impl__t_5(uint64_t *kt, uint64_t *wsb, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
@@ -14828,21 +14826,6 @@ static void Hacl_Hash_SHA3_Sponge_xor_block_at(uint64_t *st, uint8_t *msg, size_
   }
 }
 
-static void Hacl_Hash_SHA3_Core_theta_c_impl(uint64_t *st, uint64_t *c) {
-  size_t i = 0;
-  while (i < 5) {
-    size_t vi = i;
-    uint64_t a0 = st[vi];
-    uint64_t a1 = st[(vi + 5)];
-    uint64_t a2 = st[(vi + 10)];
-    uint64_t a3 = st[(vi + 15)];
-    uint64_t a4 = st[(vi + 20)];
-    uint64_t r = Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(a0, a1), a2), a3), a4);
-    c[vi] = r;
-    i = (vi + 1);
-  }
-}
-
 static uint64_t Hacl_Secret_UInt64_rotate_left(uint64_t x, uint32_t s) {
   return Hacl_Secret_UInt64_rotate(x, (64 - s));
 }
@@ -14852,68 +14835,239 @@ static uint64_t Hacl_Hash_SHA3_Core_rotl_u32(uint64_t x, uint32_t k) {
   else return Hacl_Secret_UInt64_rotate_left(x, k);
 }
 
-static void Hacl_Hash_SHA3_Core_theta_apply(uint64_t *st, uint64_t *c) {
-  size_t i = 0;
-  while (i < 25) {
-    size_t vi = i;
-    size_t x = (vi % 5);
-    size_t x4 = ((x + 4) % 5);
-    size_t x1 = ((x + 1) % 5);
-    uint64_t c1 = c[x4];
-    uint64_t c2 = c[x1];
-    uint64_t d = Hacl_Secret_UInt64_logxor(c1, Hacl_Hash_SHA3_Core_rotl_u32(c2, 1));
-    uint64_t a = st[vi];
-    st[vi] = Hacl_Secret_UInt64_logxor(a, d);
-    i = (vi + 1);
-  }
+static void Hacl_Hash_SHA3_Core_theta_impl(uint64_t *st) {
+  uint64_t s00 = st[0];
+  uint64_t s01 = st[1];
+  uint64_t s02 = st[2];
+  uint64_t s03 = st[3];
+  uint64_t s04 = st[4];
+  uint64_t s05 = st[5];
+  uint64_t s06 = st[6];
+  uint64_t s07 = st[7];
+  uint64_t s08 = st[8];
+  uint64_t s09 = st[9];
+  uint64_t s10 = st[10];
+  uint64_t s11 = st[11];
+  uint64_t s12 = st[12];
+  uint64_t s13 = st[13];
+  uint64_t s14 = st[14];
+  uint64_t s15 = st[15];
+  uint64_t s16 = st[16];
+  uint64_t s17 = st[17];
+  uint64_t s18 = st[18];
+  uint64_t s19 = st[19];
+  uint64_t s20 = st[20];
+  uint64_t s21 = st[21];
+  uint64_t s22 = st[22];
+  uint64_t s23 = st[23];
+  uint64_t s24 = st[24];
+  uint64_t c0 = Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(s00, s05), s10), s15), s20);
+  uint64_t c1 = Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(s01, s06), s11), s16), s21);
+  uint64_t c2 = Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(s02, s07), s12), s17), s22);
+  uint64_t c3 = Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(s03, s08), s13), s18), s23);
+  uint64_t c4 = Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(Hacl_Secret_UInt64_logxor(s04, s09), s14), s19), s24);
+  uint64_t d0 = Hacl_Secret_UInt64_logxor(c4, Hacl_Hash_SHA3_Core_rotl_u32(c1, 1));
+  uint64_t d1 = Hacl_Secret_UInt64_logxor(c0, Hacl_Hash_SHA3_Core_rotl_u32(c2, 1));
+  uint64_t d2 = Hacl_Secret_UInt64_logxor(c1, Hacl_Hash_SHA3_Core_rotl_u32(c3, 1));
+  uint64_t d3 = Hacl_Secret_UInt64_logxor(c2, Hacl_Hash_SHA3_Core_rotl_u32(c4, 1));
+  uint64_t d4 = Hacl_Secret_UInt64_logxor(c3, Hacl_Hash_SHA3_Core_rotl_u32(c0, 1));
+  st[0] = Hacl_Secret_UInt64_logxor(s00, d0);
+  st[1] = Hacl_Secret_UInt64_logxor(s01, d1);
+  st[2] = Hacl_Secret_UInt64_logxor(s02, d2);
+  st[3] = Hacl_Secret_UInt64_logxor(s03, d3);
+  st[4] = Hacl_Secret_UInt64_logxor(s04, d4);
+  st[5] = Hacl_Secret_UInt64_logxor(s05, d0);
+  st[6] = Hacl_Secret_UInt64_logxor(s06, d1);
+  st[7] = Hacl_Secret_UInt64_logxor(s07, d2);
+  st[8] = Hacl_Secret_UInt64_logxor(s08, d3);
+  st[9] = Hacl_Secret_UInt64_logxor(s09, d4);
+  st[10] = Hacl_Secret_UInt64_logxor(s10, d0);
+  st[11] = Hacl_Secret_UInt64_logxor(s11, d1);
+  st[12] = Hacl_Secret_UInt64_logxor(s12, d2);
+  st[13] = Hacl_Secret_UInt64_logxor(s13, d3);
+  st[14] = Hacl_Secret_UInt64_logxor(s14, d4);
+  st[15] = Hacl_Secret_UInt64_logxor(s15, d0);
+  st[16] = Hacl_Secret_UInt64_logxor(s16, d1);
+  st[17] = Hacl_Secret_UInt64_logxor(s17, d2);
+  st[18] = Hacl_Secret_UInt64_logxor(s18, d3);
+  st[19] = Hacl_Secret_UInt64_logxor(s19, d4);
+  st[20] = Hacl_Secret_UInt64_logxor(s20, d0);
+  st[21] = Hacl_Secret_UInt64_logxor(s21, d1);
+  st[22] = Hacl_Secret_UInt64_logxor(s22, d2);
+  st[23] = Hacl_Secret_UInt64_logxor(s23, d3);
+  st[24] = Hacl_Secret_UInt64_logxor(s24, d4);
 }
 
-static void Hacl_Hash_SHA3_Core_rho_pi_impl(uint64_t *st, uint64_t *b, uint32_t *rotc_tbl) {
-  size_t i = 0;
-  while (i < 25) {
-    size_t vi = i;
-    size_t x = (vi % 5);
-    size_t y = (vi / 5);
-    size_t j = (((x + (3 * y)) % 5) + (5 * x));
-    uint64_t a = st[j];
-    uint32_t k = rotc_tbl[j];
-    b[vi] = Hacl_Hash_SHA3_Core_rotl_u32(a, k);
-    i = (vi + 1);
-  }
+static void Hacl_Hash_SHA3_Core_rho_pi_impl(uint64_t *st, uint64_t *b) {
+  uint64_t a = st[0];
+  b[0] = Hacl_Hash_SHA3_Core_rotl_u32(a, 0);
+  uint64_t a1 = st[6];
+  b[1] = Hacl_Hash_SHA3_Core_rotl_u32(a1, 44);
+  uint64_t a2 = st[12];
+  b[2] = Hacl_Hash_SHA3_Core_rotl_u32(a2, 43);
+  uint64_t a3 = st[18];
+  b[3] = Hacl_Hash_SHA3_Core_rotl_u32(a3, 21);
+  uint64_t a4 = st[24];
+  b[4] = Hacl_Hash_SHA3_Core_rotl_u32(a4, 14);
+  uint64_t a5 = st[3];
+  b[5] = Hacl_Hash_SHA3_Core_rotl_u32(a5, 28);
+  uint64_t a6 = st[9];
+  b[6] = Hacl_Hash_SHA3_Core_rotl_u32(a6, 20);
+  uint64_t a7 = st[10];
+  b[7] = Hacl_Hash_SHA3_Core_rotl_u32(a7, 3);
+  uint64_t a8 = st[16];
+  b[8] = Hacl_Hash_SHA3_Core_rotl_u32(a8, 45);
+  uint64_t a9 = st[22];
+  b[9] = Hacl_Hash_SHA3_Core_rotl_u32(a9, 61);
+  uint64_t a10 = st[1];
+  b[10] = Hacl_Hash_SHA3_Core_rotl_u32(a10, 1);
+  uint64_t a11 = st[7];
+  b[11] = Hacl_Hash_SHA3_Core_rotl_u32(a11, 6);
+  uint64_t a12 = st[13];
+  b[12] = Hacl_Hash_SHA3_Core_rotl_u32(a12, 25);
+  uint64_t a13 = st[19];
+  b[13] = Hacl_Hash_SHA3_Core_rotl_u32(a13, 8);
+  uint64_t a14 = st[20];
+  b[14] = Hacl_Hash_SHA3_Core_rotl_u32(a14, 18);
+  uint64_t a15 = st[4];
+  b[15] = Hacl_Hash_SHA3_Core_rotl_u32(a15, 27);
+  uint64_t a16 = st[5];
+  b[16] = Hacl_Hash_SHA3_Core_rotl_u32(a16, 36);
+  uint64_t a17 = st[11];
+  b[17] = Hacl_Hash_SHA3_Core_rotl_u32(a17, 10);
+  uint64_t a18 = st[17];
+  b[18] = Hacl_Hash_SHA3_Core_rotl_u32(a18, 15);
+  uint64_t a19 = st[23];
+  b[19] = Hacl_Hash_SHA3_Core_rotl_u32(a19, 56);
+  uint64_t a20 = st[2];
+  b[20] = Hacl_Hash_SHA3_Core_rotl_u32(a20, 62);
+  uint64_t a21 = st[8];
+  b[21] = Hacl_Hash_SHA3_Core_rotl_u32(a21, 55);
+  uint64_t a22 = st[14];
+  b[22] = Hacl_Hash_SHA3_Core_rotl_u32(a22, 39);
+  uint64_t a23 = st[15];
+  b[23] = Hacl_Hash_SHA3_Core_rotl_u32(a23, 41);
+  uint64_t a24 = st[21];
+  b[24] = Hacl_Hash_SHA3_Core_rotl_u32(a24, 2);
 }
 
 static void Hacl_Hash_SHA3_Core_chi_impl(uint64_t *b, uint64_t *st) {
-  size_t i = 0;
-  while (i < 25) {
-    size_t vi = i;
-    size_t x = (vi % 5);
-    size_t y = (vi / 5);
-    size_t y5 = (5 * y);
-    size_t j1 = (((x + 1) % 5) + y5);
-    size_t j2 = (((x + 2) % 5) + y5);
-    uint64_t a0 = b[vi];
-    uint64_t a1 = b[j1];
-    uint64_t a2 = b[j2];
-    st[vi] = Hacl_Secret_UInt64_logxor(a0, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a1), a2));
-    i = (vi + 1);
-  }
+  uint64_t a0 = b[0];
+  uint64_t a1 = b[1];
+  uint64_t a2 = b[2];
+  st[0] = Hacl_Secret_UInt64_logxor(a0, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a1), a2));
+  uint64_t a01 = b[1];
+  uint64_t a11 = b[2];
+  uint64_t a21 = b[3];
+  st[1] = Hacl_Secret_UInt64_logxor(a01, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a11), a21));
+  uint64_t a02 = b[2];
+  uint64_t a12 = b[3];
+  uint64_t a22 = b[4];
+  st[2] = Hacl_Secret_UInt64_logxor(a02, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a12), a22));
+  uint64_t a03 = b[3];
+  uint64_t a13 = b[4];
+  uint64_t a23 = b[0];
+  st[3] = Hacl_Secret_UInt64_logxor(a03, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a13), a23));
+  uint64_t a04 = b[4];
+  uint64_t a14 = b[0];
+  uint64_t a24 = b[1];
+  st[4] = Hacl_Secret_UInt64_logxor(a04, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a14), a24));
+  uint64_t a05 = b[5];
+  uint64_t a15 = b[6];
+  uint64_t a25 = b[7];
+  st[5] = Hacl_Secret_UInt64_logxor(a05, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a15), a25));
+  uint64_t a06 = b[6];
+  uint64_t a16 = b[7];
+  uint64_t a26 = b[8];
+  st[6] = Hacl_Secret_UInt64_logxor(a06, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a16), a26));
+  uint64_t a07 = b[7];
+  uint64_t a17 = b[8];
+  uint64_t a27 = b[9];
+  st[7] = Hacl_Secret_UInt64_logxor(a07, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a17), a27));
+  uint64_t a08 = b[8];
+  uint64_t a18 = b[9];
+  uint64_t a28 = b[5];
+  st[8] = Hacl_Secret_UInt64_logxor(a08, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a18), a28));
+  uint64_t a09 = b[9];
+  uint64_t a19 = b[5];
+  uint64_t a29 = b[6];
+  st[9] = Hacl_Secret_UInt64_logxor(a09, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a19), a29));
+  uint64_t a010 = b[10];
+  uint64_t a110 = b[11];
+  uint64_t a210 = b[12];
+  st[10] = Hacl_Secret_UInt64_logxor(a010, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a110), a210));
+  uint64_t a011 = b[11];
+  uint64_t a111 = b[12];
+  uint64_t a211 = b[13];
+  st[11] = Hacl_Secret_UInt64_logxor(a011, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a111), a211));
+  uint64_t a012 = b[12];
+  uint64_t a112 = b[13];
+  uint64_t a212 = b[14];
+  st[12] = Hacl_Secret_UInt64_logxor(a012, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a112), a212));
+  uint64_t a013 = b[13];
+  uint64_t a113 = b[14];
+  uint64_t a213 = b[10];
+  st[13] = Hacl_Secret_UInt64_logxor(a013, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a113), a213));
+  uint64_t a014 = b[14];
+  uint64_t a114 = b[10];
+  uint64_t a214 = b[11];
+  st[14] = Hacl_Secret_UInt64_logxor(a014, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a114), a214));
+  uint64_t a015 = b[15];
+  uint64_t a115 = b[16];
+  uint64_t a215 = b[17];
+  st[15] = Hacl_Secret_UInt64_logxor(a015, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a115), a215));
+  uint64_t a016 = b[16];
+  uint64_t a116 = b[17];
+  uint64_t a216 = b[18];
+  st[16] = Hacl_Secret_UInt64_logxor(a016, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a116), a216));
+  uint64_t a017 = b[17];
+  uint64_t a117 = b[18];
+  uint64_t a217 = b[19];
+  st[17] = Hacl_Secret_UInt64_logxor(a017, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a117), a217));
+  uint64_t a018 = b[18];
+  uint64_t a118 = b[19];
+  uint64_t a218 = b[15];
+  st[18] = Hacl_Secret_UInt64_logxor(a018, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a118), a218));
+  uint64_t a019 = b[19];
+  uint64_t a119 = b[15];
+  uint64_t a219 = b[16];
+  st[19] = Hacl_Secret_UInt64_logxor(a019, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a119), a219));
+  uint64_t a020 = b[20];
+  uint64_t a120 = b[21];
+  uint64_t a220 = b[22];
+  st[20] = Hacl_Secret_UInt64_logxor(a020, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a120), a220));
+  uint64_t a021 = b[21];
+  uint64_t a121 = b[22];
+  uint64_t a221 = b[23];
+  st[21] = Hacl_Secret_UInt64_logxor(a021, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a121), a221));
+  uint64_t a022 = b[22];
+  uint64_t a122 = b[23];
+  uint64_t a222 = b[24];
+  st[22] = Hacl_Secret_UInt64_logxor(a022, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a122), a222));
+  uint64_t a023 = b[23];
+  uint64_t a123 = b[24];
+  uint64_t a223 = b[20];
+  st[23] = Hacl_Secret_UInt64_logxor(a023, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a123), a223));
+  uint64_t a024 = b[24];
+  uint64_t a124 = b[20];
+  uint64_t a224 = b[21];
+  st[24] = Hacl_Secret_UInt64_logxor(a024, Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lognot(a124), a224));
 }
 
-static void Hacl_Hash_SHA3_Core_round_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, size_t n) {
-  Hacl_Hash_SHA3_Core_theta_c_impl(st, c);
-  Hacl_Hash_SHA3_Core_theta_apply(st, c);
-  Hacl_Hash_SHA3_Core_rho_pi_impl(st, b, rotc_tbl);
+static void Hacl_Hash_SHA3_Core_round_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, size_t n) {
+  Hacl_Hash_SHA3_Core_theta_impl(st);
+  Hacl_Hash_SHA3_Core_rho_pi_impl(st, b);
   Hacl_Hash_SHA3_Core_chi_impl(b, st);
   uint64_t x0 = st[0];
   uint64_t r = rc_tbl[n];
   st[0] = Hacl_Secret_UInt64_logxor(x0, r);
 }
 
-static void Hacl_Hash_SHA3_Core_permute_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl) {
+static void Hacl_Hash_SHA3_Core_permute_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl) {
   size_t i = 0;
   while (i < 24) {
     size_t vi = i;
-    Hacl_Hash_SHA3_Core_round_impl(st, b, c, rotc_tbl, rc_tbl, vi);
+    Hacl_Hash_SHA3_Core_round_impl(st, b, rc_tbl, vi);
     i = (vi + 1);
   }
 }
@@ -14935,7 +15089,7 @@ static void Hacl_Hash_SHA3_Sponge_squeeze_block(uint8_t *out, size_t base, size_
   }
 }
 
-static void Hacl_Hash_SHA3_Sponge_squeeze_impl(uint8_t *out, size_t outlen, uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, size_t r) {
+static void Hacl_Hash_SHA3_Sponge_squeeze_impl(uint8_t *out, size_t outlen, uint64_t *st, uint64_t *b, uint64_t *rc_tbl, size_t r) {
   size_t base = 0;
   while (base < outlen) {
     size_t vbase = base;
@@ -14943,12 +15097,12 @@ static void Hacl_Hash_SHA3_Sponge_squeeze_impl(uint8_t *out, size_t outlen, uint
     if (r <= (outlen - vbase)) cnt = r;
     else cnt = (outlen - vbase);
     Hacl_Hash_SHA3_Sponge_squeeze_block(out, vbase, cnt, st);
-    Hacl_Hash_SHA3_Core_permute_impl(st, b, c, rotc_tbl, rc_tbl);
+    Hacl_Hash_SHA3_Core_permute_impl(st, b, rc_tbl);
     base = (vbase + cnt);
   }
 }
 
-static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *out, size_t olen, size_t r, uint8_t suffix) {
+static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *out, size_t olen, size_t r, uint8_t suffix) {
   size_t tlen = tot[0];
   size_t blen = (tlen % r);
   uint64_t z64 = 0;
@@ -14966,8 +15120,8 @@ static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint
   uint8_t *blk = Hacl_Impl_Sub_sub__t(blkarr, 0, r);
   Hacl_Hash_SHA3_Sponge_last_block(blk, tail, blen, r, suffix);
   Hacl_Hash_SHA3_Sponge_xor_block_at(starr, blk, 0, r);
-  Hacl_Hash_SHA3_Core_permute_impl(starr, b, c, rotc_tbl, rc_tbl);
-  Hacl_Hash_SHA3_Sponge_squeeze_impl(out, olen, starr, b, c, rotc_tbl, rc_tbl, r);
+  Hacl_Hash_SHA3_Core_permute_impl(starr, b, rc_tbl);
+  Hacl_Hash_SHA3_Sponge_squeeze_impl(out, olen, starr, b, rc_tbl, r);
 }
 
 static void Hacl_Streaming_SHA3_keccak_digest(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *out, size_t out_len, size_t r, uint8_t suffix) {
@@ -14976,42 +15130,37 @@ static void Hacl_Streaming_SHA3_keccak_digest(uint64_t *st, uint8_t *buf, size_t
   for (size_t _ci1 = 0; _ci1 < 25; _ci1++) {
     barr[_ci1] = z64;
   }
-  uint64_t carr[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    carr[_ci2] = z64;
-  }
   uint64_t *rc_tbl = (uint64_t *)Hacl_Hash_SHA3_rc_arr;
-  uint32_t *rotc_tbl = (uint32_t *)Hacl_Hash_SHA3_rotc_arr;
-  Hacl_Hash_SHA3_Streaming_digest_impl(st, barr, carr, rotc_tbl, rc_tbl, buf, tot, out, out_len, r, suffix);
+  Hacl_Hash_SHA3_Streaming_digest_impl(st, barr, rc_tbl, buf, tot, out, out_len, r, suffix);
 }
 
 void Hacl_Streaming_SHA3_shake256_digest(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *out, size_t out_len) {
   Hacl_Streaming_SHA3_keccak_digest(st, buf, tot, out, out_len, 136, 0x1f);
 }
 
-static void Hacl_Hash_SHA3_Streaming_absorb_blocks(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *input, size_t base, size_t nfull, size_t nb, size_t r) {
+static void Hacl_Hash_SHA3_Streaming_absorb_blocks(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *input, size_t base, size_t nfull, size_t nb, size_t r) {
   (void)nb;
   size_t i = 0;
   while (i < nfull) {
     size_t vi = i;
     size_t off = (base + (vi * r));
     Hacl_Hash_SHA3_Sponge_xor_block_at(st, input, off, r);
-    Hacl_Hash_SHA3_Core_permute_impl(st, b, c, rotc_tbl, rc_tbl);
+    Hacl_Hash_SHA3_Core_permute_impl(st, b, rc_tbl);
     i = (vi + 1);
   }
 }
 
-static void Hacl_Hash_SHA3_Streaming_update_full(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill, size_t r) {
+static void Hacl_Hash_SHA3_Streaming_update_full(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, uint8_t *data, size_t dlen, size_t blen, size_t nb0, size_t fill, size_t r) {
   (void)blen;
-  Hacl_Hash_SHA3_Streaming_absorb_blocks(st, b, c, rotc_tbl, rc_tbl, buf, 0, 1, nb0, r);
+  Hacl_Hash_SHA3_Streaming_absorb_blocks(st, b, rc_tbl, buf, 0, 1, nb0, r);
   size_t restlen = (dlen - fill);
   size_t nfull = (restlen / r);
   size_t tl = (restlen % r);
-  Hacl_Hash_SHA3_Streaming_absorb_blocks(st, b, c, rotc_tbl, rc_tbl, data, fill, nfull, (nb0 + 1), r);
+  Hacl_Hash_SHA3_Streaming_absorb_blocks(st, b, rc_tbl, data, fill, nfull, (nb0 + 1), r);
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_SHA3_Streaming_update_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen, size_t r) {
+static void Hacl_Hash_SHA3_Streaming_update_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen, size_t r) {
   size_t tlen = tot[0];
   size_t blen = (tlen % r);
   size_t nb0 = (tlen / r);
@@ -15019,7 +15168,7 @@ static void Hacl_Hash_SHA3_Streaming_update_impl(uint64_t *st, uint64_t *b, uint
   if ((r - blen) <= dlen) fill = (r - blen);
   else fill = dlen;
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
-  if ((blen + fill) == r) Hacl_Hash_SHA3_Streaming_update_full(st, b, c, rotc_tbl, rc_tbl, buf, data, dlen, blen, nb0, fill, r);
+  if ((blen + fill) == r) Hacl_Hash_SHA3_Streaming_update_full(st, b, rc_tbl, buf, data, dlen, blen, nb0, fill, r);
   tot[0] = (tlen + dlen);
 }
 
@@ -15029,13 +15178,8 @@ static void Hacl_Streaming_SHA3_keccak_update(uint64_t *st, uint8_t *buf, size_t
   for (size_t _ci1 = 0; _ci1 < 25; _ci1++) {
     barr[_ci1] = z64;
   }
-  uint64_t carr[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    carr[_ci2] = z64;
-  }
   uint64_t *rc_tbl = (uint64_t *)Hacl_Hash_SHA3_rc_arr;
-  uint32_t *rotc_tbl = (uint32_t *)Hacl_Hash_SHA3_rotc_arr;
-  Hacl_Hash_SHA3_Streaming_update_impl(st, barr, carr, rotc_tbl, rc_tbl, buf, tot, data, data_len, r);
+  Hacl_Hash_SHA3_Streaming_update_impl(st, barr, rc_tbl, buf, tot, data, data_len, r);
 }
 
 void Hacl_Streaming_SHA3_shake256_update(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -15127,21 +15271,21 @@ void Hacl_Streaming_SHA3_sha3_224_init(uint64_t *st, uint8_t *buf, size_t *tot) 
   Hacl_Hash_SHA3_Streaming_init_impl(st, tot, 144);
 }
 
-static void Hacl_Hash_SHA3_Sponge_absorb_full(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r) {
+static void Hacl_Hash_SHA3_Sponge_absorb_full(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r) {
   size_t q = (n / r);
   size_t i = 0;
   while (i < q) {
     size_t vi = i;
     size_t off = (vi * r);
     Hacl_Hash_SHA3_Sponge_xor_block_at(st, msg, off, r);
-    Hacl_Hash_SHA3_Core_permute_impl(st, b, c, rotc_tbl, rc_tbl);
+    Hacl_Hash_SHA3_Core_permute_impl(st, b, rc_tbl);
     i = (vi + 1);
   }
 }
 
-static void Hacl_Hash_SHA3_Sponge_absorb_impl(uint64_t *st, uint64_t *b, uint64_t *c, uint32_t *rotc_tbl, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r, uint8_t suffix) {
+static void Hacl_Hash_SHA3_Sponge_absorb_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *msg, size_t n, size_t r, uint8_t suffix) {
   Hacl_Hash_SHA3_Sponge_zero_state_impl(st);
-  Hacl_Hash_SHA3_Sponge_absorb_full(st, b, c, rotc_tbl, rc_tbl, msg, n, r);
+  Hacl_Hash_SHA3_Sponge_absorb_full(st, b, rc_tbl, msg, n, r);
   uint8_t z8 = 0;
   uint8_t arr[200];
   for (size_t _ci1 = 0; _ci1 < 200; _ci1++) {
@@ -15150,7 +15294,7 @@ static void Hacl_Hash_SHA3_Sponge_absorb_impl(uint64_t *st, uint64_t *b, uint64_
   uint8_t *blk = Hacl_Impl_Sub_sub__t(arr, 0, r);
   Hacl_Hash_SHA3_Sponge_last_block(blk, msg, n, r, suffix);
   Hacl_Hash_SHA3_Sponge_xor_block_at(st, blk, 0, r);
-  Hacl_Hash_SHA3_Core_permute_impl(st, b, c, rotc_tbl, rc_tbl);
+  Hacl_Hash_SHA3_Core_permute_impl(st, b, rc_tbl);
 }
 
 static void Hacl_Hash_SHA3_keccak_impl(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len, size_t r, uint8_t suffix) {
@@ -15163,14 +15307,9 @@ static void Hacl_Hash_SHA3_keccak_impl(uint8_t *out, size_t out_len, uint8_t *ms
   for (size_t _ci2 = 0; _ci2 < 25; _ci2++) {
     barr[_ci2] = z64;
   }
-  uint64_t carr[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    carr[_ci3] = z64;
-  }
   uint64_t *rc_tbl = (uint64_t *)Hacl_Hash_SHA3_rc_arr;
-  uint32_t *rotc_tbl = (uint32_t *)Hacl_Hash_SHA3_rotc_arr;
-  Hacl_Hash_SHA3_Sponge_absorb_impl(starr, barr, carr, rotc_tbl, rc_tbl, msg, msg_len, r, suffix);
-  Hacl_Hash_SHA3_Sponge_squeeze_impl(out, out_len, starr, barr, carr, rotc_tbl, rc_tbl, r);
+  Hacl_Hash_SHA3_Sponge_absorb_impl(starr, barr, rc_tbl, msg, msg_len, r, suffix);
+  Hacl_Hash_SHA3_Sponge_squeeze_impl(out, out_len, starr, barr, rc_tbl, r);
 }
 
 void Hacl_Hash_SHA3_shake256(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len) {

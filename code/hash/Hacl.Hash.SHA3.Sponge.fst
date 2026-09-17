@@ -179,25 +179,23 @@ ensures exists* (vst: Seq.seq S64.t).
 
 (** Absorb the [len msg / r] whole blocks, in place, out of the caller's
     buffer.  Leaves the state at [repeati (len msg / r) (absorb_step ...)]. *)
-fn absorb_full (st: A.array S64.t) (b: A.array S64.t) (c: A.array S64.t)
-               (rotc_tbl: A.array U32.t) (rc_tbl: A.array S64.t)
+fn absorb_full (st: A.array S64.t) (b: A.array S64.t)
+               (rc_tbl: A.array S64.t)
                (msg: A.array S8.t) (n: SZ.t) (r: SZ.t) (suffix: G.erased U8.t)
-               (#vb0: erased (Seq.seq S64.t)) (#vc0: erased (Seq.seq S64.t))
-               (#pr: perm) (#vr: erased (Seq.seq U32.t))
+               (#vb0: erased (Seq.seq S64.t))
                (#prc: perm) (#vrc: erased (Seq.seq S64.t))
                (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires A.pts_to st (zero_state <: Seq.seq S64.t) ** A.pts_to b vb0 ** A.pts_to c vc0 **
-         A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+requires A.pts_to st (zero_state <: Seq.seq S64.t) ** A.pts_to b vb0 **
+         A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
          pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
-               Seq.length vb0 == 25 /\ Seq.length vc0 == 5 /\ Seq.length vr == 25 /\
-               reveal vrc == (rc <: Seq.seq S64.t) /\
-               (forall (j: nat). j < 25 ==> U32.v (Seq.index vr j) == rotc j))
+               Seq.length vb0 == 25 /\
+               reveal vrc == (rc <: Seq.seq S64.t))
          ** pure (SZ.v n == Seq.length vm)
-ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
-  A.pts_to st vst ** A.pts_to b vb ** A.pts_to c vc **
-  A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
+  A.pts_to st vst ** A.pts_to b vb **
+  A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
   pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
-        Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vc == 5 /\
+        Seq.length vst == 25 /\ Seq.length vb == 25 /\
         vst == Loops.repeati (Seq.length vm / SZ.v r)
                  (absorb_step (SZ.v r) (padded (SZ.v r) suffix vm)) zero_state)
 {
@@ -206,11 +204,11 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
   let q = SZ.div n r;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi q)
-  invariant exists* (vi: SZ.t) (vst: Seq.seq S64.t) (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to st vst ** A.pts_to b vb ** A.pts_to c vc **
-    A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+  invariant exists* (vi: SZ.t) (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to st vst ** A.pts_to b vb **
+    A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
     pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
-          Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vc == 5 /\
+          Seq.length vst == 25 /\ Seq.length vb == 25 /\
           SZ.v vi <= Seq.length vm / SZ.v r /\
           vst == Loops.repeati (SZ.v vi)
                    (absorb_step (SZ.v r) (padded (SZ.v r) suffix vm)) zero_state)
@@ -227,7 +225,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
     Loops.unfold_repeati (SZ.v vi)
       (absorb_step (SZ.v r) (padded (SZ.v r) suffix vm)) zero_state;
     xor_block_at st msg off r;
-    permute_impl st b c rotc_tbl rc_tbl;
+    permute_impl st b rc_tbl;
     i := SZ.add vi 1sz;
   };
 }
@@ -289,33 +287,31 @@ ensures exists* (vk: Seq.seq S8.t).
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 (** The whole absorb phase: [st <- absorb r suffix msg]. *)
-fn absorb_impl (st: A.array S64.t) (b: A.array S64.t) (c: A.array S64.t)
-               (rotc_tbl: A.array U32.t) (rc_tbl: A.array S64.t)
+fn absorb_impl (st: A.array S64.t) (b: A.array S64.t)
+               (rc_tbl: A.array S64.t)
                (msg: A.array S8.t) (n: SZ.t) (r: SZ.t) (suffix: U8.t)
                (#vst0: erased (Seq.seq S64.t))
-               (#vb0: erased (Seq.seq S64.t)) (#vc0: erased (Seq.seq S64.t))
-               (#pr: perm) (#vr: erased (Seq.seq U32.t))
+               (#vb0: erased (Seq.seq S64.t))
                (#prc: perm) (#vrc: erased (Seq.seq S64.t))
                (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires A.pts_to st vst0 ** A.pts_to b vb0 ** A.pts_to c vc0 **
-         A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+requires A.pts_to st vst0 ** A.pts_to b vb0 **
+         A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
          pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
                Seq.length vst0 == 25 /\
-               Seq.length vb0 == 25 /\ Seq.length vc0 == 5 /\ Seq.length vr == 25 /\
-               reveal vrc == (rc <: Seq.seq S64.t) /\
-               (forall (j: nat). j < 25 ==> U32.v (Seq.index vr j) == rotc j))
+               Seq.length vb0 == 25 /\
+               reveal vrc == (rc <: Seq.seq S64.t))
          ** pure (SZ.v n == Seq.length vm)
-ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
-  A.pts_to st vst ** A.pts_to b vb ** A.pts_to c vc **
-  A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
+  A.pts_to st vst ** A.pts_to b vb **
+  A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
   pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
-        Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vc == 5 /\
+        Seq.length vst == 25 /\ Seq.length vb == 25 /\
         vst == absorb (SZ.v r) suffix vm)
 {
   A.pts_to_len st;
   A.pts_to_len msg;
   zero_state_impl st;
-  absorb_full st b c rotc_tbl rc_tbl msg n r (G.hide suffix);
+  absorb_full st b rc_tbl msg n r (G.hide suffix);
   let z8 = S8.classify 0uy;
   let mut arr = [| z8; 200sz |];
   A.pts_to_len arr;
@@ -326,7 +322,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
   Loops.unfold_repeati (Seq.length vm / SZ.v r)
     (absorb_step (SZ.v r) (padded (SZ.v r) suffix vm)) zero_state;
   xor_block_at st blk 0sz r;
-  permute_impl st b c rotc_tbl rc_tbl;
+  permute_impl st b rc_tbl;
   Sub.unsub arr 0 (SZ.v r) blk;
   ()
 }
@@ -385,24 +381,22 @@ ensures exists* (vout: Seq.seq S8.t).
 #push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
 
 (** The whole squeeze phase: [out <- squeeze r st (len out)]. *)
-fn squeeze_impl (out: A.array S8.t) (outlen: SZ.t) (st: A.array S64.t) (b: A.array S64.t) (c: A.array S64.t)
-                (rotc_tbl: A.array U32.t) (rc_tbl: A.array S64.t) (r: SZ.t)
+fn squeeze_impl (out: A.array S8.t) (outlen: SZ.t) (st: A.array S64.t) (b: A.array S64.t)
+                (rc_tbl: A.array S64.t) (r: SZ.t)
                 (#vout0: erased (Seq.seq S8.t)) (#vst0: erased (Seq.seq S64.t))
-                (#vb0: erased (Seq.seq S64.t)) (#vc0: erased (Seq.seq S64.t))
-                (#pr: perm) (#vr: erased (Seq.seq U32.t))
+                (#vb0: erased (Seq.seq S64.t))
                 (#prc: perm) (#vrc: erased (Seq.seq S64.t))
-requires A.pts_to out vout0 ** A.pts_to st vst0 ** A.pts_to b vb0 ** A.pts_to c vc0 **
-         A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc **
+requires A.pts_to out vout0 ** A.pts_to st vst0 ** A.pts_to b vb0 **
+         A.pts_to rc_tbl #prc vrc **
          pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
                Seq.length vst0 == 25 /\
-               Seq.length vb0 == 25 /\ Seq.length vc0 == 5 /\ Seq.length vr == 25 /\
-               reveal vrc == (rc <: Seq.seq S64.t) /\
-               (forall (j: nat). j < 25 ==> U32.v (Seq.index vr j) == rotc j))
+               Seq.length vb0 == 25 /\
+               reveal vrc == (rc <: Seq.seq S64.t))
          ** pure (SZ.v outlen == Seq.length vout0)
 ensures exists* (vout: Seq.seq S8.t) (vst: Seq.seq S64.t)
-                (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
-  A.pts_to out vout ** A.pts_to st vst ** A.pts_to b vb ** A.pts_to c vc **
-  A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc **
+                (vb: Seq.seq S64.t).
+  A.pts_to out vout ** A.pts_to st vst ** A.pts_to b vb **
+  A.pts_to rc_tbl #prc vrc **
   pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
         Seq.length vst0 == 25 /\ Seq.length vst == 25 /\
         Seq.length vout == Seq.length vout0 /\
@@ -413,13 +407,13 @@ ensures exists* (vout: Seq.seq S8.t) (vst: Seq.seq S64.t)
   let mut base = 0sz;
   while (let vb1 = !base; SZ.lt vb1 outlen)
   invariant exists* (vbase: SZ.t) (vout: Seq.seq S8.t) (vst: Seq.seq S64.t)
-                    (vb: Seq.seq S64.t) (vc: Seq.seq S64.t).
+                    (vb: Seq.seq S64.t).
     pts_to base vbase ** A.pts_to out vout ** A.pts_to st vst **
-    A.pts_to b vb ** A.pts_to c vc **
-    A.pts_to rotc_tbl #pr vr ** A.pts_to rc_tbl #prc vrc **
+    A.pts_to b vb **
+    A.pts_to rc_tbl #prc vrc **
     pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
           Seq.length vst0 == 25 /\
-          Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vc == 5 /\
+          Seq.length vst == 25 /\ Seq.length vb == 25 /\
           Seq.length vout == Seq.length vout0 /\
           SZ.v vbase <= Seq.length vout0 /\
           (SZ.v vbase < Seq.length vout0 ==>
@@ -436,7 +430,7 @@ ensures exists* (vout: Seq.seq S8.t) (vst: Seq.seq S64.t)
     squeeze_range_eq (SZ.v r) (reveal vst0) (Seq.length vout0) (SZ.v vbase) (SZ.v cnt);
     squeeze_block out vbase cnt st;
     Loops.unfold_repeati (SZ.v q) (fun _ st -> permute st) (reveal vst0);
-    permute_impl st b c rotc_tbl rc_tbl;
+    permute_impl st b rc_tbl;
     Math.lemma_div_plus 0 (SZ.v q) (SZ.v r);
     Math.lemma_mod_plus 0 (SZ.v q) (SZ.v r);
     Math.distributivity_add_left (SZ.v q) 1 (SZ.v r);
