@@ -66,6 +66,7 @@ module G = Spec.GF128
 module Poly = Spec.GF128.Poly
 module Classical = FStar.Classical
 module U32 = FStar.UInt32
+module Math = FStar.Math.Lemmas
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -362,6 +363,115 @@ ensures exists* (va': Seq.seq S8.t).
   let r = gmul_vec (Vec.vxor x dv) y;
   Vec.store a r #(as_blk va);
   vals_len (Vec.vv r);
+  ()
+}
+
+(** {2 The whole inner loop}
+
+    [gmul_add_ni] above is one block, and calling it a block at a time is
+    what the dispatcher in [Hacl.AES.GMul] did: a function call, a CPUID
+    feature test, an aliasing check and a load and a store of the
+    accumulator, all per sixteen bytes of input, wrapped around a multiply
+    that is now well under thirty instructions.  GHASH is a Horner
+    evaluation, so the accumulator is a serial dependency and every one of
+    those loads waits on the previous store.
+
+    So the loop itself comes down here.  The feature test happens once, the
+    hash key is loaded once, and the accumulator lives in a register from the
+    first block to the last. *)
+
+(** One turn of it, on the pure side: the slice of the input at [i] is block
+    [i / blocklen] of the prefix being hashed. *)
+let ghash_step (hh acc0: G.block) (d: Seq.seq elem) (n i: nat)
+  : Lemma (requires n % blocklen == 0 /\ n <= Seq.length d /\
+                    i % blocklen == 0 /\ i + blocklen <= n)
+          (ensures (let dd = Seq.slice d 0 n in
+                    Seq.length dd % blocklen == 0 /\
+                    i / blocklen + 1 <= G.nblocks dd /\
+                    (i + blocklen) / blocklen == i / blocklen + 1 /\
+                    G.ghash_from hh acc0 dd (i / blocklen + 1) ==
+                      G.gmul (G.gadd (G.ghash_from hh acc0 dd (i / blocklen))
+                                     (Seq.slice d i (i + blocklen))) hh))
+  = let dd = Seq.slice d 0 n in
+    let k = i / blocklen in
+    Math.euclidean_division_definition i blocklen;
+    Math.division_addition_lemma i blocklen 1;
+    Math.distributivity_add_left k 1 blocklen;
+    Math.lemma_div_le (i + blocklen) n blocklen;
+    Math.multiple_division_lemma (n / blocklen) blocklen;
+    Math.euclidean_division_definition n blocklen;
+    G.ghash_from_step hh acc0 dd k;
+    Seq.slice_slice d 0 n (k * blocklen) (k * blocklen + blocklen)
+
+#push-options "--fuel 1"
+(** Entering the loop. *)
+let ghash_zero (hh acc0: G.block)
+               (dd: Seq.seq elem { Seq.length dd % blocklen == 0 })
+  : Lemma (G.ghash_from hh acc0 dd 0 == acc0) = ()
+#pop-options
+
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+fn ghash_loop_ni (acc: A.array S8.t) (h: A.array S8.t) (d: A.array S8.t) (n: SZ.t)
+                 (#va0 #vh: erased (Seq.seq S8.t))
+                 (#pd: perm) (#vd: erased (Seq.seq S8.t))
+requires A.pts_to acc va0 ** A.pts_to h vh ** A.pts_to d #pd vd ** pure (
+  Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+  SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0)
+ensures exists* (va1: Seq.seq S8.t).
+  A.pts_to acc va1 ** A.pts_to h vh ** A.pts_to d #pd vd ** pure (
+  Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+  Seq.length va1 == blocklen /\
+  SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+  Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
+  SZ.v n / blocklen == G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
+  vals va1 == G.ghash_from (vals vh) (vals va0)
+                           (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v n / blocklen))
+{
+  A.pts_to_len acc;
+  A.pts_to_len h;
+  A.pts_to_len d;
+  Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
+  Math.euclidean_division_definition (SZ.v n) blocklen;
+
+  ghash_zero (vals vh) (vals va0) (Seq.slice (vals vd) 0 (SZ.v n));
+  let y = Vec.load h #(as_blk vh);
+  let a0 = Vec.load acc #(as_blk va0);
+  let mut av = a0;
+  let mut i = 0sz;
+
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (cur: Vec.t).
+    pts_to i vi ** pts_to av cur **
+    A.pts_to acc va0 ** A.pts_to h vh ** A.pts_to d #pd vd **
+    pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
+          Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+          SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+          Vec.vv y == reveal vh /\
+          SZ.v vi / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
+          Vec.bv cur == G.ghash_from (vals vh) (vals va0)
+                                     (Seq.slice (vals vd) 0 (SZ.v n))
+                                     (SZ.v vi / blocklen))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let vi2 = SZ.add vi 16sz;
+    let db = Sub.sub d vi vi2;
+    vals_slice vd (SZ.v vi) (SZ.v vi2);
+    let dv = Vec.load db #(as_blk (Seq.slice vd (SZ.v vi) (SZ.v vi2)));
+    Sub.unsub_id d (SZ.v vi) (SZ.v vi2) db;
+    let cur = !av;
+    xor_block_bv cur dv;
+    let r = gmul_vec (Vec.vxor cur dv) y;
+    ghash_step (vals vh) (vals va0) (vals vd) (SZ.v n) (SZ.v vi);
+    Math.division_addition_lemma (SZ.v vi) blocklen 1;
+    av := r;
+    i := vi2;
+  };
+
+  let fin = !av;
+  Vec.store acc fin #(as_blk va0);
+  vals_len (Vec.vv fin);
   ()
 }
 

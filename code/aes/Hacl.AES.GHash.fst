@@ -42,6 +42,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module G = Spec.GF128
 module Copy = Hacl.Impl.Copy
+module Vec = Hacl.Vec128
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -143,6 +144,32 @@ ensures exists* (va1: Seq.seq S8.t).
 
   ghash_start (vals vh) (vals va0) (whole (vals vd));
   let mut i = 0sz;
+
+  (* The whole-block loop, when the machine has the instructions for it, runs
+     inside Hacl.AES.GF128.NI: the feature test happens once instead of once
+     per block, and the accumulator stays in a register across the lot.  What
+     it leaves behind is the loop invariant below at [i = nblk], so the
+     portable loop that follows simply finds nothing to do. *)
+  let rem0 = SZ.rem n 16sz;
+  let nblk = SZ.sub n rem0;
+  Math.euclidean_division_definition (SZ.v n) blocklen;
+  Math.multiple_division_lemma (G.nblocks (vals vd)) blocklen;
+  nblocks_whole (vals vd);
+  if Vec.supported ()
+  ensures exists* (vi: SZ.t) (va: Seq.seq S8.t).
+    pts_to i vi ** A.pts_to acc va ** A.pts_to h vh ** A.pts_to data #pd vd **
+    pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
+          Seq.length va == blocklen /\
+          SZ.v vi / blocklen <= G.nblocks (whole (vals vd)) /\
+          vals va == G.ghash_from (vals vh) (vals va0) (whole (vals vd))
+                                  (SZ.v vi / blocklen))
+  {
+    Hacl.AES.GF128.NI.ghash_loop_ni acc h data nblk;
+    i := nblk;
+  } else {
+    ()
+  };
+
   while (let vi = !i; SZ.lte (SZ.add vi 16sz) n)
   invariant exists* (vi: SZ.t) (va: Seq.seq S8.t).
     pts_to i vi ** A.pts_to acc va ** A.pts_to h vh ** A.pts_to data #pd vd **
