@@ -135,6 +135,22 @@ let ks_index (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
   = Math.lemma_div_plus t bi 16; Math.small_div t 16;
     Math.lemma_mod_plus t bi 16; Math.small_mod t 16
 
+(** The same, for every byte of a whole block at once: what the fused
+    counter-mode step establishes, in the terms the loop invariant wants. *)
+let ks_index_all (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                 (n: nat) (j: nat) (bi: nat)
+  : Lemma (requires j == 16 * bi /\ j + 16 <= n)
+          (ensures Seq.length (cipher v w (counter_block b bi)) == blocklen /\
+                   (forall (t: nat). t < 16 /\ j + t < n ==>
+                      ctr_keystream v w b n (j + t) ==
+                        Seq.index (cipher v w (counter_block b bi)) t))
+  = let aux (t: nat { t < 16 /\ j + t < n })
+      : Lemma (ctr_keystream v w b n (j + t) ==
+               Seq.index (cipher v w (counter_block b bi)) t)
+      = ks_index v w b n j bi t
+    in
+    FStar.Classical.forall_intro aux
+
 let ctr_done (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
              (m m': Seq.seq elem) (n: nat)
   : Lemma (requires Seq.length m == n /\ Seq.length m' == n /\
@@ -206,6 +222,42 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
   counter_block_zero (vals vc0);
   let mut j = 0sz;
   let mut bi = 0sz;
+  (* Whole blocks.  The keystream is never written down on this path: the
+     counter is encrypted into a register and exclusive-ored straight into
+     the message.  See [Hacl.AES.NI.ctr_block_ni]. *)
+  while (let vj = !j; SZ.lte (SZ.add vj 16sz) n)
+  invariant exists* (vj: SZ.t) (vbi: SZ.t) (vm: Seq.seq S8.t)
+                    (vc: Seq.seq S8.t) (vk: Seq.seq S8.t).
+    pts_to j vj ** pts_to bi vbi ** A.pts_to msg vm ** A.pts_to w vw **
+    A.pts_to ctr vc ** A.pts_to ka vk **
+    pure (SZ.v vj == 16 * SZ.v vbi /\ Seq.length vk == blocklen /\
+          Seq.length vw == xkeylen p.pv /\ Seq.length vc0 == blocklen /\
+          Seq.length vc == blocklen /\
+          Seq.length vm == Seq.length vm0 /\ Seq.length vm0 == SZ.v n /\
+          SZ.fits (SZ.v n + blocklen) /\ SZ.v vj <= SZ.v n /\
+          vals vc == counter_block (vals vc0) (SZ.v vbi) /\
+          (forall (k: nat). k < SZ.v n ==>
+             Seq.index (vals vm) k ==
+               (if k < SZ.v vj
+                then Seq.index (vals vm0) k ^^
+                     ctr_keystream p.pv (vals vw) (vals vc0) (SZ.v n) k
+                else Seq.index (vals vm0) k)))
+  decreases (SZ.v n - SZ.v (!j))
+  {
+    let vj = !j;
+    let vbi = !bi;
+    SZ.fits_lte (SZ.v vj + blocklen) (SZ.v n + blocklen);
+    with vc. assert A.pts_to ctr vc;
+    ctr_block_impl p msg vj w ctr ka;
+    ks_index_all p.pv (vals vw) (vals vc0) (SZ.v n) (SZ.v vj) (SZ.v vbi);
+    counter_block_step (vals vc0) (SZ.v vbi);
+    inc32_impl ctr;
+    j := SZ.add vj 16sz;
+    bi := SZ.add vbi 1sz;
+  };
+
+  (* At most one partial block is left, and it goes through the general
+     path: a scratch keystream block and a byte at a time. *)
   while (let vj = !j; SZ.lt vj n)
   invariant exists* (vj: SZ.t) (vbi: SZ.t) (vm: Seq.seq S8.t)
                     (vc: Seq.seq S8.t) (vk: Seq.seq S8.t).

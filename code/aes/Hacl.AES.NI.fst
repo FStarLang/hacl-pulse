@@ -57,24 +57,43 @@ let as_blk (s: Seq.seq S8.t { Seq.length s == blocklen })
   : Pure (Seq.lseq S8.t blocklen) (requires True) (ensures fun r -> r == s)
   = s
 
-(** {2 The cipher} *)
+(** [xor_block] and [Seq.slice] are both [Seq.init]-shaped, so their indices
+    have to be given to the solver explicitly before it will push an
+    equation about a whole block down to a single byte. *)
+let xor_block_index (a b: block) (i: nat { i < blocklen })
+  : Lemma (Seq.index (xor_block a b) i == Seq.index a i ^^ Seq.index b i)
+          [SMTPat (Seq.index (xor_block a b) i)]
+  = ()
+
+let slice_index (s: Seq.seq elem) (lo: nat) (hi: nat { lo <= hi /\ hi <= Seq.length s })
+                (i: nat { i < hi - lo })
+  : Lemma (Seq.index (Seq.slice s lo hi) i == Seq.index s (lo + i))
+          [SMTPat (Seq.index (Seq.slice s lo hi) i)]
+  = ()
+
+(** {2 The cipher, on a register}
+
+    The block never has to be in memory: it arrives in a register, every
+    round leaves it in a register, and it leaves in one.  [cipher_ni] below
+    is this with a load in front and a store behind, for callers that do hold
+    their block in an array; [Hacl.AES.CTR]'s driver instead keeps the whole
+    counter-mode step in registers and never materialises the keystream. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
   custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
-fn cipher_ni ([@@@FStar.Attributes.monomorphize] p: params)
-             (st: A.array S8.t) (w: A.array S8.t)
-             (#v0 #vw: erased (Seq.seq S8.t))
-requires A.pts_to st v0 ** A.pts_to w vw ** pure (
-  Seq.length v0 == blocklen /\ Seq.length vw == xkeylen p.pv)
-ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
+inline_for_extraction
+fn cipher_vec ([@@@FStar.Attributes.monomorphize] p: params)
+              (x0: Vec.t) (w: A.array S8.t)
+              (#v0 #vw: erased (Seq.seq S8.t))
+requires A.pts_to w vw ** pure (
+  Seq.length v0 == blocklen /\ Seq.length vw == xkeylen p.pv /\
+  Vec.bv x0 == vals v0)
+returns r: Vec.t
+ensures A.pts_to w vw ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length v0 == blocklen /\
-  Seq.length v1 == blocklen /\
-  vals v1 == cipher p.pv (vals vw) (vals v0))
+  Vec.bv r == cipher p.pv (vals vw) (vals v0))
 {
-  A.pts_to_len st;
   A.pts_to_len w;
-
-  let x0 = Vec.load st #(as_blk v0);
 
   (* Round key zero, added before the first round. *)
   let k0 = Sub.sub w 0sz 16sz;
@@ -123,8 +142,97 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
   let kv = Vec.load kb #(as_blk (Seq.slice vw (SZ.v vo) (SZ.v vo2)));
   Sub.unsub_id w (SZ.v vo) (SZ.v vo2) kb;
   let r = Vec.aesenclast vs kv;
+  r
+}
+
+(** {2 The cipher, in place on an array} *)
+
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+fn cipher_ni ([@@@FStar.Attributes.monomorphize] p: params)
+             (st: A.array S8.t) (w: A.array S8.t)
+             (#v0 #vw: erased (Seq.seq S8.t))
+requires A.pts_to st v0 ** A.pts_to w vw ** pure (
+  Seq.length v0 == blocklen /\ Seq.length vw == xkeylen p.pv)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
+  Seq.length vw == xkeylen p.pv /\ Seq.length v0 == blocklen /\
+  Seq.length v1 == blocklen /\
+  vals v1 == cipher p.pv (vals vw) (vals v0))
+{
+  A.pts_to_len st;
+  A.pts_to_len w;
+  let x0 = Vec.load st #(as_blk v0);
+  let r = cipher_vec p x0 w #v0;
   Vec.store st r #(as_blk v0);
   vals_len (Vec.vv r);
+  ()
+}
+
+(** {2 One counter-mode block}
+
+    The whole of a counter-mode step, with the keystream never written down.
+    The counter is loaded into a register, encrypted there, exclusive-ored
+    into the message in place, and discarded; the sixteen-byte scratch block
+    that [Hacl.AES.CTR] would otherwise copy the counter into, encrypt, and
+    read back a byte at a time does not exist on this path.  That scratch
+    block is what made the portable driver expensive: it was written by a
+    vector store and read by sixteen scalar loads, which is a store-
+    forwarding stall on every block on top of the byte traffic. *)
+
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+fn ctr_block_ni ([@@@FStar.Attributes.monomorphize] p: params)
+                (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t) (ctr: A.array S8.t)
+                (#vm #vw #vc: erased (Seq.seq S8.t))
+requires A.pts_to msg vm ** A.pts_to w vw ** A.pts_to ctr vc ** pure (
+  Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
+  SZ.v idx + blocklen <= Seq.length vm)
+ensures exists* (vm': Seq.seq S8.t).
+  A.pts_to msg vm' ** A.pts_to w vw ** A.pts_to ctr vc ** pure (
+  Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
+  SZ.v idx + blocklen <= Seq.length vm /\
+  Seq.length vm' == Seq.length vm /\
+  (forall (k: nat). k < Seq.length vm ==>
+     Seq.index (vals vm') k ==
+       (if SZ.v idx <= k && k < SZ.v idx + blocklen
+        then Seq.index (vals vm) k ^^
+             Seq.index (cipher p.pv (vals vw) (vals vc)) (k - SZ.v idx)
+        else Seq.index (vals vm) k)))
+{
+  A.pts_to_len msg;
+  A.pts_to_len w;
+  A.pts_to_len ctr;
+
+  let c0 = Vec.load ctr #(as_blk vc);
+  let ks = cipher_vec p c0 w #vc;
+
+  let idx2 = SZ.add idx 16sz;
+  let mb = Sub.sub msg idx idx2;
+  vals_slice vm (SZ.v idx) (SZ.v idx2);
+  let mv = Vec.load mb #(as_blk (Seq.slice vm (SZ.v idx) (SZ.v idx2)));
+  let r = Vec.vxor mv ks;
+  Vec.store mb r #(as_blk (Seq.slice vm (SZ.v idx) (SZ.v idx2)));
+  vals_len (Vec.vv r);
+  Sub.unsub msg (SZ.v idx) (SZ.v idx2) mb;
+  with vm'. assert A.pts_to msg vm';
+  assert (pure (Seq.length vm' == Seq.length vm));
+  assert (pure (Vec.bv r == xor_block (Vec.bv mv) (Vec.bv ks)));
+  assert (pure (Vec.bv ks == cipher p.pv (vals vw) (vals vc)));
+  assert (pure (Vec.bv mv == Seq.slice (vals vm) (SZ.v idx) (SZ.v idx2)));
+  assert (pure (forall (k: nat). SZ.v idx <= k /\ k < SZ.v idx2 ==>
+    Seq.index vm' k == Seq.index (Vec.vv r) (k - SZ.v idx)));
+  assert (pure (forall (k: nat). SZ.v idx <= k /\ k < SZ.v idx2 ==>
+    Seq.index (vals vm') k == Seq.index (Vec.bv r) (k - SZ.v idx)));
+  assert (pure (forall (k: nat). SZ.v idx <= k /\ k < SZ.v idx2 ==>
+    Seq.index (vals vm') k ==
+      Seq.index (Vec.bv mv) (k - SZ.v idx) ^^ Seq.index (Vec.bv ks) (k - SZ.v idx)));
+  assert (pure (forall (k: nat). SZ.v idx <= k /\ k < SZ.v idx2 ==>
+    Seq.index (vals vm') k ==
+      Seq.index (vals vm) k ^^
+      Seq.index (cipher p.pv (vals vw) (vals vc)) (k - SZ.v idx)));
+  assert (pure (forall (k: nat). k < Seq.length vm /\
+                                ~(SZ.v idx <= k /\ k < SZ.v idx2) ==>
+    Seq.index (vals vm') k == Seq.index (vals vm) k));
   ()
 }
 

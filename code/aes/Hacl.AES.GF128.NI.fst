@@ -55,8 +55,10 @@ open Spec.Byte
 open Spec.AES
 
 module A = Pulse.Lib.Array
+module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
+module Sub = Hacl.Impl.Sub
 module Vec = Hacl.Vec128
 module CL = Spec.CLMUL
 module CLess = Spec.CarryLess
@@ -179,6 +181,53 @@ ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   let x = Vec.load a #(as_blk va);
   let y = Vec.load h #(as_blk vh);
   let r = gmul_vec x y;
+  Vec.store a r #(as_blk va);
+  vals_len (Vec.vv r);
+  ()
+}
+
+(** {2 Multiply-add}
+
+    GHASH never multiplies without first adding the next block in, and the
+    two together are the whole of its inner loop.  Fusing them is worth more
+    than it looks: the addition on its own is sixteen bytes read, exclusive-
+    ored and written back one at a time, and it sits between a sixteen-byte
+    vector store (the previous multiply's result) and a sixteen-byte vector
+    load (this one's operand), so every block pays a store-forwarding stall
+    on top of the byte traffic.  Done this way the accumulator is loaded
+    once, stays in a register through the add and the multiply, and is
+    stored once. *)
+
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+fn gmul_add_ni (a: A.array S8.t) (h: A.array S8.t) (b: A.array S8.t) (off: SZ.t)
+               (#va #vh: erased (Seq.seq S8.t))
+               (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to a va ** A.pts_to h vh ** A.pts_to b #pb vb ** pure (
+  Seq.length va == blocklen /\ Seq.length vh == blocklen /\
+  SZ.v off + blocklen <= Seq.length vb)
+ensures exists* (va': Seq.seq S8.t).
+  A.pts_to a va' ** A.pts_to h vh ** A.pts_to b #pb vb ** pure (
+  Seq.length va == blocklen /\ Seq.length vh == blocklen /\
+  SZ.v off + blocklen <= Seq.length vb /\ Seq.length va' == blocklen /\
+  vals va' == G.gmul (G.gadd (vals va)
+                             (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
+                     (vals vh))
+{
+  A.pts_to_len a;
+  A.pts_to_len h;
+  A.pts_to_len b;
+  let x = Vec.load a #(as_blk va);
+  let y = Vec.load h #(as_blk vh);
+
+  let off2 = SZ.add off 16sz;
+  let db = Sub.sub b off off2;
+  vals_slice vb (SZ.v off) (SZ.v off2);
+  let dv = Vec.load db #(as_blk (Seq.slice vb (SZ.v off) (SZ.v off2)));
+  Sub.unsub_id b (SZ.v off) (SZ.v off2) db;
+
+  xor_block_bv x dv;
+  let r = gmul_vec (Vec.vxor x dv) y;
   Vec.store a r #(as_blk va);
   vals_len (Vec.vv r);
   ()
