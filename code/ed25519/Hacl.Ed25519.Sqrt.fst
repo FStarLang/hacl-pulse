@@ -37,6 +37,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module C = Spec.Curve25519
 module E = Spec.Ed25519
 
@@ -52,7 +53,8 @@ ensures exists* (vout': Seq.seq S64.t).
   pure (felem (vals vout') /\ fev (vals vout') == E.modp_sqrt (fev (vals va)))
 {
   let z = S64.zero;
-  let mut arr1 = [| z; 16sz |]; A.pts_to_len arr1; let mut arr2 = [| z; 16sz |]; A.pts_to_len arr2; let mut arr3 = [| z; 16sz |]; A.pts_to_len arr3; let mut arr4 = [| z; 16sz |]; A.pts_to_len arr4; let mut arr5 = [| z; 16sz |]; A.pts_to_len arr5; let mut arr6 = [| z; 16sz |]; A.pts_to_len arr6; let mut arr7 = [| z; 16sz |]; A.pts_to_len arr7; let mut arrc = [| z; 16sz |]; A.pts_to_len arrc; let mut arrd = [| z; 16sz |]; A.pts_to_len arrd; let mut arrt = [| z; 31sz |]; A.pts_to_len arrt; A.pts_to_len arr1; A.pts_to_len arr2; A.pts_to_len arr3; A.pts_to_len arr4;
+  let z128 : S128.t = S128.zero;
+  let mut arr1 = [| z; 8sz |]; A.pts_to_len arr1; let mut arr2 = [| z; 8sz |]; A.pts_to_len arr2; let mut arr3 = [| z; 8sz |]; A.pts_to_len arr3; let mut arr4 = [| z; 8sz |]; A.pts_to_len arr4; let mut arr5 = [| z; 8sz |]; A.pts_to_len arr5; let mut arr6 = [| z; 8sz |]; A.pts_to_len arr6; let mut arr7 = [| z; 8sz |]; A.pts_to_len arr7; let mut arrc = [| z; 8sz |]; A.pts_to_len arrc; let mut arrd = [| z; 8sz |]; A.pts_to_len arrd; let mut arrt = [| z128; 15sz |]; A.pts_to_len arrt; A.pts_to_len arr1; A.pts_to_len arr2; A.pts_to_len arr3; A.pts_to_len arr4;
   A.pts_to_len arr5; A.pts_to_len arr6; A.pts_to_len arr7;
   A.pts_to_len arrc; A.pts_to_len arrd; A.pts_to_len arrt;
   A.pts_to_len out; A.pts_to_len a;

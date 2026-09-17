@@ -16,7 +16,7 @@
 
 (** The scalar field [Z/n].
 
-    The same sixteen limbs and the same Montgomery machinery as
+    The same eight limbs and the same Montgomery machinery as
     [Hacl.K256.Field], with [qmod] in place of [fmod].  ECDSA needs
     addition, multiplication and inversion here, plus two decoders: one
     that insists the scalar is a proper private key, and one that reduces
@@ -146,7 +146,7 @@ ensures A.pts_to a #pa va ** pure (r == (qev va = K.qzero))
   mev_iszero qmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 16sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 8sz |]; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
   r
@@ -221,7 +221,7 @@ ensures exists* (vo': Seq.seq S64.t).
   qmod_ok (); qmod_m ();
   assert_norm (pow2 256 < 2 * K.order);
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 8sz |]; A.pts_to_len at; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = qnm ();
   let lo = abelow at asv nm qmod;
@@ -243,7 +243,7 @@ ensures exists* (vo': Seq.seq S64.t).
   qmod_ok (); qmod_m ();
   assert_norm (pow2 256 < 2 * K.order);
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 8sz |]; A.pts_to_len at; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = qnm ();
   ared at asv nm qmod;
@@ -261,7 +261,7 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (qev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 8sz |]; A.pts_to_len at; A.pts_to_len at;
   qfrom at a;
   store_be b at;
   ()

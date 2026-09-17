@@ -16,12 +16,12 @@
 
 (** The modular operations, with their scratch.
 
-    [Hacl.Impl.Bignum256] allocates nothing: its workspace is eighty words and
-    it takes them as arguments, because that is the only way to prove
-    anything about a loop that reuses them.  Nobody wants to write that at a
-    call site, so each operation gets a wrapper here that declares the
-    scratch and drops it on return.  Eighty words of stack per multiply is
-    not a cost worth an interface for.
+    [Hacl.Impl.Bignum256] allocates nothing: its workspace is forty-one wide
+    columns and eight words, and it takes them as arguments, because that is
+    the only way to prove anything about a loop that reuses them.  Nobody
+    wants to write that at a call site, so each operation gets a wrapper
+    here that declares the scratch and drops it on return.  Seven hundred
+    bytes of stack per multiply is not a cost worth an interface for.
 
     These are ordinary functions rather than [inline_for_extraction] ones,
     and they still take the modulus as an argument: the field and the scalar
@@ -44,6 +44,7 @@ module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module Cast = Hacl.Secret.Cast
 module Declassify = Hacl.Secret.Declassify
 module UInt = FStar.UInt
@@ -72,10 +73,11 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == mmul d (vals va) (vals vb))
 {
   let z = S64.zero;
-  let mut ap = [| z; 31sz |]; A.pts_to_len ap; let mut at = [| z; 33sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len ap; A.pts_to_len at; A.pts_to_len asv;
-  assert_norm (nw == 31);
-  assert_norm (ncol == 33);
-  mmul_op out a b ap at asv ms nm mu d;
+  let z128 : S128.t = S128.zero;
+  let mut ap = [| z128; 15sz |]; A.pts_to_len ap; let mut at = [| z128; 17sz |]; A.pts_to_len at; let mut ar = [| z128; 9sz |]; A.pts_to_len ar; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len ap; A.pts_to_len at; A.pts_to_len ar; A.pts_to_len asv;
+  assert_norm (nw == 15);
+  assert_norm (ncol == 17);
+  mmul_op out a b ap at ar asv ms nm mu d;
   ()
 }
 
@@ -97,7 +99,7 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == madd d (vals va) (vals vb))
 {
   let z = S64.zero;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len asv;
+  let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len asv;
   madd_op out a b asv nm d;
   ()
 }
@@ -118,7 +120,7 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == msub d (vals va) (vals vb))
 {
   let z = S64.zero;
-  let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len asv;
+  let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len asv;
   msub_op out a b asv ms d;
   ()
 }
@@ -138,7 +140,7 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == mneg d (vals va))
 {
   let z = S64.zero;
-  let mut az = [| z; 16sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 8sz |]; A.pts_to_len az; A.pts_to_len az;
   with vz. assert (A.pts_to az vz);
   Seq.lemma_eq_intro (vals vz) mzero;
   mzero_ok ();
@@ -159,12 +161,12 @@ ensures exists* (vd': Seq.seq S64.t).
   A.pts_to_len dst;
   A.pts_to_len src;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to dst v ** A.pts_to src #ps vs **
-    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(src.(vi));
@@ -187,12 +189,12 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   A.pts_to_len out;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to out v **
-    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     A.((out.(vi) <- S64.zero));
@@ -224,14 +226,14 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.pts_to_len a; A.pts_to_len b;
   let mut m = S64.ones;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (mm: S64.t).
     pts_to i vi ** pts_to m mm ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\
+    pure (SZ.v vi <= 8 /\
           (if (forall (k: nat). k < SZ.v vi ==>
                  Seq.index (vals va) k == Seq.index (vals vb) k)
            then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let mm = !m;
@@ -273,7 +275,7 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
 {
   A.pts_to_len a; A.pts_to_len b;
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 8sz |]; A.pts_to_len at; A.pts_to_len at;
   let co = negsub_op at a b;
   msub_pre d (vals va) (vals vb);
   ebnd (carry_low (addw (vals va) (negw (vals vb))));
@@ -308,7 +310,7 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
 {
   A.pts_to_len a;
   let z = S64.zero;
-  let mut ac = [| z; 16sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 8sz |]; A.pts_to_len ac; A.pts_to_len ac;
   acopy ac a;
   ebnd (vals va);
   csub_op a s nm S64.zero d;
@@ -361,14 +363,14 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   A.pts_to_len out; A.pts_to_len a; A.pts_to_len b;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index v k ==
                Seq.index (if bb then reveal vb else reveal va) k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let xa = A.(a.(vi));
@@ -396,11 +398,11 @@ ensures A.pts_to s #ps vs **
           (if eval (vals vs) / pow2 (SZ.v i) % 2 = 1 then pow2 64 - 1 else 0))
 {
   A.pts_to_len s;
-  assert_norm (rad == 16);
+  assert_norm (rad == 32);
   ebit (vals vs) (SZ.v i);
-  let k = SZ.div i 16sz;
+  let k = SZ.div i 32sz;
   let l = A.(s.(k));
-  let r = SZ.rem i 16sz;
+  let r = SZ.rem i 32sz;
   Math.small_mod (SZ.v r) (pow2 32);
   let j = SZ.sizet_to_uint32 r;
   assert_norm (pow2 1 - 1 == 1);

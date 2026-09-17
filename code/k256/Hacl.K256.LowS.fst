@@ -113,7 +113,7 @@ ensures A.pts_to b #pb vb ** pure (r == isn vb)
 {
   setup ();
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   let ok = load_nz a0 a1 a2 b;
   if ok {
     let qh = qhalf ();
@@ -201,7 +201,7 @@ ensures exists* (wb: Seq.seq S8.t).
   setup ();
   A.pts_to_len sg;
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let mut a3 = [| z; 16sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
 
   let ss = Sub.sub sg 32sz 64sz;
   with vss. assert (A.pts_to ss vss);

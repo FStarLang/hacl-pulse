@@ -263,7 +263,7 @@ let mev_eq (d: modulus) (a b: Seq.seq nat)
 
     The exponentiation loop walks the exponent one bit at a time and the
     exponent arrives as limbs, so the two views have to be related once:
-    bit [i] of the value is bit [i mod 16] of limb [i / 16]. *)
+    bit [i] of the value is bit [i mod 32] of limb [i / 32]. *)
 
 let ebit (s: Seq.seq nat) (i: nat { i < 256 })
   : Lemma (requires Seq.length s == nl /\ bnd s base)

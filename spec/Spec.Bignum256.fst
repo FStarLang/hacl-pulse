@@ -22,14 +22,19 @@
     conversions do not, so they live here; folding the top half down and
     subtracting a prime do, so they live with their curve.
 
-    {b Why sixteen limbs of sixteen bits.}  Custard's integer builtins stop
-    at [FStar.UInt64] -- there is no [UInt128] and, unlike karamel, no
-    compiler-side emulation of one -- so the usual radix 2^51 or 2^52 is not
-    available.  With sixteen-bit limbs a product of two limbs is at most
-    [2^34], a column of the schoolbook product accumulates sixteen of those
-    plus carries, and the total stays comfortably inside 64 bits.  That is
-    what makes [part] need no intermediate reduction at all, which is in turn
-    what makes its proof tractable.
+    {b Why eight limbs of thirty-two bits.}  A column of the schoolbook
+    product has to hold [nl] limb products with no intermediate reduction,
+    which is what makes [part] need no carries at all and in turn what makes
+    its proof tractable.  With thirty-two-bit limbs a product is just under
+    [2^64], eight of them just under [2^67], and folding the top half down
+    multiplies that by thirty-eight for a little under [2^73]: a column is a
+    [Hacl.Secret.UInt128], which Custard now emits as [unsigned __int128].
+
+    Thirty-two is the largest radix this column layout admits.  At sixty-four
+    bits four products already reach [2^130] and the schoolbook would have to
+    propagate carries as it goes, as [Hacl.Bignum.Base] does.  Thirty-two
+    also keeps [nl * rad] at [256], so a limb is exactly four bytes and the
+    prime-specific folding above this module is untouched by the width.
 
     Limbs are [nat] here, not machine words: every lemma is about the
     mathematical value, and the implementation separately shows its
@@ -51,9 +56,9 @@ module S8 = Hacl.Secret.UInt8
 open Hacl.Spec.Bytes
 
 (** Bits per limb, limbs per element, columns in a product. *)
-let rad : pos = 16
-let nl : pos = 16
-let nw : pos = 31
+let rad : pos = 32
+let nl : pos = 8
+let nw : pos = 15
 
 let base : pos = pow2 rad
 
@@ -430,51 +435,170 @@ let carry_out_zero (s: Seq.seq nat)
 
 (** {2 Bytes}
 
-    A limb is exactly two bytes, so both directions are stated relationally
-    on whatever the loop happens to have built. *)
+    A limb is exactly four bytes, so both directions are stated relationally
+    on whatever the loop happens to have built.  Byte [m] of limb [k] is
+    digit [m] of the limb in base [256], which is the one statement that
+    covers the interior bytes and the top one alike.
 
-#push-options "--fuel 4"
+    The four is written out rather than derived from [rad], because [4 * k]
+    is linear arithmetic and [(rad / 8) * k] is not: with the latter the
+    solver will not even place the indices in range. *)
+
+#push-options "--fuel 5"
+(** [le_nat] of exactly four bytes, unfolded.  Stated on its own because the
+    recursion below cuts [b] with {!le_nat_split} and then needs the head in
+    closed form, and slices of slices of slices is not something the solver
+    will unfold on its own. *)
+let le_nat_limb (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length b == 4)
+          (ensures le_nat b == S8.v (Seq.index b 0) + 256 * S8.v (Seq.index b 1) +
+                               65536 * S8.v (Seq.index b 2) +
+                               16777216 * S8.v (Seq.index b 3))
+  = let b1 = Seq.slice b 1 4 in
+    let b2 = Seq.slice b 2 4 in
+    let b3 = Seq.slice b 3 4 in
+    Seq.lemma_eq_intro (Seq.slice b1 1 3) b2;
+    Seq.lemma_eq_intro (Seq.slice b2 1 2) b3
+
+(** The limb-wise reading of a byte string is its little-endian value. *)
 let rec eval_bytes (b: Seq.seq S8.t) (s: Seq.seq nat)
-  : Lemma (requires Seq.length b == 2 * Seq.length s /\
-                    (forall (k: nat). k < Seq.length s ==>
-                       Seq.index s k == S8.v (Seq.index b (2 * k)) +
-                                        256 * S8.v (Seq.index b (2 * k + 1))))
+  : Lemma (requires Seq.length b == 4 * Seq.length s /\
+                    (forall (k: nat). {:pattern (Seq.index s k)}
+                       k < Seq.length s ==>
+                       Seq.index s k == S8.v (Seq.index b (4 * k)) +
+                                        256 * S8.v (Seq.index b (4 * k + 1)) +
+                                        65536 * S8.v (Seq.index b (4 * k + 2)) +
+                                        16777216 * S8.v (Seq.index b (4 * k + 3))))
           (ensures eval s == le_nat b)
           (decreases Seq.length s)
   = let n = Seq.length s in
     if n = 0 then ()
     else begin
-      le_nat_split b 2;
-      let hd = Seq.slice b 0 2 in
-      let tl = Seq.slice b 2 (2 * n) in
-      assert (le_nat hd == S8.v (Seq.index b 0) + 256 * S8.v (Seq.index b 1));
+      le_nat_split b 4;
+      let hd = Seq.slice b 0 4 in
+      let tl = Seq.slice b 4 (4 * n) in
+      le_nat_limb hd;
       eval_bytes tl (Seq.slice s 1 n)
     end
+
 #pop-options
 
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 400"
+
+(** [rad] is a definition rather than a literal, so the solver sees [rad * k]
+    as a product of two opaque terms.  This puts it back in linear form, and
+    every index computation below goes through it. *)
+let rad_lin (k: nat) : Lemma (rad * k == 32 * k) = assert_norm (rad == 32)
+
+(** Byte [m] of limb [k] is byte [4 * k + m] of the whole number. *)
+let store_digit (s: Seq.seq nat) (k: nat { k < Seq.length s }) (m: nat { m < 4 })
+  : Lemma (requires bnd s base)
+          (ensures (Seq.index s k / pow2 (8 * m)) % 256 ==
+                   (eval s / pow2 (32 * k + 8 * m)) % 256)
+  = let v = eval s in
+    rad_lin k;
+    assert_norm (base == 4294967296);
+    assert_norm (pow2 32 == 4294967296);
+    eval_digit s k;
+    let a = v / pow2 (32 * k) in
+    Math.pow2_plus (32 * k) (8 * m);
+    Math.division_multiplication_lemma v (pow2 (32 * k)) (pow2 (8 * m));
+    Math.pow2_modulo_division_lemma_1 a (8 * m) 32;
+    Math.pow2_modulo_modulo_lemma_1 (a / pow2 (8 * m)) 8 (32 - 8 * m)
+
+(** Byte [i] of the number is byte [i % 4] of limb [i / 4].  Kept apart from
+    {!store_ok} because the solver has to do the index arithmetic here, and
+    it only manages that against a context this small. *)
+let byte_index (i: nat { i < 32 })
+  : Lemma (i / 4 < 8 /\ i % 4 < 4 /\
+           pow2 (8 * i) == pow2 (32 * (i / 4) + 8 * (i % 4)))
+  = Math.lemma_mod_lt i 4;
+    Math.euclidean_division_definition i 4
+
+(** The four byte weights inside a limb, as literals. *)
+let pow2_byte (m: nat { m < 4 })
+  : Lemma (pow2 (8 * m) == (if m = 0 then 1 else if m = 1 then 256
+                            else if m = 2 then 65536 else 16777216))
+  = assert_norm (pow2 0 == 1);
+    assert_norm (pow2 8 == 256);
+    assert_norm (pow2 16 == 65536);
+    assert_norm (pow2 24 == 16777216)
+
+(** A store loop divides by literals; [store_ok] divides by a power of two. *)
+let digit (x: nat) (m: nat { m < 4 }) (y: nat)
+  : Lemma (requires y == (if m = 0 then x % 256
+                          else if m = 1 then x / 256 % 256
+                          else if m = 2 then x / 65536 % 256
+                          else x / 16777216 % 256))
+          (ensures y == (x / pow2 (8 * m)) % 256)
+  = pow2_byte m
+
+(** Byte [4k + m] belongs to limb [k], digit [m]. *)
+let split4 (k: nat) (m: nat { m < 4 })
+  : Lemma ((4 * k + m) / 4 == k /\ (4 * k + m) % 4 == m)
+  = Math.lemma_div_plus m k 4;
+    Math.lemma_mod_plus m k 4;
+    Math.small_div m 4;
+    Math.small_mod m 4
+
+(** One byte of one limb, in both shapes at once. *)
+let store_shape (s: Seq.seq nat) (b: Seq.seq S8.t) (k: nat { k < nl }) (m: nat { m < 4 })
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
+                    S8.v (Seq.index b (4 * k)) == Seq.index s k % 256 /\
+                    S8.v (Seq.index b (4 * k + 1)) == Seq.index s k / 256 % 256 /\
+                    S8.v (Seq.index b (4 * k + 2)) == Seq.index s k / 65536 % 256 /\
+                    S8.v (Seq.index b (4 * k + 3)) == Seq.index s k / 16777216 % 256)
+          (ensures S8.v (Seq.index b (4 * k + m)) ==
+                     (Seq.index s ((4 * k + m) / 4) / pow2 (8 * ((4 * k + m) % 4))) % 256)
+  = split4 k m;
+    if m = 0 then digit (Seq.index s k) 0 (S8.v (Seq.index b (4 * k)))
+    else if m = 1 then digit (Seq.index s k) 1 (S8.v (Seq.index b (4 * k + 1)))
+    else if m = 2 then digit (Seq.index s k) 2 (S8.v (Seq.index b (4 * k + 2)))
+    else digit (Seq.index s k) 3 (S8.v (Seq.index b (4 * k + 3)))
+
+(** The same, indexed by the byte rather than by the limb. *)
+let store_byte_ok (s: Seq.seq nat) (b: Seq.seq S8.t) (i: nat { i < 32 })
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
+                    (forall (k: nat). k < nl ==>
+                       S8.v (Seq.index b (4 * k)) == Seq.index s k % 256 /\
+                       S8.v (Seq.index b (4 * k + 1)) == Seq.index s k / 256 % 256 /\
+                       S8.v (Seq.index b (4 * k + 2)) == Seq.index s k / 65536 % 256 /\
+                       S8.v (Seq.index b (4 * k + 3)) == Seq.index s k / 16777216 % 256))
+          (ensures S8.v (Seq.index b i) ==
+                     (Seq.index s (i / 4) / pow2 (8 * (i % 4))) % 256)
+  = Math.lemma_mod_lt i 4;
+    Math.euclidean_division_definition i 4;
+    store_shape s b (i / 4) (i % 4)
+
+(** Writing each limb out as four bytes produces the little-endian encoding.
+    Byte [i] is digit [i % 4] of limb [i / 4]. *)
 let store_ok (s: Seq.seq nat) (b: Seq.seq S8.t)
   : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\ bnd s base /\
-                    (forall (k: nat). k < nl ==>
-                       S8.v (Seq.index b (2 * k)) == Seq.index s k % 256 /\
-                       S8.v (Seq.index b (2 * k + 1)) == Seq.index s k / 256))
+                    (forall (i: nat). i < 32 ==>
+                       S8.v (Seq.index b i) ==
+                         (Seq.index s (i / 4) / pow2 (8 * (i % 4))) % 256))
           (ensures b == nat_to_le 32 (eval s))
   = let v = eval s in
     let aux (i: nat { i < 32 }) : Lemma (Seq.index b i == Seq.index (nat_to_le 32 v) i) =
-      let k = i / 2 in
-      eval_digit s k;
+      byte_index i;
+      store_digit s (i / 4) (i % 4);
       nat_to_le_index 32 v i;
-      Math.pow2_plus (rad * k) 8;
-      if i % 2 = 0 then begin
-        assert (8 * i == rad * k);
-        Math.pow2_modulo_modulo_lemma_1 (v / pow2 (rad * k)) 8 rad
-      end else begin
-        assert (8 * i == rad * k + 8);
-        Math.pow2_modulo_division_lemma_1 (v / pow2 (rad * k)) 8 rad;
-        Math.division_multiplication_lemma v (pow2 (rad * k)) (pow2 8)
-      end;
       S8.v_extensional (Seq.index b i) (Seq.index (nat_to_le 32 v) i) in
     Classical.forall_intro aux;
     Seq.lemma_eq_intro b (nat_to_le 32 v)
+
+(** {!store_ok} stated on the shape a store loop leaves behind. *)
+let store_digits (s: Seq.seq nat) (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\ bnd s base /\
+                    (forall (k: nat). k < nl ==>
+                       S8.v (Seq.index b (4 * k)) == Seq.index s k % 256 /\
+                       S8.v (Seq.index b (4 * k + 1)) == Seq.index s k / 256 % 256 /\
+                       S8.v (Seq.index b (4 * k + 2)) == Seq.index s k / 65536 % 256 /\
+                       S8.v (Seq.index b (4 * k + 3)) == Seq.index s k / 16777216 % 256))
+          (ensures b == nat_to_le 32 (eval s))
+  = Classical.forall_intro (Classical.move_requires (store_byte_ok s b));
+    store_ok s b
+#pop-options
 
 (** {2 What the loops need}
 

@@ -94,12 +94,12 @@ ensures exists* (va': Seq.seq S64.t).
   F.div_le_of_lt (reveal c + reveal d) F.base d;
   Loops.repeati_zero F.carry_step (vals va);
   let mut k = 0sz;
-  while (let vk = !k; SZ.lt vk 15sz)
+  while (let vk = !k; SZ.lt vk 7sz)
   invariant exists* (vk: SZ.t) (v: Seq.seq S64.t).
     pts_to k vk ** A.pts_to a v **
-    pure (SZ.v vk <= 15 /\ Seq.length v == F.nl /\
+    pure (SZ.v vk <= 7 /\ Seq.length v == F.nl /\
           vals v == F.carry_run (vals va) (SZ.v vk))
-  decreases (15 - SZ.v (!k))
+  decreases (7 - SZ.v (!k))
   {
     with v. assert (A.pts_to a v);
     let vk = !k;
@@ -108,8 +108,8 @@ ensures exists* (va': Seq.seq S64.t).
     let t = A.(a.(vk));
     let u = A.(a.(SZ.add vk 1sz));
     Math.lemma_div_le (S64.v t) (reveal c + reveal d) F.base;
-    let lo = lo16 t;
-    let up = addw u (hi16 t);
+    let lo = lo32 t;
+    let up = addw u (hi32 t);
     A.((a.(vk) <- lo));
     A.((a.(SZ.add vk 1sz) <- up));
     vals_upd v (SZ.v vk) lo;
@@ -118,13 +118,13 @@ ensures exists* (va': Seq.seq S64.t).
     k := SZ.add vk 1sz;
   };
   with v. assert (A.pts_to a v);
-  F.carry_run_len (vals va) 15;
-  let t = A.(a.(15sz));
-  let lo = lo16 t;
-  let hi = hi16 t;
-  A.((a.(15sz) <- lo));
-  vals_upd v 15 lo;
-  assert (pure (vals (Seq.upd v 15 lo) == F.carry_low (vals va)));
+  F.carry_run_len (vals va) 7;
+  let t = A.(a.(7sz));
+  let lo = lo32 t;
+  let hi = hi32 t;
+  A.((a.(7sz) <- lo));
+  vals_upd v 7 lo;
+  assert (pure (vals (Seq.upd v 7 lo) == F.carry_low (vals va)));
   hi
 }
 
@@ -157,13 +157,13 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to_len a;
   A.pts_to_len b;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index (vals v) k == Seq.index (vals va) k + Seq.index (vals vb) k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(a.(vi));
@@ -205,13 +205,13 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to_len a;
   let y : erased (Seq.seq nat) = hide (Seq.create 1 (S64.v b) <: Seq.seq nat);
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va **
-    pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index (vals v) k == 2 * Seq.index (vals va) k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(a.(vi));
@@ -264,7 +264,7 @@ ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
 {
   A.pts_to_len a;
   A.pts_to_len t;
-  let qcs = Table.table Tables.qc_arr 16sz;
+  let qcs = Table.table Tables.qc_arr 8sz;
   Tables.qc_seq_ok ();
   Sc.qc_ok ();
   let c = addc_op t a qcs;
@@ -292,12 +292,12 @@ ensures exists* (va': Seq.seq S64.t).
 {
   A.pts_to_len a;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to a v **
-    pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     A.((a.(vi) <- S64.classify 0uL));
@@ -478,12 +478,12 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
 {
   A.pts_to_len n;
   let bi = SZ.sub 255sz i;
-  let bj = SZ.div bi 16sz;
-  let sh = SZ.sizet_to_uint32 (SZ.rem bi 16sz);
+  let bj = SZ.div bi 32sz;
+  let sh = SZ.sizet_to_uint32 (SZ.rem bi 32sz);
   assert_norm (pow2 32 > 16);
-  Math.small_mod (SZ.v (SZ.rem bi 16sz)) (pow2 32);
-  assert (pure (SZ.v bi == 255 - SZ.v i /\ SZ.v bj == SZ.v bi / 16 /\
-                U32.v sh == SZ.v bi % 16));
+  Math.small_mod (SZ.v (SZ.rem bi 32sz)) (pow2 32);
+  assert (pure (SZ.v bi == 255 - SZ.v i /\ SZ.v bj == SZ.v bi / 32 /\
+                U32.v sh == SZ.v bi % 32));
   let limb = A.(n.(bj));
   let sr = S64.shift_right limb sh;
   assert (pure (S64.v sr ==

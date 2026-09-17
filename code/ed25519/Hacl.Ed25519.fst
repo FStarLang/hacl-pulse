@@ -41,6 +41,7 @@ module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module U8 = FStar.UInt8
 module U64 = FStar.UInt64
 module C = Spec.Curve25519
@@ -78,15 +79,16 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
 {
   A.pts_to_len ox;
   let zz = S64.zero;
-  let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 31sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; let mut a5 = [| zz; 16sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let z128 : S128.t = S128.zero;
+  let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| z128; 15sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut a5 = [| zz; 8sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5;
 
   (* The tables are read-only, but [point_mul] wants the four coordinates
      at one permission, so the two constants are copied in. *)
-  let gxt = Table.table Tables.gx_arr 16sz;
+  let gxt = Table.table Tables.gx_arr 8sz;
   copy a4 gxt;
   Table.drop_table gxt;
-  let gyt = Table.table Tables.gy_arr 16sz;
+  let gyt = Table.table Tables.gy_arr 8sz;
   copy a5 gyt;
   Table.drop_table gyt;
   Tables.gx_ok ();
@@ -113,7 +115,7 @@ ensures exists* (vout': Seq.seq S8.t).
   pure (vout' == E.scalar_bytes (E.sha512_mod_q vh))
 {
   let zz = S64.zero;
-  let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   Scalar.reduce_op a1 a2 a3 h;
   store out a1;
   ()
@@ -182,7 +184,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut b1 = [| z8; 32sz |]; A.pts_to_len b1; let mut b2 = [| z8; 32sz |]; A.pts_to_len b2; let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; A.pts_to_len b1; A.pts_to_len b2;
+  let mut b1 = [| z8; 32sz |]; A.pts_to_len b1; let mut b2 = [| z8; 32sz |]; A.pts_to_len b2; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; A.pts_to_len b1; A.pts_to_len b2;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand b1 b2 secret;
@@ -384,7 +386,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   A.pts_to_len sg;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; let mut a5 = [| zz; 16sz |]; A.pts_to_len a5; let mut a6 = [| zz; 16sz |]; A.pts_to_len a6; let mut a7 = [| zz; 16sz |]; A.pts_to_len a7; let mut a8 = [| zz; 16sz |]; A.pts_to_len a8; let mut a9 = [| zz; 16sz |]; A.pts_to_len a9; let mut aa = [| zz; 16sz |]; A.pts_to_len aa; let mut ab = [| zz; 16sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
+  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut a5 = [| zz; 8sz |]; A.pts_to_len a5; let mut a6 = [| zz; 8sz |]; A.pts_to_len a6; let mut a7 = [| zz; 8sz |]; A.pts_to_len a7; let mut a8 = [| zz; 8sz |]; A.pts_to_len a8; let mut a9 = [| zz; 8sz |]; A.pts_to_len a9; let mut aa = [| zz; 8sz |]; A.pts_to_len aa; let mut ab = [| zz; 8sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
   A.pts_to_len a5; A.pts_to_len a6; A.pts_to_len a7;
   A.pts_to_len a8; A.pts_to_len a9; A.pts_to_len aa; A.pts_to_len ab;
@@ -452,7 +454,7 @@ ensures exists* (vsg': Seq.seq S8.t).
 {
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand c2 c3 secret;
@@ -521,7 +523,7 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
   let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut c5 = [| z8; 64sz |]; A.pts_to_len c5; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len c4; A.pts_to_len c5;
 
-  let mut d1 = [| zz; 16sz |]; A.pts_to_len d1; let mut d2 = [| zz; 16sz |]; A.pts_to_len d2; let mut d3 = [| zz; 16sz |]; A.pts_to_len d3; let mut d4 = [| zz; 16sz |]; A.pts_to_len d4; let mut d5 = [| zz; 16sz |]; A.pts_to_len d5; let mut d6 = [| zz; 16sz |]; A.pts_to_len d6; let mut d7 = [| zz; 16sz |]; A.pts_to_len d7; let mut d8 = [| zz; 16sz |]; A.pts_to_len d8; let mut d9 = [| zz; 16sz |]; A.pts_to_len d9; let mut e1 = [| zz; 16sz |]; A.pts_to_len e1; let mut e2 = [| zz; 16sz |]; A.pts_to_len e2; let mut e3 = [| zz; 16sz |]; A.pts_to_len e3; let mut e4 = [| zz; 16sz |]; A.pts_to_len e4; let mut e5 = [| zz; 16sz |]; A.pts_to_len e5; let mut e6 = [| zz; 16sz |]; A.pts_to_len e6; let mut e7 = [| zz; 16sz |]; A.pts_to_len e7; let mut e8 = [| zz; 16sz |]; A.pts_to_len e8; let mut e9 = [| zz; 16sz |]; A.pts_to_len e9; let mut f1 = [| zz; 16sz |]; A.pts_to_len f1; let mut f2 = [| zz; 16sz |]; A.pts_to_len f2; let mut f3 = [| zz; 16sz |]; A.pts_to_len f3; let mut f4 = [| zz; 16sz |]; A.pts_to_len f4; let mut f5 = [| zz; 16sz |]; A.pts_to_len f5; let mut f6 = [| zz; 16sz |]; A.pts_to_len f6; let mut f7 = [| zz; 16sz |]; A.pts_to_len f7; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
+  let mut d1 = [| zz; 8sz |]; A.pts_to_len d1; let mut d2 = [| zz; 8sz |]; A.pts_to_len d2; let mut d3 = [| zz; 8sz |]; A.pts_to_len d3; let mut d4 = [| zz; 8sz |]; A.pts_to_len d4; let mut d5 = [| zz; 8sz |]; A.pts_to_len d5; let mut d6 = [| zz; 8sz |]; A.pts_to_len d6; let mut d7 = [| zz; 8sz |]; A.pts_to_len d7; let mut d8 = [| zz; 8sz |]; A.pts_to_len d8; let mut d9 = [| zz; 8sz |]; A.pts_to_len d9; let mut e1 = [| zz; 8sz |]; A.pts_to_len e1; let mut e2 = [| zz; 8sz |]; A.pts_to_len e2; let mut e3 = [| zz; 8sz |]; A.pts_to_len e3; let mut e4 = [| zz; 8sz |]; A.pts_to_len e4; let mut e5 = [| zz; 8sz |]; A.pts_to_len e5; let mut e6 = [| zz; 8sz |]; A.pts_to_len e6; let mut e7 = [| zz; 8sz |]; A.pts_to_len e7; let mut e8 = [| zz; 8sz |]; A.pts_to_len e8; let mut e9 = [| zz; 8sz |]; A.pts_to_len e9; let mut f1 = [| zz; 8sz |]; A.pts_to_len f1; let mut f2 = [| zz; 8sz |]; A.pts_to_len f2; let mut f3 = [| zz; 8sz |]; A.pts_to_len f3; let mut f4 = [| zz; 8sz |]; A.pts_to_len f4; let mut f5 = [| zz; 8sz |]; A.pts_to_len f5; let mut f6 = [| zz; 8sz |]; A.pts_to_len f6; let mut f7 = [| zz; 8sz |]; A.pts_to_len f7; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
   A.pts_to_len d5; A.pts_to_len d6; A.pts_to_len d7; A.pts_to_len d8;
   A.pts_to_len d9; A.pts_to_len e1; A.pts_to_len e2; A.pts_to_len e3;
   A.pts_to_len e4; A.pts_to_len e5; A.pts_to_len e6; A.pts_to_len e7;

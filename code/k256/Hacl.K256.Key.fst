@@ -22,7 +22,7 @@
     {!Hacl.K256.Key.Public}, because a module that mentions both the field
     and the scalar field pays for both contexts in every query.
 
-    Note that the scalar multiplication wants the scalar as sixteen plain
+    Note that the scalar multiplication wants the scalar as eight plain
     limbs and not in Montgomery form: it reads bits of the number itself.
     [load_scalar] is therefore not [qload], even though the two agree on
     what they accept. *)
@@ -72,7 +72,7 @@ ensures exists* (wo: Seq.seq S64.t).
   qmod_ok (); qmod_m (); mzero_ok ();
   assert_norm (pow2 256 < 2 * K.order);
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
 
   load_be out b;
   with wo. assert (A.pts_to out wo);
@@ -97,7 +97,7 @@ returns r: bool
 ensures A.pts_to b #pb vb ** pure (r == (0 < be_nat vb && be_nat vb < K.order))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 16sz |]; A.pts_to_len a0; A.pts_to_len a0;
+  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; A.pts_to_len a0;
   let r = load_scalar a0 b;
   r
 }
