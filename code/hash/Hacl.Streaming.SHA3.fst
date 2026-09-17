@@ -78,18 +78,11 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
   A.pts_to_len barr;
   A.pts_to_len barr;
 
-  let mut carr = [| z64; 5sz |];
-  A.pts_to_len carr;
-  A.pts_to_len carr;
-
   table_lens ();
   let rc_tbl = table rc_arr 24sz;
-  let rotc_tbl = table rotc_arr 25sz;
-  rotc_seq_ok ();
 
-  update_impl st barr carr rotc_tbl rc_tbl buf tot data data_len r seen;
+  update_impl st barr rc_tbl buf tot data data_len r seen;
 
-  drop_table rotc_tbl;
   drop_table rc_tbl;
   ()
 }
@@ -116,18 +109,11 @@ ensures exists* (vout: Seq.seq S8.t).
   A.pts_to_len barr;
   A.pts_to_len barr;
 
-  let mut carr = [| z64; 5sz |];
-  A.pts_to_len carr;
-  A.pts_to_len carr;
-
   table_lens ();
   let rc_tbl = table rc_arr 24sz;
-  let rotc_tbl = table rotc_arr 25sz;
-  rotc_seq_ok ();
 
-  digest_impl st barr carr rotc_tbl rc_tbl buf tot out out_len r suffix seen;
+  digest_impl st barr rc_tbl buf tot out out_len r suffix seen;
 
-  drop_table rotc_tbl;
   drop_table rc_tbl;
   ()
 }

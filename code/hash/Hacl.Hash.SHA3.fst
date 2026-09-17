@@ -42,19 +42,16 @@ module G = Pulse.Lib.GlobalArray
 
 (** {2 The constant tables}
 
-    Both are [static const] arrays in the program image; see
-    [Hacl.Impl.Table].  The rho offsets are public [uint32_t]s -- they are
-    shift amounts, and how far a lane rotates depends on nothing secret -- so
-    that table is not even a secret one. *)
+    It is a [static const] array in the program image; see [Hacl.Impl.Table].
+    The rho offsets used to live in a table beside it, but every round is now
+    unrolled and every rotation is an immediate, so there is nothing left to
+    look up. *)
 
-let rc_arr   : G.static_array S64.t = G.mk_static_array rc_list
-let rotc_arr : G.static_array U32.t = G.mk_static_array rotc_list
+let rc_arr : G.static_array S64.t = G.mk_static_array rc_list
 
 let table_lens (_: unit)
-  : Lemma (Seq.length (G.static_array_elems rc_arr) == 24 /\
-           Seq.length (G.static_array_elems rotc_arr) == 25)
-  = assert_norm (List.Tot.length rc_list == 24);
-    assert_norm (List.Tot.length rotc_list == 25)
+  : Lemma (Seq.length (G.static_array_elems rc_arr) == 24)
+  = assert_norm (List.Tot.length rc_list == 24)
 
 (** {2 The sponge, wrapped}
 
@@ -86,19 +83,12 @@ ensures exists* (vout: Seq.seq S8.t).
   A.pts_to_len barr;
   A.pts_to_len barr;
 
-  let mut carr = [| z64; 5sz |];
-  A.pts_to_len carr;
-  A.pts_to_len carr;
-
   table_lens ();
   let rc_tbl = table rc_arr 24sz;
-  let rotc_tbl = table rotc_arr 25sz;
-  rotc_seq_ok ();
 
-  absorb_impl starr barr carr rotc_tbl rc_tbl msg msg_len r suffix;
-  squeeze_impl out out_len starr barr carr rotc_tbl rc_tbl r;
+  absorb_impl starr barr rc_tbl msg msg_len r suffix;
+  squeeze_impl out out_len starr barr rc_tbl r;
 
-  drop_table rotc_tbl;
   drop_table rc_tbl;
   ()
 }
