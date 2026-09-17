@@ -122,3 +122,39 @@ let vals_upd (s: Seq.seq S8.t) (i: nat { i < Seq.length s }) (x: S8.t)
 let vals_slice (s: Seq.seq S8.t) (lo: nat) (hi: nat { lo <= hi /\ hi <= Seq.length s })
   : Lemma (vals (Seq.slice s lo hi) == Seq.slice (vals s) lo hi)
   = Seq.lemma_eq_intro (vals (Seq.slice s lo hi)) (Seq.slice (vals s) lo hi)
+
+(** {2 Classifying back}
+
+    [vals] has an inverse: a byte is a byte, and the secrecy of a value is a
+    property of how a program uses it, not of the number.  Specifications
+    that have to speak about both worlds at once -- HPKE, whose AEAD may be
+    either AES-GCM (specified over [elem]) or ChaCha20-Poly1305 (specified
+    over [S8.t]) -- need to move in this direction too.
+
+    This is a ghost function, so it classifies nothing at run time; there is
+    no declassification here and none anywhere else. *)
+let secrets (s: Seq.seq elem) : GTot (Seq.seq S8.t) =
+  Seq.init_ghost (Seq.length s) (fun k -> S8.classify (U8.uint_to_t (Seq.index s k)))
+
+let secrets_len (s: Seq.seq elem)
+  : Lemma (Seq.length (secrets s) == Seq.length s)
+          [SMTPat (Seq.length (secrets s))]
+  = ()
+
+let secrets_index (s: Seq.seq elem) (i: nat { i < Seq.length s })
+  : Lemma (S8.v (Seq.index (secrets s) i) == Seq.index s i)
+          [SMTPat (Seq.index (secrets s) i)]
+  = Seq.init_ghost_index (Seq.length s) (fun k -> S8.classify (U8.uint_to_t (Seq.index s k)))
+
+let vals_secrets (s: Seq.seq elem)
+  : Lemma (vals (secrets s) == s) [SMTPat (vals (secrets s))]
+  = Seq.lemma_eq_intro (vals (secrets s)) s
+
+(** The other composite: [vals] is injective, because [S8.v] is. *)
+let secrets_vals (s: Seq.seq S8.t)
+  : Lemma (secrets (vals s) == s) [SMTPat (secrets (vals s))]
+  = Seq.lemma_eq_intro (secrets (vals s)) s
+
+let vals_injective (s1 s2: Seq.seq S8.t)
+  : Lemma (requires vals s1 == vals s2) (ensures s1 == s2)
+  = secrets_vals s1; secrets_vals s2
