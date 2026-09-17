@@ -84,9 +84,9 @@ static void Hacl_AES_Block_cipher_impl__Mkparams(uint8_t *st, uint8_t *w);
 static void Hacl_AES_GCM_hkey_impl__Mkparams(uint8_t *hb, uint8_t *w);
 static void Hacl_Impl_Copy_copy_range(uint8_t *dst, size_t dbase, uint8_t *src, size_t sbase, size_t n);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
-static Hacl_Vec128_t FStar_Pervasives_Native_snd__t(FStar_Pervasives_Native_tuple2__t_t x);
-__attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static Hacl_Vec128_t FStar_Pervasives_Native_fst__t(FStar_Pervasives_Native_tuple2__t_t x);
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static Hacl_Vec128_t FStar_Pervasives_Native_snd__t(FStar_Pervasives_Native_tuple2__t_t x);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static void Hacl_AES_GF128_NI_gmul_add_ni(uint8_t *a, uint8_t *h, uint8_t *b, size_t off);
 static void Hacl_AES_GF128_gadd_at_impl(uint8_t *a, uint8_t *b, size_t off);
@@ -2294,13 +2294,13 @@ static void Hacl_Impl_Copy_copy_range(uint8_t *dst, size_t dbase, uint8_t *src, 
 }
 
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
-static Hacl_Vec128_t FStar_Pervasives_Native_snd__t(FStar_Pervasives_Native_tuple2__t_t x) {
-  return x._2;
+static Hacl_Vec128_t FStar_Pervasives_Native_fst__t(FStar_Pervasives_Native_tuple2__t_t x) {
+  return x._1;
 }
 
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
-static Hacl_Vec128_t FStar_Pervasives_Native_fst__t(FStar_Pervasives_Native_tuple2__t_t x) {
-  return x._1;
+static Hacl_Vec128_t FStar_Pervasives_Native_snd__t(FStar_Pervasives_Native_tuple2__t_t x) {
+  return x._2;
 }
 
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
@@ -2310,7 +2310,6 @@ static void Hacl_AES_GF128_NI_gmul_add_ni(uint8_t *a, uint8_t *h, uint8_t *b, si
   size_t off2 = (off + 16);
   uint8_t *db = Hacl_Impl_Sub_sub__t(b, off, off2);
   Hacl_Vec128_t dv = Hacl_Vec128_load(db);
-  Hacl_Vec128_t rc = Hacl_Vec128_reduction();
   Hacl_Vec128_t xa = Hacl_Vec128_bswap(Hacl_Vec128_xor(x, dv));
   Hacl_Vec128_t yb = Hacl_Vec128_bswap(y);
   Hacl_Vec128_t ll = Hacl_Vec128_clmul_ll(xa, yb);
@@ -2326,40 +2325,47 @@ static void Hacl_AES_GF128_NI_gmul_add_ni(uint8_t *a, uint8_t *h, uint8_t *b, si
   Hacl_Vec128_t d = Hacl_Vec128_shift_right_lanes64(hi, ((uint32_t)63U));
   Hacl_Vec128_t qlo = Hacl_Vec128_xor(Hacl_Vec128_shift_left_lanes64(lo, ((uint32_t)1U)), Hacl_Vec128_shift_left_bytes_8(c));
   Hacl_Vec128_t qhi = Hacl_Vec128_xor(Hacl_Vec128_xor(Hacl_Vec128_shift_left_lanes64(hi, ((uint32_t)1U)), Hacl_Vec128_shift_left_bytes_8(d)), Hacl_Vec128_shift_right_bytes_8(c));
-  FStar_Pervasives_Native_tuple2__t_t p1 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = Hacl_Vec128_bswap(qhi), ._2 = Hacl_Vec128_bswap(qlo) };
-  Hacl_Vec128_t xa1 = Hacl_Vec128_bswap(FStar_Pervasives_Native_snd__t(p1));
-  Hacl_Vec128_t yb1 = Hacl_Vec128_bswap(rc);
-  Hacl_Vec128_t ll1 = Hacl_Vec128_clmul_ll(xa1, yb1);
-  Hacl_Vec128_t lh1 = Hacl_Vec128_clmul_lh(xa1, yb1);
-  Hacl_Vec128_t hl1 = Hacl_Vec128_clmul_hl(xa1, yb1);
-  Hacl_Vec128_t hh1 = Hacl_Vec128_clmul_hh(xa1, yb1);
-  Hacl_Vec128_t mid1 = Hacl_Vec128_xor(lh1, hl1);
-  Hacl_Vec128_t midlo1 = Hacl_Vec128_shift_left_bytes_8(mid1);
-  Hacl_Vec128_t midhi1 = Hacl_Vec128_shift_right_bytes_8(mid1);
-  Hacl_Vec128_t lo1 = Hacl_Vec128_xor(ll1, midlo1);
-  Hacl_Vec128_t hi1 = Hacl_Vec128_xor(hh1, midhi1);
-  Hacl_Vec128_t c1 = Hacl_Vec128_shift_right_lanes64(lo1, ((uint32_t)63U));
-  Hacl_Vec128_t d1 = Hacl_Vec128_shift_right_lanes64(hi1, ((uint32_t)63U));
-  Hacl_Vec128_t qlo1 = Hacl_Vec128_xor(Hacl_Vec128_shift_left_lanes64(lo1, ((uint32_t)1U)), Hacl_Vec128_shift_left_bytes_8(c1));
-  Hacl_Vec128_t qhi1 = Hacl_Vec128_xor(Hacl_Vec128_xor(Hacl_Vec128_shift_left_lanes64(hi1, ((uint32_t)1U)), Hacl_Vec128_shift_left_bytes_8(d1)), Hacl_Vec128_shift_right_bytes_8(c1));
-  FStar_Pervasives_Native_tuple2__t_t p2 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = Hacl_Vec128_bswap(qhi1), ._2 = Hacl_Vec128_bswap(qlo1) };
-  Hacl_Vec128_t xa2 = Hacl_Vec128_bswap(FStar_Pervasives_Native_snd__t(p2));
-  Hacl_Vec128_t yb2 = Hacl_Vec128_bswap(rc);
-  Hacl_Vec128_t ll2 = Hacl_Vec128_clmul_ll(xa2, yb2);
-  Hacl_Vec128_t lh2 = Hacl_Vec128_clmul_lh(xa2, yb2);
-  Hacl_Vec128_t hl2 = Hacl_Vec128_clmul_hl(xa2, yb2);
-  Hacl_Vec128_t hh2 = Hacl_Vec128_clmul_hh(xa2, yb2);
-  Hacl_Vec128_t mid2 = Hacl_Vec128_xor(lh2, hl2);
-  Hacl_Vec128_t midlo2 = Hacl_Vec128_shift_left_bytes_8(mid2);
-  Hacl_Vec128_t midhi2 = Hacl_Vec128_shift_right_bytes_8(mid2);
-  Hacl_Vec128_t lo2 = Hacl_Vec128_xor(ll2, midlo2);
-  Hacl_Vec128_t hi2 = Hacl_Vec128_xor(hh2, midhi2);
-  Hacl_Vec128_t c2 = Hacl_Vec128_shift_right_lanes64(lo2, ((uint32_t)63U));
-  Hacl_Vec128_t d2 = Hacl_Vec128_shift_right_lanes64(hi2, ((uint32_t)63U));
-  Hacl_Vec128_t qlo2 = Hacl_Vec128_xor(Hacl_Vec128_shift_left_lanes64(lo2, ((uint32_t)1U)), Hacl_Vec128_shift_left_bytes_8(c2));
-  Hacl_Vec128_t qhi2 = Hacl_Vec128_xor(Hacl_Vec128_xor(Hacl_Vec128_shift_left_lanes64(hi2, ((uint32_t)1U)), Hacl_Vec128_shift_left_bytes_8(d2)), Hacl_Vec128_shift_right_bytes_8(c2));
-  FStar_Pervasives_Native_tuple2__t_t p3 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = Hacl_Vec128_bswap(qhi2), ._2 = Hacl_Vec128_bswap(qlo2) };
-  Hacl_Vec128_t r = Hacl_Vec128_xor(FStar_Pervasives_Native_fst__t(p1), Hacl_Vec128_xor(FStar_Pervasives_Native_fst__t(p2), FStar_Pervasives_Native_fst__t(p3)));
+  FStar_Pervasives_Native_tuple2__t_t p1 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = qlo, ._2 = qhi };
+  Hacl_Vec128_t qlo1 = FStar_Pervasives_Native_fst__t(p1);
+  Hacl_Vec128_t qhi1 = FStar_Pervasives_Native_snd__t(p1);
+  Hacl_Vec128_t h1 = Hacl_Vec128_shift_right_bytes_8(qlo1);
+  Hacl_Vec128_t l = Hacl_Vec128_shift_left_bytes_8(qlo1);
+  Hacl_Vec128_t sh = Hacl_Vec128_shift_right_lanes64(qlo1, ((uint32_t)1U));
+  Hacl_Vec128_t c1 = Hacl_Vec128_shift_left_lanes64(h1, ((uint32_t)63U));
+  Hacl_Vec128_t q1 = Hacl_Vec128_xor(sh, c1);
+  Hacl_Vec128_t sh1 = Hacl_Vec128_shift_right_lanes64(qlo1, ((uint32_t)2U));
+  Hacl_Vec128_t c2 = Hacl_Vec128_shift_left_lanes64(h1, ((uint32_t)62U));
+  Hacl_Vec128_t q2 = Hacl_Vec128_xor(sh1, c2);
+  Hacl_Vec128_t sh2 = Hacl_Vec128_shift_right_lanes64(qlo1, ((uint32_t)7U));
+  Hacl_Vec128_t c3 = Hacl_Vec128_shift_left_lanes64(h1, ((uint32_t)57U));
+  Hacl_Vec128_t q7 = Hacl_Vec128_xor(sh2, c3);
+  Hacl_Vec128_t ua = Hacl_Vec128_xor(Hacl_Vec128_xor(qlo1, q1), Hacl_Vec128_xor(q2, q7));
+  Hacl_Vec128_t t1 = Hacl_Vec128_shift_left_lanes64(l, ((uint32_t)63U));
+  Hacl_Vec128_t t2 = Hacl_Vec128_shift_left_lanes64(l, ((uint32_t)62U));
+  Hacl_Vec128_t t7 = Hacl_Vec128_shift_left_lanes64(l, ((uint32_t)57U));
+  Hacl_Vec128_t wa = Hacl_Vec128_xor(Hacl_Vec128_xor(t1, t2), t7);
+  FStar_Pervasives_Native_tuple2__t_t p2 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = ua, ._2 = wa };
+  Hacl_Vec128_t h2 = Hacl_Vec128_shift_right_bytes_8(FStar_Pervasives_Native_snd__t(p2));
+  Hacl_Vec128_t l1 = Hacl_Vec128_shift_left_bytes_8(FStar_Pervasives_Native_snd__t(p2));
+  Hacl_Vec128_t sh3 = Hacl_Vec128_shift_right_lanes64(FStar_Pervasives_Native_snd__t(p2), ((uint32_t)1U));
+  Hacl_Vec128_t c4 = Hacl_Vec128_shift_left_lanes64(h2, ((uint32_t)63U));
+  Hacl_Vec128_t q11 = Hacl_Vec128_xor(sh3, c4);
+  Hacl_Vec128_t sh4 = Hacl_Vec128_shift_right_lanes64(FStar_Pervasives_Native_snd__t(p2), ((uint32_t)2U));
+  Hacl_Vec128_t c5 = Hacl_Vec128_shift_left_lanes64(h2, ((uint32_t)62U));
+  Hacl_Vec128_t q21 = Hacl_Vec128_xor(sh4, c5);
+  Hacl_Vec128_t sh5 = Hacl_Vec128_shift_right_lanes64(FStar_Pervasives_Native_snd__t(p2), ((uint32_t)7U));
+  Hacl_Vec128_t c6 = Hacl_Vec128_shift_left_lanes64(h2, ((uint32_t)57U));
+  Hacl_Vec128_t q71 = Hacl_Vec128_xor(sh5, c6);
+  Hacl_Vec128_t ua1 = Hacl_Vec128_xor(Hacl_Vec128_xor(FStar_Pervasives_Native_snd__t(p2), q11), Hacl_Vec128_xor(q21, q71));
+  Hacl_Vec128_t t11 = Hacl_Vec128_shift_left_lanes64(l1, ((uint32_t)63U));
+  Hacl_Vec128_t t21 = Hacl_Vec128_shift_left_lanes64(l1, ((uint32_t)62U));
+  Hacl_Vec128_t t71 = Hacl_Vec128_shift_left_lanes64(l1, ((uint32_t)57U));
+  Hacl_Vec128_t wa1 = Hacl_Vec128_xor(Hacl_Vec128_xor(t11, t21), t71);
+  FStar_Pervasives_Native_tuple2__t_t p3 = (FStar_Pervasives_Native_tuple2__t_t){ ._1 = ua1, ._2 = wa1 };
+  Hacl_Vec128_t u1 = Hacl_Vec128_bswap(qhi1);
+  Hacl_Vec128_t u2 = Hacl_Vec128_bswap(FStar_Pervasives_Native_fst__t(p2));
+  Hacl_Vec128_t u3 = Hacl_Vec128_bswap(FStar_Pervasives_Native_fst__t(p3));
+  Hacl_Vec128_t r = Hacl_Vec128_xor(u1, Hacl_Vec128_xor(u2, u3));
   Hacl_Vec128_store(a, r);
 }
 
