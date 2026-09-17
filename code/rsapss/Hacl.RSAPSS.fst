@@ -101,9 +101,12 @@ ensures exists* (v: Seq.seq S32.t).
   let off = SZ.sub width len;
   let mut tmp = [| (zero8 <: S8.t); width |];
   A.pts_to_len tmp;
-  (* The padding is at most three bytes, and writing it is cheaper than
-     reasoning about what a stack allocation starts out holding. *)
-  fill_range tmp 0sz off zero8;
+  (* The padding is at most three bytes, and the stack allocation already
+     starts out zero, so [copy_at] leaving the prefix alone is enough.
+     Writing it again would be dead code, and C compilers cannot see that
+     [off] is small and warn about the store. *)
+  with v0. assert (A.pts_to tmp v0);
+  assert (pure (forall (i: nat). i < SZ.v width ==> S8.v (Seq.index v0 i) == 0));
   copy_at tmp off b len;
   with vt. assert (A.pts_to tmp vt);
   assert (pure (forall (i: nat). i < SZ.v off ==> S8.v (Seq.index vt i) == 0));
