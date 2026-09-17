@@ -1693,6 +1693,29 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   `FStar.Math.Lemmas.{distributivity_add_left, lemma_mult_le_right,
   multiple_division_lemma, multiple_modulo_lemma, euclidean_division_definition}`
   before reaching for `--z3rlimit`.
+* **A product or a quotient of two variables under a quantifier poisons the
+  whole query.**  It does not merely fail to prove its own conjunct: every
+  other fact in the same query becomes unprovable too, including goals as
+  trivial as `i == j` from `i < j + 1 /\ ~(i < j)`.  The symptom is a query
+  that runs for hours without tripping the rlimit and then blames something
+  absurd.  Both halves of Frodo's message packing hit it --- encoding named
+  the cell with two loop indices, so the invariant carried `i * nbar` under a
+  `forall`; decoding mentioned `Spec.Frodo.key_decode`, whose `Seq.init_ghost`
+  body divides the flat index by `bits p`, so the `Seq.index` trigger put a
+  division by a variable there instead.  Encoding took over four hours and
+  decoding never finished at all.  The cure is to say only that the flat
+  prefix written so far agrees with the specification sequence, keeping the
+  write position in a real mutable variable so the prefix bound stays linear,
+  and to supply the specification's value at one *concrete* index with a
+  lemma, where the product is harmless.  Where the specification function
+  itself is the problem, verify against an `[@@"opaque_to_smt"]` copy of it
+  and reconcile the two once, at the end.  Encoding now takes ninety-nine
+  seconds.  To find the culprit, reproduce the failing goal in a scratch file
+  and replace the suspect specification function with an `assume val`: if the
+  goal becomes instant, that term is the poison.
+* **`--admit_except` admits everything when the name does not match.**  The
+  run then returns success in seconds and verifies nothing.  Never read an
+  `--admit_except` pass without a baseline that fails.
 * **Prefer opaque parameters to derived expressions.**  A lemma over
   `base: nat` with `requires base == len / bl * bl` is cheap where the same
   lemma stated about `len / bl * bl` is hopeless.  Likewise, quantify over byte
