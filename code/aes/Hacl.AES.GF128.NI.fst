@@ -64,6 +64,7 @@ module CL = Spec.CLMUL
 module CLess = Spec.CarryLess
 module G = Spec.GF128
 module Poly = Spec.GF128.Poly
+module Alg = Spec.GF128.Algebra
 module Classical = FStar.Classical
 module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
@@ -410,6 +411,206 @@ let ghash_zero (hh acc0: G.block)
   : Lemma (G.ghash_from hh acc0 dd 0 == acc0) = ()
 #pop-options
 
+(** Four turns of the loop at once.
+
+    [Spec.GF128.Algebra.horner4] does the algebra.  All this lemma adds is
+    the index arithmetic that turns four applications of [ghash_step] into a
+    single statement about [ghash_from] four blocks further on, with the four
+    products independent of one another. *)
+let ghash_step4 (hh acc0 h2 h3 h4: G.block) (d: Seq.seq elem) (n i: nat)
+  : Lemma (requires n % blocklen == 0 /\ n <= Seq.length d /\
+                    i % blocklen == 0 /\ i + 4 * blocklen <= n /\
+                    h2 == G.gmul hh hh /\ h3 == G.gmul h2 hh /\
+                    h4 == G.gmul h3 hh)
+          (ensures (let dd = Seq.slice d 0 n in
+                    Seq.length dd % blocklen == 0 /\
+                    i / blocklen + 4 <= G.nblocks dd /\
+                    (i + 4 * blocklen) / blocklen == i / blocklen + 4 /\
+                    G.ghash_from hh acc0 dd (i / blocklen + 4) ==
+                      G.gadd
+                        (G.gmul (G.gadd (G.ghash_from hh acc0 dd (i / blocklen))
+                                        (Seq.slice d i (i + blocklen))) h4)
+                        (G.gadd
+                          (G.gmul (Seq.slice d (i + blocklen) (i + 2 * blocklen)) h3)
+                          (G.gadd
+                            (G.gmul (Seq.slice d (i + 2 * blocklen) (i + 3 * blocklen)) h2)
+                            (G.gmul (Seq.slice d (i + 3 * blocklen) (i + 4 * blocklen)) hh)))))
+  = ghash_step hh acc0 d n i;
+    ghash_step hh acc0 d n (i + blocklen);
+    ghash_step hh acc0 d n (i + 2 * blocklen);
+    ghash_step hh acc0 d n (i + 3 * blocklen);
+    let dd = Seq.slice d 0 n in
+    Alg.horner4 (G.ghash_from hh acc0 dd (i / blocklen))
+                (Seq.slice d i (i + blocklen))
+                (Seq.slice d (i + blocklen) (i + 2 * blocklen))
+                (Seq.slice d (i + 2 * blocklen) (i + 3 * blocklen))
+                (Seq.slice d (i + 3 * blocklen) (i + 4 * blocklen))
+                hh h2 h3 h4
+
+(** The same for the one-block loop: a partial block cannot fit. *)
+let step1_bounds (vi n: nat)
+  : Lemma (requires vi % blocklen == 0 /\ n % blocklen == 0 /\ vi < n)
+          (ensures vi + blocklen <= n)
+  = Math.lemma_mod_sub_distr n vi blocklen;
+    if n - vi < blocklen then Math.small_mod (n - vi) blocklen
+
+(** Index arithmetic for the four-way loop, kept out of the Pulse context
+    where it would have to be found among a hundred other hypotheses. *)
+let step4_bounds (vi lim n: nat)
+  : Lemma (requires vi % 64 == 0 /\ lim % 64 == 0 /\ vi < lim /\ lim <= n)
+          (ensures vi % blocklen == 0 /\ vi + 4 * blocklen <= n /\
+                   (vi + 4 * blocklen) % 64 == 0 /\
+                   vi + 4 * blocklen <= lim)
+  = Math.euclidean_division_definition vi 64;
+    Math.euclidean_division_definition lim 64;
+    Math.multiple_modulo_lemma (4 * (vi / 64)) 16;
+    Math.multiple_modulo_lemma (vi / 64 + 1) 64
+
+(** The four-way limit, again out of the Pulse context. *)
+let lim_bounds (n: nat)
+  : Lemma (requires n % blocklen == 0)
+          (ensures (n - n % 64) % 64 == 0 /\ n - n % 64 <= n /\
+                   (n - n % 64) % blocklen == 0)
+  = Math.euclidean_division_definition n 64;
+    Math.multiple_modulo_lemma (n / 64) 64;
+    Math.multiple_modulo_lemma (4 * (n / 64)) 16
+
+inline_for_extraction
+let four_limit (n: SZ.t { SZ.v n % blocklen == 0 })
+  : Pure SZ.t (requires True)
+         (ensures fun r -> SZ.v r % 64 == 0 /\ SZ.v r <= SZ.v n /\
+                           SZ.v r % blocklen == 0)
+  = lim_bounds (SZ.v n);
+    SZ.sub n (SZ.rem n 64sz)
+
+(** The four-way block loop.
+
+    [lim] bytes, a multiple of sixty-four, are consumed against the four
+    precomputed powers of the hash key.  The accumulator never leaves a
+    register and the four multiplies of a turn do not depend on one another,
+    which is the whole point: the Horner chain is broken. *)
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+fn ghash_loop4_ni (a0 y y2 y3 y4: Vec.t) (d: A.array S8.t) (n: SZ.t) (lim: SZ.t)
+                  (#pd: perm) (#vd: erased (Seq.seq S8.t))
+requires A.pts_to d #pd vd ** pure (
+  SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+  SZ.v lim <= SZ.v n /\ SZ.v lim % 64 == 0 /\
+  Vec.bv y2 == G.gmul (Vec.bv y) (Vec.bv y) /\
+  Vec.bv y3 == G.gmul (Vec.bv y2) (Vec.bv y) /\
+  Vec.bv y4 == G.gmul (Vec.bv y3) (Vec.bv y))
+returns r: Vec.t
+ensures A.pts_to d #pd vd ** pure (
+  SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+  Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
+  SZ.v lim / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
+  Vec.bv r == G.ghash_from (Vec.bv y) (Vec.bv a0)
+                           (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v lim / blocklen))
+{
+  A.pts_to_len d;
+  Math.lemma_div_le (SZ.v lim) (SZ.v n) blocklen;
+  Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
+  Math.euclidean_division_definition (SZ.v n) blocklen;
+  ghash_zero (Vec.bv y) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
+  let mut av = a0;
+  let mut i = 0sz;
+
+  while (let vi = !i; SZ.lt vi lim)
+  invariant exists* (vi: SZ.t) (cur: Vec.t).
+    pts_to i vi ** pts_to av cur **
+    A.pts_to d #pd vd **
+    pure (SZ.v vi <= SZ.v lim /\ SZ.v vi % 64 == 0 /\
+          SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+          SZ.v lim <= SZ.v n /\ SZ.v lim % 64 == 0 /\
+          SZ.v vi / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
+          Vec.bv cur == G.ghash_from (Vec.bv y) (Vec.bv a0)
+                                     (Seq.slice (vals vd) 0 (SZ.v n))
+                                     (SZ.v vi / blocklen))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    step4_bounds (SZ.v vi) (SZ.v lim) (SZ.v n);
+    let vi1 = SZ.add vi 16sz;
+    let vi2 = SZ.add vi 32sz;
+    let vi3 = SZ.add vi 48sz;
+    let vi4 = SZ.add vi 64sz;
+
+    let db0 = Sub.sub d vi vi1;
+    vals_slice vd (SZ.v vi) (SZ.v vi1);
+    let d0 = Vec.load db0 #(as_blk (Seq.slice vd (SZ.v vi) (SZ.v vi1)));
+    Sub.unsub_id d (SZ.v vi) (SZ.v vi1) db0;
+
+    let db1 = Sub.sub d vi1 vi2;
+    vals_slice vd (SZ.v vi1) (SZ.v vi2);
+    let d1 = Vec.load db1 #(as_blk (Seq.slice vd (SZ.v vi1) (SZ.v vi2)));
+    Sub.unsub_id d (SZ.v vi1) (SZ.v vi2) db1;
+
+    let db2 = Sub.sub d vi2 vi3;
+    vals_slice vd (SZ.v vi2) (SZ.v vi3);
+    let d2 = Vec.load db2 #(as_blk (Seq.slice vd (SZ.v vi2) (SZ.v vi3)));
+    Sub.unsub_id d (SZ.v vi2) (SZ.v vi3) db2;
+
+    let db3 = Sub.sub d vi3 vi4;
+    vals_slice vd (SZ.v vi3) (SZ.v vi4);
+    let d3 = Vec.load db3 #(as_blk (Seq.slice vd (SZ.v vi3) (SZ.v vi4)));
+    Sub.unsub_id d (SZ.v vi3) (SZ.v vi4) db3;
+
+    let cur = !av;
+    xor_block_bv cur d0;
+    let p0 = gmul_vec (Vec.vxor cur d0) y4;
+    let p1 = gmul_vec d1 y3;
+    let p2 = gmul_vec d2 y2;
+    let p3 = gmul_vec d3 y;
+    xor_block_bv p2 p3;
+    xor_block_bv p1 (Vec.vxor p2 p3);
+    xor_block_bv p0 (Vec.vxor p1 (Vec.vxor p2 p3));
+    ghash_step4 (Vec.bv y) (Vec.bv a0) (Vec.bv y2) (Vec.bv y3) (Vec.bv y4)
+                (vals vd) (SZ.v n) (SZ.v vi);
+    av := Vec.vxor p0 (Vec.vxor p1 (Vec.vxor p2 p3));
+    i := vi4;
+  };
+
+  let fin = !av;
+  fin
+}
+
+(** Entering the block loop: the four-way pass, if there is anything for it
+    to do, and otherwise nothing at all.  Kept in a function of its own so
+    that the branch is checked against a handful of hypotheses rather than
+    against everything the caller knows. *)
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+fn ghash_start (a0: Vec.t) (y: Vec.t) (d: A.array S8.t) (n: SZ.t) (lim: SZ.t)
+               (#pd: perm) (#vd: erased (Seq.seq S8.t))
+requires A.pts_to d #pd vd ** pure (
+  SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+  SZ.v lim <= SZ.v n /\ SZ.v lim % 64 == 0)
+returns r: Vec.t
+ensures A.pts_to d #pd vd ** pure (
+  SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
+  Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
+  SZ.v lim / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
+  Vec.bv r == G.ghash_from (Vec.bv y) (Vec.bv a0)
+                           (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v lim / blocklen))
+{
+  A.pts_to_len d;
+  Math.lemma_div_le (SZ.v lim) (SZ.v n) blocklen;
+  Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
+  Math.euclidean_division_definition (SZ.v n) blocklen;
+  if SZ.gt lim 0sz
+  {
+    let y2 = gmul_vec y y;
+    let y3 = gmul_vec y2 y;
+    let y4 = gmul_vec y3 y;
+    ghash_loop4_ni a0 y y2 y3 y4 d n lim
+  }
+  else
+  {
+    ghash_zero (Vec.bv y) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
+    a0
+  }
+}
+
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
   custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
 fn ghash_loop_ni (acc: A.array S8.t) (h: A.array S8.t) (d: A.array S8.t) (n: SZ.t)
@@ -428,17 +629,18 @@ ensures exists* (va1: Seq.seq S8.t).
   vals va1 == G.ghash_from (vals vh) (vals va0)
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v n / blocklen))
 {
+  let lim = four_limit n;
   A.pts_to_len acc;
   A.pts_to_len h;
   A.pts_to_len d;
   Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
   Math.euclidean_division_definition (SZ.v n) blocklen;
 
-  ghash_zero (vals vh) (vals va0) (Seq.slice (vals vd) 0 (SZ.v n));
   let y = Vec.load h #(as_blk vh);
   let a0 = Vec.load acc #(as_blk va0);
-  let mut av = a0;
-  let mut i = 0sz;
+  let r = ghash_start a0 y d n lim;
+  let mut av = r;
+  let mut i = lim;
 
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (cur: Vec.t).
@@ -455,6 +657,7 @@ ensures exists* (va1: Seq.seq S8.t).
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
+    step1_bounds (SZ.v vi) (SZ.v n);
     let vi2 = SZ.add vi 16sz;
     let db = Sub.sub d vi vi2;
     vals_slice vd (SZ.v vi) (SZ.v vi2);
