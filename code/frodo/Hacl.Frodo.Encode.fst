@@ -53,35 +53,51 @@ let slice_shift (v: Seq.seq S8.t) (base: nat) (nb: nat { base + nb <= Seq.length
   : Lemma (Seq.slice (Seq.slice v base (base + nb)) j nb == Seq.slice v (base + j) (base + nb))
   = Seq.slice_slice v base (base + nb) j nb
 
-let key_encode_eq (p: params) (mu: Seq.lseq S8.t (bytes_mu p)) (res: M.matrix nbar nbar)
-  : Lemma (requires forall (i: nat) (k: nat). i < nbar /\ k < nbar ==>
-                      S16.v (Seq.index res (i * nbar + k)) ==
-                        F.ec_val p (F.mu_chunk p mu i) k)
-          (ensures res == F.key_encode p mu)
-  = let aux (t: nat { t < nbar * nbar })
-      : Lemma (Seq.index res t == Seq.index (F.key_encode p mu) t)
-      = M.div_lt t nbar nbar;
-        Math.euclidean_division_definition t nbar;
-        F.ec_bound p (F.mu_chunk p mu (t / nbar)) (t % nbar)
-    in
-    FStar.Classical.forall_intro aux;
-    Seq.lemma_eq_intro res (F.key_encode p mu)
+(** [key_encode] is written one cell at a time, left to right, and the
+    loop invariant says only that the flat prefix written so far agrees with
+    the specification.  Nothing quantified ever mentions [mu_chunk]: that
+    would put [ii * bits p] under a quantifier, and a product of two
+    variables under a quantifier is enough to make every other fact in the
+    query unprovable too. *)
+let prefix_step (v: Seq.seq S16.t) (spec: Seq.seq S16.t)
+                (t: nat { t < Seq.length v /\ Seq.length v == Seq.length spec })
+  : Lemma (requires forall (u: nat). u < t ==> Seq.index v u == Seq.index spec u)
+          (ensures Seq.length (Seq.upd v t (Seq.index spec t)) == Seq.length spec /\
+                   (forall (u: nat). u < t + 1 ==>
+                      Seq.index (Seq.upd v t (Seq.index spec t)) u == Seq.index spec u))
+  = ()
 
-let key_decode_eq (p: params) (m: M.matrix nbar nbar) (res: Seq.lseq S8.t (bytes_mu p))
-  : Lemma (requires forall (i: nat) (j: nat). i < nbar /\ j < bits p ==>
-                      i * bits p + j < bytes_mu p /\
-                      S8.v (Seq.index res (i * bits p + j)) ==
-                        (F.row_val p m i / pow2 (8 * j)) % 256)
-          (ensures res == F.key_decode p m)
-  = let aux (t: nat { t < bytes_mu p })
-      : Lemma (Seq.index res t == Seq.index (F.key_decode p m) t)
-      = M.div_lt t nbar (bits p);
-        Math.euclidean_division_definition t (bits p)
-    in
-    FStar.Classical.forall_intro aux;
-    Seq.lemma_eq_intro res (F.key_decode p m)
+(** The one cell, named: this is the only place [mu_chunk] appears, and here
+    the row index is a concrete term rather than a bound variable. *)
+let ke_at (p: params) (mu: Seq.lseq S8.t (bytes_mu p))
+          (i: nat { i < nbar }) (k: nat { k < nbar })
+  : Lemma (i * nbar + k < nbar * nbar /\
+           S16.v (Seq.index (F.key_encode p mu) (i * nbar + k)) ==
+             F.ec_val p (F.mu_chunk p mu i) k)
+  = M.index_bound nbar nbar i k;
+    M.get_flat nbar nbar (F.key_encode p mu) (i * nbar + k);
+    Math.lemma_div_plus k i nbar;
+    Math.lemma_mod_plus k i nbar;
+    Math.small_div k nbar;
+    Math.small_mod k nbar;
+    F.ec_bound p (F.mu_chunk p mu i) k
 
-#push-options "--z3rlimit 1000 --fuel 1 --ifuel 1"
+(** [bits p * k] is a product of two variables, so its bound is a hint. *)
+let sh_ok (p: params) (k: nat { k < nbar })
+  : Lemma (bits p * k < 64 /\ bits p * k + bits p <= 64)
+  = Math.lemma_mult_le_right (bits p) (k + 1) nbar
+
+(** The whole of one encoding step, as a pure fact: the 64-bit
+    multiplication cannot wrap, so the shift is exact. *)
+let ec_val_ok (p: params) (x: nat) (k: nat)
+  : Lemma (ensures (let y = (x / pow2 (bits p * k)) % pow2 (bits p) in
+                    (y * pow2 (logq p - bits p)) % pow2 64 == F.ec_val p x k /\
+                    F.ec_val p x k < pow2 16))
+  = F.ec_bound p x k;
+    Math.pow2_le_compat 64 16;
+    Math.small_mod (F.ec_val p x k) (pow2 64)
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 (** [mu[base .. base + nb)] as a little-endian integer, read from the top
     down so that each step is one application of [le_nat]'s own recursion. *)
@@ -141,8 +157,8 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
   invariant exists* (vi: SZ.t) (v: Seq.seq S16.t).
     pts_to i vi ** A.pts_to m v ** A.pts_to mu #pm vmu **
     pure (SZ.v vi <= nbar /\ Seq.length v == nbar * nbar /\
-          (forall (ii: nat) (kk: nat). ii < SZ.v vi /\ kk < nbar ==>
-             S16.v (Seq.index v (ii * nbar + kk)) == F.ec_val p (F.mu_chunk p vmu ii) kk))
+          (forall (u: nat). u < SZ.v vi * nbar ==>
+             Seq.index v u == Seq.index (F.key_encode p vmu) u))
   decreases (nbar - SZ.v (!i))
   {
     let vi = !i;
@@ -154,120 +170,31 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
     invariant exists* (vk: SZ.t) (v: Seq.seq S16.t).
       pts_to i vi ** pts_to k vk ** A.pts_to m v ** A.pts_to mu #pm vmu **
       pure (SZ.v vi < nbar /\ SZ.v vk <= nbar /\ Seq.length v == nbar * nbar /\
-            (forall (ii: nat) (kk: nat). ii < SZ.v vi /\ kk < nbar ==>
-               S16.v (Seq.index v (ii * nbar + kk)) == F.ec_val p (F.mu_chunk p vmu ii) kk) /\
-            (forall (kk: nat). kk < SZ.v vk ==>
-               S16.v (Seq.index v (SZ.v vi * nbar + kk)) ==
-                 F.ec_val p (F.mu_chunk p vmu (SZ.v vi)) kk))
+            (forall (u: nat). u < SZ.v vi * nbar + SZ.v vk ==>
+               Seq.index v u == Seq.index (F.key_encode p vmu) u))
     decreases (nbar - SZ.v (!k))
     {
       let vk = !k;
+      sh_ok p (SZ.v vk);
       let sh = U32.mul p.bits (SZ.sizet_to_uint32 vk);
       S64.logand_mask_low (S64.shift_right x sh) p.bits;
       let y = S64.logand (S64.shift_right x sh) mask;
-      Math.pow2_plus (bits p) (logq p - bits p);
-      Math.pow2_le_compat 64 (logq p);
+      ec_val_ok p (S64.v x) (SZ.v vk);
       let z = S64.shift_left y up;
-      assert (pure (S64.v z == F.ec_val p (S64.v x) (SZ.v vk)));
-      Math.pow2_le_compat 16 (logq p);
-      A.((m.(SZ.add (SZ.mul vi 8sz) vk) <- Cast.u64_to_u16 z));
+      Math.small_mod (F.ec_val p (S64.v x) (SZ.v vk)) (pow2 16);
+      ke_at p vmu (SZ.v vi) (SZ.v vk);
+      let w = Cast.u64_to_u16 z;
+      assert (pure (w == Seq.index (F.key_encode p vmu) (SZ.v vi * nbar + SZ.v vk)));
+      with vcur. assert (A.pts_to m vcur);
+      prefix_step vcur (F.key_encode p vmu) (SZ.v vi * nbar + SZ.v vk);
+      A.((m.(SZ.add (SZ.mul vi 8sz) vk) <- w));
       k := SZ.add vk 1sz;
     };
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to m v);
-  assert (pure (Seq.length v == nbar * nbar /\
-                (forall (ii: nat) (kk: nat). ii < nbar /\ kk < nbar ==>
-                   S16.v (Seq.index v (ii * nbar + kk)) ==
-                     F.ec_val p (F.mu_chunk p vmu ii) kk)));
-  key_encode_eq p vmu v;
+  Seq.lemma_eq_intro v (F.key_encode p vmu);
   assert (pure (v == F.key_encode p vmu));
-}
-
-(** [mu <- key_decode p m]: round each entry to its nearest multiple of
-    [2^(logq - bits)], reassemble eight of them into a row, and write the
-    row out little-endian. *)
-fn key_decode ([@@@FStar.Attributes.monomorphize] p: params)
-              (mu: A.array S8.t) (m: A.array S16.t)
-              (#pm: perm) (#vmu: erased (Seq.seq S8.t))
-              (#vm: erased (M.matrix nbar nbar))
-requires A.pts_to mu vmu ** A.pts_to m #pm vm **
-         pure (Seq.length vmu == bytes_mu p)
-ensures exists* v. A.pts_to mu v ** A.pts_to m #pm vm **
-        pure (v == F.key_decode p vm)
-{
-  A.pts_to_len mu;
-  A.pts_to_len m;
-  Hacl.SizeT.fits32 ();
-  let nb = SZ.uint32_to_sizet p.bits;
-  let down = U32.sub p.logq p.bits;
-  let half = S16.shift_left S16.one (U32.sub down 1ul);
-  let bmask = S16.mask_low p.bits;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** A.pts_to mu v ** A.pts_to m #pm vm **
-    pure (SZ.v vi <= nbar /\ Seq.length v == bytes_mu p /\
-          (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < bits p ==>
-             ii * bits p + jj < bytes_mu p /\
-             S8.v (Seq.index v (ii * bits p + jj)) ==
-               (F.row_val p vm ii / pow2 (8 * jj)) % 256))
-  decreases (nbar - SZ.v (!i))
-  {
-    let vi = !i;
-    let mut row = S64.zero;
-    let mut k = 0sz;
-    while (let vk = !k; SZ.lt vk 8sz)
-    invariant exists* (vk: SZ.t) (vrow: S64.t) (v: Seq.seq S8.t).
-      pts_to i vi ** pts_to k vk ** pts_to row vrow ** A.pts_to mu v ** A.pts_to m #pm vm **
-      pure (SZ.v vi < nbar /\ SZ.v vk <= nbar /\ Seq.length v == bytes_mu p /\
-            (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < bits p ==>
-               ii * bits p + jj < bytes_mu p /\
-               S8.v (Seq.index v (ii * bits p + jj)) ==
-                 (F.row_val p vm ii / pow2 (8 * jj)) % 256) /\
-            S64.v vrow == F.row_head p vm (SZ.v vi) (SZ.v vk))
-    decreases (nbar - SZ.v (!k))
-    {
-      let vk = !k;
-      let vrow = !row;
-      let c = A.(m.(SZ.add (SZ.mul vi 8sz) vk));
-      F.row_head_bound p vm (SZ.v vi) (SZ.v vk);
-      F.row_head_bound p vm (SZ.v vi) (SZ.v vk + 1);
-      S16.logand_mask_low (S16.shift_right (S16.add_mod c half) down) p.bits;
-      let d = S16.logand (S16.shift_right (S16.add_mod c half) down) bmask;
-      assert (pure (S16.v d == F.dc p (M.get nbar nbar vm (SZ.v vi) (SZ.v vk))));
-      Math.pow2_plus (bits p) (bits p * SZ.v vk);
-      Math.pow2_le_compat 64 (bits p * (SZ.v vk + 1));
-      row := S64.add_mod vrow (S64.shift_left (Cast.u16_to_u64 d) (U32.mul p.bits (SZ.sizet_to_uint32 vk)));
-      k := SZ.add vk 1sz;
-    };
-    let vrow = !row;
-    assert (pure (S64.v vrow == F.row_val p vm (SZ.v vi)));
-    let mut j = 0sz;
-    while (let vj = !j; SZ.lt vj nb)
-    invariant exists* (vj: SZ.t) (v: Seq.seq S8.t).
-      pts_to i vi ** pts_to j vj ** A.pts_to mu v ** A.pts_to m #pm vm **
-      pure (SZ.v vi < nbar /\ SZ.v vj <= bits p /\ Seq.length v == bytes_mu p /\
-            (forall (ii: nat) (jj: nat). ii < SZ.v vi /\ jj < bits p ==>
-               ii * bits p + jj < bytes_mu p /\
-               S8.v (Seq.index v (ii * bits p + jj)) ==
-                 (F.row_val p vm ii / pow2 (8 * jj)) % 256) /\
-            (forall (jj: nat). jj < SZ.v vj ==>
-               SZ.v vi * bits p + jj < bytes_mu p /\
-               S8.v (Seq.index v (SZ.v vi * bits p + jj)) ==
-                 (F.row_val p vm (SZ.v vi) / pow2 (8 * jj)) % 256))
-    decreases (bits p - SZ.v (!j))
-    {
-      let vj = !j;
-      Math.lemma_mult_le_right (bits p) (SZ.v vi + 1) nbar;
-      A.((mu.(SZ.add (SZ.mul vi nb) vj) <- Cast.u64_to_u8 (S64.shift_right vrow (U32.mul 8ul (SZ.sizet_to_uint32 vj)))));
-      j := SZ.add vj 1sz;
-    };
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to mu v);
-  key_decode_eq p vm v;
-  assert (pure (v == F.key_decode p vm));
 }
 
 #pop-options

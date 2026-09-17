@@ -52,6 +52,7 @@ module Pack = Hacl.Frodo.Pack
 module Mat = Hacl.Frodo.Matrix
 module Sample = Hacl.Frodo.Sample
 module Encode = Hacl.Frodo.Encode
+module Decode = Hacl.Frodo.Decode
 module Gen = Hacl.Frodo.Gen
 module Cast = Hacl.Secret.Cast
 module SEM = FStar.IndefiniteDescription
@@ -882,7 +883,7 @@ ensures exists* vss.
   assert (pure (vmdiff == M.sub nbar nbar vcm vprod));
   let mut mu = [| (S8.zero <: S8.t); mub |];
   A.pts_to_len mu;
-  Encode.key_decode p mu mdiff;
+  Decode.key_decode p mu mdiff;
   with vmu. assert (A.pts_to mu vmu);
 
   (* Re-derive the encapsulation randomness from mu and re-encrypt. *)
