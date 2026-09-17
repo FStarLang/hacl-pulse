@@ -294,8 +294,6 @@ let enc_ct_eq (p: params)
                 vct == ct /\ vbp == b2 /\ vv == v2))
   = ()
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
-
 (** The ciphertext, and the two matrices that went into it reduced to
     [logq] bits.  Decapsulation re-runs this and compares those two against
     what it received, which is why they are returned rather than dropped. *)
