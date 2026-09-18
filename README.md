@@ -617,32 +617,49 @@ for.  Because a secret byte has no decidable equality, the specification's
 notion of "the tag is right" is a `prop` (`decrypt_ok`) and the recovered
 plaintext is a separate function (`decrypted`), rather than one `option`.
 
-### Curve25519, eight limbs of thirty-two bits
+### Curve25519, five limbs of fifty-one bits
 
 Every fast X25519 in existence represents a field element in radix 2^51,
 five limbs, because the product of two limbs fits in a 128-bit integer.  This
-library started without one: Custard's builtins were `FStar.UInt8/16/32/64`
-and `FStar.SizeT`, and unlike karamel there was no compiler-side emulation, so
-the first version used **sixteen limbs of sixteen bits** -- narrow enough that
-a whole schoolbook column, sixteen limb products plus carries, stayed inside a
-64-bit word with no intermediate reduction at all, which is what made the
-proof tractable.  The price was 256 word multiplies per `fmul` against 25 for
-HACL\*'s `_51`.
+library took two detours before it got there.  Custard's builtins were
+`FStar.UInt8/16/32/64` and `FStar.SizeT`, and unlike karamel there was no
+compiler-side emulation, so the first version used **sixteen limbs of sixteen
+bits** -- narrow enough that a whole schoolbook column, sixteen limb products
+plus carries, stayed inside a 64-bit word with no intermediate reduction at
+all, which is what made the proof tractable.  The price was 256 word
+multiplies per `fmul` against 25 for HACL\*'s `_51`.  When Custard grew
+`unsigned __int128`, exposed as `Hacl.Secret.UInt128`, the representation
+moved to **eight limbs of thirty-two bits** and a scalar multiplication went
+from 461 to 243 microseconds.
 
-Custard now emits `unsigned __int128`, exposed as `Hacl.Secret.UInt128`, and
-the representation moved up to **eight limbs of thirty-two bits**.  A limb is
-allowed to reach `2^33 - 1` rather than being canonical, so a limb product is
-below `2^66`, an eight-product column below `2^69`, and the accumulator, once
-the high column has been folded in against `38`, below `2^75` -- all
-comfortably inside the wide type -- a quarter of the multiplies
-and a quarter of the carries.  A scalar multiplication went from 461 to 243
-microseconds.  Radix 2^51 would be roughly another factor of two, and is the
-largest single optimization left in the library; it is not hard, it is simply
-not done yet.
+It now runs at **five limbs of fifty-one bits**, and a scalar multiplication
+takes 145 microseconds -- 1.67x again, or almost exactly 2x with
+`-march=native`.  The arithmetic is nicer at every level.  Twenty-five
+64x64->128 products replace sixty-four 32x32->64 ones.  And because
+`5 * 51 == 255` exactly and `2^255 == prime + 19`, the fold constant is 19
+rather than 38, and the whole top-limb apparatus -- `freeze_b`, `red255`,
+`fold255`, `hi255`, `mask255`, `mask_top` -- disappears: the final reduction
+is `add19`, one carry pass, and a select on the carry out.  A limb is allowed
+to reach `2^52 - 1` rather than being canonical; `fmul` accumulates 25
+products into nine 128-bit columns, folds the top four against 19, and runs
+two 128-bit carry passes before narrowing.
 
-The reduction `2^256 = 2 * prime + 38` is still done once at the end of `fmul`
-rather than woven through it, and `fmul` now needs two carry passes rather
-than one.
+`fscale` is the one operation that needed a wider intermediate:
+`121665 * (2^52 - 1)` is about `2^69`, past a word, so it takes a nine-element
+128-bit scratch array and carries down from there.
+
+**Bytes go through the radix-32 representation.**  `Spec.Bignum256`'s byte
+layer was already proved, so `load` is the 32-bit byte loop followed by five
+window extractions, and `store` is eight window extractions followed by the
+32-bit byte loop.  The window arithmetic -- which 32-bit limb and which bit
+offset each 51-bit limb starts at, and back -- lives in
+`Spec.Curve25519.Repack`, in its own module for a proof-engineering reason:
+a single window lemma parameterised over the indices timed out at every one
+of its call sites, while eight concrete lemmas with literal indices, each
+discharging its radix arithmetic with `assert_norm`, verify in forty seconds
+together.  In the implementation's ambient context even those would not
+close; in a small module of their own they are routine.  `load` masks bit 255
+itself, which is why `mask_top` has no callers left.
 
 **Inversion is an addition chain, not square-and-multiply.**  `x^(p-2)` by
 scanning the 255 bits of `p-2` would need a lemma about every one of those
@@ -675,13 +692,30 @@ for which `ecdh` returns `false` and the shared secret is all zeros.
 ### Ed25519, on top of Curve25519's field
 
 Ed25519 lives on the same prime as X25519, so it reuses
-`Hacl.Curve25519.Field` unchanged -- the same eight limbs of thirty-two bits,
+`Hacl.Curve25519.Field` unchanged -- the same five limbs of fifty-one bits,
 the same `fmul`, the same inversion chain.  Nothing in the signature scheme
 needed a second field implementation, which is the main reason the whole of
 `code/ed25519` is six modules.
 
+Its *scalar* arithmetic, mod the group order `q`, is a different matter: it
+is eight limbs of thirty-two bits and always was, and for a while it shared
+the field's names because the field happened to use the same radix.  The move
+to 2^51 forced the split.  `Hacl.Ed25519.Scalar` now sits on
+`Hacl.Impl.Limb` and `Spec.Bignum256` and owns its own `copy`, `load_le`,
+`store_le`, `limbs_eq` and `reduce32`; `Hacl.Ed25519` deliberately mixes the
+two, five-limb arrays for coordinates and eight-limb arrays for scalars.
+
+**The compressed sign bit moved into the top byte.**  At radix 2^32 bit 255
+was the top bit of limb 7 and `point_compress` could set it in place before
+encoding.  At radix 2^51 it is one past the top of limb 4, so setting it
+there would break `store`'s bound precondition.  It is now written into
+byte 31 of the encoded output instead, which is sound for a reason that is
+pure arithmetic: `b * 2^255` is a multiple of `2^(8i+8)` for every `i < 31`,
+so no other byte changes, and byte 31 of a number below `2^255` is below
+`2^7`, so the addition does not carry.
+
 **A point is four arrays, not a record.**  Extended coordinates `(x, y, z,
-t)` are passed as four separate 16-limb arrays side by side, because a
+t)` are passed as four separate five-limb arrays side by side, because a
 struct of arrays would need its own separation discipline and Custard would
 have to lay it out.  `point_add ox oy oz ot x1 y1 z1 t1 x2 y2 z2 t2` is a
 wide signature, but the separation logic is then exactly the one the field
@@ -738,7 +772,7 @@ one-shot `sign`.
 P-256 is the first curve here whose field is not Curve25519's, and the first
 whose group order matters arithmetically rather than only as a range check.
 Both are 256-bit primes with no special shape, so both are done in Montgomery
-form over sixteen 16-bit limbs by one shared layer in `code/field256/`:
+form over eight 32-bit limbs by one shared layer in `code/field256/`:
 `Spec.Bignum256` fixes the representation, `Hacl.Impl.Mont256` does
 Coarsely-Integrated Operand Scanning, and `Hacl.P256.Field` and
 `Hacl.P256.Scalar` are two instantiations that never meet.  **That layer
@@ -1709,9 +1743,9 @@ the reference.
 | RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
-| X25519 | -- | 243 us | 44 us | 5.47x |
+| X25519 | -- | 145 us | 44 us | 3.27x |
 | P-256 ECDSA verify | -- | 4.76 ms | 0.43 ms | 11.0x |
-| Ed25519 sign | -- | 890 us | 64 us | 13.8x |
+| Ed25519 sign | -- | 542 us | 64 us | 8.41x |
 | secp256k1 ECDSA sign | -- | 2.10 ms | 0.07 ms | 32x |
 
 Three things account for most of the spread.
@@ -1728,10 +1762,12 @@ arithmetic.**  RSA-PSS and FFDHE use square-and-multiply; HACL\* uses a 4-bit
 window.  The generic bignum itself is *faster* than HACL\*'s, which is what
 the modexp row shows.
 
-**Where it is behind by more, it is the field representation.**  Curve25519
-runs at radix 2^32, eight limbs, where HACL\*'s `_51` runs at radix 2^51,
-five limbs -- so roughly two and a half times the multiplies, and no lazy
-reduction.  P-256 and secp256k1 use the shared general Montgomery core rather
+**Where it is behind by more, it is the higher-level algorithm.**  Curve25519
+now runs at radix 2^51 like HACL\*'s `_51`, so the field arithmetic is the
+same shape; what remains is that the ladder and Ed25519's scalar
+multiplication have had no attention -- no lazy reduction across steps, and
+Ed25519 multiplies one bit at a time where HACL\* uses a precomputed window,
+which is why signing is further behind than X25519.  P-256 and secp256k1 use the shared general Montgomery core rather
 than the special-prime reductions those two primes admit, and multiply scalars
 one bit at a time rather than through a precomputed window.  These are known,
 localized and unstarted; none of them requires new proof technique, only work.
@@ -2096,9 +2132,10 @@ nothing Frodo is exported from `code/Hacl.fst`.
 Beyond feature parity, the performance work above has a queue of its own, in
 rough order of value:
 
-1. **Curve25519 at radix 2^51.**  Five limbs of fifty-one bits fit an
-   `unsigned __int128` -- `5 * (2^51 - 1)^2 < 2^115` -- and would roughly halve
-   X25519 and Ed25519, the largest single win left.
+1. **Windowed scalar multiplication for Ed25519**, which is most of the
+   remaining gap now that the field is at radix 2^51: signing is 8.4x the
+   reference where X25519 is 3.3x, and the difference is HACL\*'s precomputed
+   base-point window against a bit-at-a-time double-and-add here.
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
