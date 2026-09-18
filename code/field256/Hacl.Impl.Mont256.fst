@@ -25,9 +25,17 @@
 
     These are ordinary functions rather than [inline_for_extraction] ones,
     and they still take the modulus as an argument: the field and the scalar
-    field share the code, and the emitted C has one [amul] rather than two.
-    Specialising the two moduli would buy the multiplier nothing -- the
-    limbs it reads are data either way -- and would double the object. *)
+    field share the code.
+
+    [amul] is the exception.  Sharing one multiplier between the four moduli
+    costs a factor of two and a half on every P-256 and secp256k1 operation,
+    which is easy to miss because gcc used to hide it: given a small enough
+    translation unit its interprocedural constant propagation cloned [amul]
+    once per modulus by itself.  That is a budget, not a guarantee --
+    [--param ipa-cp-large-unit-insns] defaults to sixteen thousand -- and
+    the distribution grew past it, at which point the clones silently
+    vanished.  Asking for the specialisation here makes it the library's
+    decision rather than the C compiler's. *)
 module Hacl.Impl.Mont256
 
 #lang-pulse
@@ -54,6 +62,7 @@ module Math = FStar.Math.Lemmas
 
 (** {2 Multiplication} *)
 
+inline_for_extraction
 fn amul (out a b ms nm: A.array S64.t) (mu: S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
