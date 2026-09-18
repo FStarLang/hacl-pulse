@@ -1897,7 +1897,7 @@ the reference.
 | NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
 | X25519 | -- | 56 us | 44 us | 1.27x |
 | Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
-| BLAKE2b | 256 KiB | 582 us | 313 us | 1.86x |
+| BLAKE2b | 256 KiB | 567 us | 313 us | 1.81x |
 | RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
 | Ed25519 sign | -- | 255 us | 64 us | 3.96x |
@@ -1980,8 +1980,8 @@ compilers see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are seventy-two today --
-Blake2's compress, HMAC, the SHA-2 cores -- and the list is meant to shrink.
+diffs them against `mk/clones.baseline`.  There are sixty-eight today -- HMAC,
+the SHA-2 cores, one BLAKE2 round -- and the list is meant to shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
 *would* have cloned given room.
 
@@ -1994,6 +1994,24 @@ FFDHE and the bare modexp are unchanged to within a quarter of a percent.
 Which is the other half of the lesson: a clone tells you the compiler found a
 specialisation, not that the specialisation pays.  The way to find out is to
 measure, and the way to keep the answer is to write it down.
+
+BLAKE2 is what the policy looks like when it is clang that was losing.  gcc
+cloned the compression function and both half-rounds, once per width, on the
+initialisation vector, the message schedule and the final-block flag; clang
+cloned nothing, and that alone was most of a 13% gap between the two.  Making
+the whole chain from `g_impl` up to `compress_impl` `inline_for_extraction`
+leaves gcc exactly where it was -- it was already getting this -- and brings
+clang up to meet it: BLAKE2b 640 to 562 microseconds, BLAKE2s 1,016 to 932.
+The two compilers now agree on BLAKE2b to within one percent.
+
+One function in that chain is deliberately left alone, and it is the
+interesting one.  Inlining `round_impl` into the round loop lets clang keep
+the sixteen-word working vector in registers and reach 441 microseconds, a
+further 1.35x; the same change costs gcc 15%, because gcc spills the vector
+instead.  There is no annotation that satisfies both, which is the honest
+signal that the code, not the annotation, is what needs to change: the round
+loop wants unrolling so that the schedule indices are literals and neither
+compiler has to guess.  That is on the roadmap below.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
@@ -2434,11 +2452,20 @@ rough order of value:
    gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
-6. **Taking over the remaining seventy-two compiler specialisations**, the
-   ones `make clones` lists: Blake2's compress, HMAC, the SHA-2 cores.  Each
+6. **An unrolled BLAKE2 round**, twelve straight-line round bodies with the
+   message schedule indices as literals rather than a loop over a table.
+   That is what stands between clang's 441 microseconds on BLAKE2b and the
+   562 it does today -- a further 1.35x -- and it is also the only way to get
+   it without costing gcc 15%, since the two disagree about inlining
+   `round_impl` precisely because the indices are not constants.
+7. **Taking over the remaining sixty-eight compiler specialisations**, the
+   ones `make clones` lists: HMAC, the SHA-2 cores, one BLAKE2 round.  Each
    is a speedup that gcc currently grants us at its own discretion and clang
    does not grant at all.  The SHA-3 sponge and permutation were the first,
-   and were worth 2.4x on a short digest.  Splitting the distribution into
-   several translation units is *not* the fix here -- it moves the budget
-   rather than removing the dependency on it, and costs inlining across the
-   new boundaries.
+   and were worth 2.4x on a short digest; BLAKE2's compression function was
+   the second, and was worth 14% to clang.  Pricing them all at once with
+   `-fno-ipa-cp-clone` says the rest are worth nothing measurable, so this is
+   a tidying exercise rather than a performance one.  Splitting the
+   distribution into several translation units is *not* the fix here -- it
+   moves the budget rather than removing the dependency on it, and costs
+   inlining across the new boundaries.
