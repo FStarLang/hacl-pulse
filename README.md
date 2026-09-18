@@ -9,18 +9,22 @@ port: where HACL\* had to work around the absence of a language feature, this
 library uses the feature.  `design/` records what HACL\* does and
 `design/changes.md` the four commitments this reimplementation starts from.
 
-Status: **feature parity with HACL\* apart from FrodoKEM**, whose matrix
-arithmetic, packing, sampling and message encoding are in but whose KEM is
-not.  Everything else listed in the roadmap below is specified, implemented,
-verified, extracted and tested against the published vectors -- FIPS 180-4,
-FIPS 202, RFC 4231, RFC 5869, RFC 7748, RFC 8032, RFC 7919, FIPS 186-4,
-PKCS#1 v2.2, the NIST CAVP sets for AES-GCM and HMAC-DRBG, and the NaCl
-vectors -- thirty-one C test harnesses in `tests/`.
+Status: **feature parity with HACL\***, and past it in places -- all four
+FrodoKEM parameter sets are here, and so is HPKE, which HACL\* ships only in
+its Base mode and only over ChaCha20-Poly1305.  The one deliberate omission
+is an agile provider in the shape of EverCrypt; see the roadmap below.
+Everything listed there is specified, implemented, verified, extracted and
+tested against the published vectors -- FIPS 180-4, FIPS 202, RFC 4231,
+RFC 5869, RFC 7748, RFC 8032, RFC 7919, RFC 9180, FIPS 186-4, PKCS#1 v2.2,
+the NIST CAVP sets for AES-GCM and HMAC-DRBG, the FrodoKEM known-answer
+tests, and the NaCl vectors -- thirty-three C test harnesses in `tests/`.
 
 Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
-SHA-3, ChaCha20, ChaCha20-Poly1305 and the generic bignum are all faster -- to
-an order of magnitude behind it on the elliptic curves, where the field
-representations have not been tuned yet.  See [Performance](#performance).
+SHA-3, ChaCha20, ChaCha20-Poly1305 and the generic bignum are all faster --
+to behind it on the elliptic curves, where what is left is the scalar
+multiplication rather than the field: X25519 is within 1.27x, but Ed25519,
+P-256 and secp256k1 still multiply one bit at a time where HACL\* uses a
+precomputed window.  See [Performance](#performance).
 
 ```
 make            verify, extract, compile, test
