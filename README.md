@@ -1889,7 +1889,7 @@ the reference.
 | SHA-256 | 256 KiB | 227 us | 1,097 us | **0.21x** |
 | ChaCha20 | 256 KiB | 495 us | 857 us | **0.58x** |
 | SHA-512 | 256 KiB | 771 us | 1,326 us | **0.58x** |
-| SHA3-256 | 256 KiB | 1,144 us | 1,832 us | **0.62x** |
+| SHA3-256 | 256 KiB | 986 us | 1,832 us | **0.54x** |
 | RSA-2048 modexp | -- | 9.1 ms | 13.1 ms | **0.70x** |
 | ChaCha20-Poly1305 | 256 KiB | 810 us | 1,074 us | **0.75x** |
 | SHA-1 | 256 KiB | 1,540 us | 1,490 us | 1.03x |
@@ -1912,7 +1912,11 @@ and the extraction is clean.**  SHA-256 is ahead because the SHA extensions
 are wired in and HACL\*'s portable C does not use them; ChaCha20, SHA-512 and
 SHA-3 are ahead because Custard's output unrolls and register-allocates at
 least as well as karamel's and the specifications here permitted a flatter
-implementation.  Nothing was hand-tuned.
+implementation.  Nothing was hand-tuned.  SHA-3 is the one of these that was
+returned to: the rate is now a literal in each of the six sponges and the
+permutation sits inside them rather than behind a call, which is worth 2.4x
+on a 64-byte digest and 1.13x on bulk.  A 64-byte SHA3-256 is 624 ns against
+the reference's 995.
 
 **Where it is behind by a factor of two, it is the exponent, not the
 arithmetic.**  RSA-PSS and FFDHE use square-and-multiply; HACL\* uses a 4-bit
@@ -1976,13 +1980,20 @@ compilers see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are seventy-eight today --
-the generic bignum's Montgomery reduction and exponentiation, Blake2's
-compress, HMAC, the SHA-2 cores -- and the list is meant to shrink.  `make
-clones-available` recompiles with the budget raised and prints what gcc
-*would* have cloned given room: four functions today, worth about seven
-percent on SHA-3, which is the difference between the SHA-3 numbers above and
-the ones before FrodoKEM was merged.
+diffs them against `mk/clones.baseline`.  There are seventy-two today --
+Blake2's compress, HMAC, the SHA-2 cores -- and the list is meant to shrink.
+`make clones-available` recompiles with the budget raised and prints what gcc
+*would* have cloned given room.
+
+It has already earned its place.  Specialising the SHA-3 sponge grew the
+distribution by four thousand lines, and the check reported five clones lost
+to that growth: the generic bignum's Montgomery reduction, its precomputation
+and its constant-time exponentiation, a Frodo sampler and an HPKE label
+expansion.  Every one of them turned out to be worth nothing -- RSA-PSS,
+FFDHE and the bare modexp are unchanged to within a quarter of a percent.
+Which is the other half of the lesson: a clone tells you the compiler found a
+specialisation, not that the specialisation pays.  The way to find out is to
+measure, and the way to keep the answer is to write it down.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
@@ -2423,12 +2434,11 @@ rough order of value:
    gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
-6. **Taking over the remaining seventy-eight compiler specialisations**, the
-   ones `make clones` lists: the generic bignum's Montgomery reduction and
-   exponentiation, Blake2's compress, HMAC, the SHA-2 cores.  Each is a
-   speedup that gcc currently grants us at its own discretion and clang does
-   not grant at all.  `Hacl.Hash.SHA3.keccak_impl` is the first, since it is
-   already being lost to the budget and is worth about seven percent.
-   Splitting the distribution into several translation units is *not* the fix
-   here -- it moves the budget rather than removing the dependency on it, and
-   costs inlining across the new boundaries.
+6. **Taking over the remaining seventy-two compiler specialisations**, the
+   ones `make clones` lists: Blake2's compress, HMAC, the SHA-2 cores.  Each
+   is a speedup that gcc currently grants us at its own discretion and clang
+   does not grant at all.  The SHA-3 sponge and permutation were the first,
+   and were worth 2.4x on a short digest.  Splitting the distribution into
+   several translation units is *not* the fix here -- it moves the budget
+   rather than removing the dependency on it, and costs inlining across the
+   new boundaries.
