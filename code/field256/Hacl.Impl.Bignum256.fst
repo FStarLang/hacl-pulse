@@ -111,6 +111,7 @@ let mrow_ble (t ms: Seq.seq nat) (u: nat) (i: nat) (j: nat { j <= Seq.length ms 
 
 #push-options "--z3rlimit 400"
 
+[@@ FStar.Attributes.CInline]
 fn mstep_op (t: A.array S128.t) (ms: A.array S64.t) (mu: S64.t) (i: SZ.t) (c: erased nat)
             (#vt: erased (Seq.seq S128.t))
             (#pm: perm) (#vms: erased (Seq.seq S64.t))
@@ -186,6 +187,7 @@ ensures exists* (vt': Seq.seq S128.t).
 
 #push-options "--z3rlimit 400"
 
+[@@ FStar.Attributes.CInline]
 fn mreduce_op (t: A.array S128.t) (ms: A.array S64.t) (mu: S64.t) (c: erased nat)
               (#vt: erased (Seq.seq S128.t))
               (#pm: perm) (#vms: erased (Seq.seq S64.t))
@@ -234,6 +236,7 @@ ensures exists* (vt': Seq.seq S128.t).
 
 #push-options "--z3rlimit 400"
 
+[@@ FStar.Attributes.CInline]
 fn csub_op (a s nm: A.array S64.t) (top: S64.t) (d: erased modulus)
            (#va: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
            (#pn: perm) (#vnm: erased (Seq.seq S64.t))
@@ -295,6 +298,7 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
 
 #push-options "--z3rlimit 400"
 
+[@@ FStar.Attributes.CInline]
 fn madd_op (out a b s nm: A.array S64.t) (d: erased modulus)
            (#vo: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
            (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -373,6 +377,7 @@ let negw_shape (a b: Seq.seq nat)
 
 #push-options "--z3rlimit 300"
 
+[@@ FStar.Attributes.CInline]
 fn negsub_op (out a b: A.array S64.t)
              (#vo: erased (Seq.seq S64.t))
              (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -440,6 +445,7 @@ ensures exists* (vo': Seq.seq S64.t).
 
 #push-options "--z3rlimit 300"
 
+[@@ FStar.Attributes.CInline]
 fn addm_op (out s ms: A.array S64.t) (m: S64.t)
            (#vo: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
            (#pm: perm) (#vms: erased (Seq.seq S64.t))
@@ -489,6 +495,7 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
 
 #push-options "--z3rlimit 1200"
 
+[@@ FStar.Attributes.CInline]
 fn msub_op (out a b s ms: A.array S64.t) (d: erased modulus)
            (#vo: erased (Seq.seq S64.t)) (#vs: erased (Seq.seq S64.t))
            (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -531,6 +538,7 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
 
 #push-options "--z3rlimit 300"
 
+[@@ FStar.Attributes.CInline]
 fn prod_op (t p: A.array S128.t) (a b: A.array S64.t)
            (#vt: erased (Seq.seq S128.t)) (#vp: erased (Seq.seq S128.t))
            (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -604,6 +612,7 @@ let narrow_ok (s: Seq.seq nat) (k: nat)
 
 #push-options "--z3rlimit 400"
 
+[@@ FStar.Attributes.CInline]
 fn redc_op (out: A.array S64.t) (t r: A.array S128.t) (ms: A.array S64.t)
            (mu: S64.t) (d: erased modulus)
            (#vo: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
@@ -688,6 +697,7 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S128.t) (vr': Seq.seq S128.t)
 
 #push-options "--z3rlimit 300"
 
+[@@ FStar.Attributes.CInline]
 fn mmul_op (out: A.array S64.t) (a b: A.array S64.t) (p t r: A.array S128.t)
            (s ms nm: A.array S64.t) (mu: S64.t) (d: erased modulus)
            (#vo: erased (Seq.seq S64.t)) (#vp: erased (Seq.seq S128.t))
@@ -740,6 +750,7 @@ ensures exists* (vo': Seq.seq S64.t) (vp': Seq.seq S128.t)
 
 #push-options "--z3rlimit 300"
 
+[@@ FStar.Attributes.CInline]
 fn load_be (a: A.array S64.t) (b: A.array S8.t)
            (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to a va ** A.pts_to b #pb vb **
@@ -784,6 +795,7 @@ ensures exists* (va': Seq.seq S64.t).
                256 * (pow2 8 - 1) + (pow2 8 - 1) < base);
 }
 
+[@@ FStar.Attributes.CInline]
 fn store_be (b: A.array S8.t) (a: A.array S64.t)
             (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #pa va **
