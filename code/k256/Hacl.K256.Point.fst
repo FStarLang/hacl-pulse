@@ -77,7 +77,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%K.point_add) K.point_add;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 16sz |]; A.pts_to_len a0; let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; let mut aw = [| zz; 16sz |]; A.pts_to_len aw; let mut au = [| zz; 16sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| zz; 8sz |]; A.pts_to_len a0; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut aw = [| zz; 8sz |]; A.pts_to_len aw; let mut au = [| zz; 8sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len aw; A.pts_to_len au;
   let bc = fb3 ();
   fmul a0 x1 x2;
@@ -153,7 +153,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%K.point_double) K.point_double;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 16sz |]; A.pts_to_len a0; let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; let mut aw = [| zz; 16sz |]; A.pts_to_len aw; let mut au = [| zz; 16sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| zz; 8sz |]; A.pts_to_len a0; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut aw = [| zz; 8sz |]; A.pts_to_len aw; let mut au = [| zz; 8sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len aw; A.pts_to_len au;
   let bc = fb3 ();
   fsqr a0 y;

@@ -74,7 +74,7 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; let mut c1 = [| z; 16sz |]; A.pts_to_len c1; let mut c2 = [| z; 16sz |]; A.pts_to_len c2; let mut c3 = [| z; 16sz |]; A.pts_to_len c3; let mut c4 = [| z; 16sz |]; A.pts_to_len c4; let mut c5 = [| z; 16sz |]; A.pts_to_len c5; let mut c6 = [| z; 16sz |]; A.pts_to_len c6; let mut c7 = [| z; 16sz |]; A.pts_to_len c7; let mut c8 = [| z; 16sz |]; A.pts_to_len c8; let mut c9 = [| z; 16sz |]; A.pts_to_len c9; let mut ca = [| z; 16sz |]; A.pts_to_len ca; let mut cb = [| z; 16sz |]; A.pts_to_len cb; let mut cc = [| z; 16sz |]; A.pts_to_len cc; A.pts_to_len c0; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; let mut c1 = [| z; 8sz |]; A.pts_to_len c1; let mut c2 = [| z; 8sz |]; A.pts_to_len c2; let mut c3 = [| z; 8sz |]; A.pts_to_len c3; let mut c4 = [| z; 8sz |]; A.pts_to_len c4; let mut c5 = [| z; 8sz |]; A.pts_to_len c5; let mut c6 = [| z; 8sz |]; A.pts_to_len c6; let mut c7 = [| z; 8sz |]; A.pts_to_len c7; let mut c8 = [| z; 8sz |]; A.pts_to_len c8; let mut c9 = [| z; 8sz |]; A.pts_to_len c9; let mut ca = [| z; 8sz |]; A.pts_to_len ca; let mut cb = [| z; 8sz |]; A.pts_to_len cb; let mut cc = [| z; 8sz |]; A.pts_to_len cc; A.pts_to_len c0; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len c4; A.pts_to_len c5; A.pts_to_len c6; A.pts_to_len c7;
   A.pts_to_len c8; A.pts_to_len c9; A.pts_to_len ca;
   A.pts_to_len cb; A.pts_to_len cc;

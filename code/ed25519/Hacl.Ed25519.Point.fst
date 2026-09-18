@@ -44,6 +44,7 @@ module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module U64 = FStar.UInt64
 module U32 = FStar.UInt32
 module Cast = Hacl.Secret.Cast
@@ -115,32 +116,33 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len x1; A.pts_to_len y1; A.pts_to_len z1; A.pts_to_len t1;
   A.pts_to_len x2; A.pts_to_len y2; A.pts_to_len z2; A.pts_to_len t2;
   let z = S64.zero;
-  let mut au = [| z; 16sz |]; A.pts_to_len au; let mut av = [| z; 16sz |]; A.pts_to_len av; let mut aa = [| z; 16sz |]; A.pts_to_len aa; let mut ab = [| z; 16sz |]; A.pts_to_len ab; let mut ac = [| z; 16sz |]; A.pts_to_len ac; let mut ae = [| z; 16sz |]; A.pts_to_len ae; let mut aw = [| z; 31sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len aa;
+  let z128 : S128.t = S128.zero;
+  let mut au = [| z; 5sz |]; A.pts_to_len au; let mut av = [| z; 5sz |]; A.pts_to_len av; let mut aa = [| z; 5sz |]; A.pts_to_len aa; let mut ab = [| z; 5sz |]; A.pts_to_len ab; let mut ac = [| z; 5sz |]; A.pts_to_len ac; let mut ae = [| z; 5sz |]; A.pts_to_len ae; let mut aw = [| z128; 9sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len aa;
   A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len ae; A.pts_to_len aw;
 
   (* aa = (y1 - x1) (y2 - x2) *)
   fsub au y1 x1;
   fsub av y2 x2;
-  fmul aa au av aw;
+  fmul aa au av;
 
   (* ab = (y1 + x1) (y2 + x2) *)
   fadd au y1 x1;
   fadd av y2 x2;
-  fmul ab au av aw;
+  fmul ab au av;
 
   (* ac = 2d t1 t2 *)
-  let dt = Table.table Tables.d2_arr 16sz;
+  let dt = Table.table Tables.d2_arr 5sz;
   Tables.d2_ok ();
-  fmul au dt t1 aw;
+  fmul au dt t1;
   Table.drop_table dt;
-  fmul ac au t2 aw;
+  fmul ac au t2;
 
   (* ae = 2 z1 z2 *)
-  fscale au z1 2uL;
+  fscale au z1 2uL aw;
   with vu. assert (A.pts_to au vu);
   double_ok (eval (vals vz1));
   assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul ae au z2 aw;
+  fmul ae au z2;
 
   (* E = ab - aa, H = ab + aa, then F = ae - ac and G = ae + ac on top of aa and ab *)
   fsub au ab aa;
@@ -148,10 +150,10 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   fsub aa ae ac;
   fadd ab ae ac;
 
-  fmul ox au aa aw;
-  fmul oy ab av aw;
-  fmul oz aa ab aw;
-  fmul ot au av aw;
+  fmul ox au aa;
+  fmul oy ab av;
+  fmul oz aa ab;
+  fmul ot au av;
 
   with wx. assert (A.pts_to ox wx);
   with wy. assert (A.pts_to oy wy);
@@ -192,24 +194,25 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
   A.pts_to_len x1; A.pts_to_len y1; A.pts_to_len z1; A.pts_to_len t1;
   let z = S64.zero;
-  let mut au = [| z; 16sz |]; A.pts_to_len au; let mut av = [| z; 16sz |]; A.pts_to_len av; let mut ar = [| z; 16sz |]; A.pts_to_len ar; let mut aa = [| z; 16sz |]; A.pts_to_len aa; let mut ab = [| z; 16sz |]; A.pts_to_len ab; let mut ac = [| z; 16sz |]; A.pts_to_len ac; let mut aw = [| z; 31sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len ar;
+  let z128 : S128.t = S128.zero;
+  let mut au = [| z; 5sz |]; A.pts_to_len au; let mut av = [| z; 5sz |]; A.pts_to_len av; let mut ar = [| z; 5sz |]; A.pts_to_len ar; let mut aa = [| z; 5sz |]; A.pts_to_len aa; let mut ab = [| z; 5sz |]; A.pts_to_len ab; let mut ac = [| z; 5sz |]; A.pts_to_len ac; let mut aw = [| z128; 9sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len ar;
   A.pts_to_len aa; A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len aw;
 
   (* aa = x1^2, ab = y1^2, ac = 2 z1^2 *)
   copy au x1;
-  fmul aa au x1 aw;
+  fmul aa au x1;
   copy au y1;
-  fmul ab au y1 aw;
-  fscale au z1 2uL;
+  fmul ab au y1;
+  fscale au z1 2uL aw;
   with vu. assert (A.pts_to au vu);
   double_ok (eval (vals vz1));
   assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul ac au z1 aw;
+  fmul ac au z1;
 
   (* ar = (x1 + y1)^2 *)
   fadd au x1 y1;
   copy av au;
-  fmul ar av au aw;
+  fmul ar av au;
 
   (* H = aa + ab, E = H - ar, G = aa - ab, F = ac + G *)
   fadd av aa ab;
@@ -217,10 +220,10 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   fsub ar aa ab;
   fadd aa ac ar;
 
-  fmul ox au aa aw;
-  fmul oy ar av aw;
-  fmul oz aa ar aw;
-  fmul ot au av aw;
+  fmul ox au aa;
+  fmul oy ar av;
+  fmul oz aa ar;
+  fmul ot au av;
 
   with wx. assert (A.pts_to ox wx);
   with wy. assert (A.pts_to oy wy);
@@ -249,12 +252,12 @@ ensures exists* (va': Seq.seq S64.t).
 {
   A.pts_to_len a;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 5sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to a v **
-    pure (SZ.v vi <= 16 /\ Seq.length v == nl /\
+    pure (SZ.v vi <= 5 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
-  decreases (16 - SZ.v (!i))
+  decreases (5 - SZ.v (!i))
   {
     let vi = !i;
     A.((a.(vi) <- S64.zero));
@@ -287,6 +290,7 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to x wx ** A.pts_to y wy ** A.pts_to z wz ** A.pts_to t wt **
   pure (pt_ok wx wy wz wt /\ pt wx wy wz wt == E.point_at_infinity)
 {
+  assert_norm (1 < base);
   set_small x 0uL;
   set_small y 1uL;
   set_small z 1uL;
@@ -414,7 +418,7 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
   let z = S64.zero;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; let mut a3 = [| z; 16sz |]; A.pts_to_len a3; let mut a4 = [| z; 16sz |]; A.pts_to_len a4; let mut a5 = [| z; 16sz |]; A.pts_to_len a5; let mut a6 = [| z; 16sz |]; A.pts_to_len a6; let mut a7 = [| z; 16sz |]; A.pts_to_len a7; let mut a8 = [| z; 16sz |]; A.pts_to_len a8; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
+  let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut a6 = [| z; 5sz |]; A.pts_to_len a6; let mut a7 = [| z; 5sz |]; A.pts_to_len a7; let mut a8 = [| z; 5sz |]; A.pts_to_len a8; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
   A.pts_to_len a5; A.pts_to_len a6; A.pts_to_len a7; A.pts_to_len a8;
 
   set_infinity ox oy oz ot;

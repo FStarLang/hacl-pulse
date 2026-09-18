@@ -47,7 +47,7 @@ module Hacl.Ed25519.Scalar
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Hacl.Curve25519.Field
+open Hacl.Impl.Limb
 open Hacl.Spec.Bytes
 
 module A = Pulse.Lib.Array
@@ -62,12 +62,200 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
 module Loops = Hacl.Spec.Loops
-module F = Spec.Curve25519.Field
+module F = Spec.Bignum256
 module Sc = Spec.Ed25519.Scalar
 module Table = Hacl.Impl.Table
 module Tables = Hacl.Ed25519.Tables
+module Declassify = Hacl.Secret.Declassify
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+(** {2 Bytes, copies and comparison}
+
+    A scalar is eight thirty-two-bit limbs, so a limb is exactly four bytes
+    and its byte layer is a shuffle.  These used to be shared with the
+    field, but at radix [2^51] a field limb is no longer a whole number of
+    bytes and the field goes through a repacking instead; what is left is
+    the plain little-endian conversion, which belongs here. *)
+
+let pow2_bytes (_: unit)
+  : Lemma (pow2 8 == 256 /\ pow2 16 == 65536 /\ pow2 24 == 16777216)
+  = assert_norm (pow2 8 == 256);
+    assert_norm (pow2 16 == 65536);
+    assert_norm (pow2 24 == 16777216)
+
+(** Eight limbs from one slice to another. *)
+fn copy (dst src: A.array S64.t)
+        (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
+  pure (Seq.length vd == F.nl /\ Seq.length vs == F.nl)
+ensures exists* (vd': Seq.seq S64.t).
+  A.pts_to dst vd' ** A.pts_to src #ps vs ** pure (vd' == reveal vs)
+{
+  A.pts_to_len dst;
+  A.pts_to_len src;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 8sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to dst v ** A.pts_to src #ps vs **
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
+          (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
+  decreases (8 - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = A.(src.(vi));
+    A.((dst.(vi) <- x));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to dst v);
+  assert (pure (v `Seq.equal` reveal vs));
+}
+
+(** Thirty-two little-endian bytes into eight limbs. *)
+fn load_le (a: A.array S64.t) (b: A.array S8.t)
+           (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to a va ** A.pts_to b #pb vb **
+  pure (Seq.length va == F.nl /\ Seq.length vb == 32)
+ensures exists* (va': Seq.seq S64.t).
+  A.pts_to a va' ** A.pts_to b #pb vb **
+  pure (Seq.length va' == F.nl /\ F.bnd (vals va') F.base /\
+        F.eval (vals va') == le_nat vb)
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 8sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to a v ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
+          (forall (k: nat). k < SZ.v vi ==>
+             Seq.index (vals v) k ==
+               S8.v (Seq.index vb (4 * k)) + 256 * S8.v (Seq.index vb (4 * k + 1)) +
+               65536 * S8.v (Seq.index vb (4 * k + 2)) +
+               16777216 * S8.v (Seq.index vb (4 * k + 3))))
+  decreases (8 - SZ.v (!i))
+  {
+    let vi = !i;
+    let o = SZ.mul vi 4sz;
+    let b0 = A.(b.(o));
+    let b1 = A.(b.(SZ.add o 1sz));
+    let b2 = A.(b.(SZ.add o 2sz));
+    let b3 = A.(b.(SZ.add o 3sz));
+    assert_norm (16777216 * (pow2 8 - 1) < pow2 64);
+    assert_norm (65536 * (pow2 8 - 1) < pow2 64);
+    assert_norm (256 * (pow2 8 - 1) < pow2 64);
+    assert_norm ((pow2 8 - 1) + 256 * (pow2 8 - 1) +
+                 65536 * (pow2 8 - 1) + 16777216 * (pow2 8 - 1) < pow2 64);
+    let w = addw (addw (Cast.u8_to_u64 b0) (mulk 256uL (Cast.u8_to_u64 b1)))
+                 (addw (mulk 65536uL (Cast.u8_to_u64 b2))
+                       (mulk 16777216uL (Cast.u8_to_u64 b3)));
+    A.((a.(vi) <- w));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to a v);
+  assert (pure (forall (k: nat). k < F.nl ==>
+                  Seq.index (vals v) k ==
+                    S8.v (Seq.index vb (4 * k)) + 256 * S8.v (Seq.index vb (4 * k + 1)) +
+                    65536 * S8.v (Seq.index vb (4 * k + 2)) +
+                    16777216 * S8.v (Seq.index vb (4 * k + 3))));
+  F.eval_bytes vb (vals v);
+  assert_norm ((pow2 8 - 1) + 256 * (pow2 8 - 1) +
+               65536 * (pow2 8 - 1) + 16777216 * (pow2 8 - 1) < F.base);
+}
+
+(** Eight limbs into thirty-two little-endian bytes. *)
+fn store_le (b: A.array S8.t) (a: A.array S64.t)
+            (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to b vb ** A.pts_to a #pa va **
+  pure (Seq.length vb == 32 /\ Seq.length va == F.nl /\ F.bnd (vals va) F.base)
+ensures exists* (vb': Seq.seq S8.t).
+  A.pts_to b vb' ** A.pts_to a #pa va **
+  pure (vb' == nat_to_le 32 (F.eval (vals va)))
+{
+  A.pts_to_len b;
+  A.pts_to_len a;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 8sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
+    pts_to i vi ** A.pts_to b v ** A.pts_to a #pa va **
+    pure (SZ.v vi <= 8 /\ Seq.length v == 32 /\
+          (forall (k: nat). k < SZ.v vi ==>
+             S8.v (Seq.index v (4 * k)) == Seq.index (vals va) k % 256 /\
+             S8.v (Seq.index v (4 * k + 1)) == Seq.index (vals va) k / 256 % 256 /\
+             S8.v (Seq.index v (4 * k + 2)) == Seq.index (vals va) k / 65536 % 256 /\
+             S8.v (Seq.index v (4 * k + 3)) == Seq.index (vals va) k / 16777216 % 256))
+  decreases (8 - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = A.(a.(vi));
+    let o = SZ.mul vi 4sz;
+    pow2_bytes ();
+    A.((b.(o) <- Cast.u64_to_u8 x));
+    A.((b.(SZ.add o 1sz) <- Cast.u64_to_u8 (S64.shift_right x 8ul)));
+    A.((b.(SZ.add o 2sz) <- Cast.u64_to_u8 (S64.shift_right x 16ul)));
+    A.((b.(SZ.add o 3sz) <- Cast.u64_to_u8 (S64.shift_right x 24ul)));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to b v);
+  assert (pure (Seq.length v == 32 /\ F.bnd (vals va) F.base));
+  assert (pure (forall (k: nat). k < F.nl ==>
+                  S8.v (Seq.index v (4 * k)) == Seq.index (vals va) k % 256 /\
+                  S8.v (Seq.index v (4 * k + 1)) == Seq.index (vals va) k / 256 % 256 /\
+                  S8.v (Seq.index v (4 * k + 2)) == Seq.index (vals va) k / 65536 % 256 /\
+                  S8.v (Seq.index v (4 * k + 3)) == Seq.index (vals va) k / 16777216 % 256));
+  F.store_digits (vals va) v;
+  assert (pure (v == nat_to_le 32 (F.eval (vals va))));
+}
+
+(** Two bounded eight-limb sequences have the same value exactly when they
+    have the same limbs, so equality is eight mask-and-combine steps. *)
+let limbs_unique_eq (a b: Seq.seq nat)
+  : Lemma (requires Seq.length a == F.nl /\ Seq.length b == F.nl /\
+                    F.bnd a F.base /\ F.bnd b F.base /\ F.eval a == F.eval b)
+          (ensures a == b)
+  = Sc.limbs_unique a (F.eval a); Sc.limbs_unique b (F.eval b)
+
+fn limbs_eq (a b: A.array S64.t)
+            (#pa: perm) (#va: erased (Seq.seq S64.t))
+            (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length va == F.nl /\ Seq.length vb == F.nl /\
+        F.bnd (vals va) F.base /\ F.bnd (vals vb) F.base)
+returns r: bool
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (r == (F.eval (vals va) = F.eval (vals vb)))
+{
+  A.pts_to_len a; A.pts_to_len b;
+  let mut m = S64.ones;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 8sz)
+  invariant exists* (vi: SZ.t) (mm: S64.t).
+    pts_to i vi ** pts_to m mm ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= 8 /\
+          (if (forall (k: nat). k < SZ.v vi ==>
+                 Seq.index (vals va) k == Seq.index (vals vb) k)
+           then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
+  decreases (8 - SZ.v (!i))
+  {
+    let vi = !i;
+    let mm = !m;
+    let xa = A.(a.(vi));
+    let xb = A.(b.(vi));
+    let e = S64.eq_mask xa xb;
+    UInt.logand_lemma_1 #64 (S64.v e);
+    UInt.logand_lemma_2 #64 (S64.v e);
+    UInt.logand_commutative #64 (S64.v mm) (S64.v e);
+    m := S64.logand mm e;
+    i := SZ.add vi 1sz;
+  };
+  let mm = !m;
+  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+  let m8 = Cast.u64_to_u8 mm;
+  let r = Declassify.bool_of_mask m8;
+  Classical.move_requires (Seq.lemma_eq_intro (vals va)) (vals vb);
+  Classical.move_requires (limbs_unique_eq (vals va)) (vals vb);
+  r
+}
 
 (** {2 The carry chain, keeping the carry}
 
@@ -94,12 +282,12 @@ ensures exists* (va': Seq.seq S64.t).
   F.div_le_of_lt (reveal c + reveal d) F.base d;
   Loops.repeati_zero F.carry_step (vals va);
   let mut k = 0sz;
-  while (let vk = !k; SZ.lt vk 15sz)
+  while (let vk = !k; SZ.lt vk 7sz)
   invariant exists* (vk: SZ.t) (v: Seq.seq S64.t).
     pts_to k vk ** A.pts_to a v **
-    pure (SZ.v vk <= 15 /\ Seq.length v == F.nl /\
+    pure (SZ.v vk <= 7 /\ Seq.length v == F.nl /\
           vals v == F.carry_run (vals va) (SZ.v vk))
-  decreases (15 - SZ.v (!k))
+  decreases (7 - SZ.v (!k))
   {
     with v. assert (A.pts_to a v);
     let vk = !k;
@@ -108,8 +296,8 @@ ensures exists* (va': Seq.seq S64.t).
     let t = A.(a.(vk));
     let u = A.(a.(SZ.add vk 1sz));
     Math.lemma_div_le (S64.v t) (reveal c + reveal d) F.base;
-    let lo = lo16 t;
-    let up = addw u (hi16 t);
+    let lo = lo32 t;
+    let up = addw u (hi32 t);
     A.((a.(vk) <- lo));
     A.((a.(SZ.add vk 1sz) <- up));
     vals_upd v (SZ.v vk) lo;
@@ -118,13 +306,13 @@ ensures exists* (va': Seq.seq S64.t).
     k := SZ.add vk 1sz;
   };
   with v. assert (A.pts_to a v);
-  F.carry_run_len (vals va) 15;
-  let t = A.(a.(15sz));
-  let lo = lo16 t;
-  let hi = hi16 t;
-  A.((a.(15sz) <- lo));
-  vals_upd v 15 lo;
-  assert (pure (vals (Seq.upd v 15 lo) == F.carry_low (vals va)));
+  F.carry_run_len (vals va) 7;
+  let t = A.(a.(7sz));
+  let lo = lo32 t;
+  let hi = hi32 t;
+  A.((a.(7sz) <- lo));
+  vals_upd v 7 lo;
+  assert (pure (vals (Seq.upd v 7 lo) == F.carry_low (vals va)));
   hi
 }
 
@@ -157,13 +345,13 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to_len a;
   A.pts_to_len b;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index (vals v) k == Seq.index (vals va) k + Seq.index (vals vb) k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(a.(vi));
@@ -205,13 +393,13 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to_len a;
   let y : erased (Seq.seq nat) = hide (Seq.create 1 (S64.v b) <: Seq.seq nat);
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va **
-    pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==>
              Seq.index (vals v) k == 2 * Seq.index (vals va) k))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(a.(vi));
@@ -264,7 +452,7 @@ ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
 {
   A.pts_to_len a;
   A.pts_to_len t;
-  let qcs = Table.table Tables.qc_arr 16sz;
+  let qcs = Table.table Tables.qc_arr 8sz;
   Tables.qc_seq_ok ();
   Sc.qc_ok ();
   let c = addc_op t a qcs;
@@ -272,7 +460,7 @@ ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
   Sc.addc_ok (vals va) Sc.qc;
   let m = S64.eq_mask c (S64.classify 1uL);
   assert (pure ((S64.v m == 0) == (S64.v c <> 1)));
-  cswap m a t;
+  cselect a t m;
   Sc.csub_q_ok (vals va);
   Sc.q_bound ();
   with va'. assert (A.pts_to a va');
@@ -292,12 +480,12 @@ ensures exists* (va': Seq.seq S64.t).
 {
   A.pts_to_len a;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 8sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to a v **
-    pure (SZ.v vi <= 16 /\ Seq.length v == F.nl /\
+    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
           (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
-  decreases (16 - SZ.v (!i))
+  decreases (8 - SZ.v (!i))
   {
     let vi = !i;
     A.((a.(vi) <- S64.classify 0uL));
@@ -478,12 +666,12 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
 {
   A.pts_to_len n;
   let bi = SZ.sub 255sz i;
-  let bj = SZ.div bi 16sz;
-  let sh = SZ.sizet_to_uint32 (SZ.rem bi 16sz);
+  let bj = SZ.div bi 32sz;
+  let sh = SZ.sizet_to_uint32 (SZ.rem bi 32sz);
   assert_norm (pow2 32 > 16);
-  Math.small_mod (SZ.v (SZ.rem bi 16sz)) (pow2 32);
-  assert (pure (SZ.v bi == 255 - SZ.v i /\ SZ.v bj == SZ.v bi / 16 /\
-                U32.v sh == SZ.v bi % 16));
+  Math.small_mod (SZ.v (SZ.rem bi 32sz)) (pow2 32);
+  assert (pure (SZ.v bi == 255 - SZ.v i /\ SZ.v bj == SZ.v bi / 32 /\
+                U32.v sh == SZ.v bi % 32));
   let limb = A.(n.(bj));
   let sr = S64.shift_right limb sh;
   assert (pure (S64.v sr ==
@@ -500,7 +688,7 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
   qadd_op t3 a t1 t2;
   let m = S64.eq_mask bit (S64.classify 1uL);
   assert (pure ((S64.v m == 0) == (S64.v bit <> 1)));
-  cswap m acc t3;
+  cselect acc t3 m;
   with w. assert (A.pts_to acc w);
   assert (pure (vals w == Sc.qsel (S64.v bit) (vals d) (Sc.qadd (vals d) (vals va))));
 }
@@ -555,5 +743,39 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
 }
 
 #pop-options
+
+(** {2 A thirty-two byte scalar, reduced}
+
+    The secret scalar is stored as thirty-two bytes but is used modulo the
+    group order.  Zero-extending to sixty-four bytes lets the same
+    reduction serve, and costs only the extra doublings. *)
+
+fn reduce32 (acc t1 t2: A.array S64.t) (sb: A.array S8.t)
+                   (#vacc: erased (Seq.seq S64.t))
+                   (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
+                   (#psb: perm) (#vsb: erased (Seq.lseq S8.t 32))
+requires A.pts_to acc vacc ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
+  A.pts_to sb #psb vsb **
+  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl)
+ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
+  A.pts_to acc w ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to sb #psb vsb **
+  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
+        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
+        F.eval (vals w) == le_nat vsb % Sc.q)
+{
+  A.pts_to_len sb;
+  let z8 = S8.zero;
+  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; A.pts_to_len c1;
+  Hacl.Impl.Copy.copy_prefix c1 sb 32sz;
+  with vh. assert (A.pts_to c1 vh);
+  A.pts_to_len c1;
+  le_nat_split vh 32;
+  assert (pure (forall (i: nat). i < 32 ==>
+                  S8.v (Seq.index (Seq.slice vh 32 64) i) == 0));
+  le_nat_zeros (Seq.slice vh 32 64);
+  assert (pure (Seq.equal (Seq.slice vh 0 32) vsb));
+  reduce_op acc t1 t2 c1;
+  ()
+}
 
 #pop-options

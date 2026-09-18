@@ -22,13 +22,13 @@
     number the limbs denote are the same number.
 
     {b Lengths.}  Each function takes a limb count [n] and works on exactly
-    [4n] bytes.  HACL* instead takes a byte count and rounds up, padding on
+    [8n] bytes.  HACL* instead takes a byte count and rounds up, padding on
     the left.  That rounding is the caller's business here: a caller with a
-    length that is not a multiple of four zeroes a [4n]-byte buffer and
+    length that is not a multiple of eight zeroes a [8n]-byte buffer and
     copies its bytes into the right end, which is both what the padding
     means and what the caller usually has to do anyway to own the buffer.
     Nothing in this library, and nothing in the standards it implements, has
-    a key length that is not a multiple of four.
+    a key length that is not a multiple of eight.
 
     {b Constant time.}  Byte order is a compile-time choice and the loop
     bounds are public lengths.  No byte or limb is ever branched on. *)
@@ -42,7 +42,7 @@ open Hacl.Secret.Word
 open Hacl.Secret.Word.Instances
 open Hacl.Spec.Bytes
 open Hacl.Impl.Bytes
-open Hacl.Impl.Limb32
+open Hacl.Impl.Limb64
 open Hacl.Bignum.Base
 
 module A = Pulse.Lib.Array
@@ -50,7 +50,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
-module S32 = Hacl.Secret.UInt32
+module S64 = Hacl.Secret.UInt64
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -73,48 +73,48 @@ let le_nat_empty (s: Seq.seq S8.t)
 (** Reading big-endian: the window just below the cursor is worth its own
     four bytes, weighted by the limbs already read. *)
 let from_be_step (vb: Seq.seq S8.t) (n: nat) (i: nat { i < n })
-  : Lemma (requires Seq.length vb == 4 * n)
-          (ensures be_nat (Seq.slice vb (4 * (n - i - 1)) (4 * n)) ==
-                   be_nat (Seq.slice vb (4 * (n - i)) (4 * n)) +
-                   wt i * be_nat (Seq.slice vb (4 * (n - i - 1)) (4 * (n - i))))
-  = let s = Seq.slice vb (4 * (n - i - 1)) (4 * n) in
-    be_nat_split s (4 * i);
-    Seq.lemma_eq_intro (Seq.slice s 0 4) (Seq.slice vb (4 * (n - i - 1)) (4 * (n - i)));
-    Seq.lemma_eq_intro (Seq.slice s 4 (4 * i + 4)) (Seq.slice vb (4 * (n - i)) (4 * n));
-    assert (pow2 (8 * (4 * i)) == wt i)
+  : Lemma (requires Seq.length vb == 8 * n)
+          (ensures be_nat (Seq.slice vb (8 * (n - i - 1)) (8 * n)) ==
+                   be_nat (Seq.slice vb (8 * (n - i)) (8 * n)) +
+                   wt i * be_nat (Seq.slice vb (8 * (n - i - 1)) (8 * (n - i))))
+  = let s = Seq.slice vb (8 * (n - i - 1)) (8 * n) in
+    be_nat_split s (8 * i);
+    Seq.lemma_eq_intro (Seq.slice s 0 8) (Seq.slice vb (8 * (n - i - 1)) (8 * (n - i)));
+    Seq.lemma_eq_intro (Seq.slice s 8 (8 * i + 8)) (Seq.slice vb (8 * (n - i)) (8 * n));
+    assert (pow2 (8 * (8 * i)) == wt i)
 
 (** Reading little-endian: the window just above the cursor is worth its own
     four bytes, weighted the same way. *)
 let from_le_step (vb: Seq.seq S8.t) (n: nat) (i: nat { i < n })
-  : Lemma (requires Seq.length vb == 4 * n)
-          (ensures le_nat (Seq.slice vb 0 (4 * i + 4)) ==
-                   le_nat (Seq.slice vb 0 (4 * i)) +
-                   wt i * le_nat (Seq.slice vb (4 * i) (4 * i + 4)))
-  = let s = Seq.slice vb 0 (4 * i + 4) in
-    le_nat_split s (4 * i);
-    Seq.lemma_eq_intro (Seq.slice s 0 (4 * i)) (Seq.slice vb 0 (4 * i));
-    Seq.lemma_eq_intro (Seq.slice s (4 * i) (4 * i + 4)) (Seq.slice vb (4 * i) (4 * i + 4));
-    assert (pow2 (8 * (4 * i)) == wt i)
+  : Lemma (requires Seq.length vb == 8 * n)
+          (ensures le_nat (Seq.slice vb 0 (8 * i + 8)) ==
+                   le_nat (Seq.slice vb 0 (8 * i)) +
+                   wt i * le_nat (Seq.slice vb (8 * i) (8 * i + 8)))
+  = let s = Seq.slice vb 0 (8 * i + 8) in
+    le_nat_split s (8 * i);
+    Seq.lemma_eq_intro (Seq.slice s 0 (8 * i)) (Seq.slice vb 0 (8 * i));
+    Seq.lemma_eq_intro (Seq.slice s (8 * i) (8 * i + 8)) (Seq.slice vb (8 * i) (8 * i + 8));
+    assert (pow2 (8 * (8 * i)) == wt i)
 
 (** Writing: the four bytes a window receives are the big-endian -- or the
     little-endian -- form of the limb, so the window is worth the limb. *)
 let write_window_be (v: Seq.seq S8.t) (off: nat) (x: nat)
-  : Lemma (requires off + 4 <= Seq.length v /\ x < pow2 32 /\
-                    (forall (m: nat). m < 4 ==>
-                       S8.v (Seq.index v (off + m)) == (x / pow2 (8 * (3 - m))) % 256))
-          (ensures be_nat (Seq.slice v off (off + 4)) == x)
-  = assert (pow2 32 == pow2 (8 * 4));
-    Seq.lemma_eq_intro (Seq.slice v off (off + 4)) (nat_to_be 4 x);
-    be_nat_to_be 4 x
+  : Lemma (requires off + 8 <= Seq.length v /\ x < pow2 64 /\
+                    (forall (m: nat). m < 8 ==>
+                       S8.v (Seq.index v (off + m)) == (x / pow2 (8 * (7 - m))) % 256))
+          (ensures be_nat (Seq.slice v off (off + 8)) == x)
+  = assert (pow2 64 == pow2 (8 * 8));
+    Seq.lemma_eq_intro (Seq.slice v off (off + 8)) (nat_to_be 8 x);
+    be_nat_to_be 8 x
 
 let write_window_le (v: Seq.seq S8.t) (off: nat) (x: nat)
-  : Lemma (requires off + 4 <= Seq.length v /\ x < pow2 32 /\
-                    (forall (m: nat). m < 4 ==>
+  : Lemma (requires off + 8 <= Seq.length v /\ x < pow2 64 /\
+                    (forall (m: nat). m < 8 ==>
                        S8.v (Seq.index v (off + m)) == (x / pow2 (8 * m)) % 256))
-          (ensures le_nat (Seq.slice v off (off + 4)) == x)
-  = assert (pow2 32 == pow2 (8 * 4));
-    Seq.lemma_eq_intro (Seq.slice v off (off + 4)) (nat_to_le 4 x);
-    le_nat_to_le 4 x
+          (ensures le_nat (Seq.slice v off (off + 8)) == x)
+  = assert (pow2 64 == pow2 (8 * 8));
+    Seq.lemma_eq_intro (Seq.slice v off (off + 8)) (nat_to_le 8 x);
+    le_nat_to_le 8 x
 
 (** What a write leaves alone it leaves equal. *)
 let untouched (u v: Seq.seq S8.t) (lo: nat) (hi: nat { lo <= hi })
@@ -123,18 +123,18 @@ let untouched (u v: Seq.seq S8.t) (lo: nat) (hi: nat { lo <= hi })
           (ensures Seq.slice v lo hi == Seq.slice u lo hi)
   = Seq.lemma_eq_intro (Seq.slice v lo hi) (Seq.slice u lo hi)
 
-(** A [Hacl.Secret.UInt32] read through the word class is the same value.
+(** A [Hacl.Secret.UInt64] read through the word class is the same value.
     The class is how the byte loops are written; [Spec.Bignum] speaks of
     limbs.  This is the one line that says the two agree. *)
-let w32 (x: S32.t) : Lemma (v #S32.t x == S32.v x /\ bytes #S32.t == 4) = ()
+let w64 (x: S64.t) : Lemma (v #S64.t x == S64.v x /\ bytes #S64.t == 8) = ()
 
 (** {2 Bytes to limbs} *)
 
-fn from_bytes_be (res: A.array S32.t) (n: SZ.t) (b: A.array S8.t)
-                 (#p: perm) (#vres: erased (Seq.seq S32.t)) (#vb: erased (Seq.seq S8.t))
+fn from_bytes_be (res: A.array S64.t) (n: SZ.t) (b: A.array S8.t)
+                 (#p: perm) (#vres: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to res vres ** A.pts_to b #p vb **
-  pure (Seq.length vres == SZ.v n /\ Seq.length vb == 4 * SZ.v n /\ SZ.fits (4 * SZ.v n))
-ensures exists* (v: Seq.seq S32.t).
+  pure (Seq.length vres == SZ.v n /\ Seq.length vb == 8 * SZ.v n /\ SZ.fits (8 * SZ.v n))
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to b #p vb **
   pure (Seq.length v == SZ.v n /\ num v == be_nat vb)
 {
@@ -142,18 +142,18 @@ ensures exists* (v: Seq.seq S32.t).
   A.pts_to_len b;
   let mut i = 0sz;
   pre_zero vres;
-  be_nat_empty (Seq.slice vb (4 * SZ.v n) (4 * SZ.v n));
+  be_nat_empty (Seq.slice vb (8 * SZ.v n) (8 * SZ.v n));
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to b #p vb **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
-          pre v (SZ.v vi) == be_nat (Seq.slice vb (4 * (SZ.v n - SZ.v vi)) (4 * SZ.v n)))
+          pre v (SZ.v vi) == be_nat (Seq.slice vb (8 * (SZ.v n - SZ.v vi)) (8 * SZ.v n)))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
     with v. assert (A.pts_to res v);
-    let off = SZ.mul 4sz (SZ.sub (SZ.sub n vi) 1sz);
-    let w = load_be #S32.t b off;
+    let off = SZ.mul 8sz (SZ.sub (SZ.sub n vi) 1sz);
+    let w = load_be #S64.t b off;
     A.((res.(vi) <- w));
     pre_upd v (SZ.v vi) w (SZ.v vi);
     pre_snoc (Seq.upd v (SZ.v vi) w) (SZ.v vi);
@@ -162,15 +162,15 @@ ensures exists* (v: Seq.seq S32.t).
   };
   with v. assert (A.pts_to res v);
   pre_full v;
-  Seq.lemma_eq_intro (Seq.slice vb 0 (4 * SZ.v n)) vb;
+  Seq.lemma_eq_intro (Seq.slice vb 0 (8 * SZ.v n)) vb;
   ()
 }
 
-fn from_bytes_le (res: A.array S32.t) (n: SZ.t) (b: A.array S8.t)
-                 (#p: perm) (#vres: erased (Seq.seq S32.t)) (#vb: erased (Seq.seq S8.t))
+fn from_bytes_le (res: A.array S64.t) (n: SZ.t) (b: A.array S8.t)
+                 (#p: perm) (#vres: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to res vres ** A.pts_to b #p vb **
-  pure (Seq.length vres == SZ.v n /\ Seq.length vb == 4 * SZ.v n /\ SZ.fits (4 * SZ.v n))
-ensures exists* (v: Seq.seq S32.t).
+  pure (Seq.length vres == SZ.v n /\ Seq.length vb == 8 * SZ.v n /\ SZ.fits (8 * SZ.v n))
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to b #p vb **
   pure (Seq.length v == SZ.v n /\ num v == le_nat vb)
 {
@@ -180,16 +180,16 @@ ensures exists* (v: Seq.seq S32.t).
   pre_zero vres;
   le_nat_empty (Seq.slice vb 0 0);
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to b #p vb **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
-          pre v (SZ.v vi) == le_nat (Seq.slice vb 0 (4 * SZ.v vi)))
+          pre v (SZ.v vi) == le_nat (Seq.slice vb 0 (8 * SZ.v vi)))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
     with v. assert (A.pts_to res v);
-    let off = SZ.mul 4sz vi;
-    let w = load_le #S32.t b off;
+    let off = SZ.mul 8sz vi;
+    let w = load_le #S64.t b off;
     A.((res.(vi) <- w));
     pre_upd v (SZ.v vi) w (SZ.v vi);
     pre_snoc (Seq.upd v (SZ.v vi) w) (SZ.v vi);
@@ -198,58 +198,58 @@ ensures exists* (v: Seq.seq S32.t).
   };
   with v. assert (A.pts_to res v);
   pre_full v;
-  Seq.lemma_eq_intro (Seq.slice vb 0 (4 * SZ.v n)) vb;
+  Seq.lemma_eq_intro (Seq.slice vb 0 (8 * SZ.v n)) vb;
   ()
 }
 
 (** {2 Limbs to bytes} *)
 
-fn to_bytes_be (b: A.array S8.t) (a: A.array S32.t) (n: SZ.t)
-               (#p: perm) (#vb: erased (Seq.seq S8.t)) (#va: erased (Seq.seq S32.t))
+fn to_bytes_be (b: A.array S8.t) (a: A.array S64.t) (n: SZ.t)
+               (#p: perm) (#vb: erased (Seq.seq S8.t)) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #p va **
-  pure (Seq.length vb == 4 * SZ.v n /\ Seq.length va == SZ.v n /\ SZ.fits (4 * SZ.v n))
+  pure (Seq.length vb == 8 * SZ.v n /\ Seq.length va == SZ.v n /\ SZ.fits (8 * SZ.v n))
 ensures exists* (v: Seq.seq S8.t).
   A.pts_to b v ** A.pts_to a #p va **
-  pure (Seq.length v == 4 * SZ.v n /\ be_nat v == num va)
+  pure (Seq.length v == 8 * SZ.v n /\ be_nat v == num va)
 {
   A.pts_to_len b;
   A.pts_to_len a;
   let mut i = 0sz;
   pre_zero va;
-  be_nat_empty (Seq.slice vb (4 * SZ.v n) (4 * SZ.v n));
+  be_nat_empty (Seq.slice vb (8 * SZ.v n) (8 * SZ.v n));
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
     pts_to i vi ** A.pts_to b v ** A.pts_to a #p va **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == 4 * SZ.v n /\
-          be_nat (Seq.slice v (4 * (SZ.v n - SZ.v vi)) (4 * SZ.v n)) == pre va (SZ.v vi))
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == 8 * SZ.v n /\
+          be_nat (Seq.slice v (8 * (SZ.v n - SZ.v vi)) (8 * SZ.v n)) == pre va (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
     with v0. assert (A.pts_to b v0);
-    let off = SZ.mul 4sz (SZ.sub (SZ.sub n vi) 1sz);
+    let off = SZ.mul 8sz (SZ.sub (SZ.sub n vi) 1sz);
     let x = A.(a.(vi));
-    store_be #S32.t b off x;
+    store_be #S64.t b off x;
     with v1. assert (A.pts_to b v1);
-    w32 x;
-    write_window_be v1 (SZ.v off) (S32.v x);
-    untouched v0 v1 (4 * (SZ.v n - SZ.v vi)) (4 * SZ.v n);
+    w64 x;
+    write_window_be v1 (SZ.v off) (S64.v x);
+    untouched v0 v1 (8 * (SZ.v n - SZ.v vi)) (8 * SZ.v n);
     from_be_step v1 (SZ.v n) (SZ.v vi);
     pre_snoc va (SZ.v vi);
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to b v);
   pre_full va;
-  Seq.lemma_eq_intro (Seq.slice v 0 (4 * SZ.v n)) v;
+  Seq.lemma_eq_intro (Seq.slice v 0 (8 * SZ.v n)) v;
   ()
 }
 
-fn to_bytes_le (b: A.array S8.t) (a: A.array S32.t) (n: SZ.t)
-               (#p: perm) (#vb: erased (Seq.seq S8.t)) (#va: erased (Seq.seq S32.t))
+fn to_bytes_le (b: A.array S8.t) (a: A.array S64.t) (n: SZ.t)
+               (#p: perm) (#vb: erased (Seq.seq S8.t)) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #p va **
-  pure (Seq.length vb == 4 * SZ.v n /\ Seq.length va == SZ.v n /\ SZ.fits (4 * SZ.v n))
+  pure (Seq.length vb == 8 * SZ.v n /\ Seq.length va == SZ.v n /\ SZ.fits (8 * SZ.v n))
 ensures exists* (v: Seq.seq S8.t).
   A.pts_to b v ** A.pts_to a #p va **
-  pure (Seq.length v == 4 * SZ.v n /\ le_nat v == num va)
+  pure (Seq.length v == 8 * SZ.v n /\ le_nat v == num va)
 {
   A.pts_to_len b;
   A.pts_to_len a;
@@ -259,26 +259,26 @@ ensures exists* (v: Seq.seq S8.t).
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
     pts_to i vi ** A.pts_to b v ** A.pts_to a #p va **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == 4 * SZ.v n /\
-          le_nat (Seq.slice v 0 (4 * SZ.v vi)) == pre va (SZ.v vi))
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == 8 * SZ.v n /\
+          le_nat (Seq.slice v 0 (8 * SZ.v vi)) == pre va (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
     with v0. assert (A.pts_to b v0);
-    let off = SZ.mul 4sz vi;
+    let off = SZ.mul 8sz vi;
     let x = A.(a.(vi));
-    store_le #S32.t b off x;
+    store_le #S64.t b off x;
     with v1. assert (A.pts_to b v1);
-    w32 x;
-    write_window_le v1 (SZ.v off) (S32.v x);
-    untouched v0 v1 0 (4 * SZ.v vi);
+    w64 x;
+    write_window_le v1 (SZ.v off) (S64.v x);
+    untouched v0 v1 0 (8 * SZ.v vi);
     from_le_step v1 (SZ.v n) (SZ.v vi);
     pre_snoc va (SZ.v vi);
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to b v);
   pre_full va;
-  Seq.lemma_eq_intro (Seq.slice v 0 (4 * SZ.v n)) v;
+  Seq.lemma_eq_intro (Seq.slice v 0 (8 * SZ.v n)) v;
   ()
 }
 

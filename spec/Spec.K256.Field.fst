@@ -35,34 +35,34 @@ module K = Spec.K256
 
 let fmod : modulus =
   assert_norm (K.prime < pow2 256);
-  mk K.prime 13617
+  mk K.prime 3525653809
      0xc9bd1905155383999c46c2c295f2b761bcb223fedc24a059d838091d0868192a
 
 let fmod_ok (_: unit) : Lemma (modulus_ok fmod) =
   assert_norm (K.prime < pow2 256);
   assert_norm (1 < K.prime);
-  assert_norm (13617 < pow2 rad);
-  assert_norm (((K.prime % pow2 rad) * 13617 + 1) % pow2 rad == 0);
+  assert_norm (3525653809 < pow2 rad);
+  assert_norm (((K.prime % pow2 rad) * 3525653809 + 1) % pow2 rad == 0);
   assert_norm (pow2 256 *
     0xc9bd1905155383999c46c2c295f2b761bcb223fedc24a059d838091d0868192a
     % K.prime == 1);
-  mk_ok K.prime 13617
+  mk_ok K.prime 3525653809
     0xc9bd1905155383999c46c2c295f2b761bcb223fedc24a059d838091d0868192a
 
 let qmod : modulus =
   assert_norm (K.order < pow2 256);
-  mk K.order 45375
+  mk K.order 1435021631
      0xd9e8890d6494ef93897f30c127cfab5d3bbbd4567fa50c3c80fd22938097c016
 
 let qmod_ok (_: unit) : Lemma (modulus_ok qmod) =
   assert_norm (K.order < pow2 256);
   assert_norm (1 < K.order);
-  assert_norm (45375 < pow2 rad);
-  assert_norm (((K.order % pow2 rad) * 45375 + 1) % pow2 rad == 0);
+  assert_norm (1435021631 < pow2 rad);
+  assert_norm (((K.order % pow2 rad) * 1435021631 + 1) % pow2 rad == 0);
   assert_norm (pow2 256 *
     0xd9e8890d6494ef93897f30c127cfab5d3bbbd4567fa50c3c80fd22938097c016
     % K.order == 1);
-  mk_ok K.order 45375
+  mk_ok K.order 1435021631
     0xd9e8890d6494ef93897f30c127cfab5d3bbbd4567fa50c3c80fd22938097c016
 
 #pop-options
