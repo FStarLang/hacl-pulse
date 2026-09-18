@@ -175,8 +175,17 @@ ensures exists* (vo': Seq.seq S64.t)
 
 (** [out := a^(eval e)], with [a] in Montgomery form and [e] sixteen public
     limbs.  [r1] is the Montgomery one, which is where the accumulator
-    starts. *)
+    starts.
+
+    [inline_for_extraction], for the reason given at the top of
+    [Hacl.Impl.Mont256]: each of the six call sites has its own modulus, its
+    own Montgomery constant and its own exponent, and a copy that knows them
+    is worth seven to nine percent on P-256 and secp256k1 inversion.  gcc
+    will clone this by itself if its interprocedural budget happens to
+    stretch that far, and clang will not clone it at all; neither is a thing
+    to depend on. *)
 #push-options "--z3rlimit 600"
+inline_for_extraction
 fn mexp (out a: A.array S64.t) (e: A.array U64.t) (r1 ms nm: A.array S64.t)
         (mu: S64.t) (d: erased modulus)
         (#vo: erased (Seq.seq S64.t))
