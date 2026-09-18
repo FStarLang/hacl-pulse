@@ -1,0 +1,137 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** Arithmetic in [Z_3329] on secret sixteen-bit words.
+
+    A coefficient is a {!Hacl.Secret.UInt16.t} whose value is below [q], and
+    every operation here restores that invariant, so no caller ever has to
+    reason about a lazily reduced representative.  That is a real cost --
+    the reference implementations keep coefficients in a wider range and
+    reduce only where they must -- but it is paid once per operation rather
+    than once per proof, and the alternative is a range bound threaded
+    through every loop invariant in the transform.
+
+    Everything is branch-free.  Addition and subtraction reduce with a
+    conditional subtraction driven by {!Hacl.Secret.UInt16.gte_mask};
+    multiplication reduces with a Barrett step in sixty-four bits.  The
+    obvious optimisation is Montgomery multiplication with the zeta table
+    stored pre-scaled, which is what every fast implementation does; it
+    changes the representation invariant, so it belongs in a later pass and
+    not in the first correct one. *)
+module Hacl.Impl.MLKEM.Zq
+
+open Spec.MLKEM.Zq
+
+module U16 = FStar.UInt16
+module U64 = FStar.UInt64
+module S16 = Hacl.Secret.UInt16
+module S64 = Hacl.Secret.UInt64
+module Cast = Hacl.Secret.Cast
+module Math = FStar.Math.Lemmas
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
+
+(** A coefficient in canonical form. *)
+let zqt = x: S16.t { S16.v x < q }
+
+inline_for_extraction
+let qw : w: S16.t { S16.v w == q } = S16.classify 3329us
+
+(** {2 Conditional subtraction}
+
+    The one primitive everything else is built from: [x] is known to be
+    below [2q], and exactly one subtraction brings it below [q].  [select]
+    rather than [logand] because [select] is specified on the mask's two
+    possible values instead of on its bits. *)
+inline_for_extraction
+let csub (x: S16.t { S16.v x < 2 * q }) : r: zqt { S16.v r == S16.v x % q }
+  = let m = S16.gte_mask x qw in
+    let r = S16.select m (S16.sub_mod x qw) x in
+    if S16.v x >= q then Math.small_mod (S16.v x - q) q else Math.small_mod (S16.v x) q;
+    r
+
+(** {2 Addition and subtraction}
+
+    [a + b < 2q] and [a + q - b < 2q], both far below [2^16], so the
+    wrapping operations are exact and one conditional subtraction
+    suffices.  Subtraction adds [q] first rather than testing a sign,
+    which is the same trick and keeps the word unsigned throughout. *)
+
+inline_for_extraction
+let zq_add (a b: zqt) : r: zqt { S16.v r == add (S16.v a) (S16.v b) }
+  = assert_norm (2 * q < pow2 16);
+    Math.small_mod (S16.v a + S16.v b) (pow2 16);
+    csub (S16.add_mod a b)
+
+inline_for_extraction
+let zq_sub (a b: zqt) : r: zqt { S16.v r == sub (S16.v a) (S16.v b) }
+  = assert_norm (2 * q < pow2 16);
+    Math.small_mod (S16.v a + q) (pow2 16);
+    Math.small_mod (S16.v a + q - S16.v b) (pow2 16);
+    csub (S16.sub_mod (S16.add_mod a qw) b)
+
+inline_for_extraction
+let zq_neg (a: zqt) : r: zqt { S16.v r == neg (S16.v a) }
+  = zq_sub (S16.classify 0us) a
+
+(** {2 Multiplication}
+
+    A product of two canonical coefficients is below [2^24], and
+    [5039 = floor(2^24 / q)], so [t = (x * 5039) >> 24] approximates
+    [x / q] from below.  The error is small enough that a single
+    conditional subtraction finishes the job -- which is what
+    {!barrett_bound} says, and it is worth proving rather than asserting
+    because the two inequalities pull in opposite directions and the
+    margin on the second is under fifteen percent. *)
+
+let barrett_bound (x: nat { x < pow2 24 })
+  : Lemma (let t = (x * 5039) / pow2 24 in t * q <= x /\ x - t * q < 2 * q)
+  = let p = pow2 24 in
+    assert_norm (pow2 24 == 16777216);
+    let t = (x * 5039) / p in
+    Math.lemma_div_mod (x * 5039) p;
+    Math.lemma_mult_le_right q (t * p) (x * 5039);
+    Math.lemma_mult_le_right p t x;
+    assert (t * p * q <= x * 5039 * q);
+    assert (x * 5039 * q == x * 16774831);
+    Math.lemma_mult_le_right x 16774831 16777216;
+    assert (t * q * p <= x * p);
+    assert (t * p > x * 5039 - p);
+    assert (t * q * p > x * 16774831 - q * p);
+    Math.lemma_mult_le_right 2385 x p;
+    assert ((x - t * q) * p < 2385 * x + q * p);
+    assert (2385 * x + q * p <= 2385 * p + q * p)
+
+inline_for_extraction
+let zq_mul (a b: zqt) : r: zqt { S16.v r == mul (S16.v a) (S16.v b) }
+  = assert_norm ((q - 1) * (q - 1) < pow2 24);
+    assert_norm (pow2 24 * 5039 < pow2 64);
+    assert_norm (2 * q < pow2 16);
+    Math.lemma_mult_le_right (S16.v b) (S16.v a) (q - 1);
+    Math.lemma_mult_le_right (q - 1) (S16.v b) (q - 1);
+    barrett_bound (S16.v a * S16.v b);
+    Math.small_mod (S16.v a * S16.v b) (pow2 64);
+    Math.small_mod (S16.v a * S16.v b * 5039) (pow2 64);
+    Math.small_mod (S16.v a * S16.v b * 5039 / pow2 24 * q) (pow2 64);
+    Math.small_mod (S16.v a * S16.v b - S16.v a * S16.v b * 5039 / pow2 24 * q) (pow2 64);
+    Math.small_mod (S16.v a * S16.v b - S16.v a * S16.v b * 5039 / pow2 24 * q) (pow2 16);
+    Math.lemma_mod_plus (S16.v a * S16.v b - S16.v a * S16.v b * 5039 / pow2 24 * q)
+                        (S16.v a * S16.v b * 5039 / pow2 24) q;
+    let x = S64.mul_mod (Cast.u16_to_u64 a) (Cast.u16_to_u64 b) in
+    let t = S64.shift_right (S64.mul_mod x (S64.classify 5039uL)) 24ul in
+    csub (Cast.u64_to_u16 (S64.sub_mod x (S64.mul_mod t (S64.classify 3329uL))))
+
+#pop-options
