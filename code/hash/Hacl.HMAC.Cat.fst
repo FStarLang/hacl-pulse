@@ -58,6 +58,12 @@ let cat5 (a b c d e: Seq.seq S8.t)
         (Seq.append (Seq.empty #S8.t) a) b) c) d) e)
       (Seq.append a (Seq.append b (Seq.append c (Seq.append d e)))))
 
+(** This module is arithmetic-heavy, and the default SMT encoding boxes
+    every integer operation, which hides the structure of the products from
+    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
+    only the nonlinear operators wrapped is measurably faster here. *)
+#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn hmac_cat (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)

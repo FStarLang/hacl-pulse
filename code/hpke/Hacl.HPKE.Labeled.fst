@@ -65,7 +65,7 @@ let prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
 
 (** {2 LabeledExtract} *)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 fn labeled_extract_impl (#t: Type0) {| w: word t |}
                         ([@@@FStar.Attributes.monomorphize] p: params t)

@@ -471,7 +471,7 @@ ensures exists* (w: Seq.seq S64.t).
     [body3_char] is pure boolean reasoning -- the whole thing is under a
     second. *)
 
-#push-options "--fuel 0 --ifuel 2 --z3rlimit 50"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
 let body (dd sm y: C.elem) (sign: nat { sign < 2 }) : option C.elem =
   let v = C.fadd (C.fmul dd (C.fmul y y)) C.one in
@@ -541,7 +541,7 @@ let body3_char (sign: nat { sign < 2 }) (x1 x2 xr: C.elem)
     [ox] receives the candidate; the caller looks at the result before
     using it. *)
 
-#push-options "--fuel 0 --ifuel 2 --z3rlimit 200"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 fn recover_x (ox yb: A.array S64.t) (sign: bool)
              (#vox: erased (Seq.seq S64.t))
@@ -636,7 +636,7 @@ ensures exists* (wx: Seq.seq S64.t).
 
 (** The sign bit is the top bit of the last byte, which is bit [255] of the
     number the thirty-two bytes encode. *)
-#push-options "--fuel 2 --ifuel 1 --z3rlimit 60"
+#push-options "--fuel 2 --ifuel 0 --z3rlimit 60"
 
 let sign_bit (s: Seq.seq S8.t { Seq.length s == 32 })
   : Lemma (le_nat s / pow2 255 == S8.v (Seq.index s 31) / pow2 7)
@@ -664,7 +664,7 @@ let sign_bit (s: Seq.seq S8.t { Seq.length s == 32 })
 
     The coordinates are only meaningful when that boolean is [true]. *)
 
-#push-options "--fuel 0 --ifuel 2 --z3rlimit 800"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 800"
 
 fn point_decompress (ox oy oz ot: A.array S64.t) (s: A.array S8.t)
                     (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
