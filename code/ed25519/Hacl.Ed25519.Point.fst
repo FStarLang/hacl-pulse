@@ -123,26 +123,26 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   (* aa = (y1 - x1) (y2 - x2) *)
   fsub au y1 x1;
   fsub av y2 x2;
-  fmul aa au av aw;
+  fmul aa au av;
 
   (* ab = (y1 + x1) (y2 + x2) *)
   fadd au y1 x1;
   fadd av y2 x2;
-  fmul ab au av aw;
+  fmul ab au av;
 
   (* ac = 2d t1 t2 *)
   let dt = Table.table Tables.d2_arr 5sz;
   Tables.d2_ok ();
-  fmul au dt t1 aw;
+  fmul au dt t1;
   Table.drop_table dt;
-  fmul ac au t2 aw;
+  fmul ac au t2;
 
   (* ae = 2 z1 z2 *)
   fscale au z1 2uL aw;
   with vu. assert (A.pts_to au vu);
   double_ok (eval (vals vz1));
   assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul ae au z2 aw;
+  fmul ae au z2;
 
   (* E = ab - aa, H = ab + aa, then F = ae - ac and G = ae + ac on top of aa and ab *)
   fsub au ab aa;
@@ -150,10 +150,10 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   fsub aa ae ac;
   fadd ab ae ac;
 
-  fmul ox au aa aw;
-  fmul oy ab av aw;
-  fmul oz aa ab aw;
-  fmul ot au av aw;
+  fmul ox au aa;
+  fmul oy ab av;
+  fmul oz aa ab;
+  fmul ot au av;
 
   with wx. assert (A.pts_to ox wx);
   with wy. assert (A.pts_to oy wy);
@@ -200,19 +200,19 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 
   (* aa = x1^2, ab = y1^2, ac = 2 z1^2 *)
   copy au x1;
-  fmul aa au x1 aw;
+  fmul aa au x1;
   copy au y1;
-  fmul ab au y1 aw;
+  fmul ab au y1;
   fscale au z1 2uL aw;
   with vu. assert (A.pts_to au vu);
   double_ok (eval (vals vz1));
   assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul ac au z1 aw;
+  fmul ac au z1;
 
   (* ar = (x1 + y1)^2 *)
   fadd au x1 y1;
   copy av au;
-  fmul ar av au aw;
+  fmul ar av au;
 
   (* H = aa + ab, E = H - ar, G = aa - ab, F = ac + G *)
   fadd av aa ab;
@@ -220,10 +220,10 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   fsub ar aa ab;
   fadd aa ac ar;
 
-  fmul ox au aa aw;
-  fmul oy ar av aw;
-  fmul oz aa ar aw;
-  fmul ot au av aw;
+  fmul ox au aa;
+  fmul oy ar av;
+  fmul oz aa ar;
+  fmul ot au av;
 
   with wx. assert (A.pts_to ox wx);
   with wy. assert (A.pts_to oy wy);

@@ -97,7 +97,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   Tables.gy_ok ();
   assert_norm (1 < base);
   P.set_small a1 1uL;
-  fmul a2 a4 a5 a3;
+  fmul a2 a4 a5;
   P.point_mul ox oy oz ot a4 a5 a1 a2 ks;
   ()
 }

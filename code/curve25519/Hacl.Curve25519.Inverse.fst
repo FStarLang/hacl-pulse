@@ -77,7 +77,7 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
   with u1. assert (A.pts_to c1 u1);
   with u2. assert (A.pts_to c2 u2);
   assert (pure (vals u1 == vals va /\ vals u2 == vals va));
-  fmul a c1 c2 t;
+  fmul a c1 c2;
   with v'. assert (A.pts_to a v');
   C.fexp_two (fev (vals va));
   assert (pure (fev (vals v') == C.fexp (fev (vals va)) 2));
@@ -97,7 +97,7 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t) (vt': Seq.seq S128.t)
         fev (vals va') == C.fmul (fev (vals va)) (fev (vals vb)))
 {
   copy c1 a;
-  fmul a c1 b t;
+  fmul a c1 b;
 }
 
 (** [a := a^(2^n)], by [n] squarings. *)
