@@ -75,6 +75,11 @@ let xof_block_bytes (seed: Seq.seq S8.t) (j: nat)
              xof_byte seed (j * 168 + u))
   = FStar.Classical.forall_intro (xof_block_byte seed j)
 
+(** No block taken yet is the state the absorb left. *)
+let squeeze_state_zero (s: state)
+  : Lemma (squeeze_state 0 s == s)
+  = Loops.repeati_zero (fun _ st -> permute st) s
+
 (** Taking a block advances the state by one permutation. *)
 let squeeze_state_succ (j: nat) (s: state)
   : Lemma (squeeze_state (j + 1) s == permute (squeeze_state j s))
@@ -104,7 +109,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
 (** [blk <- block j], and the state moves on to block [j + 1]. *)
 fn xof_block (blk: A.array S8.t) (st: A.array S64.t) (b: A.array S64.t)
              (rc_tbl: A.array S64.t)
-             (#j: erased nat) (#vsq: erased (Seq.seq S64.t))
+             (j: erased nat) (vsq: erased (Seq.seq S64.t))
              (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
              (#vblk0: erased (Seq.seq S8.t))
              (#prc: perm) (#vrc: erased (Seq.seq S64.t))
