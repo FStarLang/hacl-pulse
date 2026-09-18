@@ -137,17 +137,23 @@ let gammas_zetas (i: nat { i < 128 })
     in the upper half, [f[j] - zeta * f[j + len]] with [j = t - len].  Both
     read the {i input} polynomial, which is why the in-place pseudocode
     ("write [j+len] before [j]") and this out-of-place reading agree. *)
+let ntt_layer_at (e: nat { 1 <= e /\ e <= 7 }) (f: poly) (t: nat { t < n }) : zq
+  = let len = pow2 e in
+    let z = zetas (zidx e t) in
+    if (t / len) % 2 = 0 then begin
+      even_step e t;
+      add (Seq.index f t) (mul z (Seq.index f (t + len)))
+    end else begin
+      odd_step e t;
+      sub (Seq.index f (t - len)) (mul z (Seq.index f t))
+    end
+
 let ntt_layer (e: nat { 1 <= e /\ e <= 7 }) (f: poly) : poly
-  = Seq.init n (fun t ->
-      let len = pow2 e in
-      let z = zetas (zidx e t) in
-      if (t / len) % 2 = 0 then begin
-        even_step e t;
-        add (Seq.index f t) (mul z (Seq.index f (t + len)))
-      end else begin
-        odd_step e t;
-        sub (Seq.index f (t - len)) (mul z (Seq.index f t))
-      end)
+  = Seq.init n (ntt_layer_at e f)
+
+let ntt_layer_index (e: nat { 1 <= e /\ e <= 7 }) (f: poly) (t: nat { t < n })
+  : Lemma (Seq.index (ntt_layer e f) t == ntt_layer_at e f t)
+  = Seq.init_index_ n (ntt_layer_at e f) t
 
 (** Algorithm 9.  Seven layers, half-width 128 down to 2; the layer with
     half-width 1 is deliberately absent, which is what leaves the output in
@@ -155,23 +161,39 @@ let ntt_layer (e: nat { 1 <= e /\ e <= 7 }) (f: poly) : poly
 let ntt (f: poly) : poly
   = Loops.repeati 7 (fun l acc -> if l < 7 then ntt_layer (7 - l) acc else acc) f
 
+(** The seven layers, spelled out: an implementation runs them one after
+    another rather than as a fold, and this is the bridge. *)
+#push-options "--fuel 8"
+let ntt_unfold (f: poly)
+  : Lemma (ntt f ==
+           ntt_layer 1 (ntt_layer 2 (ntt_layer 3 (ntt_layer 4
+             (ntt_layer 5 (ntt_layer 6 (ntt_layer 7 f)))))))
+  = ()
+#pop-options
+
 (** {2 The inverse transform}
 
     One Gentleman-Sande layer.  The lower half adds, the upper half
     subtracts and then scales -- note that unlike the forward layer the
     multiplication by [zeta] happens after the subtraction, which is what
     makes the two layers mutually inverse rather than merely similar. *)
+let intt_layer_at (e: nat { 1 <= e /\ e <= 7 }) (f: poly) (t: nat { t < n }) : zq
+  = let len = pow2 e in
+    let z = zetas (zidx_inv e t) in
+    if (t / len) % 2 = 0 then begin
+      even_step e t;
+      add (Seq.index f t) (Seq.index f (t + len))
+    end else begin
+      odd_step e t;
+      mul z (sub (Seq.index f t) (Seq.index f (t - len)))
+    end
+
 let intt_layer (e: nat { 1 <= e /\ e <= 7 }) (f: poly) : poly
-  = Seq.init n (fun t ->
-      let len = pow2 e in
-      let z = zetas (zidx_inv e t) in
-      if (t / len) % 2 = 0 then begin
-        even_step e t;
-        add (Seq.index f t) (Seq.index f (t + len))
-      end else begin
-        odd_step e t;
-        mul z (sub (Seq.index f t) (Seq.index f (t - len)))
-      end)
+  = Seq.init n (intt_layer_at e f)
+
+let intt_layer_index (e: nat { 1 <= e /\ e <= 7 }) (f: poly) (t: nat { t < n })
+  : Lemma (Seq.index (intt_layer e f) t == intt_layer_at e f t)
+  = Seq.init_index_ n (intt_layer_at e f) t
 
 (** [128^-1 mod q].  The seven layers each double the result, so the
     inverse transform ends by scaling the whole polynomial down. *)
@@ -182,9 +204,23 @@ let inv_128_correct () : Lemma (mul 128 inv_128 == 1) = assert_norm (mul 128 inv
 let poly_scale (c: zq) (f: poly) : poly
   = Seq.init n (fun i -> mul c (Seq.index f i))
 
+let poly_scale_index (c: zq) (f: poly) (i: nat { i < n })
+  : Lemma (Seq.index (poly_scale c f) i == mul c (Seq.index f i))
+          [SMTPat (Seq.index (poly_scale c f) i)]
+  = Seq.init_index_ n (fun j -> mul c (Seq.index f j)) i
+
 (** Algorithm 10.  The layers run the other way, half-width 2 up to 128. *)
 let intt (f: poly) : poly
   = poly_scale inv_128 (Loops.repeati 7 (fun l acc -> if l < 7 then intt_layer (1 + l) acc else acc) f)
+
+#push-options "--fuel 8"
+let intt_unfold (f: poly)
+  : Lemma (intt f ==
+           poly_scale inv_128
+             (intt_layer 7 (intt_layer 6 (intt_layer 5 (intt_layer 4
+               (intt_layer 3 (intt_layer 2 (intt_layer 1 f))))))))
+  = ()
+#pop-options
 
 (** {2 Multiplication in the NTT domain} *)
 
@@ -195,15 +231,21 @@ let base_case_multiply (a0 a1 b0 b1 g: zq) : zq & zq
 
 (** Algorithm 11.  128 independent quadratic products, the [i]th modulo
     [X^2 - gammas i]. *)
+let multiply_ntts_at (f g: poly) (t: nat { t < n }) : zq
+  = let i = t / 2 in
+    div_lt t 128 2;
+    let c0, c1 =
+      base_case_multiply (Seq.index f (2 * i)) (Seq.index f (2 * i + 1))
+                         (Seq.index g (2 * i)) (Seq.index g (2 * i + 1))
+                         (gammas i) in
+    if t % 2 = 0 then c0 else c1
+
 let multiply_ntts (f g: poly) : poly
-  = Seq.init n (fun t ->
-      let i = t / 2 in
-      div_lt t 128 2;
-      let c0, c1 =
-        base_case_multiply (Seq.index f (2 * i)) (Seq.index f (2 * i + 1))
-                           (Seq.index g (2 * i)) (Seq.index g (2 * i + 1))
-                           (gammas i) in
-      if t % 2 = 0 then c0 else c1)
+  = Seq.init n (multiply_ntts_at f g)
+
+let multiply_ntts_index (f g: poly) (t: nat { t < n })
+  : Lemma (Seq.index (multiply_ntts f g) t == multiply_ntts_at f g t)
+  = Seq.init_index_ n (multiply_ntts_at f g) t
 
 (** {2 Vectors}
 
