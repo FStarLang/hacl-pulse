@@ -1902,8 +1902,8 @@ the reference.
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
 | Ed25519 sign | -- | 255 us | 64 us | 3.96x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
-| P-256 ECDSA verify | -- | 2.57 ms | 0.43 ms | 5.98x |
-| secp256k1 ECDSA sign | -- | 1.14 ms | 0.07 ms | 16x |
+| P-256 ECDSA verify | -- | 2.49 ms | 0.43 ms | 5.77x |
+| secp256k1 ECDSA sign | -- | 1.08 ms | 0.07 ms | 16x |
 
 Three things account for most of the spread.
 
@@ -1955,11 +1955,34 @@ also a budget -- `--param ipa-cp-large-unit-insns` defaults to sixteen
 thousand -- and adding FrodoKEM and HPKE to the single translation unit spent
 it.  The clones vanished, and every elliptic curve benchmark got two and a
 half times slower without a single line of elliptic curve code changing.
-`amul` is now `inline_for_extraction`, so each of its nineteen call sites
-carries its own copy with its own constants; that is a decision the library
-makes rather than one it hopes for.  It is slightly slower than gcc's four
-clones and about thirty kilobytes larger, and it no longer depends on how big
-the rest of the distribution happens to be.
+`amul` is now `inline_for_extraction`, and so is the modular exponentiation
+`Hacl.Impl.Exp256.mexp` above it, which gcc was cloning for the same reason:
+each of their call sites carries its own copy with its own constants.  That
+is a decision the library makes rather than one it hopes for, and it puts the
+curves back at or slightly ahead of where they were before the merge.
+
+**So the policy is to do this work ourselves.**  Every specialisation the C
+compiler performs for us is one we do not control, and there are two
+independent reasons not to want that.  It is spent against a budget for the
+translation unit as a whole, so any new primitive can take it away without
+touching the code it slows down.  And clang does no function specialisation
+at all -- LLVM's pass is off by default -- so anything obtained this way is a
+gcc-only speedup, and shows up as a gcc/clang gap rather than as a gap in the
+library.  Splitting the distribution into several files does not fix either
+one; it makes the units smaller, which moves the budget around and takes away
+inlining opportunities elsewhere.  The fix is to say what we mean:
+`inline_for_extraction` where a caller's constant matters, and let both
+compilers see the same code.
+
+`make clones` reports where we are still relying on the compiler's judgement:
+it compiles the distribution with gcc, lists the functions it cloned, and
+diffs them against `mk/clones.baseline`.  There are seventy-eight today --
+the generic bignum's Montgomery reduction and exponentiation, Blake2's
+compress, HMAC, the SHA-2 cores -- and the list is meant to shrink.  `make
+clones-available` recompiles with the budget raised and prints what gcc
+*would* have cloned given room: four functions today, worth about seven
+percent on SHA-3, which is the difference between the SHA-3 numbers above and
+the ones before FrodoKEM was merged.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
@@ -2400,9 +2423,12 @@ rough order of value:
    gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
-6. **Splitting the distribution into several translation units**, so that
-   `inline` and interprocedural constant propagation stop being one global
-   budget that any new primitive can exhaust.  Both of the regressions
-   described above -- the `CInline` hints that do not compose, and the
-   Montgomery clones that disappeared when FrodoKEM arrived -- are the same
-   problem seen twice.
+6. **Taking over the remaining seventy-eight compiler specialisations**, the
+   ones `make clones` lists: the generic bignum's Montgomery reduction and
+   exponentiation, Blake2's compress, HMAC, the SHA-2 cores.  Each is a
+   speedup that gcc currently grants us at its own discretion and clang does
+   not grant at all.  `Hacl.Hash.SHA3.keccak_impl` is the first, since it is
+   already being lost to the budget and is worth about seven percent.
+   Splitting the distribution into several translation units is *not* the fix
+   here -- it moves the budget rather than removing the dependency on it, and
+   costs inlining across the new boundaries.
