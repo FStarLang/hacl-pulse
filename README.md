@@ -669,6 +669,18 @@ multiplications, twenty-five `mul_wide`s, a chain of shifts and masks, and
 five writes; the change was worth 2.1x on every Curve25519 and Ed25519
 benchmark.
 
+**And the field asks to be inlined.**  HACL\*'s `_51` is a set of
+`static inline` functions in a header, so each disappears into the ladder
+body; Custard emits plain `static` functions, and gcc declines to inline a
+forty-line `fmul` with thirty call sites.  `FStar.Attributes.CInline` is
+Custard's way of saying `static inline` while leaving the definition where it
+is -- a request to the C compiler, as distinct from Custard's own `Inline`,
+which substitutes the body and emits nothing.  The distinction matters:
+forcing the inline with `always_inline` makes X25519 *slower* than not
+inlining at all (78 us against 68), because five `fmul`s in a ladder step,
+each holding ten limbs and five 128-bit columns, spill.  Letting gcc choose
+gives 56.  The attribute is on all eight field operations.
+
 `fscale` is the one operation that needed a wider intermediate:
 `121665 * (2^52 - 1)` is about `2^69`, past a word, so it takes a nine-element
 128-bit scratch array and carries down from there.  It is also the only
@@ -1764,12 +1776,12 @@ the reference.
 | SHA-1 | 256 KiB | 1,540 us | 1,490 us | 1.03x |
 | HMAC-SHA-256 | 256 KiB | 1,148 us | 1,102 us | 1.04x |
 | NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
+| X25519 | -- | 56 us | 44 us | 1.27x |
 | Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
-| X25519 | -- | 68 us | 44 us | 1.54x |
 | BLAKE2b | 256 KiB | 582 us | 313 us | 1.86x |
 | RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
-| Ed25519 sign | -- | 263 us | 64 us | 4.08x |
+| Ed25519 sign | -- | 255 us | 64 us | 3.96x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
 | P-256 ECDSA verify | -- | 4.76 ms | 0.43 ms | 11.0x |
 | secp256k1 ECDSA sign | -- | 2.10 ms | 0.07 ms | 32x |
@@ -1790,11 +1802,10 @@ the modexp row shows.
 
 **Where it is behind by more, it is the higher-level algorithm.**  Curve25519
 now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
-so the field arithmetic is the same shape and X25519 is within 1.5x; what is
-left there is that HACL\*'s `fmul` is a `static inline` in a header and gets
-inlined into the ladder body, while Custard emits a `static` function that gcc
-declines to inline.  Ed25519 is further behind because it multiplies one bit
-at a time where HACL\* uses a precomputed window.  P-256 and secp256k1 use the shared general Montgomery core rather
+so the field arithmetic is the same shape, and with the field marked
+`CInline` X25519 is within 1.27x -- what is left there is the ladder itself,
+which has had no attention.  Ed25519 is further behind because it multiplies
+one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1 use the shared general Montgomery core rather
 than the special-prime reductions those two primes admit, and multiply scalars
 one bit at a time rather than through a precomputed window.  These are known,
 localized and unstarted; none of them requires new proof technique, only work.
@@ -2161,7 +2172,7 @@ rough order of value:
 
 1. **Windowed scalar multiplication for Ed25519**, which is most of the
    remaining gap now that the field is at radix 2^51 and `fmul` is a straight
-   line: signing is 4.1x the reference where X25519 is 1.5x, and the whole of
+   line: signing is 4.0x the reference where X25519 is 1.27x, and the whole of
    the difference is HACL\*'s precomputed base-point window against a
    bit-at-a-time double-and-add here.
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
