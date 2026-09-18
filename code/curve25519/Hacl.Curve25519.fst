@@ -116,7 +116,7 @@ ensures exists* (vout': Seq.seq S64.t) (vc': Seq.seq S64.t) (vt': Seq.seq S128.t
   copy c a;
   with u. assert (A.pts_to c u);
   assert (pure (vals u == vals va));
-  fmul out a c t;
+  fmul out a c;
 }
 
 (** {2 One ladder step}
@@ -172,24 +172,24 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
   fsub t1 x2 z2;                          (* b  *)
   fadd t2 x3 z3;                          (* c  *)
   fsub t3 x3 z3;                          (* d  *)
-  fmul t4 t3 t0 t31;                      (* da *)
-  fmul t5 t2 t1 t31;                      (* cb *)
+  fmul t4 t3 t0;                      (* da *)
+  fmul t5 t2 t1;                      (* cb *)
   fsqr t2 t0 t6 t31;                      (* aa *)
   fsqr t3 t1 t6 t31;                      (* bb *)
   fadd t0 t4 t5;                          (* da + cb *)
   fsub t1 t4 t5;                          (* da - cb *)
   fsqr x3 t0 t6 t31;                      (* x3' *)
   fsqr t4 t1 t6 t31;
-  fmul z3 x1 t4 t31;                      (* z3' *)
+  fmul z3 x1 t4;                      (* z3' *)
   fsub t5 t2 t3;                          (* e = aa - bb *)
-  fmul x2 t2 t3 t31;                      (* x2' = aa * bb *)
+  fmul x2 t2 t3;                      (* x2' = aa * bb *)
   with e. assert (A.pts_to t5 e);
   fscale t0 t5 121665uL t31;
   with s. assert (A.pts_to t0 s);
   Math.lemma_mod_mul_distr_r 121665 (eval (vals e)) C.prime;
   assert (pure (fev (vals s) == C.fmul C.a24 (fev (vals e))));
   fadd t1 t2 t0;                          (* aa + a24 e *)
-  fmul z2 t5 t1 t31;                      (* z2' *)
+  fmul z2 t5 t1;                      (* z2' *)
 }
 
 #pop-options
@@ -458,7 +458,7 @@ ensures exists* (vout': Seq.seq S8.t).
   finv b0 a3;
   with vi0. assert (A.pts_to b0 vi0);
   assert (pure (fev (vals vi0) == C.finv (fev (vals wz2))));
-  fmul b1 a2 b0 bw;
+  fmul b1 a2 b0;
   with vm. assert (A.pts_to b1 vm);
   assert (pure (fev (vals vm) == C.fmul (fev (vals wx2)) (fev (vals vi0))));
   freeze b1 b2;

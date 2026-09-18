@@ -70,6 +70,7 @@ module B32 = Spec.Bignum256
 module W = Spec.Bignum51.Window
 module W32 = Spec.Bignum256.Window
 module R = Spec.Curve25519.Repack
+module Cols = Spec.Curve25519.Columns
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -610,219 +611,172 @@ ensures exists* (vout': Seq.seq S64.t) (vt': Seq.seq S128.t).
 
 (** {2 Multiplication}
 
-    Three loops: the nine wide columns of the schoolbook product, the fold
-    of the top four columns down by [19], and two carry passes.  The
-    columns live in a nine-word scratch slice, which the caller supplies. *)
+    Twenty-five products, five columns, one carry chain -- and not one
+    array.  [Spec.Curve25519.Columns] says the five columns of
+    [fold19 (part a b nl)] are these five explicit sums and that
+    [carry_fix (carry_pass .)] is this straight line, so the whole of
+    [fmul] can be written in local variables and Custard emits it as
+    such.  The nine-column accumulator and the second carry pass that the
+    specification describes are proof scaffolding; they never run.
 
-let addw_zerow (x: Seq.seq nat)
-  : Lemma (requires Seq.length x == nw)
-          (ensures Spec.Curve25519.Field.addw x zerow == x)
-  = Seq.lemma_eq_intro (Spec.Curve25519.Field.addw x zerow) x
+    The two ideas that make it fit.  The reduction constant is folded
+    into [b] up front -- [19 * lim] still fits a word, so four
+    multiplications buy nine columns collapsed to five.  And the carry
+    between columns is a {e word}: a column is under [95 * lim^2], so its
+    quotient by the base is under [2^60] and nineteen times the last one
+    is still under [2^64].  That is what turns two hundred-and-twenty-eight-bit
+    carry passes into one chain of five. *)
 
-let acc_ble (a b acc: Seq.seq nat) (i j: nat)
-  : Lemma (requires ble a lim /\ ble b lim /\
-                    acc == Spec.Curve25519.Field.addw (part a b i) (rowj a b i j) /\ i < nl)
-          (ensures ble acc (nl * (lim * lim)))
-  = part_ble a b lim lim i;
-    rowj_ble a b lim lim i j;
-    addw_ble (part a b i) (rowj a b i j) (i * (lim * lim)) (lim * lim);
-    Math.distributivity_add_left i 1 (lim * lim);
-    Math.lemma_mult_le_right (lim * lim) (i + 1) nl;
-    ble_mono acc (i * (lim * lim) + lim * lim) (nl * (lim * lim))
+unfold let colb : nat = 5 * (19 * (lim * lim))
+unfold let carb : nat = (colb + pow2 60) / base
 
-#push-options "--z3rlimit 300"
+(** A limb product with the nineteen already in the right factor. *)
+inline_for_extraction
+let mulw19 (x y: S64.t)
+  : Pure S128.t (requires S64.v x <= lim /\ S64.v y <= 19 * lim)
+                (ensures fun z -> S128.v z == S64.v x * S64.v y /\
+                                  S128.v z <= 19 * (lim * lim))
+  = Math.lemma_mult_le_left (S64.v x) (S64.v y) (19 * lim);
+    Math.lemma_mult_le_right (19 * lim) (S64.v x) lim;
+    Math.paren_mul_right lim 19 lim;
+    Math.swap_mul lim 19;
+    Math.paren_mul_right 19 lim lim;
+    S128.mul_wide x y
 
-fn mul_columns (t: A.array S128.t) (a b: A.array S64.t)
-               (#vt: erased (Seq.seq S128.t))
-               (#pa: perm) (#va: erased (Seq.seq S64.t))
-               (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires A.pts_to t vt ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vt == nw /\ felem (vals va) /\ felem (vals vb))
-ensures exists* (vt': Seq.seq S128.t).
-  A.pts_to t vt' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vt' == nw /\ vals128 vt' == part (vals va) (vals vb) nl)
-{
-  A.pts_to_len t;
-  A.pts_to_len a;
-  A.pts_to_len b;
-  assert_norm (nl * (lim * lim) + lim * lim < pow2 128);
-  assert_norm (lim * lim < pow2 128);
-  let z = S128.zero;
-  let mut c = 0sz;
-  while (let vc = !c; SZ.lt vc 9sz)
-  invariant exists* (vc: SZ.t) (v: Seq.seq S128.t).
-    pts_to c vc ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vc <= 9 /\ Seq.length v == nw /\
-          (forall (k: nat). k < SZ.v vc ==> Seq.index (vals128 v) k == 0))
-  decreases (9 - SZ.v (!c))
-  {
-    let vc = !c;
-    A.((t.(vc) <- z));
-    c := SZ.add vc 1sz;
-  };
-  with v0. assert (A.pts_to t v0);
-  assert (pure (vals128 v0 `Seq.equal` zerow));
-  Loops.repeati_zero (mul_step (vals va) (vals vb)) zerow;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 5sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S128.t).
-    pts_to i vi ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 5 /\ Seq.length v == nw /\
-          vals128 v == part (vals va) (vals vb) (SZ.v vi))
-  decreases (5 - SZ.v (!i))
-  {
-    let vi = !i;
-    let ai = A.(a.(vi));
-    part_len (vals va) (vals vb) (SZ.v vi);
-    rowj_zero (vals va) (vals vb) (SZ.v vi);
-    addw_zerow (part (vals va) (vals vb) (SZ.v vi));
-    let mut j = 0sz;
-    while (let vj = !j; SZ.lt vj 5sz)
-    invariant exists* (vj: SZ.t) (v: Seq.seq S128.t).
-      pts_to j vj ** pts_to i vi ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-      pure (SZ.v vj <= 5 /\ Seq.length v == nw /\ SZ.v vi < 5 /\
-            vals128 v == Spec.Curve25519.Field.addw
-                           (part (vals va) (vals vb) (SZ.v vi))
-                           (rowj (vals va) (vals vb) (SZ.v vi) (SZ.v vj)))
-    decreases (5 - SZ.v (!j))
-    {
-      with v. assert (A.pts_to t v);
-      let vj = !j;
-      acc_ble (vals va) (vals vb) (vals128 v) (SZ.v vi) (SZ.v vj);
-      let bj = A.(b.(vj));
-      let pos = SZ.add vi vj;
-      let cur = A.(t.(pos));
-      Math.lemma_mult_le_left (S64.v ai) (S64.v bj) lim;
-      Math.lemma_mult_le_right lim (S64.v ai) lim;
-      let nw' = addd cur (S128.mul_wide ai bj);
-      A.((t.(pos) <- nw'));
-      vals128_upd v (SZ.v vi + SZ.v vj) nw';
-      addw_rowj_step (part (vals va) (vals vb) (SZ.v vi)) (vals va) (vals vb)
-                     (SZ.v vi) (SZ.v vj);
-      j := SZ.add vj 1sz;
-    };
-    part_step (vals va) (vals vb) (SZ.v vi);
-    i := SZ.add vi 1sz;
-  };
-  ()
-}
+(** One column: five of those, summed left to right. *)
+inline_for_extraction
+let col5 (p0 p1 p2 p3 p4: S128.t)
+  : Pure S128.t
+         (requires S128.v p0 <= 19 * (lim * lim) /\ S128.v p1 <= 19 * (lim * lim) /\
+                   S128.v p2 <= 19 * (lim * lim) /\ S128.v p3 <= 19 * (lim * lim) /\
+                   S128.v p4 <= 19 * (lim * lim))
+         (ensures fun z ->
+            S128.v z == S128.v p0 + S128.v p1 + S128.v p2 + S128.v p3 + S128.v p4 /\
+            S128.v z <= colb)
+  = assert_norm (colb < pow2 128);
+    addd (addd (addd (addd p0 p1) p2) p3) p4
 
-#pop-options
+(** The incoming carry, widened onto a column. *)
+inline_for_extraction
+let cadd (x: S128.t) (c: S64.t)
+  : Pure S128.t (requires S128.v x <= colb /\ S64.v c <= carb)
+                (ensures fun z -> S128.v z == S128.v x + S64.v c /\
+                                  S128.v z <= colb + pow2 60)
+  = assert_norm (carb <= pow2 60);
+    assert_norm (colb + pow2 60 < pow2 128);
+    addd x (Cast.u64_to_u128 c)
 
-(** One step of the fold, on the sequences alone: [g] is [f] with the first
-    [k] columns already folded, and [x] is the folded column [k]. *)
-let fold_step (f g: Seq.seq nat) (k: nat { k < nw - nl }) (x: nat)
-  : Lemma (requires Seq.length f == nw /\ Seq.length g == nw /\
-                    x == Seq.index f k + 19 * Seq.index f (k + nl) /\
-                    (forall (c: nat). c < k ==>
-                       Seq.index g c == Seq.index f c + 19 * Seq.index f (c + nl)) /\
-                    (forall (c: nat). k <= c /\ c < nw ==> Seq.index g c == Seq.index f c))
-          (ensures (let h = Seq.upd g k x in
-                    Seq.length h == nw /\
-                    (forall (c: nat). c < k + 1 ==>
-                       Seq.index h c == Seq.index f c + 19 * Seq.index f (c + nl)) /\
-                    (forall (c: nat). k + 1 <= c /\ c < nw ==> Seq.index h c == Seq.index f c)))
-  = ()
+(** The outgoing carry, narrowed back to a word. *)
+inline_for_extraction
+let chi (x: S128.t)
+  : Pure S64.t (requires S128.v x <= colb + pow2 60)
+               (ensures fun k -> S64.v k == S128.v x / base /\ S64.v k <= carb)
+  = assert_norm (carb < pow2 64);
+    Math.lemma_div_le (S128.v x) (colb + pow2 60) base;
+    narrow128 (hi51d x)
 
-#push-options "--z3rlimit 600"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn fmul (out a b: A.array S64.t) (t: A.array S128.t)
-        (#vout: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
+fn fmul (out a b: A.array S64.t)
+        (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires A.pts_to out vout ** A.pts_to t vt ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vout == nl /\ Seq.length vt == nw /\
-        felem (vals va) /\ felem (vals vb))
-ensures exists* (vout': Seq.seq S64.t) (vt': Seq.seq S128.t).
-  A.pts_to out vout' ** A.pts_to t vt' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vt' == nw /\ felem (vals vout') /\
+requires A.pts_to out vout ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vout == nl /\ felem (vals va) /\ felem (vals vb))
+ensures exists* (vout': Seq.seq S64.t).
+  A.pts_to out vout' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (felem (vals vout') /\
         fev (vals vout') == C.fmul (fev (vals va)) (fev (vals vb)))
 {
   A.pts_to_len out;
-  A.pts_to_len t;
-  mul_columns t a b;
-  with vp. assert (A.pts_to t vp);
-  part_ble (vals va) (vals vb) lim lim nl;
-  assert_norm (20 * (nl * (lim * lim)) < pow2 128);
-  let mut k = 0sz;
-  while (let vk = !k; SZ.lt vk 4sz)
-  invariant exists* (vk: SZ.t) (v: Seq.seq S128.t).
-    pts_to k vk ** A.pts_to t v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vk <= 4 /\ Seq.length v == nw /\
-          (forall (c: nat). c < SZ.v vk ==>
-             Seq.index (vals128 v) c ==
-               Seq.index (vals128 vp) c + 19 * Seq.index (vals128 vp) (c + nl)) /\
-          (forall (c: nat). SZ.v vk <= c /\ c < nw ==>
-             Seq.index (vals128 v) c == Seq.index (vals128 vp) c))
-  decreases (4 - SZ.v (!k))
-  {
-    with v. assert (A.pts_to t v);
-    let vk = !k;
-    let x = A.(t.(vk));
-    let y = A.(t.(SZ.add vk 5sz));
-    assert (pure (S128.v x == Seq.index (vals128 vp) (SZ.v vk)));
-    assert (pure (S128.v y == Seq.index (vals128 vp) (SZ.v vk + nl)));
-    assert (pure (19 * S128.v y < pow2 128));
-    let s = addd x (mul19 y);
-    A.((t.(vk) <- s));
-    vals128_upd v (SZ.v vk) s;
-    fold_step (vals128 vp) (vals128 v) (SZ.v vk) (S128.v s);
-    k := SZ.add vk 1sz;
-  };
-  with v. assert (A.pts_to t v);
-  pre_index v;
-  assert (pure (pre v `Seq.equal` fold19 (vals128 vp)));
-  fold_ble (vals128 vp) (nl * (lim * lim));
-  assert_norm (20 * (nl * (lim * lim)) <= pow2 111);
-  ble_mono (pre v) (20 * (nl * (lim * lim))) (pow2 111);
-  assert_norm (pow2 111 + (pow2 60 + pow2 10) < base * (pow2 60 + pow2 10 + 1));
-  assert_norm (pow2 111 + (pow2 60 + pow2 10) < pow2 128);
-  assert_norm (base + 19 * (pow2 60 + pow2 10) < pow2 128);
-  carry_chain128 t (pow2 111) (pow2 60 + pow2 10);
-  with v1. assert (A.pts_to t v1);
-  carry_pass_len (pre v);
-  carry_pass_ble (pre v) (pow2 111) (pow2 60 + pow2 10);
-  assert_norm (base - 1 + 19 * ((pow2 111 + (pow2 60 + pow2 10)) / base) <= pow2 65);
-  ble_mono (pre v1) (base - 1 + 19 * ((pow2 111 + (pow2 60 + pow2 10)) / base)) (pow2 65);
-  assert_norm (pow2 65 + (pow2 14 + pow2 2) < base * (pow2 14 + pow2 2 + 1));
-  assert_norm (pow2 65 + (pow2 14 + pow2 2) < pow2 128);
-  assert_norm (base + 19 * (pow2 14 + pow2 2) < pow2 128);
-  carry_chain128 t (pow2 65) (pow2 14 + pow2 2);
-  with v2. assert (A.pts_to t v2);
-  carry_pass_len (pre v1);
-  carry_pass_ble (pre v1) (pow2 65) (pow2 14 + pow2 2);
-  assert_norm (base - 1 + 19 * ((pow2 65 + (pow2 14 + pow2 2)) / base) <= lim);
-  ble_mono (pre v2) (base - 1 + 19 * ((pow2 65 + (pow2 14 + pow2 2)) / base)) lim;
-  assert_norm (lim < pow2 64);
-  let mut n = 0sz;
-  while (let vn = !n; SZ.lt vn 5sz)
-  invariant exists* (vn: SZ.t) (w: Seq.seq S64.t).
-    pts_to n vn ** A.pts_to out w ** A.pts_to t v2 ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vn <= 5 /\ Seq.length w == nl /\
-          (forall (c: nat). c < SZ.v vn ==>
-             Seq.index (vals w) c == Seq.index (pre v2) c))
-  decreases (5 - SZ.v (!n))
-  {
-    with w. assert (A.pts_to out w);
-    let vn = !n;
-    let x = A.(t.(vn));
-    Seq.lemma_index_slice (vals128 v2) 0 nl (SZ.v vn);
-    assert (pure (Seq.index (pre v2) (SZ.v vn) == S128.v x));
-    assert (pure (S128.v x < pow2 64));
-    let y = narrow128 x;
-    A.((out.(vn) <- y));
-    vals_upd w (SZ.v vn) y;
-    copy_step (pre v2) (vals w) (SZ.v vn) (S64.v y);
-    n := SZ.add vn 1sz;
-  };
+  A.pts_to_len a;
+  A.pts_to_len b;
+  assert_norm (nl == 5);
+  let a0 = A.(a.(0sz));
+  let a1 = A.(a.(1sz));
+  let a2 = A.(a.(2sz));
+  let a3 = A.(a.(3sz));
+  let a4 = A.(a.(4sz));
+  let b0 = A.(b.(0sz));
+  let b1 = A.(b.(1sz));
+  let b2 = A.(b.(2sz));
+  let b3 = A.(b.(3sz));
+  let b4 = A.(b.(4sz));
+
+  (* The four scaled limbs of [b]. *)
+  assert_norm (19 * lim < pow2 64);
+  let r1 = mulk 19uL b1;
+  let r2 = mulk 19uL b2;
+  let r3 = mulk 19uL b3;
+  let r4 = mulk 19uL b4;
+  assert (pure (S64.v b0 <= 19 * lim /\ S64.v b1 <= 19 * lim /\
+                S64.v b2 <= 19 * lim /\ S64.v b3 <= 19 * lim /\
+                S64.v b4 <= 19 * lim));
+
+  let c0 = col5 (mulw19 a0 b0) (mulw19 a1 r4) (mulw19 a2 r3) (mulw19 a3 r2) (mulw19 a4 r1);
+  let c1 = col5 (mulw19 a0 b1) (mulw19 a1 b0) (mulw19 a2 r4) (mulw19 a3 r3) (mulw19 a4 r2);
+  let c2 = col5 (mulw19 a0 b2) (mulw19 a1 b1) (mulw19 a2 b0) (mulw19 a3 r4) (mulw19 a4 r3);
+  let c3 = col5 (mulw19 a0 b3) (mulw19 a1 b2) (mulw19 a2 b1) (mulw19 a3 b0) (mulw19 a4 r4);
+  let c4 = col5 (mulw19 a0 b4) (mulw19 a1 b3) (mulw19 a2 b2) (mulw19 a3 b1) (mulw19 a4 b0);
+
+  (* The columns are the five entries of [fold19 (part a b nl)]. *)
+  Cols.col0 (vals va) (vals vb);
+  Cols.col1 (vals va) (vals vb);
+  Cols.col2 (vals va) (vals vb);
+  Cols.col3 (vals va) (vals vb);
+  Cols.col4 (vals va) (vals vb);
+  assert (pure (Seq.length (fold19 (part (vals va) (vals vb) nl)) == nl /\
+                vat (fold19 (part (vals va) (vals vb) nl)) 0 == S128.v c0 /\
+                vat (fold19 (part (vals va) (vals vb) nl)) 1 == S128.v c1 /\
+                vat (fold19 (part (vals va) (vals vb) nl)) 2 == S128.v c2 /\
+                vat (fold19 (part (vals va) (vals vb) nl)) 3 == S128.v c3 /\
+                vat (fold19 (part (vals va) (vals vb) nl)) 4 == S128.v c4));
+
+  (* One chain up the limbs, carrying a word. *)
+  let o0 = lo51d c0;
+  let k0 = chi c0;
+  let l1 = cadd c1 k0;
+  let o1 = lo51d l1;
+  let k1 = chi l1;
+  let l2 = cadd c2 k1;
+  let o2 = lo51d l2;
+  let k2 = chi l2;
+  let l3 = cadd c3 k2;
+  let o3 = lo51d l3;
+  let k3 = chi l3;
+  let l4 = cadd c4 k3;
+  let o4 = lo51d l4;
+  let k4 = chi l4;
+
+  (* The wrap: [2^255 == prime + 19], then one more step into limb one. *)
+  assert_norm (19 * carb < pow2 64);
+  assert_norm (base + 19 * carb < pow2 64);
+  let t0 = addw o0 (mulk 19uL k4);
+  let w0 = lo51 t0;
+  let w1 = addw o1 (hi51 t0);
+
+  Cols.chain (fold19 (part (vals va) (vals vb) nl));
+
+  A.((out.(0sz) <- w0));
+  A.((out.(1sz) <- w1));
+  A.((out.(2sz) <- o2));
+  A.((out.(3sz) <- o3));
+  A.((out.(4sz) <- o4));
+
   with w. assert (A.pts_to out w);
-  assert (pure (vals w `Seq.equal` pre v2));
-  assert (pure (pre v == fold19 (part (vals va) (vals vb) nl)));
-  assert (pure (vals w ==
-                carry_pass (carry_pass (fold19 (part (vals va) (vals vb) nl)))));
-  assert (pure (vals w == fmul_spec (vals va) (vals vb)));
+  assert (pure (Seq.length w == nl));
+  assert (pure (Seq.index w 0 == w0 /\ Seq.index w 1 == w1 /\
+                Seq.index w 2 == o2 /\ Seq.index w 3 == o3 /\
+                Seq.index w 4 == o4));
+  assert (pure (Seq.length (fmul_spec (vals va) (vals vb)) == nl));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals vb)) 0 == S64.v w0));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals vb)) 1 == S64.v w1));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals vb)) 2 == S64.v o2));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals vb)) 3 == S64.v o3));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals vb)) 4 == S64.v o4));
+  Cols.five_eq (vals w) (fmul_spec (vals va) (vals vb));
   fmul_spec_ok (vals va) (vals vb);
-  assert (pure (felem (vals w)));
+  ()
 }
 
 #pop-options

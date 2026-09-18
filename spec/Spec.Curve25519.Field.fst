@@ -145,6 +145,35 @@ let carry_pass_ble (s: Seq.seq nat) (c d: nat)
     carry_top_ble (carry_run s (nl - 1)) c d
 
 
+let shaped (s: Seq.seq nat) (c0: nat) : prop =
+  Seq.length s == nl /\ vat s 0 <= c0 /\
+  (forall (k: nat). 0 < k /\ k < nl ==> vat s k < base)
+
+let shaped_ble (s: Seq.seq nat) (c0: nat)
+  : Lemma (requires shaped s c0 /\ base - 1 <= c0) (ensures ble s c0) = ()
+
+let eval_shaped (s: Seq.seq nat) (c0: nat)
+  : Lemma (requires shaped s c0) (ensures eval s <= c0 + pow2 255 - base)
+  = let t = Seq.slice s 1 nl in
+    let aux (i: nat { i < nl - 1 }) : Lemma (Seq.index t i < base) =
+      Seq.lemma_index_slice s 1 nl i;
+      assert (vat s (i + 1) < base) in
+    Classical.forall_intro aux;
+    assert (bnd t base);
+    eval_bnd t;
+    assert_norm (rad * (nl - 1) == 204);
+    Math.lemma_mult_le_left base (eval t + 1) (pow2 204);
+    Math.pow2_plus rad 204
+
+(** A pass leaves a shaped number: every limb but the lowest is a proper
+    base-[2^51] digit, and the lowest has absorbed the wrap-around. *)
+let carry_pass_shaped (s: Seq.seq nat) (c d: nat)
+  : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1))
+          (ensures shaped (carry_pass s) (base - 1 + 19 * ((c + d) / base)))
+  = carry_run_chained s c d (nl - 1);
+    carry_run_len s (nl - 1);
+    Math.lemma_div_le (Seq.index (carry_run s (nl - 1)) (nl - 1)) (c + d) base
+
 (** {2 Eight primes}
 
     [fsub] adds a multiple of the prime before subtracting, so that no limb
@@ -283,8 +312,27 @@ let fsub_spec_ok (a b: Seq.seq nat)
 
 (** {3 Multiplication} *)
 
+(** The last, partial pass.  {!carry_pass_shaped} says a full pass leaves
+    every limb but the lowest a proper base-[2^51] digit, so all that is
+    left to do is move limb zero's overflow into limb one -- one step of
+    the chain rather than a second pass over all five limbs.  That is what
+    lets [fmul] run a single carry chain, and it is why the bound below is
+    kept as [20 * (nl * (lim * lim))] rather than rounded up to [2^111]:
+    the rounding would put [19] times the top carry over [2^64] and the
+    chain could no longer be carried in a word. *)
+let carry_fix (s: Seq.seq nat) : Seq.seq nat = carry_step 0 s
+
+let carry_fix_ok (s: Seq.seq nat)
+  : Lemma (requires Seq.length s == nl)
+          (ensures Seq.length (carry_fix s) == nl /\ eval (carry_fix s) == eval s)
+  = carry_step_ok 0 s
+
+let carry_fix_ble (s: Seq.seq nat) (c0: nat)
+  : Lemma (requires shaped s c0) (ensures ble (carry_fix s) (base - 1 + c0 / base))
+  = Math.lemma_div_le (vat s 0) c0 base
+
 let fmul_spec (a b: Seq.seq nat) : Seq.seq nat =
-  carry_pass (carry_pass (fold19 (part a b nl)))
+  carry_fix (carry_pass (fold19 (part a b nl)))
 
 let fold_mod (c: Seq.seq nat)
   : Lemma (requires Seq.length c == nw)
@@ -299,17 +347,18 @@ let fmul_spec_ok (a b: Seq.seq nat)
   = part_ble a b lim lim nl;
     part_len a b nl;
     let p = part a b nl in
-    assert_norm (20 * (nl * (lim * lim)) <= pow2 111);
     fold_ble p (nl * (lim * lim));
-    ble_mono (fold19 p) (20 * (nl * (lim * lim))) (pow2 111);
     let f = fold19 p in
-    assert_norm (pow2 111 + (pow2 60 + pow2 10) < base * (pow2 60 + pow2 10 + 1));
-    assert_norm (base - 1 + 19 * ((pow2 111 + (pow2 60 + pow2 10)) / base) <= pow2 65);
-    pass f (pow2 111) (pow2 60 + pow2 10) (pow2 65);
+    assert_norm (20 * (nl * (lim * lim)) + pow2 60 < base * (pow2 60 + 1));
+    carry_pass_shaped f (20 * (nl * (lim * lim))) (pow2 60);
+    carry_pass_len f;
+    carry_pass_mod f;
     let g = carry_pass f in
-    assert_norm (pow2 65 + (pow2 14 + pow2 2) < base * (pow2 14 + pow2 2 + 1));
-    assert_norm (base - 1 + 19 * ((pow2 65 + (pow2 14 + pow2 2)) / base) <= lim);
-    pass g (pow2 65) (pow2 14 + pow2 2) lim;
+    let c0 = base - 1 + 19 * ((20 * (nl * (lim * lim)) + pow2 60) / base) in
+    carry_fix_ble g c0;
+    carry_fix_ok g;
+    assert_norm (base - 1 + (base - 1 + 19 * ((20 * (nl * (lim * lim)) + pow2 60) / base)) / base <= lim);
+    ble_mono (carry_fix g) (base - 1 + c0 / base) lim;
     fold_mod p;
     mul_ok a b;
     Math.lemma_mod_mul_distr_l (eval a) (eval b) prime;
@@ -346,26 +395,6 @@ let fscale_spec_ok (m: nat) (a: Seq.seq nat)
     already below [2^255] because [nl * rad] is [255]; one conditional
     subtraction finishes. *)
 
-let shaped (s: Seq.seq nat) (c0: nat) : prop =
-  Seq.length s == nl /\ vat s 0 <= c0 /\
-  (forall (k: nat). 0 < k /\ k < nl ==> vat s k < base)
-
-let shaped_ble (s: Seq.seq nat) (c0: nat)
-  : Lemma (requires shaped s c0 /\ base - 1 <= c0) (ensures ble s c0) = ()
-
-let eval_shaped (s: Seq.seq nat) (c0: nat)
-  : Lemma (requires shaped s c0) (ensures eval s <= c0 + pow2 255 - base)
-  = let t = Seq.slice s 1 nl in
-    let aux (i: nat { i < nl - 1 }) : Lemma (Seq.index t i < base) =
-      Seq.lemma_index_slice s 1 nl i;
-      assert (vat s (i + 1) < base) in
-    Classical.forall_intro aux;
-    assert (bnd t base);
-    eval_bnd t;
-    assert_norm (rad * (nl - 1) == 204);
-    Math.lemma_mult_le_left base (eval t + 1) (pow2 204);
-    Math.pow2_plus rad 204
-
 (** One step: carry the whole number, then fold the overflow back in with
     the reduction constant, since [2^255 = prime + 19]. *)
 let fstep (s: Seq.seq nat) : Seq.seq nat =
@@ -394,15 +423,6 @@ let fstep_ok (s: Seq.seq nat) (c d: nat)
     carry_low_len s;
     carry_split_bnd s c d;
     Math.lemma_mult_le_right 19 (carry_out s) d
-
-(** A pass leaves a shaped number: every limb but the lowest is a proper
-    base-[2^51] digit, and the lowest has absorbed the wrap-around. *)
-let carry_pass_shaped (s: Seq.seq nat) (c d: nat)
-  : Lemma (requires Seq.length s == nl /\ ble s c /\ c + d < base * (d + 1))
-          (ensures shaped (carry_pass s) (base - 1 + 19 * ((c + d) / base)))
-  = carry_run_chained s c d (nl - 1);
-    carry_run_len s (nl - 1);
-    Math.lemma_div_le (Seq.index (carry_run s (nl - 1)) (nl - 1)) (c + d) base
 
 (** [fstep] is nothing but [carry_pass] written the other way round: the
     wrap-around of the top limb and the fold of the overflow are the same

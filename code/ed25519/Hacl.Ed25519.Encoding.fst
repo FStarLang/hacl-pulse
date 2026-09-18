@@ -319,8 +319,8 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len a4; A.pts_to_len a5;
 
   finv a1 z;
-  fmul a2 x a1 a5;
-  fmul a3 y a1 a5;
+  fmul a2 x a1;
+  fmul a3 y a1;
   freeze a2 a4;
   freeze a3 a4;
   with ux. assert (A.pts_to a2 ux);
@@ -399,11 +399,11 @@ ensures
   let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut a5 = [| zz; 5sz |]; A.pts_to_len a5; let mut a6 = [| z128; 9sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
 
-  fmul a1 x1 z2 a6;
-  fmul a2 x2 z1 a6;
+  fmul a1 x1 z2;
+  fmul a2 x2 z1;
   let e1 = feq a1 a2 a3 a4 a5;
-  fmul a1 y1 z2 a6;
-  fmul a2 y2 z1 a6;
+  fmul a1 y1 z2;
+  fmul a2 y2 z1;
   let e2 = feq a1 a2 a3 a4 a5;
 
   e1 && e2
@@ -569,12 +569,12 @@ ensures exists* (wx: Seq.seq S64.t).
 
   (* b1 = y^2, u = b1 - 1, v = d b1 + 1 *)
   copy b7 yb;
-  fmul b1 b7 yb ba;
+  fmul b1 b7 yb;
   fsub b2 b1 b6;
   with su. assert (A.pts_to b2 su);
   let dt = Table.table Tables.d_arr 5sz;
   Tables.d_ok ();
-  fmul b3 dt b1 ba;
+  fmul b3 dt b1;
   Table.drop_table dt;
   copy b7 b3;
   fadd b3 b7 b6;
@@ -585,25 +585,25 @@ ensures exists* (wx: Seq.seq S64.t).
   (* w = u / v *)
   finv b4 b3;
   copy b7 b4;
-  fmul b4 b2 b7 ba;
+  fmul b4 b2 b7;
   with sw. assert (A.pts_to b4 sw);
 
   (* the first candidate, w^((p+3)/8) *)
   fsqrt b5 b4;
   with sx1. assert (A.pts_to b5 sx1);
   copy b7 b5;
-  fmul b1 b7 b5 ba;
+  fmul b1 b7 b5;
   let ok1 = feq b1 b4 b7 b8 b9;
 
   (* the second, that one times sqrt(-1) *)
   let sm = Table.table Tables.sqrtm1_arr 5sz;
   Tables.sqrtm1_ok ();
   copy b7 b5;
-  fmul b2 b7 sm ba;
+  fmul b2 b7 sm;
   Table.drop_table sm;
   with sx2. assert (A.pts_to b2 sx2);
   copy b7 b2;
-  fmul b1 b7 b2 ba;
+  fmul b1 b7 b2;
   let ok2 = feq b1 b4 b7 b8 b9;
 
   fselect ox b5 b2 ok1;
@@ -719,7 +719,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
       assert_norm (1 < base);
       P.set_small oz 1uL;
       copy c1 ox;
-      fmul ot c1 oy c3;
+      fmul ot c1 oy;
       true
     } else {
       false
