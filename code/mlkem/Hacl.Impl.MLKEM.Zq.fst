@@ -135,3 +135,25 @@ let zq_mul (a b: zqt) : r: zqt { S16.v r == mul (S16.v a) (S16.v b) }
     csub (Cast.u64_to_u16 (S64.sub_mod x (S64.mul_mod t (S64.classify 3329uL))))
 
 #pop-options
+
+(** {2 The view of an array as a polynomial}
+
+    Coefficients live in memory as secret words and in the specification as
+    naturals below [q], so the two are related by mapping [S16.v] over a
+    sequence.  [S16.v] is ghost, hence [init_ghost] and [GTot]. *)
+
+let as_poly (s: Seq.seq zqt { Seq.length s == n }) : GTot poly
+  = Seq.init_ghost n (fun i -> (S16.v (Seq.index s i) <: zq))
+
+let as_poly_index (s: Seq.seq zqt { Seq.length s == n }) (i: nat { i < n })
+  : Lemma (Seq.index (as_poly s) i == S16.v (Seq.index s i))
+          [SMTPat (Seq.index (as_poly s) i)]
+  = Seq.init_ghost_index_ n (fun j -> (S16.v (Seq.index s j) <: zq)) i
+
+(** What lets an implementation conclude from a pointwise loop invariant:
+    an array whose words agree with a polynomial coefficient by coefficient
+    {i is} that polynomial. *)
+let as_poly_intro (s: Seq.seq zqt { Seq.length s == n }) (f: poly)
+  : Lemma (requires forall (i: nat). i < n ==> S16.v (Seq.index s i) == Seq.index f i)
+          (ensures as_poly s == f)
+  = Seq.lemma_eq_intro (as_poly s) f
