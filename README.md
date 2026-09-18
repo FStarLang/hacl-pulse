@@ -1783,8 +1783,8 @@ the reference.
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
 | Ed25519 sign | -- | 255 us | 64 us | 3.96x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
-| P-256 ECDSA verify | -- | 4.76 ms | 0.43 ms | 11.0x |
-| secp256k1 ECDSA sign | -- | 2.10 ms | 0.07 ms | 32x |
+| P-256 ECDSA verify | -- | 2.49 ms | 0.43 ms | 5.77x |
+| secp256k1 ECDSA sign | -- | 1.11 ms | 0.07 ms | 17x |
 
 Three things account for most of the spread.
 
@@ -1805,10 +1805,25 @@ now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
 so the field arithmetic is the same shape, and with the field marked
 `CInline` X25519 is within 1.27x -- what is left there is the ladder itself,
 which has had no attention.  Ed25519 is further behind because it multiplies
-one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1 use the shared general Montgomery core rather
-than the special-prime reductions those two primes admit, and multiply scalars
-one bit at a time rather than through a precomputed window.  These are known,
+one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1
+use the shared general Montgomery core rather than the special-prime reductions
+those two primes admit, and multiply scalars one bit at a time rather than
+through a precomputed window.  These are known,
 localized and unstarted; none of them requires new proof technique, only work.
+
+**`inline` is a global resource.**  The whole library is one translation unit,
+so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
+against gcc's `--param inline-unit-growth` budget for the unit as a whole.
+Marking `Hacl.Impl.Bignum256`, the layer every P-256 and secp256k1 operation
+goes through, is worth **1.9x** on both curves and costs nothing anywhere
+else.  Marking the Montgomery and field wrappers above it as well, or
+Poly1305 alongside, gains no more and costs 1.5x on BLAKE2, 1.4x on Salsa20
+and 1.6x on Ed25519 -- primitives that share no code with any of it.  Raising
+the budget on the command line restores them exactly, which confirms the
+mechanism, but a library cannot dictate its consumers' flags.  So the
+attribute goes only where it is paid for: Curve25519's field and the 256-bit
+bignum core.  The `Hacl.Secret` arithmetic, 168 single-expression functions,
+gains nothing at all -- gcc was already inlining every one.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
