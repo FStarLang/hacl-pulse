@@ -892,20 +892,12 @@ static size_t Hacl_Hash_Blake2_block_avail(size_t off, size_t len, size_t bl);
 static void Hacl_Hash_Blake2_read_block__t(uint8_t *blk, uint8_t *s, size_t len, size_t off);
 static uint32_t Hacl_Impl_Bytes_load_le__t_2(uint8_t *b, size_t off);
 static void Hacl_Hash_Blake2_load_block__t(uint32_t *mw, uint8_t *blk);
-static void Hacl_Hash_Blake2_Core_load_vector__t(uint32_t *vv, uint32_t *h, uint32_t *ivs);
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x);
 static uint32_t Hacl_Secret_Word_Instances_sz_lo_32(size_t x);
 static uint32_t Hacl_Secret_Word_of_sizet_lo__t_1(size_t x);
 static uint32_t Hacl_Secret_Word_Instances_sz_hi_32(size_t x);
 static uint32_t Hacl_Secret_Word_of_sizet_hi__t(size_t x);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t(uint32_t *vv, uint32_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_mix_state_impl__t(uint32_t *h, uint32_t *vv);
-static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *vv, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -915,13 +907,7 @@ static void Hacl_Hash_Blake2_Streaming_update_impl__t(uint32_t *acc, uint32_t *v
 static void Hacl_Streaming_Blake2_update_gen__t(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_1(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_1(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_1(uint32_t *vv, uint32_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_1(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_1(uint8_t *out, uint32_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t *vv, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_1(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -931,13 +917,7 @@ static void Hacl_Hash_Blake2_Streaming_update_impl__t_1(uint32_t *acc, uint32_t 
 static void Hacl_Streaming_Blake2_update_gen__t_1(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_1(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_1(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_2(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_2(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_2(uint32_t *vv, uint32_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_2(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_2(uint8_t *out, uint32_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t *vv, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_2(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -947,13 +927,7 @@ static void Hacl_Hash_Blake2_Streaming_update_impl__t_2(uint32_t *acc, uint32_t 
 static void Hacl_Streaming_Blake2_update_gen__t_2(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_2(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_2(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_3(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_3(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_3(uint32_t *vv, uint32_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_3(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_3(uint8_t *out, uint32_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t *vv, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_3(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -970,18 +944,10 @@ static void Hacl_Hash_Blake2_Streaming_copy_state__t_1(uint64_t *dst, uint64_t *
 static void Hacl_Hash_Blake2_read_block__t_1(uint8_t *blk, uint8_t *s, size_t len, size_t off);
 static uint64_t Hacl_Impl_Bytes_load_le__t_3(uint8_t *b, size_t off);
 static void Hacl_Hash_Blake2_load_block__t_1(uint64_t *mw, uint8_t *blk);
-static void Hacl_Hash_Blake2_Core_load_vector__t_1(uint64_t *vv, uint64_t *h, uint64_t *ivs);
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t_2(size_t x);
 static uint64_t Hacl_Secret_Word_Instances_sz_hi_64(size_t x);
 static uint64_t Hacl_Secret_Word_of_sizet_hi__t_1(size_t x);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_4(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_4(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_4(uint64_t *vv, uint64_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_mix_state_impl__t_1(uint64_t *h, uint64_t *vv);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_4(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint64_t x);
 static void Hacl_Hash_Blake2_write_digest_le__t_4(uint8_t *out, uint64_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t *vv, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -992,13 +958,7 @@ static void Hacl_Hash_Blake2_Streaming_update_impl__t_4(uint64_t *acc, uint64_t 
 static void Hacl_Streaming_Blake2_update_gen__t_4(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_4(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_4(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_5(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_5(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_5(uint64_t *vv, uint64_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_5(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_5(uint8_t *out, uint64_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t *vv, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_5(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -1008,13 +968,7 @@ static void Hacl_Hash_Blake2_Streaming_update_impl__t_5(uint64_t *acc, uint64_t 
 static void Hacl_Streaming_Blake2_update_gen__t_5(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_5(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_5(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_6(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_6(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_6(uint64_t *vv, uint64_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_6(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_6(uint8_t *out, uint64_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t *vv, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_6(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -1024,13 +978,7 @@ static void Hacl_Hash_Blake2_Streaming_update_impl__t_6(uint64_t *acc, uint64_t 
 static void Hacl_Streaming_Blake2_update_gen__t_6(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_6(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_6(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_7(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last);
-static void Hacl_Hash_Blake2_Core_g_impl__t_7(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y);
-static void Hacl_Hash_Blake2_Core_mix_columns__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
 static void Hacl_Hash_Blake2_Core_round_impl__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base);
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_7(uint64_t *vv, uint64_t *m, size_t *sg);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_7(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_7(uint8_t *out, uint64_t *st);
 static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t *vv, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_7(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
@@ -19058,41 +19006,6 @@ static void Hacl_Hash_Blake2_load_block__t(uint32_t *mw, uint8_t *blk) {
   }
 }
 
-static void Hacl_Hash_Blake2_Core_load_vector__t(uint32_t *vv, uint32_t *h, uint32_t *ivs) {
-  uint32_t __anf0 = h[0];
-  vv[0] = __anf0;
-  uint32_t __anf01 = h[1];
-  vv[1] = __anf01;
-  uint32_t __anf02 = h[2];
-  vv[2] = __anf02;
-  uint32_t __anf03 = h[3];
-  vv[3] = __anf03;
-  uint32_t __anf04 = h[4];
-  vv[4] = __anf04;
-  uint32_t __anf05 = h[5];
-  vv[5] = __anf05;
-  uint32_t __anf06 = h[6];
-  vv[6] = __anf06;
-  uint32_t __anf07 = h[7];
-  vv[7] = __anf07;
-  uint32_t __anf08 = ivs[0];
-  vv[8] = __anf08;
-  uint32_t __anf09 = ivs[1];
-  vv[9] = __anf09;
-  uint32_t __anf010 = ivs[2];
-  vv[10] = __anf010;
-  uint32_t __anf011 = ivs[3];
-  vv[11] = __anf011;
-  uint32_t __anf012 = ivs[4];
-  vv[12] = __anf012;
-  uint32_t __anf013 = ivs[5];
-  vv[13] = __anf013;
-  uint32_t __anf014 = ivs[6];
-  vv[14] = __anf014;
-  uint32_t __anf015 = ivs[7];
-  vv[15] = __anf015;
-}
-
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x) {
   return (uint32_t)x;
 }
@@ -19113,38 +19026,7 @@ static uint32_t Hacl_Secret_Word_of_sizet_hi__t(size_t x) {
   return Hacl_Secret_Word_Instances_sz_hi_32(x);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t(vv, h, ivs);
-  uint32_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
-  uint32_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
-  if (last) {
-    uint32_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y) {
-  uint32_t ra = vv[a];
-  uint32_t rb = vv[b];
-  uint32_t rc = vv[c];
-  uint32_t rd = vv[d];
-  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), x);
-  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
-  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
-  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
-  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), y);
-  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
-  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
-  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -19155,19 +19037,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t(uint32_t *vv, uint32_t *m, size
   size_t s7 = sg[(base + 7)];
   uint32_t __anf1 = m[s0];
   uint32_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint32_t ra = vv[0];
+  uint32_t rb = vv[4];
+  uint32_t rc = vv[8];
+  uint32_t rd = vv[12];
+  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), __anf1);
+  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
+  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
+  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
+  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), __anf0);
+  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
+  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
+  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint32_t __anf11 = m[s2];
   uint32_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint32_t ra1 = vv[1];
+  uint32_t rb1 = vv[5];
+  uint32_t rc1 = vv[9];
+  uint32_t rd1 = vv[13];
+  uint32_t a11 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra1, rb1), __anf11);
+  uint32_t d11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd1, a11), 16);
+  uint32_t c11 = Hacl_Secret_Word_add_mod__t(rc1, d11);
+  uint32_t b11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb1, c11), 12);
+  uint32_t a21 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a11, b11), __anf01);
+  uint32_t d21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d11, a21), 8);
+  uint32_t c21 = Hacl_Secret_Word_add_mod__t(c11, d21);
+  uint32_t b21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b11, c21), 7);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint32_t __anf12 = m[s4];
   uint32_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint32_t ra2 = vv[2];
+  uint32_t rb2 = vv[6];
+  uint32_t rc2 = vv[10];
+  uint32_t rd2 = vv[14];
+  uint32_t a12 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra2, rb2), __anf12);
+  uint32_t d12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd2, a12), 16);
+  uint32_t c12 = Hacl_Secret_Word_add_mod__t(rc2, d12);
+  uint32_t b12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb2, c12), 12);
+  uint32_t a22 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a12, b12), __anf02);
+  uint32_t d22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d12, a22), 8);
+  uint32_t c22 = Hacl_Secret_Word_add_mod__t(c12, d22);
+  uint32_t b22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b12, c22), 7);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint32_t __anf13 = m[s6];
   uint32_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+  uint32_t ra3 = vv[3];
+  uint32_t rb3 = vv[7];
+  uint32_t rc3 = vv[11];
+  uint32_t rd3 = vv[15];
+  uint32_t a13 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra3, rb3), __anf13);
+  uint32_t d13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd3, a13), 16);
+  uint32_t c13 = Hacl_Secret_Word_add_mod__t(rc3, d13);
+  uint32_t b13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb3, c13), 12);
+  uint32_t a23 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a13, b13), __anf03);
+  uint32_t d23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d13, a23), 8);
+  uint32_t c23 = Hacl_Secret_Word_add_mod__t(c13, d23);
+  uint32_t b23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b13, c23), 7);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -19176,56 +19115,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t(uint32_t *vv, uint32_t *m, si
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint32_t __anf1 = m[s8];
-  uint32_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint32_t __anf11 = m[s10];
-  uint32_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint32_t __anf12 = m[s12];
-  uint32_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint32_t __anf13 = m[s14];
-  uint32_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t(uint32_t *vv, uint32_t *m, size_t *sg) {
-  size_t nr = 10;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_mix_state_impl__t(uint32_t *h, uint32_t *vv) {
-  size_t i = 0;
-  while (i < 8) {
-    size_t vi = i;
-    uint32_t a = h[vi];
-    uint32_t b = vv[vi];
-    uint32_t c = vv[(vi + 8)];
-    h[vi] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t(h, vv);
+  uint32_t __anf14 = m[s8];
+  uint32_t __anf04 = m[s9];
+  uint32_t ra4 = vv[0];
+  uint32_t rb4 = vv[5];
+  uint32_t rc4 = vv[10];
+  uint32_t rd4 = vv[15];
+  uint32_t a14 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra4, rb4), __anf14);
+  uint32_t d14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd4, a14), 16);
+  uint32_t c14 = Hacl_Secret_Word_add_mod__t(rc4, d14);
+  uint32_t b14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb4, c14), 12);
+  uint32_t a24 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a14, b14), __anf04);
+  uint32_t d24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d14, a24), 8);
+  uint32_t c24 = Hacl_Secret_Word_add_mod__t(c14, d24);
+  uint32_t b24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b14, c24), 7);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint32_t __anf15 = m[s10];
+  uint32_t __anf05 = m[s11];
+  uint32_t ra5 = vv[1];
+  uint32_t rb5 = vv[6];
+  uint32_t rc5 = vv[11];
+  uint32_t rd5 = vv[12];
+  uint32_t a15 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra5, rb5), __anf15);
+  uint32_t d15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd5, a15), 16);
+  uint32_t c15 = Hacl_Secret_Word_add_mod__t(rc5, d15);
+  uint32_t b15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb5, c15), 12);
+  uint32_t a25 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a15, b15), __anf05);
+  uint32_t d25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d15, a25), 8);
+  uint32_t c25 = Hacl_Secret_Word_add_mod__t(c15, d25);
+  uint32_t b25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b15, c25), 7);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint32_t __anf16 = m[s12];
+  uint32_t __anf06 = m[s13];
+  uint32_t ra6 = vv[2];
+  uint32_t rb6 = vv[7];
+  uint32_t rc6 = vv[8];
+  uint32_t rd6 = vv[13];
+  uint32_t a16 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra6, rb6), __anf16);
+  uint32_t d16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd6, a16), 16);
+  uint32_t c16 = Hacl_Secret_Word_add_mod__t(rc6, d16);
+  uint32_t b16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb6, c16), 12);
+  uint32_t a26 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a16, b16), __anf06);
+  uint32_t d26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d16, a26), 8);
+  uint32_t c26 = Hacl_Secret_Word_add_mod__t(c16, d26);
+  uint32_t b26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b16, c26), 7);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint32_t __anf17 = m[s14];
+  uint32_t __anf07 = m[s15];
+  uint32_t ra7 = vv[3];
+  uint32_t rb7 = vv[4];
+  uint32_t rc7 = vv[9];
+  uint32_t rd7 = vv[14];
+  uint32_t a17 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra7, rb7), __anf17);
+  uint32_t d17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd7, a17), 16);
+  uint32_t c17 = Hacl_Secret_Word_add_mod__t(rc7, d17);
+  uint32_t b17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb7, c17), 12);
+  uint32_t a27 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a17, b17), __anf07);
+  uint32_t d27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d17, a27), 8);
+  uint32_t c27 = Hacl_Secret_Word_add_mod__t(c17, d27);
+  uint32_t b27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b17, c27), 7);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st) {
@@ -19267,7 +19228,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *v
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t(starr, mw, vv, ivs, sg, tlen, true);
+  uint32_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint32_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint32_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint32_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint32_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint32_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint32_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint32_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint32_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(tlen));
+  uint32_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(tlen));
+  uint32_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = starr[vi_1];
+    uint32_t b = vv[vi_1];
+    uint32_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t(out, starr);
 }
 
@@ -19306,7 +19325,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t(uint32_t *acc, uint32_t 
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t(acc, mw, vv, ivs, sg, ctr, false);
+    uint32_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
+    size_t nr = 10;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint32_t a = acc[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -19391,38 +19466,7 @@ void Hacl_Streaming_Blake2_blake2s_128_init(uint32_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_1(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t(vv, h, ivs);
-  uint32_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
-  uint32_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
-  if (last) {
-    uint32_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_1(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y) {
-  uint32_t ra = vv[a];
-  uint32_t rb = vv[b];
-  uint32_t rc = vv[c];
-  uint32_t rd = vv[d];
-  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), x);
-  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
-  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
-  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
-  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), y);
-  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
-  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
-  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -19433,19 +19477,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_1(uint32_t *vv, uint32_t *m, si
   size_t s7 = sg[(base + 7)];
   uint32_t __anf1 = m[s0];
   uint32_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint32_t ra = vv[0];
+  uint32_t rb = vv[4];
+  uint32_t rc = vv[8];
+  uint32_t rd = vv[12];
+  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), __anf1);
+  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
+  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
+  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
+  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), __anf0);
+  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
+  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
+  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint32_t __anf11 = m[s2];
   uint32_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint32_t ra1 = vv[1];
+  uint32_t rb1 = vv[5];
+  uint32_t rc1 = vv[9];
+  uint32_t rd1 = vv[13];
+  uint32_t a11 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra1, rb1), __anf11);
+  uint32_t d11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd1, a11), 16);
+  uint32_t c11 = Hacl_Secret_Word_add_mod__t(rc1, d11);
+  uint32_t b11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb1, c11), 12);
+  uint32_t a21 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a11, b11), __anf01);
+  uint32_t d21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d11, a21), 8);
+  uint32_t c21 = Hacl_Secret_Word_add_mod__t(c11, d21);
+  uint32_t b21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b11, c21), 7);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint32_t __anf12 = m[s4];
   uint32_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint32_t ra2 = vv[2];
+  uint32_t rb2 = vv[6];
+  uint32_t rc2 = vv[10];
+  uint32_t rd2 = vv[14];
+  uint32_t a12 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra2, rb2), __anf12);
+  uint32_t d12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd2, a12), 16);
+  uint32_t c12 = Hacl_Secret_Word_add_mod__t(rc2, d12);
+  uint32_t b12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb2, c12), 12);
+  uint32_t a22 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a12, b12), __anf02);
+  uint32_t d22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d12, a22), 8);
+  uint32_t c22 = Hacl_Secret_Word_add_mod__t(c12, d22);
+  uint32_t b22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b12, c22), 7);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint32_t __anf13 = m[s6];
   uint32_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+  uint32_t ra3 = vv[3];
+  uint32_t rb3 = vv[7];
+  uint32_t rc3 = vv[11];
+  uint32_t rd3 = vv[15];
+  uint32_t a13 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra3, rb3), __anf13);
+  uint32_t d13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd3, a13), 16);
+  uint32_t c13 = Hacl_Secret_Word_add_mod__t(rc3, d13);
+  uint32_t b13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb3, c13), 12);
+  uint32_t a23 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a13, b13), __anf03);
+  uint32_t d23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d13, a23), 8);
+  uint32_t c23 = Hacl_Secret_Word_add_mod__t(c13, d23);
+  uint32_t b23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b13, c23), 7);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -19454,44 +19555,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_1(uint32_t *vv, uint32_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint32_t __anf1 = m[s8];
-  uint32_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint32_t __anf11 = m[s10];
-  uint32_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint32_t __anf12 = m[s12];
-  uint32_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint32_t __anf13 = m[s14];
-  uint32_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_1(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_1(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_1(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_1(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_1(uint32_t *vv, uint32_t *m, size_t *sg) {
-  size_t nr = 10;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_1(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_1(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_1(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_1(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t(h, vv);
+  uint32_t __anf14 = m[s8];
+  uint32_t __anf04 = m[s9];
+  uint32_t ra4 = vv[0];
+  uint32_t rb4 = vv[5];
+  uint32_t rc4 = vv[10];
+  uint32_t rd4 = vv[15];
+  uint32_t a14 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra4, rb4), __anf14);
+  uint32_t d14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd4, a14), 16);
+  uint32_t c14 = Hacl_Secret_Word_add_mod__t(rc4, d14);
+  uint32_t b14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb4, c14), 12);
+  uint32_t a24 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a14, b14), __anf04);
+  uint32_t d24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d14, a24), 8);
+  uint32_t c24 = Hacl_Secret_Word_add_mod__t(c14, d24);
+  uint32_t b24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b14, c24), 7);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint32_t __anf15 = m[s10];
+  uint32_t __anf05 = m[s11];
+  uint32_t ra5 = vv[1];
+  uint32_t rb5 = vv[6];
+  uint32_t rc5 = vv[11];
+  uint32_t rd5 = vv[12];
+  uint32_t a15 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra5, rb5), __anf15);
+  uint32_t d15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd5, a15), 16);
+  uint32_t c15 = Hacl_Secret_Word_add_mod__t(rc5, d15);
+  uint32_t b15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb5, c15), 12);
+  uint32_t a25 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a15, b15), __anf05);
+  uint32_t d25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d15, a25), 8);
+  uint32_t c25 = Hacl_Secret_Word_add_mod__t(c15, d25);
+  uint32_t b25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b15, c25), 7);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint32_t __anf16 = m[s12];
+  uint32_t __anf06 = m[s13];
+  uint32_t ra6 = vv[2];
+  uint32_t rb6 = vv[7];
+  uint32_t rc6 = vv[8];
+  uint32_t rd6 = vv[13];
+  uint32_t a16 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra6, rb6), __anf16);
+  uint32_t d16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd6, a16), 16);
+  uint32_t c16 = Hacl_Secret_Word_add_mod__t(rc6, d16);
+  uint32_t b16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb6, c16), 12);
+  uint32_t a26 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a16, b16), __anf06);
+  uint32_t d26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d16, a26), 8);
+  uint32_t c26 = Hacl_Secret_Word_add_mod__t(c16, d26);
+  uint32_t b26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b16, c26), 7);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint32_t __anf17 = m[s14];
+  uint32_t __anf07 = m[s15];
+  uint32_t ra7 = vv[3];
+  uint32_t rb7 = vv[4];
+  uint32_t rc7 = vv[9];
+  uint32_t rd7 = vv[14];
+  uint32_t a17 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra7, rb7), __anf17);
+  uint32_t d17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd7, a17), 16);
+  uint32_t c17 = Hacl_Secret_Word_add_mod__t(rc7, d17);
+  uint32_t b17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb7, c17), 12);
+  uint32_t a27 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a17, b17), __anf07);
+  uint32_t d27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d17, a27), 8);
+  uint32_t c27 = Hacl_Secret_Word_add_mod__t(c17, d27);
+  uint32_t b27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b17, c27), 7);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t_1(uint8_t *out, uint32_t *st) {
@@ -19533,7 +19668,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_1(starr, mw, vv, ivs, sg, tlen, true);
+  uint32_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint32_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint32_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint32_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint32_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint32_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint32_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint32_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint32_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(tlen));
+  uint32_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(tlen));
+  uint32_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_1(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = starr[vi_1];
+    uint32_t b = vv[vi_1];
+    uint32_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_1(out, starr);
 }
 
@@ -19572,7 +19765,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(uint32_t *acc, uint32_
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_1(acc, mw, vv, ivs, sg, ctr, false);
+    uint32_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
+    size_t nr = 10;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_1(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint32_t a = acc[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -19657,38 +19906,7 @@ void Hacl_Streaming_Blake2_blake2s_160_init(uint32_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_1(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_2(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t(vv, h, ivs);
-  uint32_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
-  uint32_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
-  if (last) {
-    uint32_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_2(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y) {
-  uint32_t ra = vv[a];
-  uint32_t rb = vv[b];
-  uint32_t rc = vv[c];
-  uint32_t rd = vv[d];
-  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), x);
-  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
-  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
-  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
-  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), y);
-  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
-  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
-  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -19699,19 +19917,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_2(uint32_t *vv, uint32_t *m, si
   size_t s7 = sg[(base + 7)];
   uint32_t __anf1 = m[s0];
   uint32_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint32_t ra = vv[0];
+  uint32_t rb = vv[4];
+  uint32_t rc = vv[8];
+  uint32_t rd = vv[12];
+  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), __anf1);
+  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
+  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
+  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
+  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), __anf0);
+  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
+  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
+  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint32_t __anf11 = m[s2];
   uint32_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint32_t ra1 = vv[1];
+  uint32_t rb1 = vv[5];
+  uint32_t rc1 = vv[9];
+  uint32_t rd1 = vv[13];
+  uint32_t a11 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra1, rb1), __anf11);
+  uint32_t d11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd1, a11), 16);
+  uint32_t c11 = Hacl_Secret_Word_add_mod__t(rc1, d11);
+  uint32_t b11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb1, c11), 12);
+  uint32_t a21 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a11, b11), __anf01);
+  uint32_t d21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d11, a21), 8);
+  uint32_t c21 = Hacl_Secret_Word_add_mod__t(c11, d21);
+  uint32_t b21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b11, c21), 7);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint32_t __anf12 = m[s4];
   uint32_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint32_t ra2 = vv[2];
+  uint32_t rb2 = vv[6];
+  uint32_t rc2 = vv[10];
+  uint32_t rd2 = vv[14];
+  uint32_t a12 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra2, rb2), __anf12);
+  uint32_t d12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd2, a12), 16);
+  uint32_t c12 = Hacl_Secret_Word_add_mod__t(rc2, d12);
+  uint32_t b12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb2, c12), 12);
+  uint32_t a22 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a12, b12), __anf02);
+  uint32_t d22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d12, a22), 8);
+  uint32_t c22 = Hacl_Secret_Word_add_mod__t(c12, d22);
+  uint32_t b22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b12, c22), 7);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint32_t __anf13 = m[s6];
   uint32_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+  uint32_t ra3 = vv[3];
+  uint32_t rb3 = vv[7];
+  uint32_t rc3 = vv[11];
+  uint32_t rd3 = vv[15];
+  uint32_t a13 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra3, rb3), __anf13);
+  uint32_t d13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd3, a13), 16);
+  uint32_t c13 = Hacl_Secret_Word_add_mod__t(rc3, d13);
+  uint32_t b13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb3, c13), 12);
+  uint32_t a23 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a13, b13), __anf03);
+  uint32_t d23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d13, a23), 8);
+  uint32_t c23 = Hacl_Secret_Word_add_mod__t(c13, d23);
+  uint32_t b23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b13, c23), 7);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -19720,44 +19995,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_2(uint32_t *vv, uint32_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint32_t __anf1 = m[s8];
-  uint32_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint32_t __anf11 = m[s10];
-  uint32_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint32_t __anf12 = m[s12];
-  uint32_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint32_t __anf13 = m[s14];
-  uint32_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_2(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_2(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_2(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_2(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_2(uint32_t *vv, uint32_t *m, size_t *sg) {
-  size_t nr = 10;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_2(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_2(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_2(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_2(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t(h, vv);
+  uint32_t __anf14 = m[s8];
+  uint32_t __anf04 = m[s9];
+  uint32_t ra4 = vv[0];
+  uint32_t rb4 = vv[5];
+  uint32_t rc4 = vv[10];
+  uint32_t rd4 = vv[15];
+  uint32_t a14 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra4, rb4), __anf14);
+  uint32_t d14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd4, a14), 16);
+  uint32_t c14 = Hacl_Secret_Word_add_mod__t(rc4, d14);
+  uint32_t b14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb4, c14), 12);
+  uint32_t a24 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a14, b14), __anf04);
+  uint32_t d24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d14, a24), 8);
+  uint32_t c24 = Hacl_Secret_Word_add_mod__t(c14, d24);
+  uint32_t b24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b14, c24), 7);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint32_t __anf15 = m[s10];
+  uint32_t __anf05 = m[s11];
+  uint32_t ra5 = vv[1];
+  uint32_t rb5 = vv[6];
+  uint32_t rc5 = vv[11];
+  uint32_t rd5 = vv[12];
+  uint32_t a15 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra5, rb5), __anf15);
+  uint32_t d15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd5, a15), 16);
+  uint32_t c15 = Hacl_Secret_Word_add_mod__t(rc5, d15);
+  uint32_t b15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb5, c15), 12);
+  uint32_t a25 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a15, b15), __anf05);
+  uint32_t d25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d15, a25), 8);
+  uint32_t c25 = Hacl_Secret_Word_add_mod__t(c15, d25);
+  uint32_t b25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b15, c25), 7);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint32_t __anf16 = m[s12];
+  uint32_t __anf06 = m[s13];
+  uint32_t ra6 = vv[2];
+  uint32_t rb6 = vv[7];
+  uint32_t rc6 = vv[8];
+  uint32_t rd6 = vv[13];
+  uint32_t a16 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra6, rb6), __anf16);
+  uint32_t d16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd6, a16), 16);
+  uint32_t c16 = Hacl_Secret_Word_add_mod__t(rc6, d16);
+  uint32_t b16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb6, c16), 12);
+  uint32_t a26 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a16, b16), __anf06);
+  uint32_t d26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d16, a26), 8);
+  uint32_t c26 = Hacl_Secret_Word_add_mod__t(c16, d26);
+  uint32_t b26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b16, c26), 7);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint32_t __anf17 = m[s14];
+  uint32_t __anf07 = m[s15];
+  uint32_t ra7 = vv[3];
+  uint32_t rb7 = vv[4];
+  uint32_t rc7 = vv[9];
+  uint32_t rd7 = vv[14];
+  uint32_t a17 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra7, rb7), __anf17);
+  uint32_t d17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd7, a17), 16);
+  uint32_t c17 = Hacl_Secret_Word_add_mod__t(rc7, d17);
+  uint32_t b17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb7, c17), 12);
+  uint32_t a27 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a17, b17), __anf07);
+  uint32_t d27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d17, a27), 8);
+  uint32_t c27 = Hacl_Secret_Word_add_mod__t(c17, d27);
+  uint32_t b27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b17, c27), 7);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t_2(uint8_t *out, uint32_t *st) {
@@ -19799,7 +20108,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_2(starr, mw, vv, ivs, sg, tlen, true);
+  uint32_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint32_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint32_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint32_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint32_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint32_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint32_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint32_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint32_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(tlen));
+  uint32_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(tlen));
+  uint32_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_2(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = starr[vi_1];
+    uint32_t b = vv[vi_1];
+    uint32_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_2(out, starr);
 }
 
@@ -19838,7 +20205,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(uint32_t *acc, uint32_
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_2(acc, mw, vv, ivs, sg, ctr, false);
+    uint32_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
+    size_t nr = 10;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_2(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint32_t a = acc[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -19923,38 +20346,7 @@ void Hacl_Streaming_Blake2_blake2s_224_init(uint32_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_2(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_3(uint32_t *vv, uint32_t *h, uint32_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t(vv, h, ivs);
-  uint32_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
-  uint32_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
-  if (last) {
-    uint32_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_3(uint32_t *vv, size_t a, size_t b, size_t c, size_t d, uint32_t x, uint32_t y) {
-  uint32_t ra = vv[a];
-  uint32_t rb = vv[b];
-  uint32_t rc = vv[c];
-  uint32_t rd = vv[d];
-  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), x);
-  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
-  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
-  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
-  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), y);
-  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
-  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
-  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -19965,19 +20357,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_3(uint32_t *vv, uint32_t *m, si
   size_t s7 = sg[(base + 7)];
   uint32_t __anf1 = m[s0];
   uint32_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint32_t ra = vv[0];
+  uint32_t rb = vv[4];
+  uint32_t rc = vv[8];
+  uint32_t rd = vv[12];
+  uint32_t a1 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra, rb), __anf1);
+  uint32_t d1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd, a1), 16);
+  uint32_t c1 = Hacl_Secret_Word_add_mod__t(rc, d1);
+  uint32_t b1 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb, c1), 12);
+  uint32_t a2 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a1, b1), __anf0);
+  uint32_t d2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d1, a2), 8);
+  uint32_t c2 = Hacl_Secret_Word_add_mod__t(c1, d2);
+  uint32_t b2 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b1, c2), 7);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint32_t __anf11 = m[s2];
   uint32_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint32_t ra1 = vv[1];
+  uint32_t rb1 = vv[5];
+  uint32_t rc1 = vv[9];
+  uint32_t rd1 = vv[13];
+  uint32_t a11 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra1, rb1), __anf11);
+  uint32_t d11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd1, a11), 16);
+  uint32_t c11 = Hacl_Secret_Word_add_mod__t(rc1, d11);
+  uint32_t b11 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb1, c11), 12);
+  uint32_t a21 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a11, b11), __anf01);
+  uint32_t d21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d11, a21), 8);
+  uint32_t c21 = Hacl_Secret_Word_add_mod__t(c11, d21);
+  uint32_t b21 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b11, c21), 7);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint32_t __anf12 = m[s4];
   uint32_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint32_t ra2 = vv[2];
+  uint32_t rb2 = vv[6];
+  uint32_t rc2 = vv[10];
+  uint32_t rd2 = vv[14];
+  uint32_t a12 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra2, rb2), __anf12);
+  uint32_t d12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd2, a12), 16);
+  uint32_t c12 = Hacl_Secret_Word_add_mod__t(rc2, d12);
+  uint32_t b12 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb2, c12), 12);
+  uint32_t a22 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a12, b12), __anf02);
+  uint32_t d22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d12, a22), 8);
+  uint32_t c22 = Hacl_Secret_Word_add_mod__t(c12, d22);
+  uint32_t b22 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b12, c22), 7);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint32_t __anf13 = m[s6];
   uint32_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
+  uint32_t ra3 = vv[3];
+  uint32_t rb3 = vv[7];
+  uint32_t rc3 = vv[11];
+  uint32_t rd3 = vv[15];
+  uint32_t a13 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra3, rb3), __anf13);
+  uint32_t d13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd3, a13), 16);
+  uint32_t c13 = Hacl_Secret_Word_add_mod__t(rc3, d13);
+  uint32_t b13 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb3, c13), 12);
+  uint32_t a23 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a13, b13), __anf03);
+  uint32_t d23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d13, a23), 8);
+  uint32_t c23 = Hacl_Secret_Word_add_mod__t(c13, d23);
+  uint32_t b23 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b13, c23), 7);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -19986,44 +20435,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_3(uint32_t *vv, uint32_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint32_t __anf1 = m[s8];
-  uint32_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint32_t __anf11 = m[s10];
-  uint32_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint32_t __anf12 = m[s12];
-  uint32_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint32_t __anf13 = m[s14];
-  uint32_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_3(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_3(uint32_t *vv, uint32_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_3(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_3(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_3(uint32_t *vv, uint32_t *m, size_t *sg) {
-  size_t nr = 10;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_3(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_3(uint32_t *h, uint32_t *m, uint32_t *vv, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_3(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_3(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t(h, vv);
+  uint32_t __anf14 = m[s8];
+  uint32_t __anf04 = m[s9];
+  uint32_t ra4 = vv[0];
+  uint32_t rb4 = vv[5];
+  uint32_t rc4 = vv[10];
+  uint32_t rd4 = vv[15];
+  uint32_t a14 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra4, rb4), __anf14);
+  uint32_t d14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd4, a14), 16);
+  uint32_t c14 = Hacl_Secret_Word_add_mod__t(rc4, d14);
+  uint32_t b14 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb4, c14), 12);
+  uint32_t a24 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a14, b14), __anf04);
+  uint32_t d24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d14, a24), 8);
+  uint32_t c24 = Hacl_Secret_Word_add_mod__t(c14, d24);
+  uint32_t b24 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b14, c24), 7);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint32_t __anf15 = m[s10];
+  uint32_t __anf05 = m[s11];
+  uint32_t ra5 = vv[1];
+  uint32_t rb5 = vv[6];
+  uint32_t rc5 = vv[11];
+  uint32_t rd5 = vv[12];
+  uint32_t a15 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra5, rb5), __anf15);
+  uint32_t d15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd5, a15), 16);
+  uint32_t c15 = Hacl_Secret_Word_add_mod__t(rc5, d15);
+  uint32_t b15 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb5, c15), 12);
+  uint32_t a25 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a15, b15), __anf05);
+  uint32_t d25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d15, a25), 8);
+  uint32_t c25 = Hacl_Secret_Word_add_mod__t(c15, d25);
+  uint32_t b25 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b15, c25), 7);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint32_t __anf16 = m[s12];
+  uint32_t __anf06 = m[s13];
+  uint32_t ra6 = vv[2];
+  uint32_t rb6 = vv[7];
+  uint32_t rc6 = vv[8];
+  uint32_t rd6 = vv[13];
+  uint32_t a16 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra6, rb6), __anf16);
+  uint32_t d16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd6, a16), 16);
+  uint32_t c16 = Hacl_Secret_Word_add_mod__t(rc6, d16);
+  uint32_t b16 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb6, c16), 12);
+  uint32_t a26 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a16, b16), __anf06);
+  uint32_t d26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d16, a26), 8);
+  uint32_t c26 = Hacl_Secret_Word_add_mod__t(c16, d26);
+  uint32_t b26 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b16, c26), 7);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint32_t __anf17 = m[s14];
+  uint32_t __anf07 = m[s15];
+  uint32_t ra7 = vv[3];
+  uint32_t rb7 = vv[4];
+  uint32_t rc7 = vv[9];
+  uint32_t rd7 = vv[14];
+  uint32_t a17 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(ra7, rb7), __anf17);
+  uint32_t d17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rd7, a17), 16);
+  uint32_t c17 = Hacl_Secret_Word_add_mod__t(rc7, d17);
+  uint32_t b17 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(rb7, c17), 12);
+  uint32_t a27 = Hacl_Secret_Word_add_mod__t(Hacl_Secret_Word_add_mod__t(a17, b17), __anf07);
+  uint32_t d27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(d17, a27), 8);
+  uint32_t c27 = Hacl_Secret_Word_add_mod__t(c17, d27);
+  uint32_t b27 = Hacl_Secret_Word_rotate_right__t(Hacl_Secret_Word_logxor__t(b17, c27), 7);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t_3(uint8_t *out, uint32_t *st) {
@@ -20065,7 +20548,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_3(starr, mw, vv, ivs, sg, tlen, true);
+  uint32_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint32_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint32_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint32_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint32_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint32_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint32_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint32_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint32_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(tlen));
+  uint32_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(tlen));
+  uint32_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_3(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = starr[vi_1];
+    uint32_t b = vv[vi_1];
+    uint32_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_3(out, starr);
 }
 
@@ -20104,7 +20645,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(uint32_t *acc, uint32_
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_3(acc, mw, vv, ivs, sg, ctr, false);
+    uint32_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(ctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(ctr));
+    size_t nr = 10;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_3(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint32_t a = acc[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -20250,41 +20847,6 @@ static void Hacl_Hash_Blake2_load_block__t_1(uint64_t *mw, uint8_t *blk) {
   }
 }
 
-static void Hacl_Hash_Blake2_Core_load_vector__t_1(uint64_t *vv, uint64_t *h, uint64_t *ivs) {
-  uint64_t __anf0 = h[0];
-  vv[0] = __anf0;
-  uint64_t __anf01 = h[1];
-  vv[1] = __anf01;
-  uint64_t __anf02 = h[2];
-  vv[2] = __anf02;
-  uint64_t __anf03 = h[3];
-  vv[3] = __anf03;
-  uint64_t __anf04 = h[4];
-  vv[4] = __anf04;
-  uint64_t __anf05 = h[5];
-  vv[5] = __anf05;
-  uint64_t __anf06 = h[6];
-  vv[6] = __anf06;
-  uint64_t __anf07 = h[7];
-  vv[7] = __anf07;
-  uint64_t __anf08 = ivs[0];
-  vv[8] = __anf08;
-  uint64_t __anf09 = ivs[1];
-  vv[9] = __anf09;
-  uint64_t __anf010 = ivs[2];
-  vv[10] = __anf010;
-  uint64_t __anf011 = ivs[3];
-  vv[11] = __anf011;
-  uint64_t __anf012 = ivs[4];
-  vv[12] = __anf012;
-  uint64_t __anf013 = ivs[5];
-  vv[13] = __anf013;
-  uint64_t __anf014 = ivs[6];
-  vv[14] = __anf014;
-  uint64_t __anf015 = ivs[7];
-  vv[15] = __anf015;
-}
-
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t_2(size_t x) {
   return Hacl_Secret_Word_Instances_sz_lo_64(x);
 }
@@ -20298,38 +20860,7 @@ static uint64_t Hacl_Secret_Word_of_sizet_hi__t_1(size_t x) {
   return Hacl_Secret_Word_Instances_sz_hi_64(x);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_4(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
-  uint64_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
-  uint64_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
-  if (last) {
-    uint64_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_4(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) {
-  uint64_t ra = vv[a];
-  uint64_t rb = vv[b];
-  uint64_t rc = vv[c];
-  uint64_t rd = vv[d];
-  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), x);
-  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
-  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
-  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
-  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), y);
-  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
-  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
-  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -20340,19 +20871,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_4(uint64_t *vv, uint64_t *m, si
   size_t s7 = sg[(base + 7)];
   uint64_t __anf1 = m[s0];
   uint64_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint64_t ra = vv[0];
+  uint64_t rb = vv[4];
+  uint64_t rc = vv[8];
+  uint64_t rd = vv[12];
+  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), __anf1);
+  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
+  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
+  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
+  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), __anf0);
+  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
+  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
+  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint64_t __anf11 = m[s2];
   uint64_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint64_t ra1 = vv[1];
+  uint64_t rb1 = vv[5];
+  uint64_t rc1 = vv[9];
+  uint64_t rd1 = vv[13];
+  uint64_t a11 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra1, rb1), __anf11);
+  uint64_t d11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd1, a11), 32);
+  uint64_t c11 = Hacl_Secret_Word_add_mod__t_1(rc1, d11);
+  uint64_t b11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb1, c11), 24);
+  uint64_t a21 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a11, b11), __anf01);
+  uint64_t d21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d11, a21), 16);
+  uint64_t c21 = Hacl_Secret_Word_add_mod__t_1(c11, d21);
+  uint64_t b21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b11, c21), 63);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint64_t __anf12 = m[s4];
   uint64_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint64_t ra2 = vv[2];
+  uint64_t rb2 = vv[6];
+  uint64_t rc2 = vv[10];
+  uint64_t rd2 = vv[14];
+  uint64_t a12 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra2, rb2), __anf12);
+  uint64_t d12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd2, a12), 32);
+  uint64_t c12 = Hacl_Secret_Word_add_mod__t_1(rc2, d12);
+  uint64_t b12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb2, c12), 24);
+  uint64_t a22 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a12, b12), __anf02);
+  uint64_t d22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d12, a22), 16);
+  uint64_t c22 = Hacl_Secret_Word_add_mod__t_1(c12, d22);
+  uint64_t b22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b12, c22), 63);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint64_t __anf13 = m[s6];
   uint64_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+  uint64_t ra3 = vv[3];
+  uint64_t rb3 = vv[7];
+  uint64_t rc3 = vv[11];
+  uint64_t rd3 = vv[15];
+  uint64_t a13 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra3, rb3), __anf13);
+  uint64_t d13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd3, a13), 32);
+  uint64_t c13 = Hacl_Secret_Word_add_mod__t_1(rc3, d13);
+  uint64_t b13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb3, c13), 24);
+  uint64_t a23 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a13, b13), __anf03);
+  uint64_t d23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d13, a23), 16);
+  uint64_t c23 = Hacl_Secret_Word_add_mod__t_1(c13, d23);
+  uint64_t b23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b13, c23), 63);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -20361,56 +20949,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_4(uint64_t *vv, uint64_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint64_t __anf1 = m[s8];
-  uint64_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint64_t __anf11 = m[s10];
-  uint64_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint64_t __anf12 = m[s12];
-  uint64_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint64_t __anf13 = m[s14];
-  uint64_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_4(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_4(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_4(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_4(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_4(uint64_t *vv, uint64_t *m, size_t *sg) {
-  size_t nr = 12;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_4(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_mix_state_impl__t_1(uint64_t *h, uint64_t *vv) {
-  size_t i = 0;
-  while (i < 8) {
-    size_t vi = i;
-    uint64_t a = h[vi];
-    uint64_t b = vv[vi];
-    uint64_t c = vv[(vi + 8)];
-    h[vi] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_4(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_4(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_4(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t_1(h, vv);
+  uint64_t __anf14 = m[s8];
+  uint64_t __anf04 = m[s9];
+  uint64_t ra4 = vv[0];
+  uint64_t rb4 = vv[5];
+  uint64_t rc4 = vv[10];
+  uint64_t rd4 = vv[15];
+  uint64_t a14 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra4, rb4), __anf14);
+  uint64_t d14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd4, a14), 32);
+  uint64_t c14 = Hacl_Secret_Word_add_mod__t_1(rc4, d14);
+  uint64_t b14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb4, c14), 24);
+  uint64_t a24 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a14, b14), __anf04);
+  uint64_t d24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d14, a24), 16);
+  uint64_t c24 = Hacl_Secret_Word_add_mod__t_1(c14, d24);
+  uint64_t b24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b14, c24), 63);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint64_t __anf15 = m[s10];
+  uint64_t __anf05 = m[s11];
+  uint64_t ra5 = vv[1];
+  uint64_t rb5 = vv[6];
+  uint64_t rc5 = vv[11];
+  uint64_t rd5 = vv[12];
+  uint64_t a15 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra5, rb5), __anf15);
+  uint64_t d15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd5, a15), 32);
+  uint64_t c15 = Hacl_Secret_Word_add_mod__t_1(rc5, d15);
+  uint64_t b15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb5, c15), 24);
+  uint64_t a25 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a15, b15), __anf05);
+  uint64_t d25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d15, a25), 16);
+  uint64_t c25 = Hacl_Secret_Word_add_mod__t_1(c15, d25);
+  uint64_t b25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b15, c25), 63);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint64_t __anf16 = m[s12];
+  uint64_t __anf06 = m[s13];
+  uint64_t ra6 = vv[2];
+  uint64_t rb6 = vv[7];
+  uint64_t rc6 = vv[8];
+  uint64_t rd6 = vv[13];
+  uint64_t a16 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra6, rb6), __anf16);
+  uint64_t d16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd6, a16), 32);
+  uint64_t c16 = Hacl_Secret_Word_add_mod__t_1(rc6, d16);
+  uint64_t b16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb6, c16), 24);
+  uint64_t a26 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a16, b16), __anf06);
+  uint64_t d26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d16, a26), 16);
+  uint64_t c26 = Hacl_Secret_Word_add_mod__t_1(c16, d26);
+  uint64_t b26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b16, c26), 63);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint64_t __anf17 = m[s14];
+  uint64_t __anf07 = m[s15];
+  uint64_t ra7 = vv[3];
+  uint64_t rb7 = vv[4];
+  uint64_t rc7 = vv[9];
+  uint64_t rd7 = vv[14];
+  uint64_t a17 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra7, rb7), __anf17);
+  uint64_t d17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd7, a17), 32);
+  uint64_t c17 = Hacl_Secret_Word_add_mod__t_1(rc7, d17);
+  uint64_t b17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb7, c17), 24);
+  uint64_t a27 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a17, b17), __anf07);
+  uint64_t d27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d17, a27), 16);
+  uint64_t c27 = Hacl_Secret_Word_add_mod__t_1(c17, d27);
+  uint64_t b27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b17, c27), 63);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint64_t x) {
@@ -20465,7 +21075,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_4(starr, mw, vv, ivs, sg, tlen, true);
+  uint64_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint64_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint64_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint64_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint64_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint64_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint64_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint64_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint64_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(tlen));
+  uint64_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(tlen));
+  uint64_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_4(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = starr[vi_1];
+    uint64_t b = vv[vi_1];
+    uint64_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_4(out, starr);
 }
 
@@ -20504,7 +21172,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_4(acc, mw, vv, ivs, sg, ctr, false);
+    uint64_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
+    size_t nr = 12;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_4(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint64_t a = acc[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -20589,38 +21313,7 @@ void Hacl_Streaming_Blake2_blake2b_160_init(uint64_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_4(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_5(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
-  uint64_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
-  uint64_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
-  if (last) {
-    uint64_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_5(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) {
-  uint64_t ra = vv[a];
-  uint64_t rb = vv[b];
-  uint64_t rc = vv[c];
-  uint64_t rd = vv[d];
-  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), x);
-  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
-  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
-  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
-  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), y);
-  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
-  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
-  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -20631,19 +21324,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_5(uint64_t *vv, uint64_t *m, si
   size_t s7 = sg[(base + 7)];
   uint64_t __anf1 = m[s0];
   uint64_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint64_t ra = vv[0];
+  uint64_t rb = vv[4];
+  uint64_t rc = vv[8];
+  uint64_t rd = vv[12];
+  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), __anf1);
+  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
+  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
+  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
+  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), __anf0);
+  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
+  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
+  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint64_t __anf11 = m[s2];
   uint64_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint64_t ra1 = vv[1];
+  uint64_t rb1 = vv[5];
+  uint64_t rc1 = vv[9];
+  uint64_t rd1 = vv[13];
+  uint64_t a11 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra1, rb1), __anf11);
+  uint64_t d11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd1, a11), 32);
+  uint64_t c11 = Hacl_Secret_Word_add_mod__t_1(rc1, d11);
+  uint64_t b11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb1, c11), 24);
+  uint64_t a21 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a11, b11), __anf01);
+  uint64_t d21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d11, a21), 16);
+  uint64_t c21 = Hacl_Secret_Word_add_mod__t_1(c11, d21);
+  uint64_t b21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b11, c21), 63);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint64_t __anf12 = m[s4];
   uint64_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint64_t ra2 = vv[2];
+  uint64_t rb2 = vv[6];
+  uint64_t rc2 = vv[10];
+  uint64_t rd2 = vv[14];
+  uint64_t a12 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra2, rb2), __anf12);
+  uint64_t d12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd2, a12), 32);
+  uint64_t c12 = Hacl_Secret_Word_add_mod__t_1(rc2, d12);
+  uint64_t b12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb2, c12), 24);
+  uint64_t a22 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a12, b12), __anf02);
+  uint64_t d22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d12, a22), 16);
+  uint64_t c22 = Hacl_Secret_Word_add_mod__t_1(c12, d22);
+  uint64_t b22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b12, c22), 63);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint64_t __anf13 = m[s6];
   uint64_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+  uint64_t ra3 = vv[3];
+  uint64_t rb3 = vv[7];
+  uint64_t rc3 = vv[11];
+  uint64_t rd3 = vv[15];
+  uint64_t a13 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra3, rb3), __anf13);
+  uint64_t d13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd3, a13), 32);
+  uint64_t c13 = Hacl_Secret_Word_add_mod__t_1(rc3, d13);
+  uint64_t b13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb3, c13), 24);
+  uint64_t a23 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a13, b13), __anf03);
+  uint64_t d23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d13, a23), 16);
+  uint64_t c23 = Hacl_Secret_Word_add_mod__t_1(c13, d23);
+  uint64_t b23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b13, c23), 63);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -20652,44 +21402,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_5(uint64_t *vv, uint64_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint64_t __anf1 = m[s8];
-  uint64_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint64_t __anf11 = m[s10];
-  uint64_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint64_t __anf12 = m[s12];
-  uint64_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint64_t __anf13 = m[s14];
-  uint64_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_5(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_5(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_5(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_5(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_5(uint64_t *vv, uint64_t *m, size_t *sg) {
-  size_t nr = 12;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_5(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_5(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_5(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_5(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t_1(h, vv);
+  uint64_t __anf14 = m[s8];
+  uint64_t __anf04 = m[s9];
+  uint64_t ra4 = vv[0];
+  uint64_t rb4 = vv[5];
+  uint64_t rc4 = vv[10];
+  uint64_t rd4 = vv[15];
+  uint64_t a14 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra4, rb4), __anf14);
+  uint64_t d14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd4, a14), 32);
+  uint64_t c14 = Hacl_Secret_Word_add_mod__t_1(rc4, d14);
+  uint64_t b14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb4, c14), 24);
+  uint64_t a24 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a14, b14), __anf04);
+  uint64_t d24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d14, a24), 16);
+  uint64_t c24 = Hacl_Secret_Word_add_mod__t_1(c14, d24);
+  uint64_t b24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b14, c24), 63);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint64_t __anf15 = m[s10];
+  uint64_t __anf05 = m[s11];
+  uint64_t ra5 = vv[1];
+  uint64_t rb5 = vv[6];
+  uint64_t rc5 = vv[11];
+  uint64_t rd5 = vv[12];
+  uint64_t a15 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra5, rb5), __anf15);
+  uint64_t d15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd5, a15), 32);
+  uint64_t c15 = Hacl_Secret_Word_add_mod__t_1(rc5, d15);
+  uint64_t b15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb5, c15), 24);
+  uint64_t a25 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a15, b15), __anf05);
+  uint64_t d25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d15, a25), 16);
+  uint64_t c25 = Hacl_Secret_Word_add_mod__t_1(c15, d25);
+  uint64_t b25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b15, c25), 63);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint64_t __anf16 = m[s12];
+  uint64_t __anf06 = m[s13];
+  uint64_t ra6 = vv[2];
+  uint64_t rb6 = vv[7];
+  uint64_t rc6 = vv[8];
+  uint64_t rd6 = vv[13];
+  uint64_t a16 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra6, rb6), __anf16);
+  uint64_t d16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd6, a16), 32);
+  uint64_t c16 = Hacl_Secret_Word_add_mod__t_1(rc6, d16);
+  uint64_t b16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb6, c16), 24);
+  uint64_t a26 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a16, b16), __anf06);
+  uint64_t d26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d16, a26), 16);
+  uint64_t c26 = Hacl_Secret_Word_add_mod__t_1(c16, d26);
+  uint64_t b26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b16, c26), 63);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint64_t __anf17 = m[s14];
+  uint64_t __anf07 = m[s15];
+  uint64_t ra7 = vv[3];
+  uint64_t rb7 = vv[4];
+  uint64_t rc7 = vv[9];
+  uint64_t rd7 = vv[14];
+  uint64_t a17 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra7, rb7), __anf17);
+  uint64_t d17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd7, a17), 32);
+  uint64_t c17 = Hacl_Secret_Word_add_mod__t_1(rc7, d17);
+  uint64_t b17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb7, c17), 24);
+  uint64_t a27 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a17, b17), __anf07);
+  uint64_t d27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d17, a27), 16);
+  uint64_t c27 = Hacl_Secret_Word_add_mod__t_1(c17, d27);
+  uint64_t b27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b17, c27), 63);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t_5(uint8_t *out, uint64_t *st) {
@@ -20731,7 +21515,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_5(starr, mw, vv, ivs, sg, tlen, true);
+  uint64_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint64_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint64_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint64_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint64_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint64_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint64_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint64_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint64_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(tlen));
+  uint64_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(tlen));
+  uint64_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_5(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = starr[vi_1];
+    uint64_t b = vv[vi_1];
+    uint64_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_5(out, starr);
 }
 
@@ -20770,7 +21612,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_5(acc, mw, vv, ivs, sg, ctr, false);
+    uint64_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
+    size_t nr = 12;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_5(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint64_t a = acc[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -20855,38 +21753,7 @@ void Hacl_Streaming_Blake2_blake2b_256_init(uint64_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_5(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_6(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
-  uint64_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
-  uint64_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
-  if (last) {
-    uint64_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_6(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) {
-  uint64_t ra = vv[a];
-  uint64_t rb = vv[b];
-  uint64_t rc = vv[c];
-  uint64_t rd = vv[d];
-  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), x);
-  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
-  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
-  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
-  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), y);
-  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
-  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
-  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -20897,19 +21764,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_6(uint64_t *vv, uint64_t *m, si
   size_t s7 = sg[(base + 7)];
   uint64_t __anf1 = m[s0];
   uint64_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint64_t ra = vv[0];
+  uint64_t rb = vv[4];
+  uint64_t rc = vv[8];
+  uint64_t rd = vv[12];
+  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), __anf1);
+  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
+  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
+  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
+  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), __anf0);
+  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
+  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
+  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint64_t __anf11 = m[s2];
   uint64_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint64_t ra1 = vv[1];
+  uint64_t rb1 = vv[5];
+  uint64_t rc1 = vv[9];
+  uint64_t rd1 = vv[13];
+  uint64_t a11 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra1, rb1), __anf11);
+  uint64_t d11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd1, a11), 32);
+  uint64_t c11 = Hacl_Secret_Word_add_mod__t_1(rc1, d11);
+  uint64_t b11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb1, c11), 24);
+  uint64_t a21 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a11, b11), __anf01);
+  uint64_t d21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d11, a21), 16);
+  uint64_t c21 = Hacl_Secret_Word_add_mod__t_1(c11, d21);
+  uint64_t b21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b11, c21), 63);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint64_t __anf12 = m[s4];
   uint64_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint64_t ra2 = vv[2];
+  uint64_t rb2 = vv[6];
+  uint64_t rc2 = vv[10];
+  uint64_t rd2 = vv[14];
+  uint64_t a12 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra2, rb2), __anf12);
+  uint64_t d12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd2, a12), 32);
+  uint64_t c12 = Hacl_Secret_Word_add_mod__t_1(rc2, d12);
+  uint64_t b12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb2, c12), 24);
+  uint64_t a22 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a12, b12), __anf02);
+  uint64_t d22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d12, a22), 16);
+  uint64_t c22 = Hacl_Secret_Word_add_mod__t_1(c12, d22);
+  uint64_t b22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b12, c22), 63);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint64_t __anf13 = m[s6];
   uint64_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+  uint64_t ra3 = vv[3];
+  uint64_t rb3 = vv[7];
+  uint64_t rc3 = vv[11];
+  uint64_t rd3 = vv[15];
+  uint64_t a13 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra3, rb3), __anf13);
+  uint64_t d13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd3, a13), 32);
+  uint64_t c13 = Hacl_Secret_Word_add_mod__t_1(rc3, d13);
+  uint64_t b13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb3, c13), 24);
+  uint64_t a23 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a13, b13), __anf03);
+  uint64_t d23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d13, a23), 16);
+  uint64_t c23 = Hacl_Secret_Word_add_mod__t_1(c13, d23);
+  uint64_t b23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b13, c23), 63);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -20918,44 +21842,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_6(uint64_t *vv, uint64_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint64_t __anf1 = m[s8];
-  uint64_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint64_t __anf11 = m[s10];
-  uint64_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint64_t __anf12 = m[s12];
-  uint64_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint64_t __anf13 = m[s14];
-  uint64_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_6(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_6(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_6(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_6(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_6(uint64_t *vv, uint64_t *m, size_t *sg) {
-  size_t nr = 12;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_6(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_6(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_6(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_6(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t_1(h, vv);
+  uint64_t __anf14 = m[s8];
+  uint64_t __anf04 = m[s9];
+  uint64_t ra4 = vv[0];
+  uint64_t rb4 = vv[5];
+  uint64_t rc4 = vv[10];
+  uint64_t rd4 = vv[15];
+  uint64_t a14 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra4, rb4), __anf14);
+  uint64_t d14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd4, a14), 32);
+  uint64_t c14 = Hacl_Secret_Word_add_mod__t_1(rc4, d14);
+  uint64_t b14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb4, c14), 24);
+  uint64_t a24 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a14, b14), __anf04);
+  uint64_t d24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d14, a24), 16);
+  uint64_t c24 = Hacl_Secret_Word_add_mod__t_1(c14, d24);
+  uint64_t b24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b14, c24), 63);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint64_t __anf15 = m[s10];
+  uint64_t __anf05 = m[s11];
+  uint64_t ra5 = vv[1];
+  uint64_t rb5 = vv[6];
+  uint64_t rc5 = vv[11];
+  uint64_t rd5 = vv[12];
+  uint64_t a15 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra5, rb5), __anf15);
+  uint64_t d15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd5, a15), 32);
+  uint64_t c15 = Hacl_Secret_Word_add_mod__t_1(rc5, d15);
+  uint64_t b15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb5, c15), 24);
+  uint64_t a25 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a15, b15), __anf05);
+  uint64_t d25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d15, a25), 16);
+  uint64_t c25 = Hacl_Secret_Word_add_mod__t_1(c15, d25);
+  uint64_t b25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b15, c25), 63);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint64_t __anf16 = m[s12];
+  uint64_t __anf06 = m[s13];
+  uint64_t ra6 = vv[2];
+  uint64_t rb6 = vv[7];
+  uint64_t rc6 = vv[8];
+  uint64_t rd6 = vv[13];
+  uint64_t a16 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra6, rb6), __anf16);
+  uint64_t d16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd6, a16), 32);
+  uint64_t c16 = Hacl_Secret_Word_add_mod__t_1(rc6, d16);
+  uint64_t b16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb6, c16), 24);
+  uint64_t a26 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a16, b16), __anf06);
+  uint64_t d26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d16, a26), 16);
+  uint64_t c26 = Hacl_Secret_Word_add_mod__t_1(c16, d26);
+  uint64_t b26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b16, c26), 63);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint64_t __anf17 = m[s14];
+  uint64_t __anf07 = m[s15];
+  uint64_t ra7 = vv[3];
+  uint64_t rb7 = vv[4];
+  uint64_t rc7 = vv[9];
+  uint64_t rd7 = vv[14];
+  uint64_t a17 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra7, rb7), __anf17);
+  uint64_t d17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd7, a17), 32);
+  uint64_t c17 = Hacl_Secret_Word_add_mod__t_1(rc7, d17);
+  uint64_t b17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb7, c17), 24);
+  uint64_t a27 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a17, b17), __anf07);
+  uint64_t d27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d17, a27), 16);
+  uint64_t c27 = Hacl_Secret_Word_add_mod__t_1(c17, d27);
+  uint64_t b27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b17, c27), 63);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t_6(uint8_t *out, uint64_t *st) {
@@ -20997,7 +21955,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_6(starr, mw, vv, ivs, sg, tlen, true);
+  uint64_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint64_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint64_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint64_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint64_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint64_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint64_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint64_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint64_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(tlen));
+  uint64_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(tlen));
+  uint64_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_6(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = starr[vi_1];
+    uint64_t b = vv[vi_1];
+    uint64_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_6(out, starr);
 }
 
@@ -21036,7 +22052,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_6(acc, mw, vv, ivs, sg, ctr, false);
+    uint64_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
+    size_t nr = 12;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_6(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint64_t a = acc[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -21121,38 +22193,7 @@ void Hacl_Streaming_Blake2_blake2b_384_init(uint64_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_6(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_init_vector_impl__t_7(uint64_t *vv, uint64_t *h, uint64_t *ivs, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_load_vector__t_1(vv, h, ivs);
-  uint64_t x12 = vv[12];
-  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
-  uint64_t x13 = vv[13];
-  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
-  if (last) {
-    uint64_t x14 = vv[14];
-    vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_g_impl__t_7(uint64_t *vv, size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) {
-  uint64_t ra = vv[a];
-  uint64_t rb = vv[b];
-  uint64_t rc = vv[c];
-  uint64_t rd = vv[d];
-  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), x);
-  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
-  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
-  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
-  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), y);
-  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
-  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
-  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
-  vv[a] = a2;
-  vv[b] = b2;
-  vv[c] = c2;
-  vv[d] = d2;
-}
-
-static void Hacl_Hash_Blake2_Core_mix_columns__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+static void Hacl_Hash_Blake2_Core_round_impl__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
   size_t s0 = sg[base];
   size_t s1 = sg[(base + 1)];
   size_t s2 = sg[(base + 2)];
@@ -21163,19 +22204,76 @@ static void Hacl_Hash_Blake2_Core_mix_columns__t_7(uint64_t *vv, uint64_t *m, si
   size_t s7 = sg[(base + 7)];
   uint64_t __anf1 = m[s0];
   uint64_t __anf0 = m[s1];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 0, 4, 8, 12, __anf1, __anf0);
+  uint64_t ra = vv[0];
+  uint64_t rb = vv[4];
+  uint64_t rc = vv[8];
+  uint64_t rd = vv[12];
+  uint64_t a1 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra, rb), __anf1);
+  uint64_t d1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd, a1), 32);
+  uint64_t c1 = Hacl_Secret_Word_add_mod__t_1(rc, d1);
+  uint64_t b1 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb, c1), 24);
+  uint64_t a2 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a1, b1), __anf0);
+  uint64_t d2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d1, a2), 16);
+  uint64_t c2 = Hacl_Secret_Word_add_mod__t_1(c1, d2);
+  uint64_t b2 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b1, c2), 63);
+  vv[0] = a2;
+  vv[4] = b2;
+  vv[8] = c2;
+  vv[12] = d2;
   uint64_t __anf11 = m[s2];
   uint64_t __anf01 = m[s3];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 1, 5, 9, 13, __anf11, __anf01);
+  uint64_t ra1 = vv[1];
+  uint64_t rb1 = vv[5];
+  uint64_t rc1 = vv[9];
+  uint64_t rd1 = vv[13];
+  uint64_t a11 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra1, rb1), __anf11);
+  uint64_t d11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd1, a11), 32);
+  uint64_t c11 = Hacl_Secret_Word_add_mod__t_1(rc1, d11);
+  uint64_t b11 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb1, c11), 24);
+  uint64_t a21 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a11, b11), __anf01);
+  uint64_t d21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d11, a21), 16);
+  uint64_t c21 = Hacl_Secret_Word_add_mod__t_1(c11, d21);
+  uint64_t b21 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b11, c21), 63);
+  vv[1] = a21;
+  vv[5] = b21;
+  vv[9] = c21;
+  vv[13] = d21;
   uint64_t __anf12 = m[s4];
   uint64_t __anf02 = m[s5];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 2, 6, 10, 14, __anf12, __anf02);
+  uint64_t ra2 = vv[2];
+  uint64_t rb2 = vv[6];
+  uint64_t rc2 = vv[10];
+  uint64_t rd2 = vv[14];
+  uint64_t a12 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra2, rb2), __anf12);
+  uint64_t d12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd2, a12), 32);
+  uint64_t c12 = Hacl_Secret_Word_add_mod__t_1(rc2, d12);
+  uint64_t b12 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb2, c12), 24);
+  uint64_t a22 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a12, b12), __anf02);
+  uint64_t d22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d12, a22), 16);
+  uint64_t c22 = Hacl_Secret_Word_add_mod__t_1(c12, d22);
+  uint64_t b22 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b12, c22), 63);
+  vv[2] = a22;
+  vv[6] = b22;
+  vv[10] = c22;
+  vv[14] = d22;
   uint64_t __anf13 = m[s6];
   uint64_t __anf03 = m[s7];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 3, 7, 11, 15, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_mix_diagonals__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
+  uint64_t ra3 = vv[3];
+  uint64_t rb3 = vv[7];
+  uint64_t rc3 = vv[11];
+  uint64_t rd3 = vv[15];
+  uint64_t a13 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra3, rb3), __anf13);
+  uint64_t d13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd3, a13), 32);
+  uint64_t c13 = Hacl_Secret_Word_add_mod__t_1(rc3, d13);
+  uint64_t b13 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb3, c13), 24);
+  uint64_t a23 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a13, b13), __anf03);
+  uint64_t d23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d13, a23), 16);
+  uint64_t c23 = Hacl_Secret_Word_add_mod__t_1(c13, d23);
+  uint64_t b23 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b13, c23), 63);
+  vv[3] = a23;
+  vv[7] = b23;
+  vv[11] = c23;
+  vv[15] = d23;
   size_t s8 = sg[(base + 8)];
   size_t s9 = sg[(base + 9)];
   size_t s10 = sg[(base + 10)];
@@ -21184,44 +22282,78 @@ static void Hacl_Hash_Blake2_Core_mix_diagonals__t_7(uint64_t *vv, uint64_t *m, 
   size_t s13 = sg[(base + 13)];
   size_t s14 = sg[(base + 14)];
   size_t s15 = sg[(base + 15)];
-  uint64_t __anf1 = m[s8];
-  uint64_t __anf0 = m[s9];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 0, 5, 10, 15, __anf1, __anf0);
-  uint64_t __anf11 = m[s10];
-  uint64_t __anf01 = m[s11];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 1, 6, 11, 12, __anf11, __anf01);
-  uint64_t __anf12 = m[s12];
-  uint64_t __anf02 = m[s13];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 2, 7, 8, 13, __anf12, __anf02);
-  uint64_t __anf13 = m[s14];
-  uint64_t __anf03 = m[s15];
-  Hacl_Hash_Blake2_Core_g_impl__t_7(vv, 3, 4, 9, 14, __anf13, __anf03);
-}
-
-static void Hacl_Hash_Blake2_Core_round_impl__t_7(uint64_t *vv, uint64_t *m, size_t *sg, size_t base) {
-  Hacl_Hash_Blake2_Core_mix_columns__t_7(vv, m, sg, base);
-  Hacl_Hash_Blake2_Core_mix_diagonals__t_7(vv, m, sg, base);
-}
-
-static void Hacl_Hash_Blake2_Core_rounds_impl__t_7(uint64_t *vv, uint64_t *m, size_t *sg) {
-  size_t nr = 12;
-  size_t i = 0;
-  size_t base = 0;
-  while (i < nr) {
-    size_t vi = i;
-    size_t vb = base;
-    Hacl_Hash_Blake2_Core_round_impl__t_7(vv, m, sg, vb);
-    size_t nb = (vb + 16);
-    if (nb == 160) base = 0;
-    else base = nb;
-    i = (vi + 1);
-  }
-}
-
-static void Hacl_Hash_Blake2_Core_compress_impl__t_7(uint64_t *h, uint64_t *m, uint64_t *vv, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
-  Hacl_Hash_Blake2_Core_init_vector_impl__t_7(vv, h, ivs, ctr, last);
-  Hacl_Hash_Blake2_Core_rounds_impl__t_7(vv, m, sg);
-  Hacl_Hash_Blake2_Core_mix_state_impl__t_1(h, vv);
+  uint64_t __anf14 = m[s8];
+  uint64_t __anf04 = m[s9];
+  uint64_t ra4 = vv[0];
+  uint64_t rb4 = vv[5];
+  uint64_t rc4 = vv[10];
+  uint64_t rd4 = vv[15];
+  uint64_t a14 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra4, rb4), __anf14);
+  uint64_t d14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd4, a14), 32);
+  uint64_t c14 = Hacl_Secret_Word_add_mod__t_1(rc4, d14);
+  uint64_t b14 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb4, c14), 24);
+  uint64_t a24 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a14, b14), __anf04);
+  uint64_t d24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d14, a24), 16);
+  uint64_t c24 = Hacl_Secret_Word_add_mod__t_1(c14, d24);
+  uint64_t b24 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b14, c24), 63);
+  vv[0] = a24;
+  vv[5] = b24;
+  vv[10] = c24;
+  vv[15] = d24;
+  uint64_t __anf15 = m[s10];
+  uint64_t __anf05 = m[s11];
+  uint64_t ra5 = vv[1];
+  uint64_t rb5 = vv[6];
+  uint64_t rc5 = vv[11];
+  uint64_t rd5 = vv[12];
+  uint64_t a15 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra5, rb5), __anf15);
+  uint64_t d15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd5, a15), 32);
+  uint64_t c15 = Hacl_Secret_Word_add_mod__t_1(rc5, d15);
+  uint64_t b15 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb5, c15), 24);
+  uint64_t a25 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a15, b15), __anf05);
+  uint64_t d25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d15, a25), 16);
+  uint64_t c25 = Hacl_Secret_Word_add_mod__t_1(c15, d25);
+  uint64_t b25 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b15, c25), 63);
+  vv[1] = a25;
+  vv[6] = b25;
+  vv[11] = c25;
+  vv[12] = d25;
+  uint64_t __anf16 = m[s12];
+  uint64_t __anf06 = m[s13];
+  uint64_t ra6 = vv[2];
+  uint64_t rb6 = vv[7];
+  uint64_t rc6 = vv[8];
+  uint64_t rd6 = vv[13];
+  uint64_t a16 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra6, rb6), __anf16);
+  uint64_t d16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd6, a16), 32);
+  uint64_t c16 = Hacl_Secret_Word_add_mod__t_1(rc6, d16);
+  uint64_t b16 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb6, c16), 24);
+  uint64_t a26 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a16, b16), __anf06);
+  uint64_t d26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d16, a26), 16);
+  uint64_t c26 = Hacl_Secret_Word_add_mod__t_1(c16, d26);
+  uint64_t b26 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b16, c26), 63);
+  vv[2] = a26;
+  vv[7] = b26;
+  vv[8] = c26;
+  vv[13] = d26;
+  uint64_t __anf17 = m[s14];
+  uint64_t __anf07 = m[s15];
+  uint64_t ra7 = vv[3];
+  uint64_t rb7 = vv[4];
+  uint64_t rc7 = vv[9];
+  uint64_t rd7 = vv[14];
+  uint64_t a17 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(ra7, rb7), __anf17);
+  uint64_t d17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rd7, a17), 32);
+  uint64_t c17 = Hacl_Secret_Word_add_mod__t_1(rc7, d17);
+  uint64_t b17 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(rb7, c17), 24);
+  uint64_t a27 = Hacl_Secret_Word_add_mod__t_1(Hacl_Secret_Word_add_mod__t_1(a17, b17), __anf07);
+  uint64_t d27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(d17, a27), 16);
+  uint64_t c27 = Hacl_Secret_Word_add_mod__t_1(c17, d27);
+  uint64_t b27 = Hacl_Secret_Word_rotate_right__t_1(Hacl_Secret_Word_logxor__t_1(b17, c27), 63);
+  vv[3] = a27;
+  vv[4] = b27;
+  vv[9] = c27;
+  vv[14] = d27;
 }
 
 static void Hacl_Hash_Blake2_write_digest_le__t_7(uint8_t *out, uint64_t *st) {
@@ -21263,7 +22395,65 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_7(starr, mw, vv, ivs, sg, tlen, true);
+  uint64_t __anf0 = starr[0];
+  vv[0] = __anf0;
+  uint64_t __anf01 = starr[1];
+  vv[1] = __anf01;
+  uint64_t __anf02 = starr[2];
+  vv[2] = __anf02;
+  uint64_t __anf03 = starr[3];
+  vv[3] = __anf03;
+  uint64_t __anf04 = starr[4];
+  vv[4] = __anf04;
+  uint64_t __anf05 = starr[5];
+  vv[5] = __anf05;
+  uint64_t __anf06 = starr[6];
+  vv[6] = __anf06;
+  uint64_t __anf07 = starr[7];
+  vv[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  vv[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  vv[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  vv[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  vv[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  vv[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  vv[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  vv[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  vv[15] = __anf015;
+  uint64_t x12 = vv[12];
+  vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(tlen));
+  uint64_t x13 = vv[13];
+  vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(tlen));
+  uint64_t x14 = vv[14];
+  vv[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_7(vv, mw, sg, vb);
+    size_t nb = (vb + 16);
+    if (nb == 160) base = 0;
+    else base = nb;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = starr[vi_1];
+    uint64_t b = vv[vi_1];
+    uint64_t c = vv[(vi_1 + 8)];
+    starr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_7(out, starr);
 }
 
@@ -21302,7 +22492,63 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_7(acc, mw, vv, ivs, sg, ctr, false);
+    uint64_t __anf0 = acc[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = acc[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = acc[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = acc[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = acc[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = acc[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = acc[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = acc[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(ctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(ctr));
+    size_t nr = 12;
+    size_t i = 0;
+    size_t base1 = 0;
+    while (i < nr) {
+      size_t vi = i;
+      size_t vb = base1;
+      Hacl_Hash_Blake2_Core_round_impl__t_7(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base1 = 0;
+      else base1 = nb;
+      i = (vi + 1);
+    }
+    size_t i1 = 0;
+    while (i1 < 8) {
+      size_t vi_1 = i1;
+      uint64_t a = acc[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      acc[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i1 = (vi_1 + 1);
+    }
     j = (vj + 1);
   }
 }
@@ -21428,7 +22674,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *vv, uint32_
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t(h, mw, vv, ivs, sg, vctr, false);
+    uint32_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(vctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(vctr));
+    size_t nr = 10;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint32_t a = h[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21476,7 +22778,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t(uint32_t *ivs, uint8_t *out, uint8_t
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t(harr, marr, varr, ivs, sg, lastc, true);
+  uint32_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint32_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint32_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint32_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint32_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint32_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint32_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint32_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint32_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(lastc));
+  uint32_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(lastc));
+  uint32_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = harr[vi_1];
+    uint32_t b = varr[vi_1];
+    uint32_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t(out, harr);
 }
 
@@ -21497,7 +22857,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *vv, uint3
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_1(h, mw, vv, ivs, sg, vctr, false);
+    uint32_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(vctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(vctr));
+    size_t nr = 10;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_1(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint32_t a = h[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21535,7 +22951,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_1(uint32_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_1(harr, marr, varr, ivs, sg, lastc, true);
+  uint32_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint32_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint32_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint32_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint32_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint32_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint32_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint32_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint32_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(lastc));
+  uint32_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(lastc));
+  uint32_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_1(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = harr[vi_1];
+    uint32_t b = varr[vi_1];
+    uint32_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_1(out, harr);
 }
 
@@ -21556,7 +23030,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *vv, uint3
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_2(h, mw, vv, ivs, sg, vctr, false);
+    uint32_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(vctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(vctr));
+    size_t nr = 10;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_2(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint32_t a = h[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21594,7 +23124,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_2(uint32_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_2(harr, marr, varr, ivs, sg, lastc, true);
+  uint32_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint32_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint32_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint32_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint32_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint32_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint32_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint32_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint32_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(lastc));
+  uint32_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(lastc));
+  uint32_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_2(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = harr[vi_1];
+    uint32_t b = varr[vi_1];
+    uint32_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_2(out, harr);
 }
 
@@ -21615,7 +23203,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *vv, uint3
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_3(h, mw, vv, ivs, sg, vctr, false);
+    uint32_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint32_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint32_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint32_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint32_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint32_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint32_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint32_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint32_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint32_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint32_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint32_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint32_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint32_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint32_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint32_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint32_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(vctr));
+    uint32_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(vctr));
+    size_t nr = 10;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_3(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint32_t a = h[vi_1];
+      uint32_t b = vv[vi_1];
+      uint32_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21653,7 +23297,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_3(uint32_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_3(harr, marr, varr, ivs, sg, lastc, true);
+  uint32_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint32_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint32_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint32_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint32_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint32_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint32_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint32_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint32_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint32_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint32_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint32_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint32_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint32_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint32_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint32_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint32_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t(x12, Hacl_Secret_Word_of_sizet_lo__t_1(lastc));
+  uint32_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t(x13, Hacl_Secret_Word_of_sizet_hi__t(lastc));
+  uint32_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t(x14);
+  size_t nr = 10;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_3(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint32_t a = harr[vi_1];
+    uint32_t b = varr[vi_1];
+    uint32_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t(Hacl_Secret_Word_logxor__t(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_3(out, harr);
 }
 
@@ -21679,7 +23381,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *vv, uint6
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_4(h, mw, vv, ivs, sg, vctr, false);
+    uint64_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(vctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(vctr));
+    size_t nr = 12;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_4(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint64_t a = h[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21717,7 +23475,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_4(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_4(harr, marr, varr, ivs, sg, lastc, true);
+  uint64_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint64_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint64_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint64_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint64_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint64_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint64_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint64_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint64_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(lastc));
+  uint64_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(lastc));
+  uint64_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_4(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = harr[vi_1];
+    uint64_t b = varr[vi_1];
+    uint64_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_4(out, harr);
 }
 
@@ -21738,7 +23554,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *vv, uint6
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_5(h, mw, vv, ivs, sg, vctr, false);
+    uint64_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(vctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(vctr));
+    size_t nr = 12;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_5(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint64_t a = h[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21776,7 +23648,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_5(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_5(harr, marr, varr, ivs, sg, lastc, true);
+  uint64_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint64_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint64_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint64_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint64_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint64_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint64_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint64_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint64_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(lastc));
+  uint64_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(lastc));
+  uint64_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_5(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = harr[vi_1];
+    uint64_t b = varr[vi_1];
+    uint64_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_5(out, harr);
 }
 
@@ -21797,7 +23727,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *vv, uint6
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_6(h, mw, vv, ivs, sg, vctr, false);
+    uint64_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(vctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(vctr));
+    size_t nr = 12;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_6(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint64_t a = h[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21835,7 +23821,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_6(harr, marr, varr, ivs, sg, lastc, true);
+  uint64_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint64_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint64_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint64_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint64_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint64_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint64_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint64_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint64_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(lastc));
+  uint64_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(lastc));
+  uint64_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_6(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = harr[vi_1];
+    uint64_t b = varr[vi_1];
+    uint64_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_6(out, harr);
 }
 
@@ -21856,7 +23900,63 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *vv, uint6
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_7(h, mw, vv, ivs, sg, vctr, false);
+    uint64_t __anf0 = h[0];
+    vv[0] = __anf0;
+    uint64_t __anf01 = h[1];
+    vv[1] = __anf01;
+    uint64_t __anf02 = h[2];
+    vv[2] = __anf02;
+    uint64_t __anf03 = h[3];
+    vv[3] = __anf03;
+    uint64_t __anf04 = h[4];
+    vv[4] = __anf04;
+    uint64_t __anf05 = h[5];
+    vv[5] = __anf05;
+    uint64_t __anf06 = h[6];
+    vv[6] = __anf06;
+    uint64_t __anf07 = h[7];
+    vv[7] = __anf07;
+    uint64_t __anf08 = ivs[0];
+    vv[8] = __anf08;
+    uint64_t __anf09 = ivs[1];
+    vv[9] = __anf09;
+    uint64_t __anf010 = ivs[2];
+    vv[10] = __anf010;
+    uint64_t __anf011 = ivs[3];
+    vv[11] = __anf011;
+    uint64_t __anf012 = ivs[4];
+    vv[12] = __anf012;
+    uint64_t __anf013 = ivs[5];
+    vv[13] = __anf013;
+    uint64_t __anf014 = ivs[6];
+    vv[14] = __anf014;
+    uint64_t __anf015 = ivs[7];
+    vv[15] = __anf015;
+    uint64_t x12 = vv[12];
+    vv[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(vctr));
+    uint64_t x13 = vv[13];
+    vv[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(vctr));
+    size_t nr = 12;
+    size_t i1 = 0;
+    size_t base = 0;
+    while (i1 < nr) {
+      size_t vi = i1;
+      size_t vb = base;
+      Hacl_Hash_Blake2_Core_round_impl__t_7(vv, mw, sg, vb);
+      size_t nb = (vb + 16);
+      if (nb == 160) base = 0;
+      else base = nb;
+      i1 = (vi + 1);
+    }
+    size_t i2 = 0;
+    while (i2 < 8) {
+      size_t vi_1 = i2;
+      uint64_t a = h[vi_1];
+      uint64_t b = vv[vi_1];
+      uint64_t c = vv[(vi_1 + 8)];
+      h[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+      i2 = (vi_1 + 1);
+    }
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -21894,7 +23994,65 @@ static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_7(harr, marr, varr, ivs, sg, lastc, true);
+  uint64_t __anf0 = harr[0];
+  varr[0] = __anf0;
+  uint64_t __anf01 = harr[1];
+  varr[1] = __anf01;
+  uint64_t __anf02 = harr[2];
+  varr[2] = __anf02;
+  uint64_t __anf03 = harr[3];
+  varr[3] = __anf03;
+  uint64_t __anf04 = harr[4];
+  varr[4] = __anf04;
+  uint64_t __anf05 = harr[5];
+  varr[5] = __anf05;
+  uint64_t __anf06 = harr[6];
+  varr[6] = __anf06;
+  uint64_t __anf07 = harr[7];
+  varr[7] = __anf07;
+  uint64_t __anf08 = ivs[0];
+  varr[8] = __anf08;
+  uint64_t __anf09 = ivs[1];
+  varr[9] = __anf09;
+  uint64_t __anf010 = ivs[2];
+  varr[10] = __anf010;
+  uint64_t __anf011 = ivs[3];
+  varr[11] = __anf011;
+  uint64_t __anf012 = ivs[4];
+  varr[12] = __anf012;
+  uint64_t __anf013 = ivs[5];
+  varr[13] = __anf013;
+  uint64_t __anf014 = ivs[6];
+  varr[14] = __anf014;
+  uint64_t __anf015 = ivs[7];
+  varr[15] = __anf015;
+  uint64_t x12 = varr[12];
+  varr[12] = Hacl_Secret_Word_logxor__t_1(x12, Hacl_Secret_Word_of_sizet_lo__t_2(lastc));
+  uint64_t x13 = varr[13];
+  varr[13] = Hacl_Secret_Word_logxor__t_1(x13, Hacl_Secret_Word_of_sizet_hi__t_1(lastc));
+  uint64_t x14 = varr[14];
+  varr[14] = Hacl_Secret_Word_lognot__t_1(x14);
+  size_t nr = 12;
+  size_t i = 0;
+  size_t base = 0;
+  while (i < nr) {
+    size_t vi = i;
+    size_t vb = base;
+    Hacl_Hash_Blake2_Core_round_impl__t_7(varr, marr, sg, vb);
+    size_t nb1 = (vb + 16);
+    if (nb1 == 160) base = 0;
+    else base = nb1;
+    i = (vi + 1);
+  }
+  size_t i1 = 0;
+  while (i1 < 8) {
+    size_t vi_1 = i1;
+    uint64_t a = harr[vi_1];
+    uint64_t b = varr[vi_1];
+    uint64_t c = varr[(vi_1 + 8)];
+    harr[vi_1] = Hacl_Secret_Word_logxor__t_1(Hacl_Secret_Word_logxor__t_1(a, b), c);
+    i1 = (vi_1 + 1);
+  }
   Hacl_Hash_Blake2_write_digest_le__t_7(out, harr);
 }
 

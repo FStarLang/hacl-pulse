@@ -69,6 +69,7 @@ let sigma_len (_: unit)
 
 #push-options "--z3rlimit 60 --fuel 0 --ifuel 0"
 
+inline_for_extraction
 fn g_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
           (vv: A.array t) (a b c d: SZ.t) (x y: t)
           (#v0: erased (Seq.seq t))
@@ -109,10 +110,21 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 **
     routine.
 
     [base] is [16 * r], carried in rather than multiplied out, so that no
-    product appears in a proof obligation, and [r] itself is erased. *)
+    product appears in a proof obligation, and [r] itself is erased.
+
+    [mix_columns] and [mix_diagonals] are [inline_for_extraction], so a round
+    is one straight-line body; [round_impl] itself deliberately is not.  It is
+    the one place in the chain where the two C compilers want opposite things:
+    inlining it into the round loop is what lets clang keep the working vector
+    in registers, worth 1.35x there, but it costs gcc 15% -- gcc spills the
+    same vector rather than promoting it.  A round remains a call until the
+    loop around it is unrolled and the schedule indices become literals, at
+    which point neither compiler has to guess.  See the note above
+    [Hacl.Impl.Mont256.amul] for the policy this follows. *)
 
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
+inline_for_extraction
 fn mix_columns (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
                (#v0: erased (Seq.seq t))
@@ -144,6 +156,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to
   g_impl p vv 3sz 7sz 11sz 15sz A.(m.(s6)) A.(m.(s7));
 }
 
+inline_for_extraction
 fn mix_diagonals (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                  (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
                  (#v0: erased (Seq.seq t))
@@ -222,6 +235,7 @@ let sizet_hi_eq (#t: Type0) {| w: word t |} (x: SZ.t)
 (** [vv := h ++ iv].  Unrolled: sixteen stores, and one extensionality
     argument over sixteen indices, is cheaper than a loop invariant that has to
     talk about two source slices at once. *)
+inline_for_extraction
 fn load_vector (#t: Type0) {| w: word t |}
                (vv: A.array t) (h: A.array t) (ivs: A.array t)
                (#v0: erased (Seq.seq t))
@@ -259,6 +273,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to h #ph vh ** A.pts_to
 }
 
 (** [Spec.Blake2.init_vector]. *)
+inline_for_extraction
 fn init_vector_impl (#t: Type0) {| w: word t |}
                     ([@@@FStar.Attributes.monomorphize] p: params t)
                     (vv: A.array t) (h: A.array t) (ivs: A.array t)
@@ -297,6 +312,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to h #ph vh ** A.pts_to
     and twelfth rounds reuse the first and second permutations. *)
 #push-options "--z3rlimit 600 --fuel 1 --ifuel 0"
 
+inline_for_extraction
 fn rounds_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                (vv: A.array t) (m: A.array t) (sg: A.array SZ.t)
@@ -341,6 +357,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to
 #pop-options
 
 (** The feedforward, [Spec.Blake2.mix_state]. *)
+inline_for_extraction
 fn mix_state_impl (#t: Type0) {| w: word t |}
                   (h: A.array t) (vv: A.array t)
                   (#vh: erased (Seq.seq t))
@@ -380,7 +397,18 @@ ensures exists* (vh': Seq.seq t). A.pts_to h vh' ** A.pts_to vv #pv v4 **
 }
 
 (** [Spec.Blake2.compress]: the state [h] is updated in place, using [vv] as
-    scratch. *)
+    scratch.
+
+    [inline_for_extraction], because all three of the things a caller knows
+    are worth knowing: [ivs] and [sg] are the initialisation vector and the
+    sigma table, both static, and [last] is the final-block flag, which is a
+    literal at every call site -- false in the block loop, true in the digest.
+    Constant tables fold their loads; a constant [last] removes a branch from
+    the middle of the compression function.  gcc was already cloning this
+    twice per instantiation to get exactly that, and clang was not cloning it
+    at all, which is 14% of BLAKE2; doing it here gives both the same code.
+    See the note above [Hacl.Impl.Mont256.amul]. *)
+inline_for_extraction
 fn compress_impl (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
                  (h: A.array t) (m: A.array t) (vv: A.array t) (ivs: A.array t)
