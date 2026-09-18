@@ -538,9 +538,9 @@ let auth_decap (k: kem_alg) (enc: Seq.lseq S8.t (size_dh_public k))
     key become an AEAD key, a base nonce and an exporter secret. *)
 
 let suite_id (#t: Type0) {| word t |} (cs: ciphersuite t) : Seq.lseq S8.t 10 =
-  Seq.append hpke_prefix
-    (Seq.append (two_bytes (kem_id cs.kem))
-       (Seq.append (two_bytes (kdf_id cs)) (two_bytes (aead_id cs.aead))))
+  Seq.append (Seq.append (Seq.append hpke_prefix (two_bytes (kem_id cs.kem)))
+                (two_bytes (kdf_id cs)))
+    (two_bytes (aead_id cs.aead))
 
 (** The context a mode needs beyond the shared secret: a pre-shared key and
     its identifier, both empty in the unauthenticated modes.  RFC 9180
@@ -571,6 +571,11 @@ type context (#t: Type0) {| word t |} (cs: ciphersuite t) = {
 let xor_bytes (#n: nat) (a b: Seq.lseq S8.t n) : Seq.lseq S8.t n =
   Seq.init n (fun i -> S8.logxor (Seq.index a i) (Seq.index b i))
 
+let xor_bytes_index (#n: nat) (a b: Seq.lseq S8.t n) (i: nat { i < n })
+  : Lemma (Seq.index (xor_bytes a b) i == S8.logxor (Seq.index a i) (Seq.index b i))
+          [SMTPat (Seq.index (xor_bytes a b) i)]
+  = ()
+
 (** [ComputeNonce]: the base nonce exclusive-ored with the sequence number in
     big-endian.  The nonce is twelve bytes and the counter eight, so the
     leading four bytes of the base nonce always come through unchanged. *)
@@ -598,8 +603,8 @@ let key_schedule (#t: Type0) {| word t |} (cs: ciphersuite t) (m: mode)
     let psk_id_hash = labeled_extract cs.kdf sid Seq.empty label_psk_id_hash psk_id in
     let info_hash = labeled_extract cs.kdf sid Seq.empty label_info_hash info in
     let ks : Seq.lseq S8.t (size_ks_context cs) =
-      Seq.append (Seq.create 1 (S8.classify (U8.uint_to_t (mode_id m))))
-        (Seq.append psk_id_hash info_hash) in
+      Seq.append (Seq.append (Seq.create 1 (S8.classify (U8.uint_to_t (mode_id m))))
+                    psk_id_hash) info_hash in
     let secret = labeled_extract cs.kdf sid shared_secret label_secret psk in
     { ckey = labeled_expand cs.kdf sid secret label_key ks (size_key cs);
       cbase_nonce = labeled_expand cs.kdf sid secret label_base_nonce ks (size_nonce cs);
