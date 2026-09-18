@@ -168,6 +168,16 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Frodo640., keypair enc dec)
 CUSTARD_ENTRIES += $(addprefix Hacl.Frodo976., keypair enc dec)
 CUSTARD_ENTRIES += $(addprefix Hacl.Frodo1344., keypair enc dec)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.HPKE.Suites., \
+  x25519_sha256_chachapoly_setup_base_s x25519_sha256_chachapoly_setup_base_r \
+  x25519_sha256_chachapoly_seal x25519_sha256_chachapoly_open \
+  x25519_sha512_chachapoly_setup_base_s x25519_sha512_chachapoly_setup_base_r \
+  x25519_sha512_chachapoly_seal x25519_sha512_chachapoly_open \
+  p256_sha256_chachapoly_setup_base_s p256_sha256_chachapoly_setup_base_r \
+  p256_sha256_chachapoly_seal p256_sha256_chachapoly_open \
+  x25519_sha256_aes128gcm_setup_base_s x25519_sha256_aes128gcm_setup_base_r \
+  x25519_sha256_aes128gcm_seal x25519_sha256_aes128gcm_open)
+
 include mk/extract.mk
 
 .DEFAULT_GOAL := all
