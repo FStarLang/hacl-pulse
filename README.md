@@ -633,20 +633,46 @@ moved to **eight limbs of thirty-two bits** and a scalar multiplication went
 from 461 to 243 microseconds.
 
 It now runs at **five limbs of fifty-one bits**, and a scalar multiplication
-takes 145 microseconds -- 1.67x again, or almost exactly 2x with
-`-march=native`.  The arithmetic is nicer at every level.  Twenty-five
+takes 68 microseconds.  The arithmetic is nicer at every level.  Twenty-five
 64x64->128 products replace sixty-four 32x32->64 ones.  And because
 `5 * 51 == 255` exactly and `2^255 == prime + 19`, the fold constant is 19
 rather than 38, and the whole top-limb apparatus -- `freeze_b`, `red255`,
 `fold255`, `hi255`, `mask255`, `mask_top` -- disappears: the final reduction
 is `add19`, one carry pass, and a select on the carry out.  A limb is allowed
-to reach `2^52 - 1` rather than being canonical; `fmul` accumulates 25
-products into nine 128-bit columns, folds the top four against 19, and runs
-two 128-bit carry passes before narrowing.
+to reach `2^52 - 1` rather than being canonical.
+
+**`fmul` is a straight line, not an array.**  The specification describes it
+as nine schoolbook columns, a fold of the top four against 19, and two
+128-bit carry passes -- the right shape for the proof, since both halves are
+inductions over the limb index, and the wrong shape for the machine.  Written
+that way it cost 52.8 ns against HACL\*'s 12.8, which was the whole remaining
+gap in X25519.  The implementation now holds everything in local variables.
+The reduction constant is folded into `b` up front -- `19 * (2^52 - 1)` still
+fits a word, so four extra multiplications collapse nine columns to five --
+and the carry between columns is then a *word* rather than a 128-bit value: a
+column is under `95 * lim^2`, a little below `2^110.6`, so its quotient by the
+base is under `2^60`, and nineteen times the topmost one is still under
+`2^64`.  That is what turns two 128-bit passes into one chain of five, with
+the top carry wrapping into limb zero in a word and one more step carrying
+into limb one.  The scheme only closes with the tight product bound; relaxing
+it to `2^111` makes the wrap overflow, so `fmul_spec_ok` carries
+`20 * (nl * (lim * lim))` unrounded the whole way, and `fmul_spec` ends in
+`carry_fix` -- a single `carry_step` on limb zero -- rather than a second full
+pass, because `carry_pass_shaped` already proves every other limb is a proper
+digit after the first.  `Spec.Curve25519.Columns` is the bridge: it unfolds
+the `repeati` behind `part` into nine explicit columns, moves the nineteen
+across each product so it lands in the right operand, distributes `fold19`
+into five explicit five-term sums in exactly the association the code
+evaluates, and unfolds the carry chain into the straight line the code runs.
+No new mathematics, which is the point.  Custard emits ten reads, four scalar
+multiplications, twenty-five `mul_wide`s, a chain of shifts and masks, and
+five writes; the change was worth 2.1x on every Curve25519 and Ed25519
+benchmark.
 
 `fscale` is the one operation that needed a wider intermediate:
 `121665 * (2^52 - 1)` is about `2^69`, past a word, so it takes a nine-element
-128-bit scratch array and carries down from there.
+128-bit scratch array and carries down from there.  It is also the only
+reason those scratch arrays still exist, now that `fmul` has no use for one.
 
 **Bytes go through the radix-32 representation.**  `Spec.Bignum256`'s byte
 layer was already proved, so `load` is the 32-bit byte loop followed by five
@@ -1739,13 +1765,13 @@ the reference.
 | HMAC-SHA-256 | 256 KiB | 1,148 us | 1,102 us | 1.04x |
 | NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
 | Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
+| X25519 | -- | 68 us | 44 us | 1.54x |
 | BLAKE2b | 256 KiB | 582 us | 313 us | 1.86x |
 | RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
+| Ed25519 sign | -- | 263 us | 64 us | 4.08x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
-| X25519 | -- | 145 us | 44 us | 3.27x |
 | P-256 ECDSA verify | -- | 4.76 ms | 0.43 ms | 11.0x |
-| Ed25519 sign | -- | 542 us | 64 us | 8.41x |
 | secp256k1 ECDSA sign | -- | 2.10 ms | 0.07 ms | 32x |
 
 Three things account for most of the spread.
@@ -1763,11 +1789,12 @@ window.  The generic bignum itself is *faster* than HACL\*'s, which is what
 the modexp row shows.
 
 **Where it is behind by more, it is the higher-level algorithm.**  Curve25519
-now runs at radix 2^51 like HACL\*'s `_51`, so the field arithmetic is the
-same shape; what remains is that the ladder and Ed25519's scalar
-multiplication have had no attention -- no lazy reduction across steps, and
-Ed25519 multiplies one bit at a time where HACL\* uses a precomputed window,
-which is why signing is further behind than X25519.  P-256 and secp256k1 use the shared general Montgomery core rather
+now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
+so the field arithmetic is the same shape and X25519 is within 1.5x; what is
+left there is that HACL\*'s `fmul` is a `static inline` in a header and gets
+inlined into the ladder body, while Custard emits a `static` function that gcc
+declines to inline.  Ed25519 is further behind because it multiplies one bit
+at a time where HACL\* uses a precomputed window.  P-256 and secp256k1 use the shared general Montgomery core rather
 than the special-prime reductions those two primes admit, and multiply scalars
 one bit at a time rather than through a precomputed window.  These are known,
 localized and unstarted; none of them requires new proof technique, only work.
@@ -2133,9 +2160,10 @@ Beyond feature parity, the performance work above has a queue of its own, in
 rough order of value:
 
 1. **Windowed scalar multiplication for Ed25519**, which is most of the
-   remaining gap now that the field is at radix 2^51: signing is 8.4x the
-   reference where X25519 is 3.3x, and the difference is HACL\*'s precomputed
-   base-point window against a bit-at-a-time double-and-add here.
+   remaining gap now that the field is at radix 2^51 and `fmul` is a straight
+   line: signing is 4.1x the reference where X25519 is 1.5x, and the whole of
+   the difference is HACL\*'s precomputed base-point window against a
+   bit-at-a-time double-and-add here.
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
