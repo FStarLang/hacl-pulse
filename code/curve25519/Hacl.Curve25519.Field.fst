@@ -239,6 +239,7 @@ let narrow128 (x: S128.t)
 
 #push-options "--z3rlimit 200"
 
+[@@ FStar.Attributes.CInline]
 fn carry_chain (a: A.array S64.t) (c: erased nat) (d: erased nat)
                (#va: erased (Seq.seq S64.t))
 requires A.pts_to a va **
@@ -347,6 +348,7 @@ ensures exists* (va': Seq.seq S64.t).
 
 (** The same chain one width up, on the first [nl] of the [nw] columns.
     This is the pass that brings a folded product back towards a word. *)
+[@@ FStar.Attributes.CInline]
 fn carry_chain128 (a: A.array S128.t) (c: erased nat) (d: erased nat)
                   (#va: erased (Seq.seq S128.t))
 requires A.pts_to a va **
@@ -405,6 +407,7 @@ ensures exists* (va': Seq.seq S128.t).
 
 #push-options "--z3rlimit 120"
 
+[@@ FStar.Attributes.CInline]
 fn fadd (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -462,6 +465,7 @@ let eightp_index (i: nat { i < nl })
   = assert_norm (8 * (base - 19) == 18014398509481832);
     assert_norm (8 * (base - 1) == 18014398509481976)
 
+[@@ FStar.Attributes.CInline]
 fn fsub (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -533,6 +537,7 @@ let copy_step (f g: Seq.seq nat) (k: nat { k < Seq.length g }) (x: nat)
 
 #push-options "--z3rlimit 200"
 
+[@@ FStar.Attributes.CInline]
 fn fscale (out a: A.array S64.t) (m: U64.t { U64.v m <= 121665 }) (t: A.array S128.t)
           (#vout: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
           (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -677,6 +682,7 @@ let chi (x: S128.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
+[@@ FStar.Attributes.CInline]
 fn fmul (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -1174,6 +1180,7 @@ ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
 
 #push-options "--z3rlimit 120"
 
+[@@ FStar.Attributes.CInline]
 fn cswap (sel: S64.t) (a b: A.array S64.t)
          (#va: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S64.t))
 requires A.pts_to a va ** A.pts_to b vb **
@@ -1213,6 +1220,7 @@ ensures exists* (va': Seq.seq S64.t) (vb': Seq.seq S64.t).
 }
 
 (** A straight copy, for the ladder's temporaries. *)
+[@@ FStar.Attributes.CInline]
 fn copy (dst src: A.array S64.t)
         (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
 requires A.pts_to dst vd ** A.pts_to src #ps vs **
