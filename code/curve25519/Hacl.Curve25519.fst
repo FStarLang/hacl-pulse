@@ -71,12 +71,12 @@ ensures exists* (va': Seq.seq S64.t).
   A.pts_to_len a;
   let z = S64.zero;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
+  while (let vi = !i; SZ.lt vi 5sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to a v **
-    pure (SZ.v vi <= 8 /\ Seq.length v == nl /\
+    pure (SZ.v vi <= 5 /\ Seq.length v == nl /\
           (forall (k: nat). k < SZ.v vi ==> S64.v (Seq.index v k) == 0))
-  decreases (8 - SZ.v (!i))
+  decreases (5 - SZ.v (!i))
   {
     let vi = !i;
     A.((a.(vi) <- z));
@@ -184,7 +184,7 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
   fsub t5 t2 t3;                          (* e = aa - bb *)
   fmul x2 t2 t3 t31;                      (* x2' = aa * bb *)
   with e. assert (A.pts_to t5 e);
-  fscale t0 t5 121665uL;
+  fscale t0 t5 121665uL t31;
   with s. assert (A.pts_to t0 s);
   Math.lemma_mod_mul_distr_r 121665 (eval (vals e)) C.prime;
   assert (pure (fev (vals s) == C.fmul C.a24 (fev (vals e))));
@@ -430,7 +430,7 @@ ensures exists* (vout': Seq.seq S8.t).
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
   let z8 = S8.classify 0uy;
-  let mut ka = [| z8; 32sz |]; A.pts_to_len ka; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; let mut a4 = [| z; 8sz |]; A.pts_to_len a4; let mut a5 = [| z; 8sz |]; A.pts_to_len a5; let mut b0 = [| z; 8sz |]; A.pts_to_len b0; let mut b1 = [| z; 8sz |]; A.pts_to_len b1; let mut b2 = [| z; 8sz |]; A.pts_to_len b2; let mut b3 = [| z; 8sz |]; A.pts_to_len b3; let mut b4 = [| z; 8sz |]; A.pts_to_len b4; let mut b5 = [| z; 8sz |]; A.pts_to_len b5; let mut b6 = [| z; 8sz |]; A.pts_to_len b6; let mut bw = [| z128; 15sz |]; A.pts_to_len bw; A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut ka = [| z8; 32sz |]; A.pts_to_len ka; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut b0 = [| z; 5sz |]; A.pts_to_len b0; let mut b1 = [| z; 5sz |]; A.pts_to_len b1; let mut b2 = [| z; 5sz |]; A.pts_to_len b2; let mut b3 = [| z; 5sz |]; A.pts_to_len b3; let mut b4 = [| z; 5sz |]; A.pts_to_len b4; let mut b5 = [| z; 5sz |]; A.pts_to_len b5; let mut b6 = [| z; 5sz |]; A.pts_to_len b6; let mut bw = [| z128; 9sz |]; A.pts_to_len bw; A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len b0; A.pts_to_len b1;
   A.pts_to_len b2; A.pts_to_len b3; A.pts_to_len b4; A.pts_to_len b5;
   A.pts_to_len b6; A.pts_to_len bw; A.pts_to_len out;
@@ -440,11 +440,11 @@ ensures exists* (vout': Seq.seq S8.t).
   assert (pure (Seq.length vks == 32));
 
   load a1 u;
-  mask_top a1;
   with vx1. assert (A.pts_to a1 vx1);
   assert_norm (base - 1 <= lim);
   assert (pure (felem (vals vx1) /\ fev (vals vx1) == C.decode_point vu));
 
+  assert_norm (1 < base);
   set_small a2 1uL;
   set_small a3 0uL;
   copy a4 a1;

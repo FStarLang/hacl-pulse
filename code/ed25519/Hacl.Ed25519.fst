@@ -52,6 +52,8 @@ module Table = Hacl.Impl.Table
 module Sub = Hacl.Impl.Sub
 module Tables = Hacl.Ed25519.Tables
 module Scalar = Hacl.Ed25519.Scalar
+module Limb = Hacl.Impl.Limb
+module B32 = Spec.Bignum256
 module Hash = Hacl.Hash.SHA2
 module Stream = Hacl.Streaming.SHA2
 module SHA2 = Spec.SHA2
@@ -80,15 +82,15 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   A.pts_to_len ox;
   let zz = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| z128; 15sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut a5 = [| zz; 8sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| z128; 9sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut a5 = [| zz; 5sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5;
 
   (* The tables are read-only, but [point_mul] wants the four coordinates
      at one permission, so the two constants are copied in. *)
-  let gxt = Table.table Tables.gx_arr 8sz;
+  let gxt = Table.table Tables.gx_arr 5sz;
   copy a4 gxt;
   Table.drop_table gxt;
-  let gyt = Table.table Tables.gy_arr 8sz;
+  let gyt = Table.table Tables.gy_arr 5sz;
   copy a5 gyt;
   Table.drop_table gyt;
   Tables.gx_ok ();
@@ -117,7 +119,7 @@ ensures exists* (vout': Seq.seq S8.t).
   let zz = S64.zero;
   let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   Scalar.reduce_op a1 a2 a3 h;
-  store out a1;
+  Scalar.store_le out a1;
   ()
 }
 
@@ -184,7 +186,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut b1 = [| z8; 32sz |]; A.pts_to_len b1; let mut b2 = [| z8; 32sz |]; A.pts_to_len b2; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; A.pts_to_len b1; A.pts_to_len b2;
+  let mut b1 = [| z8; 32sz |]; A.pts_to_len b1; let mut b2 = [| z8; 32sz |]; A.pts_to_len b2; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; A.pts_to_len b1; A.pts_to_len b2;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand b1 b2 secret;
@@ -313,40 +315,6 @@ ensures exists* (vout': Seq.seq S8.t).
   ()
 }
 
-(** {2 A thirty-two byte scalar, reduced}
-
-    The secret scalar is stored as thirty-two bytes but is used modulo the
-    group order.  Zero-extending to sixty-four bytes lets the same
-    reduction serve, and costs only the extra doublings. *)
-
-fn scalar_reduce32 (acc t1 t2: A.array S64.t) (sb: A.array S8.t)
-                   (#vacc: erased (Seq.seq S64.t))
-                   (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-                   (#psb: perm) (#vsb: erased (Seq.lseq S8.t 32))
-requires A.pts_to acc vacc ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
-  A.pts_to sb #psb vsb **
-  pure (Seq.length vacc == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to sb #psb vsb **
-  pure (Seq.length w == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
-        bnd (vals w) base /\ eval (vals w) < Sc.q /\
-        eval (vals w) == le_nat vsb % Sc.q)
-{
-  A.pts_to_len sb;
-  let z8 = S8.zero;
-  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; A.pts_to_len c1;
-  Hacl.Impl.Copy.copy_prefix c1 sb 32sz;
-  with vh. assert (A.pts_to c1 vh);
-  A.pts_to_len c1;
-  le_nat_split vh 32;
-  assert (pure (forall (i: nat). i < 32 ==>
-                  S8.v (Seq.index (Seq.slice vh 32 64) i) == 0));
-  le_nat_zeros (Seq.slice vh 32 64);
-  assert (pure (Seq.equal (Seq.slice vh 0 32) vsb));
-  Scalar.reduce_op acc t1 t2 c1;
-  ()
-}
-
 #push-options "--z3rlimit 600"
 
 (** The two halves of the signature buffer, reassembled.  Pulse leaves the
@@ -386,14 +354,14 @@ ensures exists* (vsg': Seq.seq S8.t).
   A.pts_to_len sg;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut a5 = [| zz; 8sz |]; A.pts_to_len a5; let mut a6 = [| zz; 8sz |]; A.pts_to_len a6; let mut a7 = [| zz; 8sz |]; A.pts_to_len a7; let mut a8 = [| zz; 8sz |]; A.pts_to_len a8; let mut a9 = [| zz; 8sz |]; A.pts_to_len a9; let mut aa = [| zz; 8sz |]; A.pts_to_len aa; let mut ab = [| zz; 8sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
+  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut a5 = [| zz; 8sz |]; A.pts_to_len a5; let mut a6 = [| zz; 8sz |]; A.pts_to_len a6; let mut a7 = [| zz; 8sz |]; A.pts_to_len a7; let mut a8 = [| zz; 5sz |]; A.pts_to_len a8; let mut a9 = [| zz; 5sz |]; A.pts_to_len a9; let mut aa = [| zz; 5sz |]; A.pts_to_len aa; let mut ab = [| zz; 5sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
   A.pts_to_len a5; A.pts_to_len a6; A.pts_to_len a7;
   A.pts_to_len a8; A.pts_to_len a9; A.pts_to_len aa; A.pts_to_len ab;
 
   hash2 c1 prefix msg mlen;
   Scalar.reduce_op a1 a5 a6 c1;
-  store c2 a1;
+  Scalar.store_le c2 a1;
   point_mul_g a8 a9 aa ab c2;
   point_compress c3 a8 a9 aa ab;
   with vrr. assert (A.pts_to c3 vrr);
@@ -402,16 +370,16 @@ ensures exists* (vsg': Seq.seq S8.t).
   hash3 c1 c3 pub msg mlen;
   Scalar.reduce_op a2 a5 a6 c1;
   with vk. assert (A.pts_to a2 vk);
-  scalar_reduce32 a3 a5 a6 sk;
+  Scalar.reduce32 a3 a5 a6 sk;
   with vsa. assert (A.pts_to a3 vsa);
   Scalar.qmul_op a4 a2 a3 a5 a6 a7;
   with vr. assert (A.pts_to a1 vr);
   with vmm. assert (A.pts_to a4 vmm);
   Scalar.qadd_op a1 a4 a5 a6;
-  Sc.qadd_ok (vals vr) (vals vmm);
-  Math.lemma_mod_add_distr (eval (vals vr))
-    (eval (vals vk) * eval (vals vsa)) Sc.q;
-  store c4 a1;
+  Sc.qadd_ok (Limb.vals vr) (Limb.vals vmm);
+  Math.lemma_mod_add_distr (B32.eval (Limb.vals vr))
+    (B32.eval (Limb.vals vk) * B32.eval (Limb.vals vsa)) Sc.q;
+  Scalar.store_le c4 a1;
   with vss. assert (A.pts_to c4 vss);
   A.pts_to_len c4;
 
@@ -454,7 +422,7 @@ ensures exists* (vsg': Seq.seq S8.t).
 {
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand c2 c3 secret;
@@ -523,7 +491,7 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
   let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut c5 = [| z8; 64sz |]; A.pts_to_len c5; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len c4; A.pts_to_len c5;
 
-  let mut d1 = [| zz; 8sz |]; A.pts_to_len d1; let mut d2 = [| zz; 8sz |]; A.pts_to_len d2; let mut d3 = [| zz; 8sz |]; A.pts_to_len d3; let mut d4 = [| zz; 8sz |]; A.pts_to_len d4; let mut d5 = [| zz; 8sz |]; A.pts_to_len d5; let mut d6 = [| zz; 8sz |]; A.pts_to_len d6; let mut d7 = [| zz; 8sz |]; A.pts_to_len d7; let mut d8 = [| zz; 8sz |]; A.pts_to_len d8; let mut d9 = [| zz; 8sz |]; A.pts_to_len d9; let mut e1 = [| zz; 8sz |]; A.pts_to_len e1; let mut e2 = [| zz; 8sz |]; A.pts_to_len e2; let mut e3 = [| zz; 8sz |]; A.pts_to_len e3; let mut e4 = [| zz; 8sz |]; A.pts_to_len e4; let mut e5 = [| zz; 8sz |]; A.pts_to_len e5; let mut e6 = [| zz; 8sz |]; A.pts_to_len e6; let mut e7 = [| zz; 8sz |]; A.pts_to_len e7; let mut e8 = [| zz; 8sz |]; A.pts_to_len e8; let mut e9 = [| zz; 8sz |]; A.pts_to_len e9; let mut f1 = [| zz; 8sz |]; A.pts_to_len f1; let mut f2 = [| zz; 8sz |]; A.pts_to_len f2; let mut f3 = [| zz; 8sz |]; A.pts_to_len f3; let mut f4 = [| zz; 8sz |]; A.pts_to_len f4; let mut f5 = [| zz; 8sz |]; A.pts_to_len f5; let mut f6 = [| zz; 8sz |]; A.pts_to_len f6; let mut f7 = [| zz; 8sz |]; A.pts_to_len f7; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
+  let mut d1 = [| zz; 5sz |]; A.pts_to_len d1; let mut d2 = [| zz; 5sz |]; A.pts_to_len d2; let mut d3 = [| zz; 5sz |]; A.pts_to_len d3; let mut d4 = [| zz; 5sz |]; A.pts_to_len d4; let mut d5 = [| zz; 5sz |]; A.pts_to_len d5; let mut d6 = [| zz; 5sz |]; A.pts_to_len d6; let mut d7 = [| zz; 5sz |]; A.pts_to_len d7; let mut d8 = [| zz; 5sz |]; A.pts_to_len d8; let mut d9 = [| zz; 5sz |]; A.pts_to_len d9; let mut e1 = [| zz; 5sz |]; A.pts_to_len e1; let mut e2 = [| zz; 5sz |]; A.pts_to_len e2; let mut e3 = [| zz; 5sz |]; A.pts_to_len e3; let mut e4 = [| zz; 5sz |]; A.pts_to_len e4; let mut e5 = [| zz; 5sz |]; A.pts_to_len e5; let mut e6 = [| zz; 5sz |]; A.pts_to_len e6; let mut e7 = [| zz; 5sz |]; A.pts_to_len e7; let mut e8 = [| zz; 5sz |]; A.pts_to_len e8; let mut e9 = [| zz; 5sz |]; A.pts_to_len e9; let mut f1 = [| zz; 5sz |]; A.pts_to_len f1; let mut f2 = [| zz; 5sz |]; A.pts_to_len f2; let mut f3 = [| zz; 8sz |]; A.pts_to_len f3; let mut f4 = [| zz; 8sz |]; A.pts_to_len f4; let mut f5 = [| zz; 8sz |]; A.pts_to_len f5; let mut f6 = [| zz; 8sz |]; A.pts_to_len f6; let mut f7 = [| zz; 8sz |]; A.pts_to_len f7; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
   A.pts_to_len d5; A.pts_to_len d6; A.pts_to_len d7; A.pts_to_len d8;
   A.pts_to_len d9; A.pts_to_len e1; A.pts_to_len e2; A.pts_to_len e3;
   A.pts_to_len e4; A.pts_to_len e5; A.pts_to_len e6; A.pts_to_len e7;
@@ -556,11 +524,11 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
   (* [S] must be below the group order: reducing it has to be the
      identity, which is exactly what comparing against the reduction
      decides. *)
-  load f3 c2;
-  scalar_reduce32 f4 f6 f7 c2;
+  Scalar.load_le f3 c2;
+  Scalar.reduce32 f4 f6 f7 c2;
   with vsl. assert (A.pts_to f3 vsl);
   with vsr. assert (A.pts_to f4 vsr);
-  let oks = limbs_eq f3 f4;
+  let oks = Scalar.limbs_eq f3 f4;
   lt_char (le_nat vs0) Sc.q oks;
   assert (pure (oks == (le_nat vs0 < Sc.q)));
 
@@ -575,17 +543,17 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
     with vry. assert (A.pts_to d6 vry);
     with vrz. assert (A.pts_to d7 vrz);
     with vrt. assert (A.pts_to d8 vrt);
-    store c3 f3;
+    Scalar.store_le c3 f3;
     hash3 c5 c1 pub msg mlen;
     Scalar.reduce_op f5 f6 f7 c5;
-    store c4 f5;
+    Scalar.store_le c4 f5;
     point_mul_g e4 e5 e6 e7 c3;
     P.point_mul d9 e1 e2 e3 d1 d2 d3 d4 c4;
     P.point_add e8 e9 f1 f2 d5 d6 d7 d8 d9 e1 e2 e3;
     with vacc. assert (A.pts_to f5 vacc);
     let r = point_equal e4 e5 e6 e7 e8 e9 f1 f2;
     verify_char vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
-                (le_nat vs0) (eval (vals vacc)) r;
+                (le_nat vs0) (B32.eval (Limb.vals vacc)) r;
     r
   } else {
     verify_false vpub vm vsg;
