@@ -118,6 +118,18 @@ let zetas (i: nat { i < 128 }) : zq = pow zeta (bitrev7 i)
     is [X^2 - zeta^(2 BitRev7(i) + 1)]. *)
 let gammas (i: nat { i < 128 }) : zq = pow zeta (2 * bitrev7 i + 1)
 
+(** ... which is [zetas.[i]^2 * zeta], so an implementation needs only the
+    one table: two multiplications recover [gamma] from [zeta^BitRev7(i)]. *)
+
+let gammas_zetas (i: nat { i < 128 })
+  : Lemma (gammas i == mul (mul (zetas i) (zetas i)) zeta)
+  = let b = bitrev7 i in
+    pow_add zeta (2 * b) 1;
+    pow_one zeta;
+    assert (gammas i == mul (pow zeta (2 * b)) zeta);
+    pow_add zeta b b;
+    assert (pow zeta (2 * b) == mul (zetas i) (zetas i))
+
 (** {2 The forward transform}
 
     One Cooley-Tukey layer, pointwise.  For a coefficient in the lower half
