@@ -21,8 +21,13 @@
     the last block is built, in a two-hundred byte stack buffer, because it
     carries the padding.
 
-    Everything here is parameterised by the rate as a runtime [size_t], so one
-    copy of this code serves SHA3-224 through SHA3-512 and both SHAKEs. *)
+    Everything here is parameterised by the rate as a [size_t], so one copy of
+    this code serves SHA3-224 through SHA3-512 and both SHAKEs -- but the
+    functions are [inline_for_extraction], so the parameter is the caller's
+    literal by the time a C compiler sees it.  Sharing one copy costs the
+    absorb loop two integer divisions by a runtime value and a variable
+    length on every block copy; see the note above [keccak_impl] in
+    [Hacl.Hash.SHA3]. *)
 module Hacl.Hash.SHA3.Sponge
 
 #lang-pulse
@@ -64,6 +69,7 @@ let shift8 (j: SZ.t { SZ.v j < 8 }) : (k: U32.t { U32.v k == 8 * SZ.v j }) =
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
 (** The little-endian lane at byte offset [off]. *)
+inline_for_extraction
 fn lane_at (msg: A.array S8.t) (off: SZ.t) (#pm: perm) (#vm: erased (Seq.seq S8.t))
 requires A.pts_to msg #pm vm ** pure (SZ.v off + 8 <= Seq.length vm)
 returns x: S64.t
@@ -100,6 +106,7 @@ ensures A.pts_to msg #pm vm **
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
 (** [st <- xor_block r msg[off .. off+r) st]. *)
+inline_for_extraction
 fn xor_block_at (st: A.array S64.t) (msg: A.array S8.t) (off: SZ.t) (r: SZ.t)
                 (#vst0: erased (Seq.seq S64.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
 requires A.pts_to st vst0 ** A.pts_to msg #pm vm **
@@ -155,6 +162,7 @@ ensures exists* (vst: Seq.seq S64.t).
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
 (** [st <- zero_state]. *)
+inline_for_extraction
 fn zero_state_impl (st: A.array S64.t) (#vst0: erased (Seq.seq S64.t))
 requires A.pts_to st vst0 ** pure (Seq.length vst0 == 25)
 ensures exists* (vst: Seq.seq S64.t).
@@ -179,6 +187,7 @@ ensures exists* (vst: Seq.seq S64.t).
 
 (** Absorb the [len msg / r] whole blocks, in place, out of the caller's
     buffer.  Leaves the state at [repeati (len msg / r) (absorb_step ...)]. *)
+inline_for_extraction
 fn absorb_full (st: A.array S64.t) (b: A.array S64.t)
                (rc_tbl: A.array S64.t)
                (msg: A.array S8.t) (n: SZ.t) (r: SZ.t) (suffix: G.erased U8.t)
@@ -236,6 +245,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
 
 (** Build the last block -- the [len msg % r] leftover bytes plus pad10*1 with
     the domain-separation suffix -- into [blk], which must be zeroed. *)
+inline_for_extraction
 fn last_block (blk: A.array S8.t) (msg: A.array S8.t) (n: SZ.t) (r: SZ.t) (suffix: U8.t)
               (#vk0: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
 requires A.pts_to blk vk0 ** A.pts_to msg #pm vm **
@@ -287,6 +297,7 @@ ensures exists* (vk: Seq.seq S8.t).
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 (** The whole absorb phase: [st <- absorb r suffix msg]. *)
+inline_for_extraction
 fn absorb_impl (st: A.array S64.t) (b: A.array S64.t)
                (rc_tbl: A.array S64.t)
                (msg: A.array S8.t) (n: SZ.t) (r: SZ.t) (suffix: U8.t)
@@ -334,6 +345,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
 (** Write [cnt] bytes of the current state to [out[base ..)]. *)
+inline_for_extraction
 fn squeeze_block (out: A.array S8.t) (base: SZ.t) (cnt: SZ.t)
                  (st: A.array S64.t) (#pst: perm) (#vst: erased (Seq.seq S64.t))
                  (#vout0: erased (Seq.seq S8.t))
@@ -381,6 +393,7 @@ ensures exists* (vout: Seq.seq S8.t).
 #push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
 
 (** The whole squeeze phase: [out <- squeeze r st (len out)]. *)
+inline_for_extraction
 fn squeeze_impl (out: A.array S8.t) (outlen: SZ.t) (st: A.array S64.t) (b: A.array S64.t)
                 (rc_tbl: A.array S64.t) (r: SZ.t)
                 (#vout0: erased (Seq.seq S8.t)) (#vst0: erased (Seq.seq S64.t))
