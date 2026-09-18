@@ -63,7 +63,7 @@ let sample_matrix_eq (p: params) (r: nat) (c: pos)
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro res (F.sample_matrix p r c b)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** One sample.  [cdf] is the parameter set's table, which the caller owns
     and which the erased field of [p] describes. *)

@@ -77,7 +77,7 @@ let kdf_len (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] cs: cip
     ['HPKE'] and the three algorithm identifiers, ten bytes, in front of
     every label the key schedule extracts or expands under. *)
 
-#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 0"
 
 fn suite_id_impl (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t)
@@ -150,7 +150,7 @@ let ks_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
     SZ.fits_lte (block_len #t + 7 + 10 + 16 + n) (256 + 128 + 64 + n);
     SZ.fits_lte (block_len #t + hash_bytes p + 9 + 10 + 16 + n + 1) (256 + 128 + 64 + n)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
 fn key_schedule_impl (#t: Type0) {| w: word t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
@@ -332,7 +332,7 @@ let nonce_eq (n: nat { n < pow2 64 }) (bn o: Seq.lseq S8.t 12)
 #pop-options
 
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1 --using_facts_from '* -Spec.HPKE +Spec.HPKE.xor_bytes'"
+#push-options "--z3rlimit 200 --fuel 0 --ifuel 0 --using_facts_from '* -Spec.HPKE +Spec.HPKE.xor_bytes'"
 
 (** [out <- base_nonce xor be96(sq)].
 
@@ -402,7 +402,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to bn #pb vbn **
     numbers is a failure, not a wrap, because a repeated nonce would destroy
     the AEAD's security outright. *)
 
-#push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 300 --fuel 0 --ifuel 0"
 
 fn context_seal_impl (#t: Type0) {| w: word t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
@@ -548,7 +548,7 @@ ensures exists* wsq wpt.
     Any number of independent secrets of any length, from the context's
     exporter secret and a caller-supplied exporter context. *)
 
-#push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 300 --fuel 0 --ifuel 0"
 
 fn context_export_impl (#t: Type0) {| w: word t |}
                        ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t)
@@ -608,7 +608,7 @@ ensures exists* wout.
     only in the strings a caller passes, and [Auth] and [AuthPSK] likewise,
     so the mode is a parameter rather than a separate entry point. *)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1 --using_facts_from '* -Spec.HPKE.key_schedule -Spec.HPKE.labeled -Spec.HPKE.ks -Spec.HPKE.cat2_pointwise -Spec.HPKE.cat3_pointwise -Spec.HPKE.cat4_pointwise -Spec.HPKE.cat5_pointwise -Spec.HPKE.suite_id'"
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0 --using_facts_from '* -Spec.HPKE.key_schedule -Spec.HPKE.labeled -Spec.HPKE.ks -Spec.HPKE.cat2_pointwise -Spec.HPKE.cat3_pointwise -Spec.HPKE.cat4_pointwise -Spec.HPKE.cat5_pointwise -Spec.HPKE.suite_id'"
 
 fn setup_s_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
@@ -954,7 +954,7 @@ ensures exists* wkey wbn wsq wexp.
     stack allocation is not something C wants to see -- so the two empty
     strings are made here, as zero-length windows onto one spare byte. *)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
 fn setup_base_s (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
