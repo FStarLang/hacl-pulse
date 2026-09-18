@@ -456,18 +456,18 @@ static void Hacl_P256_Scalar_qstore(uint8_t *b, uint64_t *a);
 static bool Hacl_P256_Sign_sign(uint8_t *out, uint64_t *mq, uint8_t *sk, uint8_t *nonce);
 static void Hacl_Curve25519_Field_load32(uint64_t *u, uint8_t *b);
 static void Hacl_Curve25519_Field_load(uint64_t *a, uint8_t *b);
-static void Hacl_Curve25519_Field_copy(uint64_t *dst, uint64_t *src);
-static void Hacl_Curve25519_Field_carry_chain(uint64_t *a);
+static inline void Hacl_Curve25519_Field_copy(uint64_t *dst, uint64_t *src);
+static inline void Hacl_Curve25519_Field_carry_chain(uint64_t *a);
 static void Hacl_Curve25519_Field_narrow(uint64_t *a);
 static uint64_t Hacl_Curve25519_Field_carry_out_op(uint64_t *a);
 static void Hacl_Curve25519_Field_freeze(uint64_t *a, uint64_t *t);
 static bool Hacl_Ed25519_Encoding_limbs_eq(uint64_t *a, uint64_t *b);
 static bool Hacl_Ed25519_Encoding_flt_prime(uint64_t *a, uint64_t *u, uint64_t *w);
 static void Hacl_Ed25519_Point_set_small(uint64_t *a, uint64_t m);
-static void Hacl_Curve25519_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b);
-static void Hacl_Curve25519_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b);
+static inline void Hacl_Curve25519_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b);
+static inline void Hacl_Curve25519_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b);
 static const uint64_t Hacl_Ed25519_Tables_d_arr[5] = { 0x34dca135978a3ULL, 0x1a8283b156ebdULL, 0x5e7a26001c029ULL, 0x739c663a03cbbULL, 0x52036cee2b6ffULL };
-static void Hacl_Curve25519_Field_fadd(uint64_t *out, uint64_t *a, uint64_t *b);
+static inline void Hacl_Curve25519_Field_fadd(uint64_t *out, uint64_t *a, uint64_t *b);
 static bool Hacl_Ed25519_Encoding_feq(uint64_t *a, uint64_t *b, uint64_t *u, uint64_t *v, uint64_t *w);
 static bool Hacl_Ed25519_Encoding_fzerop(uint64_t *a, uint64_t *u, uint64_t *w);
 static void Hacl_Curve25519_Inverse_fsqr_ip(uint64_t *a, uint64_t *c1, uint64_t *c2, unsigned __int128 *t);
@@ -503,12 +503,12 @@ static const uint64_t Hacl_Ed25519_Tables_gx_arr[5] = { 0x62d608f25d51aULL, 0x41
 static const uint64_t Hacl_Ed25519_Tables_gy_arr[5] = { 0x6666666666658ULL, 0x4ccccccccccccULL, 0x1999999999999ULL, 0x3333333333333ULL, 0x6666666666666ULL };
 static void Hacl_Ed25519_Point_set_infinity(uint64_t *x, uint64_t *y, uint64_t *z, uint64_t *t);
 static unsigned __int128 Hacl_Secret_UInt128_shift_left(unsigned __int128 x, uint32_t s);
-static void Hacl_Curve25519_Field_carry_chain128(unsigned __int128 *a);
-static void Hacl_Curve25519_Field_fscale(uint64_t *out, uint64_t *a, uint64_t m, unsigned __int128 *t);
+static inline void Hacl_Curve25519_Field_carry_chain128(unsigned __int128 *a);
+static inline void Hacl_Curve25519_Field_fscale(uint64_t *out, uint64_t *a, uint64_t m, unsigned __int128 *t);
 static void Hacl_Ed25519_Point_point_double(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1);
 static const uint64_t Hacl_Ed25519_Tables_d2_arr[5] = { 0x69b9426b2f159ULL, 0x35050762add7aULL, 0x3cf44c0038052ULL, 0x6738cc7407977ULL, 0x2406d9dc56dffULL };
 static void Hacl_Ed25519_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1, uint64_t *x2, uint64_t *y2, uint64_t *z2, uint64_t *t2);
-static void Hacl_Curve25519_Field_cswap(uint64_t sel, uint64_t *a, uint64_t *b);
+static inline void Hacl_Curve25519_Field_cswap(uint64_t sel, uint64_t *a, uint64_t *b);
 static void Hacl_Ed25519_Point_point_mul_step(uint64_t *ax, uint64_t *ay, uint64_t *az, uint64_t *at, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *ut, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *st, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt, uint8_t *ks, size_t n);
 static void Hacl_Ed25519_Point_point_mul(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt, uint8_t *ks);
 static void Hacl_Ed25519_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint8_t *ks);
@@ -8326,7 +8326,7 @@ static void Hacl_Curve25519_Field_load(uint64_t *a, uint8_t *b) {
   a[4] = a4;
 }
 
-static void Hacl_Curve25519_Field_copy(uint64_t *dst, uint64_t *src) {
+static inline void Hacl_Curve25519_Field_copy(uint64_t *dst, uint64_t *src) {
   size_t i = 0;
   while (i < 5) {
     size_t vi = i;
@@ -8336,7 +8336,7 @@ static void Hacl_Curve25519_Field_copy(uint64_t *dst, uint64_t *src) {
   }
 }
 
-static void Hacl_Curve25519_Field_carry_chain(uint64_t *a) {
+static inline void Hacl_Curve25519_Field_carry_chain(uint64_t *a) {
   size_t k = 0;
   while (k < 4) {
     size_t vk = k;
@@ -8438,7 +8438,7 @@ static void Hacl_Ed25519_Point_set_small(uint64_t *a, uint64_t m) {
   a[0] = m;
 }
 
-static void Hacl_Curve25519_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b) {
+static inline void Hacl_Curve25519_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b) {
   uint64_t a0 = a[0];
   uint64_t a1 = a[1];
   uint64_t a2 = a[2];
@@ -8482,7 +8482,7 @@ static void Hacl_Curve25519_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b) 
   out[4] = o4;
 }
 
-static void Hacl_Curve25519_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b) {
+static inline void Hacl_Curve25519_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b) {
   uint64_t x0 = a[0];
   uint64_t y0 = b[0];
   out[0] = Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_add_mod(x0, 18014398509481832ULL), y0);
@@ -8497,7 +8497,7 @@ static void Hacl_Curve25519_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b) 
   Hacl_Curve25519_Field_carry_chain(out);
 }
 
-static void Hacl_Curve25519_Field_fadd(uint64_t *out, uint64_t *a, uint64_t *b) {
+static inline void Hacl_Curve25519_Field_fadd(uint64_t *out, uint64_t *a, uint64_t *b) {
   size_t i = 0;
   while (i < 5) {
     size_t vi = i;
@@ -9092,7 +9092,7 @@ static unsigned __int128 Hacl_Secret_UInt128_shift_left(unsigned __int128 x, uin
   return (x << s);
 }
 
-static void Hacl_Curve25519_Field_carry_chain128(unsigned __int128 *a) {
+static inline void Hacl_Curve25519_Field_carry_chain128(unsigned __int128 *a) {
   size_t k = 0;
   while (k < 4) {
     size_t vk = k;
@@ -9112,7 +9112,7 @@ static void Hacl_Curve25519_Field_carry_chain128(unsigned __int128 *a) {
   a[0] = z_;
 }
 
-static void Hacl_Curve25519_Field_fscale(uint64_t *out, uint64_t *a, uint64_t m, unsigned __int128 *t) {
+static inline void Hacl_Curve25519_Field_fscale(uint64_t *out, uint64_t *a, uint64_t m, unsigned __int128 *t) {
   size_t i = 0;
   while (i < 5) {
     size_t vi = i;
@@ -9234,7 +9234,7 @@ static void Hacl_Ed25519_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *o
   Hacl_Curve25519_Field_fmul(ot, au, av);
 }
 
-static void Hacl_Curve25519_Field_cswap(uint64_t sel, uint64_t *a, uint64_t *b) {
+static inline void Hacl_Curve25519_Field_cswap(uint64_t sel, uint64_t *a, uint64_t *b) {
   size_t i = 0;
   while (i < 5) {
     size_t vi = i;
