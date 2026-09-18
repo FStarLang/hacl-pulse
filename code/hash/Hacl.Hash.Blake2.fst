@@ -62,7 +62,7 @@ let block_avail (off len bl: SZ.t)
     then (let a = SZ.sub len off in if SZ.lt a bl then a else bl)
     else 0sz
 
-#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 0"
 
 (** {2 Reading a block}
 
@@ -190,7 +190,7 @@ let param_word_word (#t: Type0) {| w: word t |} (klen nn: SZ.t)
     Math.small_mod (SZ.v klen * pow2 8 + SZ.v nn) (pow2 b);
     Math.small_mod (pow2 24 + pow2 16 + (SZ.v klen * pow2 8 + SZ.v nn)) (pow2 b)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 (** {2 The initial state}
 
@@ -247,7 +247,7 @@ ensures exists* (vh: Seq.seq t). A.pts_to h vh ** A.pts_to ivs #pi vi **
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 (** {2 The digest}
 
@@ -363,7 +363,7 @@ let nblocks_sz (klen mlen bl: SZ.t)
     let n = SZ.add k nmb in
     if SZ.eq n 0sz then 1sz else n
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** {2 Every block but the last}
 
@@ -498,7 +498,7 @@ let msg_blocks_bound_opt (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (nlast
           (ensures koffs <= nlast ==> (nlast - koffs) * block_len #t <= Seq.length msg)
   = if koffs <= nlast then msg_blocks_bound #t key msg (nlast - koffs)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** {2 The hash}
 

@@ -49,10 +49,6 @@ module P = Spec.P256
 
 (** {2 Points as three limb sequences} *)
 
-let pt (x y z: Seq.seq S64.t) : GTot P.proj_point = (fev x, fev y, fev z)
-
-let pt_ok (x y z: Seq.seq S64.t) : prop = felem x /\ felem y /\ felem z
-
 (** {2 Addition} *)
 
 fn point_add (ox oy oz: A.array S64.t)

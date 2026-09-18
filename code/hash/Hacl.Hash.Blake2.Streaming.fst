@@ -274,7 +274,7 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
     the whole difference from SHA-2: the last full block is kept, not
     absorbed. *)
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
 fn update_full (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -361,7 +361,7 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
 
 #pop-options
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
 fn update_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)

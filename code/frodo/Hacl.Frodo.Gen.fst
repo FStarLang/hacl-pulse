@@ -114,7 +114,7 @@ let msg_eq (i: nat { i < pow2 16 }) (seed: Seq.lseq S8.t 16) (m: Seq.lseq S8.t 1
           (ensures m == Seq.append (F.index_bytes i) seed)
   = Seq.lemma_eq_intro m (Seq.append (F.index_bytes i) seed)
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 800 --fuel 1 --ifuel 0"
 
 (** Row [i] of A, as [n] entries rather than as [2n] bytes.  [msg] and
     [row] are scratch the caller owns; keeping them out of here means the
