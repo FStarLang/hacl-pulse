@@ -212,36 +212,71 @@ let poly_sub_index (f g: poly) (i: nat { i < n })
           [SMTPat (Seq.index (poly_sub f g) i)]
   = ()
 
-(** A vector of [k] polynomials, flat: entry [i] occupies coefficients
-    [i * n] through [i * n + n - 1]. *)
-let pvec (k: pos) = Seq.lseq zq (k * n)
+(** A flat concatenation of [k] blocks of [m] elements: the shape every
+    vector, key and ciphertext component in ML-KEM has.  The dimension is an
+    argument rather than an index because it reaches the implementation as a
+    run-time [size_t], and the block size is explicit for the same reason the
+    matrix dimensions are in {!Spec.Frodo.Matrix}: the unifier cannot recover
+    an implicit from a product. *)
 
-(** Entry [i] of a vector, as a polynomial. *)
-let vec_at (#k: pos) (v: pvec k) (i: nat { i < k }) : poly
-  = Math.lemma_mult_le_right n (i + 1) k;
-    Seq.slice v (i * n) (i * n + n)
+let flat_at (#a: Type) (k: pos) (m: pos) (v: Seq.lseq a (k * m)) (i: nat { i < k })
+  : Seq.lseq a m
+  = Math.lemma_mult_le_right m (i + 1) k;
+    Seq.slice v (i * m) (i * m + m)
 
-(** A vector from its entries.  [Seq.init] over the flat index, which keeps
-    the definition extensional and makes [vec_at_of_fun] below provable by
-    {!FStar.Seq.lemma_eq_intro} alone. *)
-let vec_of_fun (k: pos) (f: (i: nat { i < k }) -> poly) : pvec k
-  = Seq.init (k * n) (fun t ->
-      div_lt t k n;
-      Seq.index (f (t / n)) (t % n))
+let flat_of_fun (#a: Type) (k: pos) (m: pos) (f: (i: nat { i < k }) -> Seq.lseq a m)
+  : Seq.lseq a (k * m)
+  = Seq.init (k * m) (fun t -> div_lt t k m; Seq.index (f (t / m)) (t % m))
 
-let vec_at_of_fun (k: pos) (f: (i: nat { i < k }) -> poly) (i: nat { i < k })
-  : Lemma (vec_at (vec_of_fun k f) i == f i)
-  = let v = vec_of_fun k f in
-    Math.lemma_mult_le_right n (i + 1) k;
-    let s = vec_at v i in
-    introduce forall (j: nat { j < n }). Seq.index s j == Seq.index (f i) j
+(** The same for a step that is only ghostly computable, which is most of
+    them: anything that reads a secret byte is [GTot]. *)
+let flat_of_fun_g (#a: Type) (k: pos) (m: pos) (f: (i: nat { i < k }) -> GTot (Seq.lseq a m))
+  : GTot (Seq.lseq a (k * m))
+  = Seq.init_ghost (k * m) (fun t -> div_lt t k m; Seq.index (f (t / m)) (t % m))
+
+let flat_at_of_fun (#a: Type) (k: pos) (m: pos) (f: (i: nat { i < k }) -> Seq.lseq a m)
+                   (i: nat { i < k })
+  : Lemma (flat_at k m (flat_of_fun k m f) i == f i)
+  = let v = flat_of_fun k m f in
+    Math.lemma_mult_le_right m (i + 1) k;
+    let s = flat_at k m v i in
+    introduce forall (j: nat { j < m }). Seq.index s j == Seq.index (f i) j
     with begin
-      Math.lemma_mod_plus j i n;
-      Math.small_mod j n;
-      Math.lemma_div_plus j i n;
-      Math.small_div j n
+      Math.lemma_mod_plus j i m;
+      Math.small_mod j m;
+      Math.lemma_div_plus j i m;
+      Math.small_div j m
     end;
     Seq.lemma_eq_intro s (f i)
 
+(** A vector of [k] polynomials: entry [i] occupies coefficients [i * n]
+    through [i * n + n - 1]. *)
+let pvec (k: pos) = Seq.lseq zq (k * n)
+
+let vec_at (#k: pos) (v: pvec k) (i: nat { i < k }) : poly = flat_at k n v i
+
+let vec_of_fun (k: pos) (f: (i: nat { i < k }) -> poly) : pvec k = flat_of_fun k n f
+
+let vec_of_fun_g (k: pos) (f: (i: nat { i < k }) -> GTot poly) : GTot (pvec k)
+  = flat_of_fun_g k n f
+
+let vec_at_of_fun (k: pos) (f: (i: nat { i < k }) -> poly) (i: nat { i < k })
+  : Lemma (vec_at (vec_of_fun k f) i == f i)
+  = flat_at_of_fun k n f i
+
+(** Forgetting the [< q] refinement.  [FStar.Seq] is invariant in its
+    element type, so a [poly] is not a sequence of naturals however obvious
+    that is; the serialisers take the wider type because half of what they
+    serialise is compressed and therefore not [q]-bounded. *)
+let widen (#m: nat) (f: Seq.lseq zq m) : Seq.lseq nat m
+  = Seq.init m (fun i -> (Seq.index f i <: nat))
+
+let widen_index (#m: nat) (f: Seq.lseq zq m) (i: nat { i < m })
+  : Lemma (Seq.index (widen f) i == Seq.index f i) [SMTPat (Seq.index (widen f) i)]
+  = ()
+
 let vec_add (#k: pos) (u v: pvec k) : pvec k
   = Seq.init (k * n) (fun i -> add (Seq.index u i) (Seq.index v i))
+
+let vec_sub (#k: pos) (u v: pvec k) : pvec k
+  = Seq.init (k * n) (fun i -> sub (Seq.index u i) (Seq.index v i))
