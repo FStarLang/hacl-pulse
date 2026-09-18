@@ -1683,6 +1683,63 @@ is an equality with a spec-level `if` whose scrutinee never exists at run
 time.
 
 
+### HPKE, where the ciphersuite is a record rather than fifteen modules
+
+RFC 9180 is an agility standard: a hybrid public-key encryption scheme
+parameterised by a KEM, a KDF and an AEAD, any combination of which is a
+ciphersuite.  HACL\* answers agility by generating a module per suite --
+fifteen of them, plus a `Hacl.Meta.HPKE` to tie the knot -- because its
+implementations are indexed by a `hash_alg` the extraction has to see
+through.  Here the suite is a value:
+
+```
+type ciphersuite (t: Type0) {| word t |} = {
+  kem: kem_alg;
+  kdf: p: params t { hash_bytes p == 32 \/ hash_bytes p == 48 \/ hash_bytes p == 64 };
+  aead: aead_alg;
+}
+```
+
+and every function takes it as a `[@@@FStar.Attributes.monomorphize]`
+argument, so there is exactly one implementation of `SetupBaseS`,
+`KeySchedule`, `Seal` and the rest, and the extraction specialises them at
+whichever suites the C surface pins.  `Hacl.HPKE.Suites` pins four --
+X25519/SHA-256/ChaCha20-Poly1305, X25519/SHA-512/ChaCha20-Poly1305,
+P-256/SHA-256/ChaCha20-Poly1305 and X25519/SHA-256/AES-128-GCM -- which are
+the four combinations that actually change code; adding a fifth is three
+lines and no proof.
+
+Three things are more than HACL\* has.  All four modes are implemented --
+Base, PSK, Auth and AuthPSK -- where the C distribution ships only Base.
+All three RFC AEADs are wired up, where HACL\* offers only
+ChaCha20-Poly1305 under HPKE.  And the labelled KDF is written once against
+`Spec.HPKE.labeled_extract`/`labeled_expand` rather than open-coded per
+suite.  Two things are deliberately different: fallible operations return
+`bool` rather than a `uint32_t` that is only ever `0` or `1`, and the
+ciphertext and the tag are separate buffers rather than a single
+`len + 16` allocation the caller has to slice.  Export-only ciphersuites
+are in the specification but not in the implementation.
+
+The encryption context is not a type.  RFC 9180's context is a key, a base
+nonce, a sequence number and an exporter secret; here those are four
+caller-owned buffers, with the sequence number a one-element
+`array uint64_t` so that `Seal` can advance it in place.  Nothing is
+allocated on the caller's behalf, so nothing has to be freed, and a caller
+that wants to keep a context in a struct can lay it out however it likes.
+Running out of sequence numbers is a failure rather than a wrap, because a
+repeated nonce loses the AEAD outright.
+
+`ComputeNonce` is the one place where the proof shape mattered more than
+the code.  The nonce is the base nonce exclusive-ored with the
+sequence number in ninety-six-bit big-endian, which is four zero bytes and
+then a `uint64`; writing those twelve bytes as straight-line code leaves
+the solver twelve nested `Seq.upd`s to see through once per index, which is
+quadratic, and at twelve it does not come back.  Writing them as an
+allocation (whose contents are `Seq.create 12 0uy`, reachable by one
+`SMTPat`), a `store_be`, and a loop with a pointwise invariant takes ten
+seconds.
+
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
@@ -1991,6 +2048,38 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   precondition in scope, and fails as "ill-typed term" at the `ensures`
   clause rather than anywhere useful.
 
+* **Twelve straight-line writes are quadratic.**  A postcondition that
+  reads every index of a buffer written by `n` consecutive `upd`s costs
+  `O(n^2)` in the solver, and no `z3rlimit` rescues it -- `ComputeNonce`
+  did not return in a quarter of an hour at twelve writes and takes ten
+  seconds as a loop with a pointwise invariant.  Preferring a loop to
+  straight-line code is usually a readability choice; past about four
+  writes it is a feasibility one.
+* **A `pure` conjunct in an invariant may not mix `seq` with `lseq`.**
+  `reveal w == B.nat_to_be 12 n` where `w: Seq.seq t` sends F\* off to prove
+  `l_True == (Seq.length s == 12)`, which takes about fifteen minutes to
+  fail and reports nothing useful.  State the pointwise form in the
+  invariant and do the extensionality afterwards.
+* **Restrict the facts when a module has pointwise `SMTPat`s.**
+  `Spec.HPKE`'s `catN_pointwise` lemmas fire on every `Seq.index` in scope;
+  `--using_facts_from '* -Spec.HPKE +Spec.HPKE.xor_bytes'` took one
+  `ComputeNonce` lemma from over fifteen minutes to fifty-four seconds.
+  The filter is a prefix match, so `+Spec.HPKE.xor_bytes` readmits
+  `xor_bytes_index` too.
+* **`introduce forall ... with ...` is not free.**  In a query already
+  carrying many `Seq.index` terms it was dramatically slower than an inner
+  `aux` lemma passed to `Classical.forall_intro`.  Conversely, merely
+  writing `module Classical = FStar.Classical` loads that module's axioms
+  into every query in the file, which is enough to tip a marginal one.
+* **Assert the lemma's conclusion after calling it.**  A pure lemma whose
+  conclusion is exactly the Pulse `ensures` is often not enough on its own;
+  restating it as `assert (pure ...)` immediately after the call splits one
+  hopeless query into two cheap ones.
+* **`--admit_except` admits the callers too.**  It admits the SMT of every
+  other definition in the file, so a green run says only that the named
+  definition is fine in isolation, not that anything downstream of it
+  still typechecks.
+
 ## Roadmap
 
 Following `design/reimplementation.md` §9, the minimum viable subset is
@@ -2015,7 +2104,18 @@ and so is the whole of the original NaCl interface: `crypto_secretbox`,
 `crypto_box`, and the `beforenm`/`afternm` split for callers that talk to
 the same peer more than once.
 
-FrodoKEM closes it: all four parameter sets, with the public matrix
-streamed a row at a time rather than assembled.
+FrodoKEM closes the primitives: all four parameter sets, with the public
+matrix streamed a row at a time rather than assembled.
 
-Nothing is left.
+Above them all sits HPKE, RFC 9180, with all four modes, all three AEADs
+and four ciphersuites pinned for C -- more than the HACL\* distribution
+exposes, from a single implementation parameterised by a ciphersuite
+record.
+
+One thing is left, and it is deliberate: there is no agile provider in the
+shape of EverCrypt.  Multiplexing between implementations happens inside
+the algorithm -- AES-NI under AES-GCM, the SHA extensions under SHA-256 --
+rather than behind a separate dispatch layer with its own state type, so a
+caller that wants to choose an algorithm at run time does so by choosing a
+function.  Whether a general agile surface is worth the indirection it
+costs is still open.
