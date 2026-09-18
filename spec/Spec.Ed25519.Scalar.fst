@@ -44,7 +44,7 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
 module Loops = Hacl.Spec.Loops
-module F = Spec.Curve25519.Field
+module F = Spec.Bignum256
 module S8 = Hacl.Secret.UInt8
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
