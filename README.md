@@ -2,7 +2,7 @@
 
 A reimplementation of [HACL\*](https://github.com/hacl-star/hacl-star) in
 modern F\*/Pulse, extracted straight to C by
-[Custard](https://github.com/FStarLang/FStar/blob/gebner_custard/doc/ref/custard.md).
+[Custard](https://github.com/FStarLang/FStar/blob/master/doc/ref/custard.md).
 
 The goal is feature parity with HACL\*'s C and F\* APIs.  The design is not a
 port: where HACL\* had to work around the absence of a language feature, this
@@ -29,8 +29,8 @@ make extract    (re)generate dist/
 make test       build and run the C tests
 ```
 
-You need an F\* built from the `gebner_custard` branch, through `stage3` (that
-is, with the Pulse plugin and libraries installed).  Point the build at it:
+You need an F\* built from `master`, through `stage3` (that is, with the Pulse
+plugin and libraries installed).  Point the build at it:
 
 ```
 make FSTAR_ROOT=$HOME/tools/fstar
