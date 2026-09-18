@@ -195,6 +195,21 @@ let sample_cbd (eta: pos { eta <= 3 }) (b: Seq.lseq S8.t (64 * eta)) : GTot poly
       let y: zq = bit_sum b (2 * i * eta + eta) eta in
       sub x y)
 
+(** A sum accumulated from the bottom up, which is the direction a loop
+    with an accumulator runs in. *)
+let rec bit_sum_snoc (b: Seq.seq S8.t) (off: nat) (m: pos)
+  : Lemma (ensures bit_sum b off m == bit_sum b off (m - 1) + stream_bit b (off + m - 1))
+          (decreases m)
+  = if m = 1 then () else bit_sum_snoc b (off + 1) (m - 1)
+
+let sample_cbd_index (eta: pos { eta <= 3 }) (b: Seq.lseq S8.t (64 * eta)) (i: nat { i < n })
+  : Lemma (Seq.index (sample_cbd eta b) i ==
+           sub (bit_sum b (2 * i * eta) eta) (bit_sum b (2 * i * eta + eta) eta))
+  = Seq.init_ghost_index_ n (fun j ->
+      let x: zq = bit_sum b (2 * j * eta) eta in
+      let y: zq = bit_sum b (2 * j * eta + eta) eta in
+      sub x y) i
+
 (** {2 The pseudorandom function}
 
     [PRF_eta(s, b) = SHAKE256(s || b, 64 eta)].  The byte is a public

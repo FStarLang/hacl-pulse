@@ -48,6 +48,7 @@ open Spec.SHA3.Constants
 open Hacl.Impl.Table
 open Hacl.Hash.SHA3
 open Hacl.Impl.MLKEM.Zq
+open Hacl.Impl.MLKEM.Encode
 open Hacl.Impl.MLKEM.XOF
 
 module A = Pulse.Lib.Array
@@ -63,6 +64,8 @@ module Cast = FStar.Int.Cast
 module Declassify = Hacl.Secret.Declassify
 module Math = FStar.Math.Lemmas
 module HSZ = Hacl.SizeT
+module Copy = Hacl.Impl.Copy
+module Sub = Hacl.Impl.Sub
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -321,6 +324,159 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
     as_poly_intro v (sample_ntt vs);
     assert (pure (as_poly v == sample_ntt vs));
   }
+}
+
+#pop-options
+
+(** {2 Centred binomial sampling}
+
+    No branch and no early exit: [SamplePolyCBD] reads a fixed number of
+    bits and counts them. *)
+
+#push-options "--z3rlimit 200"
+
+(** [bit_sum b off m], a sum of [m] bits, with [m] at most three. *)
+inline_for_extraction
+fn bit_sum_impl (b: A.array S8.t) (blen: SZ.t) (off: SZ.t) (m: SZ.t)
+                (#p: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to b #p vb **
+         pure (Seq.length vb == SZ.v blen /\ SZ.v m <= 3 /\
+               SZ.v off + SZ.v m <= 8 * SZ.v blen /\ SZ.v off + SZ.v m < pow2 32)
+returns x: S16.t
+ensures A.pts_to b #p vb **
+  pure (Seq.length vb == SZ.v blen /\ SZ.v m <= 3 /\
+        S16.v x == bit_sum vb (SZ.v off) (SZ.v m))
+{
+  A.pts_to_len b;
+  HSZ.fits32 ();
+  assert_norm (pow2 16 == 65536);
+  let mut acc = S16.zero;
+  let mut j = 0sz;
+  while (let vj = !j; SZ.lt vj m)
+  invariant exists* (vj: SZ.t) (a: S16.t).
+    pts_to j vj ** pts_to acc a ** A.pts_to b #p vb **
+    pure (SZ.v vj <= SZ.v m /\ SZ.v m <= 3 /\ Seq.length vb == SZ.v blen /\
+          SZ.v off + SZ.v m < pow2 32 /\
+          S16.v a == bit_sum vb (SZ.v off) (SZ.v vj))
+  decreases (SZ.v m - SZ.v (!j))
+  {
+    let vj = !j;
+    let a = !acc;
+    SZ.fits_u32_implies_fits (SZ.v off + SZ.v vj);
+    SZ.fits_u32_implies_fits (SZ.v vj + 1);
+    let bit = stream_bit_impl b blen (SZ.add off vj);
+    bit_sum_snoc vb (SZ.v off) (SZ.v vj + 1);
+    Math.small_mod (S16.v a + S16.v bit) (pow2 16);
+    acc := S16.add_mod a bit;
+    j := SZ.add vj 1sz;
+  };
+  !acc
+}
+
+(** [dst <- SamplePolyCBD_eta b]. *)
+fn cbd_impl (dst: A.array zqt) (b: A.array S8.t) (eta: SZ.t)
+            (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to b #p vb **
+         pure (Seq.length vd == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+               Seq.length vb == 64 * SZ.v eta)
+ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
+  pure (Seq.length v == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        Seq.length vb == 64 * SZ.v eta /\
+        as_poly v == sample_cbd (SZ.v eta) vb)
+{
+  A.pts_to_len dst;
+  A.pts_to_len b;
+  HSZ.fits32 ();
+  assert_norm (64 * 3 < pow2 32);
+  assert_norm (2 * n * 3 + 3 < pow2 32);
+  SZ.fits_u32_implies_fits (64 * SZ.v eta);
+  let blen = SZ.mul 64sz eta;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 256sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq zqt).
+    pts_to i vi ** A.pts_to dst v ** A.pts_to b #p vb **
+    pure (SZ.v vi <= n /\ Seq.length v == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+          Seq.length vb == 64 * SZ.v eta /\
+          (forall (k: nat). k < SZ.v vi ==>
+             S16.v (Seq.index v k) == Seq.index (sample_cbd (SZ.v eta) vb) k))
+  decreases (n - SZ.v (!i))
+  {
+    let vi = !i;
+    Math.lemma_mult_le_right (SZ.v eta) (2 * SZ.v vi) (2 * n);
+    Math.lemma_mult_le_left (2 * n) (SZ.v eta) 3;
+    SZ.fits_u32_implies_fits (2 * SZ.v vi * SZ.v eta + SZ.v eta);
+    SZ.fits_u32_implies_fits (SZ.v vi + 1);
+    let off = SZ.mul (SZ.mul 2sz vi) eta;
+    assert (pure (SZ.v off + 2 * SZ.v eta <= 8 * SZ.v blen /\
+                  SZ.v off + 2 * SZ.v eta < pow2 32));
+    let x = bit_sum_impl b blen off eta;
+    let y = bit_sum_impl b blen (SZ.add off eta) eta;
+    sample_cbd_index (SZ.v eta) vb (SZ.v vi);
+    assert (pure (Seq.index (sample_cbd (SZ.v eta) vb) (SZ.v vi) ==
+                  sub (S16.v x) (S16.v y)));
+    A.((dst.(vi) <- zq_sub x y));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to dst v);
+  as_poly_intro v (sample_cbd (SZ.v eta) vb);
+  assert (pure (as_poly v == sample_cbd (SZ.v eta) vb));
+}
+
+(** {2 The pseudorandom function}
+
+    [PRF_eta(s, b) = SHAKE256(s || b, 64 eta)].  The counter byte is
+    public -- it is a loop index -- so it is classified on the way in. *)
+fn prf_impl (out: A.array S8.t) (s: A.array S8.t) (byte: U8.t) (eta: SZ.t)
+            (#vo: erased (Seq.seq S8.t)) (#p: perm) (#vs: erased (Seq.seq S8.t))
+requires A.pts_to out vo ** A.pts_to s #p vs **
+         pure (Seq.length vs == 32 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+               Seq.length vo == 64 * SZ.v eta)
+ensures exists* v. A.pts_to out v ** A.pts_to s #p vs **
+  pure (Seq.length vs == 32 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        Seq.length v == 64 * SZ.v eta /\
+        v == prf (SZ.v eta) vs byte)
+{
+  A.pts_to_len out;
+  A.pts_to_len s;
+  HSZ.fits32 ();
+  assert_norm (64 * 3 < pow2 32);
+  SZ.fits_u32_implies_fits (64 * SZ.v eta);
+  let z8 = S8.classify 0uy;
+  let mut msg = [| z8; 33sz |];
+  A.pts_to_len msg;
+  Copy.copy_prefix msg s 32sz;
+  A.((msg.(32sz) <- S8.classify byte));
+  with vm. assert (A.pts_to msg vm);
+  Seq.lemma_eq_intro (reveal vm) (Seq.snoc vs (S8.classify byte));
+  assert (pure (reveal vm == Seq.snoc vs (S8.classify byte)));
+  shake256 out (SZ.mul 64sz eta) msg 33sz;
+}
+
+(** [SamplePolyCBD] driven by the PRF, which is how every caller uses it. *)
+fn sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) (eta: SZ.t)
+                        (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to s #p vs **
+         pure (Seq.length vd == n /\ Seq.length vs == 32 /\
+               1 <= SZ.v eta /\ SZ.v eta <= 3)
+ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
+  pure (Seq.length v == n /\ Seq.length vs == 32 /\
+        1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        as_poly v == sample_poly_cbd (SZ.v eta) vs byte)
+{
+  A.pts_to_len dst;
+  A.pts_to_len s;
+  HSZ.fits32 ();
+  assert_norm (64 * 3 < pow2 32);
+  SZ.fits_u32_implies_fits (64 * SZ.v eta);
+  let z8 = S8.classify 0uy;
+  let mut buf = [| z8; 192sz |];
+  A.pts_to_len buf;
+  let el = SZ.mul 64sz eta;
+  let bs = Sub.sub buf 0sz el;
+  prf_impl bs s byte eta;
+  cbd_impl dst bs eta;
+  Sub.unsub buf 0 (SZ.v el) bs;
+  ()
 }
 
 #pop-options
