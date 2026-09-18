@@ -75,7 +75,6 @@ let xof_byte (seed: Seq.seq S8.t) (i: nat) : GTot S8.t
 
 let xof_byte_index (seed: Seq.seq S8.t) (l: nat) (i: nat { i < l })
   : Lemma (Seq.index (SHA3.shake128 seed l) i == xof_byte seed i)
-          [SMTPat (Seq.index (SHA3.shake128 seed l) i)]
   = shake128_prefix seed l (i + 1) i
 
 (** {2 Uniform sampling}
@@ -101,6 +100,54 @@ let sample_step (seed: Seq.seq S8.t) (t: nat) (acc: partial) : GTot partial
 
 let sampled (seed: Seq.seq S8.t) (m: nat) : GTot partial
   = Loops.repeati_g m (sample_step seed) Seq.empty
+
+(** {3 One candidate at a time}
+
+    The implementation cannot mirror [sample_step] directly: it tests one
+    twelve-bit candidate, writes it or does not, and moves on.  [push] is
+    that single test, and [sample_step_push] says a step is two pushes --
+    including in the case where the accumulator is already full, where
+    both are the identity and the step's outer guard does the same job. *)
+
+let cand1 (seed: Seq.seq S8.t) (t: nat) : GTot nat
+  = S8.v (xof_byte seed (3 * t)) + 256 * (S8.v (xof_byte seed (3 * t + 1)) % 16)
+
+let cand2 (seed: Seq.seq S8.t) (t: nat) : GTot nat
+  = S8.v (xof_byte seed (3 * t + 1)) / 16 + 16 * S8.v (xof_byte seed (3 * t + 2))
+
+let push (acc: partial) (d: nat) : GTot partial
+  = if Seq.length acc < n && d < q then Seq.snoc acc d else acc
+
+let push_len (acc: partial) (d: nat)
+  : Lemma (Seq.length (push acc d) ==
+             (if Seq.length acc < n && d < q then Seq.length acc + 1 else Seq.length acc))
+  = ()
+
+let push_index_old (acc: partial) (d: nat) (k: nat { k < Seq.length acc })
+  : Lemma (Seq.index (push acc d) k == Seq.index acc k)
+  = if Seq.length acc < n && d < q then
+      Seq.lemma_index_app1 acc (Seq.create 1 d) k
+
+let push_index_new (acc: partial) (d: nat)
+  : Lemma (requires Seq.length acc < n /\ d < q)
+          (ensures Seq.index (push acc d) (Seq.length acc) == d)
+  = Seq.lemma_index_app2 acc (Seq.create 1 d) (Seq.length acc)
+
+(** The same as a single implication, so that a caller that does not know
+    whether the candidate was accepted can still use it. *)
+let push_index_new_opt (acc: partial) (d: nat)
+  : Lemma ((Seq.length acc < n /\ d < q) ==>
+           Seq.index (push acc d) (Seq.length acc) == d)
+  = if Seq.length acc < n && d < q then push_index_new acc d
+
+let push_index (acc: partial) (d: nat)
+  : Lemma (forall (k: nat). k < Seq.length acc ==> Seq.index (push acc d) k == Seq.index acc k)
+  = FStar.Classical.forall_intro (push_index_old acc d)
+
+let sample_step_push (seed: Seq.seq S8.t) (t: nat) (acc: partial)
+  : Lemma (sample_step seed t acc ==
+           push (push acc (cand1 seed t)) (cand2 seed t))
+  = ()
 
 (** Once full, the accumulator is fixed: every later step is the identity.
     This is what lets the implementation stop early. *)
