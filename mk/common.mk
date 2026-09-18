@@ -22,9 +22,9 @@ DIST_DIR  ?= $(HACL_ROOT)/dist
 # ---------------------------------------------------------------------------
 #
 # hacl-pulse needs a stage3 F* -- that is, one with the Pulse plugin and the
-# Pulse libraries installed -- built from the `gebner_custard` branch, which is
-# where the Custard extraction pipeline lives.  Point FSTAR_EXE at it, or set
-# FSTAR_ROOT to a checkout whose stage3 has been built.
+# Pulse libraries installed -- built from F* master, which is where the Custard
+# extraction pipeline now lives.  Point FSTAR_EXE at it, or set FSTAR_ROOT to a
+# checkout whose stage3 has been built.
 
 ifneq ($(FSTAR_ROOT),)
 FSTAR_EXE ?= $(FSTAR_ROOT)/stage3/out/bin/fstar.exe
@@ -32,7 +32,7 @@ endif
 FSTAR_EXE ?= $(shell which fstar.exe 2>/dev/null)
 
 ifeq ($(FSTAR_EXE),)
-$(error No F* found. Set FSTAR_EXE to a stage3 fstar.exe from the gebner_custard branch, or FSTAR_ROOT to its checkout.)
+$(error No F* found. Set FSTAR_EXE to a stage3 fstar.exe built from F* master, or FSTAR_ROOT to its checkout.)
 endif
 
 FSTAR_EXE := $(abspath $(FSTAR_EXE))
