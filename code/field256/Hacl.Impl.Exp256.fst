@@ -63,12 +63,12 @@ let is_one (b: U64.t) : (r: bool { r <==> U64.v b == 1 }) = b = 1uL
     the loop builds, so the caller has nothing left to rewrite. *)
 let bit_of (ve: Seq.seq U64.t) (i: nat { i < 256 }) (l: U64.t) (j: U32.t)
   : Lemma (requires Seq.length ve == nl /\ bnd (pvals ve) base /\
-                    l == Seq.index ve (i / 16) /\ U32.v j == i % 16)
+                    l == Seq.index ve (i / 32) /\ U32.v j == i % 32)
           (ensures (let b = U64.v (U64.logand (U64.shift_right l j) 1uL) in
                     b < 2 /\ b == eval (pvals ve) / pow2 i % 2))
   = assert_norm (pow2 1 - 1 == 1);
     assert_norm (pow2 1 == 2);
-    assert_norm (rad == 16);
+    assert_norm (rad == 32);
     UInt.logand_mask #64 (U64.v (U64.shift_right l j)) 1;
     ebit (pvals ve) i
 
@@ -150,13 +150,16 @@ ensures exists* (vo': Seq.seq S64.t)
   acopy t2 out;
   amul out t1 t2 ms nm mu d;
   mev_mul d (vals v) (vals v);
-  let k = SZ.div bi 16sz;
+  let k = SZ.div bi 32sz;
+  assert (pure (SZ.v k == SZ.v bi / 32));
+  assert (pure (SZ.v k < nl));
   let l = A.(e.(k));
-  let r = SZ.rem bi 16sz;
-  assert (pure (SZ.v r == SZ.v bi % 16));
+  assert (pure (l == Seq.index ve (SZ.v bi / 32)));
+  let r = SZ.rem bi 32sz;
+  assert (pure (SZ.v r == SZ.v bi % 32));
   Math.small_mod (SZ.v r) (pow2 32);
   let j = SZ.sizet_to_uint32 r;
-  assert (pure (U32.v j == SZ.v bi % 16));
+  assert (pure (U32.v j == SZ.v bi % 32));
   let b = U64.logand (U64.shift_right l j) 1uL;
   bit_of ve (SZ.v bi) l j;
   exp_step (mev d (vals va)) kk (U64.v b);
@@ -202,7 +205,7 @@ ensures exists* (vo': Seq.seq S64.t).
   let en = hide (eval (pvals ve));
   ebnd (pvals ve);
   let z = S64.zero;
-  let mut a1 = [| z; 16sz |]; A.pts_to_len a1; let mut a2 = [| z; 16sz |]; A.pts_to_len a2; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; A.pts_to_len a1; A.pts_to_len a2;
   acopy out r1;
   ebnd (pvals ve);
   Math.small_div (reveal en) (pow2 256);

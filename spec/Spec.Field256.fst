@@ -14,7 +14,7 @@
    limitations under the License.
 *)
 
-(** Arithmetic on a 256-bit modulus in sixteen limbs, in Montgomery form.
+(** Arithmetic on a 256-bit modulus in eight limbs, in Montgomery form.
 
     [Spec.Montgomery256] does the reduction for an arbitrary odd modulus;
     this module is the operations built on it -- addition, subtraction,
@@ -23,7 +23,7 @@
     group order in {!Spec.P256.Field}, and secp256k1's in
     {!Spec.K256.Field}.
 
-    {b The representation.}  A residue [x] is stored as the sixteen proper
+    {b The representation.}  A residue [x] is stored as the eight proper
     limbs of [x R mod m], where [R = 2^256].  [mmul] computes
     [a b R^-1 mod m], so it maps [(xR, yR)] to [(xy)R]: the factor survives
     multiplication, and addition and subtraction never noticed it.  Entering
@@ -69,7 +69,7 @@ noeq type modulus = {
   nm: Seq.seq nat;      (** the limbs of [2^256 - m]: subtracting by adding *)
   r1: Seq.seq nat;      (** the limbs of [R mod m], which is [1] in Montgomery form *)
   r2: Seq.seq nat;      (** the limbs of [R^2 mod m], for entering Montgomery form *)
-  mu: nat;              (** [-m^-1 mod 2^16] *)
+  mu: nat;              (** [-m^-1 mod 2^32] *)
   ri: nat;              (** any [R^-1 mod m]; only ever used to cancel an [R] *)
 }
 
@@ -80,7 +80,7 @@ let modulus_ok (d: modulus) : prop =
   Seq.length d.r2 == nl /\ bnd d.r2 base /\ eval d.r2 == pow2 256 * pow2 256 % d.m /\
   pow2 256 * d.ri % d.m == 1
 
-(** A residue: sixteen proper limbs holding a value below the modulus. *)
+(** A residue: eight proper limbs holding a value below the modulus. *)
 let res (d: modulus) (s: Seq.seq nat) : prop =
   Seq.length s == nl /\ bnd s base /\ eval s < d.m
 
@@ -90,7 +90,7 @@ let mform (d: modulus) (x: nat) (s: Seq.seq nat) : prop =
 
 (** {2 Building a modulus bundle from its number}
 
-    Rather than write five sequences of sixteen literals per modulus and
+    Rather than write five sequences of eight literals per modulus and
     prove each one's [eval], the limbs are read off the number itself.  The
     implementation will of course carry the literals; the specification
     only has to say what they mean. *)
@@ -98,6 +98,7 @@ let mform (d: modulus) (x: nat) (s: Seq.seq nat) : prop =
 let limbs_n (x: nat) (n: nat) : Seq.seq nat =
   Seq.init #nat n (fun i -> x / pow2 (rad * i) % base)
 
+#push-options "--z3rlimit 400"
 let rec limbs_n_eval (x: nat) (n: nat)
   : Lemma (ensures Seq.length (limbs_n x n) == n /\ bnd (limbs_n x n) base /\
                    eval (limbs_n x n) == x % pow2 (rad * n))
@@ -112,11 +113,15 @@ let rec limbs_n_eval (x: nat) (n: nat)
           Math.division_multiplication_lemma x base (pow2 (rad * i)) in
       Classical.forall_intro aux;
       Seq.lemma_eq_intro t (limbs_n (x / base) (n - 1));
+      Math.distributivity_add_right rad 1 (n - 1);
+      assert (rad * n == rad + rad * (n - 1));
       Math.pow2_plus rad (rad * (n - 1));
+      assert (pow2 (rad * n) == base * pow2 (rad * (n - 1)));
       Math.modulo_division_lemma x base (pow2 (rad * (n - 1)));
       Math.euclidean_division_definition (x % pow2 (rad * n)) base;
       Math.pow2_modulo_modulo_lemma_1 x rad (rad * n)
     end
+#pop-options
 
 let limbs (x: nat) : Seq.seq nat = limbs_n x nl
 
@@ -168,7 +173,7 @@ let mk_ok (m: pos { m < pow2 256 }) (mu ri: nat)
 
 (** {2 The conditional subtraction}
 
-    The input is sixteen proper limbs and a top limb that is zero or one,
+    The input is eight proper limbs and a top limb that is zero or one,
     together holding a value below [2 m].  Adding [2^256 - m] and reading
     the carry out decides and performs the subtraction at once: the carry is
     one exactly when the low part already exceeds the modulus. *)
@@ -253,15 +258,15 @@ let normalize (s: Seq.seq nat { Seq.length s == nl + 1 })
     carry_run s nl
 
 let normalize_ok (s: Seq.seq nat { Seq.length s == nl + 1 }) (c: nat)
-  : Lemma (requires ble s c /\ c <= pow2 40 /\ eval s < pow2 257)
+  : Lemma (requires ble s c /\ c <= pow2 72 /\ eval s < pow2 257)
           (ensures eval (normalize s) == eval s /\
                    bnd (Seq.slice (normalize s) 0 nl) base /\
                    vat (normalize s) nl <= 1)
   = let r = normalize s in
     carry_run_len s nl;
     carry_run_ok s nl;
-    assert_norm (pow2 40 + pow2 25 < base * (pow2 25 + 1));
-    carry_run_chained s c (pow2 25) nl;
+    assert_norm (pow2 72 + pow2 41 < base * (pow2 41 + 1));
+    carry_run_chained s c (pow2 41) nl;
     eval_split r nl;
     assert_norm (rad * nl == 256);
     assert_norm (pow2 257 == pow2 256 * 2);
@@ -269,11 +274,11 @@ let normalize_ok (s: Seq.seq nat { Seq.length s == nl + 1 }) (c: nat)
 
 (** {3 Splitting the normalisation}
 
-    The implementation keeps the sixteen limbs and the top column in
-    separate buffers, so it runs the pass on the sixteen and adds the
-    overflow to the seventeenth by hand.  That is the same computation:
-    steps [0] to [14] never look above limb [15], and step [15] is exactly
-    the split that [carry_low] and [carry_out] perform. *)
+    The lemmas below relate the full pass to a pass run on a prefix, which
+    is what a caller that keeps the limbs and the top column in separate
+    buffers needs: steps [0] to [nl - 2] never look above limb [nl - 1],
+    and step [nl - 1] is exactly the split that [carry_low] and
+    [carry_out] perform. *)
 
 let carry_runr (s: Seq.seq nat) (k: nat)
   : (r: Seq.seq nat { Seq.length r == Seq.length s /\ r == carry_run s k })
@@ -333,7 +338,7 @@ let prod (a b: Seq.seq nat) : (t: Seq.seq nat { Seq.length t == ncol }) =
   assert_norm (nl + 1 <= ncol);
   padc (part a b nl)
 
-(** The reduction, normalised: sixteen proper limbs and a top carry. *)
+(** The reduction, normalised: eight proper limbs and a top carry. *)
 let redc (d: modulus) (t: Seq.seq nat { Seq.length t == ncol })
   : (r: Seq.seq nat { Seq.length r == nl + 1 })
   = mreduce_len d.ms d.mu t;
@@ -347,10 +352,10 @@ let mmul (d: modulus) (a b: Seq.seq nat) : Seq.seq nat =
     context so that the literals never meet a hypothesis. *)
 let cmax : nat = nl * ((base - 1) * (base - 1))
 
-let cmax_fits (_: unit) : Lemma (cmax + nl * pow2 33 <= pow2 40) =
-  assert_norm (nl * ((base - 1) * (base - 1)) + nl * pow2 33 <= pow2 40)
+let cmax_fits (_: unit) : Lemma (cmax + nl * pow2 65 <= pow2 72) =
+  assert_norm (nl * ((base - 1) * (base - 1)) + nl * pow2 65 <= pow2 72)
 
-let cmax_le (_: unit) : Lemma (cmax <= pow2 40) = assert_norm (cmax <= pow2 40)
+let cmax_le (_: unit) : Lemma (cmax <= pow2 72) = assert_norm (cmax <= pow2 72)
 
 let prod_ok (a b: Seq.seq nat)
   : Lemma (requires Seq.length a == nl /\ Seq.length b == nl /\
@@ -376,7 +381,7 @@ let redc_ok (d: modulus) (t: Seq.seq nat { Seq.length t == ncol })
     mreduce_lt d.ms d.mu t d.m;
     let y = mreduce d.ms d.mu t in
     assert_norm (pow2 257 == 2 * pow2 256);
-    normalize_ok y (cmax + nl * pow2 33);
+    normalize_ok y (cmax + nl * pow2 65);
     let r = normalize y in
     eval_split r nl;
     assert_norm (rad * nl == 256)
@@ -459,7 +464,7 @@ let madd_ok (d: modulus) (a b: Seq.seq nat)
     else Math.lemma_mod_sub (eval a + eval b) d.m 1
 
 (** The complement, so that a subtraction is an addition.  [compl s] holds
-    [2^16 - 1 - s_i] in each limb, so [compl s + s] is all ones. *)
+    [2^32 - 1 - s_i] in each limb, so [compl s + s] is all ones. *)
 let compl (s: Seq.seq nat) : Seq.seq nat =
   Seq.init #nat nl (fun i -> (base - 1) - (if vat s i < base then vat s i else base - 1))
 
@@ -480,7 +485,7 @@ let unit1_ok (_: unit)
   = eval_upd (Seq.create nl 0) 0 1;
     eval_zeros (Seq.create nl 0)
 
-(** [2^256 - b], with every limb below [2^16 + 1]. *)
+(** [2^256 - b], with every limb below [2^32 + 1]. *)
 let negw (b: Seq.seq nat) : Seq.seq nat = addw (compl b) unit1
 
 let negw_ok (b: Seq.seq nat)
@@ -580,77 +585,179 @@ let from_mont (d: modulus) (a: Seq.seq nat) : Seq.seq nat = mmul d a unit1
 
 (** {2 Big-endian bytes}
 
-    Both curves serialise most significant byte first, so limb [k] -- the [k]-th
-    least significant -- is the byte pair at the *end* of the buffer.  The
-    two lemmas are stated relationally on whatever the loop has built, in
-    the same style as [Spec.Bignum256]'s little-endian pair. *)
+    Both curves serialise most significant byte first, so limb [k] -- the
+    [k]-th least significant -- is the four-byte group at the *end* of the
+    buffer.  The lemmas are stated relationally on whatever the loop has
+    built, in the same style as [Spec.Bignum256]'s little-endian pair, and
+    for the same reason they are split until no one of them needs the
+    solver to guess a witness.
+
+    The four is written out rather than derived from [rad]: [4 * k] is
+    linear arithmetic and [(rad / 8) * k] is not. *)
 
 let bat (b: Seq.seq S8.t) (i: nat) : GTot nat =
   if i < Seq.length b then S8.v (Seq.index b i) else 0
 
-let be_pair (b: Seq.seq S8.t) (n: pos) (k: nat { k < n }) : GTot nat =
-  256 * bat b (2 * (n - 1 - k)) + bat b (2 * (n - 1 - k) + 1)
+(** The four bytes of limb [k], most significant first. *)
+let be_quad (b: Seq.seq S8.t) (n: pos) (k: nat { k < n }) : GTot nat =
+  16777216 * bat b (4 * (n - 1 - k)) + 65536 * bat b (4 * (n - 1 - k) + 1) +
+  256 * bat b (4 * (n - 1 - k) + 2) + bat b (4 * (n - 1 - k) + 3)
 
-#push-options "--fuel 4 --z3rlimit 200"
+(** The limb-wise reading of a byte string is its big-endian value.  The
+    recursion drops the *last* four bytes, which are the least significant
+    limb, so the induction is on [Seq.slice s 1 n] exactly as in the
+    little-endian twin. *)
+#push-options "--fuel 6 --z3rlimit 400"
 let rec eval_bytes_be (b: Seq.seq S8.t) (s: Seq.seq nat)
-  : Lemma (requires Seq.length b == 2 * Seq.length s /\
-                    (forall (k: nat). k < Seq.length s ==>
-                       Seq.index s k == be_pair b (Seq.length s) k))
+  : Lemma (requires Seq.length b == 4 * Seq.length s /\
+                    (forall (k: nat). {:pattern (Seq.index s k)}
+                       k < Seq.length s ==> Seq.index s k == be_quad b (Seq.length s) k))
           (ensures eval s == be_nat b)
           (decreases Seq.length s)
   = let n = Seq.length s in
     if n = 0 then ()
     else begin
-      let b' = Seq.slice b 0 (2 * n - 2) in
+      let b' = Seq.slice b 0 (4 * n - 4) in
       let s' = Seq.slice s 1 n in
-      be_nat_snoc b (2 * n - 2);
-      be_nat_snoc b (2 * n - 1);
-      Seq.lemma_eq_intro (Seq.slice b 0 (2 * n)) b;
-      Seq.lemma_eq_intro (Seq.slice b 0 (2 * n - 2)) b';
-      assert (be_nat b == be_nat b' * 256 * 256 +
-                          bat b (2 * n - 2) * 256 + bat b (2 * n - 1));
-      let aux (k: nat { k < n - 1 }) : Lemma (Seq.index s' k == be_pair b' (n - 1) k) =
-        assert (2 * (n - 1 - (k + 1)) == 2 * ((n - 1) - 1 - k));
-        assert (bat b' (2 * ((n - 1) - 1 - k)) == bat b (2 * (n - 1 - (k + 1))));
-        assert (bat b' (2 * ((n - 1) - 1 - k) + 1) == bat b (2 * (n - 1 - (k + 1)) + 1)) in
+      be_nat_snoc b (4 * n - 4);
+      be_nat_snoc b (4 * n - 3);
+      be_nat_snoc b (4 * n - 2);
+      be_nat_snoc b (4 * n - 1);
+      Seq.lemma_eq_intro (Seq.slice b 0 (4 * n)) b;
+      Seq.lemma_eq_intro (Seq.slice b 0 (4 * n - 4)) b';
+      assert (be_nat b == ((be_nat b' * 256 + bat b (4 * n - 4)) * 256 +
+                           bat b (4 * n - 3)) * 256 * 256 +
+                          bat b (4 * n - 2) * 256 + bat b (4 * n - 1));
+      let aux (k: nat { k < n - 1 }) : Lemma (Seq.index s' k == be_quad b' (n - 1) k) =
+        assert (4 * (n - 1 - (k + 1)) == 4 * ((n - 1) - 1 - k));
+        assert (bat b' (4 * ((n - 1) - 1 - k)) == bat b (4 * (n - 1 - (k + 1))));
+        assert (bat b' (4 * ((n - 1) - 1 - k) + 1) == bat b (4 * (n - 1 - (k + 1)) + 1));
+        assert (bat b' (4 * ((n - 1) - 1 - k) + 2) == bat b (4 * (n - 1 - (k + 1)) + 2));
+        assert (bat b' (4 * ((n - 1) - 1 - k) + 3) == bat b (4 * (n - 1 - (k + 1)) + 3)) in
       Classical.forall_intro aux;
       eval_bytes_be b' s'
     end
 #pop-options
 
-(** Which limb a byte belongs to, and where in it: pure index arithmetic,
-    kept away from the [pow2] facts it is used beside. *)
-let be_index_arith (i: nat { i < 32 })
-  : Lemma (let k = 15 - i / 2 in
-           k < nl /\ 2 * (nl - 1 - k) == 2 * (i / 2) /\
-           (if i % 2 = 1 then 8 * (32 - 1 - i) == rad * k
-                         else 8 * (32 - 1 - i) == rad * k + 8))
-  = assert_norm (rad == 16);
-    assert_norm (nl == 16);
-    Math.euclidean_division_definition i 2
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 400"
 
+(** [rad] is a definition rather than a literal, so [rad * k] is a product
+    of two opaque terms; this puts it back in linear form. *)
+let radf_lin (k: nat) : Lemma (rad * k == 32 * k) = assert_norm (rad == 32)
+
+(** Byte [m] of limb [k], counted from the top of the limb, is byte
+    [32 * k + 8 * (3 - m)] of the number. *)
+let store_be_digit (s: Seq.seq nat) (k: nat { k < Seq.length s }) (m: nat { m < 4 })
+  : Lemma (requires bnd s base)
+          (ensures (Seq.index s k / pow2 (8 * (3 - m))) % 256 ==
+                   (eval s / pow2 (32 * k + 8 * (3 - m))) % 256)
+  = let v = eval s in
+    radf_lin k;
+    assert_norm (base == 4294967296);
+    assert_norm (pow2 32 == 4294967296);
+    eval_digit s k;
+    let a = v / pow2 (32 * k) in
+    Math.pow2_plus (32 * k) (8 * (3 - m));
+    Math.division_multiplication_lemma v (pow2 (32 * k)) (pow2 (8 * (3 - m)));
+    Math.pow2_modulo_division_lemma_1 a (8 * (3 - m)) 32;
+    Math.pow2_modulo_modulo_lemma_1 (a / pow2 (8 * (3 - m))) 8 (32 - 8 * (3 - m))
+
+(** Where byte [i] of a thirty-two byte big-endian string lives: limb
+    [7 - i / 4], byte [i % 4] of it counted from the top.  Pure index
+    arithmetic, kept apart from the [pow2] facts it is used beside. *)
+let be_index_arith (i: nat { i < 32 })
+  : Lemma (let k = 7 - i / 4 in
+           k < nl /\ 4 * (nl - 1 - k) == 4 * (i / 4) /\ i % 4 < 4 /\
+           8 * (32 - 1 - i) == 32 * k + 8 * (3 - i % 4))
+  = assert_norm (nl == 8);
+    Math.lemma_mod_lt i 4;
+    Math.euclidean_division_definition i 4
+
+(** The four byte weights inside a limb, as literals. *)
+let pow2_byte_be (m: nat { m < 4 })
+  : Lemma (pow2 (8 * (3 - m)) == (if m = 3 then 1 else if m = 2 then 256
+                                  else if m = 1 then 65536 else 16777216))
+  = assert_norm (pow2 0 == 1);
+    assert_norm (pow2 8 == 256);
+    assert_norm (pow2 16 == 65536);
+    assert_norm (pow2 24 == 16777216)
+
+(** A store loop divides by literals; {!store_be_ok} divides by a power of
+    two. *)
+let digit_be (x: nat) (m: nat { m < 4 }) (y: nat)
+  : Lemma (requires y == (if m = 3 then x % 256
+                          else if m = 2 then x / 256 % 256
+                          else if m = 1 then x / 65536 % 256
+                          else x / 16777216 % 256))
+          (ensures y == (x / pow2 (8 * (3 - m))) % 256)
+  = pow2_byte_be m
+
+(** Byte [4 (nl - 1 - k) + m] belongs to limb [k], digit [3 - m]. *)
+let split4_be (k: nat { k < nl }) (m: nat { m < 4 })
+  : Lemma ((4 * (nl - 1 - k) + m) / 4 == nl - 1 - k /\
+           (4 * (nl - 1 - k) + m) % 4 == m /\
+           7 - (4 * (nl - 1 - k) + m) / 4 == k)
+  = assert_norm (nl == 8);
+    Math.lemma_div_plus m (nl - 1 - k) 4;
+    Math.lemma_mod_plus m (nl - 1 - k) 4;
+    Math.small_div m 4;
+    Math.small_mod m 4
+
+(** One byte of one limb, in both shapes at once. *)
+let store_be_shape (s: Seq.seq nat) (b: Seq.seq S8.t) (k: nat { k < nl }) (m: nat { m < 4 })
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
+                    bat b (4 * (nl - 1 - k)) == Seq.index s k / 16777216 % 256 /\
+                    bat b (4 * (nl - 1 - k) + 1) == Seq.index s k / 65536 % 256 /\
+                    bat b (4 * (nl - 1 - k) + 2) == Seq.index s k / 256 % 256 /\
+                    bat b (4 * (nl - 1 - k) + 3) == Seq.index s k % 256)
+          (ensures (let i = 4 * (nl - 1 - k) + m in
+                    i < 32 /\
+                    S8.v (Seq.index b i) ==
+                      (Seq.index s (7 - i / 4) / pow2 (8 * (3 - i % 4))) % 256))
+  = assert_norm (nl == 8);
+    split4_be k m;
+    if m = 3 then digit_be (Seq.index s k) 3 (bat b (4 * (nl - 1 - k) + 3))
+    else if m = 2 then digit_be (Seq.index s k) 2 (bat b (4 * (nl - 1 - k) + 2))
+    else if m = 1 then digit_be (Seq.index s k) 1 (bat b (4 * (nl - 1 - k) + 1))
+    else digit_be (Seq.index s k) 0 (bat b (4 * (nl - 1 - k)))
+
+(** The same, indexed by the byte rather than by the limb. *)
+let store_be_byte_ok (s: Seq.seq nat) (b: Seq.seq S8.t) (i: nat { i < 32 })
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
+                    (forall (k: nat). k < nl ==>
+                       bat b (4 * (nl - 1 - k)) == Seq.index s k / 16777216 % 256 /\
+                       bat b (4 * (nl - 1 - k) + 1) == Seq.index s k / 65536 % 256 /\
+                       bat b (4 * (nl - 1 - k) + 2) == Seq.index s k / 256 % 256 /\
+                       bat b (4 * (nl - 1 - k) + 3) == Seq.index s k % 256))
+          (ensures S8.v (Seq.index b i) ==
+                     (Seq.index s (7 - i / 4) / pow2 (8 * (3 - i % 4))) % 256)
+  = assert_norm (nl == 8);
+    Math.lemma_mod_lt i 4;
+    Math.euclidean_division_definition i 4;
+    store_be_shape s b (7 - i / 4) (i % 4)
+
+(** Writing each limb out as four bytes, most significant first and most
+    significant limb first, produces the big-endian encoding. *)
 let store_be_ok (s: Seq.seq nat) (b: Seq.seq S8.t)
   : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\ bnd s base /\
                     (forall (k: nat). k < nl ==>
-                       bat b (2 * (nl - 1 - k)) == Seq.index s k / 256 /\
-                       bat b (2 * (nl - 1 - k) + 1) == Seq.index s k % 256))
+                       bat b (4 * (nl - 1 - k)) == Seq.index s k / 16777216 % 256 /\
+                       bat b (4 * (nl - 1 - k) + 1) == Seq.index s k / 65536 % 256 /\
+                       bat b (4 * (nl - 1 - k) + 2) == Seq.index s k / 256 % 256 /\
+                       bat b (4 * (nl - 1 - k) + 3) == Seq.index s k % 256))
           (ensures b == nat_to_be 32 (eval s))
   = let v = eval s in
     ebnd s;
     let aux (i: nat { i < 32 }) : Lemma (Seq.index b i == Seq.index (nat_to_be 32 v) i) =
-      let k = 15 - i / 2 in
-      eval_digit s k;
-      nat_to_be_index 32 v i;
-      Math.pow2_plus (rad * k) 8;
+      let k = 7 - i / 4 in
       be_index_arith i;
-      if i % 2 = 1 then
-        Math.pow2_modulo_modulo_lemma_1 (v / pow2 (rad * k)) 8 rad
-      else begin
-        Math.pow2_modulo_division_lemma_1 (v / pow2 (rad * k)) 8 rad;
-        Math.division_multiplication_lemma v (pow2 (rad * k)) (pow2 8)
-      end;
+      store_be_byte_ok s b i;
+      store_be_digit s k (i % 4);
+      nat_to_be_index 32 v i;
       S8.v_extensional (Seq.index b i) (Seq.index (nat_to_be 32 v) i) in
     Classical.forall_intro aux;
     Seq.lemma_eq_intro b (nat_to_be 32 v)
+
+#pop-options
 
 #pop-options

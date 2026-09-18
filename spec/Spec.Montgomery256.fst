@@ -14,13 +14,13 @@
    limitations under the License.
 *)
 
-(** Montgomery reduction on [Spec.Bignum256]'s sixteen limbs, for an
+(** Montgomery reduction on [Spec.Bignum256]'s eight limbs, for an
     arbitrary odd modulus.
 
     Curve25519's prime has a shape -- [2^256 = 2 * prime + 38] -- that turns
     reduction into adding thirty-eight times the top half to the bottom.
-    P-256's prime has a shape too, but one that only pays off with 32-bit
-    limbs; with sixteen-bit limbs it buys nothing.  And the P-256 *group
+    P-256's prime has a shape too, but exploiting it would mean a second
+    reduction path for every modulus that has none.  And the P-256 *group
     order*, which needs exactly the same arithmetic for ECDSA, has no shape
     at all.  So both of P-256's moduli use the one method that does not care
     what the modulus looks like.
@@ -28,23 +28,24 @@
     {b The method.}  Write [R = 2^256].  Instead of [a * b mod m] the
     library computes [a * b * R^-1 mod m], and keeps every value multiplied
     by [R].  Then [(aR)(bR)R^-1 = (ab)R], so the representation is
-    preserved, and the reduction itself is a loop of sixteen steps each
+    preserved, and the reduction itself is a loop of eight steps each
     costing one multiply-accumulate of the modulus.  Step [i] picks the
-    unique [u < 2^16] making limb [i] of the accumulator divisible by
-    [2^16], adds [u * m * 2^(16 i)] -- which changes nothing modulo [m] --
+    unique [u < 2^32] making limb [i] of the accumulator divisible by
+    [2^32], adds [u * m * 2^(32 i)] -- which changes nothing modulo [m] --
     and carries limb [i] into limb [i + 1], leaving limb [i] zero.  After
-    sixteen steps the bottom sixteen limbs are zero and dropping them is
+    eight steps the bottom eight limbs are zero and dropping them is
     division by [R].
 
-    {b Why the whole thing fits in a 64-bit word.}  The accumulator starts
-    as an unreduced product with columns below [2^36].  Each step adds at
-    most [(2^16 - 1)^2 < 2^32] to a limb and carries in less than [2^25], so
-    sixteen steps cannot push a limb past [2^38].  No intermediate
+    {b Why the whole thing fits in a 128-bit word.}  The accumulator starts
+    as an unreduced product with columns below [2^67].  Each step adds at
+    most [(2^32 - 1)^2 < 2^64] to a limb and carries in less than [2^41], so
+    eight steps cannot push a limb past [2^69].  That is comfortably inside
+    the [2^72] ceiling the bound chain is stated with, and no intermediate
     normalisation is needed anywhere, which is why the loop body is three
     lines.
 
-    {b What the caller must supply.}  The modulus as sixteen proper limbs,
-    and [mu], the negated inverse of its bottom limb modulo [2^16].  Both
+    {b What the caller must supply.}  The modulus as eight proper limbs,
+    and [mu], the negated inverse of its bottom limb modulo [2^32].  Both
     are compile-time constants in every instance, so [mont_ok] is discharged
     once by [assert_norm] and never thought about again.
 
@@ -88,7 +89,7 @@ let eval_emb (n i: nat) (s: Seq.seq nat)
 
 (** {2 The modulus}
 
-    [mu] is the constant with [m0 * mu = -1 mod 2^16], which exists exactly
+    [mu] is the constant with [m0 * mu = -1 mod 2^32], which exists exactly
     when the modulus is odd. *)
 
 let mont_ok (ms: Seq.seq nat) (mu: nat) : prop =
@@ -98,7 +99,7 @@ let mont_ok (ms: Seq.seq nat) (mu: nat) : prop =
 (** The digit that zeroes limb [i]. *)
 let mdigit (mu: nat) (i: nat) (t: Seq.seq nat) : nat = (vat t i * mu) % base
 
-(** The heart of it: [a + ((a * mu) mod 2^16) * m0] is divisible by [2^16],
+(** The heart of it: [a + ((a * mu) mod 2^32) * m0] is divisible by [2^32],
     for any [a] at all -- limb [i] does not have to be a proper limb first,
     which is what lets the whole reduction run without normalising. *)
 let mdigit_kills (ms: Seq.seq nat) (mu: nat) (a: nat)
@@ -159,13 +160,13 @@ let mstep_zero (ms: Seq.seq nat) (mu: nat) (i: nat) (t: Seq.seq nat)
 
 (** {3 The bound}
 
-    A limb grows by at most [(2^16 - 1)^2] from the multiply-accumulate and
-    by at most [2^25] from the incoming carry, so [2^33] of headroom per
-    step is generous.  Sixteen steps from a product's [2^36] therefore stay
-    under [2^38]. *)
+    A limb grows by at most [(2^32 - 1)^2] from the multiply-accumulate and
+    by at most [2^41] from the incoming carry, so [2^65] of headroom per
+    step is generous.  Eight steps from a product's [2^67] therefore stay
+    under [2^70]. *)
 let mstep_ble (ms: Seq.seq nat) (mu: nat) (i: nat) (t: Seq.seq nat) (c: nat)
-  : Lemma (requires mont_ok ms mu /\ ble t c /\ c <= pow2 40)
-          (ensures ble (mstep ms mu i t) (c + pow2 33))
+  : Lemma (requires mont_ok ms mu /\ ble t c /\ c <= pow2 72)
+          (ensures ble (mstep ms mu i t) (c + pow2 65))
   = let u = mdigit mu i t in
     let e = emb (Seq.length t) i (scale u ms) in
     let s = addw t e in
@@ -174,16 +175,16 @@ let mstep_ble (ms: Seq.seq nat) (mu: nat) (i: nat) (t: Seq.seq nat) (c: nat)
     assert_norm (base - 1 < base);
     Math.lemma_mult_le_right (base - 1) u (base - 1);
     assert (ble e ((base - 1) * (base - 1)));
-    assert_norm ((base - 1) * (base - 1) < pow2 32);
-    assert (ble s (c + pow2 32));
-    assert_norm (pow2 40 + pow2 32 < base * (pow2 25 + 1));
-    let aux (k: nat { k < Seq.length s }) : Lemma (Seq.index (mstep ms mu i t) k <= c + pow2 33) =
-      if k = i then assert_norm (base <= pow2 33)
+    assert_norm ((base - 1) * (base - 1) < pow2 64);
+    assert (ble s (c + pow2 64));
+    assert_norm (pow2 72 + pow2 64 < base * (pow2 41 + 1));
+    let aux (k: nat { k < Seq.length s }) : Lemma (Seq.index (mstep ms mu i t) k <= c + pow2 65) =
+      if k = i then assert_norm (base <= pow2 65)
       else if k = i + 1 && i + 1 < Seq.length s then begin
-        div_le_of_lt (Seq.index s i) base (pow2 25);
-        assert_norm (pow2 32 + pow2 25 <= pow2 33)
+        div_le_of_lt (Seq.index s i) base (pow2 41);
+        assert_norm (pow2 64 + pow2 41 <= pow2 65)
       end
-      else assert_norm (pow2 32 <= pow2 33) in
+      else assert_norm (pow2 64 <= pow2 65) in
     Classical.forall_intro aux
 
 (** {2 The loop} *)
@@ -203,16 +204,16 @@ let rec mrun_len (ms: Seq.seq nat) (mu: nat) (k: nat) (t: Seq.seq nat)
   = if k = 0 then () else (mrun_unfold ms mu k t; mrun_len ms mu (k - 1) t)
 
 let rec mrun_ble (ms: Seq.seq nat) (mu: nat) (k: nat) (t: Seq.seq nat) (c: nat)
-  : Lemma (requires mont_ok ms mu /\ ble t c /\ c + k * pow2 33 <= pow2 40)
-          (ensures ble (mrun ms mu k t) (c + k * pow2 33))
+  : Lemma (requires mont_ok ms mu /\ ble t c /\ c + k * pow2 65 <= pow2 72)
+          (ensures ble (mrun ms mu k t) (c + k * pow2 65))
           (decreases k)
   = if k = 0 then ()
     else begin
       mrun_unfold ms mu k t;
-      Math.lemma_mult_le_right (pow2 33) (k - 1) k;
+      Math.lemma_mult_le_right (pow2 65) (k - 1) k;
       mrun_ble ms mu (k - 1) t c;
-      mstep_ble ms mu (k - 1) (mrun ms mu (k - 1) t) (c + (k - 1) * pow2 33);
-      Math.distributivity_add_left (k - 1) 1 (pow2 33)
+      mstep_ble ms mu (k - 1) (mrun ms mu (k - 1) t) (c + (k - 1) * pow2 65);
+      Math.distributivity_add_left (k - 1) 1 (pow2 65)
     end
 
 let rec mrun_eval (ms: Seq.seq nat) (mu: nat) (k: nat) (t: Seq.seq nat)
@@ -263,8 +264,8 @@ let mreduce_len (ms: Seq.seq nat) (mu: nat) (t: Seq.seq nat { Seq.length t == nc
 
 let mreduce_ble (ms: Seq.seq nat) (mu: nat) (t: Seq.seq nat { Seq.length t == ncol }) (c: nat)
   : Lemma (requires mont_ok ms mu /\ ble t c /\
-                    c + nl * pow2 33 <= pow2 40)
-          (ensures ble (mreduce ms mu t) (c + nl * pow2 33))
+                    c + nl * pow2 65 <= pow2 72)
+          (ensures ble (mreduce ms mu t) (c + nl * pow2 65))
   = mrun_ble ms mu nl t c; mrun_len ms mu nl t
 
 (** The defining property: [R] times the answer is congruent to the input,
@@ -283,7 +284,7 @@ let mreduce_ok (ms: Seq.seq nat) (mu: nat) (t: Seq.seq nat { Seq.length t == nco
 
 (** {3 How much the modulus was added}
 
-    Step [i] adds at most [(2^16 - 1) m 2^(16 i)], and those weights sum to
+    Step [i] adds at most [(2^32 - 1) m 2^(32 i)], and those weights sum to
     [R - 1].  So a reduction of a value below [m R] is below [2 m] -- which
     is why one conditional subtraction at the end suffices and no other
     normalisation is ever needed. *)

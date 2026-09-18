@@ -132,7 +132,7 @@ ensures exists* (vo': Seq.seq S64.t).
 }
 
 (** Squaring needs a second reference to its argument, and the multiplier
-    wants the three buffers distinct: the copy is sixteen moves against two
+    wants the three buffers distinct: the copy is eight moves against two
     hundred and fifty-six multiplies. *)
 fn fsqr (out a: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
@@ -144,7 +144,7 @@ ensures exists* (vo': Seq.seq S64.t).
   pure (felem vo' /\ fev vo' == K.fmul (fev va) (fev va))
 {
   let z = S64.zero;
-  let mut ac = [| z; 16sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 8sz |]; A.pts_to_len ac; A.pts_to_len ac;
   acopy ac a;
   fmul out a ac;
   ()
@@ -187,7 +187,7 @@ ensures exists* (vo': Seq.seq S64.t).
 
 (** {2 Entering and leaving Montgomery form}
 
-    [fto] takes sixteen plain limbs below the prime; [ffrom] gives them
+    [fto] takes eight plain limbs below the prime; [ffrom] gives them
     back.  Only the byte conversions below use either. *)
 
 fn fto (out a: A.array S64.t)
@@ -257,7 +257,7 @@ ensures A.pts_to a #pa va ** pure (r == (fev va = K.fzero))
   mev_iszero fmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 16sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 8sz |]; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
   r
@@ -279,7 +279,7 @@ ensures exists* (p: perm) (v: Seq.seq S64.t).
   fmod_ok (); fmod_m ();
   limbs_ok (reveal x * pow2 256 % K.prime);
   mev_uniq fmod x (limbs (reveal x * pow2 256 % K.prime));
-  table a 16sz
+  table a 8sz
 }
 
 inline_for_extraction
@@ -328,7 +328,7 @@ ensures exists* (vo': Seq.seq S64.t).
   fmod_ok (); fmod_m ();
   assert_norm (pow2 256 < 2 * K.prime);
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; let mut asv = [| z; 16sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 8sz |]; A.pts_to_len at; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = fnm ();
   let r = abelow at asv nm fmod;
@@ -346,7 +346,7 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (fev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 16sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 8sz |]; A.pts_to_len at; A.pts_to_len at;
   ffrom at a;
   store_be b at;
   ()

@@ -16,10 +16,10 @@
 
 (** Connecting a limb literal to the number it denotes.
 
-    A table of constants is written as a list of sixteen literals, and what
+    A table of constants is written as a list of eight literals, and what
     it has to prove is that those literals are [Spec.Field256]'s [limbs x]
-    -- that is, [Seq.init nl (fun i -> x / 2^16i mod 2^16)].  Proving it
-    index by index means sixteen case splits inside a query that also
+    -- that is, [Seq.init nl (fun i -> x / 2^32i mod 2^32)].  Proving it
+    index by index means eight case splits inside a query that also
     carries [Seq.init], which is slow enough to be unusable.
 
     Going through the value instead costs nothing.  [leval] and [lbnd] are

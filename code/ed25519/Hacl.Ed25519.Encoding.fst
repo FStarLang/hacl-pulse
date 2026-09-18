@@ -47,6 +47,7 @@ module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module U8 = FStar.UInt8
 module U64 = FStar.UInt64
 module UInt = FStar.UInt
@@ -63,17 +64,6 @@ module Tables = Hacl.Ed25519.Tables
 
 (** {2 Two facts about the frozen representation} *)
 
-(** A number below [2^255] has at most fifteen bits in its top limb, which
-    is what leaves room for the sign bit of a compressed point. *)
-let top_limb (s: Seq.seq nat)
-  : Lemma (requires Seq.length s == nl /\ bnd s base /\ eval s < pow2 255)
-          (ensures Seq.index s 15 < pow2 15)
-  = eval_at s 15;
-    Seq.lemma_eq_intro (Seq.slice s 16 16) (Seq.empty #nat);
-    eval_empty (Seq.slice s 16 16);
-    Math.pow2_plus 240 15;
-    assert_norm (rad * 15 == 240)
-
 (** The parity of a number is the parity of its least significant limb,
     the radix being even. *)
 let parity (s: Seq.seq nat)
@@ -84,36 +74,63 @@ let parity (s: Seq.seq nat)
     eval_empty (Seq.slice s 0 0);
     assert_norm (rad * 0 == 0);
     assert_norm (pow2 0 == 1);
-    assert_norm (base == 2 * 32768);
-    Math.lemma_mod_plus (Seq.index s 0) (32768 * eval (Seq.slice s 1 nl)) 2
+    assert_norm (base == 2 * 1125899906842624);
+    Math.lemma_mod_plus (Seq.index s 0) (1125899906842624 * eval (Seq.slice s 1 nl)) 2
 
-(** Writing the sign bit into the top limb adds [2^255] to the value. *)
-let set_top (s: Seq.seq nat) (b: nat { b < 2 })
-  : Lemma (requires Seq.length s == nl /\ bnd s base /\ eval s < pow2 255)
-          (ensures (let s' = Seq.upd s 15 (Seq.index s 15 + b * pow2 15) in
-                    bnd s' base /\ eval s' == eval s + b * pow2 255))
-  = top_limb s;
-    let x : nat = Seq.index s 15 + b * pow2 15 in
-    let s' = Seq.upd s 15 x in
-    eval_upd s 15 x;
-    assert_norm (rad * 15 == 240);
-    Math.distributivity_add_right (pow2 240) (Seq.index s 15) (b * pow2 15);
-    Math.paren_mul_right (pow2 240) b (pow2 15);
-    Math.swap_mul (pow2 240) b;
-    Math.paren_mul_right b (pow2 240) (pow2 15);
-    Math.pow2_plus 240 15;
-    assert (eval s' + pow2 240 * Seq.index s 15 ==
-            eval s + pow2 240 * Seq.index s 15 + b * pow2 255);
-    assert_norm (pow2 15 + pow2 15 == pow2 16);
-    assert_norm (base == pow2 16);
-    assert (bnd s' base)
+(** Writing the sign bit.  At radix [2^51] bit [255] is one past the top of
+    the fifth limb, so the bit goes into the top *byte* rather than the top
+    limb: byte [31] of a number below [2^255] is below [2^7], and adding
+    [b * 2^7] to it adds [b * 2^255] to the number.  Every other byte is
+    untouched, because [b * 2^255] is a multiple of [2^(8i+8)] for [i < 31]. *)
+let set_top_byte (v: nat) (b: nat { b < 2 }) (i: nat { i < 32 })
+  : Lemma (requires v < pow2 255)
+          (ensures S8.v (Seq.index (nat_to_le 32 (v + b * pow2 255)) i) ==
+                   (if i = 31 then S8.v (Seq.index (nat_to_le 32 v) 31) + b * 128
+                              else S8.v (Seq.index (nat_to_le 32 v) i)))
+  = nat_to_le_index 32 v i;
+    nat_to_le_index 32 (v + b * pow2 255) i;
+    if i = 31 then begin
+      assert_norm (8 * 31 == 248);
+      assert_norm (pow2 255 == 128 * pow2 248);
+      Math.paren_mul_right b 128 (pow2 248);
+      Math.lemma_div_plus v (b * 128) (pow2 248);
+      Math.lemma_div_lt_nat v 255 248;
+      assert_norm (pow2 (255 - 248) == 128);
+      Math.small_mod (v / pow2 248 + b * 128) 256
+    end else begin
+      let e : nat = 255 - 8 * i in
+      Math.pow2_plus (8 * i) e;
+      Math.paren_mul_right b (pow2 e) (pow2 (8 * i));
+      Math.lemma_div_plus v (b * pow2 e) (pow2 (8 * i));
+      Math.pow2_plus 8 (e - 8);
+      Math.paren_mul_right b 256 (pow2 (e - 8));
+      Math.swap_mul 256 (pow2 (e - 8));
+      Math.paren_mul_right b (pow2 (e - 8)) 256;
+      Math.lemma_mod_plus (v / pow2 (8 * i)) (b * pow2 (e - 8)) 256
+    end
+
+(** The whole byte string, from the index-wise statement. *)
+let set_top_bytes (v: nat) (b: nat { b < 2 }) (o: Seq.seq S8.t)
+  : Lemma (requires v < pow2 255 /\ Seq.length o == 32 /\
+                    (forall (i: nat). i < 32 ==>
+                       S8.v (Seq.index o i) ==
+                         (if i = 31 then S8.v (Seq.index (nat_to_le 32 v) 31) + b * 128
+                                    else S8.v (Seq.index (nat_to_le 32 v) i))))
+          (ensures o == nat_to_le 32 (v + b * pow2 255))
+  = let aux (i: nat { i < 32 })
+      : Lemma (Seq.index o i == Seq.index (nat_to_le 32 (v + b * pow2 255)) i)
+      = set_top_byte v b i;
+        S8.v_extensional (Seq.index o i)
+                         (Seq.index (nat_to_le 32 (v + b * pow2 255)) i) in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro o (nat_to_le 32 (v + b * pow2 255))
 
 (** Two reduced elements with the same value have the same limbs. *)
 let frozen_unique (a b: Seq.seq nat)
   : Lemma (requires Seq.length a == nl /\ Seq.length b == nl /\
                     bnd a base /\ bnd b base /\ eval a == eval b)
           (ensures a == b)
-  = Sc.limbs_unique a (eval a); Sc.limbs_unique b (eval b)
+  = limbs_unique a (eval a); limbs_unique b (eval b)
 
 (** Reducing a number below twice the prime leaves it alone exactly when
     it was already reduced. *)
@@ -147,14 +164,14 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.pts_to_len a; A.pts_to_len b;
   let mut m = S64.ones;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 16sz)
+  while (let vi = !i; SZ.lt vi 5sz)
   invariant exists* (vi: SZ.t) (mm: S64.t).
     pts_to i vi ** pts_to m mm ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 16 /\
+    pure (SZ.v vi <= 5 /\
           (if (forall (k: nat). k < SZ.v vi ==>
                  Seq.index (vals va) k == Seq.index (vals vb) k)
            then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
-  decreases (16 - SZ.v (!i))
+  decreases (5 - SZ.v (!i))
   {
     let vi = !i;
     let mm = !m;
@@ -242,7 +259,7 @@ ensures exists* (wu ww: Seq.seq S64.t).
 {
   A.pts_to_len u;
   let z = S64.zero;
-  let mut az = [| z; 16sz |]; A.pts_to_len az; let mut ay = [| z; 16sz |]; A.pts_to_len ay; A.pts_to_len az; A.pts_to_len ay;
+  let mut az = [| z; 5sz |]; A.pts_to_len az; let mut ay = [| z; 5sz |]; A.pts_to_len ay; A.pts_to_len az; A.pts_to_len ay;
   P.set_small az 0uL;
   let r = feq a az u ay w;
   r
@@ -297,12 +314,13 @@ ensures exists* (vout': Seq.seq S8.t).
 {
   A.pts_to_len out;
   let zz = S64.zero;
-  let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; let mut a5 = [| zz; 31sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let z128 : S128.t = S128.zero;
+  let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut a5 = [| z128; 9sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5;
 
   finv a1 z;
-  fmul a2 x a1 a5;
-  fmul a3 y a1 a5;
+  fmul a2 x a1;
+  fmul a3 y a1;
   freeze a2 a4;
   freeze a3 a4;
   with ux. assert (A.pts_to a2 ux);
@@ -316,17 +334,31 @@ ensures exists* (vout': Seq.seq S8.t).
   let bit = S64.logand x0 (S64.classify 1uL);
   assert (pure (S64.v bit == eval (vals ux) % 2));
 
-  let hi = A.(a3.(15sz));
-  top_limb (vals uy);
-  assert_norm (pow2 15 + pow2 15 < pow2 64);
-  Math.small_mod (S64.v bit * pow2 15) (pow2 64);
-  let w = addw hi (S64.shift_left bit 15ul);
-  A.((a3.(15sz) <- w));
-  with uy'. assert (A.pts_to a3 uy');
-  vals_upd uy 15 w;
-  set_top (vals uy) (eval (vals ux) % 2);
-
   store out a3;
+  with vo. assert (A.pts_to out vo);
+  A.pts_to_len out;
+  let b31 = A.(out.(31sz));
+  nat_to_le_index 32 (eval (vals uy)) 31;
+  assert_norm (8 * 31 == 248);
+  Math.lemma_div_lt_nat (eval (vals uy)) 255 248;
+  assert_norm (pow2 (255 - 248) == 128);
+  Math.small_mod (eval (vals uy) / pow2 248) 256;
+  assert (pure (S8.v b31 < 128));
+  assert_norm (pow2 7 == 128);
+  Math.small_mod (S64.v bit * 128) (pow2 64);
+  let sh = S64.shift_left bit 7ul;
+  let sb = Cast.u64_to_u8 sh;
+  assert_norm (128 + 128 == 256);
+  Math.small_mod (S8.v b31 + S8.v sb) 256;
+  let w = S8.add_mod b31 sb;
+  A.((out.(31sz) <- w));
+  with vo'. assert (A.pts_to out vo');
+  assert (pure (forall (i: nat). i < 32 ==>
+                  S8.v (Seq.index vo' i) ==
+                    (if i = 31 then S8.v (Seq.index (nat_to_le 32 (eval (vals uy))) 31) +
+                                    (eval (vals ux) % 2) * 128
+                               else S8.v (Seq.index (nat_to_le 32 (eval (vals uy))) i))));
+  set_top_bytes (eval (vals uy)) (eval (vals ux) % 2) vo';
   assert_norm (pow2 255 + pow2 255 == pow2 256);
   ()
 }
@@ -363,14 +395,15 @@ ensures
   pure (r == E.point_equal (P.pt vx1 vy1 vz1 vt1) (P.pt vx2 vy2 vz2 vt2))
 {
   let zz = S64.zero;
-  let mut a1 = [| zz; 16sz |]; A.pts_to_len a1; let mut a2 = [| zz; 16sz |]; A.pts_to_len a2; let mut a3 = [| zz; 16sz |]; A.pts_to_len a3; let mut a4 = [| zz; 16sz |]; A.pts_to_len a4; let mut a5 = [| zz; 16sz |]; A.pts_to_len a5; let mut a6 = [| zz; 31sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let z128 : S128.t = S128.zero;
+  let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut a5 = [| zz; 5sz |]; A.pts_to_len a5; let mut a6 = [| z128; 9sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
 
-  fmul a1 x1 z2 a6;
-  fmul a2 x2 z1 a6;
+  fmul a1 x1 z2;
+  fmul a2 x2 z1;
   let e1 = feq a1 a2 a3 a4 a5;
-  fmul a1 y1 z2 a6;
-  fmul a2 y2 z1 a6;
+  fmul a1 y1 z2;
+  fmul a2 y2 z1;
   let e2 = feq a1 a2 a3 a4 a5;
 
   e1 && e2
@@ -405,8 +438,8 @@ ensures exists* (w: Seq.seq S64.t).
   if c {
     A.pts_to_len a;
     let zz = S64.zero;
-    let mut k1 = [| zz; 16sz |]; A.pts_to_len k1;
-    let mut k2 = [| zz; 16sz |]; A.pts_to_len k2;
+    let mut k1 = [| zz; 5sz |]; A.pts_to_len k1;
+    let mut k2 = [| zz; 5sz |]; A.pts_to_len k2;
     P.set_small k1 0uL;
     copy k2 a;
     fsub a k1 k2
@@ -525,21 +558,23 @@ ensures exists* (wx: Seq.seq S64.t).
 {
   A.pts_to_len ox;
   let zz = S64.zero;
-  let mut b1 = [| zz; 16sz |]; A.pts_to_len b1; let mut b2 = [| zz; 16sz |]; A.pts_to_len b2; let mut b3 = [| zz; 16sz |]; A.pts_to_len b3; let mut b4 = [| zz; 16sz |]; A.pts_to_len b4; let mut b5 = [| zz; 16sz |]; A.pts_to_len b5; let mut b6 = [| zz; 16sz |]; A.pts_to_len b6; let mut b7 = [| zz; 16sz |]; A.pts_to_len b7; let mut b8 = [| zz; 16sz |]; A.pts_to_len b8; let mut b9 = [| zz; 16sz |]; A.pts_to_len b9; let mut ba = [| zz; 31sz |]; A.pts_to_len ba; A.pts_to_len b1; A.pts_to_len b2; A.pts_to_len b3; A.pts_to_len b4;
+  let z128 : S128.t = S128.zero;
+  let mut b1 = [| zz; 5sz |]; A.pts_to_len b1; let mut b2 = [| zz; 5sz |]; A.pts_to_len b2; let mut b3 = [| zz; 5sz |]; A.pts_to_len b3; let mut b4 = [| zz; 5sz |]; A.pts_to_len b4; let mut b5 = [| zz; 5sz |]; A.pts_to_len b5; let mut b6 = [| zz; 5sz |]; A.pts_to_len b6; let mut b7 = [| zz; 5sz |]; A.pts_to_len b7; let mut b8 = [| zz; 5sz |]; A.pts_to_len b8; let mut b9 = [| zz; 5sz |]; A.pts_to_len b9; let mut ba = [| z128; 9sz |]; A.pts_to_len ba; A.pts_to_len b1; A.pts_to_len b2; A.pts_to_len b3; A.pts_to_len b4;
   A.pts_to_len b5; A.pts_to_len b6; A.pts_to_len b7; A.pts_to_len b8;
   A.pts_to_len b9; A.pts_to_len ba;
 
+  assert_norm (1 < base);
   P.set_small b6 1uL;
   C.prime_gt_one ();
 
   (* b1 = y^2, u = b1 - 1, v = d b1 + 1 *)
   copy b7 yb;
-  fmul b1 b7 yb ba;
+  fmul b1 b7 yb;
   fsub b2 b1 b6;
   with su. assert (A.pts_to b2 su);
-  let dt = Table.table Tables.d_arr 16sz;
+  let dt = Table.table Tables.d_arr 5sz;
   Tables.d_ok ();
-  fmul b3 dt b1 ba;
+  fmul b3 dt b1;
   Table.drop_table dt;
   copy b7 b3;
   fadd b3 b7 b6;
@@ -550,25 +585,25 @@ ensures exists* (wx: Seq.seq S64.t).
   (* w = u / v *)
   finv b4 b3;
   copy b7 b4;
-  fmul b4 b2 b7 ba;
+  fmul b4 b2 b7;
   with sw. assert (A.pts_to b4 sw);
 
   (* the first candidate, w^((p+3)/8) *)
   fsqrt b5 b4;
   with sx1. assert (A.pts_to b5 sx1);
   copy b7 b5;
-  fmul b1 b7 b5 ba;
+  fmul b1 b7 b5;
   let ok1 = feq b1 b4 b7 b8 b9;
 
   (* the second, that one times sqrt(-1) *)
-  let sm = Table.table Tables.sqrtm1_arr 16sz;
+  let sm = Table.table Tables.sqrtm1_arr 5sz;
   Tables.sqrtm1_ok ();
   copy b7 b5;
-  fmul b2 b7 sm ba;
+  fmul b2 b7 sm;
   Table.drop_table sm;
   with sx2. assert (A.pts_to b2 sx2);
   copy b7 b2;
-  fmul b1 b7 b2 ba;
+  fmul b1 b7 b2;
   let ok2 = feq b1 b4 b7 b8 b9;
 
   fselect ox b5 b2 ok1;
@@ -629,7 +664,7 @@ let sign_bit (s: Seq.seq S8.t { Seq.length s == 32 })
 
     The coordinates are only meaningful when that boolean is [true]. *)
 
-#push-options "--fuel 0 --ifuel 2 --z3rlimit 200"
+#push-options "--fuel 0 --ifuel 2 --z3rlimit 800"
 
 fn point_decompress (ox oy oz ot: A.array S64.t) (s: A.array S8.t)
                     (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
@@ -653,10 +688,10 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
   A.pts_to_len s;
   let zz = S64.zero;
-  let mut c1 = [| zz; 16sz |]; A.pts_to_len c1; let mut c2 = [| zz; 16sz |]; A.pts_to_len c2; let mut c3 = [| zz; 31sz |]; A.pts_to_len c3; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let z128 : S128.t = S128.zero;
+  let mut c1 = [| zz; 5sz |]; A.pts_to_len c1; let mut c2 = [| zz; 5sz |]; A.pts_to_len c2; let mut c3 = [| z128; 9sz |]; A.pts_to_len c3; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
 
   load oy s;
-  mask_top oy;
   with wy0. assert (A.pts_to oy wy0);
   assert (pure (ble (vals wy0) (base - 1)));
   assert_norm (base - 1 <= lim);
@@ -684,7 +719,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
       assert_norm (1 < base);
       P.set_small oz 1uL;
       copy c1 ox;
-      fmul ot c1 oy c3;
+      fmul ot c1 oy;
       true
     } else {
       false

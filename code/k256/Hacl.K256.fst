@@ -85,7 +85,7 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsign (mqe vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   msg_qelem c0 msg;
   let r = Hacl.K256.Sign.sign out c0 sk nonce;
   r
@@ -111,7 +111,7 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsign (s256 vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   sha256_qelem c0 msg msg_len;
   let r = Hacl.K256.Sign.sign out c0 sk nonce;
   r
@@ -141,7 +141,7 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsignl (mqe vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   msg_qelem c0 msg;
   let r = Hacl.K256.Sign.sign out c0 sk nonce;
   if r {
@@ -172,7 +172,7 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsignl (s256 vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   sha256_qelem c0 msg msg_len;
   let r = Hacl.K256.Sign.sign out c0 sk nonce;
   if r {
@@ -205,7 +205,7 @@ ensures
   pure (res == wverify (mqe vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   msg_qelem c0 msg;
   let res = Hacl.K256.Verify.verify c0 pk sig_r sig_s;
   res
@@ -230,7 +230,7 @@ ensures
   pure (res == wverify (s256 vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   sha256_qelem c0 msg msg_len;
   let res = Hacl.K256.Verify.verify c0 pk sig_r sig_s;
   res
@@ -257,7 +257,7 @@ ensures
   pure (res == wverifyl (mqe vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   msg_qelem c0 msg;
   let lo = Hacl.K256.LowS.is_normalized sig_s;
   if lo {
@@ -287,7 +287,7 @@ ensures
   pure (res == wverifyl (s256 vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 16sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 8sz |]; A.pts_to_len c0; A.pts_to_len c0;
   sha256_qelem c0 msg msg_len;
   let lo = Hacl.K256.LowS.is_normalized sig_s;
   if lo {

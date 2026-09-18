@@ -16,7 +16,7 @@
 
 (** Schoolbook arithmetic on numbers of any length.
 
-    Every function here walks arrays of {!Hacl.Secret.UInt32} limbs, least
+    Every function here walks arrays of {!Hacl.Secret.UInt64} limbs, least
     significant first, with the length given as a {!FStar.SizeT} the caller
     supplies.  There is no state, no allocation and no length limit beyond
     what the machine can address.
@@ -48,15 +48,15 @@ module Hacl.Bignum.Base
 
 open Pulse.Lib.Pervasives
 open Spec.Bignum
-open Hacl.Impl.Limb32
+open Hacl.Impl.Limb64
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
-module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 
 module UInt = FStar.UInt
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -68,42 +68,42 @@ module UInt = FStar.UInt
     that an invariant can talk about a prefix without a slice appearing in
     it. *)
 
-let num (v: Seq.seq S32.t) : GTot nat = eval (vals v)
+let num (v: Seq.seq S64.t) : GTot nat = eval (vals v)
 
-let pre (v: Seq.seq S32.t) (j: nat) : GTot nat =
+let pre (v: Seq.seq S64.t) (j: nat) : GTot nat =
   eval (Seq.slice (vals v) 0 (if j <= Seq.length v then j else Seq.length v))
 
-let pre_zero (v: Seq.seq S32.t) : Lemma (pre v 0 == 0) = eval_empty (Seq.slice (vals v) 0 0)
+let pre_zero (v: Seq.seq S64.t) : Lemma (pre v 0 == 0) = eval_empty (Seq.slice (vals v) 0 0)
 
-let pre_full (v: Seq.seq S32.t) : Lemma (pre v (Seq.length v) == num v)
+let pre_full (v: Seq.seq S64.t) : Lemma (pre v (Seq.length v) == num v)
   = Seq.lemma_eq_intro (Seq.slice (vals v) 0 (Seq.length v)) (vals v)
 
 (** One more limb weighs [wt j].  This is the step of every loop. *)
-let pre_snoc (v: Seq.seq S32.t) (j: nat { j < Seq.length v })
-  : Lemma (pre v (j + 1) == pre v j + wt j * S32.v (Seq.index v j))
+let pre_snoc (v: Seq.seq S64.t) (j: nat { j < Seq.length v })
+  : Lemma (pre v (j + 1) == pre v j + wt j * S64.v (Seq.index v j))
   = eval_snoc (vals v) j
 
 (** Writing limb [k] leaves every shorter prefix alone. *)
-let pre_upd (v: Seq.seq S32.t) (k: nat { k < Seq.length v }) (x: S32.t) (j: nat { j <= k })
+let pre_upd (v: Seq.seq S64.t) (k: nat { k < Seq.length v }) (x: S64.t) (j: nat { j <= k })
   : Lemma (pre (Seq.upd v k x) j == pre v j)
   = vals_upd v k x;
-    eval_upd_above (vals v) k (S32.v x) j
+    eval_upd_above (vals v) k (S64.v x) j
 
 (** A prefix is below its weight, because a limb is below the radix. *)
-let pre_bnd (v: Seq.seq S32.t) (j: nat { j <= Seq.length v })
+let pre_bnd (v: Seq.seq S64.t) (j: nat { j <= Seq.length v })
   : Lemma (pre v j < wt j)
   = eval_bnd_prefix (vals v) j
 
 (** A zeroed prefix denotes zero. *)
-let pre_zeros (v: Seq.seq S32.t) (j: nat { j <= Seq.length v })
-  : Lemma (requires forall (i: nat). i < j ==> S32.v (Seq.index v i) == 0)
+let pre_zeros (v: Seq.seq S64.t) (j: nat { j <= Seq.length v })
+  : Lemma (requires forall (i: nat). i < j ==> S64.v (Seq.index v i) == 0)
           (ensures pre v j == 0)
   = eval_zeros (Seq.slice (vals v) 0 j)
 
 (** A prefix is the number modulo its weight: the low limbs are the low
     digits.  What a reduction loop needs in order to say that the limbs it
     has zeroed really did divide out. *)
-let pre_mod (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
+let pre_mod (v: Seq.seq S64.t) (k: nat { k <= Seq.length v })
   : Lemma (pre v k == num v % wt k)
   = let n = Seq.length v in
     eval_split (vals v) k;
@@ -114,16 +114,16 @@ let pre_mod (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
 
 (** Writing one limb changes the number by the weight of that position
     times the difference.  Stated additively so both sides stay natural. *)
-let num_upd (v: Seq.seq S32.t) (k: nat { k < Seq.length v }) (x: S32.t)
-  : Lemma (num (Seq.upd v k x) + wt k * S32.v (Seq.index v k) ==
-           num v + wt k * S32.v x)
+let num_upd (v: Seq.seq S64.t) (k: nat { k < Seq.length v }) (x: S64.t)
+  : Lemma (num (Seq.upd v k x) + wt k * S64.v (Seq.index v k) ==
+           num v + wt k * S64.v x)
   = vals_upd v k x;
-    eval_upd (vals v) k (S32.v x)
+    eval_upd (vals v) k (S64.v x)
 
 (** Two arrays that agree above limb [k] denote numbers differing by exactly
     what their prefixes differ by.  Stated additively so both sides stay
     natural numbers. *)
-let num_above (u v: Seq.seq S32.t) (k: nat { k <= Seq.length u })
+let num_above (u v: Seq.seq S64.t) (k: nat { k <= Seq.length u })
   : Lemma (requires Seq.length u == Seq.length v /\
                     (forall (j: nat). k <= j /\ j < Seq.length u ==>
                        Seq.index v j == Seq.index u j))
@@ -137,9 +137,9 @@ let num_above (u v: Seq.seq S32.t) (k: nat { k <= Seq.length u })
 
 (** Zeroes above limb [k] contribute nothing, so the number is its own
     prefix.  The dual of {!pre_zeros}. *)
-let num_zeros_above (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
+let num_zeros_above (v: Seq.seq S64.t) (k: nat { k <= Seq.length v })
   : Lemma (requires forall (j: nat). k <= j /\ j < Seq.length v ==>
-                      S32.v (Seq.index v j) == 0)
+                      S64.v (Seq.index v j) == 0)
           (ensures num v == pre v k)
   = let n = Seq.length v in
     eval_split (vals v) k;
@@ -148,8 +148,8 @@ let num_zeros_above (v: Seq.seq S32.t) (k: nat { k <= Seq.length v })
 (** A number is at least any one of its columns.  What a caller needs in
     order to conclude that a modulus with its top limb set is large, without
     evaluating the other two hundred and fifty-five limbs. *)
-let num_top (v: Seq.seq S32.t) (k: nat { k < Seq.length v })
-  : Lemma (num v >= wt k * S32.v (Seq.index v k))
+let num_top (v: Seq.seq S64.t) (k: nat { k < Seq.length v })
+  : Lemma (num v >= wt k * S64.v (Seq.index v k))
   = pre_mod v (k + 1);
     pre_snoc v k;
     Math.lemma_div_mod (num v) (wt (k + 1));
@@ -161,9 +161,9 @@ let num_top (v: Seq.seq S32.t) (k: nat { k < Seq.length v })
     solver does much better on them in isolation than inside a loop body
     that also carries three arrays. *)
 
-let carry_bit (t: S64.t)
-  : Lemma (requires S64.v t < 2 * base) (ensures S32.v (hi t) <= 1)
-  = Math.lemma_div_le (S64.v t) (2 * base - 1) base;
+let carry_bit (t: S128.t)
+  : Lemma (requires S128.v t < 2 * base) (ensures S64.v (hi t) <= 1)
+  = Math.lemma_div_le (S128.v t) (2 * base - 1) base;
     assert_norm ((2 * base - 1) / base == 1)
 
 (** The two facts a column produces, restated in exactly the shape the step
@@ -171,16 +171,16 @@ let carry_bit (t: S64.t)
     solver from having to unfold [diff] and [lo]/[hi] inside a loop body
     that already carries three arrays and a quantifier. *)
 
-let carry_fact (x y c r co: S32.t) (t: S64.t)
-  : Lemma (requires S64.v t == S32.v x + S32.v y + S32.v c /\
-                    S32.v r == S64.v t % base /\ S32.v co == S64.v t / base)
-          (ensures S32.v r + base * S32.v co == S32.v x + S32.v y + S32.v c)
-  = Math.euclidean_division_definition (S64.v t) base
+let carry_fact (x y c r co: S64.t) (t: S128.t)
+  : Lemma (requires S128.v t == S64.v x + S64.v y + S64.v c /\
+                    S64.v r == S128.v t % base /\ S64.v co == S128.v t / base)
+          (ensures S64.v r + base * S64.v co == S64.v x + S64.v y + S64.v c)
+  = Math.euclidean_division_definition (S128.v t) base
 
-let borrow_fact (x y c r h bo: S32.t)
-  : Lemma (requires S32.v h <= 1 /\ S32.v bo == 1 - S32.v h /\
-                    S32.v r == base * (1 - S32.v h) + S32.v x - S32.v y - S32.v c)
-          (ensures S32.v r + S32.v y + S32.v c == base * S32.v bo + S32.v x)
+let borrow_fact (x y c r h bo: S64.t)
+  : Lemma (requires S64.v h <= 1 /\ S64.v bo == 1 - S64.v h /\
+                    S64.v r == base * (1 - S64.v h) + S64.v x - S64.v y - S64.v c)
+          (ensures S64.v r + S64.v y + S64.v c == base * S64.v bo + S64.v x)
   = ()
 
 (** The column of an addition: the running sum grows by the new limb, and
@@ -208,21 +208,21 @@ let sub_step (e ea eb: int) (ai bi ci ri bo: int) (j: nat)
 (** {2 Filling} *)
 
 (** [zero res n] sets all [n] limbs to zero. *)
-fn zero (res: A.array S32.t) (n: SZ.t) (#vres: erased (Seq.seq S32.t))
+fn zero (res: A.array S64.t) (n: SZ.t) (#vres: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** pure (Seq.length vres == SZ.v n)
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v **
   pure (Seq.length v == SZ.v n /\
-        (forall (i: nat). i < Seq.length v ==> S32.v (Seq.index v i) == 0))
+        (forall (i: nat). i < Seq.length v ==> S64.v (Seq.index v i) == 0))
 {
   A.pts_to_len res;
-  let z = S32.zero;
+  let z = S64.zero;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
-          (forall (k: nat). k < SZ.v vi ==> S32.v (Seq.index v k) == 0))
+          (forall (k: nat). k < SZ.v vi ==> S64.v (Seq.index v k) == 0))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
@@ -238,16 +238,16 @@ ensures exists* (v: Seq.seq S32.t).
 
 (** [add res a b n] is [res = a + b] truncated to [n] limbs, returning the
     limb that did not fit.  That limb is zero or one. *)
-fn add (res: A.array S32.t) (a b: A.array S32.t) (n: SZ.t)
-       (#vres: erased (Seq.seq S32.t)) (#pa #pb: perm)
-       (#va #vb: erased (Seq.seq S32.t))
+fn add (res: A.array S64.t) (a b: A.array S64.t) (n: SZ.t)
+       (#vres: erased (Seq.seq S64.t)) (#pa #pb: perm)
+       (#va #vb: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n)
-returns c: S32.t
-ensures exists* (v: Seq.seq S32.t).
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length v == SZ.v n /\ S32.v c <= 1 /\
-        num v + S32.v c * wt (SZ.v n) == num va + num vb)
+  pure (Seq.length v == SZ.v n /\ S64.v c <= 1 /\
+        num v + S64.v c * wt (SZ.v n) == num va + num vb)
 {
   A.pts_to_len res;
   A.pts_to_len a;
@@ -256,12 +256,12 @@ ensures exists* (v: Seq.seq S32.t).
   pre_zero va;
   pre_zero vb;
   let mut i = 0sz;
-  let mut c = S32.zero;
+  let mut c = S64.zero;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to i vi ** pts_to c vc ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S32.v vc <= 1 /\
-          pre v (SZ.v vi) + S32.v vc * wt (SZ.v vi) ==
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S64.v vc <= 1 /\
+          pre v (SZ.v vi) + S64.v vc * wt (SZ.v vi) ==
             pre va (SZ.v vi) + pre vb (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -282,7 +282,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc va (SZ.v vi);
     pre_snoc vb (SZ.v vi);
     add_step (pre v (SZ.v vi)) (pre va (SZ.v vi)) (pre vb (SZ.v vi))
-             (S32.v ai) (S32.v bi) (S32.v vc) (S32.v r) (S32.v co) (SZ.v vi);
+             (S64.v ai) (S64.v bi) (S64.v vc) (S64.v r) (S64.v co) (SZ.v vi);
     c := co;
     i := SZ.add vi 1sz;
   };
@@ -296,25 +296,25 @@ ensures exists* (v: Seq.seq S32.t).
 (** [double res n] is [res += res], returning the limb that did not fit.
     In place, because that is what the doubling chain of {!precomp} wants
     and because the library never allocates. *)
-fn double (res: A.array S32.t) (n: SZ.t) (#vres: erased (Seq.seq S32.t))
+fn double (res: A.array S64.t) (n: SZ.t) (#vres: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** pure (Seq.length vres == SZ.v n)
-returns c: S32.t
-ensures exists* (v: Seq.seq S32.t).
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v **
-  pure (Seq.length v == SZ.v n /\ S32.v c <= 1 /\
-        num v + S32.v c * wt (SZ.v n) == num vres + num vres)
+  pure (Seq.length v == SZ.v n /\ S64.v c <= 1 /\
+        num v + S64.v c * wt (SZ.v n) == num vres + num vres)
 {
   A.pts_to_len res;
   pre_zero vres;
   let mut i = 0sz;
-  let mut c = S32.zero;
+  let mut c = S64.zero;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to i vi ** pts_to c vc ** A.pts_to res v **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S32.v vc <= 1 /\
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S64.v vc <= 1 /\
           (forall (k: nat). SZ.v vi <= k /\ k < Seq.length v ==>
              Seq.index v k == Seq.index vres k) /\
-          pre v (SZ.v vi) + S32.v vc * wt (SZ.v vi) ==
+          pre v (SZ.v vi) + S64.v vc * wt (SZ.v vi) ==
             pre vres (SZ.v vi) + pre vres (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -333,7 +333,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc (Seq.upd v (SZ.v vi) r) (SZ.v vi);
     pre_snoc vres (SZ.v vi);
     add_step (pre v (SZ.v vi)) (pre vres (SZ.v vi)) (pre vres (SZ.v vi))
-             (S32.v xi) (S32.v xi) (S32.v vc) (S32.v r) (S32.v co) (SZ.v vi);
+             (S64.v xi) (S64.v xi) (S64.v vc) (S64.v r) (S64.v co) (SZ.v vi);
     c := co;
     i := SZ.add vi 1sz;
   };
@@ -345,16 +345,16 @@ ensures exists* (v: Seq.seq S32.t).
 
 (** [sub res a b n] is [res = a - b] with a borrow: the returned limb is one
     exactly when [b] was the larger. *)
-fn sub (res: A.array S32.t) (a b: A.array S32.t) (n: SZ.t)
-       (#vres: erased (Seq.seq S32.t)) (#pa #pb: perm)
-       (#va #vb: erased (Seq.seq S32.t))
+fn sub (res: A.array S64.t) (a b: A.array S64.t) (n: SZ.t)
+       (#vres: erased (Seq.seq S64.t)) (#pa #pb: perm)
+       (#va #vb: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n)
-returns c: S32.t
-ensures exists* (v: Seq.seq S32.t).
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length v == SZ.v n /\ S32.v c <= 1 /\
-        num va + S32.v c * wt (SZ.v n) == num v + num vb)
+  pure (Seq.length v == SZ.v n /\ S64.v c <= 1 /\
+        num va + S64.v c * wt (SZ.v n) == num v + num vb)
 {
   A.pts_to_len res;
   A.pts_to_len a;
@@ -363,12 +363,12 @@ ensures exists* (v: Seq.seq S32.t).
   pre_zero va;
   pre_zero vb;
   let mut i = 0sz;
-  let mut c = S32.zero;
+  let mut c = S64.zero;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to i vi ** pts_to c vc ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S32.v vc <= 1 /\
-          pre va (SZ.v vi) + S32.v vc * wt (SZ.v vi) ==
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S64.v vc <= 1 /\
+          pre va (SZ.v vi) + S64.v vc * wt (SZ.v vi) ==
             pre v (SZ.v vi) + pre vb (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -389,7 +389,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc va (SZ.v vi);
     pre_snoc vb (SZ.v vi);
     sub_step (pre v (SZ.v vi)) (pre va (SZ.v vi)) (pre vb (SZ.v vi))
-             (S32.v ai) (S32.v bi) (S32.v vc) (S32.v r) (S32.v bo) (SZ.v vi);
+             (S64.v ai) (S64.v bi) (S64.v vc) (S64.v r) (S64.v bo) (SZ.v vi);
     c := bo;
     i := SZ.add vi 1sz;
   };
@@ -413,29 +413,29 @@ ensures exists* (v: Seq.seq S32.t).
 #push-options "--z3rlimit 1000"
 
 (** [sub_from res b n] is [res -= b], returning the borrow. *)
-fn sub_from (res: A.array S32.t) (b: A.array S32.t) (n: SZ.t)
-            (#vres: erased (Seq.seq S32.t)) (#pb: perm) (#vb: erased (Seq.seq S32.t))
+fn sub_from (res: A.array S64.t) (b: A.array S64.t) (n: SZ.t)
+            (#vres: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to b #pb vb **
   pure (Seq.length vres == SZ.v n /\ Seq.length vb == SZ.v n)
-returns c: S32.t
-ensures exists* (v: Seq.seq S32.t).
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to b #pb vb **
-  pure (Seq.length v == SZ.v n /\ S32.v c <= 1 /\
-        num vres + S32.v c * wt (SZ.v n) == num v + num vb)
+  pure (Seq.length v == SZ.v n /\ S64.v c <= 1 /\
+        num vres + S64.v c * wt (SZ.v n) == num v + num vb)
 {
   A.pts_to_len res;
   A.pts_to_len b;
   pre_zero vres;
   pre_zero vb;
   let mut i = 0sz;
-  let mut c = S32.zero;
+  let mut c = S64.zero;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to i vi ** pts_to c vc ** A.pts_to res v ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S32.v vc <= 1 /\
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S64.v vc <= 1 /\
           (forall (k: nat). SZ.v vi <= k /\ k < SZ.v n ==>
              Seq.index v k == Seq.index vres k) /\
-          pre vres (SZ.v vi) + S32.v vc * wt (SZ.v vi) ==
+          pre vres (SZ.v vi) + S64.v vc * wt (SZ.v vi) ==
             pre v (SZ.v vi) + pre vb (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -456,7 +456,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc vres (SZ.v vi);
     pre_snoc vb (SZ.v vi);
     sub_step (pre v (SZ.v vi)) (pre vres (SZ.v vi)) (pre vb (SZ.v vi))
-             (S32.v ai) (S32.v bi) (S32.v vc) (S32.v r) (S32.v bo) (SZ.v vi);
+             (S64.v ai) (S64.v bi) (S64.v vc) (S64.v r) (S64.v bo) (SZ.v vi);
     c := bo;
     i := SZ.add vi 1sz;
   };
@@ -468,28 +468,28 @@ ensures exists* (v: Seq.seq S32.t).
 }
 
 (** A mask is all ones or all zeroes. *)
-let is_mask (m: S32.t) : prop = S32.v m == 0 \/ S32.v m == pow2 32 - 1
+let is_mask (m: S64.t) : prop = S64.v m == 0 \/ S64.v m == pow2 64 - 1
 
 (** The number a mask stands for, as a parameter rather than a definition.
     Writing [if v m = 0 then 0 else 1] inline would make every product in
     the loop below a conditional, and the solver splits on those; an opaque
     [k] bounded by one does not. *)
-let stands_for (m: S32.t) (k: nat) : prop =
-  k <= 1 /\ (S32.v m == 0 ==> k == 0) /\ (~(S32.v m == 0) ==> k == 1)
+let stands_for (m: S64.t) (k: nat) : prop =
+  k <= 1 /\ (S64.v m == 0 ==> k == 0) /\ (~(S64.v m == 0) ==> k == 1)
 
 inline_for_extraction
-let masked (m x: S32.t)
-  : Pure S32.t (requires is_mask m) (ensures fun r -> r == (if S32.v m = 0 then S32.zero else x))
-  = S32.select m x S32.zero
+let masked (m x: S64.t)
+  : Pure S64.t (requires is_mask m) (ensures fun r -> r == (if S64.v m = 0 then S64.zero else x))
+  = S64.select m x S64.zero
 
 (** The multiplier a mask stands for, for the call sites to hand over. *)
-let mask_bit (m: S32.t) : GTot nat = if S32.v m = 0 then 0 else 1
+let mask_bit (m: S64.t) : GTot nat = if S64.v m = 0 then 0 else 1
 
-let mask_bit_ok (m: S32.t) : Lemma (stands_for m (mask_bit m)) = ()
+let mask_bit_ok (m: S64.t) : Lemma (stands_for m (mask_bit m)) = ()
 
-let masked_val (m x: S32.t) (k: nat)
+let masked_val (m x: S64.t) (k: nat)
   : Lemma (requires is_mask m /\ stands_for m k)
-          (ensures S32.v (masked m x) == k * S32.v x)
+          (ensures S64.v (masked m x) == k * S64.v x)
   = ()
 
 (** Multiplying a running total by the same constant on both sides. *)
@@ -503,30 +503,30 @@ let scale_snoc (k e w x: int) : Lemma (k * (e + w * x) == k * e + w * (k * x))
 
 (** [add_masked res b n m] is [res += b] if [m] is all ones and nothing at
     all if [m] is all zeroes, in the same time either way. *)
-fn add_masked (res: A.array S32.t) (b: A.array S32.t) (n: SZ.t) (m: S32.t) (k: erased nat)
-              (#vres: erased (Seq.seq S32.t)) (#pb: perm) (#vb: erased (Seq.seq S32.t))
+fn add_masked (res: A.array S64.t) (b: A.array S64.t) (n: SZ.t) (m: S64.t) (k: erased nat)
+              (#vres: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to b #pb vb **
   pure (Seq.length vres == SZ.v n /\ Seq.length vb == SZ.v n /\
         is_mask m /\ stands_for m (reveal k))
-returns c: S32.t
-ensures exists* (v: Seq.seq S32.t).
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to b #pb vb **
-  pure (Seq.length v == SZ.v n /\ S32.v c <= 1 /\
-        num v + S32.v c * wt (SZ.v n) == num vres + reveal k * num vb)
+  pure (Seq.length v == SZ.v n /\ S64.v c <= 1 /\
+        num v + S64.v c * wt (SZ.v n) == num vres + reveal k * num vb)
 {
   A.pts_to_len res;
   A.pts_to_len b;
   pre_zero vres;
   pre_zero vb;
   let mut i = 0sz;
-  let mut c = S32.zero;
+  let mut c = S64.zero;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to i vi ** pts_to c vc ** A.pts_to res v ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S32.v vc <= 1 /\
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\ S64.v vc <= 1 /\
           (forall (j: nat). SZ.v vi <= j /\ j < SZ.v n ==>
              Seq.index v j == Seq.index vres j) /\
-          pre v (SZ.v vi) + S32.v vc * wt (SZ.v vi) ==
+          pre v (SZ.v vi) + S64.v vc * wt (SZ.v vi) ==
             pre vres (SZ.v vi) + reveal k * pre vb (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -548,9 +548,9 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc (Seq.upd v (SZ.v vi) r) (SZ.v vi);
     pre_snoc vres (SZ.v vi);
     pre_snoc vb (SZ.v vi);
-    scale_snoc (reveal k) (pre vb (SZ.v vi)) (wt (SZ.v vi)) (S32.v bi);
+    scale_snoc (reveal k) (pre vb (SZ.v vi)) (wt (SZ.v vi)) (S64.v bi);
     add_step (pre v (SZ.v vi)) (pre vres (SZ.v vi)) (reveal k * pre vb (SZ.v vi))
-             (S32.v ai) (S32.v mi) (S32.v vc) (S32.v r) (S32.v co) (SZ.v vi);
+             (S64.v ai) (S64.v mi) (S64.v vc) (S64.v r) (S64.v co) (SZ.v vi);
     c := co;
     i := SZ.add vi 1sz;
   };
@@ -573,15 +573,15 @@ ensures exists* (v: Seq.seq S32.t).
     already reduced, which is the precondition HACL* states too. *)
 
 (** [add_mod res a b m n] is [res = (a + b) mod m]. *)
-fn add_mod (res: A.array S32.t) (a b m: A.array S32.t) (n: SZ.t)
-           (#vres: erased (Seq.seq S32.t)) (#pa #pb #pm: perm)
-           (#va #vb: erased (Seq.seq S32.t))
-           (#vm: erased (s: Seq.seq S32.t { 0 < num s }))
+fn add_mod (res: A.array S64.t) (a b m: A.array S64.t) (n: SZ.t)
+           (#vres: erased (Seq.seq S64.t)) (#pa #pb #pm: perm)
+           (#va #vb: erased (Seq.seq S64.t))
+           (#vm: erased (s: Seq.seq S64.t { 0 < num s }))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb ** A.pts_to m #pm vm **
   pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n /\
         Seq.length vb == SZ.v n /\ Seq.length vm == SZ.v n /\
         num va < num vm /\ num vb < num vm)
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb ** A.pts_to m #pm vm **
   pure (Seq.length v == SZ.v n /\ num v == (num va + num vb) % num vm)
 {
@@ -600,7 +600,7 @@ ensures exists* (v: Seq.seq S32.t).
      modulus has to go back in.  The other impossible combination, a carry
      out of the sum but none out of the subtraction, is ruled out by the
      bound on [v2]. *)
-  let mask = S32.lt_mask c0 c1;
+  let mask = S64.lt_mask c0 c1;
   mask_bit_ok mask;
   let c2 = add_masked res m n mask (hide (mask_bit mask));
   with v3. assert (A.pts_to res v3);
@@ -610,12 +610,12 @@ ensures exists* (v: Seq.seq S32.t).
 }
 
 (** [double_mod res m n] is [res = (res + res) mod m], in place. *)
-fn double_mod (res: A.array S32.t) (m: A.array S32.t) (n: SZ.t)
-              (#vres: erased (Seq.seq S32.t)) (#pm: perm)
-              (#vm: erased (s: Seq.seq S32.t { 0 < num s }))
+fn double_mod (res: A.array S64.t) (m: A.array S64.t) (n: SZ.t)
+              (#vres: erased (Seq.seq S64.t)) (#pm: perm)
+              (#vm: erased (s: Seq.seq S64.t { 0 < num s }))
 requires A.pts_to res vres ** A.pts_to m #pm vm **
   pure (Seq.length vres == SZ.v n /\ Seq.length vm == SZ.v n /\ num vres < num vm)
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to m #pm vm **
   pure (Seq.length v == SZ.v n /\ num v == (num vres + num vres) % num vm)
 {
@@ -628,7 +628,7 @@ ensures exists* (v: Seq.seq S32.t).
   let c1 = sub_from res m n;
   with v2. assert (A.pts_to res v2);
   eval_bnd (vals v2);
-  let mask = S32.lt_mask c0 c1;
+  let mask = S64.lt_mask c0 c1;
   mask_bit_ok mask;
   let c2 = add_masked res m n mask (hide (mask_bit mask));
   with v3. assert (A.pts_to res v3);
@@ -638,15 +638,15 @@ ensures exists* (v: Seq.seq S32.t).
 }
 
 (** [sub_mod res a b m n] is [res = (a - b) mod m]. *)
-fn sub_mod (res: A.array S32.t) (a b m: A.array S32.t) (n: SZ.t)
-           (#vres: erased (Seq.seq S32.t)) (#pa #pb #pm: perm)
-           (#va #vb: erased (Seq.seq S32.t))
-           (#vm: erased (s: Seq.seq S32.t { 0 < num s }))
+fn sub_mod (res: A.array S64.t) (a b m: A.array S64.t) (n: SZ.t)
+           (#vres: erased (Seq.seq S64.t)) (#pa #pb #pm: perm)
+           (#va #vb: erased (Seq.seq S64.t))
+           (#vm: erased (s: Seq.seq S64.t { 0 < num s }))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb ** A.pts_to m #pm vm **
   pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n /\
         Seq.length vb == SZ.v n /\ Seq.length vm == SZ.v n /\
         num va < num vm /\ num vb < num vm)
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb ** A.pts_to m #pm vm **
   pure (Seq.length v == SZ.v n /\ num v == (num va - num vb) % num vm)
 {
@@ -660,7 +660,7 @@ ensures exists* (v: Seq.seq S32.t).
   eval_bnd (vals v1);
   (* A borrow means the difference went negative, and exactly one modulus
      brings it back. *)
-  let mask = S32.eq_mask c0 (S32.classify 1ul);
+  let mask = S64.eq_mask c0 (S64.classify 1uL);
   mask_bit_ok mask;
   let c2 = add_masked res m n mask (hide (mask_bit mask));
   with v2. assert (A.pts_to res v2);
@@ -675,25 +675,25 @@ ensures exists* (v: Seq.seq S32.t).
     every limb whatever the answer is. *)
 
 (** All ones if [a < b], all zeroes otherwise. *)
-fn lt_mask (a b: A.array S32.t) (n: SZ.t) (#pa #pb: perm)
-           (#va #vb: erased (Seq.seq S32.t))
+fn lt_mask (a b: A.array S64.t) (n: SZ.t) (#pa #pb: perm)
+           (#va #vb: erased (Seq.seq S64.t))
 requires A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n)
-returns r: S32.t
+returns r: S64.t
 ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (is_mask r /\ (num va < num vb <==> S32.v r == pow2 32 - 1))
+  pure (is_mask r /\ (num va < num vb <==> S64.v r == pow2 64 - 1))
 {
   A.pts_to_len a;
   A.pts_to_len b;
   pre_zero va;
   pre_zero vb;
   let mut i = 0sz;
-  let mut acc = S32.zero;
+  let mut acc = S64.zero;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vacc: S32.t).
+  invariant exists* (vi: SZ.t) (vacc: S64.t).
     pts_to i vi ** pts_to acc vacc ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= SZ.v n /\ is_mask vacc /\
-          (pre va (SZ.v vi) < pre vb (SZ.v vi) <==> S32.v vacc == pow2 32 - 1))
+          (pre va (SZ.v vi) < pre vb (SZ.v vi) <==> S64.v vacc == pow2 64 - 1))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
@@ -703,7 +703,7 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
     eval_lt_snoc (vals va) (vals vb) (SZ.v vi);
     pre_snoc va (SZ.v vi);
     pre_snoc vb (SZ.v vi);
-    acc := S32.select (S32.eq_mask ai bi) vacc (S32.lt_mask ai bi);
+    acc := S64.select (S64.eq_mask ai bi) vacc (S64.lt_mask ai bi);
     i := SZ.add vi 1sz;
   };
   pre_full va;
@@ -712,32 +712,32 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
 }
 
 (** All ones if [a == b], all zeroes otherwise. *)
-fn eq_mask (a b: A.array S32.t) (n: SZ.t) (#pa #pb: perm)
-           (#va #vb: erased (Seq.seq S32.t))
+fn eq_mask (a b: A.array S64.t) (n: SZ.t) (#pa #pb: perm)
+           (#va #vb: erased (Seq.seq S64.t))
 requires A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length va == SZ.v n /\ Seq.length vb == SZ.v n)
-returns r: S32.t
+returns r: S64.t
 ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (is_mask r /\ (num va == num vb <==> S32.v r == pow2 32 - 1))
+  pure (is_mask r /\ (num va == num vb <==> S64.v r == pow2 64 - 1))
 {
   A.pts_to_len a;
   A.pts_to_len b;
   let mut i = 0sz;
-  let mut acc = S32.ones;
+  let mut acc = S64.ones;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (vacc: S32.t).
+  invariant exists* (vi: SZ.t) (vacc: S64.t).
     pts_to i vi ** pts_to acc vacc ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= SZ.v n /\ is_mask vacc /\
           ((forall (k: nat). k < SZ.v vi ==>
-              S32.v (Seq.index va k) == S32.v (Seq.index vb k)) <==>
-           S32.v vacc == pow2 32 - 1))
+              S64.v (Seq.index va k) == S64.v (Seq.index vb k)) <==>
+           S64.v vacc == pow2 64 - 1))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
     let vacc = !acc;
     let ai = A.(a.(vi));
     let bi = A.(b.(vi));
-    acc := S32.select (S32.eq_mask ai bi) vacc S32.zero;
+    acc := S64.select (S64.eq_mask ai bi) vacc S64.zero;
     i := SZ.add vi 1sz;
   };
   eval_eq (vals va) (vals vb);
@@ -776,33 +776,33 @@ let row_step (e er eva: int) (aj bi r ci ri co: int) (off j: nat)
 
 (** [mul_row res a n bi off] is [res += a * bi * base^off], returning the
     limb that came out of the top of the window. *)
-fn mul_row (res: A.array S32.t) (a: A.array S32.t) (n: SZ.t) (bi: S32.t) (off: SZ.t)
-           (#vres: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+fn mul_row (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t) (bi: S64.t) (off: SZ.t)
+           (#vres: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va **
   pure (Seq.length va == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vres /\
         SZ.fits (SZ.v off + SZ.v n))
-returns c: S32.t
-ensures exists* (v: Seq.seq S32.t).
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va **
-  pure (Seq.length v == Seq.length vres /\ S32.v c < base /\
+  pure (Seq.length v == Seq.length vres /\ S64.v c < base /\
         (forall (k: nat). SZ.v off + SZ.v n <= k /\ k < Seq.length v ==>
            Seq.index v k == Seq.index vres k) /\
-        pre v (SZ.v off + SZ.v n) + S32.v c * wt (SZ.v off + SZ.v n) ==
-          pre vres (SZ.v off + SZ.v n) + (num va * S32.v bi) * wt (SZ.v off))
+        pre v (SZ.v off + SZ.v n) + S64.v c * wt (SZ.v off + SZ.v n) ==
+          pre vres (SZ.v off + SZ.v n) + (num va * S64.v bi) * wt (SZ.v off))
 {
   A.pts_to_len res;
   A.pts_to_len a;
   pre_zero va;
   let mut j = 0sz;
-  let mut c = S32.zero;
+  let mut c = S64.zero;
   while (let vj = !j; SZ.lt vj n)
-  invariant exists* (vj: SZ.t) (vc: S32.t) (v: Seq.seq S32.t).
+  invariant exists* (vj: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to j vj ** pts_to c vc ** A.pts_to res v ** A.pts_to a #pa va **
     pure (SZ.v vj <= SZ.v n /\ Seq.length v == Seq.length vres /\
             (forall (k: nat). SZ.v off + SZ.v vj <= k /\ k < Seq.length v ==>
              Seq.index v k == Seq.index vres k) /\
-          pre v (SZ.v off + SZ.v vj) + S32.v vc * wt (SZ.v off + SZ.v vj) ==
-            pre vres (SZ.v off + SZ.v vj) + (pre va (SZ.v vj) * S32.v bi) * wt (SZ.v off))
+          pre v (SZ.v off + SZ.v vj) + S64.v vc * wt (SZ.v off + SZ.v vj) ==
+            pre vres (SZ.v off + SZ.v vj) + (pre va (SZ.v vj) * S64.v bi) * wt (SZ.v off))
   decreases (SZ.v n - SZ.v (!j))
   {
     with v. assert (A.pts_to res v);
@@ -821,7 +821,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_snoc vres (SZ.v pos);
     pre_snoc va (SZ.v vj);
     row_step (pre v (SZ.v pos)) (pre vres (SZ.v pos)) (pre va (SZ.v vj))
-             (S32.v aj) (S32.v bi) (S32.v rj) (S32.v vc) (S32.v r) (S32.v co)
+             (S64.v aj) (S64.v bi) (S64.v rj) (S64.v vc) (S64.v r) (S64.v co)
              (SZ.v off) (SZ.v vj);
     c := co;
     j := SZ.add vj 1sz;
@@ -836,9 +836,9 @@ ensures exists* (v: Seq.seq S32.t).
 
 (** Nothing above the cursor has been written yet, so the limb the carry is
     about to occupy is still zero. *)
-let pre_carry (v: Seq.seq S32.t) (k: nat { k < Seq.length v }) (c: S32.t)
-  : Lemma (requires S32.v (Seq.index v k) == 0)
-          (ensures pre (Seq.upd v k c) (k + 1) == pre v k + wt k * S32.v c)
+let pre_carry (v: Seq.seq S64.t) (k: nat { k < Seq.length v }) (c: S64.t)
+  : Lemma (requires S64.v (Seq.index v k) == 0)
+          (ensures pre (Seq.upd v k c) (k + 1) == pre v k + wt k * S64.v c)
   = pre_upd v k c k;
     pre_snoc (Seq.upd v k c) k;
     pre_snoc v k
@@ -857,13 +857,13 @@ let mul_outer_step (p pold evb bi c nva wi wpos: int)
 #push-options "--z3rlimit 600"
 
 (** [mul res a b n] is the [2n]-limb product of two [n]-limb numbers. *)
-fn mul (res: A.array S32.t) (a b: A.array S32.t) (n: SZ.t)
-       (#vres: erased (Seq.seq S32.t)) (#pa #pb: perm)
-       (#va #vb: erased (Seq.seq S32.t))
+fn mul (res: A.array S64.t) (a b: A.array S64.t) (n: SZ.t)
+       (#vres: erased (Seq.seq S64.t)) (#pa #pb: perm)
+       (#va #vb: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length vres == SZ.v n + SZ.v n /\ Seq.length va == SZ.v n /\
         Seq.length vb == SZ.v n /\ SZ.fits (SZ.v n + SZ.v n))
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (Seq.length v == SZ.v n + SZ.v n /\ num v == num va * num vb)
 {
@@ -876,11 +876,11 @@ ensures exists* (v: Seq.seq S32.t).
   pre_zero vb;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n + SZ.v n /\
           (forall (k: nat). SZ.v n + SZ.v vi <= k /\ k < Seq.length v ==>
-             S32.v (Seq.index v k) == 0) /\
+             S64.v (Seq.index v k) == 0) /\
           pre v (SZ.v n + SZ.v vi) == num va * pre vb (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -894,7 +894,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_carry v (SZ.v pos) c;
     pre_snoc vb (SZ.v vi);
     mul_outer_step (pre v (SZ.v pos)) (pre vold (SZ.v pos)) (pre vb (SZ.v vi))
-                   (S32.v bi) (S32.v c) (num va) (wt (SZ.v vi)) (wt (SZ.v pos));
+                   (S64.v bi) (S64.v c) (num va) (wt (SZ.v vi)) (wt (SZ.v pos));
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to res v);
@@ -906,12 +906,12 @@ ensures exists* (v: Seq.seq S32.t).
 (** [sqr res a n] is [a * a].  It is the same loop as {!mul} with both
     operands taken from the same array, which costs nothing extra here
     because no limb of [a] is written. *)
-fn sqr (res: A.array S32.t) (a: A.array S32.t) (n: SZ.t)
-       (#vres: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+fn sqr (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t)
+       (#vres: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va **
   pure (Seq.length vres == SZ.v n + SZ.v n /\ Seq.length va == SZ.v n /\
         SZ.fits (SZ.v n + SZ.v n))
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va **
   pure (Seq.length v == SZ.v n + SZ.v n /\ num v == num va * num va)
 {
@@ -923,11 +923,11 @@ ensures exists* (v: Seq.seq S32.t).
   pre_zero va;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n + SZ.v n /\
           (forall (k: nat). SZ.v n + SZ.v vi <= k /\ k < Seq.length v ==>
-             S32.v (Seq.index v k) == 0) /\
+             S64.v (Seq.index v k) == 0) /\
           pre v (SZ.v n + SZ.v vi) == num va * pre va (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
@@ -941,7 +941,7 @@ ensures exists* (v: Seq.seq S32.t).
     pre_carry v (SZ.v pos) c;
     pre_snoc va (SZ.v vi);
     mul_outer_step (pre v (SZ.v pos)) (pre vold (SZ.v pos)) (pre va (SZ.v vi))
-                   (S32.v bi) (S32.v c) (num va) (wt (SZ.v vi)) (wt (SZ.v pos));
+                   (S64.v bi) (S64.v c) (num va) (wt (SZ.v vi)) (wt (SZ.v pos));
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to res v);
@@ -962,18 +962,18 @@ ensures exists* (v: Seq.seq S32.t).
     without letting its value reach the control flow. *)
 
 (** [copy res a n] is [res = a]. *)
-fn copy (res: A.array S32.t) (a: A.array S32.t) (n: SZ.t)
-        (#vres: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+fn copy (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t)
+        (#vres: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va **
   pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n)
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va ** pure (v == reveal va)
 {
   A.pts_to_len res;
   A.pts_to_len a;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
           (forall (k: nat). k < SZ.v vi /\ k < Seq.length v ==>
@@ -990,7 +990,7 @@ ensures exists* (v: Seq.seq S32.t).
   ()
 }
 
-let sel_eq (v va vres: Seq.seq S32.t) (k: nat)
+let sel_eq (v va vres: Seq.seq S64.t) (k: nat)
   : Lemma (requires Seq.length v == Seq.length va /\
                     Seq.length v == Seq.length vres /\
                     (forall (j: nat). j < Seq.length v ==>
@@ -1001,12 +1001,12 @@ let sel_eq (v va vres: Seq.seq S32.t) (k: nat)
 
 (** [cselect res a n m k] is [res = a] if the mask is all ones and leaves
     [res] alone if it is all zeroes, in the same time either way. *)
-fn cselect (res: A.array S32.t) (a: A.array S32.t) (n: SZ.t) (m: S32.t) (k: erased nat)
-           (#vres: erased (Seq.seq S32.t)) (#pa: perm) (#va: erased (Seq.seq S32.t))
+fn cselect (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t) (m: S64.t) (k: erased nat)
+           (#vres: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va **
   pure (Seq.length vres == SZ.v n /\ Seq.length va == SZ.v n /\
         is_mask m /\ stands_for m (reveal k))
-ensures exists* (v: Seq.seq S32.t).
+ensures exists* (v: Seq.seq S64.t).
   A.pts_to res v ** A.pts_to a #pa va **
   pure ((reveal k == 1 ==> v == reveal va) /\
         (reveal k == 0 ==> v == reveal vres))
@@ -1015,7 +1015,7 @@ ensures exists* (v: Seq.seq S32.t).
   A.pts_to_len a;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S32.t).
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
           (forall (k2: nat). k2 < SZ.v vi /\ k2 < Seq.length v ==>
@@ -1029,7 +1029,7 @@ ensures exists* (v: Seq.seq S32.t).
     let vi = !i;
     let ai = A.(a.(vi));
     let ri = A.(res.(vi));
-    A.((res.(vi) <- S32.select m ai ri));
+    A.((res.(vi) <- S64.select m ai ri));
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to res v);
@@ -1039,79 +1039,79 @@ ensures exists* (v: Seq.seq S32.t).
 
 (** Limb [q] is the number divided by that limb's weight, modulo the
     radix: exactly the digit it looks like. *)
-let num_digit (v: Seq.seq S32.t) (q: nat { q < Seq.length v })
-  : Lemma (num v / wt q % base == S32.v (Seq.index v q))
+let num_digit (v: Seq.seq S64.t) (q: nat { q < Seq.length v })
+  : Lemma (num v / wt q % base == S64.v (Seq.index v q))
   = let n = Seq.length v in
-    let hi = S32.v (Seq.index v q) + base * eval (Seq.slice (vals v) (q + 1) n) in
+    let hi = S64.v (Seq.index v q) + base * eval (Seq.slice (vals v) (q + 1) n) in
     eval_at (vals v) q;
     pre_bnd v q;
     Math.lemma_div_plus (pre v q) hi (wt q);
     Math.small_div (pre v q) (wt q);
-    Math.lemma_mod_plus (S32.v (Seq.index v q))
+    Math.lemma_mod_plus (S64.v (Seq.index v q))
       (eval (Seq.slice (vals v) (q + 1) n)) base;
-    Math.small_mod (S32.v (Seq.index v q)) base
+    Math.small_mod (S64.v (Seq.index v q)) base
 
 (** Shifting a limb out of the number and shifting inside the limb are
     the same shift. *)
-let shift_in_limb (x: nat) (r: nat { r < 32 })
-  : Lemma ((x % pow2 32) / pow2 r % 2 == x / pow2 r % 2)
+let shift_in_limb (x: nat) (r: nat { r < 64 })
+  : Lemma ((x % pow2 64) / pow2 r % 2 == x / pow2 r % 2)
   = assert_norm (pow2 1 == 2);
-    Math.pow2_modulo_division_lemma_1 x r 32;
-    Math.pow2_modulo_modulo_lemma_1 (x / pow2 r) 1 (32 - r)
+    Math.pow2_modulo_division_lemma_1 x r 64;
+    Math.pow2_modulo_modulo_lemma_1 (x / pow2 r) 1 (64 - r)
 
-(** Shifting down by [i] is shifting down to limb [i / 32] and then by the
+(** Shifting down by [i] is shifting down to limb [i / 64] and then by the
     remainder. *)
 let shift_num (n: nat) (q: nat) (r: nat)
   : Lemma (n / pow2 (rad * q + r) == (n / wt q) / pow2 r)
   = Math.pow2_plus (rad * q) r;
     Math.division_multiplication_lemma n (wt q) (pow2 r)
 
-(** Bit [i] of the number is bit [i mod 32] of limb [i / 32]. *)
-let num_bit (v: Seq.seq S32.t) (i: nat { i / 32 < Seq.length v })
-  : Lemma (S32.v (Seq.index v (i / 32)) / pow2 (i % 32) % 2 == num v / pow2 i % 2)
-  = let q = i / 32 in
-    let r = i % 32 in
+(** Bit [i] of the number is bit [i mod 64] of limb [i / 64]. *)
+let num_bit (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
+  : Lemma (S64.v (Seq.index v (i / 64)) / pow2 (i % 64) % 2 == num v / pow2 i % 2)
+  = let q = i / 64 in
+    let r = i % 64 in
     num_digit v q;
-    assert (num v / wt q % pow2 32 == S32.v (Seq.index v q));
+    assert (num v / wt q % pow2 64 == S64.v (Seq.index v q));
     shift_in_limb (num v / wt q) r;
-    assert (S32.v (Seq.index v q) / pow2 r % 2 == (num v / wt q) / pow2 r % 2);
-    Math.euclidean_division_definition i 32;
+    assert (S64.v (Seq.index v q) / pow2 r % 2 == (num v / wt q) / pow2 r % 2);
+    Math.euclidean_division_definition i 64;
     assert (rad * q + r == i);
     shift_num (num v) q r;
     assert (num v / pow2 i == (num v / wt q) / pow2 r)
 
 (** Comparing a limb known to be zero or one against one turns it into a
     mask standing for that very value. *)
-let bit_mask (bit one m: S32.t) (k: nat)
-  : Lemma (requires k < 2 /\ S32.v bit == k /\ S32.v one == 1 /\
-                    (S32.v bit == S32.v one ==> S32.v m == pow2 32 - 1) /\
-                    (S32.v bit =!= S32.v one ==> S32.v m == 0))
+let bit_mask (bit one m: S64.t) (k: nat)
+  : Lemma (requires k < 2 /\ S64.v bit == k /\ S64.v one == 1 /\
+                    (S64.v bit == S64.v one ==> S64.v m == pow2 64 - 1) /\
+                    (S64.v bit =!= S64.v one ==> S64.v m == 0))
           (ensures is_mask m /\ stands_for m k)
-  = assert_norm (pow2 32 - 1 =!= 0)
+  = assert_norm (pow2 64 - 1 =!= 0)
 
 (** [get_bit b i] is the all-ones mask when bit [i] of [b] is set.  The
     index is a loop counter and public; the bit itself never is. *)
-fn get_bit (b: A.array S32.t) (i: SZ.t) (#pb: perm) (#vb: erased (Seq.seq S32.t))
-requires A.pts_to b #pb vb ** pure (SZ.v i / 32 < Seq.length vb)
-returns m: S32.t
+fn get_bit (b: A.array S64.t) (i: SZ.t) (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to b #pb vb ** pure (SZ.v i / 64 < Seq.length vb)
+returns m: S64.t
 ensures A.pts_to b #pb vb **
   pure (is_mask m /\ stands_for m (num vb / pow2 (SZ.v i) % 2))
 {
   A.pts_to_len b;
-  let q = SZ.div i (SZ.uint_to_t 32);
-  let r = SZ.rem i (SZ.uint_to_t 32);
+  let q = SZ.div i (SZ.uint_to_t 64);
+  let r = SZ.rem i (SZ.uint_to_t 64);
   let w = A.(b.(q));
-  let x = S32.shift_right w (SZ.sizet_to_uint32 r);
+  let x = S64.shift_right w (SZ.sizet_to_uint32 r);
   assert_norm (pow2 1 == 2);
   assert_norm (pow2 1 - 1 == 1);
-  UInt.logand_mask #32 (S32.v x) 1;
-  let one = S32.classify 1ul;
-  let bit = S32.logand x one;
-  assert (pure (S32.v bit ==
-    S32.v (Seq.index vb (SZ.v i / 32)) / pow2 (SZ.v i % 32) % 2));
+  UInt.logand_mask #64 (S64.v x) 1;
+  let one = S64.classify 1uL;
+  let bit = S64.logand x one;
+  assert (pure (S64.v bit ==
+    S64.v (Seq.index vb (SZ.v i / 64)) / pow2 (SZ.v i % 64) % 2));
   num_bit vb (SZ.v i);
-  assert (pure (S32.v bit == num vb / pow2 (SZ.v i) % 2));
-  let m = S32.eq_mask bit one;
+  assert (pure (S64.v bit == num vb / pow2 (SZ.v i) % 2));
+  let m = S64.eq_mask bit one;
   bit_mask bit one m (num vb / pow2 (SZ.v i) % 2);
   m
 }

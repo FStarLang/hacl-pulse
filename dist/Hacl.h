@@ -7,15 +7,6 @@
 #include <stdbool.h>
 #include <string.h>
 
-/* The sole inhabited erased value (section 5.1).  A distinct typedef rather
-than void, so that it can be stored in a variable and returned like any
-other value.  Guarded because two generated headers may meet in one
-translation unit (section 42.2): this is a fixed name for a fixed type,
-so two spellings of it are the same spelling. */
-#ifndef CUSTARD_UNIT_DEFINED
-#define CUSTARD_UNIT_DEFINED
-typedef uint8_t custard_unit;
-#endif
 #include "Hacl_Vec128.h"
 
 #ifdef __cplusplus
@@ -71,18 +62,18 @@ void Hacl_Frodo640_keypair(uint8_t *pk, uint8_t *sk, uint8_t *coins);
 void Hacl_Frodo64_dec(uint8_t *ss, uint8_t *ct, uint8_t *sk);
 void Hacl_Frodo64_enc(uint8_t *ct, uint8_t *ss, uint8_t *pk, uint8_t *mu);
 void Hacl_Frodo64_keypair(uint8_t *pk, uint8_t *sk, uint8_t *coins);
-uint32_t Hacl_Bignum_Montgomery_mont_mu(uint32_t m0);
-void Hacl_Bignum_Base_zero(uint32_t *res, size_t n);
-void Hacl_Bignum_Montgomery_precomp(uint32_t *res, uint32_t *nmod, size_t nn);
-void Hacl_Bignum_Convert_from_bytes_be(uint32_t *res, size_t n, uint8_t *b);
-uint32_t Hacl_Bignum_Base_sub(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
-uint32_t Hacl_Bignum_Base_lt_mask(uint32_t *a, uint32_t *b, size_t n);
-void Hacl_Bignum_Base_mul(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
-void Hacl_Bignum_Montgomery_reduction(uint32_t *res, uint32_t *c, uint32_t *nmod, size_t nn, uint32_t mu);
-void Hacl_Bignum_Montgomery_mont_mul(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *tmp, uint32_t *nmod, size_t nn, uint32_t mu);
-void Hacl_Bignum_Montgomery_from_mont(uint32_t *res, uint32_t *a, uint32_t *tmp, uint32_t *nmod, size_t nn, uint32_t mu);
-void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
-void Hacl_Bignum_Convert_to_bytes_be(uint8_t *b, uint32_t *a, size_t n);
+uint64_t Hacl_Bignum_Montgomery_mont_mu(uint64_t m0);
+void Hacl_Bignum_Base_zero(uint64_t *res, size_t n);
+void Hacl_Bignum_Montgomery_precomp(uint64_t *res, uint64_t *nmod, size_t nn);
+void Hacl_Bignum_Convert_from_bytes_be(uint64_t *res, size_t n, uint8_t *b);
+uint64_t Hacl_Bignum_Base_sub(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
+uint64_t Hacl_Bignum_Base_lt_mask(uint64_t *a, uint64_t *b, size_t n);
+void Hacl_Bignum_Base_mul(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
+void Hacl_Bignum_Montgomery_reduction(uint64_t *res, uint64_t *c, uint64_t *nmod, size_t nn, uint64_t mu);
+void Hacl_Bignum_Montgomery_mont_mul(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *tmp, uint64_t *nmod, size_t nn, uint64_t mu);
+void Hacl_Bignum_Montgomery_from_mont(uint64_t *res, uint64_t *a, uint64_t *tmp, uint64_t *nmod, size_t nn, uint64_t mu);
+void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
+void Hacl_Bignum_Convert_to_bytes_be(uint8_t *b, uint64_t *a, size_t n);
 bool Hacl_FFDHE_ffdhe8192_shared_secret(uint8_t *ss, uint8_t *sk, uint8_t *pk);
 void Hacl_FFDHE_ffdhe8192_secret_to_public(uint8_t *pk, uint8_t *sk);
 bool Hacl_FFDHE_ffdhe6144_shared_secret(uint8_t *ss, uint8_t *sk, uint8_t *pk);
@@ -93,16 +84,16 @@ bool Hacl_FFDHE_ffdhe3072_shared_secret(uint8_t *ss, uint8_t *sk, uint8_t *pk);
 void Hacl_FFDHE_ffdhe3072_secret_to_public(uint8_t *pk, uint8_t *sk);
 bool Hacl_FFDHE_ffdhe2048_shared_secret(uint8_t *ss, uint8_t *sk, uint8_t *pk);
 void Hacl_FFDHE_ffdhe2048_secret_to_public(uint8_t *pk, uint8_t *sk);
-void Hacl_Bignum_Exponentiation_mod_exp_vartime(uint32_t *res, uint32_t *a, uint32_t *bb, size_t bbits, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
-void Hacl_Bignum_Exponentiation_mod_inv_prime_vartime(uint32_t *res, uint32_t *a, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu, uint32_t *e, uint32_t *aM, uint32_t *acc, uint32_t *t, uint32_t *wide);
-void Hacl_Bignum_Montgomery_modulo(uint32_t *res, uint32_t *a, uint32_t *acc, uint32_t *r2, uint32_t *nmod, size_t nn, uint32_t mu);
-void Hacl_Bignum_Convert_to_bytes_le(uint8_t *b, uint32_t *a, size_t n);
-void Hacl_Bignum_Convert_from_bytes_le(uint32_t *res, size_t n, uint8_t *b);
-uint32_t Hacl_Bignum_Base_eq_mask(uint32_t *a, uint32_t *b, size_t n);
-void Hacl_Bignum_Base_sqr(uint32_t *res, uint32_t *a, size_t n);
-void Hacl_Bignum_Base_sub_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n);
-uint32_t Hacl_Bignum_Base_add(uint32_t *res, uint32_t *a, uint32_t *b, size_t n);
-void Hacl_Bignum_Base_add_mod(uint32_t *res, uint32_t *a, uint32_t *b, uint32_t *m, size_t n);
+void Hacl_Bignum_Exponentiation_mod_exp_vartime(uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
+void Hacl_Bignum_Exponentiation_mod_inv_prime_vartime(uint64_t *res, uint64_t *a, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *e, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
+void Hacl_Bignum_Montgomery_modulo(uint64_t *res, uint64_t *a, uint64_t *acc, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu);
+void Hacl_Bignum_Convert_to_bytes_le(uint8_t *b, uint64_t *a, size_t n);
+void Hacl_Bignum_Convert_from_bytes_le(uint64_t *res, size_t n, uint8_t *b);
+uint64_t Hacl_Bignum_Base_eq_mask(uint64_t *a, uint64_t *b, size_t n);
+void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n);
+void Hacl_Bignum_Base_sub_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);
+uint64_t Hacl_Bignum_Base_add(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
+void Hacl_Bignum_Base_add_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);
 bool Hacl_AES_GCM_aes256_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 void Hacl_AES_GCM_aes256_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 bool Hacl_HMAC_DRBG_generate_sha512(uint8_t *out, size_t olen, uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *additional, size_t alen);

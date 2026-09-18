@@ -720,3 +720,54 @@ let gmul_three (x y u1 v1 u2 v2 u3 v3: block)
     gadd_zero u3
 
 #pop-options
+
+(** {2 Multiplying by the reduction constant is a shift}
+
+    [gmul_three] above uses the general product three times, which is a fine
+    way to state the reduction and an expensive way to compute it: the second
+    and third products have [r_block] as an operand, and [r_block] is
+    [x^7 + x^2 + x + 1] -- four set bits.  A product with it is therefore not
+    a product at all but four copies of the other operand, shifted by nought,
+    one, two and seven, added together.  That is what this section says, and
+    it is what lets [Hacl.AES.GF128.NI] do two thirds of a GHASH multiply
+    with shifts instead of with [PCLMULQDQ]. *)
+
+(** A bit of a block at any index at all, [false] outside it, in the style of
+    [Spec.CLMUL.lebiti]: it is what makes the statement below uniform in [k]
+    rather than a list of boundary cases. *)
+let bitk (a: block) (j: int) : bool = 0 <= j && j < 128 && bit a j
+
+(** A sum over the range with at most one nonzero term. *)
+let xsum_at (a: block) (j: int)
+  : Lemma (xsum (fun i -> i = j && bitk a i) 0 128 == bitk a j)
+  = if 0 <= j && j < 128
+    then xsum_one (fun i -> i = j && bitk a i) 0 128 j
+    else xsum_zero (fun i -> i = j && bitk a i) 0 128
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+
+(** The coefficient of [x^k] in [a * R]: four bits of [a], and no summation
+    left to do.  Compare [mul_r_high] and [mul_r_zero] above, which are the
+    two special cases of this that [gmul_three] happened to need. *)
+let mul_r_coef (a: block) (k: int)
+  : Lemma (pcoef a r_block k ==
+           (((bitk a k <> bitk a (k - 1)) <> bitk a (k - 2)) <> bitk a (k - 7)))
+  = FStar.Classical.forall_intro r_bit;
+    let g0 : int -> bool = fun i -> i = k && bitk a i in
+    let g1 : int -> bool = fun i -> i = k - 1 && bitk a i in
+    let g2 : int -> bool = fun i -> i = k - 2 && bitk a i in
+    let g7 : int -> bool = fun i -> i = k - 7 && bitk a i in
+    let g01 : int -> bool = fun i -> g0 i <> g1 i in
+    let g012 : int -> bool = fun i -> g01 i <> g2 i in
+    let f : int -> bool = fun i -> g012 i <> g7 i in
+    pmul_get (pbits a) (pbits r_block) k;
+    conv_def (pbits a) (pbits r_block) k f;
+    xsum_xor g012 g7 0 128;
+    xsum_xor g01 g2 0 128;
+    xsum_xor g0 g1 0 128;
+    xsum_at a k;
+    xsum_at a (k - 1);
+    xsum_at a (k - 2);
+    xsum_at a (k - 7)
+
+#pop-options

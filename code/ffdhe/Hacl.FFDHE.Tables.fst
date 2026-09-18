@@ -28,24 +28,24 @@ open Spec.FFDHE
 
 module G = Pulse.Lib.GlobalArray
 module Seq = FStar.Seq
-module S32 = Hacl.Secret.UInt32
+module S64 = Hacl.Secret.UInt64
 
-let ffdhe2048_arr : (a: G.static_array S32.t
-                       { G.static_array_elems a == (ffdhe2048 <: Seq.seq S32.t) })
+let ffdhe2048_arr : (a: G.static_array S64.t
+                       { G.static_array_elems a == (ffdhe2048 <: Seq.seq S64.t) })
   = G.mk_static_array ffdhe2048_list
 
-let ffdhe3072_arr : (a: G.static_array S32.t
-                       { G.static_array_elems a == (ffdhe3072 <: Seq.seq S32.t) })
+let ffdhe3072_arr : (a: G.static_array S64.t
+                       { G.static_array_elems a == (ffdhe3072 <: Seq.seq S64.t) })
   = G.mk_static_array ffdhe3072_list
 
-let ffdhe4096_arr : (a: G.static_array S32.t
-                       { G.static_array_elems a == (ffdhe4096 <: Seq.seq S32.t) })
+let ffdhe4096_arr : (a: G.static_array S64.t
+                       { G.static_array_elems a == (ffdhe4096 <: Seq.seq S64.t) })
   = G.mk_static_array ffdhe4096_list
 
-let ffdhe6144_arr : (a: G.static_array S32.t
-                       { G.static_array_elems a == (ffdhe6144 <: Seq.seq S32.t) })
+let ffdhe6144_arr : (a: G.static_array S64.t
+                       { G.static_array_elems a == (ffdhe6144 <: Seq.seq S64.t) })
   = G.mk_static_array ffdhe6144_list
 
-let ffdhe8192_arr : (a: G.static_array S32.t
-                       { G.static_array_elems a == (ffdhe8192 <: Seq.seq S32.t) })
+let ffdhe8192_arr : (a: G.static_array S64.t
+                       { G.static_array_elems a == (ffdhe8192 <: Seq.seq S64.t) })
   = G.mk_static_array ffdhe8192_list
