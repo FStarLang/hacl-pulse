@@ -61,6 +61,12 @@ module S128 = Hacl.Secret.UInt128
 module Cast = Hacl.Secret.Cast
 module Loops = Hacl.Spec.Loops
 
+(** This module is arithmetic-heavy, and the default SMT encoding boxes
+    every integer operation, which hides the structure of the products from
+    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
+    only the nonlinear operators wrapped is measurably faster here. *)
+#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
 (** {2 One Montgomery step}

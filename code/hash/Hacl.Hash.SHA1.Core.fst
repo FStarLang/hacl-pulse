@@ -99,7 +99,7 @@ ensures pure (SZ.v i < rounds ==> r == k (SZ.v i))
 
 (** {2 Message schedule} *)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 fn ws_expand (wsb: A.array S32.t) (block: A.array S8.t) (off: SZ.t)
              (#vw0: erased (Seq.seq S32.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
@@ -233,7 +233,7 @@ ensures exists* vw.
     the digest is exactly the state, so this writes straight into the caller's
     buffer with no scratch copy. *)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 fn write_digest (out: A.array S8.t) (st: A.array S32.t)
                 (#vout: erased (Seq.seq S8.t)) (#pst: perm)
@@ -278,7 +278,7 @@ ensures A.pts_to out (finish vst) ** A.pts_to st #pst vst
     at 32 bits ([Spec.SHA1.Lemmas]), both the byte-level lemmas and
     [build_tail] itself are reused rather than restated. *)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** The padding blocks and the digest.  Separated from [hash_impl] only so
     that each proof obligation sees a small context. *)
@@ -378,7 +378,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 (** The full blocks of the message, in place. *)
 
@@ -432,7 +432,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words).
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 (** The whole hash of a whole message. *)
 
@@ -477,7 +477,7 @@ ensures exists* vout'.
 
 #pop-options
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** {2 Hashing a message with a one-block prefix}
 

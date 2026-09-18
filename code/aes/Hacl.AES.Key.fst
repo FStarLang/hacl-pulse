@@ -46,6 +46,12 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module Math = FStar.Math.Lemmas
 
+(** This module is arithmetic-heavy, and the default SMT encoding boxes
+    every integer operation, which hides the structure of the products from
+    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
+    only the nonlinear operators wrapped is measurably faster here. *)
+#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** {2 Arithmetic of the round-constant counter}

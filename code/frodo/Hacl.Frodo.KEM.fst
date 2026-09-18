@@ -125,7 +125,7 @@ let keypair_eq (p: params)
       (ensures vpk == fst (F.keypair p coins) /\ vsk == snd (F.keypair p coins))
   = ()
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
 (** The parameter set's extendable output function: SHAKE-256 for the two
     wide sets, SHAKE-128 for the others.  Note that this is {i not} what

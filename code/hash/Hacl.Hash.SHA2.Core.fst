@@ -81,7 +81,7 @@ let tail_len (#t: Type0) {| w: word t |} (rem: (r: SZ.t { SZ.v r < block_len #t 
 
 (** {2 Message schedule} *)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
 fn ws_expand (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (wsb: A.array t) (block: A.array S8.t) (off: SZ.t)
@@ -507,7 +507,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
 
 #pop-options
 
-#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 0"
 
 (** The full blocks of the message, in place.  Split out of [hash_impl] so
     that the loop's proof obligation sees only the loop. *)
@@ -565,7 +565,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
 
 #pop-options
 
-#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 0"
 fn hash_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (input: A.array S8.t) (len: SZ.t)
              (#pk: perm) (#vk: erased (Seq.seq t))
@@ -627,7 +627,7 @@ ensures exists* vout'.
 
 #pop-options
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** {2 Hashing a message with a one-block prefix}
 
