@@ -136,6 +136,35 @@ let zq_mul (a b: zqt) : r: zqt { S16.v r == mul (S16.v a) (S16.v b) }
 
 #pop-options
 
+(** {2 Division by q}
+
+    Compression divides by [q], and a division instruction on a secret is
+    not something to emit: on several of the targets here its latency
+    depends on its operands.  The usual replacement is a multiply and a
+    shift, and the constant is chosen so that the identity holds over the
+    whole range compression uses.
+
+    [2580335 * q = 2^33 + 623], so writing [x = a q + b],
+    [x * 2580335 = a 2^33 + (623 a + 2580335 b)], and the remainder term
+    stays below [2^33] because [a < 2520] and [b < q]. *)
+let div_q (x: nat { x < pow2 23 })
+  : Lemma (x * 2580335 / pow2 33 == x / q)
+  = let a = x / q in
+    let b = x % q in
+    assert_norm (2580335 * q == pow2 33 + 623);
+    assert_norm (pow2 23 < 2520 * q);
+    div_lt x 2520 q;
+    Math.lemma_div_mod x q;
+    Math.lemma_mult_le_right 623 a 2519;
+    Math.lemma_mult_le_right 2580335 b (q - 1);
+    assert_norm (2519 * 623 + (q - 1) * 2580335 < pow2 33);
+    Math.distributivity_add_left (a * q) b 2580335;
+    Math.paren_mul_right a q 2580335;
+    Math.distributivity_add_right a (pow2 33) 623;
+    assert (x * 2580335 == a * pow2 33 + (a * 623 + b * 2580335));
+    Math.lemma_div_plus (a * 623 + b * 2580335) a (pow2 33);
+    Math.small_div (a * 623 + b * 2580335) (pow2 33)
+
 (** {2 The view of an array as a polynomial}
 
     Coefficients live in memory as secret words and in the specification as
@@ -157,3 +186,25 @@ let as_poly_intro (s: Seq.seq zqt { Seq.length s == n }) (f: poly)
   : Lemma (requires forall (i: nat). i < n ==> S16.v (Seq.index s i) == Seq.index f i)
           (ensures as_poly s == f)
   = Seq.lemma_eq_intro (as_poly s) f
+
+(** The same view without the [q] bound, for the [d]-bit values that
+    compression produces and encoding consumes. *)
+
+let as_nats (s: Seq.seq zqt { Seq.length s == n }) : GTot (Seq.lseq nat n)
+  = Seq.init_ghost n (fun i -> (S16.v (Seq.index s i) <: nat))
+
+let as_nats_index (s: Seq.seq zqt { Seq.length s == n }) (i: nat { i < n })
+  : Lemma (Seq.index (as_nats s) i == S16.v (Seq.index s i))
+          [SMTPat (Seq.index (as_nats s) i)]
+  = Seq.init_ghost_index_ n (fun j -> (S16.v (Seq.index s j) <: nat)) i
+
+let as_nats_intro (s: Seq.seq zqt { Seq.length s == n }) (f: Seq.lseq nat n)
+  : Lemma (requires forall (i: nat). i < n ==> S16.v (Seq.index s i) == Seq.index f i)
+          (ensures as_nats s == f)
+  = Seq.lemma_eq_intro (as_nats s) f
+
+(** An uncompressed polynomial read as plain naturals, which is what the
+    twelve-bit encoding of a key wants. *)
+let as_nats_poly (s: Seq.seq zqt { Seq.length s == n })
+  : Lemma (as_nats s == widen (as_poly s))
+  = Seq.lemma_eq_intro (as_nats s) (widen (as_poly s))

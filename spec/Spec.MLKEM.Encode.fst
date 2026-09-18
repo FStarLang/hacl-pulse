@@ -82,6 +82,18 @@ let rec bits_val (b: Seq.seq S8.t) (off: nat) (m: nat)
       stream_bit b off + 2 * bits_val b (off + 1) (m - 1)
     end
 
+(** The top bit peeled off instead of the bottom one, which is the shape a
+    loop that accumulates from the least significant end needs. *)
+let rec bits_val_snoc (b: Seq.seq S8.t) (off: nat) (m: pos)
+  : Lemma (ensures bits_val b off m ==
+                   bits_val b off (m - 1) + pow2 (m - 1) * stream_bit b (off + m - 1))
+          (decreases m)
+  = if m = 1 then ()
+    else begin
+      bits_val_snoc b (off + 1) (m - 1);
+      Math.pow2_double_mult (m - 2)
+    end
+
 (** {2 Encoding}
 
     Algorithms 5 and 6.  [d] ranges over 1, 4, 5, 10, 11 and 12 across the
@@ -175,3 +187,47 @@ let vec_decompress (d: pos { d <= 11 }) (k: pos) (v: Seq.lseq nat (k * n)) : GTo
   = vec_of_fun_g k (fun i -> poly_decompress d (flat_at k n v i))
 
 #pop-options
+
+(** {2 Pointwise views}
+
+    Every one of the four coders above is a [Seq.init], so an
+    implementation that fills an output one index at a time needs to know
+    what that index holds; none of these carry an SMT pattern, because
+    letting the solver unfold a coder at a symbolic index inside a loop
+    invariant is exactly what makes such a proof unaffordable. *)
+
+let byte_encode_index (d: pos { d <= 12 }) (f: Seq.lseq nat n) (i: nat { i < 32 * d })
+  : Lemma (Seq.index (byte_encode d f) i == S8.classify (U8.uint_to_t (byte_val d f i)))
+  = Seq.init_ghost_index_ (32 * d) (fun j -> S8.classify (U8.uint_to_t (byte_val d f j))) i
+
+let byte_decode_index (d: pos { d <= 12 }) (b: Seq.lseq S8.t (32 * d)) (i: nat { i < n })
+  : Lemma (Seq.index (byte_decode d b) i == bits_val b (i * d) d % q)
+  = Seq.init_ghost_index_ n
+      (fun j ->
+        let v = bits_val b (j * d) d in
+        let r: zq =
+          if d = 12 then v % q
+          else begin
+            Math.pow2_le_compat 11 d;
+            assert_norm (pow2 11 < q);
+            v
+          end in
+        r) i;
+    if d < 12 then begin
+      Math.pow2_le_compat 11 d;
+      assert_norm (pow2 11 < q);
+      Math.small_mod (bits_val b (i * d) d) q
+    end
+
+let poly_compress_index (d: pos { d <= 11 }) (f: poly) (i: nat { i < n })
+  : Lemma (Seq.index (poly_compress d f) i == compress d (Seq.index f i))
+  = Seq.init_index_ n (fun j -> (compress d (Seq.index f j) <: nat)) i
+
+let poly_decompress_index (d: pos { d <= 11 }) (f: Seq.lseq nat n) (i: nat { i < n })
+  : Lemma (requires Seq.index f i < pow2 d)
+          (ensures Seq.index (poly_decompress d f) i == decompress d (Seq.index f i))
+  = Seq.init_ghost_index_ n
+      (fun j ->
+        let v = Seq.index f j in
+        let r: zq = if v < pow2 d then decompress d v else 0 in
+        r) i
