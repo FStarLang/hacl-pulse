@@ -1902,8 +1902,8 @@ the reference.
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
 | Ed25519 sign | -- | 255 us | 64 us | 3.96x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
-| P-256 ECDSA verify | -- | 2.49 ms | 0.43 ms | 5.77x |
-| secp256k1 ECDSA sign | -- | 1.11 ms | 0.07 ms | 17x |
+| P-256 ECDSA verify | -- | 2.57 ms | 0.43 ms | 5.98x |
+| secp256k1 ECDSA sign | -- | 1.14 ms | 0.07 ms | 16x |
 
 Three things account for most of the spread.
 
@@ -1943,6 +1943,23 @@ mechanism, but a library cannot dictate its consumers' flags.  So the
 attribute goes only where it is paid for: Curve25519's field and the 256-bit
 bignum core.  The `Hacl.Secret` arithmetic, 168 single-expression functions,
 gains nothing at all -- gcc was already inlining every one.
+
+**And so is interprocedural constant propagation.**  The same lesson arrived
+a second time, less gently.  `Hacl.Impl.Mont256.amul` took its modulus and
+its Montgomery constant as arguments so that the field and the scalar field
+of both curves could share one multiplier, and the comment above it said that
+specialising them would buy nothing.  gcc had in fact been specialising them
+all along: it cloned `amul` once per modulus, four times, and the clones were
+worth two and a half times on every P-256 and secp256k1 operation.  That is
+also a budget -- `--param ipa-cp-large-unit-insns` defaults to sixteen
+thousand -- and adding FrodoKEM and HPKE to the single translation unit spent
+it.  The clones vanished, and every elliptic curve benchmark got two and a
+half times slower without a single line of elliptic curve code changing.
+`amul` is now `inline_for_extraction`, so each of its nineteen call sites
+carries its own copy with its own constants; that is a decision the library
+makes rather than one it hopes for.  It is slightly slower than gcc's four
+clones and about thirty kilobytes larger, and it no longer depends on how big
+the rest of the distribution happens to be.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
@@ -2383,3 +2400,9 @@ rough order of value:
    gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
+6. **Splitting the distribution into several translation units**, so that
+   `inline` and interprocedural constant propagation stop being one global
+   budget that any new primitive can exhaust.  Both of the regressions
+   described above -- the `CInline` hints that do not compose, and the
+   Montgomery clones that disappeared when FrodoKEM arrived -- are the same
+   problem seen twice.
