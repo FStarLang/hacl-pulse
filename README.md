@@ -10,14 +10,17 @@ library uses the feature.  `design/` records what HACL\* does and
 `design/changes.md` the four commitments this reimplementation starts from.
 
 Status: **feature parity with HACL\***, and past it in places -- all four
-FrodoKEM parameter sets are here, and so is HPKE, which HACL\* ships only in
-its Base mode and only over ChaCha20-Poly1305.  The one deliberate omission
+FrodoKEM parameter sets are here, HPKE is here in all four modes where
+HACL\* ships only Base and only over ChaCha20-Poly1305, and ML-KEM
+(FIPS 203) is here in all three parameter sets, which HACL\* does not have
+at all.  The one deliberate omission
 is an agile provider in the shape of EverCrypt; see the roadmap below.
 Everything listed there is specified, implemented, verified, extracted and
 tested against the published vectors -- FIPS 180-4, FIPS 202, RFC 4231,
 RFC 5869, RFC 7748, RFC 8032, RFC 7919, RFC 9180, FIPS 186-4, PKCS#1 v2.2,
 the NIST CAVP sets for AES-GCM and HMAC-DRBG, the FrodoKEM known-answer
-tests, and the NaCl vectors -- thirty-three C test harnesses in `tests/`.
+tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
+thirty-four C test harnesses in `tests/`.
 
 Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
 SHA-3, ChaCha20, ChaCha20-Poly1305 and the generic bignum are all faster --
@@ -45,8 +48,8 @@ make FSTAR_ROOT=$HOME/tools/fstar
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE` |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/hpke/`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT, sampling and encoding modules |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128-bit vector intrinsics |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
@@ -1819,6 +1822,69 @@ is an equality with a spec-level `if` whose scrutinee never exists at run
 time.
 
 
+### ML-KEM, where the ring does the work
+
+ML-KEM is FIPS 203, the standardised Kyber, and it is what TLS actually
+deploys: the hybrid groups everyone is turning on are X25519 plus
+ML-KEM-768.  It is FrodoKEM's opposite number.  Frodo refuses structure and
+pays three and a half megabytes for a public matrix; ML-KEM works in
+`Z_3329[X]/(X^256 + 1)`, so the matrix is `k * k` polynomials of 256
+coefficients, the largest key is a kilobyte and a half, and the arithmetic
+is a number-theoretic transform rather than a schoolbook product.  There is
+no ML-KEM in HACL\*; this is new code, not a port.
+
+The modulus is 3329, which is `13 * 256 + 1`, and that is the whole reason
+the scheme is fast: `Z_3329` has a primitive 256th root of unity (17), so
+the transform is seven layers of butterflies over 128 pairs and polynomial
+multiplication becomes 128 independent products of linear polynomials
+modulo `X^2 - zeta`.  `Spec.MLKEM.NTT` says exactly
+that and `Hacl.Impl.MLKEM.NTT` implements it in place, with the zeta table
+a 128-entry constant.  Addition and subtraction reduce with a
+conditional-subtract mask and multiplication with a Barrett step in
+sixty-four bits, all branch-free, and the coefficient type is a refinement
+--- `zqt = x: S16.t { S16.v x < q }` --- so every intermediate carries its
+bound in its type instead of in a lemma.
+
+The correctness statement is that the implementation computes the
+algorithms of FIPS 203, coefficient for coefficient, including that the NTT
+is the specification's NTT.  What is *not* proved, and is honest to say so,
+is the mathematical fact that the specification's NTT is multiplication in
+the ring: that is a finite-field argument about roots of unity, not a
+memory-safety or refinement argument, and it is future work.  The spec is
+pinned instead by the published vectors, which is the same bar the rest of
+this repository meets.
+
+One implementation serves all three parameter sets.  As with Frodo the
+parameters are a `[@@@monomorphize]` record --- `k`, `eta1`, `eta2`, `du`,
+`dv` --- and `Hacl.MLKEM512`, `Hacl.MLKEM768` and `Hacl.MLKEM1024` are a
+table and three one-line calls each, so Custard emits three sets of C
+functions with the dimensions as literals.  The matrix `A` *is* assembled
+here, unlike Frodo's: at ML-KEM-1024 it is thirty-two kilobytes, which is a
+stack allocation rather than a problem, and having it whole is what lets
+`A^T s` and `A y` share one implementation.
+
+Decapsulation is the part where the shape of the code is a security
+property.  FIPS 203 decapsulates by decrypting, *re-encrypting* the
+recovered message under the recovered randomness, and returning the real
+shared secret if the re-encryption reproduces the ciphertext and
+`J(z || c)` if it does not --- implicit rejection, so that a malformed
+ciphertext yields a wrong-looking secret rather than an error the attacker
+can see.  A branch on that comparison would leak, so there is none:
+`lib/Hacl.Impl.Select` compares the two ciphertexts into a single all-ones
+or all-zeros mask and selects the thirty-two output bytes through it, and
+the lemma `decaps_eq` turns "mask, then pointwise selection" back into the
+specification's `if Seq.equal c c'`.  It is the same idiom Frodo uses, but
+in a shared module this time rather than open-coded in the KEM.
+
+`tests/test_mlkem.c` is the NIST ACVP vectors: the first keyGen seeds for
+each set, digests of the encapsulation key, the decapsulation key and the
+ciphertext, the shared secret, and --- the case worth having --- the
+implicit-rejection secret for a ciphertext with one bit flipped, checked
+against its published value rather than merely against "not the real one".
+The generator re-validates its reference against all one hundred and eighty
+published keyGen, encapsulation and decapsulation cases before it emits
+anything.
+
 ### HPKE, where the ciphersuite is a record rather than fifteen modules
 
 RFC 9180 is an agility standard: a hybrid public-key encryption scheme
@@ -2324,6 +2390,26 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   other definition in the file, so a green run says only that the named
   definition is fine in isolation, not that anything downstream of it
   still typechecks.
+* **Never `open` a large Pulse implementation module; wrap it.**  The cost
+  of an `open` is not the definitions used but the whole module's
+  elaboration context, and a module full of Pulse `fn`s is enormous.
+  ML-KEM's K-PKE went from eight minutes to sixteen seconds by replacing
+  four `open`s with four thin wrapper modules --- `Hacl.Impl.MLKEM.Poly`
+  over `NTT`, `Sampler` over `Sample`, `Codec` over `Encode`, `Hash` over
+  `Hacl.Hash.SHA3` --- each an `.fsti` with two or three `val`s and an
+  `.fst` that forwards.  Giving the big module its own `.fsti` instead is
+  the wrong fix, and an expensive one: it made `NTT`'s own implementation
+  go from two and a half minutes to twenty-three.  The diagnosis is
+  `--query_stats`: total Z3 time far below wall-clock time means the cost
+  is elaboration, not solving.
+* **Thread the offending term into the lemma.**  When the goal is
+  `f a == f b` and `a`, `b` are expensive ghost terms --- an ML-KEM matrix
+  seed under an `if`, say --- the congruence step alone can time out.
+  Passing the sequence in as an extra lemma argument, so that the call
+  site matches its hypotheses syntactically, and restating the surrounding
+  `assert` in *exactly* the goal's syntax (`SZ.v vc / SZ.v k`, not
+  `SZ.v ci` for a `ci` defined to be that) took one ML-KEM function from
+  eight minutes of failure to forty-six seconds of success.
 
 ## Roadmap
 
@@ -2349,8 +2435,11 @@ and so is the whole of the original NaCl interface: `crypto_secretbox`,
 `crypto_box`, and the `beforenm`/`afternm` split for callers that talk to
 the same peer more than once.
 
-FrodoKEM closes the primitives: all four parameter sets, with the public
-matrix streamed a row at a time rather than assembled.
+FrodoKEM closes the primitives HACL\* has: all four parameter sets, with
+the public matrix streamed a row at a time rather than assembled.  Past
+them is one HACL\* does not have at all --- ML-KEM, FIPS 203, all three
+parameter sets, with constant-time implicit rejection --- which is what
+the hybrid key exchanges now being turned on in TLS need.
 
 Above them all sits HPKE, RFC 9180, with all four modes, all three AEADs
 and four ciphersuites pinned for C -- more than the HACL\* distribution
