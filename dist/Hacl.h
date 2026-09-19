@@ -14,10 +14,15 @@ extern "C" {
 #endif
 
 typedef struct FStar_Pervasives_Native_tuple2__t_t_s FStar_Pervasives_Native_tuple2__t_t;
+typedef struct FStar_Pervasives_Native_tuple2__uint32_uint32_s FStar_Pervasives_Native_tuple2__uint32_uint32;
 
 struct FStar_Pervasives_Native_tuple2__t_t_s {
   Hacl_Vec128_t _1;
   Hacl_Vec128_t _2;
+};
+struct FStar_Pervasives_Native_tuple2__uint32_uint32_s {
+  uint32_t _1;
+  uint32_t _2;
 };
 
 void Hacl_Curve25519_scalarmult(uint8_t *out, uint8_t *k, uint8_t *u);
@@ -48,7 +53,18 @@ bool Hacl_HPKE_Suites_x25519_sha256_chachapoly_open(uint8_t *pt, uint8_t *enc, u
 bool Hacl_HPKE_Suites_x25519_sha256_chachapoly_seal(uint8_t *enc, uint8_t *ct, uint8_t *tag, uint8_t *skE, uint8_t *pkR, uint8_t *info, size_t info_len, uint8_t *aad, size_t aad_len, uint8_t *pt, size_t pt_len);
 bool Hacl_HPKE_Suites_x25519_sha256_chachapoly_setup_base_r(uint8_t *key, uint8_t *base_nonce, uint64_t *sq, uint8_t *exporter, uint8_t *enc, uint8_t *skR, uint8_t *info, size_t info_len);
 bool Hacl_HPKE_Suites_x25519_sha256_chachapoly_setup_base_s(uint8_t *enc, uint8_t *key, uint8_t *base_nonce, uint64_t *sq, uint8_t *exporter, uint8_t *skE, uint8_t *pkR, uint8_t *info, size_t info_len);
+void Hacl_Hash_SHA3_sha3_512(uint8_t *out, uint8_t *msg, size_t msg_len);
 void Hacl_Hash_SHA3_shake256(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len);
+void Hacl_MLKEM1024_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk);
+void Hacl_Hash_SHA3_sha3_256(uint8_t *out, uint8_t *msg, size_t msg_len);
+void Hacl_MLKEM1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m);
+void Hacl_MLKEM1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z);
+void Hacl_MLKEM768_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk);
+void Hacl_MLKEM768_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m);
+void Hacl_MLKEM768_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z);
+void Hacl_MLKEM512_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk);
+void Hacl_MLKEM512_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m);
+void Hacl_MLKEM512_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z);
 void Hacl_Hash_SHA3_shake128(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len);
 void Hacl_Frodo1344_dec(uint8_t *ss, uint8_t *ct, uint8_t *sk);
 void Hacl_Frodo1344_enc(uint8_t *ct, uint8_t *ss, uint8_t *pk, uint8_t *mu);
@@ -246,9 +262,7 @@ void Hacl_Streaming_SHA3_sha3_256_init(uint64_t *st, uint8_t *buf, size_t *tot);
 void Hacl_Streaming_SHA3_sha3_224_digest(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *out);
 void Hacl_Streaming_SHA3_sha3_224_update(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 void Hacl_Streaming_SHA3_sha3_224_init(uint64_t *st, uint8_t *buf, size_t *tot);
-void Hacl_Hash_SHA3_sha3_512(uint8_t *out, uint8_t *msg, size_t msg_len);
 void Hacl_Hash_SHA3_sha3_384(uint8_t *out, uint8_t *msg, size_t msg_len);
-void Hacl_Hash_SHA3_sha3_256(uint8_t *out, uint8_t *msg, size_t msg_len);
 void Hacl_Hash_SHA3_sha3_224(uint8_t *out, uint8_t *msg, size_t msg_len);
 void Hacl_Streaming_SHA2_sha384_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
 void Hacl_Streaming_SHA2_sha384_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
