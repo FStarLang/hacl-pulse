@@ -111,6 +111,24 @@ let poly_sub_intro (a b r: Seq.lseq zqt n)
 
 (** {2 The three algorithms, spelled out} *)
 
+(** A one-bit decoding is zero or one, which is the guard decompression
+    needs; the message is the only place K-PKE decompresses a polynomial
+    it decoded itself. *)
+let decode_bound (d: pos { d < 12 }) (b: Seq.lseq S8.t (32 * d)) (v: Seq.lseq zqt n)
+  : Lemma (requires as_poly v == byte_decode d b)
+          (ensures forall (t: nat). t < n ==> S16.v (Seq.index v t) < pow2 d)
+  = introduce forall (t: nat). t < n ==> S16.v (Seq.index v t) < pow2 d
+    with introduce _ ==> _
+    with byte_decode_bound d b t
+
+let vec_decode_bound_arr (d: pos { d < 12 }) (k: pos) (b: Seq.lseq S8.t (k * (32 * d)))
+                         (v: Seq.lseq zqt (k * n))
+  : Lemma (requires as_zqs v == vec_decode d k b)
+          (ensures forall (t: nat). t < k * n ==> S16.v (Seq.index v t) < pow2 d)
+  = introduce forall (t: nat). t < k * n ==> S16.v (Seq.index v t) < pow2 d
+    with introduce _ ==> _
+    with vec_decode_bound d k b t
+
 (** Algorithm 13. *)
 let keygen_eq (p: params) (d: Seq.lseq S8.t 32)
               (vek: Seq.lseq S8.t (ek_len p)) (vdk: Seq.lseq S8.t (dk_pke_len p))
@@ -125,6 +143,41 @@ let keygen_eq (p: params) (d: Seq.lseq S8.t 32)
          let t = vec_add (mat_vec_mul a s) e in
          vek == Seq.append (vec_encode_12 t) rho /\ vdk == vec_encode_12 s))
       (ensures vek == fst (kpke_keygen p d) /\ vdk == snd (kpke_keygen p d))
+  = ()
+
+(** Algorithm 14. *)
+let encrypt_eq (p: params) (ek: Seq.lseq S8.t (ek_len p))
+               (m: Seq.lseq S8.t 32) (r: Seq.lseq S8.t 32)
+               (vct: Seq.lseq S8.t (ct_len p))
+  : Lemma
+      (requires
+        (let t = vec_decode 12 p.k (Seq.slice ek 0 (p.k * (32 * 12))) in
+         let rho = Seq.slice ek (p.k * (32 * 12)) (ek_len p) in
+         let at = gen_matrix p.k rho true in
+         let y = vec_ntt (noise_vec p.k p.eta1 r 0) in
+         let e1 = noise_vec p.k p.eta2 r p.k in
+         let e2 = sample_poly_cbd p.eta2 r (U8.uint_to_t (2 * p.k)) in
+         let mu = poly_decompress 1 (widen (byte_decode 1 m)) in
+         let u = vec_add (vec_intt (mat_vec_mul at y)) e1 in
+         let v = poly_add (poly_add (intt (dot t y)) e2) mu in
+         vct == Seq.append (vec_encode p.du p.k (vec_compress p.du u))
+                           (byte_encode p.dv (poly_compress p.dv v))))
+      (ensures vct == kpke_encrypt p ek m r)
+  = ()
+
+(** Algorithm 15. *)
+let decrypt_eq (p: params) (dk: Seq.lseq S8.t (dk_pke_len p))
+               (c: Seq.lseq S8.t (ct_len p)) (out: Seq.lseq S8.t 32)
+  : Lemma
+      (requires
+        (let c1 = Seq.slice c 0 (p.k * (32 * p.du)) in
+         let c2 = Seq.slice c (p.k * (32 * p.du)) (ct_len p) in
+         let u = vec_decompress p.du p.k (widen (vec_decode p.du p.k c1)) in
+         let v = poly_decompress p.dv (widen (byte_decode p.dv c2)) in
+         let s = vec_decode 12 p.k dk in
+         let w = poly_sub v (intt (dot s (vec_ntt u))) in
+         out == byte_encode 1 (poly_compress 1 w)))
+      (ensures out == kpke_decrypt p dk c)
   = ()
 
 #pop-options
