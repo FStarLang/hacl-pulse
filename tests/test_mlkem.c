@@ -11,14 +11,19 @@
  * digest of each; the shared secret is thirty-two bytes and is stored
  * whole.
  *
- * Each parameter set is checked six ways: the encapsulation key, the
+ * Each parameter set is checked ten ways: the encapsulation key, the
  * decapsulation key and the ciphertext against their digests, the
  * encapsulated shared secret against the vector, and decapsulation both
  * of the real ciphertext (which must give the same secret back) and of a
  * ciphertext with one bit flipped (which must give the implicit-rejection
  * secret, also a vector -- not merely something different, and not a
- * failure code).
+ * failure code); and the two FIPS 203 section 7 input checks, each on a
+ * key that should pass and on one corrupted so that it must not -- an
+ * encapsulation key whose first coefficient is set to 4095, which is
+ * twelve bits wide but not less than q, and a decapsulation key with one
+ * bit flipped in the hash it carries.
  */
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,6 +42,7 @@ static uint8_t digest[32];
 typedef void (*keypair_t)(uint8_t *, uint8_t *, uint8_t *, uint8_t *);
 typedef void (*enc_t)(uint8_t *, uint8_t *, uint8_t *, uint8_t *);
 typedef void (*dec_t)(uint8_t *, uint8_t *, uint8_t *);
+typedef bool (*check_t)(uint8_t *);
 
 static int check_digest(const char *name, const uint8_t *buf, size_t len,
                         const uint8_t *expected) {
@@ -44,7 +50,17 @@ static int check_digest(const char *name, const uint8_t *buf, size_t len,
   return check(name, digest, expected, 32);
 }
 
+static int expect(const char *name, bool got, bool want) {
+  if (got == want) {
+    printf("  ok   %s\n", name);
+    return 0;
+  }
+  printf("  FAIL %s: got %d, expected %d\n", name, (int)got, (int)want);
+  return 1;
+}
+
 static int one(const char *name, keypair_t keypair, enc_t enc, dec_t dec,
+               check_t ek_valid, check_t dk_valid,
                size_t ekb, size_t dkb, size_t ctb, const uint8_t *d,
                const uint8_t *z, const uint8_t *m, const uint8_t *ekd,
                const uint8_t *dkd, const uint8_t *ctd, const uint8_t *ssx,
@@ -75,6 +91,23 @@ static int one(const char *name, keypair_t keypair, enc_t enc, dec_t dec,
   dec(ss2, bad, dk);
   snprintf(label, sizeof label, "%s rejection", name);
   r |= check(label, ss2, ssbad, 32);
+
+  /* FIPS 203 7.2: the key as generated passes; with its first coefficient
+     set to 4095 -- twelve bits, but not a residue mod 3329 -- it fails. */
+  snprintf(label, sizeof label, "%s ek check accepts", name);
+  r |= expect(label, ek_valid(ek), true);
+  ek[0] = 0xffU;
+  ek[1] |= 0x0fU;
+  snprintf(label, sizeof label, "%s ek check rejects", name);
+  r |= expect(label, ek_valid(ek), false);
+
+  /* FIPS 203 7.3: the stored hash matches the stored key until it does
+     not.  The hash sits after the K-PKE key and the encapsulation key. */
+  snprintf(label, sizeof label, "%s dk check accepts", name);
+  r |= expect(label, dk_valid(dk), true);
+  dk[dkb - 64] ^= 1U;
+  snprintf(label, sizeof label, "%s dk check rejects", name);
+  r |= expect(label, dk_valid(dk), false);
 
   return r;
 }
@@ -210,13 +243,16 @@ int main(void) {
   int r = 0;
 
   r |= one("ML-KEM-512", Hacl_MLKEM512_keypair, Hacl_MLKEM512_enc,
-           Hacl_MLKEM512_dec, 800, 1632, 768, d_512, z_512, m_512,
+           Hacl_MLKEM512_dec, Hacl_MLKEM512_ek_valid,
+           Hacl_MLKEM512_dk_valid, 800, 1632, 768, d_512, z_512, m_512,
            ekd_512, dkd_512, ctd_512, ss_512, ssbad_512);
   r |= one("ML-KEM-768", Hacl_MLKEM768_keypair, Hacl_MLKEM768_enc,
-           Hacl_MLKEM768_dec, 1184, 2400, 1088, d_768, z_768, m_768,
+           Hacl_MLKEM768_dec, Hacl_MLKEM768_ek_valid,
+           Hacl_MLKEM768_dk_valid, 1184, 2400, 1088, d_768, z_768, m_768,
            ekd_768, dkd_768, ctd_768, ss_768, ssbad_768);
   r |= one("ML-KEM-1024", Hacl_MLKEM1024_keypair, Hacl_MLKEM1024_enc,
-           Hacl_MLKEM1024_dec, 1568, 3168, 1568, d_1024, z_1024, m_1024,
+           Hacl_MLKEM1024_dec, Hacl_MLKEM1024_ek_valid,
+           Hacl_MLKEM1024_dk_valid, 1568, 3168, 1568, d_1024, z_1024, m_1024,
            ekd_1024, dkd_1024, ctd_1024, ss_1024, ssbad_1024);
 
   if (r == 0)

@@ -168,9 +168,9 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Frodo640., keypair enc dec)
 CUSTARD_ENTRIES += $(addprefix Hacl.Frodo976., keypair enc dec)
 CUSTARD_ENTRIES += $(addprefix Hacl.Frodo1344., keypair enc dec)
 
-CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM512., keypair enc dec)
-CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM768., keypair enc dec)
-CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM1024., keypair enc dec)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM512., keypair enc dec ek_valid dk_valid)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM768., keypair enc dec ek_valid dk_valid)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM1024., keypair enc dec ek_valid dk_valid)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.HPKE.Suites., \
   x25519_sha256_chachapoly_setup_base_s x25519_sha256_chachapoly_setup_base_r \

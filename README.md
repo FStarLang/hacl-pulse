@@ -1876,11 +1876,23 @@ the lemma `decaps_eq` turns "mask, then pointwise selection" back into the
 specification's `if Seq.equal c c'`.  It is the same idiom Frodo uses, but
 in a shared module this time rather than open-coded in the KEM.
 
+FIPS 203 section 7's two input checks are here as well, as
+`Hacl_MLKEM768_ek_valid` and `Hacl_MLKEM768_dk_valid` and their siblings.
+The standard keeps them outside the algorithms because they say where a
+key came from rather than what encapsulation does with it, and a caller
+that generated the key itself does not need them.  The modulus check is
+written as the standard writes it --- re-encode what you decoded and
+compare --- which is four lines and no bound proof over 256k coefficients,
+and neither check pretends to run in constant time, because whether the
+input was malformed is precisely the answer being returned.
+
 `tests/test_mlkem.c` is the NIST ACVP vectors: the first keyGen seeds for
 each set, digests of the encapsulation key, the decapsulation key and the
 ciphertext, the shared secret, and --- the case worth having --- the
 implicit-rejection secret for a ciphertext with one bit flipped, checked
 against its published value rather than merely against "not the real one".
+Both section 7 checks are exercised on a key that must pass and on one
+corrupted so that it must not.
 The generator re-validates its reference against all one hundred and eighty
 published keyGen, encapsulation and decapsulation cases before it emits
 anything.

@@ -161,4 +161,34 @@ let decaps (p: params) (dk: Seq.lseq S8.t (dk_len p)) (c: Seq.lseq S8.t (ct_len 
     let c' = kpke_encrypt p ek m (Seq.slice g 32 64) in
     if Seq.equal c c' then Seq.slice g 0 32 else hash_j (Seq.append z c)
 
+(** {2 Input checking}
+
+    FIPS 203 section 7 puts two checks outside the algorithms, on the
+    grounds that they are the caller's business: the checks are about where
+    a key came from, not about what encapsulation does with it.  Both are
+    cheap and both are about malformed input rather than about an attack on
+    the mathematics, so neither has to run in constant time -- a key that
+    fails either one is a key the caller was never going to use.
+
+    The {e modulus check} of section 7.2: an encapsulation key is 384k
+    bytes of twelve-bit coefficients and thirty-two bytes of seed, and
+    twelve bits hold values up to 4095 while a coefficient is less than
+    q = 3329.  [ByteDecode_12] reduces, so a key whose coefficients are out
+    of range decodes to something that re-encodes differently.  Round-tripping
+    is therefore exactly the check, and saying it that way -- rather than
+    "every coefficient is less than q" -- is both shorter and closer to
+    what the standard writes. *)
+let ek_valid (p: params) (ek: Seq.lseq S8.t (ek_len p)) : GTot prop
+  = let b = Seq.slice ek 0 (p.k * (32 * 12)) in
+    Seq.equal (vec_encode_12 (vec_decode 12 p.k b)) b
+
+(** The {e hash check} of section 7.3: a decapsulation key carries the
+    encapsulation key it belongs to and that key's hash, and decapsulation
+    trusts both.  A key whose stored hash does not match the stored
+    encapsulation key is not a key this implementation produced. *)
+let dk_valid (p: params) (dk: Seq.lseq S8.t (dk_len p)) : GTot prop
+  = let ek = Seq.slice dk (dk_pke_len p) (dk_pke_len p + ek_len p) in
+    let h = Seq.slice dk (dk_pke_len p + ek_len p) (dk_pke_len p + ek_len p + 32) in
+    Seq.equal (hash_h ek) h
+
 #pop-options

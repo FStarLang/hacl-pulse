@@ -36,6 +36,7 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module M = Spec.MLKEM
 module KEM = Hacl.Impl.MLKEM.KEM
+module Check = Hacl.Impl.MLKEM.Check
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -90,6 +91,27 @@ ensures exists* vss.
         pure (vss == M.decaps mlkem512 vdk vct)
 {
   KEM.decaps_impl ss dk ct (hide mlkem512) 2sz 3sz 2sz 10sz 4sz;
+}
+
+(** FIPS 203 section 7.2, the modulus check on a received encapsulation
+    key.  A caller that did not generate the key itself should run this
+    before encapsulating to it. *)
+fn ek_valid (ek: A.array S8.t) (#pek: perm) (#vek: erased (Seq.lseq S8.t 800))
+requires A.pts_to ek #pek vek
+returns res: bool
+ensures A.pts_to ek #pek vek ** pure (res <==> M.ek_valid mlkem512 vek)
+{
+  Check.ek_check ek (hide mlkem512) 2sz;
+}
+
+(** FIPS 203 section 7.3, the hash check on a decapsulation key: the
+    encapsulation key it carries hashes to the digest it carries. *)
+fn dk_valid (dk: A.array S8.t) (#pdk: perm) (#vdk: erased (Seq.lseq S8.t 1632))
+requires A.pts_to dk #pdk vdk
+returns res: bool
+ensures A.pts_to dk #pdk vdk ** pure (res <==> M.dk_valid mlkem512 vdk)
+{
+  Check.dk_check dk (hide mlkem512) 2sz;
 }
 
 #pop-options
