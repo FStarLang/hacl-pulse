@@ -249,6 +249,22 @@ let flat_at_of_fun (#a: Type) (k: pos) (m: pos) (f: (i: nat { i < k }) -> Seq.ls
     end;
     Seq.lemma_eq_intro s (f i)
 
+(** The same for a ghost step. *)
+let flat_at_of_fun_g (#a: Type) (k: pos) (m: pos)
+                     (f: (i: nat { i < k }) -> GTot (Seq.lseq a m)) (i: nat { i < k })
+  : Lemma (flat_at k m (flat_of_fun_g k m f) i == f i)
+  = let v = flat_of_fun_g k m f in
+    Math.lemma_mult_le_right m (i + 1) k;
+    let s = flat_at k m v i in
+    introduce forall (j: nat { j < m }). Seq.index s j == Seq.index (f i) j
+    with begin
+      Math.lemma_mod_plus j i m;
+      Math.small_mod j m;
+      Math.lemma_div_plus j i m;
+      Math.small_div j m
+    end;
+    Seq.lemma_eq_intro s (f i)
+
 (** A vector of [k] polynomials: entry [i] occupies coefficients [i * n]
     through [i * n + n - 1]. *)
 let pvec (k: pos) = Seq.lseq zq (k * n)
@@ -259,6 +275,10 @@ let vec_of_fun (k: pos) (f: (i: nat { i < k }) -> poly) : pvec k = flat_of_fun k
 
 let vec_of_fun_g (k: pos) (f: (i: nat { i < k }) -> GTot poly) : GTot (pvec k)
   = flat_of_fun_g k n f
+
+let vec_at_of_fun_g (k: pos) (f: (i: nat { i < k }) -> GTot poly) (i: nat { i < k })
+  : Lemma (vec_at (vec_of_fun_g k f) i == f i)
+  = flat_at_of_fun_g k n f i
 
 let vec_at_of_fun (k: pos) (f: (i: nat { i < k }) -> poly) (i: nat { i < k })
   : Lemma (vec_at (vec_of_fun k f) i == f i)

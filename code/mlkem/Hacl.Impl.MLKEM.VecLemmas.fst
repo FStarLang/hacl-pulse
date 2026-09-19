@@ -225,5 +225,25 @@ let mv_entry_done (k: pos) (vm: Seq.lseq zqt (k * k * n))
            Seq.index (mat_vec_mul #k (as_zqs vm) (as_zqs vv)) t))
     (ensures as_zqs w == mat_vec_mul #k (as_zqs vm) (as_zqs vv))
   = as_zqs_intro w (mat_vec_mul #k (as_zqs vm) (as_zqs vv))
+(** {2 Blocks of any size}
+
+    The coders work on blocks of [32 d] bytes rather than [n] coefficients,
+    and on three different views of an array, so the step lemma is stated
+    once for an arbitrary block size and an arbitrary view. *)
+
+let flat_index_all_m (#a: Type) (k m: pos) (v: Seq.lseq a (k * m)) (i: nat { i < k })
+  : Lemma (forall (j: nat). j < m ==> Seq.index v (i * m + j) == Seq.index (flat_at k m v i) j)
+  = FStar.Classical.forall_intro (flat_index k m v i)
+
+let flat_step (#a #c: Type) (k m: pos) (view: (a -> GTot c)) (i: nat { i < k })
+              (w0 w1: Seq.lseq a (k * m)) (b: Seq.lseq a m) (r: Seq.lseq c (k * m))
+  : Lemma (requires
+      (forall (t: nat). t < k * m ==>
+         Seq.index w1 t == (if i * m <= t && t < i * m + m
+                            then Seq.index b (t - i * m) else Seq.index w0 t)) /\
+      (forall (t: nat). t < i * m ==> view (Seq.index w0 t) == Seq.index r t) /\
+      (forall (j: nat). j < m ==> view (Seq.index b j) == Seq.index (flat_at k m r i) j))
+    (ensures forall (t: nat). t < (i + 1) * m ==> view (Seq.index w1 t) == Seq.index r t)
+  = flat_index_all_m k m r i
 
 #pop-options
