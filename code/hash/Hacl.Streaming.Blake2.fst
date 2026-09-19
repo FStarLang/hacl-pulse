@@ -102,8 +102,6 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
   let z8 = S8.classify 0uy;
   let bl = block_len_sz #t #w;
 
-  let mut varr = [| z0; 16sz |];
-  A.pts_to_len varr;
   let mut marr = [| z0; 16sz |];
   A.pts_to_len marr;
   let mut barr = [| z8; bl |];
@@ -111,12 +109,11 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
   sigma_len ();
   let sg = table sigma_arr 160sz;
   sigma_seq_ok ();
-  A.pts_to_len varr;
   A.pts_to_len marr;
   A.pts_to_len barr;
   A.pts_to_len sg;
 
-  update_impl p acc varr marr barr ivs sg buf tot data data_len key seen;
+  update_impl p acc marr barr ivs sg buf tot data data_len key seen;
 
   drop_table sg;
 }
@@ -145,8 +142,6 @@ ensures exists* (vout': Seq.seq S8.t).
   let z8 = S8.classify 0uy;
   let bl = block_len_sz #t #w;
 
-  let mut varr = [| z0; 16sz |];
-  A.pts_to_len varr;
   let mut marr = [| z0; 16sz |];
   A.pts_to_len marr;
   let mut barr = [| z8; bl |];
@@ -154,12 +149,11 @@ ensures exists* (vout': Seq.seq S8.t).
   sigma_len ();
   let sg = table sigma_arr 160sz;
   sigma_seq_ok ();
-  A.pts_to_len varr;
   A.pts_to_len marr;
   A.pts_to_len barr;
   A.pts_to_len sg;
 
-  digest_impl p acc varr marr barr ivs sg buf tot out key seen;
+  digest_impl p acc marr barr ivs sg buf tot out key seen;
 
   drop_table sg;
 }
