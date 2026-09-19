@@ -252,3 +252,41 @@ let as_zqs_flat_at (k: pos) (m: pos) (s: Seq.seq zqt { Seq.length s == k * m })
   = Math.lemma_mult_le_right m (i + 1) k;
     as_zqs_slice s (i * m) (i * m + m)
 
+
+(** The unbounded view, for a flat sequence of any length: what a vector of
+    compressed coefficients is, and what encoding consumes. *)
+
+let as_ints (s: Seq.seq zqt) : GTot (Seq.lseq nat (Seq.length s))
+  = Seq.init_ghost (Seq.length s) (fun i -> (S16.v (Seq.index s i) <: nat))
+
+let as_ints_index (s: Seq.seq zqt) (i: nat { i < Seq.length s })
+  : Lemma (Seq.index (as_ints s) i == S16.v (Seq.index s i))
+          [SMTPat (Seq.index (as_ints s) i)]
+  = Seq.init_ghost_index_ (Seq.length s) (fun j -> (S16.v (Seq.index s j) <: nat)) i
+
+let as_ints_intro (s: Seq.seq zqt) (f: Seq.lseq nat (Seq.length s))
+  : Lemma (requires forall (i: nat). i < Seq.length s ==> S16.v (Seq.index s i) == Seq.index f i)
+          (ensures as_ints s == f)
+  = Seq.lemma_eq_intro (as_ints s) f
+
+let as_ints_nats (s: Seq.seq zqt { Seq.length s == n })
+  : Lemma (as_ints s == as_nats s)
+  = Seq.lemma_eq_intro (as_ints s) (as_nats s)
+
+let as_ints_slice (s: Seq.seq zqt) (a: nat) (b: nat { a <= b /\ b <= Seq.length s })
+  : Lemma (as_ints (Seq.slice s a b) == Seq.slice (as_ints s) a b)
+  = Seq.lemma_eq_intro (as_ints (Seq.slice s a b)) (Seq.slice (as_ints s) a b)
+
+let as_ints_flat_at (k: pos) (m: pos) (s: Seq.seq zqt { Seq.length s == k * m })
+                    (i: nat { i < k })
+  : Lemma (flat_at k m (as_ints s) i == as_ints (Seq.slice s (i * m) (i * m + m)))
+  = Math.lemma_mult_le_right m (i + 1) k;
+    as_ints_slice s (i * m) (i * m + m)
+
+(** The same for a polynomial-sized block, which is the shape every vector
+    coder works on. *)
+let as_nats_at (k: pos) (s: Seq.seq zqt { Seq.length s == k * n }) (i: nat { i < k })
+  : Lemma (flat_at k n (as_ints s) i == as_nats (Seq.slice s (i * n) (i * n + n)))
+  = Math.lemma_mult_le_right n (i + 1) k;
+    as_ints_flat_at k n s i;
+    as_ints_nats (Seq.slice s (i * n) (i * n + n))

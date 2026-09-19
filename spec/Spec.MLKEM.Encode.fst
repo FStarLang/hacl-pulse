@@ -186,7 +186,29 @@ let vec_encode_12 (#k: pos) (v: pvec k) : GTot (Seq.lseq S8.t (k * (32 * 12)))
 let vec_decompress (d: pos { d <= 11 }) (k: pos) (v: Seq.lseq nat (k * n)) : GTot (pvec k)
   = vec_of_fun_g k (fun i -> poly_decompress d (flat_at k n v i))
 
+(** Block [i] of a vector coder's output is the polynomial coder applied to
+    entry [i] of its input. *)
+
+let vec_encode_at (d: pos { d <= 12 }) (k: pos) (v: Seq.lseq nat (k * n)) (i: nat { i < k })
+  : Lemma (flat_at k (32 * d) (vec_encode d k v) i == byte_encode d (flat_at k n v i))
+  = flat_at_of_fun_g k (32 * d) (fun j -> byte_encode d (flat_at k n v j)) i
+
+let vec_decode_at (d: pos { d <= 12 }) (k: pos) (b: Seq.lseq S8.t (k * (32 * d)))
+                  (i: nat { i < k })
+  : Lemma (vec_at (vec_decode d k b) i == byte_decode d (flat_at k (32 * d) b i))
+  = vec_at_of_fun_g k (fun j -> byte_decode d (flat_at k (32 * d) b j)) i
+
+let vec_compress_at (d: pos { d <= 11 }) (#k: pos) (v: pvec k) (i: nat { i < k })
+  : Lemma (flat_at k n (vec_compress d #k v) i == poly_compress d (vec_at v i))
+  = flat_at_of_fun k n (fun j -> poly_compress d (vec_at v j)) i
+
+let vec_decompress_at (d: pos { d <= 11 }) (k: pos) (v: Seq.lseq nat (k * n))
+                      (i: nat { i < k })
+  : Lemma (vec_at (vec_decompress d k v) i == poly_decompress d (flat_at k n v i))
+  = vec_at_of_fun_g k (fun j -> poly_decompress d (flat_at k n v j)) i
+
 #pop-options
+
 
 (** {2 Pointwise views}
 
