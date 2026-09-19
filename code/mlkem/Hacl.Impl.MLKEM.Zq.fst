@@ -283,6 +283,12 @@ let as_ints_flat_at (k: pos) (m: pos) (s: Seq.seq zqt { Seq.length s == k * m })
   = Math.lemma_mult_le_right m (i + 1) k;
     as_ints_slice s (i * m) (i * m + m)
 
+(** The [nat] view is the [zq] view widened; the coders take the first and
+    the specifications of the keys take the second. *)
+let as_ints_widen (s: Seq.seq zqt)
+  : Lemma (as_ints s == widen (as_zqs s))
+  = Seq.lemma_eq_intro (as_ints s) (widen (as_zqs s))
+
 (** The same for a polynomial-sized block, which is the shape every vector
     coder works on. *)
 let as_nats_at (k: pos) (s: Seq.seq zqt { Seq.length s == k * n }) (i: nat { i < k })

@@ -241,6 +241,28 @@ let byte_decode_index (d: pos { d <= 12 }) (b: Seq.lseq S8.t (32 * d)) (i: nat {
       Math.small_mod (bits_val b (i * d) d) q
     end
 
+(** Below twelve bits the decoder's output is its literal [d]-bit reading,
+    which is what the decompression step needs to know before it may run. *)
+let byte_decode_bound (d: pos { d < 12 }) (b: Seq.lseq S8.t (32 * d)) (i: nat { i < n })
+  : Lemma (Seq.index (byte_decode d b) i < pow2 d)
+  = byte_decode_index d b i;
+    Math.pow2_le_compat 11 d;
+    assert_norm (pow2 11 < q);
+    Math.small_mod (bits_val b (i * d) d) q
+
+let vec_decode_bound (d: pos { d < 12 }) (k: pos) (b: Seq.lseq S8.t (k * (32 * d)))
+                     (t: nat { t < k * n })
+  : Lemma (Seq.index (vec_decode d k b) t < pow2 d)
+  = div_lt t k n;
+    let i = t / n in
+    let j = t % n in
+    Math.lemma_mult_le_right n (i + 1) k;
+    vec_decode_at d k b i;
+    byte_decode_bound d (flat_at k (32 * d) b i) j;
+    assert (Seq.index (vec_at (vec_decode d k b) i) j ==
+            Seq.index (Seq.slice (vec_decode d k b) (i * n) (i * n + n)) j);
+    Math.euclidean_division_definition t n
+
 let poly_compress_index (d: pos { d <= 11 }) (f: poly) (i: nat { i < n })
   : Lemma (Seq.index (poly_compress d f) i == compress d (Seq.index f i))
   = Seq.init_index_ n (fun j -> (compress d (Seq.index f j) <: nat)) i
