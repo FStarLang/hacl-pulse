@@ -109,19 +109,19 @@ ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
 
 fn absorb_blocks (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
-                 (acc: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+                 (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                  (ivs: A.array t) (sg: A.array SZ.t)
                  (input: A.array S8.t) (inlen: SZ.t) (base: SZ.t) (nblk: SZ.t) (n0: SZ.t) (ctr0: SZ.t)
                  (h0: erased (Seq.lseq t 8)) (s: erased (Seq.seq S8.t))
-                 (#vacc: erased (Seq.seq t)) (#vv0: erased (Seq.seq t))
+                 (#vacc: erased (Seq.seq t))
                  (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                  (#pi: perm) (#vi: erased (Seq.seq t))
                  (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                  (#pin: perm) (#vin: erased (Seq.seq S8.t))
-requires A.pts_to acc vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
+requires A.pts_to acc vacc ** A.pts_to mw vm0 **
          A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
          A.pts_to input #pin vin **
-         pure (Seq.length vacc == 8 /\ Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
+         pure (Seq.length vacc == 8 /\ Seq.length vm0 == 16 /\
                Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
                SZ.v base + SZ.v nblk * block_len #t <= Seq.length vin /\
@@ -133,12 +133,12 @@ requires A.pts_to acc vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
                   Seq.index vin (SZ.v base + k) ==
                     Seq.index s (SZ.v n0 * block_len #t + k)))
          ** pure (SZ.v inlen == Seq.length vin)
-ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
+ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
                 (vblk1: Seq.seq S8.t).
-  A.pts_to acc vacc' ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+  A.pts_to acc vacc' ** A.pts_to mw vm1 **
   A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
   A.pts_to input #pin vin **
-  pure (Seq.length vacc' == 8 /\ Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+  pure (Seq.length vacc' == 8 /\ Seq.length vm1 == 16 /\
         Seq.length vblk1 == block_len #t /\
         vacc' == sabsorb p h0 s (SZ.v n0 + SZ.v nblk))
 {
@@ -148,13 +148,13 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
 
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj nblk)
-  invariant exists* (vj: SZ.t) (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
+  invariant exists* (vj: SZ.t) (vacc': Seq.seq t) (vm1: Seq.seq t)
                     (vblk1: Seq.seq S8.t).
-    pts_to j vj ** A.pts_to acc vacc' ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+    pts_to j vj ** A.pts_to acc vacc' ** A.pts_to mw vm1 **
     A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
     A.pts_to input #pin vin **
     pure (SZ.v vj <= SZ.v nblk /\ Seq.length vacc' == 8 /\
-          Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+          Seq.length vm1 == 16 /\
           Seq.length vblk1 == block_len #t /\ Seq.length vi == 8 /\
           reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
           SZ.v base + SZ.v nblk * block_len #t <= Seq.length vin /\
@@ -186,7 +186,7 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
     read_block #t blk input inlen off;
     load_block #t mw blk;
     let ctr = SZ.add ctr0 (SZ.mul (SZ.add vj 1sz) bl);
-    compress_impl p acc mw vv ivs sg ctr false;
+    compress_impl p acc mw ivs sg ctr false;
 
     j := SZ.add vj 1sz;
   }
@@ -274,26 +274,26 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
     the whole difference from SHA-2: the last full block is kept, not
     absorbed. *)
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
 fn update_full (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (acc: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+               (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t) (sg: A.array SZ.t)
                (buf: A.array S8.t) (data: A.array S8.t) (dlen: SZ.t)
                (nlast: SZ.t) (blen: SZ.t)
                (h0: erased (Seq.lseq t 8))
                (s: erased (Seq.seq S8.t)) (s1: erased (Seq.seq S8.t))
-               (#vacc: erased (Seq.seq t)) (#vv0: erased (Seq.seq t))
+               (#vacc: erased (Seq.seq t))
                (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                (#pi: perm) (#vi: erased (Seq.seq t))
                (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                (#vbuf: erased (Seq.seq S8.t))
                (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires A.pts_to acc vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
+requires A.pts_to acc vacc ** A.pts_to mw vm0 **
          A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
          A.pts_to buf vbuf ** A.pts_to data #pd vdata **
-         pure (Seq.length vacc == 8 /\ Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
+         pure (Seq.length vacc == 8 /\ Seq.length vm0 == 16 /\
                Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
                Seq.length vbuf == block_len #t /\
@@ -306,12 +306,12 @@ requires A.pts_to acc vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
                (forall (k: nat). k < SZ.v blen ==>
                   Seq.index vbuf k == Seq.index s (SZ.v nlast * block_len #t + k)))
          ** pure (SZ.v dlen == Seq.length vdata)
-ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
+ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
                 (vblk1: Seq.seq S8.t) (vbuf': Seq.seq S8.t).
-  A.pts_to acc vacc' ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+  A.pts_to acc vacc' ** A.pts_to mw vm1 **
   A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
   A.pts_to buf vbuf' ** A.pts_to data #pd vdata **
-  pure (Seq.length vacc' == 8 /\ Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+  pure (Seq.length vacc' == 8 /\ Seq.length vm1 == 16 /\
         Seq.length vblk1 == block_len #t /\ Seq.length vbuf' == block_len #t /\
         vacc' == sabsorb p h0 s1 (nlast_of #t (Seq.length s1)) /\
         (forall (k: nat). k < brem_of #t (Seq.length s1) ==>
@@ -336,7 +336,7 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
   SZ.fits_lte (SZ.v nlast * block_len #t) (Seq.length s1);
   let ctr0 = SZ.mul nlast bl;
   sabsorb_prefix p h0 (reveal s) (reveal vdata) (SZ.v nlast);
-  absorb_blocks p acc vv mw blk ivs sg buf bl 0sz 1sz nlast ctr0 h0 s1;
+  absorb_blocks p acc mw blk ivs sg buf bl 0sz 1sz nlast ctr0 h0 s1;
 
   (* Whole blocks out of the caller's data, all but the last. *)
   let rest = SZ.sub dlen fill;
@@ -349,7 +349,7 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
   Math.lemma_mult_le_right (block_len #t) 1 (SZ.v nlast + 1);
   SZ.fits_lte (SZ.v nlast + 1) (Seq.length s1);
   SZ.fits_lte ((SZ.v nlast + 1) * block_len #t) (Seq.length s1);
-  absorb_blocks p acc vv mw blk ivs sg data dlen fill nblk (SZ.add nlast 1sz)
+  absorb_blocks p acc mw blk ivs sg data dlen fill nblk (SZ.add nlast 1sz)
                 (SZ.add ctr0 bl) h0 s1;
 
   (* Keep the tail: between one and [block_len] bytes. *)
@@ -361,36 +361,36 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
 
 #pop-options
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
 fn update_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (acc: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+               (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t) (sg: A.array SZ.t)
                (buf: A.array S8.t) (tot: A.array SZ.t) (data: A.array S8.t) (dlen: SZ.t)
                (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
-               (#vacc: erased (Seq.seq t)) (#vv0: erased (Seq.seq t))
+               (#vacc: erased (Seq.seq t))
                (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                (#pi: perm) (#vi: erased (Seq.seq t))
                (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                (#vbuf: erased (Seq.seq S8.t)) (#vtot: erased (Seq.seq SZ.t))
                (#pd: perm) (#vdata: erased (Seq.seq S8.t))
-requires A.pts_to acc vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
+requires A.pts_to acc vacc ** A.pts_to mw vm0 **
          A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
          A.pts_to buf vbuf ** A.pts_to tot vtot ** A.pts_to data #pd vdata **
-         pure (Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
+         pure (Seq.length vm0 == 16 /\
                Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
                stream_ok p key seen vacc vbuf vtot /\
                Seq.length (stream #t key seen) + Seq.length vdata + 2 * block_len #t < pow2 64 /\
                SZ.fits (Seq.length (stream #t key seen) + Seq.length vdata))
          ** pure (SZ.v dlen == Seq.length vdata)
-ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
+ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
                 (vblk1: Seq.seq S8.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  A.pts_to acc vacc' ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+  A.pts_to acc vacc' ** A.pts_to mw vm1 **
   A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
   A.pts_to buf vbuf' ** A.pts_to tot vtot' ** A.pts_to data #pd vdata **
-  pure (Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+  pure (Seq.length vm1 == 16 /\
         Seq.length vblk1 == block_len #t /\
         stream_ok p key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
@@ -411,12 +411,12 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
   brem_bounds #t (Seq.length s1);
 
   if SZ.gt (SZ.add blen dlen) bl
-  ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
+  ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
                   (vblk1: Seq.seq S8.t) (vbuf': Seq.seq S8.t).
-    A.pts_to acc vacc' ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+    A.pts_to acc vacc' ** A.pts_to mw vm1 **
     A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
     A.pts_to buf vbuf' ** A.pts_to tot vtot ** A.pts_to data #pd vdata **
-    pure (Seq.length vacc' == 8 /\ Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+    pure (Seq.length vacc' == 8 /\ Seq.length vm1 == 16 /\
           Seq.length vblk1 == block_len #t /\ Seq.length vbuf' == block_len #t /\
           brem_of #t (Seq.length s1) <= block_len #t /\
           Seq.length key <= max_key_len #t /\
@@ -425,7 +425,7 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
              Seq.index vbuf' k ==
                Seq.index s1 (nlast_of #t (Seq.length s1) * block_len #t + k)))
   {
-    update_full p acc vv mw blk ivs sg buf data dlen nlast blen
+    update_full p acc mw blk ivs sg buf data dlen nlast blen
                 (G.hide (init p (Seq.length key))) s s1;
   }
   else
@@ -457,31 +457,31 @@ ensures exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
 
 fn digest_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (acc: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+               (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t) (sg: A.array SZ.t)
                (buf: A.array S8.t) (tot: A.array SZ.t) (out: A.array S8.t)
                (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
-               (#pa: perm) (#vacc: erased (Seq.seq t)) (#vv0: erased (Seq.seq t))
+               (#pa: perm) (#vacc: erased (Seq.seq t))
                (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                (#pi: perm) (#vi: erased (Seq.seq t))
                (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                (#vout: erased (Seq.seq S8.t))
-requires A.pts_to acc #pa vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
+requires A.pts_to acc #pa vacc ** A.pts_to mw vm0 **
          A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
          A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot ** A.pts_to out vout **
-         pure (Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
+         pure (Seq.length vm0 == 16 /\
                Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
                Seq.length vout == hash_bytes p /\
                stream_ok p key seen vacc vbuf vtot)
-ensures exists* (vv1: Seq.seq t) (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
+ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
                 (vout': Seq.seq S8.t).
-  A.pts_to acc #pa vacc ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+  A.pts_to acc #pa vacc ** A.pts_to mw vm1 **
   A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
   A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot ** A.pts_to out vout' **
-  pure (Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+  pure (Seq.length vm1 == 16 /\
         Seq.length vblk1 == block_len #t /\
         Seq.length key <= max_key_len #t /\
         vout' == blake2 p key seen)
@@ -509,7 +509,7 @@ ensures exists* (vv1: Seq.seq t) (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
   read_block #t blk sub blen 0sz;
   last_block_is_buf #t (reveal s) (reveal vsub) (SZ.v nlast) (SZ.v blen);
   load_block #t mw blk;
-  compress_impl p starr mw vv ivs sg tlen true;
+  compress_impl p starr mw ivs sg tlen true;
   blake2_stream p (reveal key) (reveal seen);
   write_digest_le p out starr;
 

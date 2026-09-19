@@ -69,6 +69,7 @@ let sigma_len (_: unit)
 
 #push-options "--z3rlimit 60 --fuel 0 --ifuel 0"
 
+inline_for_extraction
 fn g_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
           (vv: A.array t) (a b c d: SZ.t) (x y: t)
           (#v0: erased (Seq.seq t))
@@ -109,10 +110,21 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 **
     routine.
 
     [base] is [16 * r], carried in rather than multiplied out, so that no
-    product appears in a proof obligation, and [r] itself is erased. *)
+    product appears in a proof obligation, and [r] itself is erased.
+
+    The whole round is [inline_for_extraction], and that is the point of the
+    unrolling below: with [base] a literal at every call site, [sg.(base + k)]
+    is a read of a known element of a [static const] table, so all sixteen
+    schedule indices fold to constants and the sixteen message reads become
+    sixteen named words.  While a round was a call taking a loop-carried
+    [base], none of that was available to either C compiler, and the two
+    disagreed about what to do instead -- inlining the round was worth 1.35x
+    to clang and cost gcc 15%.  Removing the thing they were guessing about
+    is what makes them agree.  See the note above [Hacl.Impl.Mont256.amul]. *)
 
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
+inline_for_extraction
 fn mix_columns (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
                (#v0: erased (Seq.seq t))
@@ -144,6 +156,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to
   g_impl p vv 3sz 7sz 11sz 15sz A.(m.(s6)) A.(m.(s7));
 }
 
+inline_for_extraction
 fn mix_diagonals (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                  (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
                  (#v0: erased (Seq.seq t))
@@ -175,6 +188,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to
   g_impl p vv 3sz 4sz  9sz 14sz A.(m.(s14)) A.(m.(s15));
 }
 
+inline_for_extraction
 fn round_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
               (vv: A.array t) (m: A.array t) (sg: A.array SZ.t) (base: SZ.t) (r: G.erased nat)
               (#v0: erased (Seq.seq t))
@@ -222,6 +236,7 @@ let sizet_hi_eq (#t: Type0) {| w: word t |} (x: SZ.t)
 (** [vv := h ++ iv].  Unrolled: sixteen stores, and one extensionality
     argument over sixteen indices, is cheaper than a loop invariant that has to
     talk about two source slices at once. *)
+inline_for_extraction
 fn load_vector (#t: Type0) {| w: word t |}
                (vv: A.array t) (h: A.array t) (ivs: A.array t)
                (#v0: erased (Seq.seq t))
@@ -259,6 +274,7 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to h #ph vh ** A.pts_to
 }
 
 (** [Spec.Blake2.init_vector]. *)
+inline_for_extraction
 fn init_vector_impl (#t: Type0) {| w: word t |}
                     ([@@@FStar.Attributes.monomorphize] p: params t)
                     (vv: A.array t) (h: A.array t) (ivs: A.array t)
@@ -291,12 +307,56 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to h #ph vh ** A.pts_to
   }
 }
 
-(** The round loop.  [base] is the offset of the current round's sixteen
-    entries in the schedule table; it advances by sixteen and wraps at a
-    hundred and sixty, which is exactly [16 * (i % 10)] -- BLAKE2b's eleventh
-    and twelfth rounds reuse the first and second permutations. *)
+(** One round, as a step of the loop that is no longer a loop.  [n] counts
+    rounds from the start of the compression and [vinit] is the working vector
+    the compression began with, so the precondition and the postcondition are
+    the same predicate at [n] and [n + 1].  That keeps each of the twelve
+    steps below a single unfolding of [rounds_upto] rather than one query
+    carrying the whole chain.
+
+    [n] and [vinit] are erased; only [base] reaches the C, and at every call
+    site it is a literal. *)
+#push-options "--z3rlimit 60 --fuel 1 --ifuel 0"
+
+inline_for_extraction
+fn round_step (#t: Type0) {| w: word t |}
+              ([@@@FStar.Attributes.monomorphize] p: params t)
+              (vv: A.array t) (m: A.array t) (sg: A.array SZ.t)
+              (base: SZ.t) (n: G.erased nat) (vinit: G.erased (Seq.seq t))
+              (#v0: erased (Seq.seq t))
+              (#pm: perm) (#vm: erased (Seq.seq t))
+              (#ps: perm) (#vs: erased (Seq.seq SZ.t))
+requires A.pts_to vv v0 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
+         pure (Seq.length v0 == 16 /\ Seq.length vm == 16 /\
+               Seq.length (G.reveal vinit) == 16 /\ sigma_ok vs /\
+               SZ.v base == 16 * (G.reveal n % 10) /\
+               v0 == rounds_upto p (reveal vm) (G.reveal vinit) (G.reveal n))
+ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
+  pure (Seq.length vm == 16 /\ Seq.length (G.reveal vinit) == 16 /\
+        Seq.length v1 == 16 /\ sigma_ok vs /\
+        v1 == rounds_upto p (reveal vm) (G.reveal vinit) (G.reveal n + 1))
+{
+  round_impl p vv m sg base (G.hide (G.reveal n % 10));
+}
+
+#pop-options
+
+(** The rounds, unrolled.  [base] is the offset of a round's sixteen entries
+    in the schedule table, and it used to be a loop-carried variable that
+    advanced by sixteen and wrapped at a hundred and sixty -- exactly
+    [16 * (i % 10)], BLAKE2b's eleventh and twelfth rounds reusing the first
+    and second permutations.
+
+    Written out, every [base] is a literal, so every one of the hundred and
+    ninety-two schedule lookups folds and the message words are read by name.
+    That is worth 1.3x to gcc and 1.6x to clang, and it is the only form in
+    which the two agree; see the note above [round_impl].  The first ten
+    rounds are common to both widths and the last two are BLAKE2b's, under a
+    test on a field that is a literal after monomorphization, so exactly one
+    arm survives in the C. *)
 #push-options "--z3rlimit 600 --fuel 1 --ifuel 0"
 
+inline_for_extraction
 fn rounds_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                (vv: A.array t) (m: A.array t) (sg: A.array SZ.t)
@@ -312,35 +372,31 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to
   A.pts_to_len vv;
   A.pts_to_len m;
 
-  let nr = p.nrounds;
-  let mut i = 0sz;
-  let mut base = 0sz;
+  round_step p vv m sg   0sz (G.hide 0) v0;
+  round_step p vv m sg  16sz (G.hide 1) v0;
+  round_step p vv m sg  32sz (G.hide 2) v0;
+  round_step p vv m sg  48sz (G.hide 3) v0;
+  round_step p vv m sg  64sz (G.hide 4) v0;
+  round_step p vv m sg  80sz (G.hide 5) v0;
+  round_step p vv m sg  96sz (G.hide 6) v0;
+  round_step p vv m sg 112sz (G.hide 7) v0;
+  round_step p vv m sg 128sz (G.hide 8) v0;
+  round_step p vv m sg 144sz (G.hide 9) v0;
 
-  while (let vi = !i; SZ.lt vi nr)
-  invariant exists* (vi: SZ.t) (vb: SZ.t) (v1: Seq.seq t).
-    pts_to i vi ** pts_to base vb ** A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to sg #ps vs **
-    pure (SZ.v vi <= SZ.v nr /\ SZ.v vb == 16 * (SZ.v vi % 10) /\
-          Seq.length v0 == 16 /\
-          Seq.length vm == 16 /\ Seq.length v1 == 16 /\ sigma_ok vs /\
-          v1 == rounds_upto p (reveal vm) (reveal v0) (SZ.v vi))
-  decreases (SZ.v nr - SZ.v (!i))
-  {
-    let vi = !i;
-    let vb = !base;
-    round_impl p vv m sg vb (G.hide (SZ.v vi % 10));
-    let nb = SZ.add vb 16sz;
-    if (SZ.eq nb 160sz) {
-      base := 0sz;
-    } else {
-      base := nb;
-    };
-    i := SZ.add vi 1sz;
-  };
+  let nr = p.nrounds;
+  nrounds_cases nr;
+  if (SZ.gt nr 10sz) {
+    round_step p vv m sg  0sz (G.hide 10) v0;
+    round_step p vv m sg 16sz (G.hide 11) v0;
+  } else {
+    A.pts_to_len vv;
+  }
 }
 
 #pop-options
 
 (** The feedforward, [Spec.Blake2.mix_state]. *)
+inline_for_extraction
 fn mix_state_impl (#t: Type0) {| w: word t |}
                   (h: A.array t) (vv: A.array t)
                   (#vh: erased (Seq.seq t))
@@ -379,29 +435,51 @@ ensures exists* (vh': Seq.seq t). A.pts_to h vh' ** A.pts_to vv #pv v4 **
   assert (pure (Seq.equal vc (mix_state #t (reveal vh) (reveal v4))));
 }
 
-(** [Spec.Blake2.compress]: the state [h] is updated in place, using [vv] as
-    scratch. *)
+(** [Spec.Blake2.compress]: the state [h] is updated in place.
+
+    The sixteen-word working vector is allocated here rather than passed in,
+    and this function is deliberately *not* [inline_for_extraction] -- the two
+    facts go together.  Everything below it is inlined, so a compression is
+    one straight-line body of twelve unrolled rounds, and the working vector
+    is a local array that provably does not escape it.  Both C compilers
+    therefore keep all sixteen words in registers for the whole compression,
+    which is where most of the 1.3x (gcc) and 1.6x (clang) comes from.
+
+    Inlining this function as well would put that body at each of its four
+    call sites in each of eight instantiations.  It was measured: it buys
+    clang nothing over this and costs gcc a fifth of its gain, because
+    thirty-two copies do not fit where eight do.  A caller-allocated scratch
+    array was measured too, and gives up half the win in both compilers --
+    a pointer parameter may alias, so the words stay in memory.
+
+    [ivs] and [sg] are the initialisation vector and the schedule table, both
+    static; [last] is the final-block flag.  gcc used to clone this function
+    on all three and clang did not, which is why it was inlined before the
+    rounds were unrolled.  Custard monomorphizes on [p], so the eight copies
+    already have them as constants. *)
 fn compress_impl (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
-                 (h: A.array t) (m: A.array t) (vv: A.array t) (ivs: A.array t)
+                 (h: A.array t) (m: A.array t) (ivs: A.array t)
                  (sg: A.array SZ.t) (ctr: SZ.t) (last: bool)
                  (#vh: erased (Seq.seq t))
-                 (#v0: erased (Seq.seq t))
                  (#pm: perm) (#vm: erased (Seq.seq t))
                  (#pi: perm) (#vi: erased (Seq.seq t))
                  (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires A.pts_to h vh ** A.pts_to m #pm vm ** A.pts_to vv v0 **
+requires A.pts_to h vh ** A.pts_to m #pm vm **
          A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
-         pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\ Seq.length v0 == 16 /\
+         pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\
                Seq.length vi == 8 /\ sigma_ok vs /\
                SZ.v ctr < pow2 64 /\ reveal vi == G.reveal p.iv)
-ensures exists* (vh': Seq.seq t) (v1: Seq.seq t).
-  A.pts_to h vh' ** A.pts_to m #pm vm ** A.pts_to vv v1 **
+ensures exists* (vh': Seq.seq t).
+  A.pts_to h vh' ** A.pts_to m #pm vm **
   A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
-  pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\ Seq.length v1 == 16 /\
+  pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\
         Seq.length vh' == 8 /\
         vh' == compress p (reveal vh) (reveal vm) (SZ.v ctr) last)
 {
+  let z0: t = zero #t #w;
+  let mut vv = [| z0; 16sz |];
+  A.pts_to_len vv;
   init_vector_impl p vv h ivs ctr last;
   rounds_impl p vv m sg;
   mix_state_impl h vv;

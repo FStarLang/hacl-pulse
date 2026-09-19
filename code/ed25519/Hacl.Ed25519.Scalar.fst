@@ -68,6 +68,12 @@ module Table = Hacl.Impl.Table
 module Tables = Hacl.Ed25519.Tables
 module Declassify = Hacl.Secret.Declassify
 
+(** This module is arithmetic-heavy, and the default SMT encoding boxes
+    every integer operation, which hides the structure of the products from
+    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
+    only the nonlinear operators wrapped is measurably faster here. *)
+#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
 (** {2 Bytes, copies and comparison}
@@ -556,7 +562,7 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
     sixteen-limb add and a conditional subtract, so about ten thousand
     machine operations -- a fraction of one point addition. *)
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
 fn reduce_body (acc t1 t2: A.array S64.t) (h: A.array S8.t) (i: SZ.t { SZ.v i < 512 })
                (#vacc: erased (Seq.seq S64.t))
@@ -640,7 +646,7 @@ ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
     selected against the accumulator on the bit, so the running time does
     not depend on the scalar. *)
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
 fn qmul_body (acc a n t1 t2 t3: A.array S64.t) (i: SZ.t { SZ.v i < 256 })
              (#vacc: erased (Seq.seq S64.t))

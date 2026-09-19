@@ -1967,21 +1967,21 @@ the reference.
 | SHA-256 | 256 KiB | 227 us | 1,097 us | **0.21x** |
 | ChaCha20 | 256 KiB | 495 us | 857 us | **0.58x** |
 | SHA-512 | 256 KiB | 771 us | 1,326 us | **0.58x** |
-| SHA3-256 | 256 KiB | 1,144 us | 1,832 us | **0.62x** |
+| SHA3-256 | 256 KiB | 986 us | 1,832 us | **0.54x** |
 | RSA-2048 modexp | -- | 9.1 ms | 13.1 ms | **0.70x** |
 | ChaCha20-Poly1305 | 256 KiB | 810 us | 1,074 us | **0.75x** |
 | SHA-1 | 256 KiB | 1,540 us | 1,490 us | 1.03x |
 | HMAC-SHA-256 | 256 KiB | 1,148 us | 1,102 us | 1.04x |
+| BLAKE2b | 256 KiB | 396 us | 313 us | 1.26x |
 | NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
 | X25519 | -- | 56 us | 44 us | 1.27x |
 | Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
-| BLAKE2b | 256 KiB | 582 us | 313 us | 1.86x |
 | RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
 | FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
 | Ed25519 sign | -- | 255 us | 64 us | 3.96x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
 | P-256 ECDSA verify | -- | 2.49 ms | 0.43 ms | 5.77x |
-| secp256k1 ECDSA sign | -- | 1.11 ms | 0.07 ms | 17x |
+| secp256k1 ECDSA sign | -- | 1.08 ms | 0.07 ms | 16x |
 
 Three things account for most of the spread.
 
@@ -1990,7 +1990,11 @@ and the extraction is clean.**  SHA-256 is ahead because the SHA extensions
 are wired in and HACL\*'s portable C does not use them; ChaCha20, SHA-512 and
 SHA-3 are ahead because Custard's output unrolls and register-allocates at
 least as well as karamel's and the specifications here permitted a flatter
-implementation.  Nothing was hand-tuned.
+implementation.  Nothing was hand-tuned.  SHA-3 is the one of these that was
+returned to: the rate is now a literal in each of the six sponges and the
+permutation sits inside them rather than behind a call, which is worth 2.4x
+on a 64-byte digest and 1.13x on bulk.  A 64-byte SHA3-256 is 624 ns against
+the reference's 995.
 
 **Where it is behind by a factor of two, it is the exponent, not the
 arithmetic.**  RSA-PSS and FFDHE use square-and-multiply; HACL\* uses a 4-bit
@@ -2021,6 +2025,97 @@ mechanism, but a library cannot dictate its consumers' flags.  So the
 attribute goes only where it is paid for: Curve25519's field and the 256-bit
 bignum core.  The `Hacl.Secret` arithmetic, 168 single-expression functions,
 gains nothing at all -- gcc was already inlining every one.
+
+**And so is interprocedural constant propagation.**  The same lesson arrived
+a second time, less gently.  `Hacl.Impl.Mont256.amul` took its modulus and
+its Montgomery constant as arguments so that the field and the scalar field
+of both curves could share one multiplier, and the comment above it said that
+specialising them would buy nothing.  gcc had in fact been specialising them
+all along: it cloned `amul` once per modulus, four times, and the clones were
+worth two and a half times on every P-256 and secp256k1 operation.  That is
+also a budget -- `--param ipa-cp-large-unit-insns` defaults to sixteen
+thousand -- and adding FrodoKEM and HPKE to the single translation unit spent
+it.  The clones vanished, and every elliptic curve benchmark got two and a
+half times slower without a single line of elliptic curve code changing.
+`amul` is now `inline_for_extraction`, and so is the modular exponentiation
+`Hacl.Impl.Exp256.mexp` above it, which gcc was cloning for the same reason:
+each of their call sites carries its own copy with its own constants.  That
+is a decision the library makes rather than one it hopes for, and it puts the
+curves back at or slightly ahead of where they were before the merge.
+
+**So the policy is to do this work ourselves.**  Every specialisation the C
+compiler performs for us is one we do not control, and there are two
+independent reasons not to want that.  It is spent against a budget for the
+translation unit as a whole, so any new primitive can take it away without
+touching the code it slows down.  And clang does no function specialisation
+at all -- LLVM's pass is off by default -- so anything obtained this way is a
+gcc-only speedup, and shows up as a gcc/clang gap rather than as a gap in the
+library.  Splitting the distribution into several files does not fix either
+one; it makes the units smaller, which moves the budget around and takes away
+inlining opportunities elsewhere.  The fix is to say what we mean:
+`inline_for_extraction` where a caller's constant matters, and let both
+compilers see the same code.
+
+`make clones` reports where we are still relying on the compiler's judgement:
+it compiles the distribution with gcc, lists the functions it cloned, and
+diffs them against `mk/clones.baseline`.  There are sixty-four today -- HMAC,
+the SHA-2 cores, the MD5 and SHA-1 blocks -- and the list is meant to
+shrink.
+`make clones-available` recompiles with the budget raised and prints what gcc
+*would* have cloned given room.
+
+It has already earned its place.  Specialising the SHA-3 sponge grew the
+distribution by four thousand lines, and the check reported five clones lost
+to that growth: the generic bignum's Montgomery reduction, its precomputation
+and its constant-time exponentiation, a Frodo sampler and an HPKE label
+expansion.  Every one of them turned out to be worth nothing -- RSA-PSS,
+FFDHE and the bare modexp are unchanged to within a quarter of a percent.
+Which is the other half of the lesson: a clone tells you the compiler found a
+specialisation, not that the specialisation pays.  The way to find out is to
+measure, and the way to keep the answer is to write it down.
+
+BLAKE2 is what the policy looks like when it is clang that was losing.  gcc
+cloned the compression function and both half-rounds, once per width, on the
+initialisation vector, the message schedule and the final-block flag; clang
+cloned nothing, and that alone was most of a 13% gap between the two.  Making
+the whole chain from `g_impl` up to `compress_impl` `inline_for_extraction`
+leaves gcc exactly where it was -- it was already getting this -- and brings
+clang up to meet it: BLAKE2b 640 to 562 microseconds, BLAKE2s 1,016 to 932.
+The two compilers now agree on BLAKE2b to within one percent.
+
+One function in that chain was deliberately left alone at the time, and it
+was the interesting one.  Inlining `round_impl` into the round loop let clang
+keep the sixteen-word working vector in registers and reach 441 microseconds,
+a further 1.35x; the same change cost gcc 15%, because gcc spilled the vector
+instead.  There was no annotation that satisfied both, which is the honest
+signal that the code, not the annotation, was what needed to change.
+
+So the round loop was unrolled.  It ran `16 * (i % 10)` rounds over a
+hundred and sixty entry schedule table, and the modulus is there because
+BLAKE2b's eleventh and twelfth rounds reuse the first and second
+permutations.  Written out as ten straight-line round bodies plus two more
+under a test on the round count -- a field that is a literal after
+monomorphization, so exactly one arm survives -- every one of the hundred and
+ninety-two schedule lookups has a constant subscript, and `round_impl` can
+then be `inline_for_extraction` without either compiler having to guess
+anything.  BLAKE2b went from 567 to 396 microseconds under gcc and 562 to 347
+under clang; BLAKE2s from 849 to 598 and 932 to 571.  BLAKE2s is now at
+parity with HACL\*'s reference on both compilers, and BLAKE2b is 1.26x rather
+than 1.81x.
+
+Two details made the difference between that and a much smaller win.  The
+first is that unrolling *alone* is worth nothing at all -- measured at
+exactly 1.00x on both compilers -- because with `round_impl` still a call the
+literal base is just an argument.  The second is where the working vector
+lives: moving its allocation out of the callers and into `compress_impl`, so
+that it is a local array in the same function as the unrolled rounds rather
+than a pointer parameter that might alias, is worth a further 1.15x to gcc
+and 1.33x to clang, because that is what lets the sixteen words be promoted
+to registers.  The cost is twelve thousand lines of generated C, and it is
+bounded by keeping `compress_impl` itself *not* inlined: eight copies of the
+unrolled rounds rather than the thirty-two the call sites would have given,
+which also matters because gcc loses most of the win to code size at
+thirty-two.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
@@ -2337,6 +2432,18 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   as `pad_block_run`, `update_split` and `update_small`, where the solver sees
   arithmetic and nothing else.  A lemma stated in exactly the shape the call
   site needs is worth more than any budget.
+* **A disjunction in a record field's refinement is a case split in every
+  proof that mentions the record.**  Telling the type system that BLAKE2 has
+  either ten rounds or twelve -- `nrounds: n: SZ.t { SZ.v n == 10 \/ SZ.v n
+  == 12 }` -- is exactly the fact the unrolled round loop needs, and it took
+  `mix_columns`, which does not care how many rounds there are, from twenty
+  seconds to a timeout at three times the resource limit.  Behind an opaque
+  predicate (`[@@"opaque_to_smt"] let nrounds_ok`) with the positivity the
+  specifications actually use spelled out beside it, the hypothesis is an
+  uninterpreted atom until the one function that wants it asks, and the
+  module checks in twenty-five seconds.  The general rule: a refinement on a
+  field is a hypothesis in *every* query about a value of that type, so it
+  should be as close to atomic as the proofs that do not use it can bear.
 * **`FStar.SizeT.fits` obligations do not follow from `< pow2 64`.**  A
   counter that a ghost sequence bounds needs a real `size_t` to descend from:
   passing the byte offset in as an argument, with `SZ.v ctr0 == n0 * block_len`
@@ -2507,3 +2614,15 @@ rough order of value:
    gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
+6. **Taking over the remaining sixty-four compiler specialisations**, the
+   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks.
+   Each is a speedup that gcc currently grants us at its own discretion and
+   clang does not grant at all.  The SHA-3 sponge and permutation were the
+   first, and were worth 2.4x on a short digest; BLAKE2's compression chain
+   was the second, and was worth 14% to clang before the unrolled round took
+   it further.  Pricing them all at once with
+   `-fno-ipa-cp-clone` says the rest are worth nothing measurable, so this is
+   a tidying exercise rather than a performance one.  Splitting the
+   distribution into several translation units is *not* the fix here -- it
+   moves the budget rather than removing the dependency on it, and costs
+   inlining across the new boundaries.

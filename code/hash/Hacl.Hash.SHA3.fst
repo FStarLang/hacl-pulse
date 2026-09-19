@@ -56,10 +56,22 @@ let table_lens (_: unit)
 (** {2 The sponge, wrapped}
 
     [keccak_impl] is the only real code in this module; the named algorithms
-    below are partial applications of it. *)
+    below are partial applications of it.
+
+    It is [inline_for_extraction], along with the sponge itself, because the
+    rate is the whole point.  Each of the six call sites passes a literal --
+    72, 104, 136, 144 or 168 -- and with it in place the [len msg / r] and
+    [len msg % r] of the absorb loop become constants rather than integer
+    divisions, and every block copy gets a constant length.  That is worth
+    1.7x on a 64-byte SHA-3 digest, where the divisions are most of the work,
+    and 1.03x to 1.15x on bulk.  gcc will do the same specialisation on its
+    own if its interprocedural budget happens to stretch that far, which
+    since FrodoKEM it does not, and clang never will; see the note on
+    [Hacl.Impl.Mont256.amul]. *)
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
+inline_for_extraction
 fn keccak_impl (out: A.array S8.t) (out_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t) (r: SZ.t) (suffix: U8.t)
                (#vout0: erased (Seq.seq S8.t))
                (#pm: perm) (#vm: erased (Seq.seq S8.t))

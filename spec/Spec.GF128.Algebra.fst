@@ -72,7 +72,7 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
 
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 150"
+#push-options "--fuel 1 --ifuel 0 --z3rlimit 150"
 
 (** {2 Addition} *)
 

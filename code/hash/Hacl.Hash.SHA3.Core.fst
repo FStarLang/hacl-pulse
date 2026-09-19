@@ -43,6 +43,16 @@
     immediate offsets and immediate rotation counts, and the proof cost is one
     lane, not twenty-five.
 
+    {b The permutation itself is [inline_for_extraction] too}, so that it
+    lands inside each of the six sponges rather than being called from them.
+    That is worth 2.2x on a short SHA3-256 and 1.14x on bulk, on top of what
+    specialising the rate already buys: the round counter and the state
+    pointers become local, the twenty-four iterations lose their call
+    boundary, and the two twenty-five word scratch buffers stop having to be
+    re-established.  gcc will do some of this on its own -- it was cloning
+    [round_impl] already -- but only while its interprocedural budget lasts,
+    and clang does none of it.
+
     The lane functions all carry the same shape of specification: a prefix
     invariant saying that everything below the current index already agrees
     with the specification's sequence.  That is exactly the invariant the
@@ -110,6 +120,7 @@ ensures exists* (vst': Seq.seq S64.t).
 }
 
 (** [st] becomes [theta st]. *)
+inline_for_extraction
 fn theta_impl (st: A.array S64.t) (#vst0: erased (Seq.seq S64.t))
 requires A.pts_to st vst0 ** pure (Seq.length vst0 == 25)
 ensures exists* (vst: Seq.seq S64.t).
@@ -221,6 +232,7 @@ ensures exists* (vb': Seq.seq S64.t).
 }
 
 (** [b] becomes [rho_pi st]. *)
+inline_for_extraction
 fn rho_pi_impl (st: A.array S64.t) (b: A.array S64.t)
                (#pst: perm) (#vst: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
 requires A.pts_to st #pst vst ** A.pts_to b vb0 **
@@ -294,6 +306,7 @@ ensures exists* (vst': Seq.seq S64.t).
 }
 
 (** [st] becomes [chi b]. *)
+inline_for_extraction
 fn chi_impl (b: A.array S64.t) (st: A.array S64.t)
             (#pb: perm) (#vb: erased (Seq.seq S64.t)) (#vst0: erased (Seq.seq S64.t))
 requires A.pts_to b #pb vb ** A.pts_to st vst0 **
@@ -340,6 +353,7 @@ ensures exists* (vst: Seq.seq S64.t).
 
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
+inline_for_extraction
 fn round_impl (st: A.array S64.t) (b: A.array S64.t)
               (rc_tbl: A.array S64.t) (n: SZ.t)
               (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
@@ -367,6 +381,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
 (** Twenty-four rounds.  This loop is {i not} unrolled: twenty-four copies of a
     fully unrolled round is about twenty kilobytes of code, which costs more in
     instruction cache than it saves in loop overhead. *)
+inline_for_extraction
 fn permute_impl (st: A.array S64.t) (b: A.array S64.t)
                 (rc_tbl: A.array S64.t)
                 (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))

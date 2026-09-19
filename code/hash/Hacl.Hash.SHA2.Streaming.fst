@@ -67,7 +67,7 @@ unfold let stream_ok (#t: Type0) {| word t |} (p: params t)
   Seq.length vtot == 1 /\ SZ.v (Seq.index vtot 0) == Seq.length seen /\
   acc_ok p vacc vbuf seen
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 (** Eight words, the size of an accumulator. *)
 fn copy8 (#t: Type0) (dst: A.array t) (src: A.array t)
@@ -105,7 +105,7 @@ ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
     message; [absorb_congr] says that is the same thing as the [n]-block fold
     of [seen], since the two agree on the bytes that have been absorbed. *)
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
 fn absorb_blocks (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                  (kt: A.array t) (wsb: A.array t) (acc: A.array t)
@@ -177,7 +177,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t).
 
 (** {2 The three operations} *)
 
-#push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 (** Reset to the empty message. *)
 fn init_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -207,7 +207,7 @@ ensures exists* (vacc': Seq.seq t) (vtot': Seq.seq SZ.t).
 
 #pop-options
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
 (** The case of [update] in which the buffer has just been filled: absorb it,
     then absorb whatever whole blocks of [data] follow, then keep the trailing
@@ -286,7 +286,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t).
 
 #pop-options
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 600 --fuel 0 --ifuel 0"
 
 (** Absorb [data]. *)
 fn update_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -355,7 +355,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
 
 #pop-options
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 600 --fuel 0 --ifuel 0"
 
 (** The digest of everything seen so far.  The state is left usable. *)
 fn digest_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)

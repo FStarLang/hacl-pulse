@@ -300,7 +300,7 @@ let xti (v: block) (j: int) : block = if j < 0 then zero else xt v j
     helpers nested it is a single query of several hundred thousand terms and
     takes the better part of an hour; split up it is under a minute. *)
 
-#push-options "--z3rlimit 150 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 150 --fuel 1 --ifuel 0"
 
 (** [x^(m+j) == x * x^(m+j-1)], at bit [0].  Below the summation range
     [m + j] may be zero, where the step does not hold and there is nothing to
@@ -557,7 +557,7 @@ let xpow_high (m: nat { m < 128 }) : Lemma (xpowi (m + 128) == xti r_block m)
   = xpow_128 ();
     xpow_add 128 m
 
-#push-options "--z3rlimit 150 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 150 --fuel 1 --ifuel 0"
 
 (** Below [x^128] the reduction is the identity, so the bottom half of the
     product is read off unchanged. *)

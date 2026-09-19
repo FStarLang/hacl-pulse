@@ -64,7 +64,7 @@ unfold let msg_ok (#t: Type0) {| word t |} (p: params t)
   (forall (k: nat). k < Seq.length info ==>
      Seq.index m ((hash_bytes p) + k) == Seq.index info k)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** Round 1: [T(0)] is empty, so hash the [info | 1] suffix of the buffer. *)
 fn round_one (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -162,7 +162,7 @@ ensures exists* (vdg': Seq.seq S8.t) (vmsg': Seq.seq S8.t).
 
 (** {2 Expand} *)
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 600 --fuel 1 --ifuel 0"
 
 fn expand_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (len: SZ.t)
