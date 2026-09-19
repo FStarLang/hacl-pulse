@@ -75,25 +75,25 @@ val init_impl (#t: Type0) {| w: word t |}
              pure (Seq.length vkey <= max_key_len #t /\
                    stream_ok p vkey (Seq.empty #S8.t) vacc' vbuf' vtot'))
 
-(** Absorb [dlen] more bytes.  [vv], [mw] and [blk] are scratch the caller
+(** Absorb [dlen] more bytes.  [mw] and [blk] are scratch the caller
     owns; their contents on exit are unspecified beyond their lengths. *)
 val update_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] p: params t)
-                (acc: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+                (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                 (ivs: A.array t) (sg: A.array SZ.t)
                 (buf: A.array S8.t) (tot: A.array SZ.t) (data: A.array S8.t) (dlen: SZ.t)
                 (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
-                (#vacc: erased (Seq.seq t)) (#vv0: erased (Seq.seq t))
+                (#vacc: erased (Seq.seq t))
                 (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                 (#pi: perm) (#vi: erased (Seq.seq t))
                 (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                 (#vbuf: erased (Seq.seq S8.t)) (#vtot: erased (Seq.seq SZ.t))
                 (#pd: perm) (#vdata: erased (Seq.seq S8.t))
   : stt unit
-    (requires A.pts_to acc vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
+    (requires A.pts_to acc vacc ** A.pts_to mw vm0 **
               A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
               A.pts_to buf vbuf ** A.pts_to tot vtot ** A.pts_to data #pd vdata **
-              pure (Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
+              pure (Seq.length vm0 == 16 /\
                     Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                     reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
                     stream_ok p key seen vacc vbuf vtot /\
@@ -102,12 +102,12 @@ val update_impl (#t: Type0) {| w: word t |}
                     SZ.fits (Seq.length (stream #t key seen) + Seq.length vdata))
               ** pure (SZ.v dlen == Seq.length vdata))
     (ensures fun _ ->
-             exists* (vacc': Seq.seq t) (vv1: Seq.seq t) (vm1: Seq.seq t)
+             exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
                      (vblk1: Seq.seq S8.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-             A.pts_to acc vacc' ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+             A.pts_to acc vacc' ** A.pts_to mw vm1 **
              A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
              A.pts_to buf vbuf' ** A.pts_to tot vtot' ** A.pts_to data #pd vdata **
-             pure (Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+             pure (Seq.length vm1 == 16 /\
                    Seq.length vblk1 == block_len #t /\
                    stream_ok p key (Seq.append seen vdata) vacc' vbuf' vtot'))
 
@@ -116,11 +116,11 @@ val update_impl (#t: Type0) {| w: word t |}
     and updates may be interleaved. *)
 val digest_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] p: params t)
-                (acc: A.array t) (vv: A.array t) (mw: A.array t) (blk: A.array S8.t)
+                (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                 (ivs: A.array t) (sg: A.array SZ.t)
                 (buf: A.array S8.t) (tot: A.array SZ.t) (out: A.array S8.t)
                 (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
-                (#pa: perm) (#vacc: erased (Seq.seq t)) (#vv0: erased (Seq.seq t))
+                (#pa: perm) (#vacc: erased (Seq.seq t))
                 (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                 (#pi: perm) (#vi: erased (Seq.seq t))
                 (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
@@ -128,21 +128,21 @@ val digest_impl (#t: Type0) {| w: word t |}
                 (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
   : stt unit
-    (requires A.pts_to acc #pa vacc ** A.pts_to vv vv0 ** A.pts_to mw vm0 **
+    (requires A.pts_to acc #pa vacc ** A.pts_to mw vm0 **
               A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
               A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot ** A.pts_to out vout **
-              pure (Seq.length vv0 == 16 /\ Seq.length vm0 == 16 /\
+              pure (Seq.length vm0 == 16 /\
                     Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                     reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
                     Seq.length vout == hash_bytes p /\
                     stream_ok p key seen vacc vbuf vtot))
     (ensures fun _ ->
-             exists* (vv1: Seq.seq t) (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
+             exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
                      (vout': Seq.seq S8.t).
-             A.pts_to acc #pa vacc ** A.pts_to vv vv1 ** A.pts_to mw vm1 **
+             A.pts_to acc #pa vacc ** A.pts_to mw vm1 **
              A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
              A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot ** A.pts_to out vout' **
-             pure (Seq.length vv1 == 16 /\ Seq.length vm1 == 16 /\
+             pure (Seq.length vm1 == 16 /\
                    Seq.length vblk1 == block_len #t /\
                    Seq.length key <= max_key_len #t /\
                    vout' == blake2 p key seen))
