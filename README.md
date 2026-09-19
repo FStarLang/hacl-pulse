@@ -2035,6 +2035,29 @@ outside the repository; the numbers above are reproducible with any AEAD/hash
 benchmark that links `dist/Hacl.c` on one side and HACL\*'s `dist/gcc-compatible`
 on the other.
 
+### ML-KEM, with no HACL\* to compare against
+
+HACL\* has no ML-KEM, so the table below is absolute rather than relative,
+measured the same way as the rest of this section:
+
+| operation | 512 | 768 | 1024 |
+| --- | --- | --- | --- |
+| keypair | 77 us | 122 us | 179 us |
+| encapsulate | 105 us | 160 us | 232 us |
+| decapsulate | 138 us | 205 us | 290 us |
+
+Decapsulation costs more than encapsulation everywhere because it *is*
+encapsulation, plus a decryption: the Fujisaki-Okamoto transform
+re-encrypts in order to check.  The numbers are a few times what a
+hand-optimised reference implementation of Kyber gets on the same class of
+machine, and the gap is not in the transform: a large share of every
+operation is Keccak, where this library is already ahead of HACL\*'s
+portable C, and the rest is the NTT and the rejection sampler, neither of
+which has been tuned at all --- the NTT is the specification's seven
+layers written out, with a Barrett reduction on every product and no
+lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
+look first if these ever need to be faster.
+
 ## Proof engineering notes
 
 Non-obvious things that cost time here, recorded so they cost less next time:
