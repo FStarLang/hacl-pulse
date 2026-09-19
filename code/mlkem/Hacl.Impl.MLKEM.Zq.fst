@@ -283,6 +283,10 @@ let as_ints_flat_at (k: pos) (m: pos) (s: Seq.seq zqt { Seq.length s == k * m })
   = Math.lemma_mult_le_right m (i + 1) k;
     as_ints_slice s (i * m) (i * m + m)
 
+let as_nats_widen (s: Seq.seq zqt { Seq.length s == n })
+  : Lemma (as_nats s == widen (as_poly s))
+  = Seq.lemma_eq_intro (as_nats s) (widen (as_poly s))
+
 (** The [nat] view is the [zq] view widened; the coders take the first and
     the specifications of the keys take the second. *)
 let as_ints_widen (s: Seq.seq zqt)
