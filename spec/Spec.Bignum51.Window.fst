@@ -40,6 +40,12 @@ module Classical = FStar.Classical
 
 open Spec.Bignum51
 
+(** This module is arithmetic-heavy, and the default SMT encoding boxes
+    every integer operation, which hides the structure of the products from
+    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
+    only the nonlinear operators wrapped is measurably faster here. *)
+#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 150"
 
 (** The [w] bits of [v] starting at bit [a]. *)

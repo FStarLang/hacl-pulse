@@ -56,12 +56,39 @@ module S64 = Hacl.Secret.UInt64
 
 let rotv (t: Type0) {| word t |} = s: U32.t { 0 < U32.v s /\ U32.v s < bits #t }
 
+(** RFC 7693 defines exactly two round counts, and the implementation needs to
+    know it: it runs the rounds as ten straight-line bodies and two more, so
+    that the message schedule indices are literals rather than table reads.
+
+    Opaque to the solver, and stated alongside the [0 < n] that is all the
+    specifications themselves ever want.  Written as a bare disjunction in the
+    field's refinement it would enter the context of every proof that so much
+    as mentions a [params], and a disjunction is a case split: [mix_columns],
+    which does not care how many rounds there are, went from seconds to a
+    timeout at three times the resource limit.  Behind [nrounds_ok] it is an
+    uninterpreted atom until [nrounds_cases] asks for it, which one function
+    does. *)
+[@@"opaque_to_smt"]
+let nrounds_ok (n: SZ.t) : prop = SZ.v n == 10 \/ SZ.v n == 12
+
+let nrounds_ok_intro (n: SZ.t)
+  : Lemma (requires SZ.v n == 10 \/ SZ.v n == 12) (ensures nrounds_ok n)
+  = reveal_opaque (`%nrounds_ok) nrounds_ok
+
+let nrounds_cases (n: SZ.t { nrounds_ok n })
+  : Lemma (SZ.v n == 10 \/ SZ.v n == 12)
+  = reveal_opaque (`%nrounds_ok) nrounds_ok
+
 noeq
 type params (t: Type0) {| word t |} = {
   (** Twelve rounds for BLAKE2b, ten for BLAKE2s.  A machine value for the
       same reason as in [Spec.SHA2.params]: every field either is one or is
-      erased, so the record has a C representation. *)
-  nrounds: n: SZ.t { 0 < SZ.v n };
+      erased, so the record has a C representation.
+
+      RFC 7693 defines exactly these two, and [nrounds_ok] says so rather than
+      leaving it at [0 < n]; see the note there for why it is opaque and why
+      the positivity is spelled out separately. *)
+  nrounds: n: SZ.t { 0 < SZ.v n /\ nrounds_ok n };
 
   (** The initialization vector.  Read only by specifications -- the
       implementation fills a table of its own and proves it equal -- so it is
@@ -288,12 +315,16 @@ let blake2 (#t: Type0) {| word t |} (p: params t)
     mixed into the initial state, so it is a parameter of these records rather
     than a truncation applied afterwards. *)
 
-let blake2b_with (nn: (n: SZ.t { 0 < SZ.v n /\ SZ.v n <= 64 })) : params S64.t = {
+let blake2b_with (nn: (n: SZ.t { 0 < SZ.v n /\ SZ.v n <= 64 })) : params S64.t =
+  nrounds_ok_intro 12sz;
+  {
   nrounds = 12sz; iv = G.hide iv64; nhash_bytes = nn;
   rot1 = 32ul; rot2 = 24ul; rot3 = 16ul; rot4 = 63ul;
 }
 
-let blake2s_with (nn: (n: SZ.t { 0 < SZ.v n /\ SZ.v n <= 32 })) : params S32.t = {
+let blake2s_with (nn: (n: SZ.t { 0 < SZ.v n /\ SZ.v n <= 32 })) : params S32.t =
+  nrounds_ok_intro 10sz;
+  {
   nrounds = 10sz; iv = G.hide iv32; nhash_bytes = nn;
   rot1 = 16ul; rot2 = 12ul; rot3 = 8ul; rot4 = 7ul;
 }

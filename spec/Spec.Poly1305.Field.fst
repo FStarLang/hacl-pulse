@@ -72,6 +72,12 @@ let ring () : Tac unit =
   norm [delta_only [`%eval5; `%p5]];
   canon_semiring int_cr
 
+(** This module is arithmetic-heavy, and the default SMT encoding boxes
+    every integer operation, which hides the structure of the products from
+    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
+    only the nonlinear operators wrapped is measurably faster here. *)
+#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
 
 let as_nat5_eval (a0 a1 a2 a3 a4: nat)

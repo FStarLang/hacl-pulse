@@ -190,6 +190,7 @@ all: verify extract compile test
 
 include mk/verify.mk
 include mk/test.mk
+include mk/clones.mk
 
 .PHONY: clean
 clean:

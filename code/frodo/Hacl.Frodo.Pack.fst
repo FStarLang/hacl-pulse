@@ -62,7 +62,7 @@ let pow2_small () : Lemma (pow2 1 == 2 /\ pow2 2 == 4 /\ pow2 3 == 8 /\ pow2 4 =
   assert_norm (pow2 5 == 32); assert_norm (pow2 6 == 64);
   assert_norm (pow2 7 == 128); assert_norm (pow2 8 == 256)
 
-#push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 300 --fuel 1 --ifuel 0"
 
 (** Bit [pos] of the packed stream: bit [d - 1 - pos mod d] of entry
     [pos / d], counting from the least significant. *)
