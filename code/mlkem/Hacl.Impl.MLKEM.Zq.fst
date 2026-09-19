@@ -208,3 +208,47 @@ let as_nats_intro (s: Seq.seq zqt { Seq.length s == n }) (f: Seq.lseq nat n)
 let as_nats_poly (s: Seq.seq zqt { Seq.length s == n })
   : Lemma (as_nats s == widen (as_poly s))
   = Seq.lemma_eq_intro (as_nats s) (widen (as_poly s))
+
+(** {2 Vectors}
+
+    A [k]-vector is one array of [k * 256] coefficients, laid out exactly
+    the way {!Spec.MLKEM.Zq.pvec} is, so that entry [i] is a sub-array and
+    needs no copy.  The view is stated for an arbitrary length so that the
+    same lemmas serve a polynomial, a vector and a matrix row. *)
+
+let as_zqs (s: Seq.seq zqt) : GTot (Seq.lseq zq (Seq.length s))
+  = Seq.init_ghost (Seq.length s) (fun i -> (S16.v (Seq.index s i) <: zq))
+
+let as_zqs_index (s: Seq.seq zqt) (i: nat { i < Seq.length s })
+  : Lemma (Seq.index (as_zqs s) i == S16.v (Seq.index s i))
+          [SMTPat (Seq.index (as_zqs s) i)]
+  = Seq.init_ghost_index_ (Seq.length s) (fun j -> (S16.v (Seq.index s j) <: zq)) i
+
+let as_zqs_intro (s: Seq.seq zqt) (f: Seq.lseq zq (Seq.length s))
+  : Lemma (requires forall (i: nat). i < Seq.length s ==> S16.v (Seq.index s i) == Seq.index f i)
+          (ensures as_zqs s == f)
+  = Seq.lemma_eq_intro (as_zqs s) f
+
+let as_zqs_poly (s: Seq.seq zqt { Seq.length s == n })
+  : Lemma (as_zqs s == as_poly s)
+  = Seq.lemma_eq_intro (as_zqs s) (as_poly s)
+
+let as_zqs_slice (s: Seq.seq zqt) (a: nat) (b: nat { a <= b /\ b <= Seq.length s })
+  : Lemma (as_zqs (Seq.slice s a b) == Seq.slice (as_zqs s) a b)
+  = Seq.lemma_eq_intro (as_zqs (Seq.slice s a b)) (Seq.slice (as_zqs s) a b)
+
+(** Entry [i] of a vector is the view of the sub-array holding it. *)
+let as_zqs_at (k: pos) (s: Seq.seq zqt { Seq.length s == k * n }) (i: nat { i < k })
+  : Lemma (vec_at #k (as_zqs s) i == as_poly (Seq.slice s (i * n) (i * n + n)))
+  = Math.lemma_mult_le_right n (i + 1) k;
+    as_zqs_slice s (i * n) (i * n + n);
+    as_zqs_poly (Seq.slice s (i * n) (i * n + n))
+
+(** The same for a flat sequence of [k] blocks of any size, which is what
+    a serialised vector and a matrix are. *)
+let as_zqs_flat_at (k: pos) (m: pos) (s: Seq.seq zqt { Seq.length s == k * m })
+                   (i: nat { i < k })
+  : Lemma (flat_at k m (as_zqs s) i == as_zqs (Seq.slice s (i * m) (i * m + m)))
+  = Math.lemma_mult_le_right m (i + 1) k;
+    as_zqs_slice s (i * m) (i * m + m)
+
