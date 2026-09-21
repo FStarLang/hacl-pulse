@@ -80,22 +80,21 @@ val init_impl (#t: Type0) {| w: word t |}
 val update_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] p: params t)
                 (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
-                (ivs: A.array t) (sg: A.array SZ.t)
+                (ivs: A.array t)
                 (buf: A.array S8.t) (tot: A.array SZ.t) (data: A.array S8.t) (dlen: SZ.t)
                 (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                 (#vacc: erased (Seq.seq t))
                 (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                 (#pi: perm) (#vi: erased (Seq.seq t))
-                (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                 (#vbuf: erased (Seq.seq S8.t)) (#vtot: erased (Seq.seq SZ.t))
                 (#pd: perm) (#vdata: erased (Seq.seq S8.t))
   : stt unit
     (requires A.pts_to acc vacc ** A.pts_to mw vm0 **
-              A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
+              A.pts_to blk vblk0 ** A.pts_to ivs #pi vi **
               A.pts_to buf vbuf ** A.pts_to tot vtot ** A.pts_to data #pd vdata **
               pure (Seq.length vm0 == 16 /\
                     Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
-                    reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
+                    reveal vi == G.reveal p.iv /\
                     stream_ok p key seen vacc vbuf vtot /\
                     Seq.length (stream #t key seen) + Seq.length vdata +
                       2 * block_len #t < pow2 64 /\
@@ -105,7 +104,7 @@ val update_impl (#t: Type0) {| w: word t |}
              exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
                      (vblk1: Seq.seq S8.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
              A.pts_to acc vacc' ** A.pts_to mw vm1 **
-             A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
+             A.pts_to blk vblk1 ** A.pts_to ivs #pi vi **
              A.pts_to buf vbuf' ** A.pts_to tot vtot' ** A.pts_to data #pd vdata **
              pure (Seq.length vm1 == 16 /\
                    Seq.length vblk1 == block_len #t /\
@@ -117,30 +116,29 @@ val update_impl (#t: Type0) {| w: word t |}
 val digest_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] p: params t)
                 (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
-                (ivs: A.array t) (sg: A.array SZ.t)
+                (ivs: A.array t)
                 (buf: A.array S8.t) (tot: A.array SZ.t) (out: A.array S8.t)
                 (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
                 (#pa: perm) (#vacc: erased (Seq.seq t))
                 (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                 (#pi: perm) (#vi: erased (Seq.seq t))
-                (#psg: perm) (#vsg: erased (Seq.seq SZ.t))
                 (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
                 (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
                 (#vout: erased (Seq.seq S8.t))
   : stt unit
     (requires A.pts_to acc #pa vacc ** A.pts_to mw vm0 **
-              A.pts_to blk vblk0 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
+              A.pts_to blk vblk0 ** A.pts_to ivs #pi vi **
               A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot ** A.pts_to out vout **
               pure (Seq.length vm0 == 16 /\
                     Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
-                    reveal vi == G.reveal p.iv /\ sigma_ok vsg /\
+                    reveal vi == G.reveal p.iv /\
                     Seq.length vout == hash_bytes p /\
                     stream_ok p key seen vacc vbuf vtot))
     (ensures fun _ ->
              exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
                      (vout': Seq.seq S8.t).
              A.pts_to acc #pa vacc ** A.pts_to mw vm1 **
-             A.pts_to blk vblk1 ** A.pts_to ivs #pi vi ** A.pts_to sg #psg vsg **
+             A.pts_to blk vblk1 ** A.pts_to ivs #pi vi **
              A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot ** A.pts_to out vout' **
              pure (Seq.length vm1 == 16 /\
                    Seq.length vblk1 == block_len #t /\

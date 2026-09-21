@@ -372,22 +372,21 @@ let nblocks_sz (klen mlen bl: SZ.t)
 fn blake2_blocks (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
                  (h: A.array t) (mw: A.array t) (blk: A.array S8.t)
-                 (ivs: A.array t) (sg: A.array SZ.t)
+                 (ivs: A.array t)
                  (key: A.array S8.t) (klen: SZ.t) (msg: A.array S8.t) (mlen: SZ.t)
                  (koffsz: SZ.t) (nlast: SZ.t)
                  (#vh0: erased (Seq.seq t)) (#vm0: erased (Seq.seq t))
                  (#vblk0: erased (Seq.seq S8.t))
                  (#pi: perm) (#vi: erased (Seq.seq t))
-                 (#ps: perm) (#vs: erased (Seq.seq SZ.t))
                  (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
 requires
   A.pts_to h vh0 ** A.pts_to mw vm0 ** A.pts_to blk vblk0 **
-  A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+  A.pts_to ivs #pi vi **
   A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vh0 == 8 /\ Seq.length vm0 == 16 /\
         Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
-        reveal vi == G.reveal p.iv /\ sigma_ok vs /\
+        reveal vi == G.reveal p.iv /\
         Seq.length vkey <= max_key_len #t /\
         SZ.v koffsz == koff #t (reveal vkey) /\
         SZ.v nlast + 1 == nblocks #t (reveal vkey) (reveal vmsg) /\
@@ -398,7 +397,7 @@ requires
          ** pure (SZ.v mlen == Seq.length vmsg)
 ensures exists* (vh: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq S8.t).
   A.pts_to h vh ** A.pts_to mw vm1 ** A.pts_to blk vb1 **
-  A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+  A.pts_to ivs #pi vi **
   A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vkey <= max_key_len #t /\ Seq.length vh == 8 /\
         Seq.length vm1 == 16 /\
@@ -422,13 +421,13 @@ ensures exists* (vh: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq S8.t).
                     (vh: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq S8.t).
     pts_to i vi2 ** pts_to off voff ** pts_to ctr vctr **
     A.pts_to h vh ** A.pts_to mw vm1 ** A.pts_to blk vb1 **
-    A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+    A.pts_to ivs #pi vi **
     A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
     pure (Seq.length vkey <= max_key_len #t /\
           SZ.v vi2 <= SZ.v nlast /\ Seq.length vh == 8 /\
           Seq.length vm1 == 16 /\
           Seq.length vb1 == block_len #t /\ Seq.length vi == 8 /\
-          reveal vi == G.reveal p.iv /\ sigma_ok vs /\
+          reveal vi == G.reveal p.iv /\
           SZ.v koffsz == koff #t (reveal vkey) /\
           SZ.v nlast + 1 == nblocks #t (reveal vkey) (reveal vmsg) /\
           Seq.length vmsg + 2 * block_len #t < pow2 64 /\
@@ -459,7 +458,7 @@ ensures exists* (vh: Seq.seq t) (vm1: Seq.seq t) (vb1: Seq.seq S8.t).
 
     read_block_of #t blk key klen msg mlen usekey voff;
     load_block #t mw blk;
-    compress_impl p h mw ivs sg vctr false;
+    compress_impl p h mw ivs vctr false;
 
     off := SZ.add voff (step_of usekey bl);
     ctr := SZ.add vctr bl;
@@ -541,13 +540,9 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len marr;
   let mut barr = [| z8; bl |];
   A.pts_to_len barr;
-  sigma_len ();
-  let sg = table sigma_arr 160sz;
-  sigma_seq_ok ();
   A.pts_to_len harr;
   A.pts_to_len marr;
   A.pts_to_len barr;
-  A.pts_to_len sg;
 
   init_state p harr ivs klen;
 
@@ -560,7 +555,7 @@ ensures exists* (vout': Seq.seq S8.t).
   let nb = nblocks_sz klen mlen bl;
   let nlast = SZ.sub nb 1sz;
 
-  blake2_blocks p harr marr barr ivs sg key klen msg mlen koffsz nlast;
+  blake2_blocks p harr marr barr ivs key klen msg mlen koffsz nlast;
 
   msg_blocks_bound_opt #t (reveal vkey) (reveal vmsg) (SZ.v nlast) (SZ.v koffsz);
   block_at_data #t (reveal vkey) (reveal vmsg) (SZ.v nlast);
@@ -571,10 +566,9 @@ ensures exists* (vout': Seq.seq S8.t).
   load_block #t marr barr;
 
   let lastc = last_ctr klen mlen bl;
-  compress_impl p harr marr ivs sg lastc true;
+  compress_impl p harr marr ivs lastc true;
   write_digest_le p out harr;
 
-  drop_table sg;
 }
 
 #pop-options

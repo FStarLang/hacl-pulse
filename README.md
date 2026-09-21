@@ -1972,12 +1972,12 @@ the reference.
 | ChaCha20-Poly1305 | 256 KiB | 810 us | 1,074 us | **0.75x** |
 | SHA-1 | 256 KiB | 1,540 us | 1,490 us | 1.03x |
 | HMAC-SHA-256 | 256 KiB | 1,148 us | 1,102 us | 1.04x |
-| BLAKE2b | 256 KiB | 396 us | 313 us | 1.26x |
+| BLAKE2b | 256 KiB | 397 us | 313 us | 1.27x |
 | NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
 | X25519 | -- | 56 us | 44 us | 1.27x |
 | Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
 | RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
-| FFDHE-2048 | -- | 9.4 ms | 4.7 ms | 2.03x |
+| FFDHE-2048 | -- | 9.6 ms | 4.7 ms | 2.04x |
 | Ed25519 sign | -- | 255 us | 64 us | 3.96x |
 | AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
 | P-256 ECDSA verify | -- | 2.49 ms | 0.43 ms | 5.77x |
@@ -2058,8 +2058,8 @@ compilers see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-four today -- HMAC,
-the SHA-2 cores, the MD5 and SHA-1 blocks -- and the list is meant to
+diffs them against `mk/clones.baseline`.  There are sixty-seven today -- HMAC,
+the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
 *would* have cloned given room.
@@ -2116,6 +2116,27 @@ bounded by keeping `compress_impl` itself *not* inlined: eight copies of the
 unrolled rounds rather than the thirty-two the call sites would have given,
 which also matters because gcc loses most of the win to code size at
 thirty-two.
+
+One thing the unrolled round exposed is that the schedule table was still
+arriving as a *parameter*.  `sg` was threaded from the four entry points down
+through six functions to the round body, and nothing ever passed anything
+else -- there is one sigma table in BLAKE2 and both widths share it.  The
+parameter existed only to be constant-propagated away, and whether it was
+propagated away was the C compiler's decision rather than ours.  It is now
+read from the global inside `compress_impl`, where the C is a local pointer
+to a `static const` array and both compilers fold the hundred and ninety-two
+literal subscripts at `-O1`.
+
+That change is worth **nothing at all** at `-O3`, which is the point.  Both
+compilers were already getting it -- gcc by cloning `compress_impl` against
+the `ipa-cp-large-unit-insns` budget, clang by interprocedural constant
+propagation into a `static` function -- and the measurement that matters is
+what happens when they stop.  Compiling with `-fno-ipa-cp`, which is what an
+exhausted budget looks like, used to cost BLAKE2 between 9% and 15%; it now
+costs nothing measurable.  A speedup you are not in control of is a speedup
+that can be taken away by an unrelated commit, and this one was the largest
+left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
+MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
 256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
@@ -2614,8 +2635,9 @@ rough order of value:
    gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
-6. **Taking over the remaining sixty-four compiler specialisations**, the
-   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks.
+6. **Taking over the remaining sixty-seven compiler specialisations**, the
+   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
+   ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and
    clang does not grant at all.  The SHA-3 sponge and permutation were the
    first, and were worth 2.4x on a short digest; BLAKE2's compression chain
@@ -2626,3 +2648,14 @@ rough order of value:
    distribution into several translation units is *not* the fix here -- it
    moves the budget rather than removing the dependency on it, and costs
    inlining across the new boundaries.
+
+   Part of this is a mechanical sweep: a table that never varies should not
+   be a parameter at all.  BLAKE2's schedule was the big one and is done, but
+   its initialisation vector still is, and so are SHA-2's round constants,
+   MD5's two tables and ML-KEM's twiddle factors.  Measured with
+   `-fno-ipa-cp`, what is left is SHA-2 6%, MD5 3% and NaCl's secretbox 8% on
+   short inputs.  The initialisation vector is the awkward case, because it
+   genuinely differs between the two widths and the word type is abstract at
+   the point where it would have to be chosen -- that wants either a
+   `monomorphize` binder that Custard honours for array arguments or a
+   type class carrying the table, and neither exists yet.
