@@ -47,6 +47,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
+module GA = Pulse.Lib.GlobalArray
 module G = FStar.Ghost
 
 (** The block length as a machine value. *)
@@ -505,15 +506,16 @@ let msg_blocks_bound_opt (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (nlast
     everything else is scratch this function allocates and gives back. *)
 fn blake2_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (ivs: A.array t) (out: A.array S8.t)
+               ([@@@FStar.Attributes.monomorphize] iva: GA.static_array t)
+               (out: A.array S8.t)
                (key: A.array S8.t) (klen: SZ.t) (msg: A.array S8.t) (mlen: SZ.t)
-               (#pi: perm) (#vi: erased (Seq.seq t))
                (#vout: erased (Seq.seq S8.t))
                (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
-requires A.pts_to ivs #pi vi ** A.pts_to out vout **
+requires A.pts_to out vout **
          A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
-         pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
+         pure (Seq.length (GA.static_array_elems iva) == 8 /\
+               GA.static_array_elems iva == G.reveal p.iv /\
                Seq.length vout == (hash_bytes p) /\
                Seq.length vkey <= max_key_len #t /\
                Seq.length vmsg + 2 * block_len #t < pow2 64 /\
@@ -521,10 +523,11 @@ requires A.pts_to ivs #pi vi ** A.pts_to out vout **
          ** pure (SZ.v klen == Seq.length vkey)
          ** pure (SZ.v mlen == Seq.length vmsg)
 ensures exists* (vout': Seq.seq S8.t).
-  A.pts_to ivs #pi vi ** A.pts_to out vout' **
+  A.pts_to out vout' **
   A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
   pure (Seq.length vkey <= max_key_len #t /\ vout' == blake2 p (reveal vkey) (reveal vmsg))
 {
+  let ivs = table iva 8sz;
   A.pts_to_len ivs;
   A.pts_to_len out;
   A.pts_to_len key;
@@ -567,6 +570,7 @@ ensures exists* (vout': Seq.seq S8.t).
 
   let lastc = last_ctr klen mlen bl;
   compress_impl p harr marr ivs lastc true;
+  drop_table ivs;
   write_digest_le p out harr;
 
 }

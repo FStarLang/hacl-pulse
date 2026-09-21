@@ -42,6 +42,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module U32 = FStar.UInt32
 module G = FStar.Ghost
+module GA = Pulse.Lib.GlobalArray
 
 (** The block length as a machine integer.  The refinement is the whole
     content: clients index and bound with it, they never unfold it. *)
@@ -89,16 +90,17 @@ val write_digest_le (#t: Type0) {| w: word t |}
 
 val blake2_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
-               (ivs: A.array t) (out: A.array S8.t)
+               ([@@@FStar.Attributes.monomorphize] iva: GA.static_array t)
+               (out: A.array S8.t)
                (key: A.array S8.t) (klen: SZ.t) (msg: A.array S8.t) (mlen: SZ.t)
-               (#pi: perm) (#vi: erased (Seq.seq t))
                (#vout: erased (Seq.seq S8.t))
                (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
   : stt unit
-    (requires A.pts_to ivs #pi vi ** A.pts_to out vout **
+    (requires A.pts_to out vout **
              A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
-             pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
+             pure (Seq.length (GA.static_array_elems iva) == 8 /\
+                   GA.static_array_elems iva == G.reveal p.iv /\
                    Seq.length vout == (hash_bytes p) /\
                    Seq.length vkey <= max_key_len #t /\
                    Seq.length vmsg + 2 * block_len #t < pow2 64 /\
@@ -106,7 +108,7 @@ val blake2_impl (#t: Type0) {| w: word t |}
              ** pure (SZ.v klen == Seq.length vkey)
              ** pure (SZ.v mlen == Seq.length vmsg))
     (ensures fun _ -> exists* (vout': Seq.seq S8.t).
-      A.pts_to ivs #pi vi ** A.pts_to out vout' **
+      A.pts_to out vout' **
       A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
       pure (Seq.length vkey <= max_key_len #t /\ vout' == blake2 p (reveal vkey) (reveal vmsg)))
 
