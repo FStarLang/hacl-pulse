@@ -23,9 +23,10 @@ tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
 thirty-four C test harnesses in `tests/`.
 
 Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
-SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305, HMAC-SHA-512 and the generic
-bignum are all faster -- to behind it on the elliptic curves, where what is
-left is the scalar multiplication rather than the field: X25519 is within
+SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305 and HMAC-SHA-512 are all faster --
+to behind it on modular exponentiation, which is still square-and-multiply
+where HACL\* uses a window, and on the elliptic curves, where what is left is
+the scalar multiplication rather than the field: X25519 is within
 1.26x, but Ed25519, P-256 and secp256k1 still multiply one bit at a time where
 HACL\* uses a precomputed window.  See [Performance](#performance).
 
@@ -1400,7 +1401,9 @@ inverts `R`.  No appeal to Bezout, no gcd, and nothing computed at run time
 `code/bignum/Hacl.Bignum.Exponentiation.fst` is the square-and-multiply
 ladder that RSA and finite-field Diffie-Hellman are built out of.  It runs
 entirely in Montgomery form: the base goes in once, the accumulator comes
-out once, and every rung in between is two `mont_mul`s.
+out once, and every rung in between is two `mont_mul`s.  Two per exponent
+bit is also exactly why RSA-PSS and FFDHE are a factor of two behind the
+reference, which uses a 4-bit window; see the roadmap.
 
     void Hacl_Bignum_Exponentiation_mod_exp_consttime(
         uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits,
@@ -1988,7 +1991,6 @@ reference**.
 | HMAC-SHA-512 | 256 KiB | 770 us | 1,361 us | **0.57x** |  |  |
 | ChaCha20 | 256 KiB | 494 us | 854 us | **0.58x** | 93 us | 5.30x |
 | SHAKE128 | 256 KiB | 883 us | 1,489 us | **0.59x** |  |  |
-| RSA-2048 modexp | -- | 9.0 ms | 12.9 ms | **0.70x** |  |  |
 | ChaCha20-Poly1305 | 256 KiB | 808 us | 1,059 us | **0.76x** | 148 us | 5.46x |
 | SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
 | HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
@@ -1999,6 +2001,7 @@ reference**.
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
+| RSA-2048 modexp | -- | 9.0 ms | 4.5 ms | **1.98x** |  |  |
 | RSA-PSS-2048 sign | -- | 9.3 ms | 4.7 ms | **1.98x** |  |  |
 | FFDHE-2048 | -- | 9.4 ms | 4.6 ms | **2.04x** |  |  |
 | Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
@@ -2033,10 +2036,19 @@ permutation sits inside them rather than behind a call, which is worth 2.4x
 on a 64-byte digest and 1.13x on bulk.  A 64-byte SHA3-256 is 624 ns against
 the reference's 985.
 
-**Where it is behind by a factor of two, it is the exponent, not the
-arithmetic.**  RSA-PSS and FFDHE use square-and-multiply; HACL\* uses a 4-bit
-window.  The generic bignum itself is *faster* than HACL\*'s, which is what
-the modexp row shows.
+**Where it is behind by a factor of two, it is the exponent.**  RSA-PSS,
+FFDHE and the generic modexp are all within a hair of 1.98x, and that is one
+cause, not three: hacl-pulse's constant-time modular exponentiation is
+square-and-multiply, two multiplications per exponent bit, where HACL\* uses
+a 4-bit window and spends five per four bits.
+
+An earlier version of this table put the modexp row at 0.70x and concluded
+that the generic bignum was ahead.  That was wrong, and the way it was wrong
+is worth recording: the benchmark's reference side called `Hacl_Bignum32`,
+which is HACL\*'s **32-bit-limb** bignum, against hacl-pulse's 64-bit limbs.
+`Hacl_Bignum64` on the same input is 4.5 ms rather than 12.9, and the row
+that had looked like a 1.43x win is a 1.98x loss.  A reference is only a
+reference if it is the same algorithm at the same width.
 
 **Where it is behind by more, it is the higher-level algorithm.**  Curve25519
 now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
@@ -2710,22 +2722,28 @@ costs is still open.
 Beyond feature parity, the performance work above has a queue of its own, in
 rough order of value:
 
-1. **Windowed scalar multiplication for Ed25519**, which is most of the
+1. **Windowed modular exponentiation** (4-bit) in
+   `Hacl.Bignum.Exponentiation`.  This is the best-evidenced item on the
+   list: RSA-PSS sign, FFDHE-2048 and the generic 2048-bit modexp are 1.98x,
+   2.04x and 1.98x behind respectively, and that is *one* cause, not three.
+   The ladder does two multiplications per exponent bit; a 4-bit window does
+   five per four bits, and the only new machinery is a constant-time lookup
+   into a sixteen-entry table -- the same masked select the curves will want
+   next.  One change, three rows, no new proof technique.
+2. **Windowed scalar multiplication for Ed25519**, which is most of the
    remaining gap now that the field is at radix 2^51 and `fmul` is a straight
-   line: signing is 4.0x the reference where X25519 is 1.27x, and the whole of
+   line: signing is 3.7x the reference where X25519 is 1.26x, and the whole of
    the difference is HACL\*'s precomputed base-point window against a
-   bit-at-a-time double-and-add here.
-2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
+   bit-at-a-time double-and-add here.  Fixed-base, so it pays on keygen and
+   signing both, and it reuses the table lookup from (1).
+3. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
-3. **Special-prime reduction for P-256 and secp256k1** in place of the shared
+4. **Special-prime reduction for P-256 and secp256k1** in place of the shared
    general Montgomery core.
-4. **Windowed modular exponentiation** (4-bit) in
-   `Hacl.Bignum.Exponentiation`, which is the whole of the RSA-PSS and FFDHE
-   gap.
 5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
-   of what is left after (3).
-6. **Taking over the remaining sixty-seven compiler specialisations**, the
+   of what is left after (4).
+6. **Taking over the remaining sixty-six compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and
@@ -2740,12 +2758,15 @@ rough order of value:
    inlining across the new boundaries.
 
    Part of this is a mechanical sweep: a table that never varies should not
-   be a parameter at all.  BLAKE2's schedule was the big one and is done, but
-   its initialisation vector still is, and so are SHA-2's round constants,
-   MD5's two tables and ML-KEM's twiddle factors.  Measured with
-   `-fno-ipa-cp`, what is left is SHA-2 6%, MD5 3% and NaCl's secretbox 8% on
-   short inputs.  The initialisation vector is the awkward case, because it
-   genuinely differs between the two widths and the word type is abstract at
-   the point where it would have to be chosen -- that wants either a
-   `monomorphize` binder that Custard honours for array arguments or a
-   type class carrying the table, and neither exists yet.
+   be a parameter at all.  BLAKE2's schedule, BLAKE2's initialisation vector
+   and MD5's two tables are done; SHA-2's round constants and initial states,
+   SHA-3's round constants, Ed25519's curve constants, ML-KEM's twiddle
+   factors, the FFDHE primes and the HPKE labels are not.  Measured with
+   `-fno-ipa-cp`, what is left is SHA-2 6% and NaCl's secretbox 8% on short
+   inputs.  The awkward case -- a table that genuinely differs between
+   instantiations, as BLAKE2's initialisation vector does between the two
+   widths -- is solved rather than open: the binder becomes a
+   `Pulse.Lib.GlobalArray` `static_array` marked `[@@@monomorphize]`, and the
+   global it is applied to carries `[@@FStar.Custard.no_specialize]` so that
+   Custard's specialization key stops at the name instead of unfolding to the
+   initializer.  SHA-2 is the next one to take that shape.
