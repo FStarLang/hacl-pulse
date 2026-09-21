@@ -23,11 +23,11 @@ tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
 thirty-four C test harnesses in `tests/`.
 
 Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
-SHA-3, ChaCha20, ChaCha20-Poly1305 and the generic bignum are all faster --
-to behind it on the elliptic curves, where what is left is the scalar
-multiplication rather than the field: X25519 is within 1.27x, but Ed25519,
-P-256 and secp256k1 still multiply one bit at a time where HACL\* uses a
-precomputed window.  See [Performance](#performance).
+SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305, HMAC-SHA-512 and the generic
+bignum are all faster -- to behind it on the elliptic curves, where what is
+left is the scalar multiplication rather than the field: X25519 is within
+1.26x, but Ed25519, P-256 and secp256k1 still multiply one bit at a time where
+HACL\* uses a precomputed window.  See [Performance](#performance).
 
 ```
 make            verify, extract, compile, test
@@ -1956,36 +1956,71 @@ seconds.
 ## Performance
 
 Measured on an AMD EPYC 7662 (Zen 2), gcc 15.2.0 `-O3`, pinned to one core,
-three interleaved rounds, per-benchmark minimum, with a canary (see
-[Measuring on a shared machine](#measuring-on-a-shared-machine)).  The
-reference is HACL\*'s
-**portable scalar C** -- not its AVX2 or AVX-512 variants -- except for
-AES-GCM, where HACL\* has no portable implementation at all and the reference
-is EverCrypt dispatching to Vale assembly.  Ratios below 1.00 are faster than
-the reference.
+three rounds at two link-time code offsets, all three contenders interleaved
+inside each round, per-benchmark minimum over the runs whose canary says the
+core was healthy (see
+[Measuring on a shared machine](#measuring-on-a-shared-machine)).
 
-| primitive | size | hacl-pulse | HACL\* | ratio |
-| --- | ---: | ---: | ---: | ---: |
-| SHA-256 | 256 KiB | 227 us | 1,097 us | **0.21x** |
-| ChaCha20 | 256 KiB | 495 us | 857 us | **0.58x** |
-| SHA-512 | 256 KiB | 771 us | 1,326 us | **0.58x** |
-| SHA3-256 | 256 KiB | 986 us | 1,832 us | **0.54x** |
-| RSA-2048 modexp | -- | 9.1 ms | 13.1 ms | **0.70x** |
-| ChaCha20-Poly1305 | 256 KiB | 810 us | 1,074 us | **0.75x** |
-| SHA-1 | 256 KiB | 1,540 us | 1,490 us | 1.03x |
-| HMAC-SHA-256 | 256 KiB | 1,148 us | 1,102 us | 1.04x |
-| BLAKE2b | 256 KiB | 397 us | 313 us | 1.27x |
-| NaCl secretbox | 256 KiB | 825 us | 650 us | 1.27x |
-| X25519 | -- | 56 us | 44 us | 1.27x |
-| Poly1305 | 256 KiB | 288 us | 210 us | 1.37x |
-| RSA-PSS-2048 sign | -- | 9.4 ms | 4.7 ms | 1.99x |
-| FFDHE-2048 | -- | 9.6 ms | 4.7 ms | 2.04x |
-| Ed25519 sign | -- | 255 us | 64 us | 3.96x |
-| AES-128-GCM | 256 KiB | 319 us | 70 us | 4.53x |
-| P-256 ECDSA verify | -- | 2.49 ms | 0.43 ms | 5.77x |
-| secp256k1 ECDSA sign | -- | 1.08 ms | 0.07 ms | 16x |
+There are two reference columns, because there are two different questions.
 
-Three things account for most of the spread.
+**HACL\*** is HACL\*'s **portable scalar C** -- not its AVX2 or AVX-512
+variants -- except for AES-GCM, where HACL\* has no portable implementation at
+all and the reference is EverCrypt dispatching to Vale assembly.  This is the
+like-for-like comparison: same algorithm, same instruction set, two extraction
+pipelines.  It is the column that says anything about Pulse.
+
+**HACL\* best** is HACL\* configured for this machine and allowed everything
+it has: EverCrypt's runtime multiplexing onto Vale's SHA-EXT assembly, the
+AVX2 ChaCha20 and Poly1305, the vectorized BLAKE2, and the BMI2/ADX
+Curve25519.  hacl-pulse has no vectorized or assembly backend, so this column
+is not a fair fight and is not meant to be one; it is there to size the gap
+that a future vectorization effort would have to close.  It is shown only
+where it differs from the scalar reference by more than 3%.
+
+Ratios are hacl-pulse over the reference, so **below 1.00 is faster than the
+reference**.
+
+| primitive | size | hacl-pulse | HACL\* | ratio | HACL\* best | ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SHA-256 | 256 KiB | 227 us | 1,098 us | **0.21x** | 164 us | 1.39x |
+| SHA3-256 | 256 KiB | 985 us | 1,839 us | **0.54x** |  |  |
+| SHA-512 | 256 KiB | 770 us | 1,364 us | **0.57x** |  |  |
+| HMAC-SHA-512 | 256 KiB | 770 us | 1,361 us | **0.57x** |  |  |
+| ChaCha20 | 256 KiB | 494 us | 854 us | **0.58x** | 93 us | 5.30x |
+| SHAKE128 | 256 KiB | 883 us | 1,489 us | **0.59x** |  |  |
+| RSA-2048 modexp | -- | 9.0 ms | 12.9 ms | **0.70x** |  |  |
+| ChaCha20-Poly1305 | 256 KiB | 808 us | 1,059 us | **0.76x** | 148 us | 5.46x |
+| SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
+| HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
+| BLAKE2s | 256 KiB | 595 us | 572 us | **1.04x** |  |  |
+| Salsa20 | 256 KiB | 528 us | 435 us | **1.22x** |  |  |
+| NaCl secretbox | 256 KiB | 809 us | 645 us | **1.26x** |  |  |
+| X25519 | -- | 55 us | 44 us | **1.26x** | 36 us | 1.52x |
+| BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
+| Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
+| MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
+| RSA-PSS-2048 sign | -- | 9.3 ms | 4.7 ms | **1.98x** |  |  |
+| FFDHE-2048 | -- | 9.4 ms | 4.6 ms | **2.04x** |  |  |
+| Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
+| AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
+| P-256 ECDSA verify | -- | 2.4 ms | 426 us | **5.74x** |  |  |
+| secp256k1 ECDSA sign | -- | 1,055 us | 65 us | **16.16x** |  |  |
+
+The last two columns say what vector code is worth, and it is worth a great
+deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
+for HMAC-SHA-256 once EverCrypt reaches the SHA-EXT assembly.  Those are the
+four places where a portable scalar implementation, however well extracted,
+simply cannot compete, and they are the honest ceiling on what the work in
+this repository can reach without a vector backend.  Two of the entries go the
+other way and are worth recording: HACL\*'s AVX2 BLAKE2b is *slower* than its
+own scalar C on this machine (438 us against 312), and every vectorized
+primitive loses at 64 bytes, where the setup outweighs the body.  SHA-EXT
+beats hacl-pulse's SHA-256 by only 1.39x, which is the narrowest of these
+margins, and for a different reason: both sides are already issuing
+`sha256rnds2`, so that row is this repository's intrinsics against Vale's
+hand-written assembly rather than scalar against vector.
+
+Three things account for most of the spread against the scalar reference.
 
 **Where the C is at parity or ahead, it is because the algorithm is the same
 and the extraction is clean.**  SHA-256 is ahead because the SHA extensions
@@ -1996,7 +2031,7 @@ implementation.  Nothing was hand-tuned.  SHA-3 is the one of these that was
 returned to: the rate is now a literal in each of the six sponges and the
 permutation sits inside them rather than behind a call, which is worth 2.4x
 on a 64-byte digest and 1.13x on bulk.  A 64-byte SHA3-256 is 624 ns against
-the reference's 995.
+the reference's 985.
 
 **Where it is behind by a factor of two, it is the exponent, not the
 arithmetic.**  RSA-PSS and FFDHE use square-and-multiply; HACL\* uses a 4-bit
@@ -2006,7 +2041,7 @@ the modexp row shows.
 **Where it is behind by more, it is the higher-level algorithm.**  Curve25519
 now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
 so the field arithmetic is the same shape, and with the field marked
-`CInline` X25519 is within 1.27x -- what is left there is the ladder itself,
+`CInline` X25519 is within 1.26x -- what is left there is the ladder itself,
 which has had no attention.  Ed25519 is further behind because it multiplies
 one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1
 use the shared general Montgomery core rather than the special-prime reductions
@@ -2100,9 +2135,9 @@ under a test on the round count -- a field that is a literal after
 monomorphization, so exactly one arm survives -- every one of the hundred and
 ninety-two schedule lookups has a constant subscript, and `round_impl` can
 then be `inline_for_extraction` without either compiler having to guess
-anything.  BLAKE2b went from 567 to 396 microseconds under gcc and 562 to 347
-under clang; BLAKE2s from 849 to 598 and 932 to 571.  BLAKE2s is now at
-parity with HACL\*'s reference on both compilers, and BLAKE2b is 1.26x rather
+anything.  BLAKE2b went from 567 to 395 microseconds under gcc and 562 to 347
+under clang; BLAKE2s from 849 to 595 and 932 to 571.  BLAKE2s is now at
+parity with HACL\*'s reference on both compilers, and BLAKE2b is 1.27x rather
 than 1.81x.
 
 Two details made the difference between that and a much smaller win.  The
@@ -2141,7 +2176,7 @@ left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
 MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
-256 KiB, twelve times the reference, and is now 319 -- four AES blocks in
+256 KiB, twelve times the reference, and is now 325 -- four AES blocks in
 flight at a time, four GHASH blocks against the precomputed powers of the hash
 key, and a GF(2^128) reduction by shifts rather than by a second multiply.
 The remaining 4.5x is against hand-written assembly that interleaves six
@@ -2184,6 +2219,27 @@ subsystem the change did not touch, and not accompanied by any difference in
 the generated code** is a measurement artifact until proven otherwise, and
 the cheapest proof is to diff `nm -S` output before reaching for a
 microarchitectural explanation.
+
+### Building the reference honestly
+
+The reference numbers are only worth what the reference build is worth, and
+HACL\*'s build has one trap that is silent in both directions.  `./configure`
+must be run **with no arguments**: given `--enable-vale --enable-inline-asm`
+it prints its help text and leaves `config.h` and `Makefile.config` empty,
+after which everything still compiles and links, and `libevercrypt.a` simply
+contains no assembly.  Worse, the objects from such a run are not rebuilt by a
+later, correct `configure`, because their sources have not changed -- so a
+tree that has ever been configured wrongly keeps producing a crippled library
+until the objects are deleted.
+
+The symptom is not a build failure but a plausible-looking number.  A library
+built that way reports every CPU feature absent, which quietly costs the
+reference its SHA-EXT, its AES-NI and its ADX; AES-GCM at 256 KiB drops from
+71 microseconds to several hundred, and hacl-pulse appears to win a comparison
+it loses by 4.5x.  The check is one line -- call
+`EverCrypt_AutoConfig2_init()` and print `EverCrypt_AutoConfig2_has_shaext()`
+and its siblings -- and it is worth running every time the reference tree is
+rebuilt.
 
 ### ML-KEM, with no HACL\* to compare against
 
