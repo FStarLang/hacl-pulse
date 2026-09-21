@@ -1956,7 +1956,9 @@ seconds.
 ## Performance
 
 Measured on an AMD EPYC 7662 (Zen 2), gcc 15.2.0 `-O3`, pinned to one core,
-three interleaved rounds, per-benchmark minimum.  The reference is HACL\*'s
+three interleaved rounds, per-benchmark minimum, with a canary (see
+[Measuring on a shared machine](#measuring-on-a-shared-machine)).  The
+reference is HACL\*'s
 **portable scalar C** -- not its AVX2 or AVX-512 variants -- except for
 AES-GCM, where HACL\* has no portable implementation at all and the reference
 is EverCrypt dispatching to Vale assembly.  Ratios below 1.00 are faster than
@@ -2150,6 +2152,38 @@ The benchmark harness and a long write-up of each optimization are kept
 outside the repository; the numbers above are reproducible with any AEAD/hash
 benchmark that links `dist/Hacl.c` on one side and HACL\*'s `dist/gcc-compatible`
 on the other.
+
+### Measuring on a shared machine
+
+A change confined to MD5 once appeared to cost BLAKE2b 62% and Ed25519 75%.
+It did not.  Every text and data symbol in the fast and the slow binary was
+at an identical address and every function was identical in size, so there
+was no layout difference to blame; the slowness followed the *file*, and
+deleting and rewriting it -- same name, same bytes -- made it go away.  The
+same two byte-identical binaries were then 65% slower on one idle core than
+on another idle core, and 20 minutes later that core was fast again.  This
+box is a shared, dual-socket, 256-thread machine whose cores report clocks
+anywhere between 2.0 and 3.3 GHz, and an individual core can be most of a
+factor of two slow for tens of minutes for reasons invisible from inside the
+container.
+
+Chasing that as a code-layout problem would have been a long way to a wrong
+answer, so the harness reports a **canary**: a fixed 200-million-iteration
+serially dependent integer loop, run once before the suite and once after,
+whose time is a direct reading of the core's clock and of whatever else is
+competing for it.  It is emitted as an ordinary CSV row, with the before/after
+ratio alongside, and the comparison script discards any run whose canary is
+more than 2% above the best canary seen anywhere in the comparison -- such a
+run measured a different machine, not a different library.  A/B runs are
+interleaved A-B-B-A within a single window at two link-time code offsets, so
+both sides see the same conditions and a residual layout sensitivity would
+show up as disagreement between the offsets rather than as a result.
+
+The general rule: a performance difference that is **large, localized in a
+subsystem the change did not touch, and not accompanied by any difference in
+the generated code** is a measurement artifact until proven otherwise, and
+the cheapest proof is to diff `nm -S` output before reaching for a
+microarchitectural explanation.
 
 ### ML-KEM, with no HACL\* to compare against
 
