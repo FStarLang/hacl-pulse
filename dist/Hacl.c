@@ -945,55 +945,55 @@ static void Hacl_NaCl_sb_easy(uint8_t *c, uint8_t *m, size_t mlen, uint8_t *nonc
 static bool Hacl_NaCl_box_beforenm(uint8_t *k, uint8_t *pk, uint8_t *sk);
 static const uint32_t Hacl_Hash_Blake2_Named_iv32_arr[8] = { 0x6a09e667U, 0xbb67ae85U, 0x3c6ef372U, 0xa54ff53aU, 0x510e527fU, 0x9b05688cU, 0x1f83d9abU, 0x5be0cd19U };
 static size_t Hacl_Hash_Blake2_block_len_sz__t = (((size_t)16ULL) * ((size_t)4ULL));
-static const size_t Hacl_Hash_Blake2_Core_sigma_arr[160] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3, 11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4, 7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8, 9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13, 2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9, 12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11, 13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10, 6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5, 10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0 };
 static size_t Hacl_Hash_Blake2_Streaming_nlast_sz__t(size_t tlen);
 static void Hacl_Hash_Blake2_Streaming_copy_state__t(uint32_t *dst, uint32_t *src);
 static size_t Hacl_Hash_Blake2_block_avail(size_t off, size_t len, size_t bl);
 static void Hacl_Hash_Blake2_read_block__t(uint8_t *blk, uint8_t *s, size_t len, size_t off);
 static uint32_t Hacl_Impl_Bytes_load_le__t_2(uint8_t *b, size_t off);
 static void Hacl_Hash_Blake2_load_block__t(uint32_t *mw, uint8_t *blk);
+static const size_t Hacl_Hash_Blake2_Core_sigma_arr[160] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3, 11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4, 7, 9, 3, 1, 13, 12, 11, 14, 2, 6, 5, 10, 4, 0, 15, 8, 9, 0, 5, 7, 2, 4, 10, 15, 14, 1, 11, 12, 6, 8, 3, 13, 2, 12, 6, 10, 0, 11, 8, 3, 4, 13, 7, 5, 15, 14, 1, 9, 12, 5, 1, 15, 14, 13, 4, 10, 0, 7, 6, 3, 9, 2, 8, 11, 13, 11, 7, 14, 12, 1, 3, 9, 5, 0, 15, 4, 8, 6, 2, 10, 6, 15, 14, 9, 11, 3, 0, 8, 12, 2, 13, 7, 1, 4, 10, 5, 10, 2, 8, 4, 7, 6, 1, 5, 15, 11, 9, 14, 3, 12, 13, 0 };
 static uint32_t Hacl_Secret_Cast_u64_to_u32(uint64_t x);
 static uint32_t Hacl_Secret_Word_Instances_sz_lo_32(size_t x);
 static uint32_t Hacl_Secret_Word_of_sizet_lo__t_1(size_t x);
 static uint32_t Hacl_Secret_Word_Instances_sz_hi_32(size_t x);
 static uint32_t Hacl_Secret_Word_of_sizet_hi__t(size_t x);
-static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_1(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_1(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_1(uint8_t *out, uint32_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_1(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_1(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_1(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_1(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_2(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_2(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_2(uint8_t *out, uint32_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_2(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_2(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_2(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_2(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_3(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_3(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_3(uint8_t *out, uint32_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_3(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_3(uint32_t *ivs, uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_3(uint32_t *h, uint32_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_3(uint32_t *acc, uint8_t *buf, size_t *tot, uint32_t *ivs, uint8_t *key, size_t klen);
@@ -1007,44 +1007,44 @@ static void Hacl_Hash_Blake2_load_block__t_1(uint64_t *mw, uint8_t *blk);
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t_2(size_t x);
 static uint64_t Hacl_Secret_Word_Instances_sz_hi_64(size_t x);
 static uint64_t Hacl_Secret_Word_of_sizet_hi__t_1(size_t x);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_4(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_4(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last);
 static void Hacl_Impl_Bytes_store_le__t_2(uint8_t *b, size_t off, uint64_t x);
 static void Hacl_Hash_Blake2_write_digest_le__t_4(uint8_t *out, uint64_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_4(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_4(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_4(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_4(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_5(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_5(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_5(uint8_t *out, uint64_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_5(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_5(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_5(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_5(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_6(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_6(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_6(uint8_t *out, uint64_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_6(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_6(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_6(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_6(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
-static void Hacl_Hash_Blake2_Core_compress_impl__t_7(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last);
+static void Hacl_Hash_Blake2_Core_compress_impl__t_7(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last);
 static void Hacl_Hash_Blake2_write_digest_le__t_7(uint8_t *out, uint64_t *st);
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out);
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out);
 static void Hacl_Streaming_Blake2_digest_gen__t_7(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out);
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
-static void Hacl_Hash_Blake2_Streaming_update_full__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0);
+static void Hacl_Hash_Blake2_Streaming_update_full__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen);
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen);
 static void Hacl_Streaming_Blake2_update_gen__t_7(uint64_t *ivs, uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len);
 static void Hacl_Hash_Blake2_init_state__t_7(uint64_t *h, uint64_t *ivs, size_t klen);
 static void Hacl_Hash_Blake2_Streaming_init_impl__t_7(uint64_t *acc, uint8_t *buf, size_t *tot, uint64_t *ivs, uint8_t *key, size_t klen);
@@ -1052,24 +1052,24 @@ static size_t Hacl_Hash_Blake2_koff_sz(size_t klen);
 static size_t Hacl_Hash_Blake2_nblocks_sz(size_t klen, size_t mlen, size_t bl);
 static void Hacl_Hash_Blake2_read_block_of__t(uint8_t *blk, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, bool usekey, size_t off);
 static size_t Hacl_Hash_Blake2_step_of(bool usekey, size_t bl);
-static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static size_t Hacl_Hash_Blake2_final_off(size_t nlast, size_t koffsz, size_t bl);
 static size_t Hacl_Hash_Blake2_last_ctr(size_t klen, size_t mlen, size_t bl);
 static void Hacl_Hash_Blake2_blake2_impl__t(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
-static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_1(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
-static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_2(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
-static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_3(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_read_block_of__t_1(uint8_t *blk, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, bool usekey, size_t off);
-static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_4(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
-static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_5(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
-static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
-static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
+static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_SHA3_Streaming_copy25(uint64_t *dst, uint64_t *src);
 static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *out, size_t olen, size_t r, uint8_t suffix);
@@ -23236,12 +23236,13 @@ static uint32_t Hacl_Secret_Word_of_sizet_hi__t(size_t x) {
   return Hacl_Secret_Word_Instances_sz_hi_32(x);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last) {
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint32_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint32_t __anf0 = h[0];
   vv[0] = __anf0;
   uint32_t __anf01 = h[1];
@@ -25241,7 +25242,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t(uint8_t *out, uint32_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
@@ -25255,7 +25256,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t(uint32_t *acc, uint32_t *m
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t(out, starr);
 }
 
@@ -25271,8 +25272,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t(uint32_t *ivs, uint32_t *acc, ui
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2s_128_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -25280,7 +25280,7 @@ void Hacl_Streaming_Blake2_blake2s_128_digest(uint32_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t j = 0;
@@ -25290,30 +25290,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t(uint32_t *acc, uint32_t 
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -25330,8 +25330,7 @@ static void Hacl_Streaming_Blake2_update_gen__t(uint32_t *ivs, uint32_t *acc, ui
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2s_128_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -25371,12 +25370,13 @@ void Hacl_Streaming_Blake2_blake2s_128_init(uint32_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_1(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_1(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last) {
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint32_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint32_t __anf0 = h[0];
   vv[0] = __anf0;
   uint32_t __anf01 = h[1];
@@ -27376,7 +27376,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_1(uint8_t *out, uint32_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
@@ -27390,7 +27390,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_1(uint32_t *acc, uint32_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_1(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_1(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_1(out, starr);
 }
 
@@ -27406,8 +27406,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_1(uint32_t *ivs, uint32_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_1(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_1(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2s_160_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -27415,7 +27414,7 @@ void Hacl_Streaming_Blake2_blake2s_160_digest(uint32_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_1(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t j = 0;
@@ -27425,30 +27424,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(uint32_t *acc, uint32_
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_1(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_1(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_1(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_1(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_1(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_1(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -27465,8 +27464,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_1(uint32_t *ivs, uint32_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_1(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_1(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2s_160_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -27506,12 +27504,13 @@ void Hacl_Streaming_Blake2_blake2s_160_init(uint32_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_1(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_2(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_2(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last) {
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint32_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint32_t __anf0 = h[0];
   vv[0] = __anf0;
   uint32_t __anf01 = h[1];
@@ -29511,7 +29510,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_2(uint8_t *out, uint32_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
@@ -29525,7 +29524,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_2(uint32_t *acc, uint32_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_2(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_2(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_2(out, starr);
 }
 
@@ -29541,8 +29540,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_2(uint32_t *ivs, uint32_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_2(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_2(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2s_224_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -29550,7 +29548,7 @@ void Hacl_Streaming_Blake2_blake2s_224_digest(uint32_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_2(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t j = 0;
@@ -29560,30 +29558,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(uint32_t *acc, uint32_
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_2(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_2(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_2(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_2(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_2(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_2(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -29600,8 +29598,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_2(uint32_t *ivs, uint32_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_2(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_2(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2s_224_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -29641,12 +29638,13 @@ void Hacl_Streaming_Blake2_blake2s_224_init(uint32_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_2(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_3(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_3(uint32_t *h, uint32_t *m, uint32_t *ivs, size_t ctr, bool last) {
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint32_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint32_t __anf0 = h[0];
   vv[0] = __anf0;
   uint32_t __anf01 = h[1];
@@ -31646,7 +31644,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_3(uint8_t *out, uint32_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
@@ -31660,7 +31658,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_3(uint32_t *acc, uint32_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_3(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_3(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_3(out, starr);
 }
 
@@ -31676,8 +31674,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_3(uint32_t *ivs, uint32_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_3(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_3(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2s_256_digest(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -31685,7 +31682,7 @@ void Hacl_Streaming_Blake2_blake2s_256_digest(uint32_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_3(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t j = 0;
@@ -31695,30 +31692,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(uint32_t *acc, uint32_
     Hacl_Hash_Blake2_read_block__t(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_3(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_3(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_3(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_3(uint32_t *acc, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_3(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_3(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -31735,8 +31732,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_3(uint32_t *ivs, uint32_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_3(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_3(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2s_256_update(uint32_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -31850,12 +31846,13 @@ static uint64_t Hacl_Secret_Word_of_sizet_hi__t_1(size_t x) {
   return Hacl_Secret_Word_Instances_sz_hi_64(x);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_4(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_4(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last) {
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint64_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint64_t __anf0 = h[0];
   vv[0] = __anf0;
   uint64_t __anf01 = h[1];
@@ -33868,7 +33865,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_4(uint8_t *out, uint64_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
@@ -33882,7 +33879,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_4(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_4(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_4(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_4(out, starr);
 }
 
@@ -33898,8 +33895,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_4(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_4(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_4(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2b_160_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -33907,7 +33903,7 @@ void Hacl_Streaming_Blake2_blake2b_160_digest(uint64_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_4(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t j = 0;
@@ -33917,30 +33913,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_4(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_4(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_4(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_4(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_4(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_4(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -33957,8 +33953,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_4(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_4(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_4(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2b_160_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -33998,12 +33993,13 @@ void Hacl_Streaming_Blake2_blake2b_160_init(uint64_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_4(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_5(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_5(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last) {
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint64_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint64_t __anf0 = h[0];
   vv[0] = __anf0;
   uint64_t __anf01 = h[1];
@@ -36003,7 +35999,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_5(uint8_t *out, uint64_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
@@ -36017,7 +36013,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_5(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_5(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_5(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_5(out, starr);
 }
 
@@ -36033,8 +36029,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_5(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_5(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_5(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2b_256_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -36042,7 +36037,7 @@ void Hacl_Streaming_Blake2_blake2b_256_digest(uint64_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_5(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t j = 0;
@@ -36052,30 +36047,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_5(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_5(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_5(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_5(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_5(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_5(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -36092,8 +36087,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_5(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_5(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_5(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2b_256_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -36133,12 +36127,13 @@ void Hacl_Streaming_Blake2_blake2b_256_init(uint64_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_5(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_6(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_6(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last) {
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint64_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint64_t __anf0 = h[0];
   vv[0] = __anf0;
   uint64_t __anf01 = h[1];
@@ -38138,7 +38133,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_6(uint8_t *out, uint64_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
@@ -38152,7 +38147,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_6(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_6(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_6(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_6(out, starr);
 }
 
@@ -38168,8 +38163,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_6(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_6(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_6(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2b_384_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -38177,7 +38171,7 @@ void Hacl_Streaming_Blake2_blake2b_384_digest(uint64_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_6(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t j = 0;
@@ -38187,30 +38181,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_6(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_6(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_6(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_6(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_6(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_6(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -38227,8 +38221,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_6(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_6(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_6(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2b_384_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -38268,12 +38261,13 @@ void Hacl_Streaming_Blake2_blake2b_384_init(uint64_t *acc, uint8_t *buf, size_t 
   Hacl_Hash_Blake2_Streaming_init_impl__t_6(acc, buf, tot, ivt, key, key_len);
 }
 
-static void Hacl_Hash_Blake2_Core_compress_impl__t_7(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t *sg, size_t ctr, bool last) {
+static void Hacl_Hash_Blake2_Core_compress_impl__t_7(uint64_t *h, uint64_t *m, uint64_t *ivs, size_t ctr, bool last) {
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint64_t vv[16];
   for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
     vv[_ci1] = z0;
   }
+  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   uint64_t __anf0 = h[0];
   vv[0] = __anf0;
   uint64_t __anf01 = h[1];
@@ -40273,7 +40267,7 @@ static void Hacl_Hash_Blake2_write_digest_le__t_7(uint8_t *out, uint64_t *st) {
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *out) {
+static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *out) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
@@ -40287,7 +40281,7 @@ static void Hacl_Hash_Blake2_Streaming_digest_impl__t_7(uint64_t *acc, uint64_t 
   uint8_t *sub = Hacl_Impl_Sub_sub__t(buf, 0, blen);
   Hacl_Hash_Blake2_read_block__t_1(blk, sub, blen, 0);
   Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-  Hacl_Hash_Blake2_Core_compress_impl__t_7(starr, mw, ivs, sg, tlen, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_7(starr, mw, ivs, tlen, true);
   Hacl_Hash_Blake2_write_digest_le__t_7(out, starr);
 }
 
@@ -40303,8 +40297,7 @@ static void Hacl_Streaming_Blake2_digest_gen__t_7(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_digest_impl__t_7(acc, marr, barr, ivs, sg, buf, tot, out);
+  Hacl_Hash_Blake2_Streaming_digest_impl__t_7(acc, marr, barr, ivs, buf, tot, out);
 }
 
 void Hacl_Streaming_Blake2_blake2b_512_digest(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *out) {
@@ -40312,7 +40305,7 @@ void Hacl_Streaming_Blake2_blake2b_512_digest(uint64_t *acc, uint8_t *buf, size_
   Hacl_Streaming_Blake2_digest_gen__t_7(ivt, acc, buf, tot, out);
 }
 
-static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
+static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *input, size_t inlen, size_t base, size_t nblk, size_t n0, size_t ctr0) {
   (void)n0;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t j = 0;
@@ -40322,30 +40315,30 @@ static void Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(uint64_t *acc, uint64_
     Hacl_Hash_Blake2_read_block__t_1(blk, input, inlen, off);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
     size_t ctr = (ctr0 + ((vj + 1) * bl));
-    Hacl_Hash_Blake2_Core_compress_impl__t_7(acc, mw, ivs, sg, ctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_7(acc, mw, ivs, ctr, false);
     j = (vj + 1);
   }
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_full__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
+static void Hacl_Hash_Blake2_Streaming_update_full__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, uint8_t *data, size_t dlen, size_t nlast, size_t blen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t fill = (bl - blen);
   Hacl_Impl_Copy_copy_range(buf, blen, data, 0, fill);
   size_t ctr0 = (nlast * bl);
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(acc, mw, blk, ivs, sg, buf, bl, 0, 1, nlast, ctr0);
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(acc, mw, blk, ivs, buf, bl, 0, 1, nlast, ctr0);
   size_t rest = (dlen - fill);
   size_t nblk = ((rest - 1) / bl);
   size_t tl = (rest - (nblk * bl));
-  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(acc, mw, blk, ivs, sg, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
+  Hacl_Hash_Blake2_Streaming_absorb_blocks__t_7(acc, mw, blk, ivs, data, dlen, fill, nblk, (nlast + 1), (ctr0 + bl));
   Hacl_Impl_Copy_copy_range(buf, 0, data, (dlen - tl), tl);
 }
 
-static void Hacl_Hash_Blake2_Streaming_update_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
+static void Hacl_Hash_Blake2_Streaming_update_impl__t_7(uint64_t *acc, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *buf, size_t *tot, uint8_t *data, size_t dlen) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t tlen = tot[0];
   size_t nlast = Hacl_Hash_Blake2_Streaming_nlast_sz__t_1(tlen);
   size_t blen = (tlen - (nlast * bl));
-  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_7(acc, mw, blk, ivs, sg, buf, data, dlen, nlast, blen);
+  if ((blen + dlen) > bl) Hacl_Hash_Blake2_Streaming_update_full__t_7(acc, mw, blk, ivs, buf, data, dlen, nlast, blen);
   else Hacl_Impl_Copy_copy_range(buf, blen, data, 0, dlen);
   tot[0] = (tlen + dlen);
 }
@@ -40362,8 +40355,7 @@ static void Hacl_Streaming_Blake2_update_gen__t_7(uint64_t *ivs, uint64_t *acc, 
   for (size_t _ci2 = 0; _ci2 < (bl); _ci2++) {
     barr[_ci2] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
-  Hacl_Hash_Blake2_Streaming_update_impl__t_7(acc, marr, barr, ivs, sg, buf, tot, data, data_len);
+  Hacl_Hash_Blake2_Streaming_update_impl__t_7(acc, marr, barr, ivs, buf, tot, data, data_len);
 }
 
 void Hacl_Streaming_Blake2_blake2b_512_update(uint64_t *acc, uint8_t *buf, size_t *tot, uint8_t *data, size_t data_len) {
@@ -40432,7 +40424,7 @@ static size_t Hacl_Hash_Blake2_step_of(bool usekey, size_t bl) {
   else return bl;
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t i = 0;
   size_t off = 0;
@@ -40444,7 +40436,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *mw, uint8_t
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40477,18 +40469,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t(uint32_t *ivs, uint8_t *out, uint8_t
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t(out, harr);
 }
 
@@ -40497,7 +40488,7 @@ void Hacl_Hash_Blake2_Named_blake2s_128(uint8_t *out, uint8_t *key, size_t key_l
   Hacl_Hash_Blake2_blake2_impl__t(ivt, out, key, key_len, msg, msg_len);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t i = 0;
   size_t off = 0;
@@ -40509,7 +40500,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_1(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_1(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40532,18 +40523,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_1(uint32_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_1(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_1(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_1(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_1(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_1(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_1(out, harr);
 }
 
@@ -40552,7 +40542,7 @@ void Hacl_Hash_Blake2_Named_blake2s_160(uint8_t *out, uint8_t *key, size_t key_l
   Hacl_Hash_Blake2_blake2_impl__t_1(ivt, out, key, key_len, msg, msg_len);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t i = 0;
   size_t off = 0;
@@ -40564,7 +40554,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_2(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_2(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40587,18 +40577,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_2(uint32_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_2(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_2(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_2(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_2(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_2(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_2(out, harr);
 }
 
@@ -40607,7 +40596,7 @@ void Hacl_Hash_Blake2_Named_blake2s_224(uint8_t *out, uint8_t *key, size_t key_l
   Hacl_Hash_Blake2_blake2_impl__t_2(ivt, out, key, key_len, msg, msg_len);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   size_t i = 0;
   size_t off = 0;
@@ -40619,7 +40608,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_3(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_3(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40642,18 +40631,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_3(uint32_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_3(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_3(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_3(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_3(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_3(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_3(out, harr);
 }
 
@@ -40667,7 +40655,7 @@ static void Hacl_Hash_Blake2_read_block_of__t_1(uint8_t *blk, uint8_t *key, size
   else Hacl_Hash_Blake2_read_block__t_1(blk, msg, mlen, off);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t i = 0;
   size_t off = 0;
@@ -40679,7 +40667,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_4(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_4(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40702,18 +40690,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_4(uint64_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_4(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_4(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_4(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_4(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_4(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_4(out, harr);
 }
 
@@ -40722,7 +40709,7 @@ void Hacl_Hash_Blake2_Named_blake2b_160(uint8_t *out, uint8_t *key, size_t key_l
   Hacl_Hash_Blake2_blake2_impl__t_4(ivt, out, key, key_len, msg, msg_len);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t i = 0;
   size_t off = 0;
@@ -40734,7 +40721,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_5(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_5(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40757,18 +40744,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_5(uint64_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_5(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_5(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_5(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_5(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_5(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_5(out, harr);
 }
 
@@ -40777,7 +40763,7 @@ void Hacl_Hash_Blake2_Named_blake2b_256(uint8_t *out, uint8_t *key, size_t key_l
   Hacl_Hash_Blake2_blake2_impl__t_5(ivt, out, key, key_len, msg, msg_len);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t i = 0;
   size_t off = 0;
@@ -40789,7 +40775,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_6(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_6(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40812,18 +40798,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_6(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_6(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_6(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_6(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_6(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_6(out, harr);
 }
 
@@ -40832,7 +40817,7 @@ void Hacl_Hash_Blake2_Named_blake2b_384(uint8_t *out, uint8_t *key, size_t key_l
   Hacl_Hash_Blake2_blake2_impl__t_6(ivt, out, key, key_len, msg, msg_len);
 }
 
-static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, size_t *sg, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
+static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   size_t i = 0;
   size_t off = 0;
@@ -40844,7 +40829,7 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8
     bool usekey = (vi2 < koffsz);
     Hacl_Hash_Blake2_read_block_of__t_1(blk, key, klen, msg, mlen, usekey, voff);
     Hacl_Hash_Blake2_load_block__t_1(mw, blk);
-    Hacl_Hash_Blake2_Core_compress_impl__t_7(h, mw, ivs, sg, vctr, false);
+    Hacl_Hash_Blake2_Core_compress_impl__t_7(h, mw, ivs, vctr, false);
     off = (voff + Hacl_Hash_Blake2_step_of(usekey, bl));
     ctr = (vctr + bl);
     i = (vi2 + 1);
@@ -40867,18 +40852,17 @@ static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8
   for (size_t _ci3 = 0; _ci3 < (bl); _ci3++) {
     barr[_ci3] = z8;
   }
-  size_t *sg = (size_t *)Hacl_Hash_Blake2_Core_sigma_arr;
   Hacl_Hash_Blake2_init_state__t_7(harr, ivs, klen);
   size_t koffsz = Hacl_Hash_Blake2_koff_sz(klen);
   size_t nb = Hacl_Hash_Blake2_nblocks_sz(klen, mlen, bl);
   size_t nlast = (nb - 1);
-  Hacl_Hash_Blake2_blake2_blocks__t_7(harr, marr, barr, ivs, sg, key, klen, msg, mlen, koffsz, nlast);
+  Hacl_Hash_Blake2_blake2_blocks__t_7(harr, marr, barr, ivs, key, klen, msg, mlen, koffsz, nlast);
   size_t foff = Hacl_Hash_Blake2_final_off(nlast, koffsz, bl);
   bool usekey = (nlast < koffsz);
   Hacl_Hash_Blake2_read_block_of__t_1(barr, key, klen, msg, mlen, usekey, foff);
   Hacl_Hash_Blake2_load_block__t_1(marr, barr);
   size_t lastc = Hacl_Hash_Blake2_last_ctr(klen, mlen, bl);
-  Hacl_Hash_Blake2_Core_compress_impl__t_7(harr, marr, ivs, sg, lastc, true);
+  Hacl_Hash_Blake2_Core_compress_impl__t_7(harr, marr, ivs, lastc, true);
   Hacl_Hash_Blake2_write_digest_le__t_7(out, harr);
 }
 
