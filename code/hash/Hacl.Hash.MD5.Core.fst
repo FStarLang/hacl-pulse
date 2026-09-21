@@ -149,6 +149,7 @@ ensures A.pts_to wb (words_from_le #S32.t block_words (block_at vb (SZ.v off))) 
 
 (** {2 One block} *)
 
+inline_for_extraction
 fn update_block_impl (kt: A.array S32.t) (st: A.array rot)
                      (wb: A.array S32.t) (state: A.array S32.t)
                      (block: A.array S8.t) (off: SZ.t)
@@ -361,9 +362,16 @@ ensures A.pts_to out (finish vst) ** A.pts_to state #pst vst
 
     [table] compiles to taking the address of a [static const] array, so the
     two acquisitions here cost nothing at run time and let the three driver
-    functions below carry exactly the footprint SHA-1's carry. *)
+    functions below carry exactly the footprint SHA-1's carry.
 
-inline_for_extraction
+    This is the function the three drivers call, and it is the one that is
+    compiled: [update_block_impl] above is [inline_for_extraction] and lands
+    here, so the sixty-four rounds exist once and the two tables are read from
+    the program image inside the same function that uses them.  The other way
+    round -- a compiled [update_block_impl] taking two pointers, inlined
+    acquisitions at each of the three call sites -- leaves the table addresses
+    to be recovered by interprocedural constant propagation, which is a budget
+    gcc can run out of. *)
 fn update_block_tbl (wb: A.array S32.t) (state: A.array S32.t)
                     (block: A.array S8.t) (off: SZ.t)
                     (#vw0: erased (Seq.seq S32.t))
