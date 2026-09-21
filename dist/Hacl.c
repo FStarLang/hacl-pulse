@@ -1055,22 +1055,22 @@ static size_t Hacl_Hash_Blake2_step_of(bool usekey, size_t bl);
 static void Hacl_Hash_Blake2_blake2_blocks__t(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
 static size_t Hacl_Hash_Blake2_final_off(size_t nlast, size_t koffsz, size_t bl);
 static size_t Hacl_Hash_Blake2_last_ctr(size_t klen, size_t mlen, size_t bl);
-static void Hacl_Hash_Blake2_blake2_impl__t(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_1(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_1(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_2(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_2(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_3(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_3(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_read_block_of__t_1(uint8_t *blk, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, bool usekey, size_t off);
 static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_4(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_5(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_5(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_6(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast);
-static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_7(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen);
 static void Hacl_Hash_SHA3_Streaming_copy25(uint64_t *dst, uint64_t *src);
 static void Hacl_Hash_SHA3_Streaming_digest_impl(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *buf, size_t *tot, uint8_t *out, size_t olen, size_t r, uint8_t suffix);
 static void Hacl_Streaming_SHA3_keccak_digest(uint64_t *st, uint8_t *buf, size_t *tot, uint8_t *out, size_t out_len, size_t r, uint8_t suffix);
@@ -40453,7 +40453,8 @@ static size_t Hacl_Hash_Blake2_last_ctr(size_t klen, size_t mlen, size_t bl) {
   else return (mlen + bl);
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint32_t *ivs = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint8_t z8 = 0;
@@ -40483,9 +40484,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t(uint32_t *ivs, uint8_t *out, uint8_t
   Hacl_Hash_Blake2_write_digest_le__t(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2s_128(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint32_t *ivt = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
-  Hacl_Hash_Blake2_blake2_impl__t(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2s_128(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv32_arr(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
@@ -40507,7 +40507,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_1(uint32_t *h, uint32_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_1(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_1(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint32_t *ivs = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint8_t z8 = 0;
@@ -40537,9 +40538,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_1(uint32_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_1(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2s_160(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint32_t *ivt = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_1(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2s_160(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_1(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
@@ -40561,7 +40561,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_2(uint32_t *h, uint32_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_2(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_2(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint32_t *ivs = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint8_t z8 = 0;
@@ -40591,9 +40592,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_2(uint32_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_2(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2s_224(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint32_t *ivt = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_2(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2s_224(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_2(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8_t *blk, uint32_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
@@ -40615,7 +40615,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_3(uint32_t *h, uint32_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_3(uint32_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_3(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint32_t *ivs = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t;
   uint32_t z0 = Hacl_Secret_Word_zero__t;
   uint8_t z8 = 0;
@@ -40645,9 +40646,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_3(uint32_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_3(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2s_256(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint32_t *ivt = (uint32_t *)Hacl_Hash_Blake2_Named_iv32_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_3(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2s_256(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv32_arr_3(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_read_block_of__t_1(uint8_t *blk, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, bool usekey, size_t off) {
@@ -40674,7 +40674,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_4(uint64_t *h, uint64_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_4(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint64_t *ivs = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
@@ -40704,9 +40705,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_4(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_4(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2b_160(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint64_t *ivt = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_4(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2b_160(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv64_arr(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
@@ -40728,7 +40728,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_5(uint64_t *h, uint64_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_5(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_5(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint64_t *ivs = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
@@ -40758,9 +40759,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_5(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_5(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2b_256(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint64_t *ivt = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_5(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2b_256(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_5(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
@@ -40782,7 +40782,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_6(uint64_t *h, uint64_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_6(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint64_t *ivs = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
@@ -40812,9 +40813,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_6(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_6(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2b_384(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint64_t *ivt = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_6(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2b_384(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_6(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8_t *blk, uint64_t *ivs, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen, size_t koffsz, size_t nlast) {
@@ -40836,7 +40836,8 @@ static void Hacl_Hash_Blake2_blake2_blocks__t_7(uint64_t *h, uint64_t *mw, uint8
   }
 }
 
-static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+static void Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_7(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  uint64_t *ivs = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
   size_t bl = Hacl_Hash_Blake2_block_len_sz__t_1;
   uint64_t z0 = Hacl_Secret_Word_zero__t_1;
   uint8_t z8 = 0;
@@ -40866,9 +40867,8 @@ static void Hacl_Hash_Blake2_blake2_impl__t_7(uint64_t *ivs, uint8_t *out, uint8
   Hacl_Hash_Blake2_write_digest_le__t_7(out, harr);
 }
 
-void Hacl_Hash_Blake2_Named_blake2b_512(uint8_t *out, uint8_t *key, size_t key_len, uint8_t *msg, size_t msg_len) {
-  uint64_t *ivt = (uint64_t *)Hacl_Hash_Blake2_Named_iv64_arr;
-  Hacl_Hash_Blake2_blake2_impl__t_7(ivt, out, key, key_len, msg, msg_len);
+void Hacl_Hash_Blake2_Named_blake2b_512(uint8_t *out, uint8_t *key, size_t klen, uint8_t *msg, size_t mlen) {
+  Hacl_Hash_Blake2_blake2_impl__t_iv64_arr_7(out, key, klen, msg, mlen);
 }
 
 static void Hacl_Hash_SHA3_Streaming_copy25(uint64_t *dst, uint64_t *src) {
