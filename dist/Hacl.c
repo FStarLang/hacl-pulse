@@ -588,15 +588,22 @@ static uint64_t Hacl_Impl_Bytes_load_be__t_2(uint8_t *b, size_t off);
 static uint64_t Hacl_Bignum_Base_mul_row(uint64_t *res, uint64_t *a, size_t n, uint64_t bi, size_t off);
 static void Hacl_Bignum_Montgomery_copy_upper(uint64_t *res, uint64_t *c, size_t nn);
 static void Hacl_Bignum_Montgomery_embed(uint64_t *tmp, uint64_t *a, size_t nn);
+static void Hacl_Bignum_Base_table_store(uint64_t *tbl, uint64_t *src, size_t n, size_t off);
 static void Hacl_Bignum_Base_copy(uint64_t *res, uint64_t *a, size_t n);
-static uint64_t Hacl_Bignum_Base_get_bit(uint64_t *b, size_t i);
-static void Hacl_Bignum_Base_cselect(uint64_t *res, uint64_t *a, size_t n, uint64_t m);
+static void Hacl_Bignum_Exponentiation_mont_sq(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu);
+static void Hacl_Bignum_Exponentiation_mont_sq4(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu);
+static void Hacl_Bignum_Base_cselect_at(uint64_t *res, uint64_t *tbl, size_t n, size_t off, uint64_t m);
+static void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d);
+static void Hacl_Bignum_Exponentiation_mont_win_mul(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t dig, size_t nn, uint64_t mu);
+static void Hacl_Bignum_Exponentiation_mont_rung_core(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t dig, size_t nn, uint64_t mu);
+static size_t Hacl_Bignum_Exponentiation_mont_rung(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t *bb, size_t i, size_t nn, uint64_t mu);
 static bool Hacl_FFDHE_shared_secret_precomp(uint8_t *ss, uint8_t *sk, uint8_t *pk, uint64_t *p, uint64_t *r2, size_t nn, uint64_t mu, uint64_t *a, uint64_t *e, uint64_t *res, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
 static void Hacl_FFDHE_secret_to_public_precomp(uint8_t *pk, uint8_t *sk, uint64_t *p, uint64_t *r2, size_t nn, uint64_t mu, uint64_t *g, uint64_t *e, uint64_t *res, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
 static const uint64_t Hacl_FFDHE_Tables_ffdhe6144_arr[96] = { 0xffffffffffffffffULL, 0xa40e329cd0e40e65ULL, 0xa41d570d7938dad4ULL, 0x62a69526d43161c1ULL, 0x3fdd4a8e9adb1e69ULL, 0x5b3b71f9dc6b80d6ULL, 0xec9d1810c6272b04ULL, 0x8ccf2dd5cacef403ULL, 0xe49f5235c95b9117ULL, 0x505dc82db854338aULL, 0x62292c311562a846ULL, 0xd72b03746ae77f5eULL, 0xf9c9091b462d538cULL, 0xae8db5847a67cbeULL, 0xb3a739c122611682ULL, 0xeeaac0232a281bf6ULL, 0x94c6651e77caf992ULL, 0x763e4e4b94b2bbc1ULL, 0x587e38da0077d9b4ULL, 0x7fb29f8c183023c3ULL, 0xabec1fff9e3a26eULL, 0xa00ef092350511e3ULL, 0xb855322edb6340d8ULL, 0xa52471f7a9a96910ULL, 0x388147fb4cfdb477ULL, 0x9b1f5c3e4e46041fULL, 0xcdad0657fccfec71ULL, 0xb38e8c334c701c3aULL, 0x917bdd64b1c0fd4cULL, 0x3bb454329b7624c8ULL, 0x23ba4442caf53ea6ULL, 0x4e677d2c38532a3aULL, 0xbfd64b645036c7aULL, 0xc68a007e5e0dd902ULL, 0x4db5a851f44182e1ULL, 0x8ec9b55a7f88a46bULL, 0xa8291cdcec97dcfULL, 0x2a4ecea9f98d0accULL, 0x1a1db93d7140003cULL, 0x92999a333cb8b7aULL, 0x6dc778f971ad0038ULL, 0xa907600a918130c4ULL, 0xed6a1e012d9e6832ULL, 0x7135c886efb4318aULL, 0x87f55ba57e31cc7aULL, 0x7763cf1d55034004ULL, 0xac7d5f42d69f6d18ULL, 0x7930e9e4e58857b6ULL, 0x6e6f52c3164df4fbULL, 0x25e41d2b669e1ef1ULL, 0x3c1b20ee3fd59d7cULL, 0xabcd06bfa53ddefULL, 0x1dbf9a42d5c4484eULL, 0xabc521979b0deadaULL, 0xe86d2bc522363a0dULL, 0x5cae82ab9c9df69eULL, 0x64f2e21e71f54bffULL, 0xf4fd4452e2d74dd3ULL, 0xb4130c93bc437944ULL, 0xaefe130985139270ULL, 0x598cb0fac186d91cULL, 0x7ad91d2691f7f7eeULL, 0x61b46fc9d6e6c907ULL, 0xbc34f4def99c0238ULL, 0xde355b3b6519035bULL, 0x886b4238611fcfdcULL, 0xc6f34a26c1b2effaULL, 0xc58ef1837d1683b2ULL, 0x3bb5fcbc2ec22005ULL, 0xc3fe3b1b4c6fad73ULL, 0x8e4f1232eef28183ULL, 0x9172fe9ce98583ffULL, 0xc03404cd28342f61ULL, 0x9e02fce1cdf7e2ecULL, 0xb07a7c8ee0a6d70ULL, 0xae56ede76372bb19ULL, 0x1d4f42a3de394df4ULL, 0xb96adab760d7f468ULL, 0xd108a94bb2c8e3fbULL, 0xbc0ab182b324fb61ULL, 0x30acca4f483a797aULL, 0x1df158a136ade735ULL, 0xe2a689daf3efe872ULL, 0x984f0c70e0e68b77ULL, 0xb557135e7f57c935ULL, 0x856365553ded1af3ULL, 0x2433f51f5f066ed0ULL, 0xd3df1ed5d5fd6561ULL, 0xf681b202aec4617aULL, 0x7d2fe363630c75d8ULL, 0xcc939dce249b3ef9ULL, 0xa9e13641146433fbULL, 0xd8b9c583ce2d3695ULL, 0xafdc5620273d3cf1ULL, 0xadf85458a2bb4a9aULL, 0xffffffffffffffffULL };
 static const uint64_t Hacl_FFDHE_Tables_ffdhe4096_arr[64] = { 0xffffffffffffffffULL, 0xc68a007e5e655f6aULL, 0x4db5a851f44182e1ULL, 0x8ec9b55a7f88a46bULL, 0xa8291cdcec97dcfULL, 0x2a4ecea9f98d0accULL, 0x1a1db93d7140003cULL, 0x92999a333cb8b7aULL, 0x6dc778f971ad0038ULL, 0xa907600a918130c4ULL, 0xed6a1e012d9e6832ULL, 0x7135c886efb4318aULL, 0x87f55ba57e31cc7aULL, 0x7763cf1d55034004ULL, 0xac7d5f42d69f6d18ULL, 0x7930e9e4e58857b6ULL, 0x6e6f52c3164df4fbULL, 0x25e41d2b669e1ef1ULL, 0x3c1b20ee3fd59d7cULL, 0xabcd06bfa53ddefULL, 0x1dbf9a42d5c4484eULL, 0xabc521979b0deadaULL, 0xe86d2bc522363a0dULL, 0x5cae82ab9c9df69eULL, 0x64f2e21e71f54bffULL, 0xf4fd4452e2d74dd3ULL, 0xb4130c93bc437944ULL, 0xaefe130985139270ULL, 0x598cb0fac186d91cULL, 0x7ad91d2691f7f7eeULL, 0x61b46fc9d6e6c907ULL, 0xbc34f4def99c0238ULL, 0xde355b3b6519035bULL, 0x886b4238611fcfdcULL, 0xc6f34a26c1b2effaULL, 0xc58ef1837d1683b2ULL, 0x3bb5fcbc2ec22005ULL, 0xc3fe3b1b4c6fad73ULL, 0x8e4f1232eef28183ULL, 0x9172fe9ce98583ffULL, 0xc03404cd28342f61ULL, 0x9e02fce1cdf7e2ecULL, 0xb07a7c8ee0a6d70ULL, 0xae56ede76372bb19ULL, 0x1d4f42a3de394df4ULL, 0xb96adab760d7f468ULL, 0xd108a94bb2c8e3fbULL, 0xbc0ab182b324fb61ULL, 0x30acca4f483a797aULL, 0x1df158a136ade735ULL, 0xe2a689daf3efe872ULL, 0x984f0c70e0e68b77ULL, 0xb557135e7f57c935ULL, 0x856365553ded1af3ULL, 0x2433f51f5f066ed0ULL, 0xd3df1ed5d5fd6561ULL, 0xf681b202aec4617aULL, 0x7d2fe363630c75d8ULL, 0xcc939dce249b3ef9ULL, 0xa9e13641146433fbULL, 0xd8b9c583ce2d3695ULL, 0xafdc5620273d3cf1ULL, 0xadf85458a2bb4a9aULL, 0xffffffffffffffffULL };
 static const uint64_t Hacl_FFDHE_Tables_ffdhe3072_arr[48] = { 0xffffffffffffffffULL, 0x25e41d2b66c62e37ULL, 0x3c1b20ee3fd59d7cULL, 0xabcd06bfa53ddefULL, 0x1dbf9a42d5c4484eULL, 0xabc521979b0deadaULL, 0xe86d2bc522363a0dULL, 0x5cae82ab9c9df69eULL, 0x64f2e21e71f54bffULL, 0xf4fd4452e2d74dd3ULL, 0xb4130c93bc437944ULL, 0xaefe130985139270ULL, 0x598cb0fac186d91cULL, 0x7ad91d2691f7f7eeULL, 0x61b46fc9d6e6c907ULL, 0xbc34f4def99c0238ULL, 0xde355b3b6519035bULL, 0x886b4238611fcfdcULL, 0xc6f34a26c1b2effaULL, 0xc58ef1837d1683b2ULL, 0x3bb5fcbc2ec22005ULL, 0xc3fe3b1b4c6fad73ULL, 0x8e4f1232eef28183ULL, 0x9172fe9ce98583ffULL, 0xc03404cd28342f61ULL, 0x9e02fce1cdf7e2ecULL, 0xb07a7c8ee0a6d70ULL, 0xae56ede76372bb19ULL, 0x1d4f42a3de394df4ULL, 0xb96adab760d7f468ULL, 0xd108a94bb2c8e3fbULL, 0xbc0ab182b324fb61ULL, 0x30acca4f483a797aULL, 0x1df158a136ade735ULL, 0xe2a689daf3efe872ULL, 0x984f0c70e0e68b77ULL, 0xb557135e7f57c935ULL, 0x856365553ded1af3ULL, 0x2433f51f5f066ed0ULL, 0xd3df1ed5d5fd6561ULL, 0xf681b202aec4617aULL, 0x7d2fe363630c75d8ULL, 0xcc939dce249b3ef9ULL, 0xa9e13641146433fbULL, 0xd8b9c583ce2d3695ULL, 0xafdc5620273d3cf1ULL, 0xadf85458a2bb4a9aULL, 0xffffffffffffffffULL };
 static const uint64_t Hacl_FFDHE_Tables_ffdhe2048_arr[32] = { 0xffffffffffffffffULL, 0x886b423861285c97ULL, 0xc6f34a26c1b2effaULL, 0xc58ef1837d1683b2ULL, 0x3bb5fcbc2ec22005ULL, 0xc3fe3b1b4c6fad73ULL, 0x8e4f1232eef28183ULL, 0x9172fe9ce98583ffULL, 0xc03404cd28342f61ULL, 0x9e02fce1cdf7e2ecULL, 0xb07a7c8ee0a6d70ULL, 0xae56ede76372bb19ULL, 0x1d4f42a3de394df4ULL, 0xb96adab760d7f468ULL, 0xd108a94bb2c8e3fbULL, 0xbc0ab182b324fb61ULL, 0x30acca4f483a797aULL, 0x1df158a136ade735ULL, 0xe2a689daf3efe872ULL, 0x984f0c70e0e68b77ULL, 0xb557135e7f57c935ULL, 0x856365553ded1af3ULL, 0x2433f51f5f066ed0ULL, 0xd3df1ed5d5fd6561ULL, 0xf681b202aec4617aULL, 0x7d2fe363630c75d8ULL, 0xcc939dce249b3ef9ULL, 0xa9e13641146433fbULL, 0xd8b9c583ce2d3695ULL, 0xafdc5620273d3cf1ULL, 0xadf85458a2bb4a9aULL, 0xffffffffffffffffULL };
+static uint64_t Hacl_Bignum_Base_get_bit(uint64_t *b, size_t i);
 static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, size_t b, uint8_t rc);
 static void Hacl_AES_Key_key_expansion_impl__Mkparams_1(uint8_t *w, uint8_t *key);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
@@ -15386,6 +15393,16 @@ void Hacl_Bignum_Montgomery_from_mont(uint64_t *res, uint64_t *a, uint64_t *tmp,
   Hacl_Bignum_Montgomery_reduction(res, tmp, nmod, nn, mu);
 }
 
+static void Hacl_Bignum_Base_table_store(uint64_t *tbl, uint64_t *src, size_t n, size_t off) {
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint64_t si = src[vi];
+    tbl[(off + vi)] = si;
+    i = (vi + 1);
+  }
+}
+
 static void Hacl_Bignum_Base_copy(uint64_t *res, uint64_t *a, size_t n) {
   size_t i = 0;
   while (i < n) {
@@ -15396,40 +15413,88 @@ static void Hacl_Bignum_Base_copy(uint64_t *res, uint64_t *a, size_t n) {
   }
 }
 
-static uint64_t Hacl_Bignum_Base_get_bit(uint64_t *b, size_t i) {
-  size_t q = (i / 64);
-  size_t r = (i % 64);
-  uint64_t w = b[q];
-  uint64_t x = Hacl_Secret_UInt64_shift_right(w, (uint32_t)r);
-  uint64_t one = 1;
-  uint64_t bit = Hacl_Secret_UInt64_logand(x, one);
-  return Hacl_Secret_UInt64_eq_mask(bit, one);
+static void Hacl_Bignum_Exponentiation_mont_sq(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu) {
+  Hacl_Bignum_Base_copy(t, acc, nn);
+  Hacl_Bignum_Montgomery_mont_mul(res, acc, t, wide, nmod, nn, mu);
+  Hacl_Bignum_Base_copy(acc, res, nn);
 }
 
-static void Hacl_Bignum_Base_cselect(uint64_t *res, uint64_t *a, size_t n, uint64_t m) {
+static void Hacl_Bignum_Exponentiation_mont_sq4(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu) {
+  Hacl_Bignum_Exponentiation_mont_sq(acc, res, t, wide, nmod, nn, mu);
+  Hacl_Bignum_Exponentiation_mont_sq(acc, res, t, wide, nmod, nn, mu);
+  Hacl_Bignum_Exponentiation_mont_sq(acc, res, t, wide, nmod, nn, mu);
+  Hacl_Bignum_Exponentiation_mont_sq(acc, res, t, wide, nmod, nn, mu);
+}
+
+static void Hacl_Bignum_Base_cselect_at(uint64_t *res, uint64_t *tbl, size_t n, size_t off, uint64_t m) {
   size_t i = 0;
   while (i < n) {
     size_t vi = i;
-    uint64_t ai = a[vi];
+    uint64_t ai = tbl[(off + vi)];
     uint64_t ri = res[vi];
     res[vi] = Hacl_Secret_UInt64_select(m, ai, ri);
     i = (vi + 1);
   }
 }
 
+static void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d) {
+  size_t e = 0;
+  uint64_t ec = 0;
+  while (e < 16) {
+    size_t ve = e;
+    uint64_t vec = ec;
+    uint64_t m = Hacl_Secret_UInt64_eq_mask(d, vec);
+    Hacl_Bignum_Base_cselect_at(res, tbl, n, (ve * n), m);
+    ec = Hacl_Secret_UInt64_add_mod(vec, 1);
+    e = (ve + 1);
+  }
+}
+
+static void Hacl_Bignum_Exponentiation_mont_win_mul(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t dig, size_t nn, uint64_t mu) {
+  Hacl_Bignum_Base_table_select(t, tbl, nn, dig);
+  Hacl_Bignum_Montgomery_mont_mul(res, acc, t, wide, nmod, nn, mu);
+}
+
+static void Hacl_Bignum_Exponentiation_mont_rung_core(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t dig, size_t nn, uint64_t mu) {
+  Hacl_Bignum_Exponentiation_mont_sq4(acc, res, t, wide, nmod, nn, mu);
+  Hacl_Bignum_Exponentiation_mont_win_mul(acc, res, t, wide, nmod, tbl, dig, nn, mu);
+  Hacl_Bignum_Base_copy(acc, res, nn);
+}
+
+static size_t Hacl_Bignum_Exponentiation_mont_rung(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t *bb, size_t i, size_t nn, uint64_t mu) {
+  size_t j = (i - 4);
+  size_t q = (j / 64);
+  size_t r = (j % 64);
+  uint64_t w = bb[q];
+  uint64_t x = Hacl_Secret_UInt64_shift_right(w, (uint32_t)r);
+  uint64_t dig = Hacl_Secret_UInt64_logand(x, Hacl_Secret_UInt64_mask_low(4));
+  Hacl_Bignum_Exponentiation_mont_rung_core(acc, res, t, wide, nmod, tbl, dig, nn, mu);
+  return j;
+}
+
 void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide) {
   Hacl_Bignum_Montgomery_mont_mul(aM, a, r2, wide, nmod, nn, mu);
   Hacl_Bignum_Montgomery_from_mont(acc, r2, wide, nmod, nn, mu);
+  uint64_t z64 = Hacl_Secret_UInt64_zero;
+  uint64_t tbl[(16 * nn)];
+  for (size_t _ci1 = 0; _ci1 < (16 * nn); _ci1++) {
+    tbl[_ci1] = z64;
+  }
+  Hacl_Bignum_Base_table_store(tbl, acc, nn, 0);
+  Hacl_Bignum_Base_table_store(tbl, aM, nn, nn);
+  Hacl_Bignum_Base_copy(t, aM, nn);
+  size_t d = 2;
+  while (d < 16) {
+    size_t vd = d;
+    Hacl_Bignum_Montgomery_mont_mul(res, t, aM, wide, nmod, nn, mu);
+    Hacl_Bignum_Base_copy(t, res, nn);
+    Hacl_Bignum_Base_table_store(tbl, res, nn, (vd * nn));
+    d = (vd + 1);
+  }
   size_t i = bbits;
   while (i > 0) {
     size_t vi = i;
-    size_t j = (vi - 1);
-    Hacl_Bignum_Base_copy(t, acc, nn);
-    Hacl_Bignum_Montgomery_mont_mul(res, acc, t, wide, nmod, nn, mu);
-    Hacl_Bignum_Base_copy(acc, res, nn);
-    Hacl_Bignum_Montgomery_mont_mul(t, acc, aM, wide, nmod, nn, mu);
-    uint64_t msk = Hacl_Bignum_Base_get_bit(bb, j);
-    Hacl_Bignum_Base_cselect(acc, t, nn, msk);
+    size_t j = Hacl_Bignum_Exponentiation_mont_rung(acc, res, t, wide, nmod, tbl, bb, vi, nn, mu);
     i = j;
   }
   Hacl_Bignum_Montgomery_from_mont(res, acc, wide, nmod, nn, mu);
@@ -15885,6 +15950,16 @@ void Hacl_FFDHE_ffdhe2048_secret_to_public(uint8_t *pk, uint8_t *sk) {
   }
   Hacl_Bignum_Montgomery_precomp(r2, p, 32);
   Hacl_FFDHE_secret_to_public_precomp(pk, sk, p, r2, 32, mu, g, e, res, aM, acc, t, wide);
+}
+
+static uint64_t Hacl_Bignum_Base_get_bit(uint64_t *b, size_t i) {
+  size_t q = (i / 64);
+  size_t r = (i % 64);
+  uint64_t w = b[q];
+  uint64_t x = Hacl_Secret_UInt64_shift_right(w, (uint32_t)r);
+  uint64_t one = 1;
+  uint64_t bit = Hacl_Secret_UInt64_logand(x, one);
+  return Hacl_Secret_UInt64_eq_mask(bit, one);
 }
 
 void Hacl_Bignum_Exponentiation_mod_exp_vartime(uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide) {

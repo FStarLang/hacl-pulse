@@ -171,6 +171,8 @@ ensures exists* (v: Seq.seq S8.t)
   pre_bnd ve1 (SZ.v nn);
   pre_full ve1;
 
+  SZ.fits_lte (16 * SZ.v nn) (64 * SZ.v nn);
+  mul64_mod4 (SZ.v nn);
   mod_exp_consttime res g e (SZ.mul 64sz nn) r2 p nn mu aM acc t wide;
   with vres1. assert (A.pts_to res vres1);
   to_bytes_be pk res nn;
@@ -277,6 +279,8 @@ ensures exists* (v: Seq.seq S8.t)
     with ve1. assert (A.pts_to e ve1);
     pre_bnd ve1 (SZ.v nn);
     pre_full ve1;
+    SZ.fits_lte (16 * SZ.v nn) (64 * SZ.v nn);
+    mul64_mod4 (SZ.v nn);
     mod_exp_consttime res a e (SZ.mul 64sz nn) r2 p nn mu aM acc t wide;
     to_bytes_be ss res nn;
     true
