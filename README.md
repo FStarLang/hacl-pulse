@@ -1398,12 +1398,24 @@ inverts `R`.  No appeal to Bezout, no gcd, and nothing computed at run time
 
 ### Modular exponentiation
 
-`code/bignum/Hacl.Bignum.Exponentiation.fst` is the square-and-multiply
-ladder that RSA and finite-field Diffie-Hellman are built out of.  It runs
-entirely in Montgomery form: the base goes in once, the accumulator comes
-out once, and every rung in between is two `mont_mul`s.  Two per exponent
-bit is also exactly why RSA-PSS and FFDHE are a factor of two behind the
-reference, which uses a 4-bit window; see the roadmap.
+`code/bignum/Hacl.Bignum.Exponentiation.fst` is the ladder that RSA and
+finite-field Diffie-Hellman are built out of.  It runs entirely in
+Montgomery form: the base goes in once, the accumulator comes out once,
+and everything in between is `mont_mul`.
+
+The constant-time ladder walks the exponent **four bits at a time**.  It
+first builds a sixteen-entry table `T[d] = a^d * R mod n`, then repeats a
+*rung*: four squarings, a constant-time lookup of `T[d]` for the next four
+bits, and one more multiply.  That is five `mont_mul`s per four bits
+instead of eight, so a 2048-bit exponent costs about 2,560 of them rather
+than 4,096 -- 1.6x, and measured at 1.56x on gcc and 1.58x on clang.  The
+variable-time ladder and `mod_inv_prime_vartime` are still bit-at-a-time;
+their exponents are public and they are not on any hot path.
+
+The window closes most, but not all, of the gap to the reference: RSA-PSS
+signing and FFDHE were 1.97x behind HACL* and are now about 1.25x.  What
+is left is not the ladder -- it is `mont_mul` itself, which costs us
+about 2.19 us per call against HACL*'s 1.77.
 
     void Hacl_Bignum_Exponentiation_mod_exp_consttime(
         uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits,
@@ -1425,11 +1437,12 @@ That identity, `pw_step`, is the only arithmetic fact the loop needs; the
 rest is `mont_cancel`, which is what says that a `mont_mul` of two numbers
 in Montgomery form is again in Montgomery form.
 
-**The constant-time one always multiplies.**  It computes both candidates
-and picks with `cselect`, a branch-free masked copy, so the instruction
-trace does not depend on the exponent.  The mask comes from `get_bit`,
-which returns a secret all-ones or all-zeroes word and offers no way to
-turn one into a `bool`.  The variable-time one branches instead, and is
+**The constant-time one never branches on the exponent.**  The table
+lookup is `table_select`, which reads *all sixteen* entries and folds them
+together under a mask derived from the digit, so the memory trace is the
+same whatever the digit is -- no data-dependent index, and so nothing for
+a cache-timing attack to observe.  The mask comes from `get_digit`, which
+returns secret words and offers no way to turn one into a `bool`.  The variable-time one branches instead, and is
 correspondingly only for public exponents -- which is why it is the one
 `mod_inv_prime_vartime` calls: the exponent there is `n - 2`, and the
 modulus is public.
@@ -1441,10 +1454,14 @@ the code actually establishes.  Claiming an inverse would require a
 primality hypothesis the caller cannot discharge and the library does not
 check, so, like HACL*, we do not claim it.
 
-**Nothing allocates**, here least of all: the length is a run-time value,
-so every temporary is a caller-supplied array.  A ladder needs three `nn`
-words of scratch plus one `2*nn` for the products, and `res` serves as a
-fourth while the loop runs.
+**Almost nothing allocates.**  The length is a run-time value, so every
+temporary is a caller-supplied array: a ladder needs three `nn` words of
+scratch plus one `2*nn` for the products, and `res` serves as a fourth
+while the loop runs.  The one exception is the window table, `16*nn`
+words, which `mod_exp_consttime` takes on its own stack -- 4 KiB for
+RSA-2048, 16 KiB for FFDHE-8192.  Threading it through every caller would
+have changed four public signatures to no purpose, and `Hacl.RSAPSS`
+already stack-allocates at a run-time length.
 
 `tests/test_montgomery.c` checks every one of these against Python, which
 inverts the radix with `pow(R, -1, n)` and multiplies out, and compares
@@ -1999,11 +2016,11 @@ reference**.
 | NaCl secretbox | 256 KiB | 809 us | 645 us | **1.26x** |  |  |
 | X25519 | -- | 55 us | 44 us | **1.26x** | 36 us | 1.52x |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
+| RSA-2048 modexp | -- | 5.8 ms | 4.5 ms | **1.27x** |  |  |
+| RSA-PSS-2048 sign | -- | 6.0 ms | 4.7 ms | **1.29x** |  |  |
+| FFDHE-2048 | -- | 6.1 ms | 4.6 ms | **1.33x** |  |  |
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
-| RSA-2048 modexp | -- | 9.0 ms | 4.5 ms | **1.98x** |  |  |
-| RSA-PSS-2048 sign | -- | 9.3 ms | 4.7 ms | **1.98x** |  |  |
-| FFDHE-2048 | -- | 9.4 ms | 4.6 ms | **2.04x** |  |  |
 | Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
 | P-256 ECDSA verify | -- | 2.4 ms | 426 us | **5.74x** |  |  |
@@ -2036,11 +2053,19 @@ permutation sits inside them rather than behind a call, which is worth 2.4x
 on a 64-byte digest and 1.13x on bulk.  A 64-byte SHA3-256 is 624 ns against
 the reference's 985.
 
-**Where it is behind by a factor of two, it is the exponent.**  RSA-PSS,
-FFDHE and the generic modexp are all within a hair of 1.98x, and that is one
-cause, not three: hacl-pulse's constant-time modular exponentiation is
-square-and-multiply, two multiplications per exponent bit, where HACL\* uses
-a 4-bit window and spends five per four bits.
+**Where it is behind by a quarter, it is the Montgomery multiply.**  RSA-PSS,
+FFDHE and the generic modexp move together, because they are one cause and
+not three: they are the same ladder.  That ladder used to be
+square-and-multiply, two multiplications per exponent bit against HACL\*'s
+five per four bits, and those three rows sat at 1.98x.  They now run the
+same 4-bit window as the reference, which is worth 1.56x on gcc and 1.58x on
+clang, and they have come down to about 1.27x.
+
+What is left is no longer algorithmic.  Both sides now issue very nearly the
+same number of `mont_mul`s; ours cost about 2.19 us each against the
+reference's 1.77, and closing *that* means going at the inner
+multiply-and-reduce loop rather than at the exponent.  It is worth saying
+plainly that this is 1.27x behind and not parity.
 
 An earlier version of this table put the modexp row at 0.70x and concluded
 that the generic bignum was ahead.  That was wrong, and the way it was wrong
@@ -2722,28 +2747,21 @@ costs is still open.
 Beyond feature parity, the performance work above has a queue of its own, in
 rough order of value:
 
-1. **Windowed modular exponentiation** (4-bit) in
-   `Hacl.Bignum.Exponentiation`.  This is the best-evidenced item on the
-   list: RSA-PSS sign, FFDHE-2048 and the generic 2048-bit modexp are 1.98x,
-   2.04x and 1.98x behind respectively, and that is *one* cause, not three.
-   The ladder does two multiplications per exponent bit; a 4-bit window does
-   five per four bits, and the only new machinery is a constant-time lookup
-   into a sixteen-entry table -- the same masked select the curves will want
-   next.  One change, three rows, no new proof technique.
-2. **Windowed scalar multiplication for Ed25519**, which is most of the
+1. **Windowed scalar multiplication for Ed25519**, which is most of the
    remaining gap now that the field is at radix 2^51 and `fmul` is a straight
    line: signing is 3.7x the reference where X25519 is 1.26x, and the whole of
    the difference is HACL\*'s precomputed base-point window against a
    bit-at-a-time double-and-add here.  Fixed-base, so it pays on keygen and
-   signing both, and it reuses the table lookup from (1).
-3. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
+   signing both, and the constant-time table lookup it needs already exists:
+   `Hacl.Bignum.Base.table_select`, written for the modexp window.
+2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
-4. **Special-prime reduction for P-256 and secp256k1** in place of the shared
+3. **Special-prime reduction for P-256 and secp256k1** in place of the shared
    general Montgomery core.
-5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
-   of what is left after (4).
-6. **Taking over the remaining sixty-six compiler specialisations**, the
+4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
+   of what is left after (3).
+5. **Taking over the remaining sixty-six compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and

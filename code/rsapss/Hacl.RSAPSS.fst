@@ -237,6 +237,8 @@ ensures exists* (v: Seq.seq S64.t).
   let bbits = SZ.mul 64sz en;
   assert (pure (wt (SZ.v en) == pow2 (SZ.v bbits)));
   if ct {
+    SZ.fits_lte (16 * SZ.v nn) (2 * rad * SZ.v nn);
+    Exp.mul64_mod4 (SZ.v en);
     Exp.mod_exp_consttime res a ebn bbits r2 nmod nn mu aM accu tn wide;
   } else {
     Exp.mod_exp_vartime res a ebn bbits r2 nmod nn mu aM accu tn wide;
