@@ -619,6 +619,39 @@ let addw_len (x y: Seq.seq nat)
     the low half at column [i + j] and the high half at column [i + j + 1].
     Both are additive: neither column is known to be zero, because the
     previous product left its high half in the first of them. *)
+(** {3 Accumulating a row}
+
+    The implementation never builds a row on its own: it adds one product
+    at a time into an accumulator that already holds something.  These are
+    the three facts that loop needs -- that it starts where it started,
+    that one product is two column updates, and that a column has not grown
+    by more than one low half and one high half. *)
+
+let addw_srow_zero (x: Seq.seq nat) (n: nat) (u: nat) (b: Seq.seq nat) (i: nat)
+  : Lemma (requires Seq.length x == n) (ensures addw x (srow n u b i 0) == x)
+  = srow_zero n u b i;
+    Seq.lemma_eq_intro (addw x (srow n u b i 0)) x
+
+let addw_srow_step (x: Seq.seq nat) (n: nat) (u: nat) (b: Seq.seq nat)
+                   (i: nat) (j: nat { i + j + 1 < n })
+  : Lemma (requires Seq.length x == n)
+          (ensures (let y = addw x (srow n u b i j) in
+                    addw x (srow n u b i (j + 1)) ==
+                    Seq.upd (Seq.upd y (i + j)
+                               (Seq.index y (i + j) + plo (u * vat b j)))
+                            (i + j + 1)
+                            (Seq.index y (i + j + 1) + phi (u * vat b j))))
+  = let y = addw x (srow n u b i j) in
+    Seq.lemma_eq_intro (addw x (srow n u b i (j + 1)))
+      (Seq.upd (Seq.upd y (i + j) (Seq.index y (i + j) + plo (u * vat b j)))
+               (i + j + 1) (Seq.index y (i + j + 1) + phi (u * vat b j)))
+
+let addw_srow_ble (x b: Seq.seq nat) (n u i j c: nat)
+  : Lemma (requires Seq.length x == n /\ ble x c /\ u <= base - 1 /\ ble b (base - 1))
+          (ensures ble (addw x (srow n u b i j)) (c + 2 * (base - 1)))
+  = srow_ble n u b i j;
+    addw_ble x (srow n u b i j) c (2 * (base - 1))
+
 let addw_rowj_step (x a b: Seq.seq nat) (i: nat) (j: nat { i + j + 1 < nw })
   : Lemma (requires Seq.length x == nw)
           (ensures (let y = addw x (rowj a b i j) in

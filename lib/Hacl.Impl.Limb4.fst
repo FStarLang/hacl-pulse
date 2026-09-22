@@ -212,6 +212,93 @@ ensures exists* (va': Seq.seq S128.t).
 
 #pop-options
 
+(** Four columns: the pass, then the top column's overflow, returned.
+    This is what a conditional subtraction needs -- the value it built is a
+    lazy sum, and whether it overflowed [2^256] is the answer to the
+    question it was asking. *)
+fn carry_out128_op (a: A.array S128.t) (c: erased nat) (d: erased nat)
+                   (#va: erased (Seq.seq S128.t))
+requires A.pts_to a va **
+  pure (Seq.length va == nl /\ ble (vals128 va) c /\
+        reveal c + reveal d < base * (reveal d + 1) /\
+        reveal c + reveal d < pow2 128 /\ reveal d < pow2 64)
+returns r: S64.t
+ensures exists* (va': Seq.seq S128.t).
+  A.pts_to a va' **
+  pure (Seq.length va' == nl /\ vals128 va' == carry_low (vals128 va) /\
+        S64.v r == carry_out (vals128 va))
+{
+  A.pts_to_len a;
+  carry_run128_op a 3sz c d;
+  with v. assert (A.pts_to a v);
+  carry_run_chained (vals128 va) c d 3;
+  carry_run_len (vals128 va) 3;
+  let t = A.(a.(3sz));
+  Math.lemma_div_le (S128.v t) (reveal c + reveal d) base;
+  let lo = Cast.u64_to_u128 (lo64d t);
+  let hi = hi64d t;
+  A.((a.(3sz) <- lo));
+  vals128_upd v 3 lo;
+  assert (pure (vals128 (Seq.upd v 3 lo) == carry_low (vals128 va)));
+  narrow128 hi
+}
+
+#pop-options
+
+(** {2 Narrowing a conditional}
+
+    The same branch-free select as {!cselect}, except that the side being
+    chosen is a column array whose entries the caller has shown are proper
+    limbs.  A lazy sum has to be built one width up now, so the narrowing
+    and the choice may as well happen together. *)
+
+#push-options "--z3rlimit 300"
+
+fn cselect_narrow (a: A.array S64.t) (b: A.array S128.t) (m: S64.t)
+                  (#va: erased (Seq.seq S64.t))
+                  (#pb: perm) (#vb: erased (Seq.seq S128.t))
+requires A.pts_to a va ** A.pts_to b #pb vb **
+  pure (Seq.length va == nl /\ Seq.length vb == nl /\ bnd (vals128 vb) base /\
+        (S64.v m == 0 \/ S64.v m == pow2 64 - 1))
+ensures exists* (va': Seq.seq S64.t).
+  A.pts_to a va' ** A.pts_to b #pb vb **
+  pure (Seq.length va' == nl /\
+        vals va' == (if S64.v m = 0 then vals va else vals128 vb))
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  assert_norm (base == pow2 64);
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 4sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to a v ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= 4 /\ Seq.length v == nl /\
+          (forall (k: nat). k < SZ.v vi ==>
+             Seq.index (vals v) k ==
+               (if S64.v m = 0 then Seq.index (vals va) k
+                else Seq.index (vals128 vb) k)) /\
+          (forall (k: nat). SZ.v vi <= k /\ k < nl ==>
+             Seq.index (vals v) k == Seq.index (vals va) k))
+  decreases (4 - SZ.v (!i))
+  {
+    with v. assert (A.pts_to a v);
+    let vi = !i;
+    let x = A.(a.(vi));
+    let y = A.(b.(vi));
+    let yn = narrow128 y;
+    let z = S64.select m yn x;
+    A.((a.(vi) <- z));
+    vals_upd v (SZ.v vi) z;
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to a v);
+  assert (pure (vals v `Seq.equal` (if S64.v m = 0 then vals va else vals128 vb)));
+}
+
+#pop-options
+
+#push-options "--z3rlimit 300"
+
 (** {2 The schoolbook product}
 
     Sixteen limb products accumulated into eight lazy columns, no carries
