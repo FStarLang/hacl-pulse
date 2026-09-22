@@ -40,7 +40,7 @@ static int check_limbs(const char *name, const uint64_t *got,
 
 int main(void) {
   int bad = 0;
-  uint64_t res[NN], acc[NN], tmp[2 * NN], wide[2 * NN];
+  uint64_t res[NN], acc[NN], scratch[NN], tmp[2 * NN], wide[2 * NN];
 
   /* The one precomputed limb. */
   uint64_t mu = Hacl_Bignum_Montgomery_mont_mu(mont_n[0]);
@@ -53,7 +53,7 @@ int main(void) {
   }
 
   /* R^2 mod N. */
-  Hacl_Bignum_Montgomery_precomp(res, mont_n, NN);
+  Hacl_Bignum_Montgomery_precomp(res, acc, scratch, wide, mont_n, NN, mu);
   bad |= check_limbs("precomp", res, mont_r2, NN);
 
   /* a * b / R mod N, both operands already reduced. */
