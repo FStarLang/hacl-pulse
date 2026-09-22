@@ -1352,7 +1352,9 @@ dropping limbs -- the reduction becomes a multiply and a shift.
 `code/bignum/Hacl.Bignum.Montgomery.fst` is that.
 
     uint64_t Hacl_Bignum_Montgomery_mont_mu (uint64_t m0);
-    void Hacl_Bignum_Montgomery_precomp     (uint64_t *res, uint64_t *n, size_t nn);
+    void Hacl_Bignum_Montgomery_precomp     (uint64_t *res, uint64_t *t1, uint64_t *t2,
+                                             uint64_t *wide, uint64_t *n, size_t nn,
+                                             uint64_t mu);
     void Hacl_Bignum_Montgomery_reduction   (uint64_t *res, uint64_t *c,
                                              uint64_t *n, size_t nn, uint64_t mu);
     void Hacl_Bignum_Montgomery_mont_mul    (uint64_t *res, uint64_t *a, uint64_t *b,
@@ -1374,10 +1376,40 @@ sixty-four.
 Shorter, and the proof is a two-line algebraic identity per step.
 
 `precomp` is `R^2 mod n`, the constant that takes a number *into* Montgomery
-form -- entering is `mont_mul` against it, so there is no separate
-`to_mont`.  HACL* starts the doubling chain at a power of two just below the
-modulus; here it starts at one and doubles all the way, which costs the same
-asymptotically and needs neither a bit-length nor a set-bit primitive.
+form -- entering is `mont_mul` against it, so there is no separate `to_mont`.
+HACL\* computes it by doubling, starting at a power of two just below the
+modulus and doubling the remaining `2 * 64n - bitlen(n)` times: about two
+thousand doublings for RSA-2048.  Here it is a ladder.
+
+In Montgomery form the accumulator stands for `2^m`, and two moves are
+available.  A Montgomery squaring doubles `m`, because the spare factor of
+`R` it leaves behind is exactly the one the reduction takes away.  A modular
+doubling adds one to `m`.  Those are the two moves of binary
+exponentiation, so `m` can be walked up to `64n` -- and `m = 64n` says
+precisely that the accumulator is `R * R mod n` -- in eleven multiplications
+rather than four thousand doublings.
+
+Climbing onto the ladder is the one part that stays linear.  It means having
+`2^(64n + 1)` reduced, and doubling is the only operation that raises an
+exponent by a fixed amount, so the seed starts as high as it can get for
+free: at `2^(64k)`, where `k` is the topmost nonzero limb of the modulus.  A
+power of the radix at or below an odd number greater than one is strictly
+below it, so that value is already its own residue and can simply be written
+down -- and `mu` is the proof that the modulus is odd, which is why
+`precomp` now takes it.  That leaves sixty-five doublings for a modulus that
+fills its limbs, against four thousand and ninety-six before.
+
+Finding `k` reads the modulus, which is public in every caller -- an RSA
+modulus travels with the public key, and the FFDHE primes are in the source
+-- so the scan declassifies one comparison per limb.  The number of
+doublings that follows depends on the modulus's length and on nothing
+secret.
+
+For RSA-2048 the constant now costs 32.5 us where the doubling chain cost
+361, an elevenfold improvement, and HACL\*'s own `precomp` takes 95.  It
+matters out of proportion to its size for *verification*, where the exponent
+is 17 bits and everything else is over in a moment: `rsapss-2048-verify`
+drops from 516 us to 198.
 
 **One carry bit, not a propagated carry.**  The reduction loop clears one
 limb per step by adding a multiple of the modulus.  Each step spills a carry
@@ -1520,11 +1552,11 @@ have to remember to use in constant time is a footgun, not a feature.  On a
 bad key the output is zeroed, so a caller who ignores the return value
 still does not get a usable secret.
 
-**`R^2 mod p` is recomputed on every call** rather than tabulated.  It is a
-doubling chain of `2 * bits` steps, against an exponentiation of `bits`
-rungs each of which is a full multiply: a few tenths of a percent, for
-several kilobytes of table per group and no precomputation context in the
-API.
+**`R^2 mod p` is recomputed on every call** rather than tabulated.  Since it
+became a ladder it is a dozen multiplies and sixty-five doublings, against
+an exponentiation of `bits` rungs each of which is a full multiply: a few
+hundredths of a percent, for several kilobytes of table per group and no
+precomputation context in the API.
 
 This is also the one place in the library that allocates.  The scratch is
 seven `nn`-limb arrays and one `2*nn`, on the *stack*, in the per-group
@@ -2012,14 +2044,15 @@ reference**.
 | SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
 | HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
 | BLAKE2s | 256 KiB | 595 us | 572 us | **1.04x** |  |  |
-| Salsa20 | 256 KiB | 528 us | 435 us | **1.22x** |  |  |
+| Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
+| RSA-PSS-2048 sign | -- | 5.7 ms | 4.7 ms | **1.23x** |  |  |
+| X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
+| FFDHE-2048 | -- | 5.8 ms | 4.6 ms | **1.25x** |  |  |
+| RSA-2048 modexp | -- | 5.7 ms | 4.5 ms | **1.26x** |  |  |
 | NaCl secretbox | 256 KiB | 809 us | 645 us | **1.26x** |  |  |
-| X25519 | -- | 55 us | 44 us | **1.26x** | 36 us | 1.52x |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
-| RSA-2048 modexp | -- | 5.8 ms | 4.5 ms | **1.27x** |  |  |
-| RSA-PSS-2048 sign | -- | 6.0 ms | 4.7 ms | **1.29x** |  |  |
-| FFDHE-2048 | -- | 6.1 ms | 4.6 ms | **1.33x** |  |  |
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
+| RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
@@ -2059,13 +2092,23 @@ not three: they are the same ladder.  That ladder used to be
 square-and-multiply, two multiplications per exponent bit against HACL\*'s
 five per four bits, and those three rows sat at 1.98x.  They now run the
 same 4-bit window as the reference, which is worth 1.56x on gcc and 1.58x on
-clang, and they have come down to about 1.27x.
+clang, and they have come down to about 1.25x.
+
+The verify row came down separately and much further.  It is a 2048-bit
+exponentiation by 65537, seventeen bits, so the ladder is short and almost
+all of it was the setup: computing `R^2 mod n` by a chain of 4,096 modular
+doublings cost 361 us against a 155 us exponentiation.  That chain is now an
+exponent ladder over the *Montgomery* exponent --- squaring doubles it, a
+single modular doubling adds one --- seeded at the topmost limb of the
+modulus rather than at one, which reaches the same value in about a dozen
+squarings and sixty-five doublings: 32.5 us, 11.1x faster, and 2.9x faster
+than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198.
 
 What is left is no longer algorithmic.  Both sides now issue very nearly the
 same number of `mont_mul`s; ours cost about 2.19 us each against the
 reference's 1.77, and closing *that* means going at the inner
 multiply-and-reduce loop rather than at the exponent.  It is worth saying
-plainly that this is 1.27x behind and not parity.
+plainly that this is 1.25x behind and not parity.
 
 An earlier version of this table put the modexp row at 0.70x and concluded
 that the generic bignum was ahead.  That was wrong, and the way it was wrong
@@ -2749,7 +2792,7 @@ rough order of value:
 
 1. **Windowed scalar multiplication for Ed25519**, which is most of the
    remaining gap now that the field is at radix 2^51 and `fmul` is a straight
-   line: signing is 3.7x the reference where X25519 is 1.26x, and the whole of
+   line: signing is 3.7x the reference where X25519 is 1.25x, and the whole of
    the difference is HACL\*'s precomputed base-point window against a
    bit-at-a-time double-and-add here.  Fixed-base, so it pays on keygen and
    signing both, and the constant-time table lookup it needs already exists:

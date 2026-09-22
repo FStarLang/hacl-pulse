@@ -231,9 +231,10 @@ ensures exists* (v: Seq.seq S64.t).
   bn_from_be ebn en eb eLen;
   with vebn. assert (A.pts_to ebn vebn);
   num_bound vebn;
-  Mont.precomp r2 nmod nn #_ #_ #(hide (as_modulus (reveal vn)));
   let n0 = A.(nmod.(0sz));
   let mu = Mont.mont_mu n0;
+  Mont.precomp r2 accu tn wide nmod nn mu
+               #_ #_ #_ #_ #_ #(hide (as_modulus (reveal vn)));
   let bbits = SZ.mul 64sz en;
   assert (pure (wt (SZ.v en) == pow2 (SZ.v bbits)));
   if ct {
