@@ -22,7 +22,7 @@
     special-cased and the loop is the same 256 iterations whatever the
     scalar is.
 
-    The scalar arrives as eight limbs rather than as bytes.  Reading bit
+    The scalar arrives as four limbs rather than as bytes.  Reading bit
     [i] of a number is a statement that survives any choice of radix; the
     same statement about a byte string is not, and the specification is
     written the first way. *)

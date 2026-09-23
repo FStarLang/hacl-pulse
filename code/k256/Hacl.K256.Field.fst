@@ -16,7 +16,7 @@
 
 (** secp256k1's field [F_p].
 
-    Sixteen limbs holding [x R mod p].  [felem] is the invariant and [fev]
+    Four limbs holding [x R mod p].  [felem] is the invariant and [fev]
     is the number: after [Spec.Mont4] the Montgomery factor is not
     visible in any statement below, and each operation says exactly what
     [Spec.P256] says it does.

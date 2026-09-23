@@ -16,7 +16,7 @@
 
 (** The scalar field [Z/n].
 
-    The same eight limbs and the same Montgomery machinery as
+    The same four limbs and the same Montgomery machinery as
     [Hacl.K256.Field], with [qmod] in place of [fmod].  ECDSA needs
     addition, multiplication and inversion here, plus two decoders: one
     that insists the scalar is a proper private key, and one that reduces
