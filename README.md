@@ -818,13 +818,29 @@ one-shot `sign`.
 P-256 is the first curve here whose field is not Curve25519's, and the first
 whose group order matters arithmetically rather than only as a range check.
 Both are 256-bit primes with no special shape, so both are done in Montgomery
-form over eight 32-bit limbs by one shared layer in `code/field256/`:
-`Spec.Bignum256` fixes the representation, `Hacl.Impl.Mont256` does
+form over four 64-bit limbs by one shared layer in `code/field256/`:
+`Spec.Bignum4` fixes the representation, `Hacl.Impl.Mont4` does
 Coarsely-Integrated Operand Scanning, and `Hacl.P256.Field` and
 `Hacl.P256.Scalar` are two instantiations that never meet.  **That layer
 takes its modulus as data**, a record of the modulus, its two's complement
 and the Montgomery constants, passed at run time.  Nothing in it mentions a
 curve, which is what made secp256k1 almost free.
+
+**A product no longer fits in a column.**  At radix 2^32 the schoolbook
+accumulator held `a_i * b_j` in one 64-bit column and every column stayed
+under a word; at radix 2^64 one product already fills 128 bits, so the core
+splits it -- `plo` of it into column `i + j`, `phi` into column `i + j + 1`.
+Since `plo x + base * phi x == x` the number is unchanged, and a finished
+column is under `2^67`, which is why `Spec.Bignum4` states its bounds against
+`pow2 66` and `pow2 72` where `Spec.Bignum256` could state them against a
+word.  The one visible consequence is that a lazy sum no longer fits in a
+word either: the scratch buffer that `csub_op` and the four byte decoders
+pass around is an array of 128-bit words, narrowed on the way out.
+
+The Montgomery constant `mu = -m^-1 mod 2^64` had to be recomputed for three
+of the four moduli.  P-256's prime keeps `mu == 1` -- its low limb is
+`2^64 - 1`, so its inverse is still `-1` -- which is a small gift from its
+Solinas shape and the only one this representation collects.
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
@@ -842,7 +858,7 @@ iteration of a 256-step ladder it is fatal.  Sealing them means the loop
 invariant talks about `point_add` the symbol.
 
 **Scalar multiplication reads bits, so it does not use Montgomery form.**
-`Hacl.P256.Key.load_scalar` produces sixteen plain limbs with `load_be`;
+`Hacl.P256.Key.load_scalar` produces four plain limbs with `load_be`;
 `qload` is used only where the scalar enters the order field (signing).  The
 ladder itself is a plain 256-iteration double-and-add with the addend
 selected by a constant-time swap, in its own module
@@ -910,7 +926,7 @@ worth doing.
 is malleable as a byte string; Bitcoin's consensus rules forbid the upper
 half, and HACL\* exposes that as a second family of entry points rather
 than as a flag.  Deciding which half `s` falls in needs an *ordering*, and
-every other test in this library is an equality.  `Hacl.Impl.Mont256.ageq`
+every other test in this library is an equality.  `Hacl.Impl.Mont4.ageq`
 supplies it by reading the answer out of the carry that the modular
 subtraction already computes -- `msub_pre` says that carry is one exactly
 when the difference did not go negative -- so the ordering costs one
@@ -2054,10 +2070,10 @@ reference**.
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
+| P-256 ECDSA verify | -- | 811 us | 425 us | **1.91x** |  |  |
 | Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
-| P-256 ECDSA verify | -- | 2.4 ms | 426 us | **5.74x** |  |  |
-| secp256k1 ECDSA sign | -- | 1,055 us | 65 us | **16.16x** |  |  |
+| secp256k1 ECDSA sign | -- | 313 us | 65 us | **4.79x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -2123,23 +2139,26 @@ now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
 so the field arithmetic is the same shape, and with the field marked
 `CInline` X25519 is within 1.26x -- what is left there is the ladder itself,
 which has had no attention.  Ed25519 is further behind because it multiplies
-one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1 are behind
-for three reasons, and the first of them is the plainest: the 256-bit core
-they share is still eight limbs of thirty-two bits, so a field multiply does
-sixty-four schoolbook products and sixty-four reduction products where four
-limbs of sixty-four would do sixteen and sixteen.  Measured directly, our
-secp256k1 `fmul` is 53.4 ns against HACL\*'s 7.0 and our P-256 `fmul` 42.2 ns
-against HACL\*'s 16.8, and HACL\*'s two are four-limb and five-limb.  After
-that they use the shared general Montgomery core rather than the special-prime
-reductions those two primes admit, and multiply scalars one bit at a time
-rather than through a precomputed window.  These are known, localized and --
-in the case of the width -- under way; none of them requires new proof
-technique, only work.
+one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1
+were behind for three reasons and are now behind for two.  The plainest has
+been removed: the 256-bit core they share was eight limbs of thirty-two bits,
+so a field multiply did sixty-four schoolbook products and sixty-four
+reduction products, and it is now four limbs of sixty-four, which does sixteen
+and sixteen.  Measured directly, our secp256k1 `fmul` went from 53.4 ns to
+21.5 and our P-256 `fmul` from 42.2 to 19.7, against HACL\*'s 7.0 and 16.8;
+P-256 is now within 1.17x of the reference field multiply, and the whole of
+P-256 ECDSA verification within 1.91x.  What is left is that both curves use
+the shared general Montgomery core rather than the special-prime reductions
+those two primes admit -- which is all of secp256k1's remaining gap, since
+HACL\*'s secp256k1 is five limbs of fifty-two bits with lazy reduction and no
+Montgomery factor at all -- and that both multiply scalars one bit at a time
+rather than through a precomputed window.  Both are known, localized, and
+require no new proof technique, only work.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
 against gcc's `--param inline-unit-growth` budget for the unit as a whole.
-Marking `Hacl.Impl.Bignum256`, the layer every P-256 and secp256k1 operation
+Marking `Hacl.Impl.Bignum4`, the layer every P-256 and secp256k1 operation
 goes through, is worth **1.9x** on both curves and costs nothing anywhere
 else.  Marking the Montgomery and field wrappers above it as well, or
 Poly1305 alongside, gains no more and costs 1.5x on BLAKE2, 1.4x on Salsa20
@@ -2151,7 +2170,7 @@ bignum core.  The `Hacl.Secret` arithmetic, 168 single-expression functions,
 gains nothing at all -- gcc was already inlining every one.
 
 **And so is interprocedural constant propagation.**  The same lesson arrived
-a second time, less gently.  `Hacl.Impl.Mont256.amul` took its modulus and
+a second time, less gently.  `Hacl.Impl.Mont4.amul` took its modulus and
 its Montgomery constant as arguments so that the field and the scalar field
 of both curves could share one multiplier, and the comment above it said that
 specialising them would buy nothing.  gcc had in fact been specialising them
@@ -2162,7 +2181,7 @@ thousand -- and adding FrodoKEM and HPKE to the single translation unit spent
 it.  The clones vanished, and every elliptic curve benchmark got two and a
 half times slower without a single line of elliptic curve code changing.
 `amul` is now `inline_for_extraction`, and so is the modular exponentiation
-`Hacl.Impl.Exp256.mexp` above it, which gcc was cloning for the same reason:
+`Hacl.Impl.Exp4.mexp` above it, which gcc was cloning for the same reason:
 each of their call sites carries its own copy with its own constants.  That
 is a decision the library makes rather than one it hopes for, and it puts the
 curves back at or slightly ahead of where they were before the merge.
@@ -2797,17 +2816,7 @@ costs is still open.
 Beyond feature parity, the performance work above has a queue of its own, in
 rough order of value:
 
-1. **The shared 256-bit core at four limbs of sixty-four bits**, which is
-   under way: `Spec.Bignum4`, `Spec.Montgomery4`, `Spec.Field4` and
-   `Hacl.Impl.Limb4` are written and verified, and the implementation and
-   the switch-over are what is left.  P-256 and secp256k1 are the two worst
-   rows in the table and the reason is not either curve's scalar
-   multiplication but the eight-limb, thirty-two-bit core underneath both:
-   a field multiply costs sixty-four schoolbook products and sixty-four
-   reduction products where four limbs would cost sixteen and sixteen.  Our
-   secp256k1 `fmul` measures 53.4 ns against HACL\*'s 7.0 and our P-256
-   `fmul` 42.2 ns against HACL\*'s 16.8.
-2. **Windowed scalar multiplication for Ed25519**, which is most of the
+1. **Windowed scalar multiplication for Ed25519**, which is most of the
    remaining gap now that the field is at radix 2^51 and `fmul` is a straight
    line: signing is 3.7x the reference where X25519 is 1.25x, and the whole of
    the difference is HACL\*'s precomputed base-point window against a
@@ -2816,16 +2825,18 @@ rough order of value:
    `Hacl.Bignum.Base.table_select`, written for the modexp window.  It needs
    associativity of the twisted Edwards addition law in extended coordinates,
    which `Spec.Ed25519` does not have in any form today.
-3. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
+2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
-4. **Special-prime reduction for P-256 and secp256k1** in place of the shared
-   general Montgomery core.  This is what is left on those two curves after
-   (1): HACL\*'s speed comes from the shape of the primes, not from the
-   width of the multiply.
-5. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
-   of what is left after (4).
-6. **Taking over the remaining sixty-six compiler specialisations**, the
+3. **Special-prime reduction for P-256 and secp256k1** in place of the shared
+   general Montgomery core.  This is what is left on those two curves now
+   that the width is right: HACL\*'s remaining speed comes from the shape of
+   the primes, and on secp256k1 it is the whole of the gap -- five limbs of
+   fifty-two bits, lazy, with no Montgomery factor, against our four limbs of
+   sixty-four with one.
+4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
+   of what is left after (3).
+5. **Taking over the remaining sixty-seven compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and

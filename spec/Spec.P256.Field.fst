@@ -17,7 +17,7 @@
 (** P-256's field prime and group order as two instances of
     {!Spec.Field4}.
 
-    [mu] is [-m^-1 mod 2^16] and [ri] is [R^-1 mod m]; both are checked by
+    [mu] is [-m^-1 mod 2^64] and [ri] is [R^-1 mod m]; both are checked by
     normalisation, which is the only place in the module where the moduli
     appear as numbers at all.  The field prime's [mu] is [1], a small gift
     from its Solinas shape -- the only one this representation collects. *)
