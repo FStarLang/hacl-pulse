@@ -374,6 +374,41 @@ let rec carry_run_chained (s: Seq.seq nat) (c d: nat) (k: nat)
       div_le_of_lt (c + d) base d
     end
 
+(** A run of [k] steps touches indices [0] through [k] and nothing above
+    them, which is what lets a run be started on a sequence whose top limb
+    is known to be zero and have that fact survive. *)
+let rec carry_run_above (s: Seq.seq nat) (k: nat) (i: nat)
+  : Lemma (requires k < i /\ i < Seq.length s)
+          (ensures vat (carry_run s k) i == vat s i)
+          (decreases k)
+  = if k = 0 then ()
+    else begin
+      carry_run_above s (k - 1) i;
+      carry_run_len s (k - 1)
+    end
+
+(** The carry that lands on a limb which started at zero.  {!carry_run_chained}
+    bounds the limb the run stops on by [c + d] because it may have had [c]
+    in it to begin with; when it began empty the bound is the incoming carry
+    alone, and [d] is a great deal smaller than [c].  This is what makes a
+    product's upper half fold: the four upper columns carry into a fifth
+    limb that was not there, and that limb is the only thing the reduction
+    constant has to multiply. *)
+let carry_run_top (s: Seq.seq nat) (c d: nat) (k: pos)
+  : Lemma (requires ble s c /\ c + d < base * (d + 1) /\
+                    k < Seq.length s /\ Seq.index s k == 0)
+          (ensures (let r = carry_run s k in
+                    Seq.length r == Seq.length s /\
+                    (forall (i: nat). i < k ==> vat r i < base) /\
+                    vat r k <= d))
+  = carry_run_chained s c d (k - 1);
+    carry_run_len s (k - 1);
+    carry_run_len s k;
+    carry_run_above s (k - 1) k;
+    let r = carry_run s (k - 1) in
+    Math.lemma_div_le (Seq.index r (k - 1)) (c + d) base;
+    div_le_of_lt (c + d) base d
+
 (** {2 Reading a limb off the number} *)
 
 let eval_digit (s: Seq.seq nat) (k: nat { k < Seq.length s })
