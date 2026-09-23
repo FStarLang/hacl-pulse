@@ -57,7 +57,7 @@ module Hash = Hacl.Impl.MLKEM.Hash
 
 (** Section 7.2, the modulus check: [ByteEncode_12] of [ByteDecode_12] of
     the coefficient half of the key is the coefficient half of the key. *)
-fn ek_check (ekey: A.array S8.t) (p: erased params) (k: SZ.t)
+fn ek_check (ekey: A.array S8.t) (p: erased params) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
             (#pk: perm) (#vek: erased (Seq.seq S8.t))
 requires A.pts_to ekey #pk vek **
          pure (SZ.v k == (reveal p).k /\ Seq.length vek == ek_len p)
@@ -95,7 +95,7 @@ ensures A.pts_to ekey #pk vek **
 
 (** Section 7.3, the hash check: the hash a decapsulation key carries is
     the hash of the encapsulation key it carries. *)
-fn dk_check (dkey: A.array S8.t) (p: erased params) (k: SZ.t)
+fn dk_check (dkey: A.array S8.t) (p: erased params) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
             (#pk: perm) (#vdk: erased (Seq.seq S8.t))
 requires A.pts_to dkey #pk vdk **
          pure (SZ.v k == (reveal p).k /\ Seq.length vdk == dk_len p)

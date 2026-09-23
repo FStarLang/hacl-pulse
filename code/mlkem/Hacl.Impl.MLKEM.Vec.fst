@@ -132,7 +132,7 @@ ensures exists* v. A.pts_to a v ** A.pts_to b #p vb **
 #push-options "--z3rlimit 200"
 
 (** [v <- NTT(v)] on each of the [k] entries. *)
-fn vec_ntt_impl (v tmp: A.array zqt) (k: SZ.t)
+fn vec_ntt_impl (v tmp: A.array zqt) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                 (#vv #vt: erased (Seq.seq zqt))
 requires A.pts_to v vv ** A.pts_to tmp vt **
          pure (1 <= SZ.v k /\ SZ.v k <= 4 /\
@@ -188,7 +188,7 @@ ensures exists* w u. A.pts_to v w ** A.pts_to tmp u **
 }
 
 (** [v <- NTT^-1(v)] on each of the [k] entries. *)
-fn vec_intt_impl (v tmp: A.array zqt) (k: SZ.t)
+fn vec_intt_impl (v tmp: A.array zqt) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                 (#vv #vt: erased (Seq.seq zqt))
 requires A.pts_to v vv ** A.pts_to tmp vt **
          pure (1 <= SZ.v k /\ SZ.v k <= 4 /\
@@ -273,7 +273,7 @@ ensures exists* v. A.pts_to dst v **
 
 (** [dst <- sum of u_i * v_i], both vectors in the NTT domain.  [tmp] holds
     one product at a time; the sum is accumulated in [dst]. *)
-fn dot_impl (dst u v tmp: A.array zqt) (k: SZ.t)
+fn dot_impl (dst u v tmp: A.array zqt) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
             (#vd: erased (Seq.seq zqt)) (#pu #pv: perm)
             (#vu #vv #vt: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
@@ -336,7 +336,7 @@ ensures exists* w c. A.pts_to dst w ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
 
 (** [dst <- m v], with [m] a [k x k] matrix flat and row-major.  One
     {!dot_impl} per row; [tmp] is the dot product's scratch space. *)
-fn mat_vec_mul_impl (dst m v tmp: A.array zqt) (k: SZ.t)
+fn mat_vec_mul_impl (dst m v tmp: A.array zqt) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                     (#vd: erased (Seq.seq zqt)) (#pm #pv: perm)
                     (#vm #vv #vt: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to m #pm vm ** A.pts_to v #pv vv **

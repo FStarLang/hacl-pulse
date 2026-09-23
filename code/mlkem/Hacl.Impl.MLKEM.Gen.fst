@@ -52,7 +52,7 @@ module HSZ = Hacl.SizeT
 (** Algorithm 13 line 3 and Algorithm 14 line 4: the [k x k] matrix, row
     major, [SampleNTT] of [rho] and the two indices.  [tr] swaps the two
     indices, which is how the standard transposes. *)
-fn gen_matrix_impl (dst: A.array zqt) (rho: A.array S8.t) (tr: bool) (k: SZ.t)
+fn gen_matrix_impl (dst: A.array zqt) (rho: A.array S8.t) (tr: bool) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                    (#vd: erased (Seq.seq zqt)) (#p: perm) (#vr: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to rho #p vr **
          pure (1 <= SZ.v k /\ SZ.v k <= 4 /\
@@ -131,7 +131,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #p vr **
 
 (** Algorithm 13 lines 8-11: [k] consecutive PRF calls with a running
     counter. *)
-fn noise_vec_impl (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) (eta k: SZ.t)
+fn noise_vec_impl (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                   (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to s #p vs **
          pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\

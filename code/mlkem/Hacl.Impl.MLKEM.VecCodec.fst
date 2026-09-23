@@ -44,7 +44,7 @@ module HSZ = Hacl.SizeT
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** [out <- ByteEncode_d] of each entry. *)
-fn vec_encode_impl (out: A.array S8.t) (src: A.array zqt) (d k: SZ.t)
+fn vec_encode_impl (out: A.array S8.t) (src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                    (#p: perm) (#vo: erased (Seq.seq S8.t)) (#vs: erased (Seq.seq zqt))
 requires A.pts_to out vo ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ 1 <= SZ.v k /\ SZ.v k <= 4 /\
@@ -106,7 +106,7 @@ ensures exists* v. A.pts_to out v ** A.pts_to src #p vs **
 }
 
 (** [dst <- ByteDecode_d] of each block. *)
-fn vec_decode_impl (dst: A.array zqt) (b: A.array S8.t) (d k: SZ.t)
+fn vec_decode_impl (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] d: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                    (#p: perm) (#vd: erased (Seq.seq zqt)) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ 1 <= SZ.v k /\ SZ.v k <= 4 /\
@@ -169,7 +169,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
 }
 
 (** [dst <- Compress_d] of each entry. *)
-fn vec_compress_impl (dst src: A.array zqt) (d k: SZ.t)
+fn vec_compress_impl (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                      (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\ 1 <= SZ.v k /\ SZ.v k <= 4 /\
@@ -221,7 +221,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
 }
 
 (** [dst <- Decompress_d] of each entry. *)
-fn vec_decompress_impl (dst src: A.array zqt) (d k: SZ.t)
+fn vec_decompress_impl (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                        (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\ 1 <= SZ.v k /\ SZ.v k <= 4 /\

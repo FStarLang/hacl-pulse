@@ -52,7 +52,7 @@ module Hash = Hacl.Impl.MLKEM.Hash
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** Algorithm 16.  [d] seeds K-PKE, [z] is the implicit-rejection key. *)
-fn keygen_impl (ek dk dseed zseed: A.array S8.t) (p: erased params) (k eta1: SZ.t)
+fn keygen_impl (ek dk dseed zseed: A.array S8.t) (p: erased params) ([@@@FStar.Attributes.monomorphize] k: SZ.t) ([@@@FStar.Attributes.monomorphize] eta1: SZ.t)
                (#vek0 #vdk0: erased (Seq.seq S8.t))
                (#pd: perm) (#vd: erased (Seq.lseq S8.t 32))
                (#pz: perm) (#vz: erased (Seq.lseq S8.t 32))
@@ -97,7 +97,9 @@ ensures exists* vek vdk.
 (** Algorithm 17.  [m] is the 32-byte message; the shared secret and the
     encryption randomness are the two halves of [G(m || H(ek))]. *)
 fn encaps_impl (ss ct ekey msg: A.array S8.t) (p: erased params)
-               (k eta1 eta2 du dv: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] k: SZ.t) ([@@@FStar.Attributes.monomorphize] eta1: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] eta2: SZ.t) ([@@@FStar.Attributes.monomorphize] du: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] dv: SZ.t)
                (#vss0 #vct0: erased (Seq.seq S8.t))
                (#pe: perm) (#vek: erased (Seq.lseq S8.t (ek_len p)))
                (#pm: perm) (#vm: erased (Seq.lseq S8.t 32))
@@ -155,7 +157,9 @@ ensures exists* vss vct.
     that does not re-encrypt to itself it returns [J(z || c)], which is
     indistinguishable from a real one to anyone without [z]. *)
 fn decaps_impl (ss dkey ct: A.array S8.t) (p: erased params)
-               (k eta1 eta2 du dv: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] k: SZ.t) ([@@@FStar.Attributes.monomorphize] eta1: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] eta2: SZ.t) ([@@@FStar.Attributes.monomorphize] du: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] dv: SZ.t)
                (#vss0: erased (Seq.seq S8.t))
                (#pd: perm) (#vdk: erased (Seq.lseq S8.t (dk_len p)))
                (#pc: perm) (#vc: erased (Seq.lseq S8.t (ct_len p)))
