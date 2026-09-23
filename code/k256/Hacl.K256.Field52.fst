@@ -47,7 +47,7 @@ module Hacl.K256.Field52
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.K256.Columns
+open Spec.K256.Freeze
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
@@ -185,6 +185,60 @@ inline_for_extraction
 let mulcf (x: S64.t) : (z: S128.t { S128.v z == cf * S64.v x }) =
   Math.swap_mul (U64.v cfw) (S64.v x);
   S128.mul_wide (S64.classify cfw) x
+
+(** {2 The constants and masks freezing needs} *)
+
+inline_for_extraction
+let cf1w : (k: U64.t { U64.v k == cf1 }) = 4294968273uL
+
+inline_for_extraction
+let mask48 : m: S64.t { S64.v m == hib - 1 } =
+  assert_norm (hib - 1 == 0xffffffffffff);
+  S64.classify 0xffffffffffffuL
+
+inline_for_extraction
+let lo48 (x: S64.t) : r: S64.t { S64.v r == S64.v x % hib } =
+  assert_norm (hib == pow2 48);
+  UInt.logand_mask #64 (S64.v x) 48;
+  S64.logand x mask48
+
+inline_for_extraction
+let hi48 (x: S64.t) : r: S64.t { S64.v r == S64.v x / hib } =
+  assert_norm (hib == pow2 48);
+  S64.shift_right x 48ul
+
+(** A mask is all ones or all zeroes, and stays that way under [logand]
+    and [logor].  The two lemmas are the four bitwise facts the SMT solver
+    cannot see through a [logand] symbol. *)
+inline_for_extraction
+let mand (x y: S64.t)
+  : Pure S64.t (requires (S64.v x == 0 \/ S64.v x == pow2 64 - 1) /\
+                         (S64.v y == 0 \/ S64.v y == pow2 64 - 1))
+               (ensures fun r -> (S64.v r == 0 \/ S64.v r == pow2 64 - 1) /\
+                                 (S64.v r == pow2 64 - 1 <==>
+                                  (S64.v x == pow2 64 - 1 /\ S64.v y == pow2 64 - 1)))
+  = UInt.logand_lemma_1 #64 (S64.v x);
+    UInt.logand_lemma_2 #64 (S64.v x);
+    UInt.logand_commutative #64 (S64.v x) (S64.v y);
+    UInt.logand_lemma_1 #64 (S64.v y);
+    UInt.logand_lemma_2 #64 (S64.v y);
+    assert_norm (pow2 64 - 1 =!= 0);
+    S64.logand x y
+
+inline_for_extraction
+let mor (x y: S64.t)
+  : Pure S64.t (requires (S64.v x == 0 \/ S64.v x == pow2 64 - 1) /\
+                         (S64.v y == 0 \/ S64.v y == pow2 64 - 1))
+               (ensures fun r -> (S64.v r == 0 \/ S64.v r == pow2 64 - 1) /\
+                                 (S64.v r == pow2 64 - 1 <==>
+                                  (S64.v x == pow2 64 - 1 \/ S64.v y == pow2 64 - 1)))
+  = UInt.logor_lemma_1 #64 (S64.v x);
+    UInt.logor_lemma_2 #64 (S64.v x);
+    UInt.logor_commutative #64 (S64.v x) (S64.v y);
+    UInt.logor_lemma_1 #64 (S64.v y);
+    UInt.logor_lemma_2 #64 (S64.v y);
+    assert_norm (pow2 64 - 1 =!= 0);
+    S64.logor x y
 
 (** {2 The carry pass on words}
 
@@ -637,6 +691,166 @@ ensures exists* (vout': Seq.seq S64.t).
   mkcols t a b;
   reduce out t;
   fmul_spec_ok (vals va) (vals vb);
+  ()
+}
+
+#pop-options
+
+(** {2 Freezing}
+
+    The one operation that produces the representative below the prime.
+    Three straight chains and a branch-free conditional subtraction, all
+    of it stated in [Spec.K256.Freeze]: a carry, a fold of everything
+    above bit 256 back against [cf1], a second carry, then the mask that
+    is all ones exactly when the number has reached the modulus, either by
+    overflowing [2^256] or by matching the prime limb for limb.
+
+    Nothing here branches on a secret.  The subtraction is [select]ing
+    [cf1] or zero into limb zero, carrying unconditionally -- which is a
+    no-op when zero was selected, because the limbs are already proper --
+    and masking the top limb back to forty-eight bits. *)
+
+#push-options "--z3rlimit 400"
+
+[@@ FStar.Attributes.CInline]
+fn freeze (out a: A.array S64.t)
+          (#vout: erased (Seq.seq S64.t))
+          (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to out vout ** A.pts_to a #pa va **
+  pure (Seq.length vout == nl /\ felem (vals va))
+ensures exists* (vout': Seq.seq S64.t).
+  A.pts_to out vout' ** A.pts_to a #pa va **
+  pure (vals vout' == freeze_spec (vals va) /\ felem (vals vout') /\
+        eval (vals vout') == fev (vals va) /\ eval (vals vout') < prime)
+{
+  A.pts_to_len out;
+  A.pts_to_len a;
+  assert_norm (nl == 5);
+  assert_norm (lim + 2 < base * 3);
+  assert_norm (lim + 2 < pow2 64);
+  div_le_of_lt (lim + 2) base 2;
+
+  let x0 = A.(a.(0sz)); let x1 = A.(a.(1sz)); let x2 = A.(a.(2sz));
+  let x3 = A.(a.(3sz)); let x4 = A.(a.(4sz));
+
+  (* The first chain. *)
+  Math.lemma_div_le (S64.v x0) (lim + 2) base;
+  let o0 = lo52 x0;
+  let v1 = addw x1 (hi52 x0);
+  Math.lemma_div_le (S64.v v1) (lim + 2) base;
+  let o1 = lo52 v1;
+  let v2 = addw x2 (hi52 v1);
+  Math.lemma_div_le (S64.v v2) (lim + 2) base;
+  let o2 = lo52 v2;
+  let v3 = addw x3 (hi52 v2);
+  Math.lemma_div_le (S64.v v3) (lim + 2) base;
+  let o3 = lo52 v3;
+  let v4 = addw x4 (hi52 v3);
+
+  let s1 = hide (step1 (vals va));
+  run4 (vals va);
+  carry_run_len (vals va) (nl - 1);
+  assert (pure (Seq.length s1 == nl));
+  assert (pure (Seq.index s1 0 == S64.v o0 /\ Seq.index s1 1 == S64.v o1 /\
+                Seq.index s1 2 == S64.v o2 /\ Seq.index s1 3 == S64.v o3 /\
+                Seq.index s1 4 == S64.v v4));
+
+  (* The fold of everything above bit 256. *)
+  assert_norm (lim + 2 < hib * 33);
+  div_le_of_lt (lim + 2) hib 32;
+  Math.lemma_div_le (S64.v v4) (lim + 2) hib;
+  let q = hi48 v4;
+  let t4 = lo48 v4;
+  assert_norm (cf1 * 32 < pow2 64);
+  Math.lemma_mult_le_right cf1 (S64.v q) 32;
+  assert_norm (base - 1 + cf1 * 32 < pow2 64);
+  let t0 = addw o0 (mulk cf1w q);
+
+  let s2 = hide (step2 (vals va));
+  assert (pure (Seq.length s2 == nl));
+  assert (pure (Seq.index s2 0 == S64.v t0 /\ Seq.index s2 1 == S64.v o1 /\
+                Seq.index s2 2 == S64.v o2 /\ Seq.index s2 3 == S64.v o3 /\
+                Seq.index s2 4 == S64.v t4));
+
+  (* The second chain. *)
+  assert_norm (base - 1 + cf1 * 32 < base * 2);
+  div_le_of_lt (base - 1 + cf1 * 32) base 1;
+  Math.lemma_div_le (S64.v t0) (base - 1 + cf1 * 32) base;
+  let u0 = lo52 t0;
+  let n1 = addw o1 (hi52 t0);
+  Math.lemma_div_le (S64.v n1) (base - 1 + cf1 * 32) base;
+  let u1 = lo52 n1;
+  let n2 = addw o2 (hi52 n1);
+  Math.lemma_div_le (S64.v n2) (base - 1 + cf1 * 32) base;
+  let u2 = lo52 n2;
+  let n3 = addw o3 (hi52 n2);
+  Math.lemma_div_le (S64.v n3) (base - 1 + cf1 * 32) base;
+  let u3 = lo52 n3;
+  let u4 = addw t4 (hi52 n3);
+
+  let s3 = hide (step3 (vals va));
+  run4 s2;
+  carry_run_len s2 (nl - 1);
+  step3_ble (vals va);
+  assert (pure (Seq.length s3 == nl /\ proper s3));
+  assert (pure (Seq.index s3 0 == S64.v u0 /\ Seq.index s3 1 == S64.v u1 /\
+                Seq.index s3 2 == S64.v u2 /\ Seq.index s3 3 == S64.v u3 /\
+                Seq.index s3 4 == S64.v u4));
+
+  (* Has it reached the modulus? *)
+  assert_norm (hib < pow2 64);
+  assert_norm (pl0 == 4503595332402223);
+  let m = mor (S64.gte_mask u4 (S64.classify 281474976710656uL))
+              (mand (S64.eq_mask u4 mask48)
+                    (mand (S64.eq_mask u3 mask52)
+                          (mand (S64.eq_mask u2 mask52)
+                                (mand (S64.eq_mask u1 mask52)
+                                      (S64.gte_mask u0 (S64.classify 4503595332402223uL))))));
+  assert (pure ((S64.v m == pow2 64 - 1) <==> over s3));
+
+  (* The conditional subtraction. *)
+  let d = S64.select m (S64.classify cf1w) S64.zero;
+  let xx = hide (if over s3 then 1 else 0);
+  assert (pure (S64.v d == cf1 * reveal xx));
+  assert_norm (base - 1 + cf1 < base * 2);
+  assert_norm (base - 1 + cf1 < pow2 64);
+  div_le_of_lt (base - 1 + cf1) base 1;
+  let y0 = addw u0 d;
+  Math.lemma_div_le (S64.v y0) (base - 1 + cf1) base;
+  let p0 = lo52 y0;
+  let g1 = addw u1 (hi52 y0);
+  Math.lemma_div_le (S64.v g1) (base - 1 + cf1) base;
+  let p1 = lo52 g1;
+  let g2 = addw u2 (hi52 g1);
+  Math.lemma_div_le (S64.v g2) (base - 1 + cf1) base;
+  let p2 = lo52 g2;
+  let g3 = addw u3 (hi52 g2);
+  Math.lemma_div_le (S64.v g3) (base - 1 + cf1) base;
+  let p3 = lo52 g3;
+  assert_norm (hib + 1 < pow2 64);
+  let g4 = addw u4 (hi52 g3);
+  let p4 = lo48 g4;
+
+  let bb = hide (Seq.upd s3 0 (vat s3 0 + cf1 * reveal xx));
+  run4 bb;
+  carry_run_len bb (nl - 1);
+  fin_uniform s3 (reveal xx);
+  assert (pure (Seq.length (freeze_spec (vals va)) == nl));
+  assert (pure (Seq.index (freeze_spec (vals va)) 0 == S64.v p0 /\
+                Seq.index (freeze_spec (vals va)) 1 == S64.v p1 /\
+                Seq.index (freeze_spec (vals va)) 2 == S64.v p2 /\
+                Seq.index (freeze_spec (vals va)) 3 == S64.v p3 /\
+                Seq.index (freeze_spec (vals va)) 4 == S64.v p4));
+
+  A.((out.(0sz) <- p0)); A.((out.(1sz) <- p1)); A.((out.(2sz) <- p2));
+  A.((out.(3sz) <- p3)); A.((out.(4sz) <- p4));
+  with w. assert (A.pts_to out w);
+  assert (pure (Seq.length (vals w) == nl));
+  assert (pure (Seq.index (vals w) 0 == S64.v p0 /\ Seq.index (vals w) 1 == S64.v p1 /\
+                Seq.index (vals w) 2 == S64.v p2 /\ Seq.index (vals w) 3 == S64.v p3 /\
+                Seq.index (vals w) 4 == S64.v p4));
+  five_eq (vals w) (freeze_spec (vals va));
+  freeze_ok (vals va);
   ()
 }
 
