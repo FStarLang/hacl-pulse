@@ -1115,3 +1115,218 @@ ensures A.pts_to b #pb vb **
   bit_mask bit one m (num vb / pow2 (SZ.v i) % 2);
   m
 }
+
+
+(** {2 Windows}
+
+    The ladder in {!Hacl.Bignum.Exponentiation} consumes the exponent four
+    bits at a time rather than one, which means reading a four-bit digit out
+    of it and then picking one of sixteen precomputed powers without letting
+    the choice reach the address bus.  Both halves are here, next to the
+    single-bit versions they generalize. *)
+
+(** Shifting inside a limb keeps the low [w] bits the number has there, as
+    long as the window does not run off the top of the limb. *)
+let shift_in_limb_w (x: nat) (r: nat) (w: nat { r + w <= 64 })
+  : Lemma ((x % pow2 64) / pow2 r % pow2 w == x / pow2 r % pow2 w)
+  = Math.pow2_modulo_division_lemma_1 x r 64;
+    Math.pow2_modulo_modulo_lemma_1 (x / pow2 r) w (64 - r)
+
+(** The [w] bits of the number at position [i] are the [w] bits of limb
+    [i / 64] at position [i mod 64].  The side condition is that they do
+    not straddle the limb boundary; a window whose width divides sixty-four
+    and whose position is a multiple of that width never does. *)
+let num_bits_at (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
+                (w: nat { i % 64 + w <= 64 })
+  : Lemma (S64.v (Seq.index v (i / 64)) / pow2 (i % 64) % pow2 w ==
+           num v / pow2 i % pow2 w)
+  = let q = i / 64 in
+    let r = i % 64 in
+    num_digit v q;
+    assert (num v / wt q % pow2 64 == S64.v (Seq.index v q));
+    shift_in_limb_w (num v / wt q) r w;
+    assert (S64.v (Seq.index v q) / pow2 r % pow2 w ==
+            (num v / wt q) / pow2 r % pow2 w);
+    Math.euclidean_division_definition i 64;
+    assert (rad * q + r == i);
+    shift_num (num v) q r;
+    assert (num v / pow2 i == (num v / wt q) / pow2 r)
+
+(** A position that is a multiple of four leaves room for four more bits in
+    the same limb, because four divides sixty-four. *)
+let window_fits (i: nat) : Lemma (requires i % 4 == 0) (ensures i % 64 + 4 <= 64)
+  = assert_norm (pow2 2 == 4);
+    assert_norm (pow2 6 == 64);
+    Math.pow2_modulo_modulo_lemma_1 i 2 6
+
+(** [get_digit b i] is the four-bit digit of [b] at position [i], which
+    must be a multiple of four.  Unlike {!get_bit} this is a value, not a
+    mask: it is consumed by {!table_select}, which is where it stops being
+    something one could branch on. *)
+inline_for_extraction
+fn get_digit (b: A.array S64.t) (i: SZ.t) (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to b #pb vb ** pure (SZ.v i / 64 < Seq.length vb /\ SZ.v i % 4 == 0)
+returns d: S64.t
+ensures A.pts_to b #pb vb ** pure (S64.v d == num vb / pow2 (SZ.v i) % 16)
+{
+  A.pts_to_len b;
+  window_fits (SZ.v i);
+  let q = SZ.div i (SZ.uint_to_t 64);
+  let r = SZ.rem i (SZ.uint_to_t 64);
+  let w = A.(b.(q));
+  assert (pure (w == Seq.index vb (SZ.v i / 64)));
+  let x = S64.shift_right w (SZ.sizet_to_uint32 r);
+  assert (pure (S64.v x == S64.v w / pow2 (SZ.v i % 64)));
+  S64.logand_mask_low x 4ul;
+  assert_norm (pow2 4 == 16);
+  assert (pure (S64.v (S64.logand x (S64.mask_low 4ul)) == S64.v x % 16));
+  num_bits_at vb (SZ.v i) 4;
+  assert (pure (S64.v w / pow2 (SZ.v i % 64) % 16 ==
+                num vb / pow2 (SZ.v i) % 16));
+  S64.logand x (S64.mask_low 4ul)
+}
+
+(** Reading a table entry out of a flat array, as a sequence slice. *)
+let sel_eq_at (v vt vres: Seq.seq S64.t) (off n: nat) (k: nat)
+  : Lemma (requires Seq.length v == n /\ Seq.length vres == n /\
+                    off + n <= Seq.length vt /\
+                    (forall (j: nat). j < n ==>
+                       Seq.index v j ==
+                         (if k = 1 then Seq.index vt (off + j)
+                          else Seq.index vres j)))
+          (ensures (k == 1 ==> v == Seq.slice vt off (off + n)) /\
+                   (k == 0 ==> v == vres))
+  = if k = 1 then Seq.lemma_eq_intro v (Seq.slice vt off (off + n))
+    else Seq.lemma_eq_intro v vres
+
+(** [cselect_at res tbl n off m k] is {!cselect} reading the [n] limbs of
+    [tbl] that begin at [off]. *)
+fn cselect_at (res: A.array S64.t) (tbl: A.array S64.t) (n: SZ.t) (off: SZ.t)
+              (m: S64.t) (k: erased nat)
+              (#vres: erased (Seq.seq S64.t)) (#pt: perm)
+              (#vt: erased (Seq.seq S64.t))
+requires A.pts_to res vres ** A.pts_to tbl #pt vt **
+  pure (Seq.length vres == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
+        SZ.fits (SZ.v off + SZ.v n) /\ is_mask m /\ stands_for m (reveal k))
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to tbl #pt vt **
+  pure (Seq.length v == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
+        (reveal k == 1 ==>
+           v == Seq.slice vt (SZ.v off) (SZ.v off + SZ.v n)) /\
+        (reveal k == 0 ==> v == reveal vres))
+{
+  A.pts_to_len res;
+  A.pts_to_len tbl;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to res v ** A.pts_to tbl #pt vt **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
+          SZ.v off + SZ.v n <= Seq.length vt /\
+          (forall (k2: nat). k2 < SZ.v vi ==>
+             Seq.index v k2 ==
+               (if reveal k = 1 then Seq.index vt (SZ.v off + k2)
+                else Seq.index vres k2)) /\
+          (forall (k2: nat). SZ.v vi <= k2 /\ k2 < SZ.v n ==>
+             Seq.index v k2 == Seq.index vres k2))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let ai = A.(tbl.(SZ.add off vi));
+    let ri = A.(res.(vi));
+    A.((res.(vi) <- S64.select m ai ri));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to res v);
+  sel_eq_at v vt vres (SZ.v off) (SZ.v n) (reveal k);
+  ()
+}
+
+(** [table_select res tbl n d] copies entry [d] of a sixteen-entry table of
+    [n]-limb numbers into [res].  Every entry is read and fifteen of them
+    are discarded, so neither the time nor the addresses touched depend on
+    [d] -- which is a secret, being four bits of the exponent. *)
+fn table_select (res: A.array S64.t) (tbl: A.array S64.t) (n: SZ.t)
+                (d: S64.t) (k: erased nat)
+                (#vres: erased (Seq.seq S64.t)) (#pt: perm)
+                (#vt: erased (Seq.seq S64.t))
+requires A.pts_to res vres ** A.pts_to tbl #pt vt **
+  pure (Seq.length vres == SZ.v n /\ Seq.length vt == 16 * SZ.v n /\
+        SZ.fits (16 * SZ.v n) /\ S64.v d == reveal k /\ reveal k < 16)
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to tbl #pt vt **
+  pure (Seq.length v == SZ.v n /\ Seq.length vt == 16 * SZ.v n /\
+        reveal k < 16 /\
+        v == Seq.slice vt (reveal k * SZ.v n) (reveal k * SZ.v n + SZ.v n))
+{
+  A.pts_to_len res;
+  A.pts_to_len tbl;
+  assert_norm (pow2 64 - 1 =!= 0);
+  let mut e = 0sz;
+  let mut ec = S64.classify 0uL;
+  while (let ve = !e; SZ.lt ve (SZ.uint_to_t 16))
+  invariant exists* (ve: SZ.t) (vec: S64.t) (v: Seq.seq S64.t).
+    pts_to e ve ** pts_to ec vec ** A.pts_to res v ** A.pts_to tbl #pt vt **
+    pure (SZ.v ve <= 16 /\ S64.v vec == SZ.v ve /\ Seq.length v == SZ.v n /\
+          Seq.length vt == 16 * SZ.v n /\ reveal k < 16 /\
+          (reveal k < SZ.v ve ==>
+             v == Seq.slice vt (reveal k * SZ.v n)
+                              (reveal k * SZ.v n + SZ.v n)))
+  decreases (16 - SZ.v (!e))
+  {
+    let ve = !e;
+    let vec = !ec;
+    let m = S64.eq_mask d vec;
+    cselect_at res tbl n (SZ.mul ve n) m (if SZ.v ve = reveal k then 1 else 0);
+    ec := S64.add_mod vec (S64.classify 1uL);
+    e := SZ.add ve 1sz;
+  }
+}
+
+(** [table_store tbl src n off] writes the [n] limbs of [src] into [tbl] at
+    [off] and leaves the rest of [tbl] alone.  Only the table's construction
+    uses this, where the offset is a public loop counter; the secret-indexed
+    read is {!table_select}. *)
+fn table_store (tbl: A.array S64.t) (src: A.array S64.t) (n: SZ.t) (off: SZ.t)
+               (#vt: erased (Seq.seq S64.t)) (#ps: perm)
+               (#vs: erased (Seq.seq S64.t))
+requires A.pts_to tbl vt ** A.pts_to src #ps vs **
+  pure (Seq.length vs == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
+        SZ.fits (SZ.v off + SZ.v n))
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to tbl v ** A.pts_to src #ps vs **
+  pure (Seq.length v == Seq.length vt /\ Seq.length vs == SZ.v n /\
+        SZ.v off + SZ.v n <= Seq.length vt /\
+        (forall (j: nat). j < SZ.v n ==>
+           Seq.index v (SZ.v off + j) == Seq.index vs j) /\
+        (forall (j: nat). j < Seq.length v ==>
+           (j < SZ.v off \/ SZ.v off + SZ.v n <= j) ==>
+           Seq.index v j == Seq.index vt j))
+{
+  A.pts_to_len tbl;
+  A.pts_to_len src;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi n)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to tbl v ** A.pts_to src #ps vs **
+    pure (SZ.v vi <= SZ.v n /\ Seq.length v == Seq.length vt /\
+          Seq.length vs == SZ.v n /\
+          SZ.v off + SZ.v n <= Seq.length vt /\
+          (forall (j: nat). j < SZ.v vi ==>
+             Seq.index v (SZ.v off + j) == Seq.index vs j) /\
+          (forall (j: nat). j < Seq.length v ==>
+             (j < SZ.v off \/ SZ.v off + SZ.v vi <= j) ==>
+             Seq.index v j == Seq.index vt j))
+  decreases (SZ.v n - SZ.v (!i))
+  {
+    let vi = !i;
+    let si = A.(src.(vi));
+    A.((tbl.(SZ.add off vi) <- si));
+    i := SZ.add vi 1sz;
+  }
+}
+
+(** The all-ones mask, for the table reads whose index is public. *)
+inline_for_extraction
+let ones () : m: S64.t { is_mask m /\ stands_for m 1 }
+  = assert_norm (pow2 64 - 1 =!= 0); S64.mask_low 64ul

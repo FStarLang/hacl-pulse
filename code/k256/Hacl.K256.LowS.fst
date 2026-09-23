@@ -25,21 +25,21 @@
     The boundary is [q / 2] rounded down and belongs to the low half, [q]
     being odd.  Deciding which side of it a scalar falls on needs an
     ordering rather than the equality every other test in this library
-    uses, which is what {!Hacl.Impl.Mont256.ageq} is for. *)
+    uses, which is what {!Hacl.Impl.Mont4.ageq} is for. *)
 module Hacl.K256.LowS
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.K256.Field
-open Spec.Mont256
+open Spec.Mont4
 open Hacl.Spec.Bytes
-open Hacl.Impl.Limb
+open Hacl.Impl.Limb4
 open Hacl.Impl.Table
-open Hacl.Impl.Bignum256
-open Hacl.Impl.Mont256
-open Hacl.Impl.Lit256
+open Hacl.Impl.Bignum4
+open Hacl.Impl.Mont4
+open Hacl.Impl.Lit4
 open Hacl.K256.Tables
 
 module A = Pulse.Lib.Array
@@ -48,6 +48,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module K = Spec.K256
 module Math = FStar.Math.Lemmas
 
@@ -74,15 +75,17 @@ let setup (_: unit)
     than the number of definitions it can see. *)
 
 inline_for_extraction
-fn load_nz (a0 a1 a2: A.array S64.t) (b: A.array S8.t)
-           (#v0 #v1 #v2: erased (Seq.seq S64.t))
+fn load_nz (a0: A.array S64.t) (a1: A.array S128.t) (a2: A.array S64.t)
+           (b: A.array S8.t)
+           (#v0: erased (Seq.seq S64.t)) (#v1: erased (Seq.seq S128.t))
+           (#v2: erased (Seq.seq S64.t))
            (#pb: perm) (#vb: erased (Seq.seq S8.t))
 requires
   A.pts_to a0 v0 ** A.pts_to a1 v1 ** A.pts_to a2 v2 ** A.pts_to b #pb vb **
   pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
         Seq.length vb == 32)
 returns r: bool
-ensures exists* (w0 w1 w2: Seq.seq S64.t).
+ensures exists* (w0: Seq.seq S64.t) (w1: Seq.seq S128.t) (w2: Seq.seq S64.t).
   A.pts_to a0 w0 ** A.pts_to a1 w1 ** A.pts_to a2 w2 ** A.pts_to b #pb vb **
   pure (Seq.length w1 == nl /\ Seq.length w2 == nl /\ res qmod (vals w0) /\
         r == (0 < be_nat vb && be_nat vb < K.order) /\
@@ -113,7 +116,8 @@ ensures A.pts_to b #pb vb ** pure (r == isn vb)
 {
   setup ();
   let z = S64.zero;
-  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let z128 : S128.t = S128.zero;
+  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z128; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   let ok = load_nz a0 a1 a2 b;
   if ok {
     let qh = qhalf ();
@@ -201,7 +205,8 @@ ensures exists* (wb: Seq.seq S8.t).
   setup ();
   A.pts_to_len sg;
   let z = S64.zero;
-  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let z128 : S128.t = S128.zero;
+  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z128; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
 
   let ss = Sub.sub sg 32sz 64sz;
   with vss. assert (A.pts_to ss vss);

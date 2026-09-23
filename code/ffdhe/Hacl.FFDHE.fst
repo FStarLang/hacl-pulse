@@ -171,6 +171,8 @@ ensures exists* (v: Seq.seq S8.t)
   pre_bnd ve1 (SZ.v nn);
   pre_full ve1;
 
+  SZ.fits_lte (16 * SZ.v nn) (64 * SZ.v nn);
+  mul64_mod4 (SZ.v nn);
   mod_exp_consttime res g e (SZ.mul 64sz nn) r2 p nn mu aM acc t wide;
   with vres1. assert (A.pts_to res vres1);
   to_bytes_be pk res nn;
@@ -277,6 +279,8 @@ ensures exists* (v: Seq.seq S8.t)
     with ve1. assert (A.pts_to e ve1);
     pre_bnd ve1 (SZ.v nn);
     pre_full ve1;
+    SZ.fits_lte (16 * SZ.v nn) (64 * SZ.v nn);
+    mul64_mod4 (SZ.v nn);
     mod_exp_consttime res a e (SZ.mul 64sz nn) r2 p nn mu aM acc t wide;
     to_bytes_be ss res nn;
     true
@@ -351,7 +355,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 32sz |];
   let mut t = [| z; 32sz |];
   let mut wide = [| z; 64sz |];
-  precomp r2 p 32sz;
+  precomp r2 acc t wide p 32sz mu;
   secret_to_public_precomp pk sk p r2 32sz mu g e res aM acc t wide;
   drop_table p;
 }
@@ -389,7 +393,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 32sz |];
   let mut t = [| z; 32sz |];
   let mut wide = [| z; 64sz |];
-  precomp r2 p 32sz;
+  precomp r2 acc t wide p 32sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 32sz mu a e res aM acc t wide;
   drop_table p;
   ok
@@ -433,7 +437,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 48sz |];
   let mut t = [| z; 48sz |];
   let mut wide = [| z; 96sz |];
-  precomp r2 p 48sz;
+  precomp r2 acc t wide p 48sz mu;
   secret_to_public_precomp pk sk p r2 48sz mu g e res aM acc t wide;
   drop_table p;
 }
@@ -471,7 +475,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 48sz |];
   let mut t = [| z; 48sz |];
   let mut wide = [| z; 96sz |];
-  precomp r2 p 48sz;
+  precomp r2 acc t wide p 48sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 48sz mu a e res aM acc t wide;
   drop_table p;
   ok
@@ -515,7 +519,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 64sz |];
   let mut t = [| z; 64sz |];
   let mut wide = [| z; 128sz |];
-  precomp r2 p 64sz;
+  precomp r2 acc t wide p 64sz mu;
   secret_to_public_precomp pk sk p r2 64sz mu g e res aM acc t wide;
   drop_table p;
 }
@@ -553,7 +557,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 64sz |];
   let mut t = [| z; 64sz |];
   let mut wide = [| z; 128sz |];
-  precomp r2 p 64sz;
+  precomp r2 acc t wide p 64sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 64sz mu a e res aM acc t wide;
   drop_table p;
   ok
@@ -597,7 +601,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 96sz |];
   let mut t = [| z; 96sz |];
   let mut wide = [| z; 192sz |];
-  precomp r2 p 96sz;
+  precomp r2 acc t wide p 96sz mu;
   secret_to_public_precomp pk sk p r2 96sz mu g e res aM acc t wide;
   drop_table p;
 }
@@ -635,7 +639,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 96sz |];
   let mut t = [| z; 96sz |];
   let mut wide = [| z; 192sz |];
-  precomp r2 p 96sz;
+  precomp r2 acc t wide p 96sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 96sz mu a e res aM acc t wide;
   drop_table p;
   ok
@@ -679,7 +683,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 128sz |];
   let mut t = [| z; 128sz |];
   let mut wide = [| z; 256sz |];
-  precomp r2 p 128sz;
+  precomp r2 acc t wide p 128sz mu;
   secret_to_public_precomp pk sk p r2 128sz mu g e res aM acc t wide;
   drop_table p;
 }
@@ -717,7 +721,7 @@ ensures exists* (v: Seq.seq S8.t).
   let mut acc = [| z; 128sz |];
   let mut t = [| z; 128sz |];
   let mut wide = [| z; 256sz |];
-  precomp r2 p 128sz;
+  precomp r2 acc t wide p 128sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 128sz mu a e res aM acc t wide;
   drop_table p;
   ok

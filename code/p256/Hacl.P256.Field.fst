@@ -16,13 +16,13 @@
 
 (** The field [F_p].
 
-    Sixteen limbs holding [x R mod p].  [felem] is the invariant and [fev]
-    is the number: after [Spec.Mont256] the Montgomery factor is not
+    Four limbs holding [x R mod p].  [felem] is the invariant and [fev]
+    is the number: after [Spec.Mont4] the Montgomery factor is not
     visible in any statement below, and each operation says exactly what
     [Spec.P256] says it does.
 
     Every function here is four lines -- fetch the constant tables, call the
-    operation from [Hacl.Impl.Mont256], apply the one lemma that turns the
+    operation from [Hacl.Impl.Mont4], apply the one lemma that turns the
     representation-level equation into a numeric one.  The tables are
     [static const] arrays and the permission on them is never returned,
     which is what [drop_table] records. *)
@@ -31,14 +31,14 @@ module Hacl.P256.Field
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.P256.Field
-open Spec.Mont256
+open Spec.Mont4
 open Hacl.Spec.Bytes
-open Hacl.Impl.Limb
+open Hacl.Impl.Limb4
 open Hacl.Impl.Table
-open Hacl.Impl.Bignum256
-open Hacl.Impl.Mont256
+open Hacl.Impl.Bignum4
+open Hacl.Impl.Mont4
 open Hacl.P256.Tables
 
 module A = Pulse.Lib.Array
@@ -46,6 +46,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module P = Spec.P256
 module MA = Spec.ModArith
 module G = Pulse.Lib.GlobalArray
@@ -144,7 +145,7 @@ ensures exists* (vo': Seq.seq S64.t).
   pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev va))
 {
   let z = S64.zero;
-  let mut ac = [| z; 8sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 4sz |]; A.pts_to_len ac; A.pts_to_len ac;
   acopy ac a;
   fmul out a ac;
   ()
@@ -257,7 +258,7 @@ ensures A.pts_to a #pa va ** pure (r == (fev va = P.fzero))
   mev_iszero fmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 8sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 4sz |]; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
   r
@@ -279,7 +280,7 @@ ensures exists* (p: perm) (v: Seq.seq S64.t).
   fmod_ok (); fmod_m ();
   limbs_ok (reveal x * pow2 256 % P.prime);
   mev_uniq fmod x (limbs (reveal x * pow2 256 % P.prime));
-  table a 8sz
+  table a 4sz
 }
 
 inline_for_extraction
@@ -330,7 +331,8 @@ ensures exists* (vo': Seq.seq S64.t).
   fmod_ok (); fmod_m ();
   assert_norm (pow2 256 < 2 * P.prime);
   let z = S64.zero;
-  let mut at = [| z; 8sz |]; A.pts_to_len at; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let z128 : S128.t = S128.zero;
+  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = fnm ();
   let r = abelow at asv nm fmod;
@@ -348,7 +350,7 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (fev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 8sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 4sz |]; A.pts_to_len at; A.pts_to_len at;
   ffrom at a;
   store_be b at;
   ()

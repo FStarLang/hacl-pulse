@@ -49,7 +49,9 @@ module G = Pulse.Lib.GlobalArray
 (** The two initialization vectors, as [static const] arrays in the program
     image; see [Hacl.Impl.Table]. *)
 
+[@@FStar.Custard.no_specialize]
 let iv64_arr : G.static_array S64.t = G.mk_static_array iv64_list
+[@@FStar.Custard.no_specialize]
 let iv32_arr : G.static_array S32.t = G.mk_static_array iv32_list
 
 let table_lens (_: unit)
@@ -79,9 +81,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv64_arr 8sz;
-  blake2_impl blake2b_512_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2b_512_p iv64_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2B with a 384-bit digest. *)
@@ -105,9 +105,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv64_arr 8sz;
-  blake2_impl blake2b_384_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2b_384_p iv64_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2B with a 256-bit digest. *)
@@ -131,9 +129,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv64_arr 8sz;
-  blake2_impl blake2b_256_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2b_256_p iv64_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2B with a 160-bit digest. *)
@@ -157,9 +153,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv64_arr 8sz;
-  blake2_impl blake2b_160_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2b_160_p iv64_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2S with a 256-bit digest. *)
@@ -183,9 +177,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv32_arr 8sz;
-  blake2_impl blake2s_256_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2s_256_p iv32_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2S with a 224-bit digest. *)
@@ -209,9 +201,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv32_arr 8sz;
-  blake2_impl blake2s_224_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2s_224_p iv32_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2S with a 160-bit digest. *)
@@ -235,9 +225,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv32_arr 8sz;
-  blake2_impl blake2s_160_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2s_160_p iv32_arr out key key_len msg msg_len;
 }
 
 (** BLAKE2S with a 128-bit digest. *)
@@ -261,7 +249,5 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   A.pts_to_len msg;
   table_lens ();
-  let ivt = table iv32_arr 8sz;
-  blake2_impl blake2s_128_p ivt out key key_len msg msg_len;
-  drop_table ivt;
+  blake2_impl blake2s_128_p iv32_arr out key key_len msg msg_len;
 }

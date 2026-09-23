@@ -15,19 +15,19 @@
 *)
 
 (** secp256k1's field prime and group order as two instances of
-    {!Spec.Field256}.
+    {!Spec.Field4}.
 
     Exactly the shape of {!Spec.P256.Field}, and for the same reason: the
     limb arithmetic does not know or care which 256-bit odd modulus it is
     working over, so a curve contributes two numbers and two [assert_norm]s
-    and nothing else.  [mu] is [-m^-1 mod 2^16] and [ri] is [R^-1 mod m];
+    and nothing else.  [mu] is [-m^-1 mod 2^64] and [ri] is [R^-1 mod m];
     neither of K-256's moduli has a [mu] as convenient as P-256's prime. *)
 module Spec.K256.Field
 
-include Spec.Field256
+include Spec.Field4
 
-open Spec.Bignum256
-open Spec.Montgomery256
+open Spec.Bignum4
+open Spec.Montgomery4
 
 module K = Spec.K256
 
@@ -35,34 +35,34 @@ module K = Spec.K256
 
 let fmod : modulus =
   assert_norm (K.prime < pow2 256);
-  mk K.prime 3525653809
+  mk K.prime 15580212934572586289
      0xc9bd1905155383999c46c2c295f2b761bcb223fedc24a059d838091d0868192a
 
 let fmod_ok (_: unit) : Lemma (modulus_ok fmod) =
   assert_norm (K.prime < pow2 256);
   assert_norm (1 < K.prime);
-  assert_norm (3525653809 < pow2 rad);
-  assert_norm (((K.prime % pow2 rad) * 3525653809 + 1) % pow2 rad == 0);
+  assert_norm (15580212934572586289 < pow2 rad);
+  assert_norm (((K.prime % pow2 rad) * 15580212934572586289 + 1) % pow2 rad == 0);
   assert_norm (pow2 256 *
     0xc9bd1905155383999c46c2c295f2b761bcb223fedc24a059d838091d0868192a
     % K.prime == 1);
-  mk_ok K.prime 3525653809
+  mk_ok K.prime 15580212934572586289
     0xc9bd1905155383999c46c2c295f2b761bcb223fedc24a059d838091d0868192a
 
 let qmod : modulus =
   assert_norm (K.order < pow2 256);
-  mk K.order 1435021631
+  mk K.order 5408259542528602431
      0xd9e8890d6494ef93897f30c127cfab5d3bbbd4567fa50c3c80fd22938097c016
 
 let qmod_ok (_: unit) : Lemma (modulus_ok qmod) =
   assert_norm (K.order < pow2 256);
   assert_norm (1 < K.order);
-  assert_norm (1435021631 < pow2 rad);
-  assert_norm (((K.order % pow2 rad) * 1435021631 + 1) % pow2 rad == 0);
+  assert_norm (5408259542528602431 < pow2 rad);
+  assert_norm (((K.order % pow2 rad) * 5408259542528602431 + 1) % pow2 rad == 0);
   assert_norm (pow2 256 *
     0xd9e8890d6494ef93897f30c127cfab5d3bbbd4567fa50c3c80fd22938097c016
     % K.order == 1);
-  mk_ok K.order 1435021631
+  mk_ok K.order 5408259542528602431
     0xd9e8890d6494ef93897f30c127cfab5d3bbbd4567fa50c3c80fd22938097c016
 
 #pop-options
