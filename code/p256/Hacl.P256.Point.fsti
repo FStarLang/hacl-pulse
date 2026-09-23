@@ -24,9 +24,9 @@ module Hacl.P256.Point
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.P256.Field
-open Hacl.Impl.Limb
+open Hacl.Impl.Limb4
 open Hacl.Impl.Table
 open Hacl.P256.Field
 

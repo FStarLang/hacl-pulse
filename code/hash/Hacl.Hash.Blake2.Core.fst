@@ -35,6 +35,7 @@ open Hacl.Spec.Bytes
 open Hacl.Impl.Bytes
 open Spec.Blake2
 open Spec.Blake2.Constants
+open Hacl.Impl.Table
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -60,6 +61,32 @@ let sigma_arr : GA.static_array SZ.t = GA.mk_static_array sigma_list
 let sigma_len (_: unit)
   : Lemma (Seq.length (GA.static_array_elems sigma_arr) == 160)
   = assert_norm (List.Tot.length sigma_list == 160)
+
+(** Take the schedule table, here rather than from a caller.
+
+    It used to be a parameter, threaded from the four entry points down
+    through six functions to [round_impl].  Nothing ever passed anything else
+    -- there is one sigma table in BLAKE2 and both widths share it -- so the
+    parameter existed only to be constant-propagated away, and whether it was
+    propagated away was the C compiler's decision rather than ours.  gcc took
+    it by cloning [compress_impl], which is spent against the
+    [ipa-cp-large-unit-insns] budget for the whole translation unit; compiling
+    with [-fno-ipa-cp], which is what an exhausted budget looks like, costs
+    BLAKE2 thirteen to fifteen percent.  Read from the global here it costs
+    nothing and cannot be taken away: the C is a local pointer to a [static
+    const] array, and both compilers fold the hundred and ninety-two literal
+    subscripts at [-O1]. *)
+inline_for_extraction
+fn sigma_table (_: unit)
+requires emp
+returns sg: A.array SZ.t
+ensures exists* (ps: perm) (vs: Seq.seq SZ.t). A.pts_to sg #ps vs ** pure (sigma_ok vs)
+{
+  sigma_len ();
+  let sg = table sigma_arr 160sz;
+  sigma_seq_ok ();
+  sg
+}
 
 (** {2 The mixing function}
 
@@ -452,27 +479,25 @@ ensures exists* (vh': Seq.seq t). A.pts_to h vh' ** A.pts_to vv #pv v4 **
     array was measured too, and gives up half the win in both compilers --
     a pointer parameter may alias, so the words stay in memory.
 
-    [ivs] and [sg] are the initialisation vector and the schedule table, both
-    static; [last] is the final-block flag.  gcc used to clone this function
-    on all three and clang did not, which is why it was inlined before the
-    rounds were unrolled.  Custard monomorphizes on [p], so the eight copies
-    already have them as constants. *)
+    The schedule table is taken here too, from the global, rather than being
+    a parameter; see {!sigma_table}.  [ivs] is the initialisation vector and
+    [last] the final-block flag.  gcc used to clone this function on all
+    three, and clang did not, which is why it was inlined before the rounds
+    were unrolled.  Custard monomorphizes on [p], so the eight copies have
+    the round count and the rotations as constants already. *)
 fn compress_impl (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
                  (h: A.array t) (m: A.array t) (ivs: A.array t)
-                 (sg: A.array SZ.t) (ctr: SZ.t) (last: bool)
+                 (ctr: SZ.t) (last: bool)
                  (#vh: erased (Seq.seq t))
                  (#pm: perm) (#vm: erased (Seq.seq t))
                  (#pi: perm) (#vi: erased (Seq.seq t))
-                 (#ps: perm) (#vs: erased (Seq.seq SZ.t))
-requires A.pts_to h vh ** A.pts_to m #pm vm **
-         A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+requires A.pts_to h vh ** A.pts_to m #pm vm ** A.pts_to ivs #pi vi **
          pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\
-               Seq.length vi == 8 /\ sigma_ok vs /\
+               Seq.length vi == 8 /\
                SZ.v ctr < pow2 64 /\ reveal vi == G.reveal p.iv)
 ensures exists* (vh': Seq.seq t).
-  A.pts_to h vh' ** A.pts_to m #pm vm **
-  A.pts_to ivs #pi vi ** A.pts_to sg #ps vs **
+  A.pts_to h vh' ** A.pts_to m #pm vm ** A.pts_to ivs #pi vi **
   pure (Seq.length vh == 8 /\ Seq.length vm == 16 /\
         Seq.length vh' == 8 /\
         vh' == compress p (reveal vh) (reveal vm) (SZ.v ctr) last)
@@ -480,8 +505,10 @@ ensures exists* (vh': Seq.seq t).
   let z0: t = zero #t #w;
   let mut vv = [| z0; 16sz |];
   A.pts_to_len vv;
+  let sg = sigma_table ();
   init_vector_impl p vv h ivs ctr last;
   rounds_impl p vv m sg;
+  drop_table sg;
   mix_state_impl h vv;
 }
 

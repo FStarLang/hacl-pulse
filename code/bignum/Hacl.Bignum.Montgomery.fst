@@ -46,9 +46,11 @@ module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module U32 = FStar.UInt32
+module U64 = FStar.UInt64
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module S128 = Hacl.Secret.UInt128
+module Declassify = Hacl.Secret.Declassify
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -655,63 +657,6 @@ ensures exists* (v: Seq.seq S64.t) (vt: Seq.seq S64.t).
 
 #pop-options
 
-(** {2 The Montgomery constant}
-
-    [precomp] is [R^2] modulo the modulus, the one number needed to enter
-    Montgomery form.  HACL* starts from a power of two just below the
-    modulus and doubles the remaining way; here we start from one and double
-    all the way, which is the same asymptotic cost and half the code. *)
-
-let dbl_mod (nN: pos) (i: nat)
-  : Lemma (((pow2 i % nN) + (pow2 i % nN)) % nN == pow2 (i + 1) % nN)
-  = Math.lemma_mod_add_distr (pow2 i % nN) (pow2 i) nN;
-    Math.lemma_mod_add_distr (pow2 i) (pow2 i) nN;
-    Math.pow2_double_sum i
-
-#push-options "--z3rlimit 300"
-
-fn precomp (res: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t)
-           (#vres: erased (Seq.seq S64.t)) (#pn: perm)
-           (#vn: erased (s: Seq.seq S64.t { 1 < num s }))
-requires A.pts_to res vres ** A.pts_to nmod #pn vn **
-  pure (Seq.length vres == SZ.v nn /\ Seq.length vn == SZ.v nn /\
-        0 < SZ.v nn /\ SZ.fits (2 * rad * SZ.v nn))
-ensures exists* (v: Seq.seq S64.t).
-  A.pts_to res v ** A.pts_to nmod #pn vn **
-  pure (Seq.length v == SZ.v nn /\
-        num v == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn)
-{
-  A.pts_to_len res;
-  A.pts_to_len nmod;
-  zero res nn;
-  with v0. assert (A.pts_to res v0);
-  pre_zeros v0 (SZ.v nn);
-  pre_full v0;
-  let one = S64.classify 1uL;
-  A.((res.(0sz) <- one));
-  num_upd v0 0 one;
-  wt_zero ();
-  Math.small_mod 1 (num vn);
-  let steps = SZ.mul 128sz nn;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi steps)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to res v ** A.pts_to nmod #pn vn **
-    pure (SZ.v vi <= SZ.v steps /\ Seq.length v == SZ.v nn /\
-          num v == pow2 (SZ.v vi) % num vn)
-  decreases (SZ.v steps - SZ.v (!i))
-  {
-    let vi = !i;
-    double_mod res nmod nn;
-    dbl_mod (num vn) (SZ.v vi);
-    i := SZ.add vi 1sz;
-  };
-  wt_add (SZ.v nn) (SZ.v nn);
-  ()
-}
-
-#pop-options
-
 (** {2 The inverse of the radix}
 
     Montgomery arithmetic computes with an extra factor of [R] throughout,
@@ -774,6 +719,400 @@ let mont_cancel (x y nN mu m0: nat) (k: nat)
   = let b1 = base_inv nN mu m0 in
     let u = wt_inv nN b1 k in
     cancel_mod x y (wt k) u nN
+
+(** {2 The Montgomery constant}
+
+    [precomp] is [R^2] modulo the modulus, the number that every entry into
+    Montgomery form goes through.
+
+    Doubling from one all the way up to it takes [2 * rad * nn] steps -- four
+    thousand and ninety-six of them for RSA-2048 -- and that is what this
+    function used to do.  It is also unnecessary.  In Montgomery form the
+    accumulator stands for [2 ^ m], and two moves are available: a Montgomery
+    squaring, which sends [m] to [2 * m] because the spare factor of [R]
+    cancels, and a modular doubling, which sends [m] to [m + 1].  Those are
+    exactly the two moves of a binary ladder, so [m] can be walked up to [rad
+    * nn] in a dozen multiplications -- and [m == rad * nn] says precisely
+    that the accumulator is [R * R] modulo the modulus.
+
+    Climbing onto the ladder is the one part that stays linear.  It means
+    having [2 ^ (rad * nn + 1)] reduced, and doubling is the only operation
+    that raises an exponent by a fixed amount, so we start as high as we can
+    get for free: at [wt k], where [k] is the topmost nonzero limb of the
+    modulus.  A power of the radix at or below an odd number greater than one
+    is strictly below it, so [wt k] is already its own residue and no
+    reduction is needed to write it down; [rad * (nn - k) + 1] doublings then
+    remain, which is sixty-five for a modulus that fills its limbs.
+
+    Finding [k] reads the modulus.  That is public in every caller -- an RSA
+    modulus travels with the public key, and the FFDHE primes are in the
+    source -- so the scan declassifies one comparison per limb and branches
+    on it, and the number of doublings that follows depends on the modulus's
+    length but on nothing secret. *)
+
+(** A limb that is set is a lower bound on the whole number: everything
+    else in {!eval}'s expansion around limb [k] is a natural number.  This
+    is how the seed below finds a power of the radix under the modulus
+    without computing anything. *)
+let num_ge_at (v: Seq.seq S64.t) (k: nat { k < Seq.length v })
+  : Lemma (requires 0 < S64.v (Seq.index v k)) (ensures wt k <= num v)
+  = let n = Seq.length (vals v) in
+    eval_at (vals v) k;
+    Math.lemma_mult_le_left (wt k) 1
+      (Seq.index (vals v) k + base * eval (Seq.slice (vals v) (k + 1) n))
+
+(** The modulus's bottom limb is what it is modulo the radix, which is the
+    shape {!mont_cancel} wants. *)
+let modulus_low (v: Seq.seq S64.t { 0 < Seq.length v })
+  : Lemma (num v % base == S64.v (Seq.index v 0))
+  = wt_zero (); wt_succ 0; pre_zero v; pre_snoc v 0; pre_mod v 1
+
+let dbl_mod (nN: pos) (i: nat)
+  : Lemma (((pow2 i % nN) + (pow2 i % nN)) % nN == pow2 (i + 1) % nN)
+  = Math.lemma_mod_add_distr (pow2 i % nN) (pow2 i) nN;
+    Math.lemma_mod_add_distr (pow2 i) (pow2 i) nN;
+    Math.pow2_double_sum i
+
+(** [mu] exists only for an odd modulus, and oddness is what keeps the seed
+    from landing exactly on the modulus.  Reading it back off [mu] costs one
+    lemma and saves a precondition at eleven call sites. *)
+let odd_mu (mu m0: nat)
+  : Lemma (requires (mu * m0 + 1) % base == 0) (ensures m0 % 2 == 1)
+  = assert_norm (pow2 1 == 2);
+    Math.pow2_modulo_modulo_lemma_1 (mu * m0 + 1) 1 rad;
+    Math.lemma_mod_mul_distr_r mu m0 2
+
+(** Only the bottom limb decides the parity, the radix being even. *)
+let num_odd (v: Seq.seq S64.t)
+  : Lemma (requires 0 < Seq.length v /\ S64.v (Seq.index v 0) % 2 == 1)
+          (ensures num v % 2 == 1)
+  = let n = Seq.length (vals v) in
+    let hi = eval (Seq.slice (vals v) 1 n) in
+    eval_at (vals v) 0;
+    eval_empty (Seq.slice (vals v) 0 0);
+    wt_zero ();
+    Math.pow2_plus 1 (rad - 1);
+    Math.lemma_mod_mul_distr_l base hi 2;
+    Math.lemma_mod_add_distr (S64.v (Seq.index v 0)) (base * hi) 2
+
+(** An odd number above one is not a power of the radix. *)
+let seed_lt (nN: nat) (k: nat)
+  : Lemma (requires 1 < nN /\ nN % 2 == 1 /\ wt k <= nN) (ensures wt k < nN)
+  = assert_norm (pow2 1 == 2);
+    if k = 0 then wt_zero () else Math.pow2_plus 1 (rad * k - 1)
+
+#push-options "--fuel 2 --ifuel 1"
+let pw_one (a: nat) : Lemma (pw a 1 == a) = ()
+
+(** [pw] at base two is [pow2].  The seed is counted in the latter, because
+    that is what a modular doubling speaks, and the ladder in the former,
+    because that is what the exponentiation lemmas speak. *)
+let rec pw_pow2 (e: nat) : Lemma (ensures pw 2 e == pow2 e) (decreases e)
+  = if e = 0 then ()
+    else begin
+      pw_pow2 (e - 1);
+      assert_norm (pow2 1 == 2);
+      Math.pow2_plus 1 (e - 1)
+    end
+
+(** A bit index is smaller than the power it names, which is all the
+    ladder's counters need in order to fit in a [size_t]. *)
+let rec pow2_ge (e: nat) : Lemma (ensures e < pow2 e) (decreases e)
+  = if e = 0 then ()
+    else begin
+      pow2_ge (e - 1);
+      assert_norm (pow2 1 == 2);
+      Math.pow2_plus 1 (e - 1)
+    end
+
+(** Only the zeroth power of two is one, so a descending [p] that is still
+    above one has a bit index left to spend. *)
+let pow2_one (e: nat) : Lemma (requires 1 < pow2 e) (ensures 1 <= e)
+  = assert_norm (pow2 0 == 1)
+#pop-options
+
+let pw_succ (a e: nat) : Lemma (pw a (e + 1) == a * pw a e)
+  = pw_add a e 1; pw_one a
+
+let pw_dbl (a e: nat) : Lemma (pw a (e + e) == pw a (2 * e)) = ()
+
+(** Regrouping a product of two Montgomery representatives. *)
+let mul_expand (p q rr: nat)
+  : Lemma ((p * rr) * (q * rr) == (p * q * rr) * rr)
+  = Math.paren_mul_right p rr (q * rr);
+    Math.paren_mul_right rr q rr;
+    Math.swap_mul rr q;
+    Math.paren_mul_right p (q * rr) rr;
+    Math.paren_mul_right p q rr
+
+(** A Montgomery product of representatives is a representative of the
+    product: this is the one arithmetic fact every ladder here runs on. *)
+let exp_mul (r x y p q rr nN: nat)
+  : Lemma (requires 0 < nN /\ x == (p * rr) % nN /\ y == (q * rr) % nN /\
+                    (r * rr) % nN == (x * y) % nN)
+          (ensures (r * rr) % nN == (((p * q * rr) % nN) * rr) % nN)
+  = Math.lemma_mod_mul_distr_l (p * rr) y nN;
+    Math.lemma_mod_mul_distr_r (p * rr) (q * rr) nN;
+    mul_expand p q rr;
+    Math.lemma_mod_mul_distr_l (p * q * rr) rr nN
+
+(** Squaring a representative doubles the exponent. *)
+let exp_sq_step (acc0 sq anum e rr nN mu m0: nat) (k: nat)
+  : Lemma (requires 0 < nN /\ (mu * m0 + 1) % base == 0 /\ nN % base == m0 /\
+                    rr == wt k /\ acc0 == (pw anum e * rr) % nN /\
+                    sq < nN /\ (sq * rr) % nN == (acc0 * acc0) % nN)
+          (ensures sq == (pw anum (e + e) * rr) % nN)
+  = let pe = pw anum e in
+    exp_mul sq acc0 acc0 pe pe rr nN;
+    mont_cancel sq ((pe * pe * rr) % nN) nN mu m0 k;
+    assert (sq == (pe * pe * rr) % nN);
+    pw_add anum e e
+
+(** Doubling a representative of [2 ^ e] gives one of [2 ^ (e + 1)]: the
+    ladder's other move, and the only one the seed has. *)
+let mont_dbl (a e rr nN: nat)
+  : Lemma (requires 0 < nN /\ a == (pw 2 e * rr) % nN)
+          (ensures (a + a) % nN == (pw 2 (e + 1) * rr) % nN)
+  = pw_succ 2 e;
+    Math.lemma_mod_mul_distr_r 2 (pw 2 e * rr) nN;
+    Math.paren_mul_right 2 (pw 2 e) rr
+
+(** One step down a descending power of two, at the level of the exponent:
+    the bits of [n] above [q] are twice those above [q + q], plus one. *)
+let half_split (n: nat) (q: pos)
+  : Lemma (n / q == n / (q + q) + n / (q + q) + n / q % 2)
+  = Math.division_multiplication_lemma n q 2;
+    Math.euclidean_division_definition (n / q) 2
+
+let div_one (n: nat) (q: pos)
+  : Lemma (requires q <= n /\ n < q + q) (ensures n / q == 1)
+  = Math.small_div (n - q) q;
+    Math.lemma_div_plus (n - q) 1 q
+
+#push-options "--z3rlimit 300"
+
+(** [top_limb nmod nn] is the index of the topmost nonzero limb of the
+    modulus -- or rather, all the caller needs of it: an index whose weight
+    is at or below the modulus.  Limb zero always qualifies, the modulus
+    being greater than one, so the scan never has to report failure. *)
+fn top_limb (nmod: A.array S64.t) (nn: SZ.t) (#pn: perm)
+            (#vn: erased (s: Seq.seq S64.t { 1 < num s }))
+requires A.pts_to nmod #pn vn **
+  pure (Seq.length vn == SZ.v nn /\ 0 < SZ.v nn)
+returns k: SZ.t
+ensures A.pts_to nmod #pn vn **
+  pure (SZ.v k < SZ.v nn /\ wt (SZ.v k) <= num vn)
+{
+  A.pts_to_len nmod;
+  wt_zero ();
+  assert_norm (pow2 64 > 1);
+  let z = S64.zero;
+  let mut k = 0sz;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi nn)
+  invariant exists* (vi: SZ.t) (vk: SZ.t).
+    pts_to i vi ** pts_to k vk ** A.pts_to nmod #pn vn **
+    pure (SZ.v vi <= SZ.v nn /\ SZ.v vk < SZ.v nn /\ wt (SZ.v vk) <= num vn)
+  decreases (SZ.v nn - SZ.v (!i))
+  {
+    let vi = !i;
+    let x = A.(nmod.(vi));
+    let m = S64.eq_mask x z;
+    let nz = U64.eq (Declassify.u64 m) 0uL;
+    if nz {
+      num_ge_at vn (SZ.v vi);
+      k := vi;
+    };
+    i := SZ.add vi 1sz;
+  };
+  !k
+}
+
+(** [seed res nmod nn] is [2 ^ (rad * nn + 1) mod nmod], written as the
+    Montgomery representative of [2 ^ 1]: the rung the ladder starts from.
+
+    It begins at [wt k], the highest power of the radix that is below the
+    modulus, which needs no reduction to write down, and doubles the [rad *
+    (nn - k) + 1] remaining times. *)
+fn seed (res: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t)
+        (#vres: erased (Seq.seq S64.t)) (#pn: perm)
+        (#vn: erased (s: Seq.seq S64.t { 1 < num s }))
+requires A.pts_to res vres ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        0 < SZ.v nn /\ SZ.fits (2 * rad * SZ.v nn) /\ num vn % 2 == 1)
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ num v < num vn /\
+        num v == (pw 2 1 * wt (SZ.v nn)) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len nmod;
+  let k = top_limb nmod nn;
+  seed_lt (num vn) (SZ.v k);
+  zero res nn;
+  with v0. assert (A.pts_to res v0);
+  pre_zeros v0 (SZ.v nn);
+  pre_full v0;
+  let one = S64.classify 1uL;
+  A.((res.(k) <- one));
+  num_upd v0 (SZ.v k) one;
+  Math.small_mod (wt (SZ.v k)) (num vn);
+  SZ.fits_lte (rad * (SZ.v nn - SZ.v k)) (2 * rad * SZ.v nn);
+  SZ.fits_lte (rad * (SZ.v nn - SZ.v k) + 1) (2 * rad * SZ.v nn);
+  let steps = SZ.add (SZ.mul 64sz (SZ.sub nn k)) 1sz;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi steps)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to res v ** A.pts_to nmod #pn vn **
+    pure (SZ.v vi <= SZ.v steps /\ Seq.length v == SZ.v nn /\
+          num v == pow2 (rad * SZ.v k + SZ.v vi) % num vn)
+  decreases (SZ.v steps - SZ.v (!i))
+  {
+    let vi = !i;
+    double_mod res nmod nn;
+    dbl_mod (num vn) (rad * SZ.v k + SZ.v vi);
+    i := SZ.add vi 1sz;
+  };
+  pw_one 2;
+  Math.pow2_plus 1 (rad * SZ.v nn);
+  ()
+}
+
+(** One rung: the exponent doubles, and then gains [bit].  Squaring in
+    Montgomery form is what doubles it, and a modular doubling is what adds
+    the one; the contract mentions no division, so the index arithmetic of
+    the ladder and the arithmetic of the modulus never share a query. *)
+fn ladder_step (res: A.array S64.t) (t1: A.array S64.t) (t2: A.array S64.t)
+               (wide: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t)
+               (mu: S64.t) (e: erased nat) (bit: SZ.t)
+               (#vres #vt1 #vt2 #vwide: erased (Seq.seq S64.t)) (#pn: perm)
+               (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to t1 vt1 ** A.pts_to t2 vt2 **
+         A.pts_to wide vwide ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length vt1 == SZ.v nn /\
+        Seq.length vt2 == SZ.v nn /\ Seq.length vwide == SZ.v nn + SZ.v nn /\
+        Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\
+        SZ.fits (SZ.v nn + SZ.v nn) /\ SZ.v bit < 2 /\
+        num vres < num vn /\
+        num vres == (pw 2 (reveal e) * wt (SZ.v nn)) % num vn /\
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v v1 v2 v3: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
+  A.pts_to wide v3 ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
+        Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn + SZ.v nn /\
+        num v < num vn /\
+        num v == (pw 2 (2 * reveal e + SZ.v bit) * wt (SZ.v nn)) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len t1;
+  A.pts_to_len t2;
+  A.pts_to_len wide;
+  A.pts_to_len nmod;
+  modulus_low vn;
+  copy t1 res nn;
+  mont_mul t2 res t1 wide nmod nn mu;
+  with vsq. assert (A.pts_to t2 vsq);
+  exp_sq_step (num vres) (num vsq) 2 (reveal e) (wt (SZ.v nn)) (num vn)
+              (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
+  pw_dbl 2 (reveal e);
+  copy res t2 nn;
+  if (SZ.eq bit 1sz) {
+    with vhalf. assert (A.pts_to res vhalf);
+    double_mod res nmod nn;
+    mont_dbl (num vhalf) (2 * reveal e) (wt (SZ.v nn)) (num vn);
+    ()
+  } else {
+    ()
+  }
+}
+
+(** [precomp res t1 t2 wide nmod nn mu] is [res = R^2 mod nmod].  [t1] and
+    [t2] are [n] limbs of scratch and [wide] is [2n]; [mu] is what
+    {!mont_mu} makes of the modulus's bottom limb.
+
+    The exponent reached after a rung is always [mm / p], for [mm == rad *
+    nn] and a [p] that starts at the highest power of two below [mm] and
+    halves: one at the start, and [mm] at the end. *)
+fn precomp (res: A.array S64.t) (t1: A.array S64.t) (t2: A.array S64.t)
+           (wide: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
+           (#vres #vt1 #vt2 #vwide: erased (Seq.seq S64.t)) (#pn: perm)
+           (#vn: erased (s: Seq.seq S64.t { 1 < num s }))
+requires A.pts_to res vres ** A.pts_to t1 vt1 ** A.pts_to t2 vt2 **
+         A.pts_to wide vwide ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length vt1 == SZ.v nn /\
+        Seq.length vt2 == SZ.v nn /\ Seq.length vwide == SZ.v nn + SZ.v nn /\
+        Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\ SZ.fits (2 * rad * SZ.v nn) /\
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v v1 v2 v3: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
+  A.pts_to wide v3 ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
+        Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn + SZ.v nn /\
+        num v == (wt (SZ.v nn) * wt (SZ.v nn)) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len t1;
+  A.pts_to_len t2;
+  A.pts_to_len wide;
+  A.pts_to_len nmod;
+  SZ.fits_lte (SZ.v nn + SZ.v nn) (2 * rad * SZ.v nn);
+  odd_mu (S64.v mu) (S64.v (Seq.index vn 0));
+  num_odd vn;
+  seed res nmod nn;
+
+  let mm = SZ.mul 64sz nn;
+  SZ.fits_lte 2 (2 * rad * SZ.v nn);
+  let mut p = 1sz;
+  let mut b = 0sz;
+  while (let vp = !p; SZ.lte (SZ.mul 2sz vp) mm)
+  invariant exists* (vp: SZ.t) (vb: SZ.t).
+    pts_to p vp ** pts_to b vb **
+    pure (SZ.v vp == pow2 (SZ.v vb) /\ SZ.v vp <= SZ.v mm /\
+          SZ.fits (2 * SZ.v vp) /\ SZ.fits (SZ.v vb + 1))
+  decreases (SZ.v mm - SZ.v (!p))
+  {
+    let vp = !p;
+    let vb = !b;
+    assert_norm (pow2 1 == 2);
+    Math.pow2_plus 1 (SZ.v vb);
+    pow2_ge (SZ.v vb + 1);
+    SZ.fits_lte (2 * (2 * SZ.v vp)) (2 * rad * SZ.v nn);
+    SZ.fits_lte (SZ.v vb + 2) (2 * rad * SZ.v nn);
+    p := SZ.mul 2sz vp;
+    b := SZ.add vb 1sz;
+  };
+  with vp0. assert (pts_to p vp0);
+  div_one (SZ.v mm) (SZ.v vp0);
+
+  while (let vp = !p; SZ.gt vp 1sz)
+  invariant exists* (vp: SZ.t) (vb: SZ.t) (v v1 v2 v3: Seq.seq S64.t).
+    pts_to p vp ** pts_to b vb ** A.pts_to res v ** A.pts_to t1 v1 **
+    A.pts_to t2 v2 ** A.pts_to wide v3 ** A.pts_to nmod #pn vn **
+    pure (SZ.v vp == pow2 (SZ.v vb) /\ 0 < SZ.v vp /\
+          Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
+          Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn + SZ.v nn /\
+          num v < num vn /\
+          num v == (pw 2 (SZ.v mm / SZ.v vp) * wt (SZ.v nn)) % num vn)
+  decreases (SZ.v (!p))
+  {
+    let vp = !p;
+    let vb = !b;
+    assert_norm (pow2 1 == 2);
+    pow2_one (SZ.v vb);
+    Math.pow2_plus 1 (SZ.v vb - 1);
+    let q = SZ.div vp 2sz;
+    assert (pure (SZ.v q + SZ.v q == SZ.v vp));
+    half_split (SZ.v mm) (SZ.v q);
+    let d = SZ.rem (SZ.div mm q) 2sz;
+    ladder_step res t1 t2 wide nmod nn mu (hide (SZ.v mm / SZ.v vp)) d;
+    p := q;
+    b := SZ.sub vb 1sz;
+  };
+  pw_pow2 (SZ.v mm);
+  ()
+}
+#pop-options
 
 (** {2 Plain remainder}
 
