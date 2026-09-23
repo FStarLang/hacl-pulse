@@ -372,3 +372,57 @@ let fin_uniform (s: Seq.seq nat) (x: nat)
     end
 
 #pop-options
+
+(** {2 Canonical five-limb numbers}
+
+    A [proper] sequence is bounded by [base] in every limb -- the top one
+    only reaches [2^48] -- so it is the sequence of radix-[2^52] digits of
+    its own value, and two proper sequences with the same value are the
+    same sequence.  That is what turns a limb-by-limb comparison into a
+    comparison of field elements, and it is the only thing [feq] needs
+    beyond [freeze]. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let proper_bnd (s: Seq.seq nat)
+  : Lemma (requires proper s) (ensures bnd s base)
+  = assert_norm (nl == 5);
+    assert_norm (hib < base)
+
+let proper_uniq (s t: Seq.seq nat)
+  : Lemma (requires proper s /\ proper t /\ eval s == eval t)
+          (ensures s == t)
+  = proper_bnd s; proper_bnd t;
+    let aux (k: nat { k < nl }) : Lemma (Seq.index s k == Seq.index t k) =
+      eval_digit s k; eval_digit t k in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro s t
+
+(** {2 Constants}
+
+    A number below [2^256] written out in five limbs.  The precomputed
+    curve constants are given this way, and [limbs_of_ok] is what says the
+    literals in [Hacl.K256.Tables] denote the number they should. *)
+
+let limbs_of (x: nat) : Seq.lseq nat nl =
+  Seq.init #nat nl (fun i -> x / pow2 (rad * i) % base)
+
+let limbs_of_ok (x: nat)
+  : Lemma (requires x < pow2 256)
+          (ensures eval (limbs_of x) == x /\ bnd (limbs_of x) base /\
+                   ble (limbs_of x) lim)
+  = assert_norm (rad * nl == 260);
+    Math.pow2_le_compat 260 256;
+    assert_norm (base - 1 <= lim);
+    Seq.init_index nl (fun i -> x / pow2 (rad * i) % base);
+    Spec.Bignum52.Window.eval_windows x (limbs_of x)
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let limbs_index (x: nat) (k: nat { k < nl })
+  : Lemma (Seq.index (limbs_of x) k == x / pow2 (rad * k) % base)
+  = Seq.init_index nl (fun i -> x / pow2 (rad * i) % base)
+
+#pop-options

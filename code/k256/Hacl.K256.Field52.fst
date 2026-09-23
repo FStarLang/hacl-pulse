@@ -63,6 +63,19 @@ module Cast = Hacl.Secret.Cast
 module Loops = Hacl.Spec.Loops
 module K = Spec.K256
 module F52 = Spec.K256.Field52
+module S8 = Hacl.Secret.UInt8
+module Declassify = Hacl.Secret.Declassify
+module B4 = Spec.Bignum4
+module F4 = Spec.Field4
+module SKF = Spec.K256.Field
+module L4 = Hacl.Impl.Limb4
+module IB4 = Hacl.Impl.Bignum4
+module IM4 = Hacl.Impl.Mont4
+module KT = Hacl.K256.Tables
+module Tbl = Hacl.Impl.Table
+module By = Hacl.Spec.Bytes
+module RP = Spec.K256.Repack
+module G = Pulse.Lib.GlobalArray
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -855,5 +868,354 @@ ensures exists* (vout': Seq.seq S64.t).
 }
 
 #pop-options
+
+#pop-options
+
+(** {2 Bytes}
+
+    A fifty-two-bit limb is not a whole number of bytes, so neither
+    direction touches bytes and limbs at the same time.  Loading decodes
+    the four sixty-four-bit limbs, whose big-endian layer is proved in
+    [Spec.Bignum4], checks them against the prime with the comparison the
+    Montgomery code already had, and then reads the five fifty-two-bit
+    limbs off them as bit windows.  Storing freezes, runs the same
+    repacking the other way, and hands four sixty-four-bit limbs to the
+    same byte layer.  The repacking itself is [Spec.K256.Repack]. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
+
+(** The two views of a slice of secrets agree; [Hacl.Impl.Limb4] has its
+    own copy, and the byte and comparison code below is stated in terms of
+    that one. *)
+let vals_l4 (v: Seq.seq S64.t) : Lemma (vals v == L4.vals v)
+  = Seq.lemma_eq_intro (vals v) (L4.vals v)
+
+(** Adding two windows and keeping [w] bits: the machine wraps at [2^64]
+    and the mask throws the wrap away. *)
+let win_mod (a b: nat) (w: nat { w <= 64 })
+  : Lemma (((a + b % pow2 64) % pow2 64) % pow2 w == (a + b) % pow2 w)
+  = Math.lemma_mod_plus_distr_r a b (pow2 64);
+    Math.pow2_modulo_modulo_lemma_1 (a + b) w 64
+
+(** A window that spans two limbs, kept to fifty-two bits. *)
+inline_for_extraction
+let win2_52 (x y: S64.t) (s1 s2: U32.t { U32.v s1 < 64 /\ U32.v s2 < 64 })
+  : r: S64.t { S64.v r == (S64.v x / pow2 (U32.v s1) +
+                           pow2 (U32.v s2) * S64.v y) % pow2 52 }
+  = let p = S64.shift_right x s1 in
+    let q = S64.shift_left y s2 in
+    let u = S64.add_mod p q in
+    Math.swap_mul (S64.v y) (pow2 (U32.v s2));
+    win_mod (S64.v x / pow2 (U32.v s1)) (pow2 (U32.v s2) * S64.v y) 52;
+    UInt.logand_mask #64 (S64.v u) 52;
+    assert_norm (base - 1 == pow2 52 - 1);
+    S64.logand u mask52
+
+(** The same kept to sixty-four bits: no mask, because the wrap the machine
+    performs is already the window. *)
+inline_for_extraction
+let win2_64 (x y: S64.t) (s1 s2: U32.t { U32.v s1 < 64 /\ U32.v s2 < 64 })
+  : r: S64.t { S64.v r == (S64.v x / pow2 (U32.v s1) +
+                           pow2 (U32.v s2) * S64.v y) % pow2 64 }
+  = let p = S64.shift_right x s1 in
+    let q = S64.shift_left y s2 in
+    let u = S64.add_mod p q in
+    Math.swap_mul (S64.v y) (pow2 (U32.v s2));
+    win_mod (S64.v x / pow2 (U32.v s1)) (pow2 (U32.v s2) * S64.v y) 64;
+    Math.small_mod (S64.v u) (pow2 64);
+    u
+
+(** Four sixty-four-bit limbs to five fifty-two-bit ones.  The bottom
+    window is a mask and the top one is a shift; the three in between
+    straddle a limb boundary. *)
+fn load (a h: A.array S64.t)
+        (#va: erased (Seq.seq S64.t)) (#ph: perm) (#vh: erased (Seq.seq S64.t))
+requires A.pts_to a va ** A.pts_to h #ph vh **
+  pure (Seq.length va == nl /\ Seq.length vh == B4.nl /\ B4.bnd (vals vh) B4.base)
+ensures exists* (va': Seq.seq S64.t).
+  A.pts_to a va' ** A.pts_to h #ph vh **
+  pure (Seq.length va' == nl /\ bnd (vals va') base /\
+        eval (vals va') == B4.eval (vals vh))
+{
+  A.pts_to_len a; A.pts_to_len h;
+  assert_norm (nl == 5); assert_norm (B4.nl == 4);
+  assert_norm (base == pow2 52);
+  let h0 = A.(h.(0sz)); let h1 = A.(h.(1sz));
+  let h2 = A.(h.(2sz)); let h3 = A.(h.(3sz));
+  let a0 = lo52 h0;
+  let a1 = win2_52 h0 h1 52ul 12ul;
+  let a2 = win2_52 h1 h2 40ul 24ul;
+  let a3 = win2_52 h2 h3 28ul 36ul;
+  let a4 = S64.shift_right h3 16ul;
+  A.((a.(0sz) <- a0)); A.((a.(1sz) <- a1)); A.((a.(2sz) <- a2));
+  A.((a.(3sz) <- a3)); A.((a.(4sz) <- a4));
+  with s. assert (A.pts_to a s);
+  assert (pure (Seq.length (vals s) == nl));
+  assert (pure (B4.vat (vals vh) 0 == S64.v h0 /\ B4.vat (vals vh) 1 == S64.v h1 /\
+                B4.vat (vals vh) 2 == S64.v h2 /\ B4.vat (vals vh) 3 == S64.v h3));
+  assert (pure (Seq.index (vals s) 0 == B4.vat (vals vh) 0 % pow2 52));
+  assert (pure (Seq.index (vals s) 1 ==
+                (B4.vat (vals vh) 0 / pow2 52 + pow2 12 * B4.vat (vals vh) 1) % pow2 52));
+  assert (pure (Seq.index (vals s) 2 ==
+                (B4.vat (vals vh) 1 / pow2 40 + pow2 24 * B4.vat (vals vh) 2) % pow2 52));
+  assert (pure (Seq.index (vals s) 3 ==
+                (B4.vat (vals vh) 2 / pow2 28 + pow2 36 * B4.vat (vals vh) 3) % pow2 52));
+  assert (pure (Seq.index (vals s) 4 == B4.vat (vals vh) 3 / pow2 16));
+  RP.load_all (vals vh) (vals s);
+  ()
+}
+
+(** And back: five fifty-two-bit limbs to four sixty-four-bit ones. *)
+fn store (u a: A.array S64.t)
+         (#vu: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to u vu ** A.pts_to a #pa va **
+  pure (Seq.length vu == B4.nl /\ Seq.length va == nl /\
+        bnd (vals va) base /\ eval (vals va) < pow2 256)
+ensures exists* (vu': Seq.seq S64.t).
+  A.pts_to u vu' ** A.pts_to a #pa va **
+  pure (Seq.length vu' == B4.nl /\ B4.bnd (vals vu') B4.base /\
+        B4.eval (vals vu') == eval (vals va))
+{
+  A.pts_to_len u; A.pts_to_len a;
+  assert_norm (nl == 5); assert_norm (B4.nl == 4);
+  let s0 = A.(a.(0sz)); let s1 = A.(a.(1sz)); let s2 = A.(a.(2sz));
+  let s3 = A.(a.(3sz)); let s4 = A.(a.(4sz));
+  let u0 = win2_64 s0 s1 0ul 52ul;
+  let u1 = win2_64 s1 s2 12ul 40ul;
+  let u2 = win2_64 s2 s3 24ul 28ul;
+  let u3 = win2_64 s3 s4 36ul 16ul;
+  A.((u.(0sz) <- u0)); A.((u.(1sz) <- u1));
+  A.((u.(2sz) <- u2)); A.((u.(3sz) <- u3));
+  with w. assert (A.pts_to u w);
+  assert (pure (Seq.length (vals w) == B4.nl));
+  assert (pure (vat (vals va) 0 == S64.v s0 /\ vat (vals va) 1 == S64.v s1 /\
+                vat (vals va) 2 == S64.v s2 /\ vat (vals va) 3 == S64.v s3 /\
+                vat (vals va) 4 == S64.v s4));
+  assert (pure (Seq.index (vals w) 0 ==
+                (vat (vals va) 0 / pow2 0 + pow2 52 * vat (vals va) 1) % pow2 64));
+  assert (pure (Seq.index (vals w) 1 ==
+                (vat (vals va) 1 / pow2 12 + pow2 40 * vat (vals va) 2) % pow2 64));
+  assert (pure (Seq.index (vals w) 2 ==
+                (vat (vals va) 2 / pow2 24 + pow2 28 * vat (vals va) 3) % pow2 64));
+  assert (pure (Seq.index (vals w) 3 ==
+                (vat (vals va) 3 / pow2 36 + pow2 16 * vat (vals va) 4) % pow2 64));
+  RP.store_all (vals va) (vals w);
+  ()
+}
+
+(** Big-endian, thirty-two bytes, as every standard that mentions
+    secp256k1 says.  Decoding is also the range check: a coordinate at or
+    above the prime is not a coordinate, and the comparison runs on the
+    sixty-four-bit limbs, where the modulus table already is. *)
+fn fload (out: A.array S64.t) (b: A.array S8.t)
+         (#vo: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to out vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length vb == 32)
+returns r: bool
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to b #pb vb **
+  pure (felem (vals vo') /\ r == (By.be_nat vb < K.prime) /\
+        (r ==> fev (vals vo') == By.be_nat vb))
+{
+  SKF.fmod_ok ();
+  assert_norm (SKF.fmod.m == K.prime);
+  assert_norm (pow2 256 < 2 * K.prime);
+  assert_norm (base - 1 <= lim);
+  let z = S64.zero;
+  let z128 : S128.t = S128.zero;
+  let mut at = [| z; 4sz |]; A.pts_to_len at;
+  let mut asv = [| z128; 4sz |]; A.pts_to_len asv;
+  A.pts_to_len at; A.pts_to_len asv;
+  IB4.load_be at b;
+  let nm = KT.fnm ();
+  let r = IM4.abelow at asv nm SKF.fmod;
+  Tbl.drop_table nm;
+  with t. assert (A.pts_to at t);
+  vals_l4 t;
+  load out at;
+  with s. assert (A.pts_to out s);
+  Math.small_mod (eval (vals s)) prime;
+  r
+}
+
+fn fstore (b: A.array S8.t) (a: A.array S64.t)
+          (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to b vb ** A.pts_to a #pa va **
+  pure (Seq.length vb == 32 /\ felem (vals va))
+ensures exists* (vb': Seq.seq S8.t).
+  A.pts_to b vb' ** A.pts_to a #pa va **
+  pure (vb' == By.nat_to_be 32 (fev (vals va)))
+{
+  assert_norm (prime < pow2 256);
+  let z = S64.zero;
+  let mut fa = [| z; 5sz |]; A.pts_to_len fa;
+  let mut at = [| z; 4sz |]; A.pts_to_len at;
+  A.pts_to_len fa; A.pts_to_len at;
+  freeze fa a;
+  with f. assert (A.pts_to fa f);
+  freeze_ok (vals va);
+  proper_bnd (vals f);
+  store at fa;
+  with t. assert (A.pts_to at t);
+  vals_l4 t;
+  IB4.store_be b at;
+  ()
+}
+
+#pop-options
+
+(** {2 Constants, copies and comparison}
+
+    Nothing here is Montgomery any more, so a constant is the number
+    itself written out in five limbs and [fone] is a literal one rather
+    than a table lookup. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+
+fn fcopy (dst src: A.array S64.t)
+         (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
+requires A.pts_to dst vd ** A.pts_to src #ps vs **
+  pure (Seq.length vd == nl /\ felem (vals vs))
+ensures exists* (vd': Seq.seq S64.t).
+  A.pts_to dst vd' ** A.pts_to src #ps vs **
+  pure (felem (vals vd') /\ fev (vals vd') == fev (vals vs))
+{
+  A.pts_to_len dst; A.pts_to_len src;
+  assert_norm (nl == 5);
+  let x0 = A.(src.(0sz)); let x1 = A.(src.(1sz)); let x2 = A.(src.(2sz));
+  let x3 = A.(src.(3sz)); let x4 = A.(src.(4sz));
+  A.((dst.(0sz) <- x0)); A.((dst.(1sz) <- x1)); A.((dst.(2sz) <- x2));
+  A.((dst.(3sz) <- x3)); A.((dst.(4sz) <- x4));
+  with w. assert (A.pts_to dst w);
+  five_eq (vals w) (vals vs);
+  ()
+}
+
+fn fzero (out: A.array S64.t) (#vo: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** pure (Seq.length vo == nl)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** pure (felem (vals vo') /\ fev (vals vo') == K.fzero)
+{
+  A.pts_to_len out;
+  assert_norm (nl == 5);
+  A.((out.(0sz) <- S64.zero)); A.((out.(1sz) <- S64.zero));
+  A.((out.(2sz) <- S64.zero)); A.((out.(3sz) <- S64.zero));
+  A.((out.(4sz) <- S64.zero));
+  with w. assert (A.pts_to out w);
+  limbs_index 0 0; limbs_index 0 1; limbs_index 0 2;
+  limbs_index 0 3; limbs_index 0 4;
+  five_eq (vals w) (limbs_of 0);
+  limbs_of_ok 0;
+  ()
+}
+
+fn fone (out: A.array S64.t) (#vo: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** pure (Seq.length vo == nl)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** pure (felem (vals vo') /\ fev (vals vo') == K.fone)
+{
+  A.pts_to_len out;
+  assert_norm (nl == 5);
+  assert_norm (1 < base);
+  assert_norm (1 < pow2 (rad * 1) /\ 1 < pow2 (rad * 2) /\
+               1 < pow2 (rad * 3) /\ 1 < pow2 (rad * 4));
+  assert_norm (1 < prime);
+  let one = S64.classify 1uL;
+  A.((out.(0sz) <- one)); A.((out.(1sz) <- S64.zero));
+  A.((out.(2sz) <- S64.zero)); A.((out.(3sz) <- S64.zero));
+  A.((out.(4sz) <- S64.zero));
+  with w. assert (A.pts_to out w);
+  limbs_index 1 0; limbs_index 1 1; limbs_index 1 2;
+  limbs_index 1 3; limbs_index 1 4;
+  five_eq (vals w) (limbs_of 1);
+  limbs_of_ok 1;
+  Math.small_mod 1 prime;
+  ()
+}
+
+(** Squaring needs a second reference to its argument and the multiplier
+    wants the three buffers distinct: five moves against twenty-five
+    multiplies. *)
+fn fsqr (out a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va **
+  pure (Seq.length vo == nl /\ felem (vals va))
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va **
+  pure (felem (vals vo') /\ fev (vals vo') == K.fmul (fev (vals va)) (fev (vals va)))
+{
+  let z = S64.zero;
+  let mut ac = [| z; 5sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  fcopy ac a;
+  fmul out a ac;
+  ()
+}
+
+(** Two field elements are equal when their canonical forms are equal limb
+    for limb: [proper_uniq] is what says a canonical form is unique.  The
+    mask is folded rather than branched on, and only the final answer --
+    public in every caller -- is declassified. *)
+fn feq (a b: A.array S64.t)
+       (#pa: perm) (#va: erased (Seq.seq S64.t))
+       (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (felem (vals va) /\ felem (vals vb))
+returns r: bool
+ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (r == (fev (vals va) = fev (vals vb)))
+{
+  assert_norm (nl == 5);
+  let z = S64.zero;
+  let mut fa = [| z; 5sz |]; A.pts_to_len fa;
+  let mut fb = [| z; 5sz |]; A.pts_to_len fb;
+  A.pts_to_len fa; A.pts_to_len fb;
+  freeze fa a;
+  freeze fb b;
+  freeze_ok (vals va); freeze_ok (vals vb);
+  with sa. assert (A.pts_to fa sa);
+  with sb. assert (A.pts_to fb sb);
+  let a0 = A.(fa.(0sz)); let a1 = A.(fa.(1sz)); let a2 = A.(fa.(2sz));
+  let a3 = A.(fa.(3sz)); let a4 = A.(fa.(4sz));
+  let b0 = A.(fb.(0sz)); let b1 = A.(fb.(1sz)); let b2 = A.(fb.(2sz));
+  let b3 = A.(fb.(3sz)); let b4 = A.(fb.(4sz));
+  let m = mand (mand (mand (S64.eq_mask a0 b0) (S64.eq_mask a1 b1))
+                     (mand (S64.eq_mask a2 b2) (S64.eq_mask a3 b3)))
+               (S64.eq_mask a4 b4);
+  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+  let m8 = Cast.u64_to_u8 m;
+  let r = Declassify.bool_of_mask m8;
+  Classical.move_requires (Seq.lemma_eq_intro (vals sa)) (vals sb);
+  Classical.move_requires (proper_uniq (vals sa)) (vals sb);
+  r
+}
+
+fn fis_zero (a: A.array S64.t) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** pure (felem (vals va))
+returns r: bool
+ensures A.pts_to a #pa va ** pure (r == (fev (vals va) = K.fzero))
+{
+  let z = S64.zero;
+  let mut az = [| z; 5sz |]; A.pts_to_len az; A.pts_to_len az;
+  fzero az;
+  let r = feq a az;
+  r
+}
+
+(** A curve constant is the number itself in five limbs; [limbs_of_ok] is
+    what says the literals in [Hacl.K256.Tables] denote the number they
+    should. *)
+inline_for_extraction
+fn fconst (a: G.static_array S64.t) (x: erased K.felem)
+requires pure (Seq.length (G.static_array_elems a) == nl /\
+               vals (G.static_array_elems a) == limbs_of (reveal x))
+returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == reveal x)
+{
+  assert_norm (prime < pow2 256);
+  limbs_of_ok (reveal x);
+  Math.small_mod (reveal x) prime;
+  Tbl.table a 5sz
+}
 
 #pop-options
