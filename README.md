@@ -2851,18 +2851,24 @@ rough order of value:
    fifty-two bits, lazy, with no Montgomery factor, against our four limbs of
    sixty-four with one.
 
-   secp256k1's half of this is under way.  `spec/Spec.Bignum52.fst` is the
-   prime-free radix-52 core, `spec/Spec.K256.Field52.fst` the prime-specific
-   arithmetic, `spec/Spec.K256.Columns.fst` the bridge that turns the
-   nine-column product and its fold into the straight line the code runs, and
-   `code/k256/Hacl.K256.Field52.fst` the code itself: `fadd`, `fsub`, `fneg`
-   and `fmul`, all proved.  `spec/Spec.Bignum4.Window.fst` and
-   `spec/Spec.Bignum52.Window.fst` are the two halves of the byte layer's
-   change of representation.  What is left is `freeze` -- five proper digits
-   at radix fifty-two only put an element below `2^260`, sixteen primes above
-   the modulus, so the tail is a fold of the top four bits, a second carry and
-   only then a conditional subtraction -- and then the callers, which allocate
-   field elements as four limbs today.  Nothing calls the new field yet, so
+   secp256k1's half of this is written and proved.  `spec/Spec.Bignum52.fst`
+   is the prime-free radix-52 core, `spec/Spec.K256.Field52.fst` the
+   prime-specific arithmetic, `spec/Spec.K256.Columns.fst` the bridge that
+   turns the nine-column product and its fold into the straight line the code
+   runs, `spec/Spec.K256.Freeze.fst` the canonical form, and
+   `spec/Spec.K256.Repack.fst` the bit repacking between five fifty-two-bit
+   limbs and the four sixty-four-bit ones whose byte layer is already proved.
+   `code/k256/Hacl.K256.Field52.fst` is the code: `fadd`, `fsub`, `fneg`,
+   `fmul`, `freeze`, the byte layer, `fcopy`, `fzero`, `fone`, `fsqr`, `feq`
+   and `fis_zero`.  `code/k256/Hacl.Impl.Lit52.fst` and
+   `code/k256/Hacl.K256.Tables52.fst` hold the four curve constants, which are
+   now the numbers themselves rather than multiples of `R`.
+
+   What is left is the callers -- `Hacl.K256.Point`, `PointStep`, `Inverse`,
+   `Encode`, `Sec1`, `LowS`, `Key`, `Ecdh`, `Sign` and `Verify` all allocate
+   field elements as four limbs today, and the scalar field stays on the
+   four-limb Montgomery core, so the two radices will be in scope together and
+   `nl` will have to be qualified.  Nothing calls the new field yet, so
    `dist/` is unchanged and the numbers in the table above still stand.
 4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
