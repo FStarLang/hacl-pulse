@@ -31,10 +31,10 @@ module Hacl.K256.PointMul
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.K256.Field
-open Hacl.Impl.Limb
-open Hacl.Impl.Mont256
+open Hacl.Impl.Limb4
+open Hacl.Impl.Mont4
 open Hacl.Impl.Table
 open Hacl.K256.Field
 open Hacl.K256.Point
@@ -79,7 +79,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; let mut a4 = [| z; 8sz |]; A.pts_to_len a4; let mut a5 = [| z; 8sz |]; A.pts_to_len a5; let mut a6 = [| z; 8sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; let mut a6 = [| z; 4sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
 
   set_infinity ox oy oz;
@@ -142,7 +142,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   pure (pt_ok wx wy wz /\ pt wx wy wz == K.point_mul_g (eval (vals vk)))
 {
   let z = S64.zero;
-  let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   fone a3;
   (* [point_add] wants its three input coordinates at one permission, and
      the constant tables hand back one existential permission each.  A copy

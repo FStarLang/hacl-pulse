@@ -22,7 +22,7 @@
     that insists the scalar is a proper private key, and one that reduces
     a hash modulo the order.
 
-    Because [Hacl.Impl.Mont256] takes its modulus as data, none of this
+    Because [Hacl.Impl.Mont4] takes its modulus as data, none of this
     duplicates any code in the emitted C: the two fields share every
     operation and differ only in the table they pass. *)
 module Hacl.P256.Scalar
@@ -30,16 +30,16 @@ module Hacl.P256.Scalar
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.P256.Field
-open Spec.Mont256
+open Spec.Mont4
 open Hacl.Spec.Bytes
-open Hacl.Impl.Limb
+open Hacl.Impl.Limb4
 open Hacl.Impl.Table
-open Hacl.Impl.Bignum256
-open Hacl.Impl.Mont256
+open Hacl.Impl.Bignum4
+open Hacl.Impl.Mont4
 open Hacl.P256.Tables
-open Hacl.Impl.Exp256
+open Hacl.Impl.Exp4
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
@@ -47,6 +47,7 @@ module SZ = FStar.SizeT
 module U64 = FStar.UInt64
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module P = Spec.P256
 module MA = Spec.ModArith
 
@@ -146,7 +147,7 @@ ensures A.pts_to a #pa va ** pure (r == (qev va = P.qzero))
   mev_iszero qmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 8sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 4sz |]; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
   r
@@ -221,7 +222,8 @@ ensures exists* (vo': Seq.seq S64.t).
   qmod_ok (); qmod_m ();
   assert_norm (pow2 256 < 2 * P.order);
   let z = S64.zero;
-  let mut at = [| z; 8sz |]; A.pts_to_len at; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let z128 : S128.t = S128.zero;
+  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = qnm ();
   let lo = abelow at asv nm qmod;
@@ -243,7 +245,8 @@ ensures exists* (vo': Seq.seq S64.t).
   qmod_ok (); qmod_m ();
   assert_norm (pow2 256 < 2 * P.order);
   let z = S64.zero;
-  let mut at = [| z; 8sz |]; A.pts_to_len at; let mut asv = [| z; 8sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let z128 : S128.t = S128.zero;
+  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = qnm ();
   ared at asv nm qmod;
@@ -261,7 +264,7 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (qev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 8sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 4sz |]; A.pts_to_len at; A.pts_to_len at;
   qfrom at a;
   store_be b at;
   ()

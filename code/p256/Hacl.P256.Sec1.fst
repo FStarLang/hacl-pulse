@@ -29,7 +29,7 @@ module Hacl.P256.Sec1
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.P256.Field
 open Hacl.Spec.Bytes
 open Hacl.Impl.Copy
@@ -197,7 +197,7 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out; A.pts_to_len pk;
   let z = S64.zero;
-  let mut m0 = [| z; 8sz |]; A.pts_to_len m0; let mut m1 = [| z; 8sz |]; A.pts_to_len m1; let mut m2 = [| z; 8sz |]; A.pts_to_len m2; let mut m3 = [| z; 8sz |]; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
+  let mut m0 = [| z; 4sz |]; A.pts_to_len m0; let mut m1 = [| z; 4sz |]; A.pts_to_len m1; let mut m2 = [| z; 4sz |]; A.pts_to_len m2; let mut m3 = [| z; 4sz |]; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
   let z8 = S8.classify 0uy;
   let mut n0 = [| z8; 32sz |]; A.pts_to_len n0; let mut n1 = [| z8; 32sz |]; A.pts_to_len n1; A.pts_to_len n0; A.pts_to_len n1;
 
