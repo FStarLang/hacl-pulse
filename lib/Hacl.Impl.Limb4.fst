@@ -114,6 +114,15 @@ let mulw (x y: S64.t) : r: S64.t { S64.v r == (S64.v x * S64.v y) % base } =
   assert_norm (base == pow2 64);
   S64.mul_mod x y
 
+(** Multiplication by a public constant, which the byte loader uses to
+    weigh a byte.  The caller shows the product fits, so it is exact. *)
+inline_for_extraction
+let mulk (k: U64.t) (x: S64.t)
+  : Pure S64.t (requires U64.v k * S64.v x < pow2 64)
+               (ensures fun z -> S64.v z == U64.v k * S64.v x)
+  = Math.small_mod (U64.v k * S64.v x) (pow2 64);
+    S64.mul_mod (S64.classify k) x
+
 inline_for_extraction
 let addd (x y: S128.t)
   : Pure S128.t (requires S128.v x + S128.v y < pow2 128)
