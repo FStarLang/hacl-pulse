@@ -426,7 +426,7 @@ static uint64_t Hacl_Hash_SHA3_Core_rotl_u32(uint64_t x, uint32_t k);
 static uint64_t Hacl_Hash_SHA3_Sponge_shiftr_u32(uint64_t x, uint32_t k);
 static void Hacl_Impl_MLKEM_Hash_hash_h_impl_(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_MLKEM_Hash_hash_h_impl(uint8_t *out, uint8_t *msg, size_t msg_len);
-static bool Hacl_Impl_MLKEM_Check_dk_check(uint8_t *dkey, size_t k);
+static bool Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_4(uint8_t *dkey);
 static uint16_t Hacl_Secret_UInt16_zero = 0;
 static uint16_t *Hacl_Impl_Sub_sub__t_1(uint16_t *a, size_t i, size_t j);
 static uint16_t Hacl_Secret_UInt16_of_bytes_le(uint8_t l, uint8_t h);
@@ -438,40 +438,45 @@ static uint16_t Hacl_Secret_UInt16_borrow(uint16_t x, uint16_t y);
 static uint16_t Hacl_Secret_UInt16_gte_mask(uint16_t x, uint16_t y);
 static uint16_t Hacl_Secret_UInt16_select(uint16_t mask, uint16_t x, uint16_t y);
 static uint16_t Hacl_Secret_UInt16_sub_mod(uint16_t x, uint16_t y);
-static void Hacl_Impl_MLKEM_Encode_decode_poly(uint16_t *dst, uint8_t *b, size_t d);
-static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(uint16_t *dst, uint8_t *b, size_t d, size_t k);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_12(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_4(uint16_t *dst, uint8_t *b);
 static uint16_t Hacl_Secret_UInt16_shift_right(uint16_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt16_lo(uint16_t x);
-static void Hacl_Impl_MLKEM_Encode_encode_poly(uint8_t *out, uint16_t *f, size_t d);
-static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(uint8_t *out, uint16_t *src, size_t d, size_t k);
-static bool Hacl_Impl_MLKEM_Check_ek_check(uint8_t *ekey, size_t k);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_12(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_4(uint8_t *out, uint16_t *src);
+static bool Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_4(uint8_t *ekey);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_11(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_11_uint_to_t_4(uint16_t *dst, uint8_t *b);
 static uint64_t Hacl_Secret_Cast_u16_to_u64(uint16_t x);
 static uint16_t Hacl_Secret_Cast_u64_to_u16(uint64_t x);
-static void Hacl_Impl_MLKEM_Encode_decompress_poly(uint16_t *dst, uint16_t *src, size_t d);
-static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl(uint16_t *dst, uint16_t *src, size_t d, size_t k);
-static void Hacl_Impl_MLKEM_Codec_decode_poly_(uint16_t *dst, uint8_t *b, size_t d);
-static void Hacl_Impl_MLKEM_Codec_decode_poly(uint16_t *dst, uint8_t *b, size_t d);
-static void Hacl_Impl_MLKEM_Codec_decompress_poly_(uint16_t *dst, uint16_t *src, size_t d);
-static void Hacl_Impl_MLKEM_Codec_decompress_poly(uint16_t *dst, uint16_t *src, size_t d);
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_11(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_11_uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_5(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_5(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_5(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_5(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src);
 static const uint16_t Hacl_MLKEM_Tables_zeta_arr[128] = { 1, 1729, 2580, 3289, 2642, 630, 1897, 848, 1062, 1919, 193, 797, 2786, 3260, 569, 1746, 296, 2447, 1339, 1476, 3046, 56, 2240, 1333, 1426, 2094, 535, 2882, 2393, 2879, 1974, 821, 289, 331, 3253, 1756, 1197, 2304, 2277, 2055, 650, 1977, 2513, 632, 2865, 33, 1320, 1915, 2319, 1435, 807, 452, 1438, 2868, 1534, 2402, 2647, 2617, 1481, 648, 2474, 3110, 1227, 910, 17, 2761, 583, 2649, 1637, 723, 2288, 1100, 1409, 2662, 3281, 233, 756, 2156, 3015, 3050, 1703, 1651, 2789, 1789, 1847, 952, 1461, 2687, 939, 2308, 2437, 2388, 733, 2337, 268, 641, 1584, 2298, 2037, 3220, 375, 2549, 2090, 1645, 1063, 319, 2773, 757, 2099, 561, 2466, 2594, 2804, 1092, 403, 1026, 1143, 2150, 2775, 886, 1722, 1212, 1874, 1029, 2110, 2935, 885, 2154 };
 static void Hacl_Impl_MLKEM_NTT_ntt_inplace(uint16_t *f, uint16_t *tmp);
 static void Hacl_Impl_MLKEM_Poly_ntt_inplace(uint16_t *f, uint16_t *tmp);
-static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl(uint16_t *v, uint16_t *tmp, size_t k);
+static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_4(uint16_t *v, uint16_t *tmp);
 static void Hacl_Impl_MLKEM_Vec_zero_range(uint16_t *dst, size_t len);
 static void Hacl_Impl_MLKEM_NTT_multiply(uint16_t *dst, uint16_t *a, uint16_t *b);
 static void Hacl_Impl_MLKEM_Poly_multiply(uint16_t *dst, uint16_t *a, uint16_t *b);
 static void Hacl_Impl_MLKEM_Vec_add_inplace(uint16_t *a, uint16_t *b, size_t len);
-static void Hacl_Impl_MLKEM_Vec_dot_impl(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp, size_t k);
+static void Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_4(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp);
 static void Hacl_Impl_MLKEM_NTT_intt_inplace(uint16_t *f, uint16_t *tmp);
 static void Hacl_Impl_MLKEM_Poly_intt_inplace(uint16_t *f, uint16_t *tmp);
 static void Hacl_Impl_MLKEM_Vec_sub_inplace(uint16_t *a, uint16_t *b, size_t len);
 static uint64_t Hacl_Secret_UInt64_mask_low(uint32_t n);
-static void Hacl_Impl_MLKEM_Encode_compress_poly(uint16_t *dst, uint16_t *src, size_t d);
-static void Hacl_Impl_MLKEM_Codec_compress_poly_(uint16_t *dst, uint16_t *src, size_t d);
-static void Hacl_Impl_MLKEM_Codec_compress_poly(uint16_t *dst, uint16_t *src, size_t d);
-static void Hacl_Impl_MLKEM_Codec_encode_poly_(uint8_t *out, uint16_t *f, size_t d);
-static void Hacl_Impl_MLKEM_Codec_encode_poly(uint8_t *out, uint16_t *f, size_t d);
-static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl(uint8_t *out, uint8_t *dkey, uint8_t *ct, size_t k, size_t du, size_t dv);
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_1(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_1(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_1(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_1(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_4_uint_to_t_11_uint_to_t_5(uint8_t *out, uint8_t *dkey, uint8_t *ct);
 static void Hacl_Impl_MLKEM_Hash_hash_g_impl_(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_MLKEM_Hash_hash_g_impl(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_MLKEM_XOF_xof_absorb(uint64_t *st, uint64_t *b, uint64_t *rc_tbl, uint8_t *seed, size_t slen);
@@ -480,24 +485,100 @@ static uint32_t FStar_Pervasives_Native_fst__t_1(FStar_Pervasives_Native_tuple2_
 static uint32_t FStar_Pervasives_Native_snd__t_1(FStar_Pervasives_Native_tuple2__uint32_uint32 x);
 static void Hacl_Impl_MLKEM_Sample_sample_ntt_impl(uint16_t *dst, uint8_t *seed, size_t slen);
 static void Hacl_Impl_MLKEM_Sampler_sample_ntt_impl(uint16_t *dst, uint8_t *seed, size_t slen);
-static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl(uint16_t *dst, uint8_t *rho, bool tr, size_t k);
-static void Hacl_Impl_MLKEM_Sample_prf_impl(uint8_t *out, uint8_t *s, uint8_t byte, size_t eta);
-static void Hacl_Impl_MLKEM_Sample_cbd_impl(uint16_t *dst, uint8_t *b, size_t eta);
-static void Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl(uint16_t *dst, uint8_t *s, uint8_t byte, size_t eta);
-static void Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl(uint16_t *dst, uint8_t *s, uint8_t byte, size_t eta);
-static void Hacl_Impl_MLKEM_Gen_noise_vec_impl(uint16_t *dst, uint8_t *s, uint8_t start, size_t eta, size_t k);
-static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp, size_t k);
-static void Hacl_Impl_MLKEM_Vec_vec_intt_impl(uint16_t *v, uint16_t *tmp, size_t k);
-static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl(uint16_t *dst, uint16_t *src, size_t d, size_t k);
-static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv);
+static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_4(uint16_t *dst, uint8_t *rho, bool tr);
+static void Hacl_Impl_MLKEM_Sample_prf_impl__uint_to_t_2(uint8_t *out, uint8_t *s, uint8_t byte);
+static void Hacl_Impl_MLKEM_Sample_cbd_impl__uint_to_t_2(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl__uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t byte);
+static void Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t byte);
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_4(uint16_t *dst, uint8_t *s, uint8_t start);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_1(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_1(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_1(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_1(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_4(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_4(uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_11(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_11_uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_11(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_11_uint_to_t_4(uint8_t *out, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_5(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_5(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_5(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_5(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd);
 static uint8_t Hacl_Impl_Select_eq_mask_bytes(uint8_t *a, uint8_t *b, size_t len);
 static void Hacl_Impl_MLKEM_Hash_hash_j_impl_(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_MLKEM_Hash_hash_j_impl(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_Select_select_copy(uint8_t *dst, size_t dbase, uint8_t *x, uint8_t *y, size_t len, uint8_t mask);
-static void Hacl_Impl_MLKEM_KEM_decaps_impl(uint8_t *ss, uint8_t *dkey, uint8_t *ct, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv);
-static void Hacl_Impl_MLKEM_KEM_encaps_impl(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv);
-static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl(uint8_t *ek, uint8_t *dk, uint8_t *dseed, size_t k, size_t eta1);
-static void Hacl_Impl_MLKEM_KEM_keygen_impl(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed, size_t k, size_t eta1);
+static void Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(uint8_t *ss, uint8_t *dkey, uint8_t *ct);
+static void Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg);
+static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_4_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed);
+static void Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_4_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed);
+static bool Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_3(uint8_t *dkey);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_3(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_3(uint8_t *out, uint16_t *src);
+static bool Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_3(uint8_t *ekey);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_10(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_10_uint_to_t_3(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_10(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_10_uint_to_t_3(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_4(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_4(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_4(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_3(uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_3(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *out, uint8_t *dkey, uint8_t *ct);
+static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_3(uint16_t *dst, uint8_t *rho, bool tr);
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_3(uint16_t *dst, uint8_t *s, uint8_t start);
+static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_3(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_3(uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_10(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_10_uint_to_t_3(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_10(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_10_uint_to_t_3(uint8_t *out, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_4(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_4(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_4(uint8_t *out, uint16_t *f);
+static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd);
+static void Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *dkey, uint8_t *ct);
+static void Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg);
+static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_3_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed);
+static void Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_3_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed);
+static bool Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_2(uint8_t *dkey);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_2(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_2(uint8_t *out, uint16_t *src);
+static bool Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_2(uint8_t *ekey);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_10_uint_to_t_2(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_10_uint_to_t_2(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_2(uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_2(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *out, uint8_t *dkey, uint8_t *ct);
+static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_2(uint16_t *dst, uint8_t *rho, bool tr);
+static void Hacl_Impl_MLKEM_Sample_prf_impl__uint_to_t_3(uint8_t *out, uint8_t *s, uint8_t byte);
+static void Hacl_Impl_MLKEM_Sample_cbd_impl__uint_to_t_3(uint16_t *dst, uint8_t *b);
+static void Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl__uint_to_t_3(uint16_t *dst, uint8_t *s, uint8_t byte);
+static void Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_3(uint16_t *dst, uint8_t *s, uint8_t byte);
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_3_uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t start);
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t start);
+static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_2(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_2(uint16_t *v, uint16_t *tmp);
+static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_10_uint_to_t_2(uint16_t *dst, uint16_t *src);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_10_uint_to_t_2(uint8_t *out, uint16_t *src);
+static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd);
+static void Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *dkey, uint8_t *ct);
+static void Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg);
+static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_2_uint_to_t_3(uint8_t *ek, uint8_t *dk, uint8_t *dseed);
+static void Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_2_uint_to_t_3(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed);
 static const uint16_t Hacl_Frodo1344_cdf_arr[7] = { 9142, 23462, 30338, 32361, 32725, 32765, 32767 };
 static uint16_t Hacl_Frodo_Pack_stream_bit(uint8_t *b, size_t blen, size_t pos);
 static uint16_t Hacl_Frodo_Pack_unpack_entry(uint8_t *b, size_t blen, size_t d, size_t off);
@@ -7803,8 +7884,8 @@ static void Hacl_Impl_MLKEM_Hash_hash_h_impl(uint8_t *out, uint8_t *msg, size_t 
   Hacl_Impl_MLKEM_Hash_hash_h_impl_(out, msg, msg_len);
 }
 
-static bool Hacl_Impl_MLKEM_Check_dk_check(uint8_t *dkey, size_t k) {
-  size_t k384 = (k * 384);
+static bool Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_4(uint8_t *dkey) {
+  size_t k384 = 1536;
   size_t eklen = (k384 + 32);
   uint8_t ek[eklen];
   for (size_t _ci1 = 0; _ci1 < (eklen); _ci1++) {
@@ -7826,7 +7907,7 @@ static bool Hacl_Impl_MLKEM_Check_dk_check(uint8_t *dkey, size_t k) {
 }
 
 bool Hacl_MLKEM1024_dk_valid(uint8_t *dk) {
-  return Hacl_Impl_MLKEM_Check_dk_check(dk, 4);
+  return Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_4(dk);
 }
 
 static uint16_t *Hacl_Impl_Sub_sub__t_1(uint16_t *a, size_t i, size_t j) {
@@ -7877,20 +7958,20 @@ static uint16_t Hacl_Secret_UInt16_sub_mod(uint16_t x, uint16_t y) {
   return ((uint16_t)((unsigned int)(x) - (unsigned int)(y)));
 }
 
-static void Hacl_Impl_MLKEM_Encode_decode_poly(uint16_t *dst, uint8_t *b, size_t d) {
-  size_t blen = (32 * d);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_12(uint16_t *dst, uint8_t *b) {
+  size_t blen = 384;
   size_t i = 0;
   while (i < 256) {
     size_t vi = i;
     uint16_t acc = Hacl_Secret_UInt16_zero;
     size_t j = 0;
-    while (j < d) {
+    while (j < 12) {
       size_t vj = j;
       uint16_t a = acc;
-      size_t j1 = (((vi * d) + vj) / 8);
+      size_t j1 = (((vi * 12) + vj) / 8);
       uint16_t bit;
       if (j1 < blen) {
-        size_t r = (((vi * d) + vj) % 8);
+        size_t r = (((vi * 12) + vj) % 8);
         uint8_t y = b[j1];
         uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
         uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
@@ -7908,10 +7989,10 @@ static void Hacl_Impl_MLKEM_Encode_decode_poly(uint16_t *dst, uint8_t *b, size_t
   }
 }
 
-static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(uint16_t *dst, uint8_t *b, size_t d, size_t k) {
-  size_t el = (32 * d);
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_4(uint16_t *dst, uint8_t *b) {
+  size_t el = 384;
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
@@ -7919,7 +8000,7 @@ static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(uint16_t *dst, uint8_t *b, 
     size_t bhi = (blo + el);
     uint8_t *bbl = Hacl_Impl_Sub_sub__t(b, blo, bhi);
     uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
-    Hacl_Impl_MLKEM_Encode_decode_poly(blk, bbl, d);
+    Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_12(blk, bbl);
     i = (vi + 1);
   }
 }
@@ -7932,79 +8013,79 @@ static uint8_t Hacl_Secret_UInt16_lo(uint16_t x) {
   return (uint8_t)x;
 }
 
-static void Hacl_Impl_MLKEM_Encode_encode_poly(uint8_t *out, uint16_t *f, size_t d) {
-  size_t len = (32 * d);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_12(uint8_t *out, uint16_t *f) {
+  size_t len = 384;
   size_t i = 0;
   while (i < len) {
     size_t vi = i;
     size_t base = (8 * vi);
     uint16_t b0;
-    if (base < (d * 256)) {
-      size_t i1 = (base / d);
-      size_t r = (base % d);
+    if (base < 3072) {
+      size_t i1 = (base / 12);
+      size_t r = (base % 12);
       uint16_t x = f[i1];
       uint16_t y = Hacl_Secret_UInt16_shift_right(x, (uint32_t)r);
       b0 = Hacl_Secret_UInt16_logand(y, Hacl_Secret_UInt16_mask_low(1));
     }
     else b0 = Hacl_Secret_UInt16_zero;
     uint16_t b1;
-    if ((base + 1) < (d * 256)) {
-      size_t i1_1 = ((base + 1) / d);
-      size_t r_1 = ((base + 1) % d);
+    if ((base + 1) < 3072) {
+      size_t i1_1 = ((base + 1) / 12);
+      size_t r_1 = ((base + 1) % 12);
       uint16_t x_1 = f[i1_1];
       uint16_t y_1 = Hacl_Secret_UInt16_shift_right(x_1, (uint32_t)r_1);
       b1 = Hacl_Secret_UInt16_logand(y_1, Hacl_Secret_UInt16_mask_low(1));
     }
     else b1 = Hacl_Secret_UInt16_zero;
     uint16_t b2;
-    if ((base + 2) < (d * 256)) {
-      size_t i1_2 = ((base + 2) / d);
-      size_t r_2 = ((base + 2) % d);
+    if ((base + 2) < 3072) {
+      size_t i1_2 = ((base + 2) / 12);
+      size_t r_2 = ((base + 2) % 12);
       uint16_t x_2 = f[i1_2];
       uint16_t y_2 = Hacl_Secret_UInt16_shift_right(x_2, (uint32_t)r_2);
       b2 = Hacl_Secret_UInt16_logand(y_2, Hacl_Secret_UInt16_mask_low(1));
     }
     else b2 = Hacl_Secret_UInt16_zero;
     uint16_t b3;
-    if ((base + 3) < (d * 256)) {
-      size_t i1_3 = ((base + 3) / d);
-      size_t r_3 = ((base + 3) % d);
+    if ((base + 3) < 3072) {
+      size_t i1_3 = ((base + 3) / 12);
+      size_t r_3 = ((base + 3) % 12);
       uint16_t x_3 = f[i1_3];
       uint16_t y_3 = Hacl_Secret_UInt16_shift_right(x_3, (uint32_t)r_3);
       b3 = Hacl_Secret_UInt16_logand(y_3, Hacl_Secret_UInt16_mask_low(1));
     }
     else b3 = Hacl_Secret_UInt16_zero;
     uint16_t b4;
-    if ((base + 4) < (d * 256)) {
-      size_t i1_4 = ((base + 4) / d);
-      size_t r_4 = ((base + 4) % d);
+    if ((base + 4) < 3072) {
+      size_t i1_4 = ((base + 4) / 12);
+      size_t r_4 = ((base + 4) % 12);
       uint16_t x_4 = f[i1_4];
       uint16_t y_4 = Hacl_Secret_UInt16_shift_right(x_4, (uint32_t)r_4);
       b4 = Hacl_Secret_UInt16_logand(y_4, Hacl_Secret_UInt16_mask_low(1));
     }
     else b4 = Hacl_Secret_UInt16_zero;
     uint16_t b5;
-    if ((base + 5) < (d * 256)) {
-      size_t i1_5 = ((base + 5) / d);
-      size_t r_5 = ((base + 5) % d);
+    if ((base + 5) < 3072) {
+      size_t i1_5 = ((base + 5) / 12);
+      size_t r_5 = ((base + 5) % 12);
       uint16_t x_5 = f[i1_5];
       uint16_t y_5 = Hacl_Secret_UInt16_shift_right(x_5, (uint32_t)r_5);
       b5 = Hacl_Secret_UInt16_logand(y_5, Hacl_Secret_UInt16_mask_low(1));
     }
     else b5 = Hacl_Secret_UInt16_zero;
     uint16_t b6;
-    if ((base + 6) < (d * 256)) {
-      size_t i1_6 = ((base + 6) / d);
-      size_t r_6 = ((base + 6) % d);
+    if ((base + 6) < 3072) {
+      size_t i1_6 = ((base + 6) / 12);
+      size_t r_6 = ((base + 6) % 12);
       uint16_t x_6 = f[i1_6];
       uint16_t y_6 = Hacl_Secret_UInt16_shift_right(x_6, (uint32_t)r_6);
       b6 = Hacl_Secret_UInt16_logand(y_6, Hacl_Secret_UInt16_mask_low(1));
     }
     else b6 = Hacl_Secret_UInt16_zero;
     uint16_t b7;
-    if ((base + 7) < (d * 256)) {
-      size_t i1_7 = ((base + 7) / d);
-      size_t r_7 = ((base + 7) % d);
+    if ((base + 7) < 3072) {
+      size_t i1_7 = ((base + 7) / 12);
+      size_t r_7 = ((base + 7) % 12);
       uint16_t x_7 = f[i1_7];
       uint16_t y_7 = Hacl_Secret_UInt16_shift_right(x_7, (uint32_t)r_7);
       b7 = Hacl_Secret_UInt16_logand(y_7, Hacl_Secret_UInt16_mask_low(1));
@@ -8023,10 +8104,10 @@ static void Hacl_Impl_MLKEM_Encode_encode_poly(uint8_t *out, uint16_t *f, size_t
   }
 }
 
-static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(uint8_t *out, uint16_t *src, size_t d, size_t k) {
-  size_t el = (32 * d);
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_4(uint8_t *out, uint16_t *src) {
+  size_t el = 384;
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
@@ -8034,14 +8115,14 @@ static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(uint8_t *out, uint16_t *src
     size_t bhi = (blo + el);
     uint16_t *blk = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
     uint8_t *obl = Hacl_Impl_Sub_sub__t(out, blo, bhi);
-    Hacl_Impl_MLKEM_Encode_encode_poly(obl, blk, d);
+    Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_12(obl, blk);
     i = (vi + 1);
   }
 }
 
-static bool Hacl_Impl_MLKEM_Check_ek_check(uint8_t *ekey, size_t k) {
-  size_t k384 = (k * 384);
-  size_t kn = (k * 256);
+static bool Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_4(uint8_t *ekey) {
+  size_t k384 = 1536;
+  size_t kn = 1024;
   uint8_t tb[k384];
   for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
     tb[_ci1] = Hacl_Secret_UInt8_zero;
@@ -8051,17 +8132,64 @@ static bool Hacl_Impl_MLKEM_Check_ek_check(uint8_t *ekey, size_t k) {
   for (size_t _ci2 = 0; _ci2 < (kn); _ci2++) {
     t[_ci2] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(t, tb, 12, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_4(t, tb);
   uint8_t re[k384];
   for (size_t _ci3 = 0; _ci3 < (k384); _ci3++) {
     re[_ci3] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(re, t, 12, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_4(re, t);
   return Hacl_Impl_Bytes_bytes_eq(re, tb, k384);
 }
 
 bool Hacl_MLKEM1024_ek_valid(uint8_t *ek) {
-  return Hacl_Impl_MLKEM_Check_ek_check(ek, 4);
+  return Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_4(ek);
+}
+
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_11(uint16_t *dst, uint8_t *b) {
+  size_t blen = 352;
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t acc = Hacl_Secret_UInt16_zero;
+    size_t j = 0;
+    while (j < 11) {
+      size_t vj = j;
+      uint16_t a = acc;
+      size_t j1 = (((vi * 11) + vj) / 8);
+      uint16_t bit;
+      if (j1 < blen) {
+        size_t r = (((vi * 11) + vj) % 8);
+        uint8_t y = b[j1];
+        uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
+        uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
+        bit = Hacl_Secret_UInt16_logand(e, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit = Hacl_Secret_UInt16_zero;
+      acc = Hacl_Secret_UInt16_add_mod(a, Hacl_Secret_UInt16_shift_left(bit, (uint32_t)vj));
+      j = (vj + 1);
+    }
+    uint16_t _ct3;
+    uint16_t m = Hacl_Secret_UInt16_gte_mask(acc, 3329);
+    _ct3 = Hacl_Secret_UInt16_select(m, Hacl_Secret_UInt16_sub_mod(acc, 3329), acc);
+    dst[vi] = _ct3;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_11_uint_to_t_4(uint16_t *dst, uint8_t *b) {
+  size_t el = 352;
+  size_t i = 0;
+  while (i < 4) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint8_t *bbl = Hacl_Impl_Sub_sub__t(b, blo, bhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_11(blk, bbl);
+    i = (vi + 1);
+  }
 }
 
 static uint64_t Hacl_Secret_Cast_u16_to_u64(uint16_t x) {
@@ -8072,13 +8200,13 @@ static uint16_t Hacl_Secret_Cast_u64_to_u16(uint64_t x) {
   return (uint16_t)x;
 }
 
-static void Hacl_Impl_MLKEM_Encode_decompress_poly(uint16_t *dst, uint16_t *src, size_t d) {
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_11(uint16_t *dst, uint16_t *src) {
   size_t i = 0;
   while (i < 256) {
     size_t vi = i;
     uint16_t x = src[vi];
     uint16_t _ct2;
-    uint32_t dd = (uint32_t)d;
+    uint32_t dd = (uint32_t)11;
     uint64_t h = Hacl_Secret_UInt64_shift_left(1, (dd - 1));
     uint64_t z = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_mul_mod(Hacl_Secret_Cast_u16_to_u64(x), 3329), h);
     uint64_t t = Hacl_Secret_UInt64_shift_right(z, dd);
@@ -8088,33 +8216,80 @@ static void Hacl_Impl_MLKEM_Encode_decompress_poly(uint16_t *dst, uint16_t *src,
   }
 }
 
-static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl(uint16_t *dst, uint16_t *src, size_t d, size_t k) {
+static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_11_uint_to_t_4(uint16_t *dst, uint16_t *src) {
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
     uint16_t *sbl = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
     uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
-    Hacl_Impl_MLKEM_Encode_decompress_poly(blk, sbl, d);
+    Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_11(blk, sbl);
     i = (vi + 1);
   }
 }
 
-static void Hacl_Impl_MLKEM_Codec_decode_poly_(uint16_t *dst, uint8_t *b, size_t d) {
-  Hacl_Impl_MLKEM_Encode_decode_poly(dst, b, d);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_5(uint16_t *dst, uint8_t *b) {
+  size_t blen = 160;
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t acc = Hacl_Secret_UInt16_zero;
+    size_t j = 0;
+    while (j < 5) {
+      size_t vj = j;
+      uint16_t a = acc;
+      size_t j1 = (((vi * 5) + vj) / 8);
+      uint16_t bit;
+      if (j1 < blen) {
+        size_t r = (((vi * 5) + vj) % 8);
+        uint8_t y = b[j1];
+        uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
+        uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
+        bit = Hacl_Secret_UInt16_logand(e, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit = Hacl_Secret_UInt16_zero;
+      acc = Hacl_Secret_UInt16_add_mod(a, Hacl_Secret_UInt16_shift_left(bit, (uint32_t)vj));
+      j = (vj + 1);
+    }
+    uint16_t _ct3;
+    uint16_t m = Hacl_Secret_UInt16_gte_mask(acc, 3329);
+    _ct3 = Hacl_Secret_UInt16_select(m, Hacl_Secret_UInt16_sub_mod(acc, 3329), acc);
+    dst[vi] = _ct3;
+    i = (vi + 1);
+  }
 }
 
-static void Hacl_Impl_MLKEM_Codec_decode_poly(uint16_t *dst, uint8_t *b, size_t d) {
-  Hacl_Impl_MLKEM_Codec_decode_poly_(dst, b, d);
+static void Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_5(uint16_t *dst, uint8_t *b) {
+  Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_5(dst, b);
 }
 
-static void Hacl_Impl_MLKEM_Codec_decompress_poly_(uint16_t *dst, uint16_t *src, size_t d) {
-  Hacl_Impl_MLKEM_Encode_decompress_poly(dst, src, d);
+static void Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_5(uint16_t *dst, uint8_t *b) {
+  Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_5(dst, b);
 }
 
-static void Hacl_Impl_MLKEM_Codec_decompress_poly(uint16_t *dst, uint16_t *src, size_t d) {
-  Hacl_Impl_MLKEM_Codec_decompress_poly_(dst, src, d);
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)5;
+    uint64_t h = Hacl_Secret_UInt64_shift_left(1, (dd - 1));
+    uint64_t z = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_mul_mod(Hacl_Secret_Cast_u16_to_u64(x), 3329), h);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(z, dd);
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(t);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_5(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_5(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_5(dst, src);
 }
 
 static void Hacl_Impl_MLKEM_NTT_ntt_inplace(uint16_t *f, uint16_t *tmp) {
@@ -8579,9 +8754,9 @@ static void Hacl_Impl_MLKEM_Poly_ntt_inplace(uint16_t *f, uint16_t *tmp) {
   Hacl_Impl_MLKEM_NTT_ntt_inplace(f, tmp);
 }
 
-static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl(uint16_t *v, uint16_t *tmp, size_t k) {
+static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_4(uint16_t *v, uint16_t *tmp) {
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
@@ -8724,10 +8899,10 @@ static void Hacl_Impl_MLKEM_Vec_add_inplace(uint16_t *a, uint16_t *b, size_t len
   }
 }
 
-static void Hacl_Impl_MLKEM_Vec_dot_impl(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp, size_t k) {
+static void Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_4(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp) {
   Hacl_Impl_MLKEM_Vec_zero_range(dst, 256);
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
@@ -9058,13 +9233,13 @@ static uint64_t Hacl_Secret_UInt64_mask_low(uint32_t n) {
   else return ((((uint64_t)1ULL) << n) - 1);
 }
 
-static void Hacl_Impl_MLKEM_Encode_compress_poly(uint16_t *dst, uint16_t *src, size_t d) {
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src) {
   size_t i = 0;
   while (i < 256) {
     size_t vi = i;
     uint16_t x = src[vi];
     uint16_t _ct2;
-    uint32_t dd = (uint32_t)d;
+    uint32_t dd = (uint32_t)1;
     uint64_t y = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_left(Hacl_Secret_Cast_u16_to_u64(x), dd), 1664);
     uint64_t t = Hacl_Secret_UInt64_shift_right(Hacl_Secret_UInt64_mul_mod(y, 2580335ULL), 33);
     uint64_t m = Hacl_Secret_UInt64_logand(t, Hacl_Secret_UInt64_mask_low(dd));
@@ -9074,26 +9249,117 @@ static void Hacl_Impl_MLKEM_Encode_compress_poly(uint16_t *dst, uint16_t *src, s
   }
 }
 
-static void Hacl_Impl_MLKEM_Codec_compress_poly_(uint16_t *dst, uint16_t *src, size_t d) {
-  Hacl_Impl_MLKEM_Encode_compress_poly(dst, src, d);
+static void Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_1(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_1(dst, src);
 }
 
-static void Hacl_Impl_MLKEM_Codec_compress_poly(uint16_t *dst, uint16_t *src, size_t d) {
-  Hacl_Impl_MLKEM_Codec_compress_poly_(dst, src, d);
+static void Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_1(dst, src);
 }
 
-static void Hacl_Impl_MLKEM_Codec_encode_poly_(uint8_t *out, uint16_t *f, size_t d) {
-  Hacl_Impl_MLKEM_Encode_encode_poly(out, f, d);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_1(uint8_t *out, uint16_t *f) {
+  size_t len = 32;
+  size_t i = 0;
+  while (i < len) {
+    size_t vi = i;
+    size_t base = (8 * vi);
+    uint16_t b0;
+    if (base < 256) {
+      size_t i1 = (base / 1);
+      size_t r = (base % 1);
+      uint16_t x = f[i1];
+      uint16_t y = Hacl_Secret_UInt16_shift_right(x, (uint32_t)r);
+      b0 = Hacl_Secret_UInt16_logand(y, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b0 = Hacl_Secret_UInt16_zero;
+    uint16_t b1;
+    if ((base + 1) < 256) {
+      size_t i1_1 = ((base + 1) / 1);
+      size_t r_1 = ((base + 1) % 1);
+      uint16_t x_1 = f[i1_1];
+      uint16_t y_1 = Hacl_Secret_UInt16_shift_right(x_1, (uint32_t)r_1);
+      b1 = Hacl_Secret_UInt16_logand(y_1, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b1 = Hacl_Secret_UInt16_zero;
+    uint16_t b2;
+    if ((base + 2) < 256) {
+      size_t i1_2 = ((base + 2) / 1);
+      size_t r_2 = ((base + 2) % 1);
+      uint16_t x_2 = f[i1_2];
+      uint16_t y_2 = Hacl_Secret_UInt16_shift_right(x_2, (uint32_t)r_2);
+      b2 = Hacl_Secret_UInt16_logand(y_2, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b2 = Hacl_Secret_UInt16_zero;
+    uint16_t b3;
+    if ((base + 3) < 256) {
+      size_t i1_3 = ((base + 3) / 1);
+      size_t r_3 = ((base + 3) % 1);
+      uint16_t x_3 = f[i1_3];
+      uint16_t y_3 = Hacl_Secret_UInt16_shift_right(x_3, (uint32_t)r_3);
+      b3 = Hacl_Secret_UInt16_logand(y_3, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b3 = Hacl_Secret_UInt16_zero;
+    uint16_t b4;
+    if ((base + 4) < 256) {
+      size_t i1_4 = ((base + 4) / 1);
+      size_t r_4 = ((base + 4) % 1);
+      uint16_t x_4 = f[i1_4];
+      uint16_t y_4 = Hacl_Secret_UInt16_shift_right(x_4, (uint32_t)r_4);
+      b4 = Hacl_Secret_UInt16_logand(y_4, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b4 = Hacl_Secret_UInt16_zero;
+    uint16_t b5;
+    if ((base + 5) < 256) {
+      size_t i1_5 = ((base + 5) / 1);
+      size_t r_5 = ((base + 5) % 1);
+      uint16_t x_5 = f[i1_5];
+      uint16_t y_5 = Hacl_Secret_UInt16_shift_right(x_5, (uint32_t)r_5);
+      b5 = Hacl_Secret_UInt16_logand(y_5, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b5 = Hacl_Secret_UInt16_zero;
+    uint16_t b6;
+    if ((base + 6) < 256) {
+      size_t i1_6 = ((base + 6) / 1);
+      size_t r_6 = ((base + 6) % 1);
+      uint16_t x_6 = f[i1_6];
+      uint16_t y_6 = Hacl_Secret_UInt16_shift_right(x_6, (uint32_t)r_6);
+      b6 = Hacl_Secret_UInt16_logand(y_6, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b6 = Hacl_Secret_UInt16_zero;
+    uint16_t b7;
+    if ((base + 7) < 256) {
+      size_t i1_7 = ((base + 7) / 1);
+      size_t r_7 = ((base + 7) % 1);
+      uint16_t x_7 = f[i1_7];
+      uint16_t y_7 = Hacl_Secret_UInt16_shift_right(x_7, (uint32_t)r_7);
+      b7 = Hacl_Secret_UInt16_logand(y_7, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b7 = Hacl_Secret_UInt16_zero;
+    uint16_t a1 = Hacl_Secret_UInt16_add_mod(b0, Hacl_Secret_UInt16_shift_left(b1, 1));
+    uint16_t a2 = Hacl_Secret_UInt16_add_mod(a1, Hacl_Secret_UInt16_shift_left(b2, 2));
+    uint16_t a3 = Hacl_Secret_UInt16_add_mod(a2, Hacl_Secret_UInt16_shift_left(b3, 3));
+    uint16_t a4 = Hacl_Secret_UInt16_add_mod(a3, Hacl_Secret_UInt16_shift_left(b4, 4));
+    uint16_t a5 = Hacl_Secret_UInt16_add_mod(a4, Hacl_Secret_UInt16_shift_left(b5, 5));
+    uint16_t a6 = Hacl_Secret_UInt16_add_mod(a5, Hacl_Secret_UInt16_shift_left(b6, 6));
+    uint16_t a7 = Hacl_Secret_UInt16_add_mod(a6, Hacl_Secret_UInt16_shift_left(b7, 7));
+    uint8_t b = Hacl_Secret_UInt16_lo(a7);
+    out[vi] = b;
+    i = (vi + 1);
+  }
 }
 
-static void Hacl_Impl_MLKEM_Codec_encode_poly(uint8_t *out, uint16_t *f, size_t d) {
-  Hacl_Impl_MLKEM_Codec_encode_poly_(out, f, d);
+static void Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_1(uint8_t *out, uint16_t *f) {
+  Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_1(out, f);
 }
 
-static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl(uint8_t *out, uint8_t *dkey, uint8_t *ct, size_t k, size_t du, size_t dv) {
-  size_t kn = (k * 256);
-  size_t c1len = (k * (32 * du));
-  size_t c2len = (32 * dv);
+static void Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_1(uint8_t *out, uint16_t *f) {
+  Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_1(out, f);
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_4_uint_to_t_11_uint_to_t_5(uint8_t *out, uint8_t *dkey, uint8_t *ct) {
+  size_t kn = 1024;
+  size_t c1len = 1408;
+  size_t c2len = 160;
   uint8_t c1[c1len];
   for (size_t _ci1 = 0; _ci1 < (c1len); _ci1++) {
     c1[_ci1] = Hacl_Secret_UInt8_zero;
@@ -9108,45 +9374,45 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl(uint8_t *out, uint8_t *dkey, 
   for (size_t _ci3 = 0; _ci3 < (kn); _ci3++) {
     ud[_ci3] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(ud, c1, du, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_11_uint_to_t_4(ud, c1);
   uint16_t u[kn];
   for (size_t _ci4 = 0; _ci4 < (kn); _ci4++) {
     u[_ci4] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl(u, ud, du, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_11_uint_to_t_4(u, ud);
   uint16_t vd[256];
   for (size_t _ci5 = 0; _ci5 < 256; _ci5++) {
     vd[_ci5] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Codec_decode_poly(vd, c2, dv);
+  Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_5(vd, c2);
   uint16_t vp[256];
   for (size_t _ci6 = 0; _ci6 < 256; _ci6++) {
     vp[_ci6] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Codec_decompress_poly(vp, vd, dv);
+  Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_5(vp, vd);
   uint16_t s[kn];
   for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
     s[_ci7] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(s, dkey, 12, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_4(s, dkey);
   uint16_t tmp[256];
   for (size_t _ci8 = 0; _ci8 < 256; _ci8++) {
     tmp[_ci8] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Vec_vec_ntt_impl(u, tmp, k);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_4(u, tmp);
   uint16_t w[256];
   for (size_t _ci9 = 0; _ci9 < 256; _ci9++) {
     w[_ci9] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Vec_dot_impl(w, s, u, tmp, k);
+  Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_4(w, s, u, tmp);
   Hacl_Impl_MLKEM_Poly_intt_inplace(w, tmp);
   Hacl_Impl_MLKEM_Vec_sub_inplace(vp, w, 256);
   uint16_t wc[256];
   for (size_t _ci10 = 0; _ci10 < 256; _ci10++) {
     wc[_ci10] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Codec_compress_poly(wc, vp, 1);
-  Hacl_Impl_MLKEM_Codec_encode_poly(out, wc, 1);
+  Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_1(wc, vp);
+  Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_1(out, wc);
 }
 
 void Hacl_Hash_SHA3_sha3_512(uint8_t *out, uint8_t *msg, size_t msg_len) {
@@ -10726,21 +10992,21 @@ static void Hacl_Impl_MLKEM_Sampler_sample_ntt_impl(uint16_t *dst, uint8_t *seed
   Hacl_Impl_MLKEM_Sample_sample_ntt_impl(dst, seed, slen);
 }
 
-static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl(uint16_t *dst, uint8_t *rho, bool tr, size_t k) {
+static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_4(uint16_t *dst, uint8_t *rho, bool tr) {
   uint8_t z8 = 0;
   uint8_t sd[34];
   for (size_t _ci1 = 0; _ci1 < 34; _ci1++) {
     sd[_ci1] = z8;
   }
   Hacl_Impl_Copy_copy_prefix(sd, rho, 32);
-  size_t kk = (k * k);
+  size_t kk = 16;
   size_t c = 0;
   while (c < kk) {
     size_t vc = c;
     size_t lo = (vc * 256);
     size_t hi = (lo + 256);
-    size_t ci = (vc / k);
-    size_t cj = (vc % k);
+    size_t ci = (vc / 4);
+    size_t cj = (vc % 4);
     uint8_t bi = (uint8_t)(uint32_t)ci;
     uint8_t bj = (uint8_t)(uint32_t)cj;
     uint8_t b32;
@@ -11510,7 +11776,7 @@ void Hacl_Hash_SHA3_shake256(uint8_t *out, size_t out_len, uint8_t *msg, size_t 
   }
 }
 
-static void Hacl_Impl_MLKEM_Sample_prf_impl(uint8_t *out, uint8_t *s, uint8_t byte, size_t eta) {
+static void Hacl_Impl_MLKEM_Sample_prf_impl__uint_to_t_2(uint8_t *out, uint8_t *s, uint8_t byte) {
   uint8_t z8 = 0;
   uint8_t msg[33];
   for (size_t _ci1 = 0; _ci1 < 33; _ci1++) {
@@ -11518,18 +11784,18 @@ static void Hacl_Impl_MLKEM_Sample_prf_impl(uint8_t *out, uint8_t *s, uint8_t by
   }
   Hacl_Impl_Copy_copy_prefix(msg, s, 32);
   msg[32] = byte;
-  Hacl_Hash_SHA3_shake256(out, (64 * eta), msg, 33);
+  Hacl_Hash_SHA3_shake256(out, 128, msg, 33);
 }
 
-static void Hacl_Impl_MLKEM_Sample_cbd_impl(uint16_t *dst, uint8_t *b, size_t eta) {
-  size_t blen = (64 * eta);
+static void Hacl_Impl_MLKEM_Sample_cbd_impl__uint_to_t_2(uint16_t *dst, uint8_t *b) {
+  size_t blen = 128;
   size_t i = 0;
   while (i < 256) {
     size_t vi = i;
-    size_t off = ((2 * vi) * eta);
+    size_t off = ((2 * vi) * 2);
     uint16_t acc = Hacl_Secret_UInt16_zero;
     size_t j = 0;
-    while (j < eta) {
+    while (j < 2) {
       size_t vj = j;
       uint16_t a = acc;
       size_t j1 = ((off + vj) / 8);
@@ -11547,13 +11813,13 @@ static void Hacl_Impl_MLKEM_Sample_cbd_impl(uint16_t *dst, uint8_t *b, size_t et
     }
     uint16_t acc1 = Hacl_Secret_UInt16_zero;
     size_t j1_1 = 0;
-    while (j1_1 < eta) {
+    while (j1_1 < 2) {
       size_t vj_1 = j1_1;
       uint16_t a_1 = acc1;
-      size_t j2 = (((off + eta) + vj_1) / 8);
+      size_t j2 = (((off + 2) + vj_1) / 8);
       uint16_t bit_1;
       if (j2 < blen) {
-        size_t r_1 = (((off + eta) + vj_1) % 8);
+        size_t r_1 = (((off + 2) + vj_1) % 8);
         uint8_t y_1 = b[j2];
         uint8_t z_1 = Hacl_Secret_UInt8_shift_right(y_1, (uint32_t)r_1);
         uint16_t e_1 = Hacl_Secret_UInt16_of_bytes_le(z_1, 0);
@@ -11571,40 +11837,103 @@ static void Hacl_Impl_MLKEM_Sample_cbd_impl(uint16_t *dst, uint8_t *b, size_t et
   }
 }
 
-static void Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl(uint16_t *dst, uint8_t *s, uint8_t byte, size_t eta) {
+static void Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl__uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t byte) {
   uint8_t z8 = 0;
   uint8_t buf[192];
   for (size_t _ci1 = 0; _ci1 < 192; _ci1++) {
     buf[_ci1] = z8;
   }
-  size_t el = (64 * eta);
+  size_t el = 128;
   uint8_t *bs = Hacl_Impl_Sub_sub__t(buf, 0, el);
-  Hacl_Impl_MLKEM_Sample_prf_impl(bs, s, byte, eta);
-  Hacl_Impl_MLKEM_Sample_cbd_impl(dst, bs, eta);
+  Hacl_Impl_MLKEM_Sample_prf_impl__uint_to_t_2(bs, s, byte);
+  Hacl_Impl_MLKEM_Sample_cbd_impl__uint_to_t_2(dst, bs);
 }
 
-static void Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl(uint16_t *dst, uint8_t *s, uint8_t byte, size_t eta) {
-  Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl(dst, s, byte, eta);
+static void Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t byte) {
+  Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl__uint_to_t_2(dst, s, byte);
 }
 
-static void Hacl_Impl_MLKEM_Gen_noise_vec_impl(uint16_t *dst, uint8_t *s, uint8_t start, size_t eta, size_t k) {
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_4(uint16_t *dst, uint8_t *s, uint8_t start) {
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
     uint8_t bi = (uint8_t)(uint32_t)vi;
     uint8_t byte = (start + bi);
     uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
-    Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl(blk, s, byte, eta);
+    Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(blk, s, byte);
     i = (vi + 1);
   }
 }
 
-static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp, size_t k) {
-  size_t kn = (k * 256);
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_1(uint16_t *dst, uint8_t *b) {
+  size_t blen = 32;
   size_t i = 0;
-  while (i < k) {
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t acc = Hacl_Secret_UInt16_zero;
+    size_t j = 0;
+    while (j < 1) {
+      size_t vj = j;
+      uint16_t a = acc;
+      size_t j1 = (((vi * 1) + vj) / 8);
+      uint16_t bit;
+      if (j1 < blen) {
+        size_t r = (((vi * 1) + vj) % 8);
+        uint8_t y = b[j1];
+        uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
+        uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
+        bit = Hacl_Secret_UInt16_logand(e, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit = Hacl_Secret_UInt16_zero;
+      acc = Hacl_Secret_UInt16_add_mod(a, Hacl_Secret_UInt16_shift_left(bit, (uint32_t)vj));
+      j = (vj + 1);
+    }
+    uint16_t _ct3;
+    uint16_t m = Hacl_Secret_UInt16_gte_mask(acc, 3329);
+    _ct3 = Hacl_Secret_UInt16_select(m, Hacl_Secret_UInt16_sub_mod(acc, 3329), acc);
+    dst[vi] = _ct3;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_1(uint16_t *dst, uint8_t *b) {
+  Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_1(dst, b);
+}
+
+static void Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_1(uint16_t *dst, uint8_t *b) {
+  Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_1(dst, b);
+}
+
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)1;
+    uint64_t h = Hacl_Secret_UInt64_shift_left(1, (dd - 1));
+    uint64_t z = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_mul_mod(Hacl_Secret_Cast_u16_to_u64(x), 3329), h);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(z, dd);
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(t);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_1(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_1(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_1(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_1(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_4(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp) {
+  size_t kn = 1024;
+  size_t i = 0;
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
@@ -11612,14 +11941,14 @@ static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl(uint16_t *dst, uint16_t *m, uin
     size_t rhi = (rlo + kn);
     uint16_t *row = Hacl_Impl_Sub_sub__t_1(m, rlo, rhi);
     uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
-    Hacl_Impl_MLKEM_Vec_dot_impl(blk, row, v, tmp, k);
+    Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_4(blk, row, v, tmp);
     i = (vi + 1);
   }
 }
 
-static void Hacl_Impl_MLKEM_Vec_vec_intt_impl(uint16_t *v, uint16_t *tmp, size_t k) {
+static void Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_4(uint16_t *v, uint16_t *tmp) {
   size_t i = 0;
-  while (i < k) {
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
@@ -11629,27 +11958,273 @@ static void Hacl_Impl_MLKEM_Vec_vec_intt_impl(uint16_t *v, uint16_t *tmp, size_t
   }
 }
 
-static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl(uint16_t *dst, uint16_t *src, size_t d, size_t k) {
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_11(uint16_t *dst, uint16_t *src) {
   size_t i = 0;
-  while (i < k) {
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)11;
+    uint64_t y = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_left(Hacl_Secret_Cast_u16_to_u64(x), dd), 1664);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(Hacl_Secret_UInt64_mul_mod(y, 2580335ULL), 33);
+    uint64_t m = Hacl_Secret_UInt64_logand(t, Hacl_Secret_UInt64_mask_low(dd));
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(m);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_11_uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 4) {
     size_t vi = i;
     size_t lo = (vi * 256);
     size_t hi = (lo + 256);
     uint16_t *sbl = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
     uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
-    Hacl_Impl_MLKEM_Encode_compress_poly(blk, sbl, d);
+    Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_11(blk, sbl);
     i = (vi + 1);
   }
 }
 
-static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv) {
-  size_t kn = (k * 256);
-  size_t kkn = (kn * k);
-  size_t k384 = (k * 384);
-  size_t c1len = (k * (32 * du));
-  size_t c2len = (32 * dv);
-  uint8_t kb = (uint8_t)(uint32_t)k;
-  size_t k2 = (2 * k);
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_11(uint8_t *out, uint16_t *f) {
+  size_t len = 352;
+  size_t i = 0;
+  while (i < len) {
+    size_t vi = i;
+    size_t base = (8 * vi);
+    uint16_t b0;
+    if (base < 2816) {
+      size_t i1 = (base / 11);
+      size_t r = (base % 11);
+      uint16_t x = f[i1];
+      uint16_t y = Hacl_Secret_UInt16_shift_right(x, (uint32_t)r);
+      b0 = Hacl_Secret_UInt16_logand(y, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b0 = Hacl_Secret_UInt16_zero;
+    uint16_t b1;
+    if ((base + 1) < 2816) {
+      size_t i1_1 = ((base + 1) / 11);
+      size_t r_1 = ((base + 1) % 11);
+      uint16_t x_1 = f[i1_1];
+      uint16_t y_1 = Hacl_Secret_UInt16_shift_right(x_1, (uint32_t)r_1);
+      b1 = Hacl_Secret_UInt16_logand(y_1, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b1 = Hacl_Secret_UInt16_zero;
+    uint16_t b2;
+    if ((base + 2) < 2816) {
+      size_t i1_2 = ((base + 2) / 11);
+      size_t r_2 = ((base + 2) % 11);
+      uint16_t x_2 = f[i1_2];
+      uint16_t y_2 = Hacl_Secret_UInt16_shift_right(x_2, (uint32_t)r_2);
+      b2 = Hacl_Secret_UInt16_logand(y_2, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b2 = Hacl_Secret_UInt16_zero;
+    uint16_t b3;
+    if ((base + 3) < 2816) {
+      size_t i1_3 = ((base + 3) / 11);
+      size_t r_3 = ((base + 3) % 11);
+      uint16_t x_3 = f[i1_3];
+      uint16_t y_3 = Hacl_Secret_UInt16_shift_right(x_3, (uint32_t)r_3);
+      b3 = Hacl_Secret_UInt16_logand(y_3, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b3 = Hacl_Secret_UInt16_zero;
+    uint16_t b4;
+    if ((base + 4) < 2816) {
+      size_t i1_4 = ((base + 4) / 11);
+      size_t r_4 = ((base + 4) % 11);
+      uint16_t x_4 = f[i1_4];
+      uint16_t y_4 = Hacl_Secret_UInt16_shift_right(x_4, (uint32_t)r_4);
+      b4 = Hacl_Secret_UInt16_logand(y_4, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b4 = Hacl_Secret_UInt16_zero;
+    uint16_t b5;
+    if ((base + 5) < 2816) {
+      size_t i1_5 = ((base + 5) / 11);
+      size_t r_5 = ((base + 5) % 11);
+      uint16_t x_5 = f[i1_5];
+      uint16_t y_5 = Hacl_Secret_UInt16_shift_right(x_5, (uint32_t)r_5);
+      b5 = Hacl_Secret_UInt16_logand(y_5, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b5 = Hacl_Secret_UInt16_zero;
+    uint16_t b6;
+    if ((base + 6) < 2816) {
+      size_t i1_6 = ((base + 6) / 11);
+      size_t r_6 = ((base + 6) % 11);
+      uint16_t x_6 = f[i1_6];
+      uint16_t y_6 = Hacl_Secret_UInt16_shift_right(x_6, (uint32_t)r_6);
+      b6 = Hacl_Secret_UInt16_logand(y_6, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b6 = Hacl_Secret_UInt16_zero;
+    uint16_t b7;
+    if ((base + 7) < 2816) {
+      size_t i1_7 = ((base + 7) / 11);
+      size_t r_7 = ((base + 7) % 11);
+      uint16_t x_7 = f[i1_7];
+      uint16_t y_7 = Hacl_Secret_UInt16_shift_right(x_7, (uint32_t)r_7);
+      b7 = Hacl_Secret_UInt16_logand(y_7, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b7 = Hacl_Secret_UInt16_zero;
+    uint16_t a1 = Hacl_Secret_UInt16_add_mod(b0, Hacl_Secret_UInt16_shift_left(b1, 1));
+    uint16_t a2 = Hacl_Secret_UInt16_add_mod(a1, Hacl_Secret_UInt16_shift_left(b2, 2));
+    uint16_t a3 = Hacl_Secret_UInt16_add_mod(a2, Hacl_Secret_UInt16_shift_left(b3, 3));
+    uint16_t a4 = Hacl_Secret_UInt16_add_mod(a3, Hacl_Secret_UInt16_shift_left(b4, 4));
+    uint16_t a5 = Hacl_Secret_UInt16_add_mod(a4, Hacl_Secret_UInt16_shift_left(b5, 5));
+    uint16_t a6 = Hacl_Secret_UInt16_add_mod(a5, Hacl_Secret_UInt16_shift_left(b6, 6));
+    uint16_t a7 = Hacl_Secret_UInt16_add_mod(a6, Hacl_Secret_UInt16_shift_left(b7, 7));
+    uint8_t b = Hacl_Secret_UInt16_lo(a7);
+    out[vi] = b;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_11_uint_to_t_4(uint8_t *out, uint16_t *src) {
+  size_t el = 352;
+  size_t i = 0;
+  while (i < 4) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint8_t *obl = Hacl_Impl_Sub_sub__t(out, blo, bhi);
+    Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_11(obl, blk);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)5;
+    uint64_t y = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_left(Hacl_Secret_Cast_u16_to_u64(x), dd), 1664);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(Hacl_Secret_UInt64_mul_mod(y, 2580335ULL), 33);
+    uint64_t m = Hacl_Secret_UInt64_logand(t, Hacl_Secret_UInt64_mask_low(dd));
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(m);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_5(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_5(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_5(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_5(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_5(uint8_t *out, uint16_t *f) {
+  size_t len = 160;
+  size_t i = 0;
+  while (i < len) {
+    size_t vi = i;
+    size_t base = (8 * vi);
+    uint16_t b0;
+    if (base < 1280) {
+      size_t i1 = (base / 5);
+      size_t r = (base % 5);
+      uint16_t x = f[i1];
+      uint16_t y = Hacl_Secret_UInt16_shift_right(x, (uint32_t)r);
+      b0 = Hacl_Secret_UInt16_logand(y, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b0 = Hacl_Secret_UInt16_zero;
+    uint16_t b1;
+    if ((base + 1) < 1280) {
+      size_t i1_1 = ((base + 1) / 5);
+      size_t r_1 = ((base + 1) % 5);
+      uint16_t x_1 = f[i1_1];
+      uint16_t y_1 = Hacl_Secret_UInt16_shift_right(x_1, (uint32_t)r_1);
+      b1 = Hacl_Secret_UInt16_logand(y_1, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b1 = Hacl_Secret_UInt16_zero;
+    uint16_t b2;
+    if ((base + 2) < 1280) {
+      size_t i1_2 = ((base + 2) / 5);
+      size_t r_2 = ((base + 2) % 5);
+      uint16_t x_2 = f[i1_2];
+      uint16_t y_2 = Hacl_Secret_UInt16_shift_right(x_2, (uint32_t)r_2);
+      b2 = Hacl_Secret_UInt16_logand(y_2, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b2 = Hacl_Secret_UInt16_zero;
+    uint16_t b3;
+    if ((base + 3) < 1280) {
+      size_t i1_3 = ((base + 3) / 5);
+      size_t r_3 = ((base + 3) % 5);
+      uint16_t x_3 = f[i1_3];
+      uint16_t y_3 = Hacl_Secret_UInt16_shift_right(x_3, (uint32_t)r_3);
+      b3 = Hacl_Secret_UInt16_logand(y_3, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b3 = Hacl_Secret_UInt16_zero;
+    uint16_t b4;
+    if ((base + 4) < 1280) {
+      size_t i1_4 = ((base + 4) / 5);
+      size_t r_4 = ((base + 4) % 5);
+      uint16_t x_4 = f[i1_4];
+      uint16_t y_4 = Hacl_Secret_UInt16_shift_right(x_4, (uint32_t)r_4);
+      b4 = Hacl_Secret_UInt16_logand(y_4, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b4 = Hacl_Secret_UInt16_zero;
+    uint16_t b5;
+    if ((base + 5) < 1280) {
+      size_t i1_5 = ((base + 5) / 5);
+      size_t r_5 = ((base + 5) % 5);
+      uint16_t x_5 = f[i1_5];
+      uint16_t y_5 = Hacl_Secret_UInt16_shift_right(x_5, (uint32_t)r_5);
+      b5 = Hacl_Secret_UInt16_logand(y_5, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b5 = Hacl_Secret_UInt16_zero;
+    uint16_t b6;
+    if ((base + 6) < 1280) {
+      size_t i1_6 = ((base + 6) / 5);
+      size_t r_6 = ((base + 6) % 5);
+      uint16_t x_6 = f[i1_6];
+      uint16_t y_6 = Hacl_Secret_UInt16_shift_right(x_6, (uint32_t)r_6);
+      b6 = Hacl_Secret_UInt16_logand(y_6, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b6 = Hacl_Secret_UInt16_zero;
+    uint16_t b7;
+    if ((base + 7) < 1280) {
+      size_t i1_7 = ((base + 7) / 5);
+      size_t r_7 = ((base + 7) % 5);
+      uint16_t x_7 = f[i1_7];
+      uint16_t y_7 = Hacl_Secret_UInt16_shift_right(x_7, (uint32_t)r_7);
+      b7 = Hacl_Secret_UInt16_logand(y_7, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b7 = Hacl_Secret_UInt16_zero;
+    uint16_t a1 = Hacl_Secret_UInt16_add_mod(b0, Hacl_Secret_UInt16_shift_left(b1, 1));
+    uint16_t a2 = Hacl_Secret_UInt16_add_mod(a1, Hacl_Secret_UInt16_shift_left(b2, 2));
+    uint16_t a3 = Hacl_Secret_UInt16_add_mod(a2, Hacl_Secret_UInt16_shift_left(b3, 3));
+    uint16_t a4 = Hacl_Secret_UInt16_add_mod(a3, Hacl_Secret_UInt16_shift_left(b4, 4));
+    uint16_t a5 = Hacl_Secret_UInt16_add_mod(a4, Hacl_Secret_UInt16_shift_left(b5, 5));
+    uint16_t a6 = Hacl_Secret_UInt16_add_mod(a5, Hacl_Secret_UInt16_shift_left(b6, 6));
+    uint16_t a7 = Hacl_Secret_UInt16_add_mod(a6, Hacl_Secret_UInt16_shift_left(b7, 7));
+    uint8_t b = Hacl_Secret_UInt16_lo(a7);
+    out[vi] = b;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_5(uint8_t *out, uint16_t *f) {
+  Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_5(out, f);
+}
+
+static void Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_5(uint8_t *out, uint16_t *f) {
+  Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_5(out, f);
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd) {
+  size_t kn = 1024;
+  size_t kkn = (kn * 4);
+  size_t k384 = 1536;
+  size_t c1len = 1408;
+  size_t c2len = 160;
+  uint8_t kb = (uint8_t)(uint32_t)4;
+  size_t k2 = 8;
   uint8_t k2b = (uint8_t)(uint32_t)k2;
   uint8_t tb[k384];
   for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
@@ -11660,7 +12235,7 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, u
   for (size_t _ci2 = 0; _ci2 < (kn); _ci2++) {
     t[_ci2] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl(t, tb, 12, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_4(t, tb);
   uint8_t rho[32];
   for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
     rho[_ci3] = Hacl_Secret_UInt8_zero;
@@ -11670,7 +12245,7 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, u
   for (size_t _ci4 = 0; _ci4 < (kkn); _ci4++) {
     a[_ci4] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Gen_gen_matrix_impl(a, rho, true, k);
+  Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_4(a, rho, true);
   uint16_t tmp[256];
   for (size_t _ci5 = 0; _ci5 < 256; _ci5++) {
     tmp[_ci5] = Hacl_Secret_UInt16_zero;
@@ -11679,40 +12254,40 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, u
   for (size_t _ci6 = 0; _ci6 < (kn); _ci6++) {
     y[_ci6] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Gen_noise_vec_impl(y, rnd, 0, eta1, k);
-  Hacl_Impl_MLKEM_Vec_vec_ntt_impl(y, tmp, k);
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_4(y, rnd, 0);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_4(y, tmp);
   uint16_t e1[kn];
   for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
     e1[_ci7] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Gen_noise_vec_impl(e1, rnd, kb, eta2, k);
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_4(e1, rnd, kb);
   uint16_t e2[256];
   for (size_t _ci8 = 0; _ci8 < 256; _ci8++) {
     e2[_ci8] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl(e2, rnd, k2b, eta2);
+  Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(e2, rnd, k2b);
   uint16_t md[256];
   for (size_t _ci9 = 0; _ci9 < 256; _ci9++) {
     md[_ci9] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Codec_decode_poly(md, msg, 1);
+  Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_1(md, msg);
   uint16_t mu[256];
   for (size_t _ci10 = 0; _ci10 < 256; _ci10++) {
     mu[_ci10] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Codec_decompress_poly(mu, md, 1);
+  Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_1(mu, md);
   uint16_t u[kn];
   for (size_t _ci11 = 0; _ci11 < (kn); _ci11++) {
     u[_ci11] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl(u, a, y, tmp, k);
-  Hacl_Impl_MLKEM_Vec_vec_intt_impl(u, tmp, k);
+  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_4(u, a, y, tmp);
+  Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_4(u, tmp);
   Hacl_Impl_MLKEM_Vec_add_inplace(u, e1, kn);
   uint16_t vp[256];
   for (size_t _ci12 = 0; _ci12 < 256; _ci12++) {
     vp[_ci12] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Vec_dot_impl(vp, t, y, tmp, k);
+  Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_4(vp, t, y, tmp);
   Hacl_Impl_MLKEM_Poly_intt_inplace(vp, tmp);
   Hacl_Impl_MLKEM_Vec_add_inplace(vp, e2, 256);
   Hacl_Impl_MLKEM_Vec_add_inplace(vp, mu, 256);
@@ -11720,22 +12295,22 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, u
   for (size_t _ci13 = 0; _ci13 < (kn); _ci13++) {
     uc[_ci13] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_compress_impl(uc, u, du, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_11_uint_to_t_4(uc, u);
   uint8_t c1[c1len];
   for (size_t _ci14 = 0; _ci14 < (c1len); _ci14++) {
     c1[_ci14] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(c1, uc, du, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_11_uint_to_t_4(c1, uc);
   uint16_t vc[256];
   for (size_t _ci15 = 0; _ci15 < 256; _ci15++) {
     vc[_ci15] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Codec_compress_poly(vc, vp, dv);
+  Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_5(vc, vp);
   uint8_t c2[c2len];
   for (size_t _ci16 = 0; _ci16 < (c2len); _ci16++) {
     c2[_ci16] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_Codec_encode_poly(c2, vc, dv);
+  Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_5(c2, vc);
   Hacl_Impl_Copy_copy_prefix(ct, c1, c1len);
   Hacl_Impl_Copy_copy_at(ct, c1len, c2, c2len);
 }
@@ -11774,10 +12349,10 @@ static void Hacl_Impl_Select_select_copy(uint8_t *dst, size_t dbase, uint8_t *x,
   }
 }
 
-static void Hacl_Impl_MLKEM_KEM_decaps_impl(uint8_t *ss, uint8_t *dkey, uint8_t *ct, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv) {
-  size_t k384 = (k * 384);
+static void Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(uint8_t *ss, uint8_t *dkey, uint8_t *ct) {
+  size_t k384 = 1536;
   size_t eklen = (k384 + 32);
-  size_t ctlen = ((k * (32 * du)) + (32 * dv));
+  size_t ctlen = 1568;
   uint8_t dkp[k384];
   for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
     dkp[_ci1] = Hacl_Secret_UInt8_zero;
@@ -11802,7 +12377,7 @@ static void Hacl_Impl_MLKEM_KEM_decaps_impl(uint8_t *ss, uint8_t *dkey, uint8_t 
   for (size_t _ci5 = 0; _ci5 < 32; _ci5++) {
     m[_ci5] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl(m, dkp, ct, k, du, dv);
+  Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_4_uint_to_t_11_uint_to_t_5(m, dkp, ct);
   uint8_t gin[64];
   for (size_t _ci6 = 0; _ci6 < 64; _ci6++) {
     gin[_ci6] = Hacl_Secret_UInt8_zero;
@@ -11828,7 +12403,7 @@ static void Hacl_Impl_MLKEM_KEM_decaps_impl(uint8_t *ss, uint8_t *dkey, uint8_t 
   for (size_t _ci10 = 0; _ci10 < (ctlen); _ci10++) {
     c2[_ci10] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(c2, ekey, m, r, k, eta1, eta2, du, dv);
+  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(c2, ekey, m, r);
   uint8_t mask = Hacl_Impl_Select_eq_mask_bytes(ct, c2, ctlen);
   uint8_t jin[(32 + ctlen)];
   for (size_t _ci11 = 0; _ci11 < (32 + ctlen); _ci11++) {
@@ -11845,11 +12420,11 @@ static void Hacl_Impl_MLKEM_KEM_decaps_impl(uint8_t *ss, uint8_t *dkey, uint8_t 
 }
 
 void Hacl_MLKEM1024_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) {
-  Hacl_Impl_MLKEM_KEM_decaps_impl(ss, dk, ct, 4, 2, 2, 11, 5);
+  Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(ss, dk, ct);
 }
 
-static void Hacl_Impl_MLKEM_KEM_encaps_impl(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv) {
-  size_t eklen = ((k * 384) + 32);
+static void Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg) {
+  size_t eklen = 1568;
   uint8_t hek[32];
   for (size_t _ci1 = 0; _ci1 < 32; _ci1++) {
     hek[_ci1] = Hacl_Secret_UInt8_zero;
@@ -11872,18 +12447,18 @@ static void Hacl_Impl_MLKEM_KEM_encaps_impl(uint8_t *ss, uint8_t *ct, uint8_t *e
     r[_ci4] = Hacl_Secret_UInt8_zero;
   }
   Hacl_Impl_Copy_copy_range(r, 0, g, 32, 32);
-  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(ct, ekey, msg, r, k, eta1, eta2, du, dv);
+  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(ct, ekey, msg, r);
 }
 
-void Hacl_MLKEM1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) {
-  Hacl_Impl_MLKEM_KEM_encaps_impl(ss, ct, ek, m, 4, 2, 2, 11, 5);
+void Hacl_MLKEM1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ekey, uint8_t *msg) {
+  Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_4_uint_to_t_2_uint_to_t_11_uint_to_t_5(ss, ct, ekey, msg);
 }
 
-static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl(uint8_t *ek, uint8_t *dk, uint8_t *dseed, size_t k, size_t eta1) {
-  size_t kn = (k * 256);
-  size_t kkn = (kn * k);
-  size_t k384 = (k * 384);
-  uint8_t kb = (uint8_t)(uint32_t)k;
+static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_4_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed) {
+  size_t kn = 1024;
+  size_t kkn = (kn * 4);
+  size_t k384 = 1536;
+  uint8_t kb = (uint8_t)(uint32_t)4;
   uint8_t gin[33];
   for (size_t _ci1 = 0; _ci1 < 33; _ci1++) {
     gin[_ci1] = Hacl_Secret_UInt8_zero;
@@ -11909,7 +12484,7 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl(uint8_t *ek, uint8_t *dk, uint
   for (size_t _ci5 = 0; _ci5 < (kkn); _ci5++) {
     a[_ci5] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Gen_gen_matrix_impl(a, rho, false, k);
+  Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_4(a, rho, false);
   uint16_t tmp[256];
   for (size_t _ci6 = 0; _ci6 < 256; _ci6++) {
     tmp[_ci6] = Hacl_Secret_UInt16_zero;
@@ -11918,38 +12493,38 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl(uint8_t *ek, uint8_t *dk, uint
   for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
     s[_ci7] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Gen_noise_vec_impl(s, sigma, 0, eta1, k);
-  Hacl_Impl_MLKEM_Vec_vec_ntt_impl(s, tmp, k);
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_4(s, sigma, 0);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_4(s, tmp);
   uint16_t e[kn];
   for (size_t _ci8 = 0; _ci8 < (kn); _ci8++) {
     e[_ci8] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Gen_noise_vec_impl(e, sigma, kb, eta1, k);
-  Hacl_Impl_MLKEM_Vec_vec_ntt_impl(e, tmp, k);
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_4(e, sigma, kb);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_4(e, tmp);
   uint16_t t[kn];
   for (size_t _ci9 = 0; _ci9 < (kn); _ci9++) {
     t[_ci9] = Hacl_Secret_UInt16_zero;
   }
-  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl(t, a, s, tmp, k);
+  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_4(t, a, s, tmp);
   Hacl_Impl_MLKEM_Vec_add_inplace(t, e, kn);
   uint8_t tb[k384];
   for (size_t _ci10 = 0; _ci10 < (k384); _ci10++) {
     tb[_ci10] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(tb, t, 12, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_4(tb, t);
   Hacl_Impl_Copy_copy_prefix(ek, tb, k384);
   Hacl_Impl_Copy_copy_at(ek, k384, rho, 32);
-  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl(dk, s, 12, k);
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_4(dk, s);
 }
 
-static void Hacl_Impl_MLKEM_KEM_keygen_impl(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed, size_t k, size_t eta1) {
-  size_t k384 = (k * 384);
+static void Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_4_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed) {
+  size_t k384 = 1536;
   size_t eklen = (k384 + 32);
   uint8_t dkp[k384];
   for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
     dkp[_ci1] = Hacl_Secret_UInt8_zero;
   }
-  Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl(ek, dkp, dseed, k, eta1);
+  Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_4_uint_to_t_2(ek, dkp, dseed);
   uint8_t hek[32];
   for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
     hek[_ci2] = Hacl_Secret_UInt8_zero;
@@ -11961,48 +12536,1617 @@ static void Hacl_Impl_MLKEM_KEM_keygen_impl(uint8_t *ek, uint8_t *dk, uint8_t *d
   Hacl_Impl_Copy_copy_at(dk, ((k384 + eklen) + 32), zseed, 32);
 }
 
-void Hacl_MLKEM1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z) {
-  Hacl_Impl_MLKEM_KEM_keygen_impl(ek, dk, d, z, 4, 2);
+void Hacl_MLKEM1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed) {
+  Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_4_uint_to_t_2(ek, dk, dseed, zseed);
+}
+
+static bool Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_3(uint8_t *dkey) {
+  size_t k384 = 1152;
+  size_t eklen = (k384 + 32);
+  uint8_t ek[eklen];
+  for (size_t _ci1 = 0; _ci1 < (eklen); _ci1++) {
+    ek[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(ek, 0, dkey, k384, eklen);
+  uint8_t h[32];
+  for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
+    h[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  size_t base = (k384 + eklen);
+  Hacl_Impl_Copy_copy_range(h, 0, dkey, base, 32);
+  uint8_t hd[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    hd[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_h_impl(hd, ek, eklen);
+  return Hacl_Impl_Bytes_bytes_eq(hd, h, 32);
 }
 
 bool Hacl_MLKEM768_dk_valid(uint8_t *dk) {
-  return Hacl_Impl_MLKEM_Check_dk_check(dk, 3);
+  return Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_3(dk);
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_3(uint16_t *dst, uint8_t *b) {
+  size_t el = 384;
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint8_t *bbl = Hacl_Impl_Sub_sub__t(b, blo, bhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_12(blk, bbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_3(uint8_t *out, uint16_t *src) {
+  size_t el = 384;
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint8_t *obl = Hacl_Impl_Sub_sub__t(out, blo, bhi);
+    Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_12(obl, blk);
+    i = (vi + 1);
+  }
+}
+
+static bool Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_3(uint8_t *ekey) {
+  size_t k384 = 1152;
+  size_t kn = 768;
+  uint8_t tb[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    tb[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(tb, ekey, k384);
+  uint16_t t[kn];
+  for (size_t _ci2 = 0; _ci2 < (kn); _ci2++) {
+    t[_ci2] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_3(t, tb);
+  uint8_t re[k384];
+  for (size_t _ci3 = 0; _ci3 < (k384); _ci3++) {
+    re[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_3(re, t);
+  return Hacl_Impl_Bytes_bytes_eq(re, tb, k384);
 }
 
 bool Hacl_MLKEM768_ek_valid(uint8_t *ek) {
-  return Hacl_Impl_MLKEM_Check_ek_check(ek, 3);
+  return Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_3(ek);
+}
+
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_10(uint16_t *dst, uint8_t *b) {
+  size_t blen = 320;
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t acc = Hacl_Secret_UInt16_zero;
+    size_t j = 0;
+    while (j < 10) {
+      size_t vj = j;
+      uint16_t a = acc;
+      size_t j1 = (((vi * 10) + vj) / 8);
+      uint16_t bit;
+      if (j1 < blen) {
+        size_t r = (((vi * 10) + vj) % 8);
+        uint8_t y = b[j1];
+        uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
+        uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
+        bit = Hacl_Secret_UInt16_logand(e, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit = Hacl_Secret_UInt16_zero;
+      acc = Hacl_Secret_UInt16_add_mod(a, Hacl_Secret_UInt16_shift_left(bit, (uint32_t)vj));
+      j = (vj + 1);
+    }
+    uint16_t _ct3;
+    uint16_t m = Hacl_Secret_UInt16_gte_mask(acc, 3329);
+    _ct3 = Hacl_Secret_UInt16_select(m, Hacl_Secret_UInt16_sub_mod(acc, 3329), acc);
+    dst[vi] = _ct3;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_10_uint_to_t_3(uint16_t *dst, uint8_t *b) {
+  size_t el = 320;
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint8_t *bbl = Hacl_Impl_Sub_sub__t(b, blo, bhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_10(blk, bbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_10(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)10;
+    uint64_t h = Hacl_Secret_UInt64_shift_left(1, (dd - 1));
+    uint64_t z = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_mul_mod(Hacl_Secret_Cast_u16_to_u64(x), 3329), h);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(z, dd);
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(t);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_10_uint_to_t_3(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *sbl = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_10(blk, sbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_4(uint16_t *dst, uint8_t *b) {
+  size_t blen = 128;
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t acc = Hacl_Secret_UInt16_zero;
+    size_t j = 0;
+    while (j < 4) {
+      size_t vj = j;
+      uint16_t a = acc;
+      size_t j1 = (((vi * 4) + vj) / 8);
+      uint16_t bit;
+      if (j1 < blen) {
+        size_t r = (((vi * 4) + vj) % 8);
+        uint8_t y = b[j1];
+        uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
+        uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
+        bit = Hacl_Secret_UInt16_logand(e, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit = Hacl_Secret_UInt16_zero;
+      acc = Hacl_Secret_UInt16_add_mod(a, Hacl_Secret_UInt16_shift_left(bit, (uint32_t)vj));
+      j = (vj + 1);
+    }
+    uint16_t _ct3;
+    uint16_t m = Hacl_Secret_UInt16_gte_mask(acc, 3329);
+    _ct3 = Hacl_Secret_UInt16_select(m, Hacl_Secret_UInt16_sub_mod(acc, 3329), acc);
+    dst[vi] = _ct3;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_4(uint16_t *dst, uint8_t *b) {
+  Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_4(dst, b);
+}
+
+static void Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_4(uint16_t *dst, uint8_t *b) {
+  Hacl_Impl_MLKEM_Codec_decode_poly___uint_to_t_4(dst, b);
+}
+
+static void Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)4;
+    uint64_t h = Hacl_Secret_UInt64_shift_left(1, (dd - 1));
+    uint64_t z = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_mul_mod(Hacl_Secret_Cast_u16_to_u64(x), 3329), h);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(z, dd);
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(t);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_4(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Codec_decompress_poly___uint_to_t_4(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_3(uint16_t *v, uint16_t *tmp) {
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(v, lo, hi);
+    Hacl_Impl_MLKEM_Poly_ntt_inplace(blk, tmp);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_3(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp) {
+  Hacl_Impl_MLKEM_Vec_zero_range(dst, 256);
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *bu = Hacl_Impl_Sub_sub__t_1(u, lo, hi);
+    uint16_t *bv = Hacl_Impl_Sub_sub__t_1(v, lo, hi);
+    Hacl_Impl_MLKEM_Poly_multiply(tmp, bu, bv);
+    Hacl_Impl_MLKEM_Vec_add_inplace(dst, tmp, 256);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *out, uint8_t *dkey, uint8_t *ct) {
+  size_t kn = 768;
+  size_t c1len = 960;
+  size_t c2len = 128;
+  uint8_t c1[c1len];
+  for (size_t _ci1 = 0; _ci1 < (c1len); _ci1++) {
+    c1[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(c1, ct, c1len);
+  uint8_t c2[c2len];
+  for (size_t _ci2 = 0; _ci2 < (c2len); _ci2++) {
+    c2[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(c2, 0, ct, c1len, c2len);
+  uint16_t ud[kn];
+  for (size_t _ci3 = 0; _ci3 < (kn); _ci3++) {
+    ud[_ci3] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_10_uint_to_t_3(ud, c1);
+  uint16_t u[kn];
+  for (size_t _ci4 = 0; _ci4 < (kn); _ci4++) {
+    u[_ci4] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_10_uint_to_t_3(u, ud);
+  uint16_t vd[256];
+  for (size_t _ci5 = 0; _ci5 < 256; _ci5++) {
+    vd[_ci5] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_4(vd, c2);
+  uint16_t vp[256];
+  for (size_t _ci6 = 0; _ci6 < 256; _ci6++) {
+    vp[_ci6] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_4(vp, vd);
+  uint16_t s[kn];
+  for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
+    s[_ci7] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_3(s, dkey);
+  uint16_t tmp[256];
+  for (size_t _ci8 = 0; _ci8 < 256; _ci8++) {
+    tmp[_ci8] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_3(u, tmp);
+  uint16_t w[256];
+  for (size_t _ci9 = 0; _ci9 < 256; _ci9++) {
+    w[_ci9] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_3(w, s, u, tmp);
+  Hacl_Impl_MLKEM_Poly_intt_inplace(w, tmp);
+  Hacl_Impl_MLKEM_Vec_sub_inplace(vp, w, 256);
+  uint16_t wc[256];
+  for (size_t _ci10 = 0; _ci10 < 256; _ci10++) {
+    wc[_ci10] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_1(wc, vp);
+  Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_1(out, wc);
+}
+
+static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_3(uint16_t *dst, uint8_t *rho, bool tr) {
+  uint8_t z8 = 0;
+  uint8_t sd[34];
+  for (size_t _ci1 = 0; _ci1 < 34; _ci1++) {
+    sd[_ci1] = z8;
+  }
+  Hacl_Impl_Copy_copy_prefix(sd, rho, 32);
+  size_t kk = 9;
+  size_t c = 0;
+  while (c < kk) {
+    size_t vc = c;
+    size_t lo = (vc * 256);
+    size_t hi = (lo + 256);
+    size_t ci = (vc / 3);
+    size_t cj = (vc % 3);
+    uint8_t bi = (uint8_t)(uint32_t)ci;
+    uint8_t bj = (uint8_t)(uint32_t)cj;
+    uint8_t b32;
+    if (tr) b32 = bi;
+    else b32 = bj;
+    uint8_t b33;
+    if (tr) b33 = bj;
+    else b33 = bi;
+    sd[32] = b32;
+    sd[33] = b33;
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Sampler_sample_ntt_impl(blk, sd, 34);
+    c = (vc + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_3(uint16_t *dst, uint8_t *s, uint8_t start) {
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint8_t bi = (uint8_t)(uint32_t)vi;
+    uint8_t byte = (start + bi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(blk, s, byte);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_3(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp) {
+  size_t kn = 768;
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t rlo = (vi * kn);
+    size_t rhi = (rlo + kn);
+    uint16_t *row = Hacl_Impl_Sub_sub__t_1(m, rlo, rhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_3(blk, row, v, tmp);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_3(uint16_t *v, uint16_t *tmp) {
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(v, lo, hi);
+    Hacl_Impl_MLKEM_Poly_intt_inplace(blk, tmp);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_10(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)10;
+    uint64_t y = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_left(Hacl_Secret_Cast_u16_to_u64(x), dd), 1664);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(Hacl_Secret_UInt64_mul_mod(y, 2580335ULL), 33);
+    uint64_t m = Hacl_Secret_UInt64_logand(t, Hacl_Secret_UInt64_mask_low(dd));
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(m);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_10_uint_to_t_3(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *sbl = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_10(blk, sbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_10(uint8_t *out, uint16_t *f) {
+  size_t len = 320;
+  size_t i = 0;
+  while (i < len) {
+    size_t vi = i;
+    size_t base = (8 * vi);
+    uint16_t b0;
+    if (base < 2560) {
+      size_t i1 = (base / 10);
+      size_t r = (base % 10);
+      uint16_t x = f[i1];
+      uint16_t y = Hacl_Secret_UInt16_shift_right(x, (uint32_t)r);
+      b0 = Hacl_Secret_UInt16_logand(y, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b0 = Hacl_Secret_UInt16_zero;
+    uint16_t b1;
+    if ((base + 1) < 2560) {
+      size_t i1_1 = ((base + 1) / 10);
+      size_t r_1 = ((base + 1) % 10);
+      uint16_t x_1 = f[i1_1];
+      uint16_t y_1 = Hacl_Secret_UInt16_shift_right(x_1, (uint32_t)r_1);
+      b1 = Hacl_Secret_UInt16_logand(y_1, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b1 = Hacl_Secret_UInt16_zero;
+    uint16_t b2;
+    if ((base + 2) < 2560) {
+      size_t i1_2 = ((base + 2) / 10);
+      size_t r_2 = ((base + 2) % 10);
+      uint16_t x_2 = f[i1_2];
+      uint16_t y_2 = Hacl_Secret_UInt16_shift_right(x_2, (uint32_t)r_2);
+      b2 = Hacl_Secret_UInt16_logand(y_2, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b2 = Hacl_Secret_UInt16_zero;
+    uint16_t b3;
+    if ((base + 3) < 2560) {
+      size_t i1_3 = ((base + 3) / 10);
+      size_t r_3 = ((base + 3) % 10);
+      uint16_t x_3 = f[i1_3];
+      uint16_t y_3 = Hacl_Secret_UInt16_shift_right(x_3, (uint32_t)r_3);
+      b3 = Hacl_Secret_UInt16_logand(y_3, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b3 = Hacl_Secret_UInt16_zero;
+    uint16_t b4;
+    if ((base + 4) < 2560) {
+      size_t i1_4 = ((base + 4) / 10);
+      size_t r_4 = ((base + 4) % 10);
+      uint16_t x_4 = f[i1_4];
+      uint16_t y_4 = Hacl_Secret_UInt16_shift_right(x_4, (uint32_t)r_4);
+      b4 = Hacl_Secret_UInt16_logand(y_4, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b4 = Hacl_Secret_UInt16_zero;
+    uint16_t b5;
+    if ((base + 5) < 2560) {
+      size_t i1_5 = ((base + 5) / 10);
+      size_t r_5 = ((base + 5) % 10);
+      uint16_t x_5 = f[i1_5];
+      uint16_t y_5 = Hacl_Secret_UInt16_shift_right(x_5, (uint32_t)r_5);
+      b5 = Hacl_Secret_UInt16_logand(y_5, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b5 = Hacl_Secret_UInt16_zero;
+    uint16_t b6;
+    if ((base + 6) < 2560) {
+      size_t i1_6 = ((base + 6) / 10);
+      size_t r_6 = ((base + 6) % 10);
+      uint16_t x_6 = f[i1_6];
+      uint16_t y_6 = Hacl_Secret_UInt16_shift_right(x_6, (uint32_t)r_6);
+      b6 = Hacl_Secret_UInt16_logand(y_6, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b6 = Hacl_Secret_UInt16_zero;
+    uint16_t b7;
+    if ((base + 7) < 2560) {
+      size_t i1_7 = ((base + 7) / 10);
+      size_t r_7 = ((base + 7) % 10);
+      uint16_t x_7 = f[i1_7];
+      uint16_t y_7 = Hacl_Secret_UInt16_shift_right(x_7, (uint32_t)r_7);
+      b7 = Hacl_Secret_UInt16_logand(y_7, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b7 = Hacl_Secret_UInt16_zero;
+    uint16_t a1 = Hacl_Secret_UInt16_add_mod(b0, Hacl_Secret_UInt16_shift_left(b1, 1));
+    uint16_t a2 = Hacl_Secret_UInt16_add_mod(a1, Hacl_Secret_UInt16_shift_left(b2, 2));
+    uint16_t a3 = Hacl_Secret_UInt16_add_mod(a2, Hacl_Secret_UInt16_shift_left(b3, 3));
+    uint16_t a4 = Hacl_Secret_UInt16_add_mod(a3, Hacl_Secret_UInt16_shift_left(b4, 4));
+    uint16_t a5 = Hacl_Secret_UInt16_add_mod(a4, Hacl_Secret_UInt16_shift_left(b5, 5));
+    uint16_t a6 = Hacl_Secret_UInt16_add_mod(a5, Hacl_Secret_UInt16_shift_left(b6, 6));
+    uint16_t a7 = Hacl_Secret_UInt16_add_mod(a6, Hacl_Secret_UInt16_shift_left(b7, 7));
+    uint8_t b = Hacl_Secret_UInt16_lo(a7);
+    out[vi] = b;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_10_uint_to_t_3(uint8_t *out, uint16_t *src) {
+  size_t el = 320;
+  size_t i = 0;
+  while (i < 3) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint8_t *obl = Hacl_Impl_Sub_sub__t(out, blo, bhi);
+    Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_10(obl, blk);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    uint16_t x = src[vi];
+    uint16_t _ct2;
+    uint32_t dd = (uint32_t)4;
+    uint64_t y = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_left(Hacl_Secret_Cast_u16_to_u64(x), dd), 1664);
+    uint64_t t = Hacl_Secret_UInt64_shift_right(Hacl_Secret_UInt64_mul_mod(y, 2580335ULL), 33);
+    uint64_t m = Hacl_Secret_UInt64_logand(t, Hacl_Secret_UInt64_mask_low(dd));
+    _ct2 = Hacl_Secret_Cast_u64_to_u16(m);
+    dst[vi] = _ct2;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_4(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_4(uint16_t *dst, uint16_t *src) {
+  Hacl_Impl_MLKEM_Codec_compress_poly___uint_to_t_4(dst, src);
+}
+
+static void Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_4(uint8_t *out, uint16_t *f) {
+  size_t len = 128;
+  size_t i = 0;
+  while (i < len) {
+    size_t vi = i;
+    size_t base = (8 * vi);
+    uint16_t b0;
+    if (base < 1024) {
+      size_t i1 = (base / 4);
+      size_t r = (base % 4);
+      uint16_t x = f[i1];
+      uint16_t y = Hacl_Secret_UInt16_shift_right(x, (uint32_t)r);
+      b0 = Hacl_Secret_UInt16_logand(y, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b0 = Hacl_Secret_UInt16_zero;
+    uint16_t b1;
+    if ((base + 1) < 1024) {
+      size_t i1_1 = ((base + 1) / 4);
+      size_t r_1 = ((base + 1) % 4);
+      uint16_t x_1 = f[i1_1];
+      uint16_t y_1 = Hacl_Secret_UInt16_shift_right(x_1, (uint32_t)r_1);
+      b1 = Hacl_Secret_UInt16_logand(y_1, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b1 = Hacl_Secret_UInt16_zero;
+    uint16_t b2;
+    if ((base + 2) < 1024) {
+      size_t i1_2 = ((base + 2) / 4);
+      size_t r_2 = ((base + 2) % 4);
+      uint16_t x_2 = f[i1_2];
+      uint16_t y_2 = Hacl_Secret_UInt16_shift_right(x_2, (uint32_t)r_2);
+      b2 = Hacl_Secret_UInt16_logand(y_2, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b2 = Hacl_Secret_UInt16_zero;
+    uint16_t b3;
+    if ((base + 3) < 1024) {
+      size_t i1_3 = ((base + 3) / 4);
+      size_t r_3 = ((base + 3) % 4);
+      uint16_t x_3 = f[i1_3];
+      uint16_t y_3 = Hacl_Secret_UInt16_shift_right(x_3, (uint32_t)r_3);
+      b3 = Hacl_Secret_UInt16_logand(y_3, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b3 = Hacl_Secret_UInt16_zero;
+    uint16_t b4;
+    if ((base + 4) < 1024) {
+      size_t i1_4 = ((base + 4) / 4);
+      size_t r_4 = ((base + 4) % 4);
+      uint16_t x_4 = f[i1_4];
+      uint16_t y_4 = Hacl_Secret_UInt16_shift_right(x_4, (uint32_t)r_4);
+      b4 = Hacl_Secret_UInt16_logand(y_4, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b4 = Hacl_Secret_UInt16_zero;
+    uint16_t b5;
+    if ((base + 5) < 1024) {
+      size_t i1_5 = ((base + 5) / 4);
+      size_t r_5 = ((base + 5) % 4);
+      uint16_t x_5 = f[i1_5];
+      uint16_t y_5 = Hacl_Secret_UInt16_shift_right(x_5, (uint32_t)r_5);
+      b5 = Hacl_Secret_UInt16_logand(y_5, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b5 = Hacl_Secret_UInt16_zero;
+    uint16_t b6;
+    if ((base + 6) < 1024) {
+      size_t i1_6 = ((base + 6) / 4);
+      size_t r_6 = ((base + 6) % 4);
+      uint16_t x_6 = f[i1_6];
+      uint16_t y_6 = Hacl_Secret_UInt16_shift_right(x_6, (uint32_t)r_6);
+      b6 = Hacl_Secret_UInt16_logand(y_6, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b6 = Hacl_Secret_UInt16_zero;
+    uint16_t b7;
+    if ((base + 7) < 1024) {
+      size_t i1_7 = ((base + 7) / 4);
+      size_t r_7 = ((base + 7) % 4);
+      uint16_t x_7 = f[i1_7];
+      uint16_t y_7 = Hacl_Secret_UInt16_shift_right(x_7, (uint32_t)r_7);
+      b7 = Hacl_Secret_UInt16_logand(y_7, Hacl_Secret_UInt16_mask_low(1));
+    }
+    else b7 = Hacl_Secret_UInt16_zero;
+    uint16_t a1 = Hacl_Secret_UInt16_add_mod(b0, Hacl_Secret_UInt16_shift_left(b1, 1));
+    uint16_t a2 = Hacl_Secret_UInt16_add_mod(a1, Hacl_Secret_UInt16_shift_left(b2, 2));
+    uint16_t a3 = Hacl_Secret_UInt16_add_mod(a2, Hacl_Secret_UInt16_shift_left(b3, 3));
+    uint16_t a4 = Hacl_Secret_UInt16_add_mod(a3, Hacl_Secret_UInt16_shift_left(b4, 4));
+    uint16_t a5 = Hacl_Secret_UInt16_add_mod(a4, Hacl_Secret_UInt16_shift_left(b5, 5));
+    uint16_t a6 = Hacl_Secret_UInt16_add_mod(a5, Hacl_Secret_UInt16_shift_left(b6, 6));
+    uint16_t a7 = Hacl_Secret_UInt16_add_mod(a6, Hacl_Secret_UInt16_shift_left(b7, 7));
+    uint8_t b = Hacl_Secret_UInt16_lo(a7);
+    out[vi] = b;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_4(uint8_t *out, uint16_t *f) {
+  Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_4(out, f);
+}
+
+static void Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_4(uint8_t *out, uint16_t *f) {
+  Hacl_Impl_MLKEM_Codec_encode_poly___uint_to_t_4(out, f);
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd) {
+  size_t kn = 768;
+  size_t kkn = (kn * 3);
+  size_t k384 = 1152;
+  size_t c1len = 960;
+  size_t c2len = 128;
+  uint8_t kb = (uint8_t)(uint32_t)3;
+  size_t k2 = 6;
+  uint8_t k2b = (uint8_t)(uint32_t)k2;
+  uint8_t tb[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    tb[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(tb, ekey, k384);
+  uint16_t t[kn];
+  for (size_t _ci2 = 0; _ci2 < (kn); _ci2++) {
+    t[_ci2] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_3(t, tb);
+  uint8_t rho[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    rho[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(rho, 0, ekey, k384, 32);
+  uint16_t a[kkn];
+  for (size_t _ci4 = 0; _ci4 < (kkn); _ci4++) {
+    a[_ci4] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_3(a, rho, true);
+  uint16_t tmp[256];
+  for (size_t _ci5 = 0; _ci5 < 256; _ci5++) {
+    tmp[_ci5] = Hacl_Secret_UInt16_zero;
+  }
+  uint16_t y[kn];
+  for (size_t _ci6 = 0; _ci6 < (kn); _ci6++) {
+    y[_ci6] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_3(y, rnd, 0);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_3(y, tmp);
+  uint16_t e1[kn];
+  for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
+    e1[_ci7] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_3(e1, rnd, kb);
+  uint16_t e2[256];
+  for (size_t _ci8 = 0; _ci8 < 256; _ci8++) {
+    e2[_ci8] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(e2, rnd, k2b);
+  uint16_t md[256];
+  for (size_t _ci9 = 0; _ci9 < 256; _ci9++) {
+    md[_ci9] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_1(md, msg);
+  uint16_t mu[256];
+  for (size_t _ci10 = 0; _ci10 < 256; _ci10++) {
+    mu[_ci10] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_1(mu, md);
+  uint16_t u[kn];
+  for (size_t _ci11 = 0; _ci11 < (kn); _ci11++) {
+    u[_ci11] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_3(u, a, y, tmp);
+  Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_3(u, tmp);
+  Hacl_Impl_MLKEM_Vec_add_inplace(u, e1, kn);
+  uint16_t vp[256];
+  for (size_t _ci12 = 0; _ci12 < 256; _ci12++) {
+    vp[_ci12] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_3(vp, t, y, tmp);
+  Hacl_Impl_MLKEM_Poly_intt_inplace(vp, tmp);
+  Hacl_Impl_MLKEM_Vec_add_inplace(vp, e2, 256);
+  Hacl_Impl_MLKEM_Vec_add_inplace(vp, mu, 256);
+  uint16_t uc[kn];
+  for (size_t _ci13 = 0; _ci13 < (kn); _ci13++) {
+    uc[_ci13] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_10_uint_to_t_3(uc, u);
+  uint8_t c1[c1len];
+  for (size_t _ci14 = 0; _ci14 < (c1len); _ci14++) {
+    c1[_ci14] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_10_uint_to_t_3(c1, uc);
+  uint16_t vc[256];
+  for (size_t _ci15 = 0; _ci15 < 256; _ci15++) {
+    vc[_ci15] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_4(vc, vp);
+  uint8_t c2[c2len];
+  for (size_t _ci16 = 0; _ci16 < (c2len); _ci16++) {
+    c2[_ci16] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_4(c2, vc);
+  Hacl_Impl_Copy_copy_prefix(ct, c1, c1len);
+  Hacl_Impl_Copy_copy_at(ct, c1len, c2, c2len);
+}
+
+static void Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *dkey, uint8_t *ct) {
+  size_t k384 = 1152;
+  size_t eklen = (k384 + 32);
+  size_t ctlen = 1088;
+  uint8_t dkp[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    dkp[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(dkp, dkey, k384);
+  uint8_t ekey[eklen];
+  for (size_t _ci2 = 0; _ci2 < (eklen); _ci2++) {
+    ekey[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(ekey, 0, dkey, k384, eklen);
+  uint8_t h[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    h[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(h, 0, dkey, (k384 + eklen), 32);
+  uint8_t z[32];
+  for (size_t _ci4 = 0; _ci4 < 32; _ci4++) {
+    z[_ci4] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(z, 0, dkey, ((k384 + eklen) + 32), 32);
+  uint8_t m[32];
+  for (size_t _ci5 = 0; _ci5 < 32; _ci5++) {
+    m[_ci5] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_3_uint_to_t_10_uint_to_t_4(m, dkp, ct);
+  uint8_t gin[64];
+  for (size_t _ci6 = 0; _ci6 < 64; _ci6++) {
+    gin[_ci6] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(gin, m, 32);
+  Hacl_Impl_Copy_copy_at(gin, 32, h, 32);
+  uint8_t g[64];
+  for (size_t _ci7 = 0; _ci7 < 64; _ci7++) {
+    g[_ci7] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_g_impl(g, gin, 64);
+  uint8_t kk[32];
+  for (size_t _ci8 = 0; _ci8 < 32; _ci8++) {
+    kk[_ci8] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(kk, g, 32);
+  uint8_t r[32];
+  for (size_t _ci9 = 0; _ci9 < 32; _ci9++) {
+    r[_ci9] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(r, 0, g, 32, 32);
+  uint8_t c2[ctlen];
+  for (size_t _ci10 = 0; _ci10 < (ctlen); _ci10++) {
+    c2[_ci10] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(c2, ekey, m, r);
+  uint8_t mask = Hacl_Impl_Select_eq_mask_bytes(ct, c2, ctlen);
+  uint8_t jin[(32 + ctlen)];
+  for (size_t _ci11 = 0; _ci11 < (32 + ctlen); _ci11++) {
+    jin[_ci11] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(jin, z, 32);
+  Hacl_Impl_Copy_copy_at(jin, 32, ct, ctlen);
+  uint8_t jj[32];
+  for (size_t _ci12 = 0; _ci12 < 32; _ci12++) {
+    jj[_ci12] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_j_impl(jj, jin, (32 + ctlen));
+  Hacl_Impl_Select_select_copy(ss, 0, kk, jj, 32, mask);
 }
 
 void Hacl_MLKEM768_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) {
-  Hacl_Impl_MLKEM_KEM_decaps_impl(ss, dk, ct, 3, 2, 2, 10, 4);
+  Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(ss, dk, ct);
 }
 
-void Hacl_MLKEM768_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) {
-  Hacl_Impl_MLKEM_KEM_encaps_impl(ss, ct, ek, m, 3, 2, 2, 10, 4);
+static void Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg) {
+  size_t eklen = 1184;
+  uint8_t hek[32];
+  for (size_t _ci1 = 0; _ci1 < 32; _ci1++) {
+    hek[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_h_impl(hek, ekey, eklen);
+  uint8_t gin[64];
+  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
+    gin[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(gin, msg, 32);
+  Hacl_Impl_Copy_copy_at(gin, 32, hek, 32);
+  uint8_t g[64];
+  for (size_t _ci3 = 0; _ci3 < 64; _ci3++) {
+    g[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_g_impl(g, gin, 64);
+  Hacl_Impl_Copy_copy_prefix(ss, g, 32);
+  uint8_t r[32];
+  for (size_t _ci4 = 0; _ci4 < 32; _ci4++) {
+    r[_ci4] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(r, 0, g, 32, 32);
+  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(ct, ekey, msg, r);
 }
 
-void Hacl_MLKEM768_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z) {
-  Hacl_Impl_MLKEM_KEM_keygen_impl(ek, dk, d, z, 3, 2);
+void Hacl_MLKEM768_enc(uint8_t *ct, uint8_t *ss, uint8_t *ekey, uint8_t *msg) {
+  Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_3_uint_to_t_2_uint_to_t_10_uint_to_t_4(ss, ct, ekey, msg);
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_3_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed) {
+  size_t kn = 768;
+  size_t kkn = (kn * 3);
+  size_t k384 = 1152;
+  uint8_t kb = (uint8_t)(uint32_t)3;
+  uint8_t gin[33];
+  for (size_t _ci1 = 0; _ci1 < 33; _ci1++) {
+    gin[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(gin, dseed, 32);
+  gin[32] = kb;
+  uint8_t g[64];
+  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
+    g[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_g_impl(g, gin, 33);
+  uint8_t rho[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    rho[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(rho, g, 32);
+  uint8_t sigma[32];
+  for (size_t _ci4 = 0; _ci4 < 32; _ci4++) {
+    sigma[_ci4] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(sigma, 0, g, 32, 32);
+  uint16_t a[kkn];
+  for (size_t _ci5 = 0; _ci5 < (kkn); _ci5++) {
+    a[_ci5] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_3(a, rho, false);
+  uint16_t tmp[256];
+  for (size_t _ci6 = 0; _ci6 < 256; _ci6++) {
+    tmp[_ci6] = Hacl_Secret_UInt16_zero;
+  }
+  uint16_t s[kn];
+  for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
+    s[_ci7] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_3(s, sigma, 0);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_3(s, tmp);
+  uint16_t e[kn];
+  for (size_t _ci8 = 0; _ci8 < (kn); _ci8++) {
+    e[_ci8] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2_uint_to_t_3(e, sigma, kb);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_3(e, tmp);
+  uint16_t t[kn];
+  for (size_t _ci9 = 0; _ci9 < (kn); _ci9++) {
+    t[_ci9] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_3(t, a, s, tmp);
+  Hacl_Impl_MLKEM_Vec_add_inplace(t, e, kn);
+  uint8_t tb[k384];
+  for (size_t _ci10 = 0; _ci10 < (k384); _ci10++) {
+    tb[_ci10] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_3(tb, t);
+  Hacl_Impl_Copy_copy_prefix(ek, tb, k384);
+  Hacl_Impl_Copy_copy_at(ek, k384, rho, 32);
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_3(dk, s);
+}
+
+static void Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_3_uint_to_t_2(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed) {
+  size_t k384 = 1152;
+  size_t eklen = (k384 + 32);
+  uint8_t dkp[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    dkp[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_3_uint_to_t_2(ek, dkp, dseed);
+  uint8_t hek[32];
+  for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
+    hek[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_h_impl(hek, ek, eklen);
+  Hacl_Impl_Copy_copy_prefix(dk, dkp, k384);
+  Hacl_Impl_Copy_copy_at(dk, k384, ek, eklen);
+  Hacl_Impl_Copy_copy_at(dk, (k384 + eklen), hek, 32);
+  Hacl_Impl_Copy_copy_at(dk, ((k384 + eklen) + 32), zseed, 32);
+}
+
+void Hacl_MLKEM768_keypair(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed) {
+  Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_3_uint_to_t_2(ek, dk, dseed, zseed);
+}
+
+static bool Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_2(uint8_t *dkey) {
+  size_t k384 = 768;
+  size_t eklen = (k384 + 32);
+  uint8_t ek[eklen];
+  for (size_t _ci1 = 0; _ci1 < (eklen); _ci1++) {
+    ek[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(ek, 0, dkey, k384, eklen);
+  uint8_t h[32];
+  for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
+    h[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  size_t base = (k384 + eklen);
+  Hacl_Impl_Copy_copy_range(h, 0, dkey, base, 32);
+  uint8_t hd[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    hd[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_h_impl(hd, ek, eklen);
+  return Hacl_Impl_Bytes_bytes_eq(hd, h, 32);
 }
 
 bool Hacl_MLKEM512_dk_valid(uint8_t *dk) {
-  return Hacl_Impl_MLKEM_Check_dk_check(dk, 2);
+  return Hacl_Impl_MLKEM_Check_dk_check__uint_to_t_2(dk);
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_2(uint16_t *dst, uint8_t *b) {
+  size_t el = 384;
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint8_t *bbl = Hacl_Impl_Sub_sub__t(b, blo, bhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_12(blk, bbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_2(uint8_t *out, uint16_t *src) {
+  size_t el = 384;
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint8_t *obl = Hacl_Impl_Sub_sub__t(out, blo, bhi);
+    Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_12(obl, blk);
+    i = (vi + 1);
+  }
+}
+
+static bool Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_2(uint8_t *ekey) {
+  size_t k384 = 768;
+  size_t kn = 512;
+  uint8_t tb[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    tb[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(tb, ekey, k384);
+  uint16_t t[kn];
+  for (size_t _ci2 = 0; _ci2 < (kn); _ci2++) {
+    t[_ci2] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_2(t, tb);
+  uint8_t re[k384];
+  for (size_t _ci3 = 0; _ci3 < (k384); _ci3++) {
+    re[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_2(re, t);
+  return Hacl_Impl_Bytes_bytes_eq(re, tb, k384);
 }
 
 bool Hacl_MLKEM512_ek_valid(uint8_t *ek) {
-  return Hacl_Impl_MLKEM_Check_ek_check(ek, 2);
+  return Hacl_Impl_MLKEM_Check_ek_check__uint_to_t_2(ek);
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_10_uint_to_t_2(uint16_t *dst, uint8_t *b) {
+  size_t el = 320;
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint8_t *bbl = Hacl_Impl_Sub_sub__t(b, blo, bhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decode_poly__uint_to_t_10(blk, bbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_10_uint_to_t_2(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *sbl = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_decompress_poly__uint_to_t_10(blk, sbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_2(uint16_t *v, uint16_t *tmp) {
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(v, lo, hi);
+    Hacl_Impl_MLKEM_Poly_ntt_inplace(blk, tmp);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_2(uint16_t *dst, uint16_t *u, uint16_t *v, uint16_t *tmp) {
+  Hacl_Impl_MLKEM_Vec_zero_range(dst, 256);
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *bu = Hacl_Impl_Sub_sub__t_1(u, lo, hi);
+    uint16_t *bv = Hacl_Impl_Sub_sub__t_1(v, lo, hi);
+    Hacl_Impl_MLKEM_Poly_multiply(tmp, bu, bv);
+    Hacl_Impl_MLKEM_Vec_add_inplace(dst, tmp, 256);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_2_uint_to_t_10_uint_to_t_4(uint8_t *out, uint8_t *dkey, uint8_t *ct) {
+  size_t kn = 512;
+  size_t c1len = 640;
+  size_t c2len = 128;
+  uint8_t c1[c1len];
+  for (size_t _ci1 = 0; _ci1 < (c1len); _ci1++) {
+    c1[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(c1, ct, c1len);
+  uint8_t c2[c2len];
+  for (size_t _ci2 = 0; _ci2 < (c2len); _ci2++) {
+    c2[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(c2, 0, ct, c1len, c2len);
+  uint16_t ud[kn];
+  for (size_t _ci3 = 0; _ci3 < (kn); _ci3++) {
+    ud[_ci3] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_10_uint_to_t_2(ud, c1);
+  uint16_t u[kn];
+  for (size_t _ci4 = 0; _ci4 < (kn); _ci4++) {
+    u[_ci4] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decompress_impl__uint_to_t_10_uint_to_t_2(u, ud);
+  uint16_t vd[256];
+  for (size_t _ci5 = 0; _ci5 < 256; _ci5++) {
+    vd[_ci5] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_4(vd, c2);
+  uint16_t vp[256];
+  for (size_t _ci6 = 0; _ci6 < 256; _ci6++) {
+    vp[_ci6] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_4(vp, vd);
+  uint16_t s[kn];
+  for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
+    s[_ci7] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_2(s, dkey);
+  uint16_t tmp[256];
+  for (size_t _ci8 = 0; _ci8 < 256; _ci8++) {
+    tmp[_ci8] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_2(u, tmp);
+  uint16_t w[256];
+  for (size_t _ci9 = 0; _ci9 < 256; _ci9++) {
+    w[_ci9] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_2(w, s, u, tmp);
+  Hacl_Impl_MLKEM_Poly_intt_inplace(w, tmp);
+  Hacl_Impl_MLKEM_Vec_sub_inplace(vp, w, 256);
+  uint16_t wc[256];
+  for (size_t _ci10 = 0; _ci10 < 256; _ci10++) {
+    wc[_ci10] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_1(wc, vp);
+  Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_1(out, wc);
+}
+
+static void Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_2(uint16_t *dst, uint8_t *rho, bool tr) {
+  uint8_t z8 = 0;
+  uint8_t sd[34];
+  for (size_t _ci1 = 0; _ci1 < 34; _ci1++) {
+    sd[_ci1] = z8;
+  }
+  Hacl_Impl_Copy_copy_prefix(sd, rho, 32);
+  size_t kk = 4;
+  size_t c = 0;
+  while (c < kk) {
+    size_t vc = c;
+    size_t lo = (vc * 256);
+    size_t hi = (lo + 256);
+    size_t ci = (vc / 2);
+    size_t cj = (vc % 2);
+    uint8_t bi = (uint8_t)(uint32_t)ci;
+    uint8_t bj = (uint8_t)(uint32_t)cj;
+    uint8_t b32;
+    if (tr) b32 = bi;
+    else b32 = bj;
+    uint8_t b33;
+    if (tr) b33 = bj;
+    else b33 = bi;
+    sd[32] = b32;
+    sd[33] = b33;
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Sampler_sample_ntt_impl(blk, sd, 34);
+    c = (vc + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Sample_prf_impl__uint_to_t_3(uint8_t *out, uint8_t *s, uint8_t byte) {
+  uint8_t z8 = 0;
+  uint8_t msg[33];
+  for (size_t _ci1 = 0; _ci1 < 33; _ci1++) {
+    msg[_ci1] = z8;
+  }
+  Hacl_Impl_Copy_copy_prefix(msg, s, 32);
+  msg[32] = byte;
+  Hacl_Hash_SHA3_shake256(out, 192, msg, 33);
+}
+
+static void Hacl_Impl_MLKEM_Sample_cbd_impl__uint_to_t_3(uint16_t *dst, uint8_t *b) {
+  size_t blen = 192;
+  size_t i = 0;
+  while (i < 256) {
+    size_t vi = i;
+    size_t off = ((2 * vi) * 3);
+    uint16_t acc = Hacl_Secret_UInt16_zero;
+    size_t j = 0;
+    while (j < 3) {
+      size_t vj = j;
+      uint16_t a = acc;
+      size_t j1 = ((off + vj) / 8);
+      uint16_t bit;
+      if (j1 < blen) {
+        size_t r = ((off + vj) % 8);
+        uint8_t y = b[j1];
+        uint8_t z = Hacl_Secret_UInt8_shift_right(y, (uint32_t)r);
+        uint16_t e = Hacl_Secret_UInt16_of_bytes_le(z, 0);
+        bit = Hacl_Secret_UInt16_logand(e, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit = Hacl_Secret_UInt16_zero;
+      acc = Hacl_Secret_UInt16_add_mod(a, bit);
+      j = (vj + 1);
+    }
+    uint16_t acc1 = Hacl_Secret_UInt16_zero;
+    size_t j1_1 = 0;
+    while (j1_1 < 3) {
+      size_t vj_1 = j1_1;
+      uint16_t a_1 = acc1;
+      size_t j2 = (((off + 3) + vj_1) / 8);
+      uint16_t bit_1;
+      if (j2 < blen) {
+        size_t r_1 = (((off + 3) + vj_1) % 8);
+        uint8_t y_1 = b[j2];
+        uint8_t z_1 = Hacl_Secret_UInt8_shift_right(y_1, (uint32_t)r_1);
+        uint16_t e_1 = Hacl_Secret_UInt16_of_bytes_le(z_1, 0);
+        bit_1 = Hacl_Secret_UInt16_logand(e_1, Hacl_Secret_UInt16_mask_low(1));
+      }
+      else bit_1 = Hacl_Secret_UInt16_zero;
+      acc1 = Hacl_Secret_UInt16_add_mod(a_1, bit_1);
+      j1_1 = (vj_1 + 1);
+    }
+    uint16_t _ct4;
+    uint16_t m = Hacl_Secret_UInt16_gte_mask(Hacl_Secret_UInt16_sub_mod(Hacl_Secret_UInt16_add_mod(acc, 3329), acc1), 3329);
+    _ct4 = Hacl_Secret_UInt16_select(m, Hacl_Secret_UInt16_sub_mod(Hacl_Secret_UInt16_sub_mod(Hacl_Secret_UInt16_add_mod(acc, 3329), acc1), 3329), Hacl_Secret_UInt16_sub_mod(Hacl_Secret_UInt16_add_mod(acc, 3329), acc1));
+    dst[vi] = _ct4;
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl__uint_to_t_3(uint16_t *dst, uint8_t *s, uint8_t byte) {
+  uint8_t z8 = 0;
+  uint8_t buf[192];
+  for (size_t _ci1 = 0; _ci1 < 192; _ci1++) {
+    buf[_ci1] = z8;
+  }
+  size_t el = 192;
+  uint8_t *bs = Hacl_Impl_Sub_sub__t(buf, 0, el);
+  Hacl_Impl_MLKEM_Sample_prf_impl__uint_to_t_3(bs, s, byte);
+  Hacl_Impl_MLKEM_Sample_cbd_impl__uint_to_t_3(dst, bs);
+}
+
+static void Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_3(uint16_t *dst, uint8_t *s, uint8_t byte) {
+  Hacl_Impl_MLKEM_Sample_sample_poly_cbd_impl__uint_to_t_3(dst, s, byte);
+}
+
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_3_uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t start) {
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint8_t bi = (uint8_t)(uint32_t)vi;
+    uint8_t byte = (start + bi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_3(blk, s, byte);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2(uint16_t *dst, uint8_t *s, uint8_t start) {
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint8_t bi = (uint8_t)(uint32_t)vi;
+    uint8_t byte = (start + bi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(blk, s, byte);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_2(uint16_t *dst, uint16_t *m, uint16_t *v, uint16_t *tmp) {
+  size_t kn = 512;
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t rlo = (vi * kn);
+    size_t rhi = (rlo + kn);
+    uint16_t *row = Hacl_Impl_Sub_sub__t_1(m, rlo, rhi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_2(blk, row, v, tmp);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_2(uint16_t *v, uint16_t *tmp) {
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(v, lo, hi);
+    Hacl_Impl_MLKEM_Poly_intt_inplace(blk, tmp);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_10_uint_to_t_2(uint16_t *dst, uint16_t *src) {
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    uint16_t *sbl = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(dst, lo, hi);
+    Hacl_Impl_MLKEM_Encode_compress_poly__uint_to_t_10(blk, sbl);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_10_uint_to_t_2(uint8_t *out, uint16_t *src) {
+  size_t el = 320;
+  size_t i = 0;
+  while (i < 2) {
+    size_t vi = i;
+    size_t lo = (vi * 256);
+    size_t hi = (lo + 256);
+    size_t blo = (vi * el);
+    size_t bhi = (blo + el);
+    uint16_t *blk = Hacl_Impl_Sub_sub__t_1(src, lo, hi);
+    uint8_t *obl = Hacl_Impl_Sub_sub__t(out, blo, bhi);
+    Hacl_Impl_MLKEM_Encode_encode_poly__uint_to_t_10(obl, blk);
+    i = (vi + 1);
+  }
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd) {
+  size_t kn = 512;
+  size_t kkn = (kn * 2);
+  size_t k384 = 768;
+  size_t c1len = 640;
+  size_t c2len = 128;
+  uint8_t kb = (uint8_t)(uint32_t)2;
+  size_t k2 = 4;
+  uint8_t k2b = (uint8_t)(uint32_t)k2;
+  uint8_t tb[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    tb[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(tb, ekey, k384);
+  uint16_t t[kn];
+  for (size_t _ci2 = 0; _ci2 < (kn); _ci2++) {
+    t[_ci2] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_decode_impl__uint_to_t_12_uint_to_t_2(t, tb);
+  uint8_t rho[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    rho[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(rho, 0, ekey, k384, 32);
+  uint16_t a[kkn];
+  for (size_t _ci4 = 0; _ci4 < (kkn); _ci4++) {
+    a[_ci4] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_2(a, rho, true);
+  uint16_t tmp[256];
+  for (size_t _ci5 = 0; _ci5 < 256; _ci5++) {
+    tmp[_ci5] = Hacl_Secret_UInt16_zero;
+  }
+  uint16_t y[kn];
+  for (size_t _ci6 = 0; _ci6 < (kn); _ci6++) {
+    y[_ci6] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_3_uint_to_t_2(y, rnd, 0);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_2(y, tmp);
+  uint16_t e1[kn];
+  for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
+    e1[_ci7] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_2(e1, rnd, kb);
+  uint16_t e2[256];
+  for (size_t _ci8 = 0; _ci8 < 256; _ci8++) {
+    e2[_ci8] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Sampler_sample_poly_cbd_impl__uint_to_t_2(e2, rnd, k2b);
+  uint16_t md[256];
+  for (size_t _ci9 = 0; _ci9 < 256; _ci9++) {
+    md[_ci9] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decode_poly__uint_to_t_1(md, msg);
+  uint16_t mu[256];
+  for (size_t _ci10 = 0; _ci10 < 256; _ci10++) {
+    mu[_ci10] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_decompress_poly__uint_to_t_1(mu, md);
+  uint16_t u[kn];
+  for (size_t _ci11 = 0; _ci11 < (kn); _ci11++) {
+    u[_ci11] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_2(u, a, y, tmp);
+  Hacl_Impl_MLKEM_Vec_vec_intt_impl__uint_to_t_2(u, tmp);
+  Hacl_Impl_MLKEM_Vec_add_inplace(u, e1, kn);
+  uint16_t vp[256];
+  for (size_t _ci12 = 0; _ci12 < 256; _ci12++) {
+    vp[_ci12] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_dot_impl__uint_to_t_2(vp, t, y, tmp);
+  Hacl_Impl_MLKEM_Poly_intt_inplace(vp, tmp);
+  Hacl_Impl_MLKEM_Vec_add_inplace(vp, e2, 256);
+  Hacl_Impl_MLKEM_Vec_add_inplace(vp, mu, 256);
+  uint16_t uc[kn];
+  for (size_t _ci13 = 0; _ci13 < (kn); _ci13++) {
+    uc[_ci13] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_compress_impl__uint_to_t_10_uint_to_t_2(uc, u);
+  uint8_t c1[c1len];
+  for (size_t _ci14 = 0; _ci14 < (c1len); _ci14++) {
+    c1[_ci14] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_10_uint_to_t_2(c1, uc);
+  uint16_t vc[256];
+  for (size_t _ci15 = 0; _ci15 < 256; _ci15++) {
+    vc[_ci15] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_compress_poly__uint_to_t_4(vc, vp);
+  uint8_t c2[c2len];
+  for (size_t _ci16 = 0; _ci16 < (c2len); _ci16++) {
+    c2[_ci16] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Codec_encode_poly__uint_to_t_4(c2, vc);
+  Hacl_Impl_Copy_copy_prefix(ct, c1, c1len);
+  Hacl_Impl_Copy_copy_at(ct, c1len, c2, c2len);
+}
+
+static void Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *dkey, uint8_t *ct) {
+  size_t k384 = 768;
+  size_t eklen = (k384 + 32);
+  size_t ctlen = 768;
+  uint8_t dkp[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    dkp[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(dkp, dkey, k384);
+  uint8_t ekey[eklen];
+  for (size_t _ci2 = 0; _ci2 < (eklen); _ci2++) {
+    ekey[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(ekey, 0, dkey, k384, eklen);
+  uint8_t h[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    h[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(h, 0, dkey, (k384 + eklen), 32);
+  uint8_t z[32];
+  for (size_t _ci4 = 0; _ci4 < 32; _ci4++) {
+    z[_ci4] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(z, 0, dkey, ((k384 + eklen) + 32), 32);
+  uint8_t m[32];
+  for (size_t _ci5 = 0; _ci5 < 32; _ci5++) {
+    m[_ci5] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_KPKE_kpke_decrypt_impl__uint_to_t_2_uint_to_t_10_uint_to_t_4(m, dkp, ct);
+  uint8_t gin[64];
+  for (size_t _ci6 = 0; _ci6 < 64; _ci6++) {
+    gin[_ci6] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(gin, m, 32);
+  Hacl_Impl_Copy_copy_at(gin, 32, h, 32);
+  uint8_t g[64];
+  for (size_t _ci7 = 0; _ci7 < 64; _ci7++) {
+    g[_ci7] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_g_impl(g, gin, 64);
+  uint8_t kk[32];
+  for (size_t _ci8 = 0; _ci8 < 32; _ci8++) {
+    kk[_ci8] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(kk, g, 32);
+  uint8_t r[32];
+  for (size_t _ci9 = 0; _ci9 < 32; _ci9++) {
+    r[_ci9] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(r, 0, g, 32, 32);
+  uint8_t c2[ctlen];
+  for (size_t _ci10 = 0; _ci10 < (ctlen); _ci10++) {
+    c2[_ci10] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(c2, ekey, m, r);
+  uint8_t mask = Hacl_Impl_Select_eq_mask_bytes(ct, c2, ctlen);
+  uint8_t jin[(32 + ctlen)];
+  for (size_t _ci11 = 0; _ci11 < (32 + ctlen); _ci11++) {
+    jin[_ci11] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(jin, z, 32);
+  Hacl_Impl_Copy_copy_at(jin, 32, ct, ctlen);
+  uint8_t jj[32];
+  for (size_t _ci12 = 0; _ci12 < 32; _ci12++) {
+    jj[_ci12] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_j_impl(jj, jin, (32 + ctlen));
+  Hacl_Impl_Select_select_copy(ss, 0, kk, jj, 32, mask);
 }
 
 void Hacl_MLKEM512_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) {
-  Hacl_Impl_MLKEM_KEM_decaps_impl(ss, dk, ct, 2, 3, 2, 10, 4);
+  Hacl_Impl_MLKEM_KEM_decaps_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(ss, dk, ct);
 }
 
-void Hacl_MLKEM512_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) {
-  Hacl_Impl_MLKEM_KEM_encaps_impl(ss, ct, ek, m, 2, 3, 2, 10, 4);
+static void Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(uint8_t *ss, uint8_t *ct, uint8_t *ekey, uint8_t *msg) {
+  size_t eklen = 800;
+  uint8_t hek[32];
+  for (size_t _ci1 = 0; _ci1 < 32; _ci1++) {
+    hek[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_h_impl(hek, ekey, eklen);
+  uint8_t gin[64];
+  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
+    gin[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(gin, msg, 32);
+  Hacl_Impl_Copy_copy_at(gin, 32, hek, 32);
+  uint8_t g[64];
+  for (size_t _ci3 = 0; _ci3 < 64; _ci3++) {
+    g[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_g_impl(g, gin, 64);
+  Hacl_Impl_Copy_copy_prefix(ss, g, 32);
+  uint8_t r[32];
+  for (size_t _ci4 = 0; _ci4 < 32; _ci4++) {
+    r[_ci4] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(r, 0, g, 32, 32);
+  Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(ct, ekey, msg, r);
 }
 
-void Hacl_MLKEM512_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z) {
-  Hacl_Impl_MLKEM_KEM_keygen_impl(ek, dk, d, z, 2, 3);
+void Hacl_MLKEM512_enc(uint8_t *ct, uint8_t *ss, uint8_t *ekey, uint8_t *msg) {
+  Hacl_Impl_MLKEM_KEM_encaps_impl__uint_to_t_2_uint_to_t_3_uint_to_t_10_uint_to_t_4(ss, ct, ekey, msg);
+}
+
+static void Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_2_uint_to_t_3(uint8_t *ek, uint8_t *dk, uint8_t *dseed) {
+  size_t kn = 512;
+  size_t kkn = (kn * 2);
+  size_t k384 = 768;
+  uint8_t kb = (uint8_t)(uint32_t)2;
+  uint8_t gin[33];
+  for (size_t _ci1 = 0; _ci1 < 33; _ci1++) {
+    gin[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(gin, dseed, 32);
+  gin[32] = kb;
+  uint8_t g[64];
+  for (size_t _ci2 = 0; _ci2 < 64; _ci2++) {
+    g[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_g_impl(g, gin, 33);
+  uint8_t rho[32];
+  for (size_t _ci3 = 0; _ci3 < 32; _ci3++) {
+    rho[_ci3] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_prefix(rho, g, 32);
+  uint8_t sigma[32];
+  for (size_t _ci4 = 0; _ci4 < 32; _ci4++) {
+    sigma[_ci4] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_Copy_copy_range(sigma, 0, g, 32, 32);
+  uint16_t a[kkn];
+  for (size_t _ci5 = 0; _ci5 < (kkn); _ci5++) {
+    a[_ci5] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_gen_matrix_impl__uint_to_t_2(a, rho, false);
+  uint16_t tmp[256];
+  for (size_t _ci6 = 0; _ci6 < 256; _ci6++) {
+    tmp[_ci6] = Hacl_Secret_UInt16_zero;
+  }
+  uint16_t s[kn];
+  for (size_t _ci7 = 0; _ci7 < (kn); _ci7++) {
+    s[_ci7] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_3_uint_to_t_2(s, sigma, 0);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_2(s, tmp);
+  uint16_t e[kn];
+  for (size_t _ci8 = 0; _ci8 < (kn); _ci8++) {
+    e[_ci8] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Gen_noise_vec_impl__uint_to_t_3_uint_to_t_2(e, sigma, kb);
+  Hacl_Impl_MLKEM_Vec_vec_ntt_impl__uint_to_t_2(e, tmp);
+  uint16_t t[kn];
+  for (size_t _ci9 = 0; _ci9 < (kn); _ci9++) {
+    t[_ci9] = Hacl_Secret_UInt16_zero;
+  }
+  Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl__uint_to_t_2(t, a, s, tmp);
+  Hacl_Impl_MLKEM_Vec_add_inplace(t, e, kn);
+  uint8_t tb[k384];
+  for (size_t _ci10 = 0; _ci10 < (k384); _ci10++) {
+    tb[_ci10] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_2(tb, t);
+  Hacl_Impl_Copy_copy_prefix(ek, tb, k384);
+  Hacl_Impl_Copy_copy_at(ek, k384, rho, 32);
+  Hacl_Impl_MLKEM_VecCodec_vec_encode_impl__uint_to_t_12_uint_to_t_2(dk, s);
+}
+
+static void Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_2_uint_to_t_3(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed) {
+  size_t k384 = 768;
+  size_t eklen = (k384 + 32);
+  uint8_t dkp[k384];
+  for (size_t _ci1 = 0; _ci1 < (k384); _ci1++) {
+    dkp[_ci1] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_KPKE_kpke_keygen_impl__uint_to_t_2_uint_to_t_3(ek, dkp, dseed);
+  uint8_t hek[32];
+  for (size_t _ci2 = 0; _ci2 < 32; _ci2++) {
+    hek[_ci2] = Hacl_Secret_UInt8_zero;
+  }
+  Hacl_Impl_MLKEM_Hash_hash_h_impl(hek, ek, eklen);
+  Hacl_Impl_Copy_copy_prefix(dk, dkp, k384);
+  Hacl_Impl_Copy_copy_at(dk, k384, ek, eklen);
+  Hacl_Impl_Copy_copy_at(dk, (k384 + eklen), hek, 32);
+  Hacl_Impl_Copy_copy_at(dk, ((k384 + eklen) + 32), zseed, 32);
+}
+
+void Hacl_MLKEM512_keypair(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed) {
+  Hacl_Impl_MLKEM_KEM_keygen_impl__uint_to_t_2_uint_to_t_3(ek, dk, dseed, zseed);
 }
 
 static uint16_t Hacl_Frodo_Pack_stream_bit(uint8_t *b, size_t blen, size_t pos) {

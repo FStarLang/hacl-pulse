@@ -374,7 +374,7 @@ ensures A.pts_to b #p vb **
 }
 
 (** [dst <- SamplePolyCBD_eta b]. *)
-fn cbd_impl (dst: A.array zqt) (b: A.array S8.t) (eta: SZ.t)
+fn cbd_impl (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
             (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
          pure (Seq.length vd == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
@@ -426,7 +426,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
 
     [PRF_eta(s, b) = SHAKE256(s || b, 64 eta)].  The counter byte is
     public -- it is a loop index -- so it is classified on the way in. *)
-fn prf_impl (out: A.array S8.t) (s: A.array S8.t) (byte: U8.t) (eta: SZ.t)
+fn prf_impl (out: A.array S8.t) (s: A.array S8.t) (byte: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
             (#vo: erased (Seq.seq S8.t)) (#p: perm) (#vs: erased (Seq.seq S8.t))
 requires A.pts_to out vo ** A.pts_to s #p vs **
          pure (Seq.length vs == 32 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
@@ -453,7 +453,7 @@ ensures exists* v. A.pts_to out v ** A.pts_to s #p vs **
 }
 
 (** [SamplePolyCBD] driven by the PRF, which is how every caller uses it. *)
-fn sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) (eta: SZ.t)
+fn sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
                         (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to s #p vs **
          pure (Seq.length vd == n /\ Seq.length vs == 32 /\

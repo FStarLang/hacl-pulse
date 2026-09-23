@@ -66,7 +66,7 @@ module Sampler = Hacl.Impl.MLKEM.Sampler
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** Algorithm 13.  [d] is the 32-byte seed. *)
-fn kpke_keygen_impl (ek dk dseed: A.array S8.t) (p: erased params) (k eta1: SZ.t)
+fn kpke_keygen_impl (ek dk dseed: A.array S8.t) (p: erased params) ([@@@FStar.Attributes.monomorphize] k: SZ.t) ([@@@FStar.Attributes.monomorphize] eta1: SZ.t)
                     (#vek0 #vdk0: erased (Seq.seq S8.t))
                     (#pd: perm) (#vd: erased (Seq.lseq S8.t 32))
 requires A.pts_to ek vek0 ** A.pts_to dk vdk0 ** A.pts_to dseed #pd vd **
@@ -172,7 +172,9 @@ ensures exists* vek vdk.
     randomness; in ML-KEM both come from the same hash, which is what
     makes the transform work. *)
 fn kpke_encrypt_impl (ct ekey msg rnd: A.array S8.t) (p: erased params)
-                     (k eta1 eta2 du dv: SZ.t)
+                     ([@@@FStar.Attributes.monomorphize] k: SZ.t) ([@@@FStar.Attributes.monomorphize] eta1: SZ.t)
+                     ([@@@FStar.Attributes.monomorphize] eta2: SZ.t) ([@@@FStar.Attributes.monomorphize] du: SZ.t)
+                     ([@@@FStar.Attributes.monomorphize] dv: SZ.t)
                      (#vct0: erased (Seq.seq S8.t))
                      (#pe: perm) (#vek: erased (Seq.lseq S8.t (ek_len p)))
                      (#pm: perm) (#vm: erased (Seq.lseq S8.t 32))
@@ -326,7 +328,9 @@ ensures exists* vct.
     the message plus everything the two rounds of compression and the
     three noise terms contributed, and [Compress_1] recovers the message
     exactly when that sum stays inside a quarter turn. *)
-fn kpke_decrypt_impl (out dkey ct: A.array S8.t) (p: erased params) (k du dv: SZ.t)
+fn kpke_decrypt_impl (out dkey ct: A.array S8.t) (p: erased params)
+                     ([@@@FStar.Attributes.monomorphize] k: SZ.t)
+                     ([@@@FStar.Attributes.monomorphize] du: SZ.t) ([@@@FStar.Attributes.monomorphize] dv: SZ.t)
                      (#vo0: erased (Seq.seq S8.t))
                      (#pd: perm) (#vdk: erased (Seq.lseq S8.t (dk_pke_len p)))
                      (#pc: perm) (#vc: erased (Seq.lseq S8.t (ct_len p)))

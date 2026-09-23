@@ -44,12 +44,16 @@ FSTAR_EXE ?= $(FSTAR_ROOT)/bin/fstar.exe
 endif
 FSTAR_EXE ?= $(shell which fstar.exe 2>/dev/null)
 
-ifeq ($(FSTAR_EXE),)
-$(error No F* found. Set FSTAR_EXE to an fstar.exe with Pulse and Custard, or FSTAR_ROOT to a release tree or a stage3 checkout.)
-endif
+# `make clean` should not need a compiler to delete a directory.
+NEEDS_FSTAR := $(filter-out clean distclean,$(or $(MAKECMDGOALS),all))
 
-ifeq ($(wildcard $(FSTAR_EXE)),)
+ifneq ($(NEEDS_FSTAR),)
+  ifeq ($(FSTAR_EXE),)
+$(error No F* found. Set FSTAR_EXE to an fstar.exe with Pulse and Custard, or FSTAR_ROOT to a release tree or a stage3 checkout.)
+  endif
+  ifeq ($(wildcard $(FSTAR_EXE)),)
 $(error No fstar.exe at $(FSTAR_EXE). Set FSTAR_EXE, or FSTAR_ROOT to a release tree or a stage3 checkout.)
+  endif
 endif
 
 FSTAR_EXE := $(abspath $(FSTAR_EXE))

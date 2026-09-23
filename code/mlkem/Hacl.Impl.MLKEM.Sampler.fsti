@@ -49,7 +49,7 @@ val sample_ntt_impl (dst: A.array zqt) (seed: A.array S8.t) (slen: SZ.t)
         pure (Seq.length v == n /\ as_poly v == sample_ntt vs))
 
 (** Algorithm 8, [SamplePolyCBD], over the PRF of Algorithm 4. *)
-val sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) (eta: SZ.t)
+val sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
                          (#vd: erased (Seq.seq zqt)) (#p: perm)
                          (#vs: erased (Seq.seq S8.t))
   : stt unit

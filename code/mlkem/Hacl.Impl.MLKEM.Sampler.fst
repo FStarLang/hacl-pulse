@@ -51,7 +51,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
 }
 
 (** Algorithm 8, [SamplePolyCBD]. *)
-fn sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) (eta: SZ.t)
+fn sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
                         (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to s #p vs **
          pure (Seq.length vd == n /\ Seq.length vs == 32 /\

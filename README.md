@@ -2200,14 +2200,21 @@ at all -- LLVM's pass is off by default -- so anything obtained this way is a
 gcc-only speedup, and shows up as a gcc/clang gap rather than as a gap in the
 library.  Splitting the distribution into several files does not fix either
 one; it makes the units smaller, which moves the budget around and takes away
-inlining opportunities elsewhere.  The fix is to say what we mean:
-`inline_for_extraction` where a caller's constant matters, and let both
-compilers see the same code.
+inlining opportunities elsewhere.  The fix is to say what we mean, and
+there are two ways to say it.  `inline_for_extraction` puts the body at the
+call site, which is right for a small function; for a large one, marking the
+parameter `[@@@FStar.Attributes.monomorphize]` is right instead, because
+Custard then emits one specialised *copy* per constant the callers pass.
+ML-KEM is the cautionary tale: inlining its K-PKE layer into the three entry
+points gave the constants to the same loops and was worth nothing, because
+the C compiler stops inlining inside a function that large, while a copy per
+parameter set was worth 1.31x on encapsulation.  Either way both compilers
+see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-seven today -- HMAC,
-the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
+diffs them against `mk/clones.baseline`.  There are sixty-four today -- HMAC,
+the SHA-2 cores, the MD5 and SHA-1 blocks -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
 *would* have cloned given room.
@@ -2359,9 +2366,9 @@ measured the same way as the rest of this section:
 
 | operation | 512 | 768 | 1024 |
 | --- | --- | --- | --- |
-| keypair | 73 us | 116 us | 172 us |
-| encapsulate | 101 us | 153 us | 224 us |
-| decapsulate | 134 us | 199 us | 283 us |
+| keypair | 73 us | 113 us | 169 us |
+| encapsulate | 74 us | 115 us | 170 us |
+| decapsulate | 103 us | 158 us | 226 us |
 
 Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
@@ -2375,16 +2382,32 @@ layers written out, with a Barrett reduction on every product and no
 lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
 look first if these ever need to be faster.
 
-There is also a specialisation gap of exactly the kind the note below this
-table is about.  `make clones-available` says gcc would clone ML-KEM's
-noise sampler, its polynomial encoder and its key generation on the
-parameters they are passed, and would clone SHA3-512 on the constant
-lengths ML-KEM calls it with, but that the interprocedural budget is
-spent.  Recompiling with the budget raised is worth **1.32x** on
-encapsulation and **1.24x** on decapsulation -- 153 to 117 microseconds
-and 199 to 160 -- and nothing at all on key generation.  By the policy
-here that gap is ours to close in F\*, not the compiler's to close if it
-happens to have room; it is on the roadmap and it is not closed yet.
+These numbers are what they are because of the note below this table.  The
+first version of this code passed the parameter set around as five
+`size_t` arguments -- `k`, `eta1`, `eta2`, `du`, `dv` -- and every loop
+bound, every buffer length and every bit width in the whole of ML-KEM was
+therefore a run-time value.  `make clones-available` said gcc would have
+specialised the encapsulation and decapsulation drivers, the K-PKE layer
+under them, the noise sampler and the polynomial coders on those
+arguments, and that the interprocedural budget was spent; recompiling with
+the budget raised was worth **1.32x** on encapsulation and **1.24x** on
+decapsulation.  By the policy below, that gap was ours to close.  The five
+arguments are now marked `[@@@FStar.Attributes.monomorphize]`, exactly as
+FrodoKEM, AES-GCM and HPKE mark their parameter records, so Custard emits
+one specialised copy of each of those functions per parameter set and the
+constants reach the loops without the C compiler having to guess.
+Encapsulation went from 153 to 115 microseconds and decapsulation from 199
+to 158; key generation, which was already being cloned, did not move.  The
+cost is 4% on the size of `dist/Hacl.c`.  `make clones-available` now finds
+nothing left to specialise in ML-KEM.
+
+What did *not* work, recorded because it is the obvious first guess:
+`inline_for_extraction` on the same functions.  Inlining the K-PKE layer
+into the three entry points gives the constants to the same loops, but the
+resulting function is large enough that the C compiler's own inlining
+heuristics start declining inside it, and measurement put the result back
+at the unspecialised numbers.  A specialised *copy* is not the same thing
+as an inlined body, and here only the copy pays.
 
 ## Proof engineering notes
 
@@ -2868,28 +2891,29 @@ rough order of value:
    sixty-four with one.
 4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
-5. **Taking over the remaining sixty-seven compiler specialisations**, the
-   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
-   ML-KEM.
+5. **Taking over the remaining sixty-four compiler specialisations**, the
+   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks.
    Each is a speedup that gcc currently grants us at its own discretion and
    clang does not grant at all.  The SHA-3 sponge and permutation were the
    first, and were worth 2.4x on a short digest; BLAKE2's compression chain
    was the second, and was worth 14% to clang before the unrolled round took
-   it further.  Pricing the ones gcc still
+   it further; ML-KEM's parameter sets were the third, and were worth 1.31x
+   on encapsulation and 1.26x on decapsulation.  Pricing the ones gcc still
    performs, all at once, with `-fno-ipa-cp-clone` says they are worth
    nothing measurable, so taking *those* over is a tidying exercise rather
    than a performance one.
 
-   The ones gcc would perform and cannot are a different matter, and ML-KEM
-   is where that now bites: `make clones-available` wants to clone the noise
-   sampler on eta, the polynomial encoder on the bit width, key generation on
-   the parameter set, and SHA3-512 on its constant call lengths, and the
-   budget is spent.  Raising it is worth 1.32x on encapsulation and 1.24x on
-   decapsulation, so this one is a performance item -- the largest single
-   number left in this list.  Splitting the
-   distribution into several translation units is *not* the fix here -- it
-   moves the budget rather than removing the dependency on it, and costs
-   inlining across the new boundaries.
+   The ones gcc would perform and cannot were a different matter, and ML-KEM
+   was where that bit: the encapsulation and decapsulation drivers, the
+   K-PKE layer, the noise sampler and the polynomial coders all wanted
+   specialising on the five parameters, and the budget was spent.  That one
+   is done -- the parameters are marked
+   `[@@@FStar.Attributes.monomorphize]` and Custard emits a copy per
+   parameter set -- and `make clones-available` now finds nothing left to
+   specialise there.  Splitting the
+   distribution into several translation units is *not* the fix for the rest
+   -- it moves the budget rather than removing the dependency on it, and
+   costs inlining across the new boundaries.
 
    Part of this is a mechanical sweep: a table that never varies should not
    be a parameter at all.  BLAKE2's schedule, BLAKE2's initialisation vector
