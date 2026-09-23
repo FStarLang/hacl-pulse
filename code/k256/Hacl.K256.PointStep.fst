@@ -26,10 +26,10 @@ module Hacl.K256.PointStep
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.K256.Field
-open Hacl.Impl.Limb
-open Hacl.Impl.Mont256
+open Hacl.Impl.Limb4
+open Hacl.Impl.Mont4
 open Hacl.K256.Field
 open Hacl.K256.Point
 

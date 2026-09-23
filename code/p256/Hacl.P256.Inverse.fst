@@ -25,15 +25,15 @@ module Hacl.P256.Inverse
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.P256.Field
-open Spec.Mont256
-open Hacl.Impl.Limb
+open Spec.Mont4
+open Hacl.Impl.Limb4
 open Hacl.Impl.Table
-open Hacl.Impl.Mont256
-open Hacl.Impl.Lit256
+open Hacl.Impl.Mont4
+open Hacl.Impl.Lit4
 open Hacl.P256.Tables
-open Hacl.Impl.Exp256
+open Hacl.Impl.Exp4
 open Hacl.P256.Field
 
 module A = Pulse.Lib.Array
@@ -107,7 +107,7 @@ ensures exists* (vo': Seq.seq S64.t).
   fexp out a e (hide ((P.prime + 1) / 4));
   drop_table e;
   let z = S64.zero;
-  let mut aq = [| z; 8sz |]; A.pts_to_len aq; A.pts_to_len aq;
+  let mut aq = [| z; 4sz |]; A.pts_to_len aq; A.pts_to_len aq;
   fsqr aq out;
   let ok = feq aq a;
   ok

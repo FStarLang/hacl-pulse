@@ -26,9 +26,9 @@ module Hacl.K256.PointMulD
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.K256.Field
-open Hacl.Impl.Limb
+open Hacl.Impl.Limb4
 open Hacl.K256.Point
 open Hacl.K256.PointMul
 
@@ -65,7 +65,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
                                (pt vqx vqy vqz))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; let mut a3 = [| z; 8sz |]; A.pts_to_len a3; let mut a4 = [| z; 8sz |]; A.pts_to_len a4; let mut a5 = [| z; 8sz |]; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   A.pts_to_len a3; A.pts_to_len a4; A.pts_to_len a5;
 
   point_mul_g a0 a1 a2 u1;

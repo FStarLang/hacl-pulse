@@ -35,7 +35,7 @@ module Hacl.K256.Key.Public
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.K256.Field
 open Hacl.Spec.Bytes
 open Hacl.K256.Point
@@ -57,7 +57,7 @@ returns r: bool
 ensures A.pts_to b #pb vb ** pure (r == Some? (lpt vb))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 8sz |]; A.pts_to_len a0; let mut a1 = [| z; 8sz |]; A.pts_to_len a1; let mut a2 = [| z; 8sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   let r = load_point a0 a1 a2 b;
   r
 }

@@ -26,7 +26,7 @@ module Hacl.P256.Msg
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.P256.Field
 open Hacl.Spec.Bytes
 open Hacl.Impl.Copy

@@ -16,23 +16,23 @@
 
 (** The secp256k1 constants, as compile-time arrays.
 
-    Eight tables of eight limbs -- for each of the two moduli, the modulus
+    Eight tables of four limbs -- for each of the two moduli, the modulus
     itself, its two's complement, and the two Montgomery radix constants --
     three exponents, and the curve constants in Montgomery form.  They are
     the only place in the implementation where secp256k1's actual numbers
     appear.
 
-    {!Hacl.Impl.Lit256} explains why each one goes through its value rather
+    {!Hacl.Impl.Lit4} explains why each one goes through its value rather
     than through its eight indices. *)
 module Hacl.K256.Tables
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum256
+open Spec.Bignum4
 open Spec.K256.Field
-open Hacl.Impl.Limb
-open Hacl.Impl.Lit256
+open Hacl.Impl.Limb4
+open Hacl.Impl.Lit4
 open Hacl.Impl.Table
 
 module Seq = FStar.Seq
@@ -47,10 +47,10 @@ module U64 = FStar.UInt64
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
 #push-options "--fuel 0 --ifuel 0"
 
-(** The field prime, as eight limbs. *)
+(** The field prime, as four limbs. *)
 let fms_list : list S64.t = [
-  S64.classify 4294966319uL; S64.classify 4294967294uL; S64.classify 4294967295uL; S64.classify 4294967295uL;
-  S64.classify 4294967295uL; S64.classify 4294967295uL; S64.classify 4294967295uL; S64.classify 4294967295uL
+  S64.classify 18446744069414583343uL; S64.classify 18446744073709551615uL;
+  S64.classify 18446744073709551615uL; S64.classify 18446744073709551615uL
 ]
 
 let fms_arr : (a: G.static_array S64.t
@@ -65,8 +65,8 @@ let fms_arr : (a: G.static_array S64.t
 
 (** [2^256] less the field prime: subtraction without borrows. *)
 let fnm_list : list S64.t = [
-  S64.classify 977uL; S64.classify 1uL; S64.classify 0uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 4294968273uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL
 ]
 
 let fnm_arr : (a: G.static_array S64.t
@@ -81,8 +81,8 @@ let fnm_arr : (a: G.static_array S64.t
 
 (** [R mod p] -- the Montgomery form of one. *)
 let fr1_list : list S64.t = [
-  S64.classify 977uL; S64.classify 1uL; S64.classify 0uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 4294968273uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL
 ]
 
 let fr1_arr : (a: G.static_array S64.t
@@ -97,8 +97,8 @@ let fr1_arr : (a: G.static_array S64.t
 
 (** [R^2 mod p] -- the Montgomery form of [R]. *)
 let fr2_list : list S64.t = [
-  S64.classify 954529uL; S64.classify 1954uL; S64.classify 1uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 8392367050913uL; S64.classify 1uL;
+  S64.classify 0uL; S64.classify 0uL
 ]
 
 let fr2_arr : (a: G.static_array S64.t
@@ -111,10 +111,10 @@ let fr2_arr : (a: G.static_array S64.t
     lit_limbs fr2_list (pow2 256 * pow2 256 % K.prime);
     G.mk_static_array fr2_list
 
-(** The group order, as eight limbs. *)
+(** The group order, as four limbs. *)
 let qms_list : list S64.t = [
-  S64.classify 3493216577uL; S64.classify 3218235020uL; S64.classify 2940772411uL; S64.classify 3132021990uL;
-  S64.classify 4294967294uL; S64.classify 4294967295uL; S64.classify 4294967295uL; S64.classify 4294967295uL
+  S64.classify 13822214165235122497uL; S64.classify 13451932020343611451uL;
+  S64.classify 18446744073709551614uL; S64.classify 18446744073709551615uL
 ]
 
 let qms_arr : (a: G.static_array S64.t
@@ -129,8 +129,8 @@ let qms_arr : (a: G.static_array S64.t
 
 (** [2^256] less the group order. *)
 let qnm_list : list S64.t = [
-  S64.classify 801750719uL; S64.classify 1076732275uL; S64.classify 1354194884uL; S64.classify 1162945305uL;
-  S64.classify 1uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 4624529908474429119uL; S64.classify 4994812053365940164uL;
+  S64.classify 1uL; S64.classify 0uL
 ]
 
 let qnm_arr : (a: G.static_array S64.t
@@ -145,8 +145,8 @@ let qnm_arr : (a: G.static_array S64.t
 
 (** [R mod n]. *)
 let qr1_list : list S64.t = [
-  S64.classify 801750719uL; S64.classify 1076732275uL; S64.classify 1354194884uL; S64.classify 1162945305uL;
-  S64.classify 1uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 4624529908474429119uL; S64.classify 4994812053365940164uL;
+  S64.classify 1uL; S64.classify 0uL
 ]
 
 let qr1_arr : (a: G.static_array S64.t
@@ -161,8 +161,8 @@ let qr1_arr : (a: G.static_array S64.t
 
 (** [R^2 mod n]. *)
 let qr2_list : list S64.t = [
-  S64.classify 1742197056uL; S64.classify 2305618452uL; S64.classify 243071096uL; S64.classify 1947506370uL;
-  S64.classify 1540163526uL; S64.classify 3868718564uL; S64.classify 2177276869uL; S64.classify 2640780501uL
+  S64.classify 9902555850136342848uL; S64.classify 8364476168144746616uL;
+  S64.classify 16616019711348246470uL; S64.classify 11342065889886772165uL
 ]
 
 let qr2_arr : (a: G.static_array S64.t
@@ -177,8 +177,8 @@ let qr2_arr : (a: G.static_array S64.t
 
 (** One, for leaving Montgomery form. *)
 let one_list : list S64.t = [
-  S64.classify 1uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 1uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL
 ]
 
 let one_arr : (a: G.static_array S64.t
@@ -193,8 +193,8 @@ let one_arr : (a: G.static_array S64.t
 
 (** Half the group order, rounded down: the low-S boundary. *)
 let qhalf_list : list S64.t = [
-  S64.classify 1746608288uL; S64.classify 3756601158uL; S64.classify 1470386205uL; S64.classify 1566010995uL;
-  S64.classify 4294967295uL; S64.classify 4294967295uL; S64.classify 4294967295uL; S64.classify 2147483647uL
+  S64.classify 16134479119472337056uL; S64.classify 6725966010171805725uL;
+  S64.classify 18446744073709551615uL; S64.classify 9223372036854775807uL
 ]
 
 let qhalf_arr : (a: G.static_array S64.t
@@ -211,8 +211,8 @@ let qhalf_arr : (a: G.static_array S64.t
 
 (** [p - 2], the inversion exponent. *)
 let finv_e_list : list U64.t = [
-  4294966317uL; 4294967294uL; 4294967295uL; 4294967295uL;
-  4294967295uL; 4294967295uL; 4294967295uL; 4294967295uL
+  18446744069414583341uL; 18446744073709551615uL;
+  18446744073709551615uL; 18446744073709551615uL
 ]
 
 let finv_e_arr : (a: G.static_array U64.t
@@ -227,8 +227,8 @@ let finv_e_arr : (a: G.static_array U64.t
 
 (** [(p + 1) / 4], the square-root exponent; [p] is [3 mod 4]. *)
 let fsqrt_e_list : list U64.t = [
-  3221225228uL; 4294967295uL; 4294967295uL; 4294967295uL;
-  4294967295uL; 4294967295uL; 4294967295uL; 1073741823uL
+  18446744072635809548uL; 18446744073709551615uL;
+  18446744073709551615uL; 4611686018427387903uL
 ]
 
 let fsqrt_e_arr : (a: G.static_array U64.t
@@ -243,8 +243,8 @@ let fsqrt_e_arr : (a: G.static_array U64.t
 
 (** [n - 2], for inverting a scalar. *)
 let qinv_e_list : list U64.t = [
-  3493216575uL; 3218235020uL; 2940772411uL; 3132021990uL;
-  4294967294uL; 4294967295uL; 4294967295uL; 4294967295uL
+  13822214165235122495uL; 13451932020343611451uL;
+  18446744073709551614uL; 18446744073709551615uL
 ]
 
 let qinv_e_arr : (a: G.static_array U64.t
@@ -267,8 +267,8 @@ let qinv_e_arr : (a: G.static_array U64.t
 
 (** The curve coefficient [b] in Montgomery form. *)
 let bm_list : list S64.t = [
-  S64.classify 6839uL; S64.classify 7uL; S64.classify 0uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 30064777911uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL
 ]
 
 let bm_arr : (a: G.static_array S64.t
@@ -283,8 +283,8 @@ let bm_arr : (a: G.static_array S64.t
 
 (** [3b = 21] in Montgomery form, which is what the complete formulas multiply by. *)
 let b3m_list : list S64.t = [
-  S64.classify 20517uL; S64.classify 21uL; S64.classify 0uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL; S64.classify 0uL; S64.classify 0uL
+  S64.classify 90194333733uL; S64.classify 0uL;
+  S64.classify 0uL; S64.classify 0uL
 ]
 
 let b3m_arr : (a: G.static_array S64.t
@@ -299,8 +299,8 @@ let b3m_arr : (a: G.static_array S64.t
 
 (** The base point's [x], in Montgomery form. *)
 let gxm_list : list S64.t = [
-  S64.classify 1216225431uL; S64.classify 3610652250uL; S64.classify 700212955uL; S64.classify 589179219uL;
-  S64.classify 872223388uL; S64.classify 2543798464uL; S64.classify 3909656392uL; S64.classify 2575427139uL
+  S64.classify 15507633332195041431uL; S64.classify 2530505477788034779uL;
+  S64.classify 10925531211367256732uL; S64.classify 11061375339145502536uL
 ]
 
 let gxm_arr : (a: G.static_array S64.t
@@ -315,8 +315,8 @@ let gxm_arr : (a: G.static_array S64.t
 
 (** The base point's [y], in Montgomery form. *)
 let gym_list : list S64.t = [
-  S64.classify 3554388962uL; S64.classify 2975770322uL; S64.classify 522045005uL; S64.classify 2382126429uL;
-  S64.classify 2887369014uL; S64.classify 1891022234uL; S64.classify 3567616726uL; S64.classify 3477046559uL
+  S64.classify 12780836216951778274uL; S64.classify 10231155108014310989uL;
+  S64.classify 8121878653926228278uL; S64.classify 14933801261141951190uL
 ]
 
 let gym_arr : (a: G.static_array S64.t
@@ -332,95 +332,95 @@ let gym_arr : (a: G.static_array S64.t
 
 (** {2 Reading a table}
 
-    Each is eight limbs, and the permission never comes back: these are
+    Each is four limbs, and the permission never comes back: these are
     [static const] arrays in the emitted C. *)
 
 inline_for_extraction
 fn finv_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (K.prime - 2))
-{ table finv_e_arr 8sz }
+{ table finv_e_arr 4sz }
 
 inline_for_extraction
 fn fsqrt_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs ((K.prime + 1) / 4))
-{ table fsqrt_e_arr 8sz }
+{ table fsqrt_e_arr 4sz }
 
 inline_for_extraction
 fn qinv_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (K.order - 2))
-{ table qinv_e_arr 8sz }
+{ table qinv_e_arr 4sz }
 
 inline_for_extraction
 fn mone () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs 1)
-{ table one_arr 8sz }
+{ table one_arr 4sz }
 
 inline_for_extraction
 fn fms () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.ms)
-{ table fms_arr 8sz }
+{ table fms_arr 4sz }
 
 inline_for_extraction
 fn fnm () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.nm)
-{ table fnm_arr 8sz }
+{ table fnm_arr 4sz }
 
 inline_for_extraction
 fn fr1 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r1)
-{ table fr1_arr 8sz }
+{ table fr1_arr 4sz }
 
 inline_for_extraction
 fn fr2 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r2)
-{ table fr2_arr 8sz }
+{ table fr2_arr 4sz }
 
 inline_for_extraction
 fn qms () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.ms)
-{ table qms_arr 8sz }
+{ table qms_arr 4sz }
 
 inline_for_extraction
 fn qnm () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.nm)
-{ table qnm_arr 8sz }
+{ table qnm_arr 4sz }
 
 inline_for_extraction
 fn qr1 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r1)
-{ table qr1_arr 8sz }
+{ table qr1_arr 4sz }
 
 inline_for_extraction
 fn qr2 () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r2)
-{ table qr2_arr 8sz }
+{ table qr2_arr 4sz }
 
 inline_for_extraction
 fn qhalf () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs K.q_half)
-{ table qhalf_arr 8sz }
+{ table qhalf_arr 4sz }
 
 (** The Montgomery constants; neither of K-256's moduli has one as
     convenient as P-256's prime. *)
 
 inline_for_extraction
-let fmu : (w: S64.t { S64.v w == fmod.mu }) = S64.classify 3525653809uL
+let fmu : (w: S64.t { S64.v w == fmod.mu }) = S64.classify 15580212934572586289uL
 
 inline_for_extraction
-let qmu : (w: S64.t { S64.v w == qmod.mu }) = S64.classify 1435021631uL
+let qmu : (w: S64.t { S64.v w == qmod.mu }) = S64.classify 5408259542528602431uL
 
 #pop-options
 #pop-options
