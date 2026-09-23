@@ -2850,6 +2850,20 @@ rough order of value:
    the primes, and on secp256k1 it is the whole of the gap -- five limbs of
    fifty-two bits, lazy, with no Montgomery factor, against our four limbs of
    sixty-four with one.
+
+   secp256k1's half of this is under way.  `spec/Spec.Bignum52.fst` is the
+   prime-free radix-52 core, `spec/Spec.K256.Field52.fst` the prime-specific
+   arithmetic, `spec/Spec.K256.Columns.fst` the bridge that turns the
+   nine-column product and its fold into the straight line the code runs, and
+   `code/k256/Hacl.K256.Field52.fst` the code itself: `fadd`, `fsub`, `fneg`
+   and `fmul`, all proved.  `spec/Spec.Bignum4.Window.fst` and
+   `spec/Spec.Bignum52.Window.fst` are the two halves of the byte layer's
+   change of representation.  What is left is `freeze` -- five proper digits
+   at radix fifty-two only put an element below `2^260`, sixteen primes above
+   the modulus, so the tail is a fold of the top four bits, a second carry and
+   only then a conditional subtraction -- and then the callers, which allocate
+   field elements as four limbs today.  Nothing calls the new field yet, so
+   `dist/` is unchanged and the numbers in the table above still stand.
 4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
 5. **Taking over the remaining sixty-seven compiler specialisations**, the
