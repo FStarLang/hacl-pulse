@@ -251,6 +251,19 @@ let p64_ok (_: unit)
   = onep_ok ();
     eval_scale 64 onep
 
+(** The three distinct limbs of [p64], as the literals the implementation
+    adds.  Curve25519's counterpart has two, because at radix [2^51] every
+    limb of the prime but the lowest is all ones; here the top one is short
+    as well. *)
+let p64_index (i: nat { i < nl })
+  : Lemma (Seq.index p64 i ==
+             (if i = 0 then 288230101273742272
+              else if i = nl - 1 then 18014398509481920
+              else 288230376151711680))
+  = assert_norm (64 * pl0 == 288230101273742272);
+    assert_norm (64 * pl4 == 18014398509481920);
+    assert_norm (64 * (base - 1) == 288230376151711680)
+
 #pop-options
 
 (** {2 The operations, as the implementation performs them}
