@@ -36,12 +36,17 @@ make extract    (re)generate dist/
 make test       build and run the C tests
 ```
 
-You need an F\* built from `master`, through `stage3` (that is, with the Pulse
-plugin and libraries installed).  Point the build at it:
+You need an F\* with the Pulse plugin and libraries installed, new enough to
+have Custard.  A [binary release](https://github.com/FStarLang/FStar/releases)
+is one -- the tarballs ship Pulse -- and so is a checkout of `master` built
+through `stage3`.  Point the build at either:
 
 ```
-make FSTAR_ROOT=$HOME/tools/fstar
+make FSTAR_ROOT=$HOME/tools/fstar-v2026.09.20   # unpacked release tarball
+make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
 ```
+
+The tree is verified against the release above.
 
 ## Layout
 

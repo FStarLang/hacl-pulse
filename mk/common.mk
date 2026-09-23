@@ -21,18 +21,35 @@ DIST_DIR  ?= $(HACL_ROOT)/dist
 # Locating the compiler
 # ---------------------------------------------------------------------------
 #
-# hacl-pulse needs a stage3 F* -- that is, one with the Pulse plugin and the
-# Pulse libraries installed -- built from F* master, which is where the Custard
-# extraction pipeline now lives.  Point FSTAR_EXE at it, or set FSTAR_ROOT to a
-# checkout whose stage3 has been built.
+# hacl-pulse needs an F* with the Pulse plugin and the Pulse libraries
+# installed, new enough to have Custard, where the extraction pipeline lives.
+# A binary release tarball from FStarLang/FStar is one -- it ships Pulse --
+# and so is a checkout of master built through stage3.
+#
+# Point FSTAR_EXE at the binary, or FSTAR_ROOT at either kind of tree:
+#
+#   make FSTAR_ROOT=$HOME/tools/fstar-v2026.09.20   # unpacked release
+#   make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
+#
+# A release has bin/fstar.exe; a checkout has stage3/out/bin/fstar.exe, and
+# the stage3 one wins if somehow both are there, because a checkout being
+# built is the case where the two disagree.
 
 ifneq ($(FSTAR_ROOT),)
+  ifneq ($(wildcard $(FSTAR_ROOT)/stage3/out/bin/fstar.exe),)
 FSTAR_EXE ?= $(FSTAR_ROOT)/stage3/out/bin/fstar.exe
+  else
+FSTAR_EXE ?= $(FSTAR_ROOT)/bin/fstar.exe
+  endif
 endif
 FSTAR_EXE ?= $(shell which fstar.exe 2>/dev/null)
 
 ifeq ($(FSTAR_EXE),)
-$(error No F* found. Set FSTAR_EXE to a stage3 fstar.exe built from F* master, or FSTAR_ROOT to its checkout.)
+$(error No F* found. Set FSTAR_EXE to an fstar.exe with Pulse and Custard, or FSTAR_ROOT to a release tree or a stage3 checkout.)
+endif
+
+ifeq ($(wildcard $(FSTAR_EXE)),)
+$(error No fstar.exe at $(FSTAR_EXE). Set FSTAR_EXE, or FSTAR_ROOT to a release tree or a stage3 checkout.)
 endif
 
 FSTAR_EXE := $(abspath $(FSTAR_EXE))
