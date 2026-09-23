@@ -72,6 +72,7 @@ module L4 = Hacl.Impl.Limb4
 module IB4 = Hacl.Impl.Bignum4
 module IM4 = Hacl.Impl.Mont4
 module KT = Hacl.K256.Tables
+module KT52 = Hacl.K256.Tables52
 module Tbl = Hacl.Impl.Table
 module By = Hacl.Spec.Bytes
 module RP = Spec.K256.Repack
@@ -1217,5 +1218,39 @@ ensures exists* (p: perm) (v: Seq.seq S64.t).
   Math.small_mod (reveal x) prime;
   Tbl.table a 5sz
 }
+
+#pop-options
+
+(** {2 Curve constants}
+
+    Not in Montgomery form any more, so reading one is reading the table
+    and nothing else. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+inline_for_extraction
+fn fb () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.b_coeff)
+{ fconst KT52.b_arr K.b_coeff }
+
+(** [3b = 21], which is the only coefficient the complete formulas need. *)
+inline_for_extraction
+fn fb3 () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.b3)
+{ fconst KT52.b3_arr K.b3 }
+
+inline_for_extraction
+fn fgx () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.g_x)
+{ fconst KT52.gx_arr K.g_x }
+
+inline_for_extraction
+fn fgy () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.g_y)
+{ fconst KT52.gy_arr K.g_y }
 
 #pop-options
