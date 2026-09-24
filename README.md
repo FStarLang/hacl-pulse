@@ -37,12 +37,17 @@ make extract    (re)generate dist/
 make test       build and run the C tests
 ```
 
-You need an F\* built from `master`, through `stage3` (that is, with the Pulse
-plugin and libraries installed).  Point the build at it:
+You need an F\* with the Pulse plugin and libraries installed, new enough to
+have Custard.  A [binary release](https://github.com/FStarLang/FStar/releases)
+is one -- the tarballs ship Pulse -- and so is a checkout of `master` built
+through `stage3`.  Point the build at either:
 
 ```
-make FSTAR_ROOT=$HOME/tools/fstar
+make FSTAR_ROOT=$HOME/tools/fstar-v2026.09.20   # unpacked release tarball
+make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
 ```
+
+The tree is verified against the release above.
 
 ## Layout
 
@@ -2365,9 +2370,9 @@ measured the same way as the rest of this section:
 
 | operation | 512 | 768 | 1024 |
 | --- | --- | --- | --- |
-| keypair | 77 us | 122 us | 179 us |
-| encapsulate | 105 us | 160 us | 232 us |
-| decapsulate | 138 us | 205 us | 290 us |
+| keypair | 73 us | 116 us | 172 us |
+| encapsulate | 101 us | 153 us | 224 us |
+| decapsulate | 134 us | 199 us | 283 us |
 
 Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
@@ -2380,6 +2385,17 @@ which has been tuned at all --- the NTT is the specification's seven
 layers written out, with a Barrett reduction on every product and no
 lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
 look first if these ever need to be faster.
+
+There is also a specialisation gap of exactly the kind the note below this
+table is about.  `make clones-available` says gcc would clone ML-KEM's
+noise sampler, its polynomial encoder and its key generation on the
+parameters they are passed, and would clone SHA3-512 on the constant
+lengths ML-KEM calls it with, but that the interprocedural budget is
+spent.  Recompiling with the budget raised is worth **1.32x** on
+encapsulation and **1.24x** on decapsulation -- 153 to 117 microseconds
+and 199 to 160 -- and nothing at all on key generation.  By the policy
+here that gap is ours to close in F\*, not the compiler's to close if it
+happens to have room; it is on the roadmap and it is not closed yet.
 
 ## Proof engineering notes
 
@@ -2835,22 +2851,24 @@ rough order of value:
    signing both, and the constant-time table lookup it needs already exists:
    `Hacl.Bignum.Base.table_select`, written for the modexp window.  It needs
    associativity of the twisted Edwards addition law in extended coordinates,
-   which `Spec.Ed25519` does not have in any form today.
+   which is now proved.
 
-   That obligation, and the same one for the two Weierstrass curves, is now
+   That obligation, and the same one for the two Weierstrass curves, is
    written down: `spec/Spec.Ed25519.Group.fsti`, `spec/Spec.P256.Group.fsti`
    and `spec/Spec.K256.Group.fsti` state curve membership, projective
-   equality, closure of the addition law, and the group axioms, as
-   interfaces with no implementations --- so they are a statement of work
-   outstanding rather than an assumption, and the library still assumes
-   nothing mathematical.  Associativity is the only hard one; the rest are
-   polynomial identities or field cancellation.  Worth saying that HACL\*
-   proves none of them either: in `specs/lemmas/Spec.K256.Lemmas.fst` and
-   its Ed25519 and P-256 twins the corresponding lemmas are `admit()`, so
-   HACL\*'s windowed Ed25519, its windowed P-256 and its GLV secp256k1 all
-   rest on the same admitted facts.  Discharging them here would be new
-   work, not a catch-up.  The measured shape of the gap says what they are
-   worth: on variable-base ECDH, where HACL\* has no table either, P-256 is
+   equality, closure of the addition law, and the group axioms, and all
+   three are now proved, with no `admit` and no `assume`, so the library
+   still assumes nothing mathematical.  The proofs reduce every statement
+   to polynomial identities modulo the affine curve equations, which a
+   small verified polynomial arithmetic (`spec/Spec.Group.Poly.fst`) checks
+   by normalisation; completeness additionally uses Pocklington primality
+   certificates for the field primes (`spec/Spec.Group.Primes.fst`), a
+   no-roots certificate on the Weierstrass curves, and non-squareness of
+   `d` on Ed25519.  Worth saying that HACL\* proves none of them: in
+   `specs/lemmas/Spec.K256.Lemmas.fst` and its Ed25519 and P-256 twins the
+   corresponding lemmas are `admit()`, so HACL\*'s windowed Ed25519, its
+   windowed P-256 and its GLV secp256k1 all rest on the same admitted
+   facts.  The measured shape of the gap says what they are worth: on variable-base ECDH, where HACL\* has no table either, P-256 is
    within 1.15x; on fixed-base it is 2.59x.
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
@@ -2885,9 +2903,18 @@ rough order of value:
    clang does not grant at all.  The SHA-3 sponge and permutation were the
    first, and were worth 2.4x on a short digest; BLAKE2's compression chain
    was the second, and was worth 14% to clang before the unrolled round took
-   it further.  Pricing them all at once with
-   `-fno-ipa-cp-clone` says the rest are worth nothing measurable, so this is
-   a tidying exercise rather than a performance one.  Splitting the
+   it further.  Pricing the ones gcc still
+   performs, all at once, with `-fno-ipa-cp-clone` says they are worth
+   nothing measurable, so taking *those* over is a tidying exercise rather
+   than a performance one.
+
+   The ones gcc would perform and cannot are a different matter, and ML-KEM
+   is where that now bites: `make clones-available` wants to clone the noise
+   sampler on eta, the polynomial encoder on the bit width, key generation on
+   the parameter set, and SHA3-512 on its constant call lengths, and the
+   budget is spent.  Raising it is worth 1.32x on encapsulation and 1.24x on
+   decapsulation, so this one is a performance item -- the largest single
+   number left in this list.  Splitting the
    distribution into several translation units is *not* the fix here -- it
    moves the budget rather than removing the dependency on it, and costs
    inlining across the new boundaries.

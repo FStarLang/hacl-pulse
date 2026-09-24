@@ -39,11 +39,12 @@
 
     Everything in this file is the P-256 file with [a = 0] and [b = 7], in
     the same way that [code/k256] is [code/p256] with three files changed.
-    If the two proofs turn out to share their structure it is worth
-    factoring them through a common Weierstrass module; the statements are
-    kept apart here because [Spec.P256] and [Spec.K256] are separate
-    modules with separate [felem] types and a goal that mentions both is
-    ruinously slow.
+    The two proofs do share their structure: the polynomial checker, the
+    field and projective lemmas and the primality certificates are common
+    ([Spec.Group.*]), and the per-curve modules are generated from the same
+    script.  The statements are kept apart here because [Spec.P256] and
+    [Spec.K256] are separate modules with separate [felem] types and a goal
+    that mentions both is ruinously slow.
 
     The point at infinity is a real projective point here, [(0 : 1 : 0)],
     rather than an ordinary curve point as it is on an Edwards curve.  So
@@ -147,9 +148,9 @@ val point_add_congr (p p' q q': proj_point)
 
     [point_add] and [point_double] are [opaque_to_smt] in [Spec.K256] --
     they are forty lines of nested [fmul] when unfolded, and the scalar
-    multiplication loop cannot afford to see them.  These proofs will have
-    to [reveal_opaque] them, and are the only place in the library that
-    does. *)
+    multiplication loop cannot afford to see them.  The proofs reveal them
+    in exactly one place, [Spec.K256.GroupSv], which says once that the
+    polynomial computations of the checks compute these functions. *)
 
 (** Associativity.  The reason this file exists. *)
 val point_add_assoc_law (p q r: proj_point)
