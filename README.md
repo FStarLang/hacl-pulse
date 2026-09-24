@@ -2868,8 +2868,9 @@ rough order of value:
    `specs/lemmas/Spec.K256.Lemmas.fst` and its Ed25519 and P-256 twins the
    corresponding lemmas are `admit()`, so HACL\*'s windowed Ed25519, its
    windowed P-256 and its GLV secp256k1 all rest on the same admitted
-   facts.  The measured shape of the gap says what they are worth: on variable-base ECDH, where HACL\* has no table either, P-256 is
-   within 1.15x; on fixed-base it is 2.59x.
+   facts.  The measured shape of the gap says what they are worth: on
+   variable-base ECDH, where HACL\* has no table either, P-256 is within
+   1.15x; on fixed-base it is 2.59x.
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
@@ -2894,8 +2895,16 @@ rough order of value:
    treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
    subtractions rather than a multiply -- and has not had it.
 
-4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
-   of what is left after (3).
+4. **Windowed scalar multiplication** for P-256 and secp256k1, which is now
+   the whole of what is left on secp256k1 and most of what is left on P-256.
+   Both still walk the scalar one bit at a time, 256 iterations of double,
+   add and constant-time select, where HACL\* uses a precomputed window.  On
+   secp256k1 that is the entire remaining 2.4x on variable-base ECDH: the
+   field multiply is within 14% of the reference and roughly twenty of them
+   go into each step, so the arithmetic accounts for essentially all of the
+   per-step cost and the difference is the number of steps.  The group-law
+   lemmas this needs are proved (`spec/Spec.K256.Group.fsti` and its P-256
+   twin), so it is no longer blocked.
 5. **Taking over the remaining sixty-seven compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
