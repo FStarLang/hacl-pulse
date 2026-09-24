@@ -28,12 +28,12 @@ module Hacl.K256.Sign
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Spec.Bytes
 open Hacl.Impl.Limb4
 open Hacl.Impl.Copy
-open Hacl.K256.Field
+open Hacl.K256.Field52
 open Hacl.K256.Scalar
 open Hacl.K256.Point
 open Hacl.K256.PointMul
@@ -74,7 +74,7 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; let mut c1 = [| z; 4sz |]; A.pts_to_len c1; let mut c2 = [| z; 4sz |]; A.pts_to_len c2; let mut c3 = [| z; 4sz |]; A.pts_to_len c3; let mut c4 = [| z; 4sz |]; A.pts_to_len c4; let mut c5 = [| z; 4sz |]; A.pts_to_len c5; let mut c6 = [| z; 4sz |]; A.pts_to_len c6; let mut c7 = [| z; 4sz |]; A.pts_to_len c7; let mut c8 = [| z; 4sz |]; A.pts_to_len c8; let mut c9 = [| z; 4sz |]; A.pts_to_len c9; let mut ca = [| z; 4sz |]; A.pts_to_len ca; let mut cb = [| z; 4sz |]; A.pts_to_len cb; let mut cc = [| z; 4sz |]; A.pts_to_len cc; A.pts_to_len c0; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; let mut c1 = [| z; 4sz |]; A.pts_to_len c1; let mut c2 = [| z; 4sz |]; A.pts_to_len c2; let mut c3 = [| z; 4sz |]; A.pts_to_len c3; let mut c4 = [| z; 4sz |]; A.pts_to_len c4; let mut c5 = [| z; 4sz |]; A.pts_to_len c5; let mut c6 = [| z; 4sz |]; A.pts_to_len c6; let mut c7 = [| z; 4sz |]; A.pts_to_len c7; let mut c8 = [| z; 5sz |]; A.pts_to_len c8; let mut c9 = [| z; 5sz |]; A.pts_to_len c9; let mut ca = [| z; 5sz |]; A.pts_to_len ca; let mut cb = [| z; 5sz |]; A.pts_to_len cb; let mut cc = [| z; 5sz |]; A.pts_to_len cc; A.pts_to_len c0; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len c4; A.pts_to_len c5; A.pts_to_len c6; A.pts_to_len c7;
   A.pts_to_len c8; A.pts_to_len c9; A.pts_to_len ca;
   A.pts_to_len cb; A.pts_to_len cc;
@@ -90,7 +90,7 @@ ensures exists* (wo: Seq.seq S8.t).
     with wax. assert (A.pts_to cb wax);
     fstore d0 cb;
     assert_norm (K.prime < pow2 256);
-    be_nat_to_be 32 (fev wax);
+    be_nat_to_be 32 (fev (vals wax));
     qload_mod c3 d0;
     qinv c5 c1;
     qmul c6 c3 c2;

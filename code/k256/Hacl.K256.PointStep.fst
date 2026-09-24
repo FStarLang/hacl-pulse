@@ -26,11 +26,11 @@ module Hacl.K256.PointStep
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Impl.Limb4
 open Hacl.Impl.Mont4
-open Hacl.K256.Field
+open Hacl.K256.Field52
 open Hacl.K256.Point
 
 module A = Pulse.Lib.Array
@@ -39,6 +39,8 @@ module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
 module Loops = Hacl.Spec.Loops
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -110,7 +112,7 @@ requires
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   A.pts_to ks #pk vk **
   pure (pt_ok vox voy voz /\ pt_ok vqx vqy vqz /\
-        Seq.length vk == nl /\ bnd (vals vk) base /\
+        Seq.length vk == B4.nl /\ B4.bnd (L4.vals vk) B4.base /\
         Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
         Seq.length vsx == nl /\ Seq.length vsy == nl /\ Seq.length vsz == nl)
 ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
@@ -123,12 +125,12 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
         Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
         Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
         pt wx wy wz ==
-          K.point_mul_step (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n)
+          K.point_mul_step (B4.eval (L4.vals vk)) (pt vqx vqy vqz) (SZ.v n)
                            (pt vox voy voz))
 {
   let bi = sub255 n;
   let m = abit ks bi;
-  let bb = hide (eval (vals vk) / pow2 (SZ.v bi) % 2 = 1);
+  let bb = hide (B4.eval (L4.vals vk) / pow2 (SZ.v bi) % 2 = 1);
   point_double ux uy uz ox oy oz;
   point_add sx sy sz ux uy uz qx qy qz;
   with wux wuy wuz. assert (A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz);
@@ -137,11 +139,11 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   asel oy uy sy m bb;
   asel oz uz sz m bb;
   sel_pt (reveal bb) wux wuy wuz wsx wsy wsz;
-  step_def (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz);
+  step_def (B4.eval (L4.vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz);
   with wx wy wz. assert (A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz);
   assert (pure (pt_ok wx wy wz));
   assert (pure (pt wx wy wz ==
-    K.point_mul_step (eval (vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz)));
+    K.point_mul_step (B4.eval (L4.vals vk)) (pt vqx vqy vqz) (SZ.v n) (pt vox voy voz)));
 }
 
 #pop-options

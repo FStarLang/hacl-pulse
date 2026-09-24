@@ -34,11 +34,10 @@ module Hacl.K256.Point
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
-open Hacl.Impl.Limb4
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Impl.Table
-open Hacl.K256.Field
+open Hacl.K256.Field52
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
@@ -50,9 +49,9 @@ module K = Spec.K256
 
 (** {2 Points as three limb sequences} *)
 
-let pt (x y z: Seq.seq S64.t) : GTot K.proj_point = (fev x, fev y, fev z)
+let pt (x y z: Seq.seq S64.t) : GTot K.proj_point = (fev (vals x), fev (vals y), fev (vals z))
 
-let pt_ok (x y z: Seq.seq S64.t) : prop = felem x /\ felem y /\ felem z
+let pt_ok (x y z: Seq.seq S64.t) : prop = felem (vals x) /\ felem (vals y) /\ felem (vals z)
 
 (** {2 Addition} *)
 
@@ -77,7 +76,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%K.point_add) K.point_add;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 4sz |]; A.pts_to_len a0; let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; let mut a2 = [| zz; 4sz |]; A.pts_to_len a2; let mut a3 = [| zz; 4sz |]; A.pts_to_len a3; let mut a4 = [| zz; 4sz |]; A.pts_to_len a4; let mut aw = [| zz; 4sz |]; A.pts_to_len aw; let mut au = [| zz; 4sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| zz; 5sz |]; A.pts_to_len a0; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut aw = [| zz; 5sz |]; A.pts_to_len aw; let mut au = [| zz; 5sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len aw; A.pts_to_len au;
   let bc = fb3 ();
   fmul a0 x1 x2;
@@ -153,7 +152,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%K.point_double) K.point_double;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 4sz |]; A.pts_to_len a0; let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; let mut a2 = [| zz; 4sz |]; A.pts_to_len a2; let mut a3 = [| zz; 4sz |]; A.pts_to_len a3; let mut a4 = [| zz; 4sz |]; A.pts_to_len a4; let mut aw = [| zz; 4sz |]; A.pts_to_len aw; let mut au = [| zz; 4sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| zz; 5sz |]; A.pts_to_len a0; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut aw = [| zz; 5sz |]; A.pts_to_len aw; let mut au = [| zz; 5sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len aw; A.pts_to_len au;
   let bc = fb3 ();
   fsqr a0 y;

@@ -29,11 +29,11 @@ module Hacl.K256.Sec1
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Spec.Bytes
 open Hacl.Impl.Copy
-open Hacl.K256.Field
+open Hacl.K256.Field52
 open Hacl.K256.Inverse
 open Hacl.K256.Encode
 
@@ -157,16 +157,16 @@ fn store_y (yb: A.array S8.t) (yf nf: A.array S64.t) (odd: bool)
            (#vyb: erased (Seq.seq S8.t)) (#vnf: erased (Seq.seq S64.t))
            (#py: perm) (#vy: erased (Seq.seq S64.t))
 requires A.pts_to yb vyb ** A.pts_to yf #py vy ** A.pts_to nf vnf **
-  pure (Seq.length vyb == 32 /\ Seq.length vnf == nl /\ felem vy)
+  pure (Seq.length vyb == 32 /\ Seq.length vnf == nl /\ felem (vals vy))
 ensures exists* (wyb: Seq.seq S8.t) (wnf: Seq.seq S64.t).
   A.pts_to yb wyb ** A.pts_to yf #py vy ** A.pts_to nf wnf **
   pure (Seq.length wnf == nl /\
-        wyb == nat_to_be 32 (if (fev vy % 2 = 1) = odd
-                             then fev vy else K.fneg (fev vy)))
+        wyb == nat_to_be 32 (if (fev (vals vy) % 2 = 1) = odd
+                             then fev (vals vy) else K.fneg (fev (vals vy))))
 {
   A.pts_to_len yb;
   fstore yb yf;
-  nat_to_be_parity 32 (fev vy);
+  nat_to_be_parity 32 (fev (vals vy));
   let lb = A.(yb.(31sz));
   UInt.logand_mask #8 (S8.v lb) 1;
   assert_norm (pow2 1 - 1 == 1);
@@ -197,7 +197,7 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out; A.pts_to_len pk;
   let z = S64.zero;
-  let mut m0 = [| z; 4sz |]; A.pts_to_len m0; let mut m1 = [| z; 4sz |]; A.pts_to_len m1; let mut m2 = [| z; 4sz |]; A.pts_to_len m2; let mut m3 = [| z; 4sz |]; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
+  let mut m0 = [| z; 5sz |]; A.pts_to_len m0; let mut m1 = [| z; 5sz |]; A.pts_to_len m1; let mut m2 = [| z; 5sz |]; A.pts_to_len m2; let mut m3 = [| z; 5sz |]; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
   let z8 = S8.classify 0uy;
   let mut n0 = [| z8; 32sz |]; A.pts_to_len n0; let mut n1 = [| z8; 32sz |]; A.pts_to_len n1; A.pts_to_len n0; A.pts_to_len n1;
 

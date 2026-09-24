@@ -31,12 +31,12 @@ module Hacl.K256.PointMul
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Impl.Limb4
 open Hacl.Impl.Mont4
 open Hacl.Impl.Table
-open Hacl.K256.Field
+open Hacl.K256.Field52
 open Hacl.K256.Point
 open Hacl.K256.PointStep
 
@@ -46,6 +46,8 @@ module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
 module Loops = Hacl.Spec.Loops
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
 
 (** {2 The loop}
 
@@ -69,21 +71,21 @@ requires
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   A.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
-        Seq.length vk == nl /\ bnd (vals vk) base /\ pt_ok vqx vqy vqz)
+        Seq.length vk == B4.nl /\ B4.bnd (L4.vals vk) B4.base /\ pt_ok vqx vqy vqz)
 ensures exists* (wx wy wz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   A.pts_to ks #pk vk **
   pure (pt_ok wx wy wz /\
-        pt wx wy wz == K.point_mul (eval (vals vk)) (pt vqx vqy vqz))
+        pt wx wy wz == K.point_mul (B4.eval (L4.vals vk)) (pt vqx vqy vqz))
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; let mut a6 = [| z; 4sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut a6 = [| z; 5sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
 
   set_infinity ox oy oz;
-  Loops.repeati_g_zero (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
+  Loops.repeati_g_zero (K.point_mul_at (B4.eval (L4.vals vk)) (pt vqx vqy vqz))
                        K.point_at_infinity;
 
   let mut i = 0sz;
@@ -101,7 +103,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
           Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
           pt wx wy wz ==
             Loops.repeati_g (SZ.v vi)
-              (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
+              (K.point_mul_at (B4.eval (L4.vals vk)) (pt vqx vqy vqz))
               K.point_at_infinity)
   decreases (256 - SZ.v (!i))
   {
@@ -111,10 +113,10 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
     with ry. assert (A.pts_to oy ry);
     with rz. assert (A.pts_to oz rz);
     Loops.unfold_repeati_g (SZ.v vi)
-      (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz)) K.point_at_infinity;
+      (K.point_mul_at (B4.eval (L4.vals vk)) (pt vqx vqy vqz)) K.point_at_infinity;
     assert (pure (pt rx ry rz ==
                   Loops.repeati_g (SZ.v vi + 1)
-                    (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
+                    (K.point_mul_at (B4.eval (L4.vals vk)) (pt vqx vqy vqz))
                     K.point_at_infinity));
     i := SZ.add vi 1sz;
   };
@@ -124,7 +126,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   with rz. assert (A.pts_to oz rz);
   assert (pure (pt rx ry rz ==
                 Loops.repeati_g 256
-                  (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
+                  (K.point_mul_at (B4.eval (L4.vals vk)) (pt vqx vqy vqz))
                   K.point_at_infinity));
   ()
 }
@@ -136,13 +138,13 @@ fn point_mul_g (ox oy oz: A.array S64.t) (ks: A.array S64.t)
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
-        Seq.length vk == nl /\ bnd (vals vk) base)
+        Seq.length vk == B4.nl /\ B4.bnd (L4.vals vk) B4.base)
 ensures exists* (wx wy wz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ks #pk vk **
-  pure (pt_ok wx wy wz /\ pt wx wy wz == K.point_mul_g (eval (vals vk)))
+  pure (pt_ok wx wy wz /\ pt wx wy wz == K.point_mul_g (B4.eval (L4.vals vk)))
 {
   let z = S64.zero;
-  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   fone a3;
   (* [point_add] wants its three input coordinates at one permission, and
      the constant tables hand back one existential permission each.  A copy

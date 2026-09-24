@@ -28,10 +28,10 @@ module Hacl.K256.Ecdh
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Spec.Bytes
-open Hacl.K256.Field
+open Hacl.K256.Field52
 open Hacl.K256.Point
 open Hacl.K256.PointMul
 open Hacl.K256.Encode
@@ -67,7 +67,7 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
 
   let ok = load_scalar a0 sk;
   if ok {
@@ -93,7 +93,7 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; let mut a6 = [| z; 4sz |]; A.pts_to_len a6; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut a6 = [| z; 5sz |]; A.pts_to_len a6; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
 
   let okq = load_point a1 a2 a3 pk;
