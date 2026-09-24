@@ -43,6 +43,9 @@ module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
+module GR = Spec.K256.Group
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -71,7 +74,11 @@ ensures exists* (wo: Seq.seq S8.t).
 
   let ok = load_scalar a0 sk;
   if ok {
+    with vk. assert (A.pts_to a0 vk);
     point_mul_g a1 a2 a3 a0;
+    with wx wy wz. assert (A.pts_to a1 wx ** A.pts_to a2 wy ** A.pts_to a3 wz);
+    GR.peq_to_aff_point (pt wx wy wz)
+                        (K.point_mul_g (B4.eval (L4.vals vk)));
     store_point out a1 a2 a3;
     true
   } else {
@@ -99,7 +106,15 @@ ensures exists* (wo: Seq.seq S8.t).
   let okq = load_point a1 a2 a3 pk;
   let okk = load_scalar a0 sk;
   if (okq && okk) {
+    with vk. assert (A.pts_to a0 vk);
+    with q0 q1 q2. assert (A.pts_to a1 q0 ** A.pts_to a2 q1 ** A.pts_to a3 q2);
+    lpt_on_curve vp;
     point_mul a4 a5 a6 a1 a2 a3 a0;
+    with wx wy wz. assert (A.pts_to a4 wx ** A.pts_to a5 wy ** A.pts_to a6 wz);
+    GR.peq_is_point_at_infinity (pt wx wy wz)
+      (K.point_mul (B4.eval (L4.vals vk)) (pt q0 q1 q2));
+    GR.peq_to_aff_point (pt wx wy wz)
+      (K.point_mul (B4.eval (L4.vals vk)) (pt q0 q1 q2));
     let inf = fis_zero a6;
     if inf {
       false
