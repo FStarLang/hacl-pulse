@@ -848,7 +848,8 @@ mentions both takes minutes.  So `code/p256` is twenty modules: the on-curve
 test and the scalar reduction never appear in the same verification context,
 and `Hacl.P256.Key` (private keys, the scalar field) and
 `Hacl.P256.Key.Public` (public keys, the field) are separate files for no
-other reason.  `code/k256` is the same twenty for the same reason.
+other reason.  `code/k256` is the same twenty for the same reason, plus the
+four modules of its own radix-52 base field.
 
 **`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
 addition formulas are Renes-Costello-Batina, twelve field multiplications
@@ -898,17 +899,23 @@ both ends.
 Bitcoin's curve has a different prime, a different order, and `a = 0`
 instead of `a = -3`.  Everything else about it is P-256, and the
 implementation says so: `code/k256` is a module-for-module copy of
-`code/p256` in which only three files differ in substance.
+`code/p256` in which the curve arithmetic differs in three files, plus the
+base field, which secp256k1 has since taken its own way.
 
-**`Hacl.K256.Tables` is the whole of the difference for the field.**  The
-two moduli, their complements, the four Montgomery constants, the three
-exponents and the curve constants in Montgomery form -- about three hundred
-lines of generated literals, and the only place in the implementation where
-secp256k1's actual numbers appear.  `Hacl.K256.Field`, `Hacl.K256.Scalar`
-and `Hacl.K256.Inverse` are then the P-256 modules with those tables
-underneath, and **none of them adds a line to the emitted C**: the
-Montgomery layer takes its modulus as an argument, so the two curves share
-every field operation and differ only in the table they pass.
+**The scalar field is shared; the base field no longer is.**
+`Hacl.K256.Tables` holds the scalar modulus, its complement, the Montgomery
+constants and the exponents, and `Hacl.K256.Scalar` is the P-256 scalar
+module with those tables underneath, adding not a line to the emitted C --
+the Montgomery layer takes its modulus as an argument, so the two curves
+share every scalar operation and differ only in the table they pass.  The
+base field went its own way: secp256k1's prime is `2^256 - 2^32 - 977`, which
+is close enough to a power of two that a bit above 2^256 folds back with a
+single multiply by `2^32 + 977`, so `Hacl.K256.Field52` carries five limbs of
+fifty-two bits, leaves them lazily reduced between operations, and has no
+Montgomery factor at all.  `Hacl.K256.Tables52` holds the curve constants in
+that representation and `Hacl.K256.Exp52` the exponentiation ladder without
+the Montgomery apparatus.  P-256 still uses the shared four-limb Montgomery
+core.
 
 **`a = 0` is a shorter addition law, not a special case of the same one.**
 Renes-Costello-Batina give separate algorithms for `a = -3` (4 and 6) and
@@ -2071,9 +2078,9 @@ reference**.
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | P-256 ECDSA verify | -- | 811 us | 425 us | **1.91x** |  |  |
+| secp256k1 ECDSA sign | -- | 227 us | 65 us | **3.49x** |  |  |
 | Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
-| secp256k1 ECDSA sign | -- | 313 us | 65 us | **4.79x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -2140,20 +2147,24 @@ so the field arithmetic is the same shape, and with the field marked
 `CInline` X25519 is within 1.26x -- what is left there is the ladder itself,
 which has had no attention.  Ed25519 is further behind because it multiplies
 one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1
-were behind for three reasons and are now behind for two.  The plainest has
-been removed: the 256-bit core they share was eight limbs of thirty-two bits,
-so a field multiply did sixty-four schoolbook products and sixty-four
-reduction products, and it is now four limbs of sixty-four, which does sixteen
-and sixteen.  Measured directly, our secp256k1 `fmul` went from 53.4 ns to
-21.5 and our P-256 `fmul` from 42.2 to 19.7, against HACL\*'s 7.0 and 16.8;
-P-256 is now within 1.17x of the reference field multiply, and the whole of
-P-256 ECDSA verification within 1.91x.  What is left is that both curves use
-the shared general Montgomery core rather than the special-prime reductions
-those two primes admit -- which is all of secp256k1's remaining gap, since
-HACL\*'s secp256k1 is five limbs of fifty-two bits with lazy reduction and no
-Montgomery factor at all -- and that both multiply scalars one bit at a time
-rather than through a precomputed window.  Both are known, localized, and
-require no new proof technique, only work.
+were behind for three reasons; secp256k1 is now behind for one and P-256 for
+two.  The plainest has been removed for both: the 256-bit core they share was
+eight limbs of thirty-two bits, so a field multiply did sixty-four schoolbook
+products and sixty-four reduction products, and it is now four limbs of
+sixty-four, which does sixteen and sixteen.  Measured directly, our secp256k1
+`fmul` went from 53.4 ns to 21.5 and our P-256 `fmul` from 42.2 to 19.7.
+Second, secp256k1 no longer uses the shared general Montgomery core at all: it
+has its own five-limb, radix-2^52, lazily reduced field, the same
+representation HACL\* and libsecp256k1 use, with the special-prime fold
+`2^256 = p + 2^32 + 977` in place of a Montgomery reduction.  A latency probe
+of the two field multiplies side by side -- ours and HACL\*'s, each behind a
+call, each fed its own previous output -- puts ours at 29.4 ns against 25.9,
+so the secp256k1 field is within 14% of the reference and is no longer worth
+attention.  P-256's prime admits the same treatment and has not had it yet.
+What is left for both is the scalar multiplication: they multiply one bit at a
+time where HACL\* uses a precomputed window.  That is all of secp256k1's
+remaining 2.4x on variable-base ECDH, and it is known, localized, and requires
+no new proof technique, only work.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -2844,32 +2855,27 @@ rough order of value:
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new
    specification fact: additivity of `Spec.GF128.Poly.halves`.
-3. **Special-prime reduction for P-256 and secp256k1** in place of the shared
-   general Montgomery core.  This is what is left on those two curves now
-   that the width is right: HACL\*'s remaining speed comes from the shape of
-   the primes, and on secp256k1 it is the whole of the gap -- five limbs of
-   fifty-two bits, lazy, with no Montgomery factor, against our four limbs of
-   sixty-four with one.
-
-   secp256k1's half of this is written and proved.  `spec/Spec.Bignum52.fst`
-   is the prime-free radix-52 core, `spec/Spec.K256.Field52.fst` the
+3. **Special-prime reduction for P-256**, in place of the shared general
+   Montgomery core.  secp256k1's half of this is **done**: `code/k256` now
+   runs on a five-limb, radix-2^52, lazily reduced field with the fold
+   `2^256 = p + 2^32 + 977` in place of a Montgomery reduction, which is the
+   representation HACL\* and libsecp256k1 use.  `spec/Spec.Bignum52.fst` is
+   the prime-free radix-52 core, `spec/Spec.K256.Field52.fst` the
    prime-specific arithmetic, `spec/Spec.K256.Columns.fst` the bridge that
    turns the nine-column product and its fold into the straight line the code
    runs, `spec/Spec.K256.Freeze.fst` the canonical form, and
    `spec/Spec.K256.Repack.fst` the bit repacking between five fifty-two-bit
-   limbs and the four sixty-four-bit ones whose byte layer is already proved.
-   `code/k256/Hacl.K256.Field52.fst` is the code: `fadd`, `fsub`, `fneg`,
-   `fmul`, `freeze`, the byte layer, `fcopy`, `fzero`, `fone`, `fsqr`, `feq`
-   and `fis_zero`.  `code/k256/Hacl.Impl.Lit52.fst` and
-   `code/k256/Hacl.K256.Tables52.fst` hold the four curve constants, which are
-   now the numbers themselves rather than multiples of `R`.
+   limbs and the four sixty-four-bit ones whose byte layer was already proved.
+   `code/k256/Hacl.K256.Field52.fst` is the code, `Hacl.K256.Exp52` the
+   exponentiation ladder without the Montgomery apparatus, and
+   `Hacl.Impl.Lit52` and `Hacl.K256.Tables52` the four curve constants, which
+   are now the numbers themselves rather than multiples of `R`.  The old
+   `Hacl.K256.Field` is deleted.  It was worth 313 us to 227 on ECDSA sign and
+   291 to 213 on ECDH, and it puts our `fmul` at 29.4 ns against HACL\*'s
+   25.9, so the field is no longer the gap.  P-256's prime admits the same
+   treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
+   subtractions rather than a multiply -- and has not had it.
 
-   What is left is the callers -- `Hacl.K256.Point`, `PointStep`, `Inverse`,
-   `Encode`, `Sec1`, `LowS`, `Key`, `Ecdh`, `Sign` and `Verify` all allocate
-   field elements as four limbs today, and the scalar field stays on the
-   four-limb Montgomery core, so the two radices will be in scope together and
-   `nl` will have to be qualified.  Nothing calls the new field yet, so
-   `dist/` is unchanged and the numbers in the table above still stand.
 4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
    of what is left after (3).
 5. **Taking over the remaining sixty-seven compiler specialisations**, the
