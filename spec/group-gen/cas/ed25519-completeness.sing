@@ -1,0 +1,13 @@
+ring r = (0,d), (u1,v1,u2,v2,e,i), dp;
+poly c1 = v1^2 - u1^2 - 1 - d*u1^2*v1^2;
+poly c2 = v2^2 - u2^2 - 1 - d*u2^2*v2^2;
+poly del = d*u1*v1*u2*v2;
+ideal J = del - e, c1, c2, e^2 - 1, i^2 + 1;
+poly Wp = u1*v1*(i*u2 + v2); poly Vp = i*u1 + e*v1;
+poly Wm = u1*v1*(v2 - i*u2); poly Vm = e*v1 - i*u1;
+poly Gp = d*Wp^2 - Vp^2; poly Gm = d*Wm^2 - Vm^2;
+ideal Js = std(J);
+"red:", reduce(Gp, Js), reduce(Gm, Js);
+matrix T = lift(J, Gp); print(T[1,1]);
+matrix T2 = lift(J, Gm); print(T2[1,1]);
+quit;
