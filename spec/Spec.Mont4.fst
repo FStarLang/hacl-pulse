@@ -284,6 +284,27 @@ let ebit (s: Seq.seq nat) (i: nat { i < 256 })
     Math.pow2_modulo_division_lemma_1 n j rad;
     Math.pow2_modulo_modulo_lemma_1 (n / pow2 j) 1 (rad - j)
 
+(** And the same four bits at a time, which is what a windowed scalar
+    multiplication reads.  The radix is a multiple of four, so a nibble at
+    an index divisible by four never straddles two limbs; that is the only
+    reason this is as short as {!ebit}. *)
+
+let enib (s: Seq.seq nat) (i: nat { i < 256 })
+  : Lemma (requires Seq.length s == nl /\ bnd s base /\ i % 4 == 0)
+          (ensures eval s / pow2 i % 16 ==
+                   Seq.index s (i / rad) / pow2 (i % rad) % 16)
+  = assert_norm (rad == 64);
+    assert_norm (pow2 4 == 16);
+    let k = i / rad in
+    let j = i % rad in
+    Math.euclidean_division_definition i rad;
+    Math.pow2_plus (rad * k) j;
+    Math.division_multiplication_lemma (eval s) (pow2 (rad * k)) (pow2 j);
+    eval_digit s k;
+    let n = eval s / pow2 (rad * k) in
+    Math.pow2_modulo_division_lemma_1 n j rad;
+    Math.pow2_modulo_modulo_lemma_1 (n / pow2 j) 4 (rad - j)
+
 (** The two steps of a left-to-right exponentiation: one more bit of the
     exponent is one squaring and, when the bit is set, one multiplication. *)
 

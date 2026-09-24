@@ -46,6 +46,9 @@ module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
+module GR = Spec.K256.Group
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
@@ -86,6 +89,9 @@ ensures exists* (wo: Seq.seq S8.t).
   let okl = load_scalar c0 nonce;
   if (okd && okn) {
     point_mul_g c8 c9 ca c0;
+    with w8 w9 wa. assert (A.pts_to c8 w8 ** A.pts_to c9 w9 ** A.pts_to ca wa);
+    with wk. assert (A.pts_to c0 wk);
+    GR.peq_to_aff_point (pt w8 w9 wa) (K.point_mul_g (B4.eval (L4.vals wk)));
     to_aff_point cb cc c8 c9 ca;
     with wax. assert (A.pts_to cb wax);
     fstore d0 cb;
