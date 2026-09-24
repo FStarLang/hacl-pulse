@@ -38,6 +38,7 @@ module S = Spec.Ed25519.GroupSv
 module K = Spec.Ed25519.GroupChecks
 module A1 = Spec.Ed25519.GroupAssoc1
 module A2 = Spec.Ed25519.GroupAssoc2
+module B = Hacl.Spec.Bytes
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 40"
 
@@ -482,4 +483,126 @@ let point_double_is_add p =
 let point_compress_congr p q =
   oc p; oc q; onc_parts p; onc_parts q;
   peq_ak p q
+
+(** {2 Decompression lands on the curve}
+
+    All the arithmetic below is done modulo an arbitrary positive [n].
+    That is not generality for its own sake: with [prime] in scope the
+    solver tries to reason about [2^255 - 19] itself, and what takes seven
+    seconds abstractly took over twenty minutes concretely.  Only the last
+    two lemmas mention the curve. *)
+
+(** Congruence, as a difference, in both directions. *)
+let sub_zero (a b: int) (n: pos)
+  : Lemma (requires a % n == b % n) (ensures (a - b) % n == 0)
+  = M.lemma_mod_sub_distr a b n; M.lemma_mod_sub_distr a a n
+
+let zero_sub (a b: int) (n: pos)
+  : Lemma (requires (a - b) % n == 0) (ensures a % n == b % n)
+  = M.lemma_mod_sub_distr a b n; M.lemma_mod_plus_distr_l (a - b) b n
+
+let mul_cong (a b c: int) (n: pos)
+  : Lemma (requires a % n == b % n) (ensures (c * a) % n == (c * b) % n)
+  = M.lemma_mod_mul_distr_r c a n; M.lemma_mod_mul_distr_r c b n
+
+(** The heart of it.  [v] is the denominator [d y^2 + 1] and the
+    hypothesis is [x^2 v = y^2 - 1]; the two sides of the curve equation,
+    multiplied through by [v], differ by exactly [v] times that
+    hypothesis, so both are [d y^4 + 1]. *)
+let cross (x2 y2 v dd: int) (n: pos)
+  : Lemma (requires v % n == (dd * y2 + 1) % n /\ (x2 * v) % n == (y2 - 1) % n)
+          (ensures ((y2 - x2) * v) % n == ((1 + dd * (x2 * y2)) * v) % n)
+  = mul_cong v (dd * y2 + 1) x2 n;
+    sub_zero (y2 - 1) (x2 * (dd * y2 + 1)) n;
+    let k = (y2 - 1) - x2 * (dd * y2 + 1) in
+    M.lemma_mod_mul_distr_r v k n;
+    assert ((v * k) % n == 0);
+    M.paren_mul_right x2 dd y2;
+    M.paren_mul_right dd x2 y2;
+    assert (x2 * (dd * y2) == dd * (x2 * y2));
+    assert (k == y2 - 1 - dd * (x2 * y2) - x2);
+    assert ((y2 - x2) * v - (1 + dd * (x2 * y2)) * v ==
+            v * (y2 - x2 - 1 - dd * (x2 * y2)));
+    zero_sub ((y2 - x2) * v) ((1 + dd * (x2 * y2)) * v) n
+
+(** Squaring is blind to the sign. *)
+let neg_sq_int (x: nat) (n: pos { x < n })
+  : Lemma (((n - x) * (n - x)) % n == (x * x) % n)
+  = assert ((n - x) * (n - x) == x * x + n * (n - 2 * x));
+    M.lemma_mod_plus (x * x) (n - 2 * x) n
+
+(** {!cross} with the reductions that [fadd], [fsub] and [fmul] insert
+    written out.  Still no [prime]. *)
+let curve_eq_gen (x2 y2 v dd: nat) (n: pos)
+  : Lemma (requires x2 < n /\ y2 < n /\ v < n /\ dd < n /\
+                    v == ((dd * y2) % n + 1) % n /\
+                    (x2 * v) % n == (y2 + n - 1) % n)
+          (ensures ((y2 + n - x2) % n * v) % n ==
+                   ((1 + (dd * (x2 * y2 % n)) % n) % n * v) % n)
+  = M.small_mod v n;
+    M.lemma_mod_plus_distr_l (dd * y2) 1 n;
+    M.lemma_mod_plus (y2 - 1) 1 n;
+    cross x2 y2 v dd n;
+    M.lemma_mod_mul_distr_l (y2 + n - x2) v n;
+    assert ((y2 + n - x2) * v == (y2 - x2) * v + v * n);
+    M.lemma_mod_plus ((y2 - x2) * v) v n;
+    M.lemma_mod_mul_distr_r dd (x2 * y2) n;
+    M.lemma_mod_plus_distr_r 1 (dd * (x2 * y2)) n;
+    M.lemma_mod_mul_distr_l (1 + dd * (x2 * y2)) v n
+
+(** {!curve_eq_gen} at [n = prime], with the denominator cancelled. *)
+let curve_eq (x2 y2 v: elem)
+  : Lemma (requires v == fadd (fmul d y2) one /\ v <> 0 /\ fmul x2 v == fsub y2 one)
+          (ensures fsub y2 x2 == fadd one (fmul d (fmul x2 y2)))
+  = curve_eq_gen x2 y2 v d prime;
+    cancel (fsub y2 x2) (fadd one (fmul d (fmul x2 y2))) v
+
+(** Squaring is blind to the sign, in the field. *)
+let neg_sq (x: elem) : Lemma (fmul (fsub 0 x) (fsub 0 x) == fmul x x) =
+  if x = 0 then () else begin
+    M.small_mod (prime - x) prime;
+    M.lemma_mod_mul_distr_l (prime - x) (prime - x) prime;
+    neg_sq_int x prime
+  end
+
+(** [recover_x] returns an abscissa satisfying the affine equation. *)
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 200"
+let recover_on_curve (y: elem) (sign: nat { sign < 2 }) (x: elem)
+  : Lemma (requires recover_x y sign == Some x) (ensures on_curve (x, y, one, fmul x y))
+  = let y2 = fmul y y in
+    let u = fsub y2 one in
+    let v = fadd (fmul d y2) one in
+    assert (v <> 0);
+    let Some x0 = sqrt_of (fmul u (finv v)) in
+    assert (fmul x0 x0 == fmul u (finv v));
+    if x = x0 then () else neg_sq x0;
+    assert (fmul x x == fmul u (finv v));
+    div_mul u v;
+    assert (fmul (fmul x x) v == u);
+    curve_eq (fmul x x) y2 v;
+    (* [hl] and [hr] at [z = one] are the two sides just proved equal. *)
+    prime_gt_one ();
+    mul_one one;
+    FStar.Pervasives.reveal_opaque (`%S.on) S.on;
+    FStar.Pervasives.reveal_opaque (`%S.hl) S.hl;
+    FStar.Pervasives.reveal_opaque (`%S.hr) S.hr;
+    cpt_parts (x) (y);
+    mul_one (fsub y2 (fmul x x));
+    onc_cpt x y;
+    oc (x, y, one, fmul x y)
+#pop-options
+
+#push-options "--fuel 1 --ifuel 2 --z3rlimit 200"
+let decompress_on_curve s p =
+  let n = B.le_nat s in
+  let sign = n / pow2 255 in
+  let y = n % pow2 255 in
+  assert_norm (pow2 255 == 2 * pow2 254);
+  B.le_nat_bound s;
+  assert_norm (pow2 (8 * 32) == 2 * pow2 255);
+  M.lemma_div_lt n 256 255;
+  M.lemma_mod_lt n (pow2 255);
+  let Some x = recover_x y sign in
+  recover_on_curve y sign x
+#pop-options
 #pop-options

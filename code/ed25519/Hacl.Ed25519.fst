@@ -48,6 +48,9 @@ module C = Spec.Curve25519
 module E = Spec.Ed25519
 module Sc = Spec.Ed25519.Scalar
 module P = Hacl.Ed25519.Point
+module W = Hacl.Ed25519.PointWin
+module GR = Spec.Ed25519.Group
+module Smul = Spec.Ed25519.Smul
 module Table = Hacl.Impl.Table
 module Sub = Hacl.Impl.Sub
 module Tables = Hacl.Ed25519.Tables
@@ -77,7 +80,8 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
                 (wz: Seq.seq S64.t) (wt: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ot wt ** A.pts_to ks #pk vk **
-  pure (P.pt_ok wx wy wz wt /\ P.pt wx wy wz wt == E.point_mul_g vk)
+  pure (P.pt_ok wx wy wz wt /\ GR.on_curve (P.pt wx wy wz wt) /\
+        E.point_equal (P.pt wx wy wz wt) (E.point_mul_g vk))
 {
   A.pts_to_len ox;
   let zz = S64.zero;
@@ -85,7 +89,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| z128; 9sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut a5 = [| zz; 5sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5;
 
-  (* The tables are read-only, but [point_mul] wants the four coordinates
+  (* The tables are read-only, but the window wants the four coordinates
      at one permission, so the two constants are copied in. *)
   let gxt = Table.table Tables.gx_arr 5sz;
   copy a4 gxt;
@@ -98,7 +102,51 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   assert_norm (1 < base);
   P.set_small a1 1uL;
   fmul a2 a4 a5;
-  P.point_mul ox oy oz ot a4 a5 a1 a2 ks;
+  with vgx. assert (A.pts_to a4 vgx);
+  with vgy. assert (A.pts_to a5 vgy);
+  with vgz. assert (A.pts_to a1 vgz);
+  with vgt. assert (A.pts_to a2 vgt);
+  assert (pure (P.pt vgx vgy vgz vgt == E.g));
+  GR.g_on_curve ();
+  W.point_mul_win ox oy oz ot a4 a5 a1 a2 ks;
+  ()
+}
+
+(** {2 Compressing a multiple of the base point}
+
+    All three of key generation, the nonce commitment [R] and the public
+    key inside signing do exactly this, and all three need the same
+    argument: the window returns a point only *equivalent* to
+    [E.point_mul_g], and compression is blind to the difference because it
+    normalises through [Z^-1] ({!Spec.Ed25519.Group.point_compress_congr}).
+    Doing it once here keeps that argument out of the three callers. *)
+
+let compress_congr (p: E.ext_point) (k: Seq.lseq S8.t 32)
+  : Lemma (requires GR.on_curve p /\ E.point_equal p (E.point_mul_g k))
+          (ensures E.point_compress p == E.point_compress (E.point_mul_g k))
+  = Smul.point_mul_g_on_curve k;
+    GR.point_compress_congr p (E.point_mul_g k)
+
+fn point_mul_g_compress (out: A.array S8.t) (ks: A.array S8.t)
+                        (#vout: erased (Seq.seq S8.t))
+                        (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
+requires A.pts_to out vout ** A.pts_to ks #pk vk **
+  pure (Seq.length vout == 32)
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to out vout' ** A.pts_to ks #pk vk **
+  pure (vout' == E.point_compress (E.point_mul_g vk))
+{
+  let zz = S64.zero;
+  let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4;
+  A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
+
+  point_mul_g a1 a2 a3 a4 ks;
+  with wx. assert (A.pts_to a1 wx);
+  with wy. assert (A.pts_to a2 wy);
+  with wz. assert (A.pts_to a3 wz);
+  with wt. assert (A.pts_to a4 wt);
+  compress_congr (P.pt wx wy wz wt) vk;
+  point_compress out a1 a2 a3 a4;
   ()
 }
 
@@ -190,8 +238,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand b1 b2 secret;
-  point_mul_g a1 a2 a3 a4 b1;
-  point_compress out a1 a2 a3 a4;
+  point_mul_g_compress out b1;
 
   ()
 }
@@ -362,8 +409,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   hash2 c1 prefix msg mlen;
   Scalar.reduce_op a1 a5 a6 c1;
   Scalar.store_le c2 a1;
-  point_mul_g a8 a9 aa ab c2;
-  point_compress c3 a8 a9 aa ab;
+  point_mul_g_compress c3 c2;
   with vrr. assert (A.pts_to c3 vrr);
   A.pts_to_len c3;
 
@@ -426,8 +472,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand c2 c3 secret;
-  point_mul_g a1 a2 a3 a4 c2;
-  point_compress c1 a1 a2 a3 a4;
+  point_mul_g_compress c1 c2;
   sign_expanded sg c1 c2 c3 msg mlen;
 
   ()
@@ -446,18 +491,40 @@ let lt_char (a: nat) (n: pos) (oks: bool)
   = Math.lemma_mod_lt a n;
     if a < n then Math.modulo_lemma a n
 
+(** The computed [[S]B] and [[k]A] are only equivalent to the ones the
+    specification names, so the final equality test has to be shown blind
+    to the difference.  It is, but not for free: [point_add] respects the
+    equivalence ([point_add_congr]), and then so does the test itself
+    ({!Spec.Ed25519.Smul.point_equal_congr}).  Both want [on_curve] of the
+    specification's points too, which is where
+    {!Spec.Ed25519.Group.decompress_on_curve} is needed -- the public key
+    arrives as bytes, and nothing before now had to know that decompressing
+    them lands on the curve. *)
 let verify_char (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
                 (sg: Seq.lseq S8.t 64) (aa rp: E.ext_point)
-                (s: nat { s < E.q }) (k: nat { k < E.q }) (res: bool)
+                (s: nat { s < E.q }) (k: nat { k < E.q })
+                (sb ka: E.ext_point) (res: bool)
   : Lemma (requires
              E.point_decompress pub == Some aa /\
              E.point_decompress (Seq.slice sg 0 32) == Some rp /\
              s == le_nat (Seq.slice sg 32 64) /\
              k == E.sig_k (Seq.slice sg 0 32) pub msg /\
-             res == E.point_equal (E.point_mul_g (E.scalar_bytes s))
-                      (E.point_add rp (E.point_mul (E.scalar_bytes k) aa)))
+             GR.on_curve sb /\ GR.on_curve ka /\
+             E.point_equal sb (E.point_mul_g (E.scalar_bytes s)) /\
+             E.point_equal ka (E.point_mul (E.scalar_bytes k) aa) /\
+             res == E.point_equal sb (E.point_add rp ka))
           (ensures E.verify pub msg sg == res)
-  = ()
+  = let sb' = E.point_mul_g (E.scalar_bytes s) in
+    let ka' = E.point_mul (E.scalar_bytes k) aa in
+    GR.decompress_on_curve pub aa;
+    GR.decompress_on_curve (Seq.slice sg 0 32) rp;
+    Smul.point_mul_g_on_curve (E.scalar_bytes s);
+    Smul.point_mul_on_curve (E.scalar_bytes k) aa;
+    GR.point_equal_refl rp;
+    GR.point_add_congr rp rp ka ka';
+    GR.point_add_on_curve rp ka;
+    GR.point_add_on_curve rp ka';
+    Smul.point_equal_congr sb sb' (E.point_add rp ka) (E.point_add rp ka')
 
 let verify_false (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
                  (sg: Seq.lseq S8.t 64)
@@ -548,12 +615,23 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
     Scalar.reduce_op f5 f6 f7 c5;
     Scalar.store_le c4 f5;
     point_mul_g e4 e5 e6 e7 c3;
-    P.point_mul d9 e1 e2 e3 d1 d2 d3 d4 c4;
+    GR.decompress_on_curve vpub (P.pt vax vay vaz vat);
+    W.point_mul_win d9 e1 e2 e3 d1 d2 d3 d4 c4;
+    GR.decompress_on_curve (Seq.slice vsg 0 32) (P.pt vrx vry vrz vrt);
     P.point_add e8 e9 f1 f2 d5 d6 d7 d8 d9 e1 e2 e3;
     with vacc. assert (A.pts_to f5 vacc);
+    with vbx. assert (A.pts_to e4 vbx);
+    with vby. assert (A.pts_to e5 vby);
+    with vbz. assert (A.pts_to e6 vbz);
+    with vbt. assert (A.pts_to e7 vbt);
+    with vkx. assert (A.pts_to d9 vkx);
+    with vky. assert (A.pts_to e1 vky);
+    with vkz. assert (A.pts_to e2 vkz);
+    with vkt. assert (A.pts_to e3 vkt);
     let r = point_equal e4 e5 e6 e7 e8 e9 f1 f2;
     verify_char vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
-                (le_nat vs0) (B32.eval (Limb.vals vacc)) r;
+                (le_nat vs0) (B32.eval (Limb.vals vacc))
+                (P.pt vbx vby vbz vbt) (P.pt vkx vky vkz vkt) r;
     r
   } else {
     verify_false vpub vm vsg;

@@ -227,3 +227,15 @@ val point_double_is_add (p: ext_point)
 val point_compress_congr (p q: ext_point)
   : Lemma (requires on_curve p /\ on_curve q /\ point_equal p q)
           (ensures point_compress p == point_compress q)
+
+(** {2 A decompressed point is on the curve}
+
+    The windowed scalar multiplication needs [on_curve] of its input, and
+    in signature verification that input is the public key, which arrives
+    as thirty-two bytes and is decompressed.  [point_decompress] recovers
+    [x] as a square root of [(y^2 - 1)/(d y^2 + 1)], which is precisely the
+    affine curve equation solved for [x], so the recovered point is on the
+    curve -- but [Spec.Ed25519] never says so, because the double-and-add
+    implementation it was written for never needed it.  It does now. *)
+val decompress_on_curve (s: FStar.Seq.lseq Hacl.Secret.UInt8.t 32) (p: ext_point)
+  : Lemma (requires point_decompress s == Some p) (ensures on_curve p)
