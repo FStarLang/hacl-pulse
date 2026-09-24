@@ -686,52 +686,53 @@ static bool Hacl_HMAC_DRBG_Ops_generate__t_2(uint32_t *kt, uint32_t *ivt, uint8_
 static void Hacl_HMAC_DRBG_Ops_reseed__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *entropy, size_t elen, uint8_t *additional, size_t alen);
 static void Hacl_HMAC_DRBG_Ops_instantiate__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *entropy, size_t elen, uint8_t *nonce, size_t nlen, uint8_t *personal, size_t plen);
 static const uint64_t Hacl_K256_Tables_fnm_arr[4] = { 4294968273ULL, 0, 0, 0 };
-static const uint64_t Hacl_K256_Tables_fms_arr[4] = { 18446744069414583343ULL, 18446744073709551615ULL, 18446744073709551615ULL, 18446744073709551615ULL };
-static const uint64_t Hacl_K256_Tables_fr2_arr[4] = { 8392367050913ULL, 1, 0, 0 };
-static void Hacl_K256_Field_fto(uint64_t *out, uint64_t *a);
-static bool Hacl_K256_Field_fload(uint64_t *out, uint8_t *b);
-static const uint64_t Hacl_K256_Tables_fr1_arr[4] = { 4294968273ULL, 0, 0, 0 };
-static void Hacl_K256_Field_fone(uint64_t *out);
-static void Hacl_K256_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b);
-static void Hacl_K256_Field_fsqr(uint64_t *out, uint64_t *a);
-static const uint64_t Hacl_K256_Tables_bm_arr[4] = { 30064777911ULL, 0, 0, 0 };
-static void Hacl_K256_Field_fadd(uint64_t *out, uint64_t *a, uint64_t *b);
+static void Hacl_K256_Field52_load(uint64_t *a, uint64_t *h);
+static bool Hacl_K256_Field52_fload(uint64_t *out, uint8_t *b);
+static void Hacl_K256_Field52_fone(uint64_t *out);
+static void Hacl_K256_Field52_fcopy(uint64_t *dst, uint64_t *src);
+static inline void Hacl_K256_Field52_mkcols(unsigned __int128 *t, uint64_t *a, uint64_t *b);
+static inline void Hacl_K256_Field52_reduce(uint64_t *out, unsigned __int128 *t);
+static inline void Hacl_K256_Field52_fmul(uint64_t *out, uint64_t *a, uint64_t *b);
+static void Hacl_K256_Field52_fsqr(uint64_t *out, uint64_t *a);
+static const uint64_t Hacl_K256_Tables52_b_arr[5] = { 7, 0, 0, 0, 0 };
+static inline void Hacl_K256_Field52_carry_chain(uint64_t *a);
+static inline void Hacl_K256_Field52_fadd(uint64_t *out, uint64_t *a, uint64_t *b);
 static void Hacl_K256_Encode_curve_rhs(uint64_t *out, uint64_t *x);
-static bool Hacl_K256_Field_feq(uint64_t *a, uint64_t *b);
+static inline void Hacl_K256_Field52_freeze(uint64_t *out, uint64_t *a);
+static bool Hacl_K256_Field52_feq(uint64_t *a, uint64_t *b);
 static bool Hacl_K256_Encode_is_on_curve(uint64_t *x, uint64_t *y);
 static bool Hacl_K256_Encode_load_point(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint8_t *b);
 static const uint64_t Hacl_K256_Tables_qnm_arr[4] = { 4624529908474429119ULL, 4994812053365940164ULL, 1, 0 };
 static bool Hacl_K256_Key_load_scalar(uint64_t *out, uint8_t *b);
-static void Hacl_K256_Field_fzero(uint64_t *out);
+static void Hacl_K256_Field52_fzero(uint64_t *out);
 static void Hacl_K256_PointStep_set_infinity(uint64_t *ox, uint64_t *oy, uint64_t *oz);
 static bool Hacl_K256_PointMul_lt256(size_t x);
 static size_t Hacl_K256_PointStep_sub255(size_t x);
-static const uint64_t Hacl_K256_Tables_b3m_arr[4] = { 90194333733ULL, 0, 0, 0 };
-static void Hacl_K256_Field_fcopy(uint64_t *dst, uint64_t *src);
-static void Hacl_K256_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b);
+static const uint64_t Hacl_K256_Tables52_b3_arr[5] = { 21, 0, 0, 0, 0 };
+static inline void Hacl_K256_Field52_fsub(uint64_t *out, uint64_t *a, uint64_t *b);
 static void Hacl_K256_Point_point_double(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *x, uint64_t *y, uint64_t *z);
 static void Hacl_K256_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *x2, uint64_t *y2, uint64_t *z2);
+static void Hacl_K256_Field52_asel(uint64_t *out, uint64_t *a, uint64_t *b, uint64_t m);
 static void Hacl_K256_PointStep_point_mul_step(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *ks, size_t n);
 static void Hacl_K256_PointMul_point_mul(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *ks);
-static bool Hacl_K256_Field_fis_zero(uint64_t *a);
+static bool Hacl_K256_Field52_fis_zero(uint64_t *a);
 static const uint64_t Hacl_K256_Tables_finv_e_arr[4] = { 18446744069414583341ULL, 18446744073709551615ULL, 18446744073709551615ULL, 18446744073709551615ULL };
 static void Hacl_K256_Inverse_finv(uint64_t *out, uint64_t *a);
 static void Hacl_K256_Encode_to_aff_point(uint64_t *ox, uint64_t *oy, uint64_t *x, uint64_t *y, uint64_t *z);
-static const uint64_t Hacl_K256_Tables_one_arr[4] = { 1, 0, 0, 0 };
-static void Hacl_K256_Field_ffrom(uint64_t *out, uint64_t *a);
-static void Hacl_K256_Field_fstore(uint8_t *b, uint64_t *a);
+static void Hacl_K256_Field52_store(uint64_t *u, uint64_t *a);
+static void Hacl_K256_Field52_fstore(uint8_t *b, uint64_t *a);
 static void Hacl_K256_Encode_store_point(uint8_t *b, uint64_t *x, uint64_t *y, uint64_t *z);
-static const uint64_t Hacl_K256_Tables_gxm_arr[4] = { 15507633332195041431ULL, 2530505477788034779ULL, 10925531211367256732ULL, 11061375339145502536ULL };
-static const uint64_t Hacl_K256_Tables_gym_arr[4] = { 12780836216951778274ULL, 10231155108014310989ULL, 8121878653926228278ULL, 14933801261141951190ULL };
+static const uint64_t Hacl_K256_Tables52_gx_arr[5] = { 705178180786072ULL, 3855836460717471ULL, 4089131105950716ULL, 3301581525494108ULL, 133858670344668ULL };
+static const uint64_t Hacl_K256_Tables52_gy_arr[5] = { 2199641648059576ULL, 1278080618437060ULL, 3959378566518708ULL, 3455034269351872ULL, 79417610544803ULL };
 static void Hacl_K256_PointMul_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks);
 static const uint64_t Hacl_K256_Tables_fsqrt_e_arr[4] = { 18446744072635809548ULL, 18446744073709551615ULL, 18446744073709551615ULL, 4611686018427387903ULL };
 static bool Hacl_K256_Inverse_fsqrt(uint64_t *out, uint64_t *a);
-static void Hacl_Impl_Mont4_aneg(uint64_t *out, uint64_t *a, uint64_t *ms);
-static void Hacl_K256_Field_fneg(uint64_t *out, uint64_t *a);
+static inline void Hacl_K256_Field52_fneg(uint64_t *out, uint64_t *a);
 static void Hacl_K256_Sec1_store_y(uint8_t *yb, uint64_t *yf, uint64_t *nf, bool odd);
 static const uint64_t Hacl_K256_Tables_qhalf_arr[4] = { 16134479119472337056ULL, 6725966010171805725ULL, 18446744073709551615ULL, 9223372036854775807ULL };
 static bool Hacl_Impl_Mont4_ageq(uint64_t *a, uint64_t *b);
 static const uint64_t Hacl_K256_Tables_qms_arr[4] = { 13822214165235122497ULL, 13451932020343611451ULL, 18446744073709551614ULL, 18446744073709551615ULL };
+static void Hacl_Impl_Mont4_aneg(uint64_t *out, uint64_t *a, uint64_t *ms);
 static bool Hacl_K256_LowS_is_normalized(uint8_t *b);
 static uint32_t Hacl_Secret_Word_zero__t_2 = 0;
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
@@ -753,6 +754,7 @@ static const uint64_t Hacl_K256_Tables_qinv_e_arr[4] = { 13822214165235122495ULL
 static const uint64_t Hacl_K256_Tables_qr1_arr[4] = { 4624529908474429119ULL, 4994812053365940164ULL, 1, 0 };
 static void Hacl_K256_Scalar_qinv(uint64_t *out, uint64_t *a);
 static void Hacl_K256_Scalar_qmul(uint64_t *out, uint64_t *a, uint64_t *b);
+static const uint64_t Hacl_K256_Tables_one_arr[4] = { 1, 0, 0, 0 };
 static void Hacl_K256_PointMulD_point_mul_double_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *u1, uint64_t *u2, uint64_t *qx, uint64_t *qy, uint64_t *qz);
 static bool Hacl_K256_Scalar_qeq(uint64_t *a, uint64_t *b);
 static bool Hacl_K256_Verify_verify(uint64_t *mq, uint8_t *pk, uint8_t *sig_r, uint8_t *sig_s);
@@ -17430,31 +17432,33 @@ void Hacl_HMAC_DRBG_instantiate_sha256(uint8_t *k, uint8_t *v, size_t *ctr, uint
   Hacl_HMAC_DRBG_Ops_instantiate__t_2(kt, ivt, k, v, ctr, entropy, elen, nonce, nlen, personal, plen);
 }
 
-static void Hacl_K256_Field_fto(uint64_t *out, uint64_t *a) {
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
-  uint64_t *r2 = (uint64_t *)Hacl_K256_Tables_fr2_arr;
-  unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
-  unsigned __int128 ap[8];
-  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
-    ap[_ci1] = z128;
-  }
-  unsigned __int128 at[9];
-  for (size_t _ci2 = 0; _ci2 < 9; _ci2++) {
-    at[_ci2] = z128;
-  }
-  unsigned __int128 ar[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    ar[_ci3] = z128;
-  }
-  unsigned __int128 asv[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
-    asv[_ci4] = z128;
-  }
-  Hacl_Impl_Bignum4_mmul_op(out, a, r2, ap, at, ar, asv, ms, nm, 15580212934572586289ULL);
+static void Hacl_K256_Field52_load(uint64_t *a, uint64_t *h) {
+  uint64_t h0 = h[0];
+  uint64_t h1 = h[1];
+  uint64_t h2 = h[2];
+  uint64_t h3 = h[3];
+  uint64_t a0 = Hacl_Secret_UInt64_logand(h0, 0xfffffffffffffULL);
+  uint64_t p = Hacl_Secret_UInt64_shift_right(h0, 52);
+  uint64_t q = Hacl_Secret_UInt64_shift_left(h1, 12);
+  uint64_t u = Hacl_Secret_UInt64_add_mod(p, q);
+  uint64_t a1 = Hacl_Secret_UInt64_logand(u, 0xfffffffffffffULL);
+  uint64_t p1 = Hacl_Secret_UInt64_shift_right(h1, 40);
+  uint64_t q1 = Hacl_Secret_UInt64_shift_left(h2, 24);
+  uint64_t u1 = Hacl_Secret_UInt64_add_mod(p1, q1);
+  uint64_t a2 = Hacl_Secret_UInt64_logand(u1, 0xfffffffffffffULL);
+  uint64_t p2 = Hacl_Secret_UInt64_shift_right(h2, 28);
+  uint64_t q2 = Hacl_Secret_UInt64_shift_left(h3, 36);
+  uint64_t u2 = Hacl_Secret_UInt64_add_mod(p2, q2);
+  uint64_t a3 = Hacl_Secret_UInt64_logand(u2, 0xfffffffffffffULL);
+  uint64_t a4 = Hacl_Secret_UInt64_shift_right(h3, 16);
+  a[0] = a0;
+  a[1] = a1;
+  a[2] = a2;
+  a[3] = a3;
+  a[4] = a4;
 }
 
-static bool Hacl_K256_Field_fload(uint64_t *out, uint8_t *b) {
+static bool Hacl_K256_Field52_fload(uint64_t *out, uint8_t *b) {
   uint64_t z = Hacl_Secret_UInt64_zero;
   unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
   uint64_t at[4];
@@ -17468,94 +17472,275 @@ static bool Hacl_K256_Field_fload(uint64_t *out, uint8_t *b) {
   Hacl_Impl_Bignum4_load_be(at, b);
   uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
   bool r = Hacl_Impl_Mont4_abelow(at, asv, nm);
-  Hacl_K256_Field_fto(out, at);
+  Hacl_K256_Field52_load(out, at);
   return r;
 }
 
-static void Hacl_K256_Field_fone(uint64_t *out) {
-  uint64_t *r1 = (uint64_t *)Hacl_K256_Tables_fr1_arr;
-  Hacl_Impl_Mont4_acopy(out, r1);
+static void Hacl_K256_Field52_fone(uint64_t *out) {
+  uint64_t one = 1;
+  out[0] = one;
+  out[1] = Hacl_Secret_UInt64_zero;
+  out[2] = Hacl_Secret_UInt64_zero;
+  out[3] = Hacl_Secret_UInt64_zero;
+  out[4] = Hacl_Secret_UInt64_zero;
 }
 
-static void Hacl_K256_Field_fmul(uint64_t *out, uint64_t *a, uint64_t *b) {
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
-  unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
-  unsigned __int128 ap[8];
-  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
-    ap[_ci1] = z128;
-  }
-  unsigned __int128 at[9];
-  for (size_t _ci2 = 0; _ci2 < 9; _ci2++) {
-    at[_ci2] = z128;
-  }
-  unsigned __int128 ar[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    ar[_ci3] = z128;
-  }
-  unsigned __int128 asv[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
-    asv[_ci4] = z128;
-  }
-  Hacl_Impl_Bignum4_mmul_op(out, a, b, ap, at, ar, asv, ms, nm, 15580212934572586289ULL);
+static void Hacl_K256_Field52_fcopy(uint64_t *dst, uint64_t *src) {
+  uint64_t x0 = src[0];
+  uint64_t x1 = src[1];
+  uint64_t x2 = src[2];
+  uint64_t x3 = src[3];
+  uint64_t x4 = src[4];
+  dst[0] = x0;
+  dst[1] = x1;
+  dst[2] = x2;
+  dst[3] = x3;
+  dst[4] = x4;
 }
 
-static void Hacl_K256_Field_fsqr(uint64_t *out, uint64_t *a) {
+static inline void Hacl_K256_Field52_mkcols(unsigned __int128 *t, uint64_t *a, uint64_t *b) {
+  uint64_t a0 = a[0];
+  uint64_t a1 = a[1];
+  uint64_t a2 = a[2];
+  uint64_t a3 = a[3];
+  uint64_t a4 = a[4];
+  uint64_t b0 = b[0];
+  uint64_t b1 = b[1];
+  uint64_t b2 = b[2];
+  uint64_t b3 = b[3];
+  uint64_t b4 = b[4];
+  unsigned __int128 c0 = Hacl_Secret_UInt128_mul_wide(a0, b0);
+  unsigned __int128 c1 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a0, b1), Hacl_Secret_UInt128_mul_wide(a1, b0));
+  unsigned __int128 c2 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a0, b2), Hacl_Secret_UInt128_mul_wide(a1, b1)), Hacl_Secret_UInt128_mul_wide(a2, b0));
+  unsigned __int128 c3 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a0, b3), Hacl_Secret_UInt128_mul_wide(a1, b2)), Hacl_Secret_UInt128_mul_wide(a2, b1)), Hacl_Secret_UInt128_mul_wide(a3, b0));
+  unsigned __int128 c4 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a0, b4), Hacl_Secret_UInt128_mul_wide(a1, b3)), Hacl_Secret_UInt128_mul_wide(a2, b2)), Hacl_Secret_UInt128_mul_wide(a3, b1)), Hacl_Secret_UInt128_mul_wide(a4, b0));
+  unsigned __int128 c5 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a1, b4), Hacl_Secret_UInt128_mul_wide(a2, b3)), Hacl_Secret_UInt128_mul_wide(a3, b2)), Hacl_Secret_UInt128_mul_wide(a4, b1));
+  unsigned __int128 c6 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a2, b4), Hacl_Secret_UInt128_mul_wide(a3, b3)), Hacl_Secret_UInt128_mul_wide(a4, b2));
+  unsigned __int128 c7 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(a3, b4), Hacl_Secret_UInt128_mul_wide(a4, b3));
+  unsigned __int128 c8 = Hacl_Secret_UInt128_mul_wide(a4, b4);
+  t[0] = c0;
+  t[1] = c1;
+  t[2] = c2;
+  t[3] = c3;
+  t[4] = c4;
+  t[5] = c5;
+  t[6] = c6;
+  t[7] = c7;
+  t[8] = c8;
+}
+
+static inline void Hacl_K256_Field52_reduce(uint64_t *out, unsigned __int128 *t) {
+  unsigned __int128 c0 = t[0];
+  unsigned __int128 c1 = t[1];
+  unsigned __int128 c2 = t[2];
+  unsigned __int128 c3 = t[3];
+  unsigned __int128 c4 = t[4];
+  unsigned __int128 c5 = t[5];
+  unsigned __int128 c6 = t[6];
+  unsigned __int128 c7 = t[7];
+  unsigned __int128 c8 = t[8];
+  uint64_t o5 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(c5), 0xfffffffffffffULL);
+  unsigned __int128 v6 = Hacl_Secret_UInt128_add_mod(c6, Hacl_Secret_UInt128_shift_right(c5, 52));
+  uint64_t o6 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(v6), 0xfffffffffffffULL);
+  unsigned __int128 v7 = Hacl_Secret_UInt128_add_mod(c7, Hacl_Secret_UInt128_shift_right(v6, 52));
+  uint64_t o7 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(v7), 0xfffffffffffffULL);
+  unsigned __int128 v8 = Hacl_Secret_UInt128_add_mod(c8, Hacl_Secret_UInt128_shift_right(v7, 52));
+  uint64_t o8 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(v8), 0xfffffffffffffULL);
+  uint64_t t8 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(v8, 52));
+  unsigned __int128 f0 = Hacl_Secret_UInt128_add_mod(c0, Hacl_Secret_UInt128_mul_wide(0x1000003d10ULL, o5));
+  unsigned __int128 f1 = Hacl_Secret_UInt128_add_mod(c1, Hacl_Secret_UInt128_mul_wide(0x1000003d10ULL, o6));
+  unsigned __int128 f2 = Hacl_Secret_UInt128_add_mod(c2, Hacl_Secret_UInt128_mul_wide(0x1000003d10ULL, o7));
+  unsigned __int128 f3 = Hacl_Secret_UInt128_add_mod(c3, Hacl_Secret_UInt128_mul_wide(0x1000003d10ULL, o8));
+  unsigned __int128 f4 = Hacl_Secret_UInt128_add_mod(c4, Hacl_Secret_UInt128_mul_wide(0x1000003d10ULL, t8));
+  uint64_t g0 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(f0), 0xfffffffffffffULL);
+  unsigned __int128 u1 = Hacl_Secret_UInt128_add_mod(f1, Hacl_Secret_UInt128_shift_right(f0, 52));
+  uint64_t g1 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(u1), 0xfffffffffffffULL);
+  unsigned __int128 u2 = Hacl_Secret_UInt128_add_mod(f2, Hacl_Secret_UInt128_shift_right(u1, 52));
+  uint64_t g2 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(u2), 0xfffffffffffffULL);
+  unsigned __int128 u3 = Hacl_Secret_UInt128_add_mod(f3, Hacl_Secret_UInt128_shift_right(u2, 52));
+  uint64_t g3 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(u3), 0xfffffffffffffULL);
+  unsigned __int128 u4 = Hacl_Secret_UInt128_add_mod(f4, Hacl_Secret_UInt128_shift_right(u3, 52));
+  uint64_t g4 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(u4), 0xfffffffffffffULL);
+  uint64_t t4 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(u4, 52));
+  unsigned __int128 r0 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_Cast_u64_to_u128(g0), Hacl_Secret_UInt128_mul_wide(0x1000003d10ULL, t4));
+  uint64_t p0 = Hacl_Secret_UInt64_logand(Hacl_Secret_Cast_u128_to_u64(r0), 0xfffffffffffffULL);
+  uint64_t y0 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(r0, 52));
+  uint64_t w1 = Hacl_Secret_UInt64_add_mod(g1, y0);
+  uint64_t h1 = Hacl_Secret_UInt64_logand(w1, 0xfffffffffffffULL);
+  uint64_t w2 = Hacl_Secret_UInt64_add_mod(g2, Hacl_Secret_UInt64_shift_right(w1, 52));
+  uint64_t h2 = Hacl_Secret_UInt64_logand(w2, 0xfffffffffffffULL);
+  uint64_t w3 = Hacl_Secret_UInt64_add_mod(g3, Hacl_Secret_UInt64_shift_right(w2, 52));
+  uint64_t h3 = Hacl_Secret_UInt64_logand(w3, 0xfffffffffffffULL);
+  uint64_t w4 = Hacl_Secret_UInt64_add_mod(g4, Hacl_Secret_UInt64_shift_right(w3, 52));
+  uint64_t h4 = Hacl_Secret_UInt64_logand(w4, 0xfffffffffffffULL);
+  uint64_t n0 = Hacl_Secret_UInt64_add_mod(p0, Hacl_Secret_UInt64_mul_mod(0x1000003d10ULL, Hacl_Secret_UInt64_shift_right(w4, 52)));
+  out[0] = n0;
+  out[1] = h1;
+  out[2] = h2;
+  out[3] = h3;
+  out[4] = h4;
+}
+
+static inline void Hacl_K256_Field52_fmul(uint64_t *out, uint64_t *a, uint64_t *b) {
+  unsigned __int128 z = Hacl_Secret_UInt128_zero;
+  unsigned __int128 t[9];
+  for (size_t _ci1 = 0; _ci1 < 9; _ci1++) {
+    t[_ci1] = z;
+  }
+  Hacl_K256_Field52_mkcols(t, a, b);
+  Hacl_K256_Field52_reduce(out, t);
+}
+
+static void Hacl_K256_Field52_fsqr(uint64_t *out, uint64_t *a) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t ac[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t ac[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     ac[_ci1] = z;
   }
-  Hacl_Impl_Mont4_acopy(ac, a);
-  Hacl_K256_Field_fmul(out, a, ac);
+  Hacl_K256_Field52_fcopy(ac, a);
+  Hacl_K256_Field52_fmul(out, a, ac);
 }
 
-static void Hacl_K256_Field_fadd(uint64_t *out, uint64_t *a, uint64_t *b) {
-  uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
-  Hacl_Impl_Mont4_aadd(out, a, b, nm);
+static inline void Hacl_K256_Field52_carry_chain(uint64_t *a) {
+  size_t k = 0;
+  while (k < 4) {
+    size_t vk = k;
+    uint64_t t = a[vk];
+    uint64_t u = a[(vk + 1)];
+    uint64_t lo = Hacl_Secret_UInt64_logand(t, 0xfffffffffffffULL);
+    uint64_t up = Hacl_Secret_UInt64_add_mod(u, Hacl_Secret_UInt64_shift_right(t, 52));
+    a[vk] = lo;
+    a[(vk + 1)] = up;
+    k = (vk + 1);
+  }
+  uint64_t t_1 = a[4];
+  uint64_t z = a[0];
+  uint64_t lo_1 = Hacl_Secret_UInt64_logand(t_1, 0xfffffffffffffULL);
+  uint64_t z_ = Hacl_Secret_UInt64_add_mod(z, Hacl_Secret_UInt64_mul_mod(0x1000003d10ULL, Hacl_Secret_UInt64_shift_right(t_1, 52)));
+  a[4] = lo_1;
+  a[0] = z_;
+}
+
+static inline void Hacl_K256_Field52_fadd(uint64_t *out, uint64_t *a, uint64_t *b) {
+  size_t i = 0;
+  while (i < 5) {
+    size_t vi = i;
+    uint64_t x = a[vi];
+    uint64_t y = b[vi];
+    out[vi] = Hacl_Secret_UInt64_add_mod(x, y);
+    i = (vi + 1);
+  }
+  Hacl_K256_Field52_carry_chain(out);
 }
 
 static void Hacl_K256_Encode_curve_rhs(uint64_t *out, uint64_t *x) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = z;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z;
   }
-  Hacl_K256_Field_fsqr(a0, x);
-  Hacl_K256_Field_fmul(a1, a0, x);
-  uint64_t *bs = (uint64_t *)Hacl_K256_Tables_bm_arr;
-  Hacl_K256_Field_fadd(out, a1, bs);
+  Hacl_K256_Field52_fsqr(a0, x);
+  Hacl_K256_Field52_fmul(a1, a0, x);
+  uint64_t *bs = (uint64_t *)Hacl_K256_Tables52_b_arr;
+  Hacl_K256_Field52_fadd(out, a1, bs);
 }
 
-static bool Hacl_K256_Field_feq(uint64_t *a, uint64_t *b) {
-  return Hacl_Impl_Mont4_aeq(a, b);
+static inline void Hacl_K256_Field52_freeze(uint64_t *out, uint64_t *a) {
+  uint64_t x0 = a[0];
+  uint64_t x1 = a[1];
+  uint64_t x2 = a[2];
+  uint64_t x3 = a[3];
+  uint64_t x4 = a[4];
+  uint64_t o0 = Hacl_Secret_UInt64_logand(x0, 0xfffffffffffffULL);
+  uint64_t v1 = Hacl_Secret_UInt64_add_mod(x1, Hacl_Secret_UInt64_shift_right(x0, 52));
+  uint64_t o1 = Hacl_Secret_UInt64_logand(v1, 0xfffffffffffffULL);
+  uint64_t v2 = Hacl_Secret_UInt64_add_mod(x2, Hacl_Secret_UInt64_shift_right(v1, 52));
+  uint64_t o2 = Hacl_Secret_UInt64_logand(v2, 0xfffffffffffffULL);
+  uint64_t v3 = Hacl_Secret_UInt64_add_mod(x3, Hacl_Secret_UInt64_shift_right(v2, 52));
+  uint64_t o3 = Hacl_Secret_UInt64_logand(v3, 0xfffffffffffffULL);
+  uint64_t v4 = Hacl_Secret_UInt64_add_mod(x4, Hacl_Secret_UInt64_shift_right(v3, 52));
+  uint64_t q = Hacl_Secret_UInt64_shift_right(v4, 48);
+  uint64_t t4 = Hacl_Secret_UInt64_logand(v4, 0xffffffffffffULL);
+  uint64_t t0 = Hacl_Secret_UInt64_add_mod(o0, Hacl_Secret_UInt64_mul_mod(4294968273ULL, q));
+  uint64_t u0 = Hacl_Secret_UInt64_logand(t0, 0xfffffffffffffULL);
+  uint64_t n1 = Hacl_Secret_UInt64_add_mod(o1, Hacl_Secret_UInt64_shift_right(t0, 52));
+  uint64_t u1 = Hacl_Secret_UInt64_logand(n1, 0xfffffffffffffULL);
+  uint64_t n2 = Hacl_Secret_UInt64_add_mod(o2, Hacl_Secret_UInt64_shift_right(n1, 52));
+  uint64_t u2 = Hacl_Secret_UInt64_logand(n2, 0xfffffffffffffULL);
+  uint64_t n3 = Hacl_Secret_UInt64_add_mod(o3, Hacl_Secret_UInt64_shift_right(n2, 52));
+  uint64_t u3 = Hacl_Secret_UInt64_logand(n3, 0xfffffffffffffULL);
+  uint64_t u4 = Hacl_Secret_UInt64_add_mod(t4, Hacl_Secret_UInt64_shift_right(n3, 52));
+  uint64_t m = Hacl_Secret_UInt64_logor(Hacl_Secret_UInt64_gte_mask(u4, 281474976710656ULL), Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_eq_mask(u4, 0xffffffffffffULL), Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_eq_mask(u3, 0xfffffffffffffULL), Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_eq_mask(u2, 0xfffffffffffffULL), Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_eq_mask(u1, 0xfffffffffffffULL), Hacl_Secret_UInt64_gte_mask(u0, 4503595332402223ULL))))));
+  uint64_t d = Hacl_Secret_UInt64_select(m, 4294968273ULL, Hacl_Secret_UInt64_zero);
+  uint64_t y0 = Hacl_Secret_UInt64_add_mod(u0, d);
+  uint64_t p0 = Hacl_Secret_UInt64_logand(y0, 0xfffffffffffffULL);
+  uint64_t g1 = Hacl_Secret_UInt64_add_mod(u1, Hacl_Secret_UInt64_shift_right(y0, 52));
+  uint64_t p1 = Hacl_Secret_UInt64_logand(g1, 0xfffffffffffffULL);
+  uint64_t g2 = Hacl_Secret_UInt64_add_mod(u2, Hacl_Secret_UInt64_shift_right(g1, 52));
+  uint64_t p2 = Hacl_Secret_UInt64_logand(g2, 0xfffffffffffffULL);
+  uint64_t g3 = Hacl_Secret_UInt64_add_mod(u3, Hacl_Secret_UInt64_shift_right(g2, 52));
+  uint64_t p3 = Hacl_Secret_UInt64_logand(g3, 0xfffffffffffffULL);
+  uint64_t g4 = Hacl_Secret_UInt64_add_mod(u4, Hacl_Secret_UInt64_shift_right(g3, 52));
+  uint64_t p4 = Hacl_Secret_UInt64_logand(g4, 0xffffffffffffULL);
+  out[0] = p0;
+  out[1] = p1;
+  out[2] = p2;
+  out[3] = p3;
+  out[4] = p4;
+}
+
+static bool Hacl_K256_Field52_feq(uint64_t *a, uint64_t *b) {
+  uint64_t z = Hacl_Secret_UInt64_zero;
+  uint64_t fa[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    fa[_ci1] = z;
+  }
+  uint64_t fb[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    fb[_ci2] = z;
+  }
+  Hacl_K256_Field52_freeze(fa, a);
+  Hacl_K256_Field52_freeze(fb, b);
+  uint64_t a0 = fa[0];
+  uint64_t a1 = fa[1];
+  uint64_t a2 = fa[2];
+  uint64_t a3 = fa[3];
+  uint64_t a4 = fa[4];
+  uint64_t b0 = fb[0];
+  uint64_t b1 = fb[1];
+  uint64_t b2 = fb[2];
+  uint64_t b3 = fb[3];
+  uint64_t b4 = fb[4];
+  uint64_t m = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_eq_mask(a0, b0), Hacl_Secret_UInt64_eq_mask(a1, b1)), Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_eq_mask(a2, b2), Hacl_Secret_UInt64_eq_mask(a3, b3))), Hacl_Secret_UInt64_eq_mask(a4, b4));
+  uint8_t m8 = Hacl_Secret_Cast_u64_to_u8(m);
+  return Hacl_Secret_Declassify_bool_of_mask(m8);
 }
 
 static bool Hacl_K256_Encode_is_on_curve(uint64_t *x, uint64_t *y) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = z;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z;
   }
   Hacl_K256_Encode_curve_rhs(a1, x);
-  Hacl_K256_Field_fsqr(a0, y);
-  return Hacl_K256_Field_feq(a0, a1);
+  Hacl_K256_Field52_fsqr(a0, y);
+  return Hacl_K256_Field52_feq(a0, a1);
 }
 
 static bool Hacl_K256_Encode_load_point(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint8_t *b) {
   uint8_t *xs = Hacl_Impl_Sub_sub__t(b, 0, 32);
-  bool okx = Hacl_K256_Field_fload(ox, xs);
+  bool okx = Hacl_K256_Field52_fload(ox, xs);
   uint8_t *ys = Hacl_Impl_Sub_sub__t(b, 32, 64);
-  bool oky = Hacl_K256_Field_fload(oy, ys);
-  Hacl_K256_Field_fone(oz);
+  bool oky = Hacl_K256_Field52_fload(oy, ys);
+  Hacl_K256_Field52_fone(oz);
   if (okx && oky) return Hacl_K256_Encode_is_on_curve(ox, oy);
   else return false;
 }
@@ -17584,14 +17769,18 @@ static bool Hacl_K256_Key_load_scalar(uint64_t *out, uint8_t *b) {
   return (lo && (!(nz)));
 }
 
-static void Hacl_K256_Field_fzero(uint64_t *out) {
-  Hacl_Impl_Mont4_azero(out);
+static void Hacl_K256_Field52_fzero(uint64_t *out) {
+  out[0] = Hacl_Secret_UInt64_zero;
+  out[1] = Hacl_Secret_UInt64_zero;
+  out[2] = Hacl_Secret_UInt64_zero;
+  out[3] = Hacl_Secret_UInt64_zero;
+  out[4] = Hacl_Secret_UInt64_zero;
 }
 
 static void Hacl_K256_PointStep_set_infinity(uint64_t *ox, uint64_t *oy, uint64_t *oz) {
-  Hacl_K256_Field_fzero(ox);
-  Hacl_K256_Field_fone(oy);
-  Hacl_K256_Field_fzero(oz);
+  Hacl_K256_Field52_fzero(ox);
+  Hacl_K256_Field52_fone(oy);
+  Hacl_K256_Field52_fzero(oz);
 }
 
 static bool Hacl_K256_PointMul_lt256(size_t x) {
@@ -17602,164 +17791,184 @@ static size_t Hacl_K256_PointStep_sub255(size_t x) {
   return (255 - x);
 }
 
-static void Hacl_K256_Field_fcopy(uint64_t *dst, uint64_t *src) {
-  Hacl_Impl_Mont4_acopy(dst, src);
-}
-
-static void Hacl_K256_Field_fsub(uint64_t *out, uint64_t *a, uint64_t *b) {
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  Hacl_Impl_Mont4_asub(out, a, b, ms);
+static inline void Hacl_K256_Field52_fsub(uint64_t *out, uint64_t *a, uint64_t *b) {
+  uint64_t x0 = a[0];
+  uint64_t y0 = b[0];
+  out[0] = Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_add_mod(x0, 288230101273742272ULL), y0);
+  size_t i = 1;
+  while (i < 4) {
+    size_t vi = i;
+    uint64_t x = a[vi];
+    uint64_t y = b[vi];
+    out[vi] = Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_add_mod(x, 288230376151711680ULL), y);
+    i = (vi + 1);
+  }
+  uint64_t x4 = a[4];
+  uint64_t y4 = b[4];
+  out[4] = Hacl_Secret_UInt64_sub_mod(Hacl_Secret_UInt64_add_mod(x4, 18014398509481920ULL), y4);
+  Hacl_K256_Field52_carry_chain(out);
 }
 
 static void Hacl_K256_Point_point_double(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *x, uint64_t *y, uint64_t *z) {
   uint64_t zz = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = zz;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = zz;
   }
-  uint64_t a2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a2[_ci3] = zz;
   }
-  uint64_t _cbuf4[4];
-  for (size_t _ci5 = 0; _ci5 < 4; _ci5++) {
+  uint64_t _cbuf4[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
     _cbuf4[_ci5] = zz;
   }
   (void)(_cbuf4);
-  uint64_t _cbuf6[4];
-  for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
+  uint64_t _cbuf6[5];
+  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
     _cbuf6[_ci7] = zz;
   }
   (void)(_cbuf6);
-  uint64_t aw[4];
-  for (size_t _ci8 = 0; _ci8 < 4; _ci8++) {
+  uint64_t aw[5];
+  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
     aw[_ci8] = zz;
   }
-  uint64_t au[4];
-  for (size_t _ci9 = 0; _ci9 < 4; _ci9++) {
+  uint64_t au[5];
+  for (size_t _ci9 = 0; _ci9 < 5; _ci9++) {
     au[_ci9] = zz;
   }
-  uint64_t *bc = (uint64_t *)Hacl_K256_Tables_b3m_arr;
-  Hacl_K256_Field_fsqr(a0, y);
-  Hacl_K256_Field_fcopy(au, a0);
-  Hacl_K256_Field_fadd(oz, a0, au);
-  Hacl_K256_Field_fcopy(au, oz);
-  Hacl_K256_Field_fadd(aw, oz, au);
-  Hacl_K256_Field_fcopy(oz, aw);
-  Hacl_K256_Field_fcopy(au, oz);
-  Hacl_K256_Field_fadd(aw, oz, au);
-  Hacl_K256_Field_fcopy(oz, aw);
-  Hacl_K256_Field_fmul(a1, y, z);
-  Hacl_K256_Field_fsqr(a2, z);
-  Hacl_K256_Field_fmul(aw, bc, a2);
-  Hacl_K256_Field_fcopy(a2, aw);
-  Hacl_K256_Field_fmul(ox, a2, oz);
-  Hacl_K256_Field_fadd(oy, a0, a2);
-  Hacl_K256_Field_fmul(aw, a1, oz);
-  Hacl_K256_Field_fcopy(oz, aw);
-  Hacl_K256_Field_fcopy(au, a2);
-  Hacl_K256_Field_fadd(a1, a2, au);
-  Hacl_K256_Field_fadd(aw, a1, a2);
-  Hacl_K256_Field_fcopy(a2, aw);
-  Hacl_K256_Field_fsub(aw, a0, a2);
-  Hacl_K256_Field_fcopy(a0, aw);
-  Hacl_K256_Field_fmul(aw, a0, oy);
-  Hacl_K256_Field_fcopy(oy, aw);
-  Hacl_K256_Field_fadd(aw, ox, oy);
-  Hacl_K256_Field_fcopy(oy, aw);
-  Hacl_K256_Field_fmul(a1, x, y);
-  Hacl_K256_Field_fmul(ox, a0, a1);
-  Hacl_K256_Field_fcopy(au, ox);
-  Hacl_K256_Field_fadd(aw, ox, au);
-  Hacl_K256_Field_fcopy(ox, aw);
+  uint64_t *bc = (uint64_t *)Hacl_K256_Tables52_b3_arr;
+  Hacl_K256_Field52_fsqr(a0, y);
+  Hacl_K256_Field52_fcopy(au, a0);
+  Hacl_K256_Field52_fadd(oz, a0, au);
+  Hacl_K256_Field52_fcopy(au, oz);
+  Hacl_K256_Field52_fadd(aw, oz, au);
+  Hacl_K256_Field52_fcopy(oz, aw);
+  Hacl_K256_Field52_fcopy(au, oz);
+  Hacl_K256_Field52_fadd(aw, oz, au);
+  Hacl_K256_Field52_fcopy(oz, aw);
+  Hacl_K256_Field52_fmul(a1, y, z);
+  Hacl_K256_Field52_fsqr(a2, z);
+  Hacl_K256_Field52_fmul(aw, bc, a2);
+  Hacl_K256_Field52_fcopy(a2, aw);
+  Hacl_K256_Field52_fmul(ox, a2, oz);
+  Hacl_K256_Field52_fadd(oy, a0, a2);
+  Hacl_K256_Field52_fmul(aw, a1, oz);
+  Hacl_K256_Field52_fcopy(oz, aw);
+  Hacl_K256_Field52_fcopy(au, a2);
+  Hacl_K256_Field52_fadd(a1, a2, au);
+  Hacl_K256_Field52_fadd(aw, a1, a2);
+  Hacl_K256_Field52_fcopy(a2, aw);
+  Hacl_K256_Field52_fsub(aw, a0, a2);
+  Hacl_K256_Field52_fcopy(a0, aw);
+  Hacl_K256_Field52_fmul(aw, a0, oy);
+  Hacl_K256_Field52_fcopy(oy, aw);
+  Hacl_K256_Field52_fadd(aw, ox, oy);
+  Hacl_K256_Field52_fcopy(oy, aw);
+  Hacl_K256_Field52_fmul(a1, x, y);
+  Hacl_K256_Field52_fmul(ox, a0, a1);
+  Hacl_K256_Field52_fcopy(au, ox);
+  Hacl_K256_Field52_fadd(aw, ox, au);
+  Hacl_K256_Field52_fcopy(ox, aw);
 }
 
 static void Hacl_K256_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *x2, uint64_t *y2, uint64_t *z2) {
   uint64_t zz = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = zz;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = zz;
   }
-  uint64_t a2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a2[_ci3] = zz;
   }
-  uint64_t a3[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+  uint64_t a3[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
     a3[_ci4] = zz;
   }
-  uint64_t a4[4];
-  for (size_t _ci5 = 0; _ci5 < 4; _ci5++) {
+  uint64_t a4[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
     a4[_ci5] = zz;
   }
-  uint64_t aw[4];
-  for (size_t _ci6 = 0; _ci6 < 4; _ci6++) {
+  uint64_t aw[5];
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
     aw[_ci6] = zz;
   }
-  uint64_t au[4];
-  for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
+  uint64_t au[5];
+  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
     au[_ci7] = zz;
   }
-  uint64_t *bc = (uint64_t *)Hacl_K256_Tables_b3m_arr;
-  Hacl_K256_Field_fmul(a0, x1, x2);
-  Hacl_K256_Field_fmul(a1, y1, y2);
-  Hacl_K256_Field_fmul(a2, z1, z2);
-  Hacl_K256_Field_fadd(a3, x1, y1);
-  Hacl_K256_Field_fadd(a4, x2, y2);
-  Hacl_K256_Field_fmul(aw, a3, a4);
-  Hacl_K256_Field_fcopy(a3, aw);
-  Hacl_K256_Field_fadd(a4, a0, a1);
-  Hacl_K256_Field_fsub(aw, a3, a4);
-  Hacl_K256_Field_fcopy(a3, aw);
-  Hacl_K256_Field_fadd(a4, y1, z1);
-  Hacl_K256_Field_fadd(ox, y2, z2);
-  Hacl_K256_Field_fmul(aw, a4, ox);
-  Hacl_K256_Field_fcopy(a4, aw);
-  Hacl_K256_Field_fadd(ox, a1, a2);
-  Hacl_K256_Field_fsub(aw, a4, ox);
-  Hacl_K256_Field_fcopy(a4, aw);
-  Hacl_K256_Field_fadd(ox, x1, z1);
-  Hacl_K256_Field_fadd(oy, x2, z2);
-  Hacl_K256_Field_fmul(aw, ox, oy);
-  Hacl_K256_Field_fcopy(ox, aw);
-  Hacl_K256_Field_fadd(oy, a0, a2);
-  Hacl_K256_Field_fsub(aw, ox, oy);
-  Hacl_K256_Field_fcopy(oy, aw);
-  Hacl_K256_Field_fcopy(au, a0);
-  Hacl_K256_Field_fadd(ox, a0, au);
-  Hacl_K256_Field_fadd(aw, ox, a0);
-  Hacl_K256_Field_fcopy(a0, aw);
-  Hacl_K256_Field_fmul(aw, bc, a2);
-  Hacl_K256_Field_fcopy(a2, aw);
-  Hacl_K256_Field_fadd(oz, a1, a2);
-  Hacl_K256_Field_fsub(aw, a1, a2);
-  Hacl_K256_Field_fcopy(a1, aw);
-  Hacl_K256_Field_fmul(aw, bc, oy);
-  Hacl_K256_Field_fcopy(oy, aw);
-  Hacl_K256_Field_fmul(ox, a4, oy);
-  Hacl_K256_Field_fmul(a2, a3, a1);
-  Hacl_K256_Field_fsub(aw, a2, ox);
-  Hacl_K256_Field_fcopy(ox, aw);
-  Hacl_K256_Field_fmul(aw, oy, a0);
-  Hacl_K256_Field_fcopy(oy, aw);
-  Hacl_K256_Field_fmul(aw, a1, oz);
-  Hacl_K256_Field_fcopy(a1, aw);
-  Hacl_K256_Field_fadd(aw, a1, oy);
-  Hacl_K256_Field_fcopy(oy, aw);
-  Hacl_K256_Field_fmul(aw, a0, a3);
-  Hacl_K256_Field_fcopy(a0, aw);
-  Hacl_K256_Field_fmul(aw, oz, a4);
-  Hacl_K256_Field_fcopy(oz, aw);
-  Hacl_K256_Field_fadd(aw, oz, a0);
-  Hacl_K256_Field_fcopy(oz, aw);
+  uint64_t *bc = (uint64_t *)Hacl_K256_Tables52_b3_arr;
+  Hacl_K256_Field52_fmul(a0, x1, x2);
+  Hacl_K256_Field52_fmul(a1, y1, y2);
+  Hacl_K256_Field52_fmul(a2, z1, z2);
+  Hacl_K256_Field52_fadd(a3, x1, y1);
+  Hacl_K256_Field52_fadd(a4, x2, y2);
+  Hacl_K256_Field52_fmul(aw, a3, a4);
+  Hacl_K256_Field52_fcopy(a3, aw);
+  Hacl_K256_Field52_fadd(a4, a0, a1);
+  Hacl_K256_Field52_fsub(aw, a3, a4);
+  Hacl_K256_Field52_fcopy(a3, aw);
+  Hacl_K256_Field52_fadd(a4, y1, z1);
+  Hacl_K256_Field52_fadd(ox, y2, z2);
+  Hacl_K256_Field52_fmul(aw, a4, ox);
+  Hacl_K256_Field52_fcopy(a4, aw);
+  Hacl_K256_Field52_fadd(ox, a1, a2);
+  Hacl_K256_Field52_fsub(aw, a4, ox);
+  Hacl_K256_Field52_fcopy(a4, aw);
+  Hacl_K256_Field52_fadd(ox, x1, z1);
+  Hacl_K256_Field52_fadd(oy, x2, z2);
+  Hacl_K256_Field52_fmul(aw, ox, oy);
+  Hacl_K256_Field52_fcopy(ox, aw);
+  Hacl_K256_Field52_fadd(oy, a0, a2);
+  Hacl_K256_Field52_fsub(aw, ox, oy);
+  Hacl_K256_Field52_fcopy(oy, aw);
+  Hacl_K256_Field52_fcopy(au, a0);
+  Hacl_K256_Field52_fadd(ox, a0, au);
+  Hacl_K256_Field52_fadd(aw, ox, a0);
+  Hacl_K256_Field52_fcopy(a0, aw);
+  Hacl_K256_Field52_fmul(aw, bc, a2);
+  Hacl_K256_Field52_fcopy(a2, aw);
+  Hacl_K256_Field52_fadd(oz, a1, a2);
+  Hacl_K256_Field52_fsub(aw, a1, a2);
+  Hacl_K256_Field52_fcopy(a1, aw);
+  Hacl_K256_Field52_fmul(aw, bc, oy);
+  Hacl_K256_Field52_fcopy(oy, aw);
+  Hacl_K256_Field52_fmul(ox, a4, oy);
+  Hacl_K256_Field52_fmul(a2, a3, a1);
+  Hacl_K256_Field52_fsub(aw, a2, ox);
+  Hacl_K256_Field52_fcopy(ox, aw);
+  Hacl_K256_Field52_fmul(aw, oy, a0);
+  Hacl_K256_Field52_fcopy(oy, aw);
+  Hacl_K256_Field52_fmul(aw, a1, oz);
+  Hacl_K256_Field52_fcopy(a1, aw);
+  Hacl_K256_Field52_fadd(aw, a1, oy);
+  Hacl_K256_Field52_fcopy(oy, aw);
+  Hacl_K256_Field52_fmul(aw, a0, a3);
+  Hacl_K256_Field52_fcopy(a0, aw);
+  Hacl_K256_Field52_fmul(aw, oz, a4);
+  Hacl_K256_Field52_fcopy(oz, aw);
+  Hacl_K256_Field52_fadd(aw, oz, a0);
+  Hacl_K256_Field52_fcopy(oz, aw);
+}
+
+static void Hacl_K256_Field52_asel(uint64_t *out, uint64_t *a, uint64_t *b, uint64_t m) {
+  size_t i = 0;
+  while (i < 5) {
+    size_t vi = i;
+    uint64_t xa = a[vi];
+    uint64_t xb = b[vi];
+    out[vi] = Hacl_Secret_UInt64_select(m, xb, xa);
+    i = (vi + 1);
+  }
 }
 
 static void Hacl_K256_PointStep_point_mul_step(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *ks, size_t n) {
@@ -17767,35 +17976,35 @@ static void Hacl_K256_PointStep_point_mul_step(uint64_t *ox, uint64_t *oy, uint6
   uint64_t m = Hacl_Impl_Mont4_abit(ks, bi);
   Hacl_K256_Point_point_double(ux, uy, uz, ox, oy, oz);
   Hacl_K256_Point_point_add(sx, sy, sz, ux, uy, uz, qx, qy, qz);
-  Hacl_Impl_Mont4_asel(ox, ux, sx, m);
-  Hacl_Impl_Mont4_asel(oy, uy, sy, m);
-  Hacl_Impl_Mont4_asel(oz, uz, sz, m);
+  Hacl_K256_Field52_asel(ox, ux, sx, m);
+  Hacl_K256_Field52_asel(oy, uy, sy, m);
+  Hacl_K256_Field52_asel(oz, uz, sz, m);
 }
 
 static void Hacl_K256_PointMul_point_mul(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *ks) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a1[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a1[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a1[_ci1] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a2[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a2[_ci2] = z;
   }
-  uint64_t a3[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a3[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a3[_ci3] = z;
   }
-  uint64_t a4[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+  uint64_t a4[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
     a4[_ci4] = z;
   }
-  uint64_t a5[4];
-  for (size_t _ci5 = 0; _ci5 < 4; _ci5++) {
+  uint64_t a5[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
     a5[_ci5] = z;
   }
-  uint64_t a6[4];
-  for (size_t _ci6 = 0; _ci6 < 4; _ci6++) {
+  uint64_t a6[5];
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
     a6[_ci6] = z;
   }
   Hacl_K256_PointStep_set_infinity(ox, oy, oz);
@@ -17810,80 +18019,38 @@ static void Hacl_K256_PointMul_point_mul(uint64_t *ox, uint64_t *oy, uint64_t *o
   }
 }
 
-static bool Hacl_K256_Field_fis_zero(uint64_t *a) {
+static bool Hacl_K256_Field52_fis_zero(uint64_t *a) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t az[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t az[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     az[_ci1] = z;
   }
-  Hacl_Impl_Mont4_azero(az);
-  return Hacl_Impl_Mont4_aeq(a, az);
+  Hacl_K256_Field52_fzero(az);
+  return Hacl_K256_Field52_feq(a, az);
 }
 
 static void Hacl_K256_Inverse_finv(uint64_t *out, uint64_t *a) {
   uint64_t *e = (uint64_t *)Hacl_K256_Tables_finv_e_arr;
-  uint64_t *r1 = (uint64_t *)Hacl_K256_Tables_fr1_arr;
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a1[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a1[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a1[_ci1] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
-    a2[_ci2] = z;
-  }
-  Hacl_Impl_Mont4_acopy(out, r1);
+  Hacl_K256_Field52_fone(out);
   size_t i = 256;
   while (i > 0) {
     size_t vi = i;
     size_t ni = (vi - 1);
-    Hacl_Impl_Mont4_acopy(a1, out);
-    Hacl_Impl_Mont4_acopy(a2, out);
-    unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
-    unsigned __int128 ap[8];
-    for (size_t _ci4 = 0; _ci4 < 8; _ci4++) {
-      ap[_ci4] = z128;
-    }
-    unsigned __int128 at[9];
-    for (size_t _ci5 = 0; _ci5 < 9; _ci5++) {
-      at[_ci5] = z128;
-    }
-    unsigned __int128 ar[5];
-    for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-      ar[_ci6] = z128;
-    }
-    unsigned __int128 asv[4];
-    for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
-      asv[_ci7] = z128;
-    }
-    Hacl_Impl_Bignum4_mmul_op(out, a1, a2, ap, at, ar, asv, ms, nm, 15580212934572586289ULL);
+    Hacl_K256_Field52_fcopy(a1, out);
+    Hacl_K256_Field52_fsqr(out, a1);
     size_t k = (ni / 64);
     uint64_t l = e[k];
     size_t r = (ni % 64);
     uint32_t j = (uint32_t)r;
     uint64_t b = ((l >> j) & 1);
     if (Hacl_Impl_Exp4_is_one(b)) {
-      Hacl_Impl_Mont4_acopy(a1, out);
-      unsigned __int128 z1281 = Hacl_Secret_UInt128_zero;
-      unsigned __int128 ap1[8];
-      for (size_t _ci8 = 0; _ci8 < 8; _ci8++) {
-        ap1[_ci8] = z1281;
-      }
-      unsigned __int128 at1[9];
-      for (size_t _ci9 = 0; _ci9 < 9; _ci9++) {
-        at1[_ci9] = z1281;
-      }
-      unsigned __int128 ar1[5];
-      for (size_t _ci10 = 0; _ci10 < 5; _ci10++) {
-        ar1[_ci10] = z1281;
-      }
-      unsigned __int128 asv1[4];
-      for (size_t _ci11 = 0; _ci11 < 4; _ci11++) {
-        asv1[_ci11] = z1281;
-      }
-      Hacl_Impl_Bignum4_mmul_op(out, a1, a, ap1, at1, ar1, asv1, ms, nm, 15580212934572586289ULL);
+      Hacl_K256_Field52_fcopy(a1, out);
+      Hacl_K256_Field52_fmul(out, a1, a);
     }
     i = ni;
   }
@@ -17891,64 +18058,69 @@ static void Hacl_K256_Inverse_finv(uint64_t *out, uint64_t *a) {
 
 static void Hacl_K256_Encode_to_aff_point(uint64_t *ox, uint64_t *oy, uint64_t *x, uint64_t *y, uint64_t *z) {
   uint64_t z0 = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = z0;
   }
   Hacl_K256_Inverse_finv(a0, z);
-  Hacl_K256_Field_fmul(ox, x, a0);
-  Hacl_K256_Field_fmul(oy, y, a0);
+  Hacl_K256_Field52_fmul(ox, x, a0);
+  Hacl_K256_Field52_fmul(oy, y, a0);
 }
 
-static void Hacl_K256_Field_ffrom(uint64_t *out, uint64_t *a) {
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
-  uint64_t *one = (uint64_t *)Hacl_K256_Tables_one_arr;
-  unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
-  unsigned __int128 ap[8];
-  for (size_t _ci1 = 0; _ci1 < 8; _ci1++) {
-    ap[_ci1] = z128;
-  }
-  unsigned __int128 at[9];
-  for (size_t _ci2 = 0; _ci2 < 9; _ci2++) {
-    at[_ci2] = z128;
-  }
-  unsigned __int128 ar[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    ar[_ci3] = z128;
-  }
-  unsigned __int128 asv[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
-    asv[_ci4] = z128;
-  }
-  Hacl_Impl_Bignum4_mmul_op(out, a, one, ap, at, ar, asv, ms, nm, 15580212934572586289ULL);
+static void Hacl_K256_Field52_store(uint64_t *u, uint64_t *a) {
+  uint64_t s0 = a[0];
+  uint64_t s1 = a[1];
+  uint64_t s2 = a[2];
+  uint64_t s3 = a[3];
+  uint64_t s4 = a[4];
+  uint64_t p = Hacl_Secret_UInt64_shift_right(s0, 0);
+  uint64_t q = Hacl_Secret_UInt64_shift_left(s1, 52);
+  uint64_t u0 = Hacl_Secret_UInt64_add_mod(p, q);
+  uint64_t p1 = Hacl_Secret_UInt64_shift_right(s1, 12);
+  uint64_t q1 = Hacl_Secret_UInt64_shift_left(s2, 40);
+  uint64_t u1 = Hacl_Secret_UInt64_add_mod(p1, q1);
+  uint64_t p2 = Hacl_Secret_UInt64_shift_right(s2, 24);
+  uint64_t q2 = Hacl_Secret_UInt64_shift_left(s3, 28);
+  uint64_t u2 = Hacl_Secret_UInt64_add_mod(p2, q2);
+  uint64_t p3 = Hacl_Secret_UInt64_shift_right(s3, 36);
+  uint64_t q3 = Hacl_Secret_UInt64_shift_left(s4, 16);
+  uint64_t u3 = Hacl_Secret_UInt64_add_mod(p3, q3);
+  u[0] = u0;
+  u[1] = u1;
+  u[2] = u2;
+  u[3] = u3;
 }
 
-static void Hacl_K256_Field_fstore(uint8_t *b, uint64_t *a) {
+static void Hacl_K256_Field52_fstore(uint8_t *b, uint64_t *a) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t at[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
-    at[_ci1] = z;
+  uint64_t fa[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    fa[_ci1] = z;
   }
-  Hacl_K256_Field_ffrom(at, a);
+  uint64_t at[4];
+  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+    at[_ci2] = z;
+  }
+  Hacl_K256_Field52_freeze(fa, a);
+  Hacl_K256_Field52_store(at, fa);
   Hacl_Impl_Bignum4_store_be(b, at);
 }
 
 static void Hacl_K256_Encode_store_point(uint8_t *b, uint64_t *x, uint64_t *y, uint64_t *z) {
   uint64_t z0 = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = z0;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z0;
   }
   Hacl_K256_Encode_to_aff_point(a0, a1, x, y, z);
   uint8_t *xs = Hacl_Impl_Sub_sub__t(b, 0, 32);
-  Hacl_K256_Field_fstore(xs, a0);
+  Hacl_K256_Field52_fstore(xs, a0);
   uint8_t *ys = Hacl_Impl_Sub_sub__t(b, 32, 64);
-  Hacl_K256_Field_fstore(ys, a1);
+  Hacl_K256_Field52_fstore(ys, a1);
 }
 
 bool Hacl_K256_Ecdh_dh_responder(uint8_t *out, uint8_t *pk, uint8_t *sk) {
@@ -17957,35 +18129,35 @@ bool Hacl_K256_Ecdh_dh_responder(uint8_t *out, uint8_t *pk, uint8_t *sk) {
   for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
     a0[_ci1] = z;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a2[_ci3] = z;
   }
-  uint64_t a3[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+  uint64_t a3[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
     a3[_ci4] = z;
   }
-  uint64_t a4[4];
-  for (size_t _ci5 = 0; _ci5 < 4; _ci5++) {
+  uint64_t a4[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
     a4[_ci5] = z;
   }
-  uint64_t a5[4];
-  for (size_t _ci6 = 0; _ci6 < 4; _ci6++) {
+  uint64_t a5[5];
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
     a5[_ci6] = z;
   }
-  uint64_t a6[4];
-  for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
+  uint64_t a6[5];
+  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
     a6[_ci7] = z;
   }
   bool okq = Hacl_K256_Encode_load_point(a1, a2, a3, pk);
   bool okk = Hacl_K256_Key_load_scalar(a0, sk);
   if (okq && okk) {
     Hacl_K256_PointMul_point_mul(a4, a5, a6, a1, a2, a3, a0);
-    bool inf = Hacl_K256_Field_fis_zero(a6);
+    bool inf = Hacl_K256_Field52_fis_zero(a6);
     if (inf) return false;
     else {
       Hacl_K256_Encode_store_point(out, a4, a5, a6);
@@ -17997,23 +18169,23 @@ bool Hacl_K256_Ecdh_dh_responder(uint8_t *out, uint8_t *pk, uint8_t *sk) {
 
 static void Hacl_K256_PointMul_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a1[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a1[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a1[_ci1] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a2[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a2[_ci2] = z;
   }
-  uint64_t a3[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a3[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a3[_ci3] = z;
   }
-  Hacl_K256_Field_fone(a3);
-  uint64_t *tx = (uint64_t *)Hacl_K256_Tables_gxm_arr;
-  Hacl_K256_Field_fcopy(a1, tx);
-  uint64_t *ty = (uint64_t *)Hacl_K256_Tables_gym_arr;
-  Hacl_K256_Field_fcopy(a2, ty);
+  Hacl_K256_Field52_fone(a3);
+  uint64_t *tx = (uint64_t *)Hacl_K256_Tables52_gx_arr;
+  Hacl_K256_Field52_fcopy(a1, tx);
+  uint64_t *ty = (uint64_t *)Hacl_K256_Tables52_gy_arr;
+  Hacl_K256_Field52_fcopy(a2, ty);
   Hacl_K256_PointMul_point_mul(ox, oy, oz, a1, a2, a3, ks);
 }
 
@@ -18023,16 +18195,16 @@ bool Hacl_K256_Ecdh_dh_initiator(uint8_t *out, uint8_t *sk) {
   for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
     a0[_ci1] = z;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a2[_ci3] = z;
   }
-  uint64_t a3[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+  uint64_t a3[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
     a3[_ci4] = z;
   }
   bool ok = Hacl_K256_Key_load_scalar(a0, sk);
@@ -18046,120 +18218,79 @@ bool Hacl_K256_Ecdh_dh_initiator(uint8_t *out, uint8_t *sk) {
 
 static bool Hacl_K256_Inverse_fsqrt(uint64_t *out, uint64_t *a) {
   uint64_t *e = (uint64_t *)Hacl_K256_Tables_fsqrt_e_arr;
-  uint64_t *r1 = (uint64_t *)Hacl_K256_Tables_fr1_arr;
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  uint64_t *nm = (uint64_t *)Hacl_K256_Tables_fnm_arr;
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a1[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a1[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a1[_ci1] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
-    a2[_ci2] = z;
-  }
-  Hacl_Impl_Mont4_acopy(out, r1);
+  Hacl_K256_Field52_fone(out);
   size_t i = 256;
   while (i > 0) {
     size_t vi = i;
     size_t ni = (vi - 1);
-    Hacl_Impl_Mont4_acopy(a1, out);
-    Hacl_Impl_Mont4_acopy(a2, out);
-    unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
-    unsigned __int128 ap[8];
-    for (size_t _ci4 = 0; _ci4 < 8; _ci4++) {
-      ap[_ci4] = z128;
-    }
-    unsigned __int128 at[9];
-    for (size_t _ci5 = 0; _ci5 < 9; _ci5++) {
-      at[_ci5] = z128;
-    }
-    unsigned __int128 ar[5];
-    for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-      ar[_ci6] = z128;
-    }
-    unsigned __int128 asv[4];
-    for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
-      asv[_ci7] = z128;
-    }
-    Hacl_Impl_Bignum4_mmul_op(out, a1, a2, ap, at, ar, asv, ms, nm, 15580212934572586289ULL);
+    Hacl_K256_Field52_fcopy(a1, out);
+    Hacl_K256_Field52_fsqr(out, a1);
     size_t k = (ni / 64);
     uint64_t l = e[k];
     size_t r = (ni % 64);
     uint32_t j = (uint32_t)r;
     uint64_t b = ((l >> j) & 1);
     if (Hacl_Impl_Exp4_is_one(b)) {
-      Hacl_Impl_Mont4_acopy(a1, out);
-      unsigned __int128 z1281 = Hacl_Secret_UInt128_zero;
-      unsigned __int128 ap1[8];
-      for (size_t _ci8 = 0; _ci8 < 8; _ci8++) {
-        ap1[_ci8] = z1281;
-      }
-      unsigned __int128 at1[9];
-      for (size_t _ci9 = 0; _ci9 < 9; _ci9++) {
-        at1[_ci9] = z1281;
-      }
-      unsigned __int128 ar1[5];
-      for (size_t _ci10 = 0; _ci10 < 5; _ci10++) {
-        ar1[_ci10] = z1281;
-      }
-      unsigned __int128 asv1[4];
-      for (size_t _ci11 = 0; _ci11 < 4; _ci11++) {
-        asv1[_ci11] = z1281;
-      }
-      Hacl_Impl_Bignum4_mmul_op(out, a1, a, ap1, at1, ar1, asv1, ms, nm, 15580212934572586289ULL);
+      Hacl_K256_Field52_fcopy(a1, out);
+      Hacl_K256_Field52_fmul(out, a1, a);
     }
     i = ni;
   }
   uint64_t z1 = Hacl_Secret_UInt64_zero;
-  uint64_t aq[4];
-  for (size_t _ci12 = 0; _ci12 < 4; _ci12++) {
-    aq[_ci12] = z1;
+  uint64_t aq[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    aq[_ci3] = z1;
   }
-  Hacl_K256_Field_fsqr(aq, out);
-  return Hacl_K256_Field_feq(aq, a);
+  Hacl_K256_Field52_fsqr(aq, out);
+  return Hacl_K256_Field52_feq(aq, a);
 }
 
-static void Hacl_Impl_Mont4_aneg(uint64_t *out, uint64_t *a, uint64_t *ms) {
-  uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t az[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
-    az[_ci1] = z;
+static inline void Hacl_K256_Field52_fneg(uint64_t *out, uint64_t *a) {
+  uint64_t x0 = a[0];
+  out[0] = Hacl_Secret_UInt64_sub_mod(288230101273742272ULL, x0);
+  size_t i = 1;
+  while (i < 4) {
+    size_t vi = i;
+    uint64_t x = a[vi];
+    out[vi] = Hacl_Secret_UInt64_sub_mod(288230376151711680ULL, x);
+    i = (vi + 1);
   }
-  Hacl_Impl_Mont4_asub(out, az, a, ms);
-}
-
-static void Hacl_K256_Field_fneg(uint64_t *out, uint64_t *a) {
-  uint64_t *ms = (uint64_t *)Hacl_K256_Tables_fms_arr;
-  Hacl_Impl_Mont4_aneg(out, a, ms);
+  uint64_t x4 = a[4];
+  out[4] = Hacl_Secret_UInt64_sub_mod(18014398509481920ULL, x4);
+  Hacl_K256_Field52_carry_chain(out);
 }
 
 static void Hacl_K256_Sec1_store_y(uint8_t *yb, uint64_t *yf, uint64_t *nf, bool odd) {
-  Hacl_K256_Field_fstore(yb, yf);
+  Hacl_K256_Field52_fstore(yb, yf);
   uint8_t lb = yb[31];
   uint8_t par = Hacl_Secret_UInt8_logand(lb, 1);
   if (!((par == 1) == odd)) {
-    Hacl_K256_Field_fneg(nf, yf);
-    Hacl_K256_Field_fstore(yb, nf);
+    Hacl_K256_Field52_fneg(nf, yf);
+    Hacl_K256_Field52_fstore(yb, nf);
   }
 }
 
 bool Hacl_K256_Sec1_compressed_to_raw(uint8_t *out, uint8_t *pk) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t m0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t m0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     m0[_ci1] = z;
   }
-  uint64_t m1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t m1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     m1[_ci2] = z;
   }
-  uint64_t m2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t m2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     m2[_ci3] = z;
   }
-  uint64_t m3[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+  uint64_t m3[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
     m3[_ci4] = z;
   }
   uint8_t z8 = 0;
@@ -18174,7 +18305,7 @@ bool Hacl_K256_Sec1_compressed_to_raw(uint8_t *out, uint8_t *pk) {
   uint8_t __anf0 = pk[0];
   if ((__anf0 == 2) || (__anf0 == 3)) {
     Hacl_Impl_Copy_copy_range(n0, 0, pk, 1, 32);
-    bool okx = Hacl_K256_Field_fload(m0, n0);
+    bool okx = Hacl_K256_Field52_fload(m0, n0);
     if (okx) {
       Hacl_K256_Encode_curve_rhs(m1, m0);
       bool oks = Hacl_K256_Inverse_fsqrt(m2, m1);
@@ -18223,6 +18354,15 @@ static bool Hacl_Impl_Mont4_ageq(uint64_t *a, uint64_t *b) {
   uint8_t m8 = Hacl_Secret_Cast_u64_to_u8(m);
   bool lo = Hacl_Secret_Declassify_bool_of_mask(m8);
   return (!(lo));
+}
+
+static void Hacl_Impl_Mont4_aneg(uint64_t *out, uint64_t *a, uint64_t *ms) {
+  uint64_t z = Hacl_Secret_UInt64_zero;
+  uint64_t az[4];
+  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+    az[_ci1] = z;
+  }
+  Hacl_Impl_Mont4_asub(out, az, a, ms);
 }
 
 bool Hacl_K256_LowS_signature_normalize(uint8_t *sg) {
@@ -18301,16 +18441,16 @@ bool Hacl_K256_LowS_is_signature_normalized(uint8_t *sg) {
 
 bool Hacl_K256_Key_Public_validate_public_key(uint8_t *b) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = z;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a2[_ci3] = z;
   }
   return Hacl_K256_Encode_load_point(a0, a1, a2, b);
@@ -18712,28 +18852,28 @@ static void Hacl_K256_Scalar_qmul(uint64_t *out, uint64_t *a, uint64_t *b) {
 
 static void Hacl_K256_PointMulD_point_mul_double_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *u1, uint64_t *u2, uint64_t *qx, uint64_t *qy, uint64_t *qz) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a0[4];
-  for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
+  uint64_t a0[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
     a0[_ci1] = z;
   }
-  uint64_t a1[4];
-  for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
+  uint64_t a1[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
     a1[_ci2] = z;
   }
-  uint64_t a2[4];
-  for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
+  uint64_t a2[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
     a2[_ci3] = z;
   }
-  uint64_t a3[4];
-  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+  uint64_t a3[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
     a3[_ci4] = z;
   }
-  uint64_t a4[4];
-  for (size_t _ci5 = 0; _ci5 < 4; _ci5++) {
+  uint64_t a4[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
     a4[_ci5] = z;
   }
-  uint64_t a5[4];
-  for (size_t _ci6 = 0; _ci6 < 4; _ci6++) {
+  uint64_t a5[5];
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
     a5[_ci6] = z;
   }
   Hacl_K256_PointMul_point_mul_g(a0, a1, a2, u1);
@@ -18775,36 +18915,36 @@ static bool Hacl_K256_Verify_verify(uint64_t *mq, uint8_t *pk, uint8_t *sig_r, u
   for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
     c6[_ci7] = z;
   }
-  uint64_t c7[4];
-  for (size_t _ci8 = 0; _ci8 < 4; _ci8++) {
+  uint64_t c7[5];
+  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
     c7[_ci8] = z;
   }
-  uint64_t c8[4];
-  for (size_t _ci9 = 0; _ci9 < 4; _ci9++) {
+  uint64_t c8[5];
+  for (size_t _ci9 = 0; _ci9 < 5; _ci9++) {
     c8[_ci9] = z;
   }
-  uint64_t c9[4];
-  for (size_t _ci10 = 0; _ci10 < 4; _ci10++) {
+  uint64_t c9[5];
+  for (size_t _ci10 = 0; _ci10 < 5; _ci10++) {
     c9[_ci10] = z;
   }
-  uint64_t ca[4];
-  for (size_t _ci11 = 0; _ci11 < 4; _ci11++) {
+  uint64_t ca[5];
+  for (size_t _ci11 = 0; _ci11 < 5; _ci11++) {
     ca[_ci11] = z;
   }
-  uint64_t cb[4];
-  for (size_t _ci12 = 0; _ci12 < 4; _ci12++) {
+  uint64_t cb[5];
+  for (size_t _ci12 = 0; _ci12 < 5; _ci12++) {
     cb[_ci12] = z;
   }
-  uint64_t cc[4];
-  for (size_t _ci13 = 0; _ci13 < 4; _ci13++) {
+  uint64_t cc[5];
+  for (size_t _ci13 = 0; _ci13 < 5; _ci13++) {
     cc[_ci13] = z;
   }
-  uint64_t cd[4];
-  for (size_t _ci14 = 0; _ci14 < 4; _ci14++) {
+  uint64_t cd[5];
+  for (size_t _ci14 = 0; _ci14 < 5; _ci14++) {
     cd[_ci14] = z;
   }
-  uint64_t ce[4];
-  for (size_t _ci15 = 0; _ci15 < 4; _ci15++) {
+  uint64_t ce[5];
+  for (size_t _ci15 = 0; _ci15 < 5; _ci15++) {
     ce[_ci15] = z;
   }
   uint64_t cf[4];
@@ -18866,11 +19006,11 @@ static bool Hacl_K256_Verify_verify(uint64_t *mq, uint8_t *pk, uint8_t *sig_r, u
     }
     Hacl_Impl_Bignum4_mmul_op(c6, c4, one1, ap1, at1, ar1, asv1, ms1, nm1, 5408259542528602431ULL);
     Hacl_K256_PointMulD_point_mul_double_g(ca, cb, cc, c5, c6, c7, c8, c9);
-    bool inf = Hacl_K256_Field_fis_zero(cc);
+    bool inf = Hacl_K256_Field52_fis_zero(cc);
     if (inf) return false;
     else {
       Hacl_K256_Encode_to_aff_point(cd, ce, ca, cb, cc);
-      Hacl_K256_Field_fstore(d0, cd);
+      Hacl_K256_Field52_fstore(d0, cd);
       Hacl_K256_Scalar_qload_mod(cf, d0);
       return Hacl_K256_Scalar_qeq(cf, c0);
     }
@@ -18971,24 +19111,24 @@ static bool Hacl_K256_Sign_sign(uint8_t *out, uint64_t *mq, uint8_t *sk, uint8_t
   for (size_t _ci8 = 0; _ci8 < 4; _ci8++) {
     c7[_ci8] = z;
   }
-  uint64_t c8[4];
-  for (size_t _ci9 = 0; _ci9 < 4; _ci9++) {
+  uint64_t c8[5];
+  for (size_t _ci9 = 0; _ci9 < 5; _ci9++) {
     c8[_ci9] = z;
   }
-  uint64_t c9[4];
-  for (size_t _ci10 = 0; _ci10 < 4; _ci10++) {
+  uint64_t c9[5];
+  for (size_t _ci10 = 0; _ci10 < 5; _ci10++) {
     c9[_ci10] = z;
   }
-  uint64_t ca[4];
-  for (size_t _ci11 = 0; _ci11 < 4; _ci11++) {
+  uint64_t ca[5];
+  for (size_t _ci11 = 0; _ci11 < 5; _ci11++) {
     ca[_ci11] = z;
   }
-  uint64_t cb[4];
-  for (size_t _ci12 = 0; _ci12 < 4; _ci12++) {
+  uint64_t cb[5];
+  for (size_t _ci12 = 0; _ci12 < 5; _ci12++) {
     cb[_ci12] = z;
   }
-  uint64_t cc[4];
-  for (size_t _ci13 = 0; _ci13 < 4; _ci13++) {
+  uint64_t cc[5];
+  for (size_t _ci13 = 0; _ci13 < 5; _ci13++) {
     cc[_ci13] = z;
   }
   uint8_t z8 = 0;
@@ -19010,7 +19150,7 @@ static bool Hacl_K256_Sign_sign(uint8_t *out, uint64_t *mq, uint8_t *sk, uint8_t
   if (okd && okn) {
     Hacl_K256_PointMul_point_mul_g(c8, c9, ca, c0);
     Hacl_K256_Encode_to_aff_point(cb, cc, c8, c9, ca);
-    Hacl_K256_Field_fstore(d0, cb);
+    Hacl_K256_Field52_fstore(d0, cb);
     Hacl_K256_Scalar_qload_mod(c3, d0);
     Hacl_K256_Scalar_qinv(c5, c1);
     Hacl_K256_Scalar_qmul(c6, c3, c2);

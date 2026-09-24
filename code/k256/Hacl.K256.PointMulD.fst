@@ -26,8 +26,8 @@ module Hacl.K256.PointMulD
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Impl.Limb4
 open Hacl.K256.Point
 open Hacl.K256.PointMul
@@ -37,6 +37,8 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -53,19 +55,19 @@ requires
   A.pts_to u1 #p1 v1 ** A.pts_to u2 #p2 v2 **
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
-        Seq.length v1 == nl /\ bnd (vals v1) base /\
-        Seq.length v2 == nl /\ bnd (vals v2) base /\ pt_ok vqx vqy vqz)
+        Seq.length v1 == B4.nl /\ B4.bnd (L4.vals v1) B4.base /\
+        Seq.length v2 == B4.nl /\ B4.bnd (L4.vals v2) B4.base /\ pt_ok vqx vqy vqz)
 ensures exists* (wx wy wz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to u1 #p1 v1 ** A.pts_to u2 #p2 v2 **
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   pure (pt_ok wx wy wz /\
         pt wx wy wz ==
-          K.point_mul_double_g (eval (vals v1)) (eval (vals v2))
+          K.point_mul_double_g (B4.eval (L4.vals v1)) (B4.eval (L4.vals v2))
                                (pt vqx vqy vqz))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 5sz |]; A.pts_to_len a0; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   A.pts_to_len a3; A.pts_to_len a4; A.pts_to_len a5;
 
   point_mul_g a0 a1 a2 u1;

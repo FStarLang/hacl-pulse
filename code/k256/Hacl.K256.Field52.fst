@@ -1253,4 +1253,44 @@ ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.g_y)
 { fconst KT52.gy_arr K.g_y }
 
+(** {2 Constant-time selection}
+
+    The scalar multiplication chooses between two accumulators on a bit of
+    a secret scalar, so the choice cannot be a branch.  The mask carries
+    the bit as a ghost boolean, which is what lets the postcondition be an
+    ordinary [if].  This is [Hacl.Impl.Mont4.asel] at five limbs. *)
+
+fn asel (out a b: A.array S64.t) (m: S64.t) (bb: erased bool)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length va == nl /\ Seq.length vb == nl /\
+        S64.v m == (if bb then pow2 64 - 1 else 0))
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (vo' == (if bb then reveal vb else reveal va))
+{
+  A.pts_to_len out; A.pts_to_len a; A.pts_to_len b;
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 5sz)
+  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
+    pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+    pure (SZ.v vi <= 5 /\ Seq.length v == nl /\
+          (forall (k: nat). k < SZ.v vi ==>
+             Seq.index v k ==
+               Seq.index (if bb then reveal vb else reveal va) k))
+  decreases (5 - SZ.v (!i))
+  {
+    let vi = !i;
+    let xa = A.(a.(vi));
+    let xb = A.(b.(vi));
+    A.((out.(vi) <- S64.select m xb xa));
+    i := SZ.add vi 1sz;
+  };
+  with v. assert (A.pts_to out v);
+  Seq.lemma_eq_intro v (if bb then reveal vb else reveal va);
+  ()
+}
+
 #pop-options

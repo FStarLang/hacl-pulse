@@ -25,16 +25,12 @@ module Hacl.K256.Inverse
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
-open Spec.Mont4
-open Hacl.Impl.Limb4
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Impl.Table
-open Hacl.Impl.Mont4
-open Hacl.Impl.Lit4
 open Hacl.K256.Tables
-open Hacl.Impl.Exp4
-open Hacl.K256.Field
+open Hacl.K256.Field52
+open Hacl.K256.Exp52
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
@@ -46,40 +42,15 @@ module MA = Spec.ModArith
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-(** The exponentiation both entry points perform: [out := a^n], with [n]
-    given as a table of public limbs whose value is known. *)
-inline_for_extraction
-fn fexp (out a: A.array S64.t) (e: A.array U64.t) (n: erased nat)
-        (#vo: erased (Seq.seq S64.t))
-        (#pa: perm) (#va: erased (Seq.seq S64.t))
-        (#pe: perm) (#ve: erased (Seq.seq U64.t))
-requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to e #pe ve **
-  pure (Seq.length vo == nl /\ felem va /\
-        reveal n < pow2 256 /\ pvals ve == limbs n)
-ensures exists* (vo': Seq.seq S64.t).
-  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to e #pe ve **
-  pure (felem vo' /\ fev vo' == MA.exp #K.prime (fev va) n)
-{
-  fmod_ok (); fmod_m ();
-  limbs_ok (reveal n);
-  let r1 = fr1 ();
-  let ms = fms ();
-  let nm = fnm ();
-  mexp out a e r1 ms nm fmu fmod;
-  drop_table r1;
-  drop_table ms;
-  drop_table nm;
-}
-
 (** [out := a^-1].  Zero inverts to zero, as [Spec.ModArith.inv] says. *)
 fn finv (out a: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to out vo ** A.pts_to a #pa va **
-  pure (Seq.length vo == nl /\ felem va)
+  pure (Seq.length vo == nl /\ felem (vals va))
 ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va **
-  pure (felem vo' /\ fev vo' == K.finv (fev va))
+  pure (felem (vals vo') /\ fev (vals vo') == K.finv (fev (vals va)))
 {
   assert_norm (K.prime - 2 < pow2 256);
   let e = finv_e ();
@@ -94,12 +65,12 @@ fn fsqrt (out a: A.array S64.t)
          (#vo: erased (Seq.seq S64.t))
          (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to out vo ** A.pts_to a #pa va **
-  pure (Seq.length vo == nl /\ felem va)
+  pure (Seq.length vo == nl /\ felem (vals va))
 returns ok: bool
 ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va **
-  pure (felem vo' /\
-        K.fsqrt (fev va) == (if ok then Some (fev vo') else None))
+  pure (felem (vals vo') /\
+        K.fsqrt (fev (vals va)) == (if ok then Some (fev (vals vo')) else None))
 {
   assert_norm ((K.prime + 1) / 4 < pow2 256);
   assert_norm (K.prime % 4 == 3);
@@ -107,7 +78,7 @@ ensures exists* (vo': Seq.seq S64.t).
   fexp out a e (hide ((K.prime + 1) / 4));
   drop_table e;
   let z = S64.zero;
-  let mut aq = [| z; 4sz |]; A.pts_to_len aq; A.pts_to_len aq;
+  let mut aq = [| z; 5sz |]; A.pts_to_len aq; A.pts_to_len aq;
   fsqr aq out;
   let ok = feq aq a;
   ok
