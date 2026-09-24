@@ -29,8 +29,8 @@ where HACL\* uses a window, and on the elliptic curves, where what is left is
 the scalar multiplication rather than the field: P-256's variable-base ECDH
 is now *faster* than the reference at 0.76x, secp256k1's is within 1.73x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
-a time; but Ed25519 still multiplies one bit at a time, and every operation
-that starts from the generator lacks the table HACL\* has compiled in.  See [Performance](#performance).
+a time, as Ed25519 now does too; what is left there is that every operation
+starting from the generator lacks the table HACL\* has compiled in.  See [Performance](#performance).
 
 ```
 make            verify, extract, compile, test
@@ -748,7 +748,7 @@ Ed25519 lives on the same prime as X25519, so it reuses
 `Hacl.Curve25519.Field` unchanged -- the same five limbs of fifty-one bits,
 the same `fmul`, the same inversion chain.  Nothing in the signature scheme
 needed a second field implementation, which is the main reason the whole of
-`code/ed25519` is six modules.
+`code/ed25519` is seven modules.
 
 Its *scalar* arithmetic, mod the group order `q`, is a different matter: it
 is eight limbs of thirty-two bits and always was, and for a while it shared
@@ -772,11 +772,28 @@ t)` are passed as four separate five-limb arrays side by side, because a
 struct of arrays would need its own separation discipline and Custard would
 have to lay it out.  `point_add ox oy oz ot x1 y1 z1 t1 x2 y2 z2 t2` is a
 wide signature, but the separation logic is then exactly the one the field
-operations already use.  One consequence: `point_add` and `point_mul` demand
+operations already use.  One consequence: `point_add` and the windowed
+`point_mul_win` demand
 all four coordinates of an input at a *single shared* permission, so the
 read-only base-point table has to be copied into owned buffers before
 `point_mul_g` can use it -- `Table.table` hands back an existential
 permission per array, and four existentials are not one.
+
+**The scalar multiplication is windowed, and that changes what the callers
+can assume.**  `Hacl.Ed25519.PointWin` walks the scalar four bits at a time
+against a sixteen-entry table of multiples of the input point, so it returns
+a point *equivalent* to the one the specification names rather than the same
+quadruple.  Every consumer of a multiple therefore has to be shown blind to
+the difference: compression is, because it normalises through `Z^-1`
+(`point_compress_congr`); addition is, by `point_add_congr`; and the equality
+test at the end of verification is, by an argument that needs `on_curve` of
+the specification's points too.  For the public key that means knowing that
+decompression lands on the curve, which nothing needed before and
+`Spec.Ed25519` does not say, so `Spec.Ed25519.Group.decompress_on_curve`
+proves it -- `recover_x` returns a square root of `(y^2 - 1)/(d y^2 + 1)`,
+which is the affine equation solved for `x`.  The three places that compress
+a multiple of the generator are one function, `point_mul_g_compress`, so the
+congruence argument is made once.
 
 **Failure is public.**  Decompression can fail, and a signature can be
 invalid; neither fact is secret, so both are ordinary `bool`s rather than
@@ -2111,7 +2128,7 @@ reference**.
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | secp256k1 ECDSA sign | -- | 169 us | 65 us | **2.58x** |  |  |
-| Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
+| Ed25519 sign | -- | 200 us | 64 us | **3.11x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
@@ -2177,8 +2194,10 @@ reference if it is the same algorithm at the same width.
 now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
 so the field arithmetic is the same shape, and with the field marked
 `CInline` X25519 is within 1.26x -- what is left there is the ladder itself,
-which has had no attention.  Ed25519 is further behind because it multiplies
-one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1
+which has had no attention.  Ed25519 is further behind because HACL\* multiplies by
+the generator out of a table compiled into the binary and this does not; the
+*variable-base* half of that gap is closed, and closing it was worth 22% of
+key generation, 19% of signing and 18% of verification.  P-256 and secp256k1
 were behind for three reasons; secp256k1 is now behind for one and P-256 for
 two.  The plainest has been removed for both: the 256-bit core they share was
 eight limbs of thirty-two bits, so a field multiply did sixty-four schoolbook
@@ -2940,15 +2959,20 @@ rough order of value:
    subtractions rather than a multiply -- and has not had it.
 
 4. **The fixed-base window**, for secp256k1 and Ed25519.  The variable-base
-   half is **done on both prime curves**: `code/k256/Hacl.K256.PointWin.fst`
-   and `code/p256/Hacl.P256.PointWin.fst` walk the scalar four bits at a time
+   half is **done on all three curves**: `code/k256/Hacl.K256.PointWin.fst`,
+   `code/p256/Hacl.P256.PointWin.fst` and
+   `code/ed25519/Hacl.Ed25519.PointWin.fst` walk the scalar four bits at a
+   time
    against a sixteen-entry table of small multiples of the input point, built
    at run time, with `Hacl.Bignum.Base.table_select` for the constant-time
    lookup and `Hacl.Impl.Mont4.adigit` for the nibble.  336 point operations
-   against the ladder's 512: about 26% off every secp256k1 operation and
-   about a third off every P-256 one, taking secp256k1's variable-base ECDH
-   from 2.40x to **1.73x** and P-256's from 1.14x to **0.76x**, the first
-   asymmetric primitive here that is ahead of the reference.
+   against the ladder's 512: about 26% off every secp256k1 operation,
+   about a third off every P-256 one and about a fifth off every Ed25519
+   one, taking secp256k1's variable-base ECDH
+   from 2.40x to **1.73x**, P-256's from 1.14x to **0.76x**, the first
+   asymmetric primitive here that is ahead of the reference, and Ed25519
+   signing from 3.82x to **3.11x** under gcc and 4.21x to **2.94x** under
+   clang.
 
    The proof is reusable and that was the point.  `spec/Spec.Group.Smul.fst`
    is a commutative group as an abstract record -- the operation, the
@@ -2961,8 +2985,12 @@ rough order of value:
    0.9 seconds, against an eight-minute timeout for the same statement proved
    directly.  `spec/Spec.P256.Smul.fst` is the same file with the P-256
    lemmas substituted in and verified in a second on the first attempt, which
-   is exactly the return the abstraction was built for.  Ed25519 should get
-   its spec side the same way.
+   is exactly the return the abstraction was built for.  `spec/Spec.Ed25519.Smul.fst`
+   is the third instance and took five seconds; it is the only one that needed
+   anything new, because Ed25519's ladder is indexed by thirty-two *bytes* and
+   reads bit `i` out of byte `i / 8` where the abstract one divides by `2^i`,
+   so it proves `ith_bit_gbit` and its four-bit analogue `nibble_of_bytes`.
+   Both are arithmetic about byte strings, mention no curve, and are cheap.
 
    The lesson generalizes past the specs: `on_curve` and `peq` unfold into
    field equations modulo a seventy-eight-digit prime, so any query that
@@ -2976,13 +3004,20 @@ rough order of value:
    and the module went from a forty-minute timeout to ninety seconds.
    `--query_stats` is the tool that finds this: when every reported query
    reads 0.00 seconds and the module still runs twenty minutes, the time is
-   one *failing* query burning its whole rlimit.
+   one *failing* query burning its whole rlimit.  Ed25519 added a fifth case,
+   one level down: `decompress_on_curve` is four lines of algebra, and
+   written over `fadd`, `fsub` and `fmul` it put `prime` in scope of a
+   degree-four nonlinear goal and ran for twenty minutes.  Restated over an
+   arbitrary positive modulus `n`, with only the last two lemmas mentioning
+   the curve, it takes fifteen seconds.  Keep the seventy-eight-digit
+   literal out of the query, whatever the query is about.
 
    What is left is the fixed-base window.  Signing, verification and
    secret-to-public all begin with a multiplication by the generator, where
    HACL\* has a table compiled in and this does not, and that is the whole of
    why secp256k1's three such rows sit between 2.6x and 3.5x while its
-   variable-base ECDH is at 1.73x.  Ed25519 has had neither half and is the
+   variable-base ECDH is at 1.73x.  The same is now true of Ed25519, whose
+   three rows sit between 2.45x and 3.11x for that one reason, and it is the
    largest single gap left.  The hard part is proving a compiled-in table of
    multiples of the generator correct: `smul (d * 2^(64i)) g` cannot simply
    be unfolded, so it wants either a handful of compiled-in base points and
