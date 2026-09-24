@@ -2840,22 +2840,24 @@ rough order of value:
    signing both, and the constant-time table lookup it needs already exists:
    `Hacl.Bignum.Base.table_select`, written for the modexp window.  It needs
    associativity of the twisted Edwards addition law in extended coordinates,
-   which `Spec.Ed25519` does not have in any form today.
+   which is now proved.
 
-   That obligation, and the same one for the two Weierstrass curves, is now
+   That obligation, and the same one for the two Weierstrass curves, is
    written down: `spec/Spec.Ed25519.Group.fsti`, `spec/Spec.P256.Group.fsti`
    and `spec/Spec.K256.Group.fsti` state curve membership, projective
-   equality, closure of the addition law, and the group axioms, as
-   interfaces with no implementations --- so they are a statement of work
-   outstanding rather than an assumption, and the library still assumes
-   nothing mathematical.  Associativity is the only hard one; the rest are
-   polynomial identities or field cancellation.  Worth saying that HACL\*
-   proves none of them either: in `specs/lemmas/Spec.K256.Lemmas.fst` and
-   its Ed25519 and P-256 twins the corresponding lemmas are `admit()`, so
-   HACL\*'s windowed Ed25519, its windowed P-256 and its GLV secp256k1 all
-   rest on the same admitted facts.  Discharging them here would be new
-   work, not a catch-up.  The measured shape of the gap says what they are
-   worth: on variable-base ECDH, where HACL\* has no table either, P-256 is
+   equality, closure of the addition law, and the group axioms, and all
+   three are now proved, with no `admit` and no `assume`, so the library
+   still assumes nothing mathematical.  The proofs reduce every statement
+   to polynomial identities modulo the affine curve equations, which a
+   small verified polynomial arithmetic (`spec/Spec.Group.Poly.fst`) checks
+   by normalisation; completeness additionally uses Pocklington primality
+   certificates for the field primes (`spec/Spec.Group.Primes.fst`), a
+   no-roots certificate on the Weierstrass curves, and non-squareness of
+   `d` on Ed25519.  Worth saying that HACL\* proves none of them: in
+   `specs/lemmas/Spec.K256.Lemmas.fst` and its Ed25519 and P-256 twins the
+   corresponding lemmas are `admit()`, so HACL\*'s windowed Ed25519, its
+   windowed P-256 and its GLV secp256k1 all rest on the same admitted
+   facts.  The measured shape of the gap says what they are worth: on variable-base ECDH, where HACL\* has no table either, P-256 is
    within 1.15x; on fixed-base it is 2.59x.
 2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
    256-bit products before reducing rather than after.  Needs one new

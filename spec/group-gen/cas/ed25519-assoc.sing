@@ -1,0 +1,22 @@
+ring r = (0,d), (x1,y1,t1,x2,y2,t2,x3,y3,t3), dp;
+proc eadd(poly X1, poly Y1, poly Z1, poly T1, poly X2, poly Y2, poly Z2, poly T2)
+{
+  poly a = (Y1-X1)*(Y2-X2); poly b = (Y1+X1)*(Y2+X2); poly c = 2*d*T1*T2; poly dd = 2*Z1*Z2;
+  poly e = b - a; poly f = dd - c; poly g = dd + c; poly h = b + a;
+  list L = e*f, g*h, f*g, e*h; return(L);
+}
+ideal I = -x1^2+y1^2-1-d*x1^2*y1^2, -x2^2+y2^2-1-d*x2^2*y2^2, -x3^2+y3^2-1-d*x3^2*y3^2, t1-x1*y1, t2-x2*y2, t3-x3*y3;
+I = std(I);
+I;
+list S12 = eadd(x1,y1,1,t1,x2,y2,1,t2);
+list L = eadd(S12[1],S12[2],S12[3],S12[4],x3,y3,1,t3);
+list S23 = eadd(x2,y2,1,t2,x3,y3,1,t3);
+list R = eadd(x1,y1,1,t1,S23[1],S23[2],S23[3],S23[4]);
+"sizes L:"; size(L[1]); size(L[2]); size(L[3]);
+"reduced L:"; size(reduce(L[1],I)); size(reduce(L[2],I)); size(reduce(L[3],I));
+poly c1 = reduce(L[1]*R[3]-R[1]*L[3], I);
+"c1"; size(c1);
+poly c3 = reduce(L[2]*R[3]-R[2]*L[3], I);
+"c3"; size(c3);
+"raw cross"; size(L[1]*R[3]-R[1]*L[3]);
+quit;

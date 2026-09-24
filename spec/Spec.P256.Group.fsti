@@ -139,9 +139,9 @@ val point_add_congr (p p' q q': proj_point)
 
     [point_add] and [point_double] are [opaque_to_smt] in [Spec.P256] --
     they are forty lines of nested [fmul] when unfolded, and the scalar
-    multiplication loop cannot afford to see them.  These proofs will have
-    to [reveal_opaque] them, and are the only place in the library that
-    does. *)
+    multiplication loop cannot afford to see them.  The proofs reveal them
+    in exactly one place, [Spec.P256.GroupSv], which says once that the
+    polynomial computations of the checks compute these functions. *)
 
 (** Associativity.  The reason this file exists. *)
 val point_add_assoc_law (p q r: proj_point)
