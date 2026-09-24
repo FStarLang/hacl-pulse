@@ -41,6 +41,7 @@ module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module GR = Spec.P256.Group
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
@@ -84,7 +85,15 @@ ensures
     qmul c4 c2 c0;
     qfrom c5 c3;
     qfrom c6 c4;
+    lpt_on_curve vp;
+    with q0 q1 q2. assert (A.pts_to c7 q0 ** A.pts_to c8 q1 ** A.pts_to c9 q2);
+    with w5 w6. assert (A.pts_to c5 w5 ** A.pts_to c6 w6);
     point_mul_double_g ca cb cc c5 c6 c7 c8 c9;
+    with wx wy wz. assert (A.pts_to ca wx ** A.pts_to cb wy ** A.pts_to cc wz);
+    GR.peq_is_point_at_infinity (pt wx wy wz)
+      (P.point_mul_double_g (eval (vals w5)) (eval (vals w6)) (pt q0 q1 q2));
+    GR.peq_to_aff_point (pt wx wy wz)
+      (P.point_mul_double_g (eval (vals w5)) (eval (vals w6)) (pt q0 q1 q2));
     let inf = fis_zero cc;
     if inf {
       false
