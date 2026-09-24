@@ -27,8 +27,9 @@ SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305 and HMAC-SHA-512 are all faster --
 to behind it on modular exponentiation, which is still square-and-multiply
 where HACL\* uses a window, and on the elliptic curves, where what is left is
 the scalar multiplication rather than the field: X25519 is within
-1.26x, but Ed25519, P-256 and secp256k1 still multiply one bit at a time where
-HACL\* uses a precomputed window.  See [Performance](#performance).
+1.26x and secp256k1 within 1.73x on variable-base ECDH now that it walks its
+scalar four bits at a time, but Ed25519 and P-256 still multiply one bit at a
+time where HACL\* uses a precomputed window.  See [Performance](#performance).
 
 ```
 make            verify, extract, compile, test
@@ -921,6 +922,19 @@ Montgomery factor at all.  `Hacl.K256.Tables52` holds the curve constants in
 that representation and `Hacl.K256.Exp52` the exponentiation ladder without
 the Montgomery apparatus.  P-256 still uses the shared four-limb Montgomery
 core.
+
+**The scalar multiplication is no longer shared either.**  P-256 still walks
+its scalar one bit at a time, 256 doublings, 256 additions and a
+constant-time select between the two; `Hacl.K256.PointWin` walks four bits at
+a time against a sixteen-entry table of small multiples of the input point,
+built at run time, which is 336 point operations rather than 512 and about
+26% faster.  The proof of it is deliberately split: `Spec.Group.Smul` is a
+commutative group as an abstract record and carries every inductive argument,
+including the ladder, over opaque operations; `Spec.K256.Smul` instantiates
+it and connects `Spec.K256.point_mul` by a definitional equality of step
+functions.  The abstraction is not decoration.  `on_curve` and `peq` unfold
+into equations modulo a seventy-eight digit prime, and proving the same
+ladder theorem with them in scope does not terminate.
 
 **`a = 0` is a shorter addition law, not a special case of the same one.**
 Renes-Costello-Batina give separate algorithms for `a = -3` (4 and 6) and
@@ -2083,7 +2097,7 @@ reference**.
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | P-256 ECDSA verify | -- | 811 us | 425 us | **1.91x** |  |  |
-| secp256k1 ECDSA sign | -- | 227 us | 65 us | **3.49x** |  |  |
+| secp256k1 ECDSA sign | -- | 169 us | 65 us | **2.58x** |  |  |
 | Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
 
@@ -2166,10 +2180,21 @@ of the two field multiplies side by side -- ours and HACL\*'s, each behind a
 call, each fed its own previous output -- puts ours at 29.4 ns against 25.9,
 so the secp256k1 field is within 14% of the reference and is no longer worth
 attention.  P-256's prime admits the same treatment and has not had it yet.
-What is left for both is the scalar multiplication: they multiply one bit at a
-time where HACL\* uses a precomputed window.  That is all of secp256k1's
-remaining 2.4x on variable-base ECDH, and it is known, localized, and requires
-no new proof technique, only work.
+Third, the scalar multiplication.  secp256k1 has now had that too, on the
+variable-base side: it walks the scalar four bits at a time against a
+sixteen-entry table of small multiples of the input point, built at run time,
+so a 256-bit multiplication costs sixty-four rungs of four doublings and one
+addition plus sixteen to build the table -- 336 point operations against the
+ladder's 512.  It is worth about 26% on every secp256k1 operation: ECDH went
+from 213 us to 154 and its ratio against the reference from 2.40x to
+**1.73x**, ECDSA signing from 227 to 169, verification from 428 to 313, and
+secret-to-public from 213 to 153.  clang agrees within 3%.  What remains on
+secp256k1 is the *fixed*-base side, where HACL\* has a window compiled in and
+this does not: signing, verification and secret-to-public all start from a
+multiplication by the generator, and that is why those three rows are still
+between 2.6x and 3.5x while variable-base ECDH is at 1.73x.  P-256 has had
+neither the special prime nor the window, and multiplies one bit at a time
+still.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -2895,16 +2920,39 @@ rough order of value:
    treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
    subtractions rather than a multiply -- and has not had it.
 
-4. **Windowed scalar multiplication** for P-256 and secp256k1, which is now
-   the whole of what is left on secp256k1 and most of what is left on P-256.
-   Both still walk the scalar one bit at a time, 256 iterations of double,
-   add and constant-time select, where HACL\* uses a precomputed window.  On
-   secp256k1 that is the entire remaining 2.4x on variable-base ECDH: the
-   field multiply is within 14% of the reference and roughly twenty of them
-   go into each step, so the arithmetic accounts for essentially all of the
-   per-step cost and the difference is the number of steps.  The group-law
-   lemmas this needs are proved (`spec/Spec.K256.Group.fsti` and its P-256
-   twin), so it is no longer blocked.
+4. **Windowed scalar multiplication** for P-256, and the *fixed-base* window
+   for secp256k1.  secp256k1's variable-base half is **done**:
+   `code/k256/Hacl.K256.PointWin.fst` walks the scalar four bits at a time
+   against a sixteen-entry table of small multiples of the input point, built
+   at run time with `Hacl.Bignum.Base.table_select` for the constant-time
+   lookup and a new `Hacl.Impl.Mont4.adigit` for the nibble.  336 point
+   operations against the ladder's 512, worth about 26% on every secp256k1
+   operation and taking variable-base ECDH from 2.40x to **1.73x** against
+   the reference.
+
+   The proof is reusable and that was the point.  `spec/Spec.Group.Smul.fst`
+   is a commutative group as an abstract record -- the operation, the
+   membership predicate and the equivalence are opaque function fields -- and
+   everything inductive lives there: scalar multiplication, its congruences,
+   the double-and-add ladder, and the theorem that the ladder computes it.
+   2.5 seconds.  `spec/Spec.K256.Smul.fst` instantiates it from
+   `Spec.K256.Group` and connects `Spec.K256.point_mul` by a definitional
+   equality of step functions, which mentions no equivalence and so is free:
+   0.9 seconds, against an eight-minute timeout for the same statement proved
+   directly.  That is the lesson of the whole exercise, and it generalizes:
+   `on_curve` and `peq` unfold into field equations modulo a seventy-eight
+   digit prime, so any query that merely has them in scope pays for the
+   field.  Keep them out of every induction, out of every bookkeeping
+   predicate (`opaque_to_smt`), and above all out of every Pulse
+   precondition, since a precondition is in scope for the entire body --
+   the invariant here is a single opaque `rep a n p`.  P-256 and Ed25519
+   should get the spec side almost free from `Spec.Group.Smul`.
+
+   What is left on secp256k1 is the fixed-base window: signing, verification
+   and secret-to-public all begin with a multiplication by the generator,
+   where HACL\* has a table compiled in and this does not, and that is the
+   whole of why those three sit between 2.6x and 3.5x while variable-base
+   ECDH is at 1.73x.  P-256 has had neither half.
 5. **Taking over the remaining sixty-seven compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
