@@ -1,0 +1,329 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** The Ed25519 formulas as polynomial computations ({!Spec.Group.Poly}),
+    and the lemmas that say they compute the specification's values. *)
+module Spec.Ed25519.GroupSv
+
+open Spec.Group.Poly
+open Spec.Group.Check
+module E = Spec.Curve25519
+module Ed = Spec.Ed25519
+
+(** The modulus and the constants as plain literals; see
+    {!Spec.Group.Poly.ctx}. *)
+let m0 : pos = %P%
+
+irreducible let m0_lem () : Lemma (m0 == E.prime) = assert_norm (m0 == pow2 255 - 19)
+
+let prime_m0 () : Lemma (FStar.Math.Euclid.is_prime m0) =
+  assert_norm (m0 == pow2 255 - 19); Spec.Group.Primes.prime_25519 ()
+
+(** [d], [2d] and [1/d]. *)
+let dl : nat = %D%
+let d2l : nat = %D2%
+let dinvl : nat = %DINV%
+
+irreducible let d_lem () : Lemma (dl < m0 /\ d2l < m0 /\ dinvl < m0 /\ dl == Ed.d /\ d2l == Ed.d2 /\
+                                  (dl * dinvl) % m0 == 1 /\ dl % m0 == dl /\ d2l % m0 == d2l /\
+                                  dinvl % m0 == dinvl)
+  = assert_norm (dl < m0 /\ d2l < m0 /\ dinvl < m0);
+    assert_norm (dl == Ed.d); assert_norm (d2l == Ed.d2);
+    assert_norm ((dl * dinvl) % m0 == 1);
+    assert_norm (dl % m0 == dl /\ d2l % m0 == d2l /\ dinvl % m0 == dinvl)
+
+let fl : nat = 40
+
+type sp (c: ctx) = sv c & sv c & sv c & sv c
+
+[@@"opaque_to_smt"]
+let point_add_sv (#c: ctx) (b: sv c) (p q: sp c) : sp c =
+  let (x1, y1, z1, t1) = p in
+  let (x2, y2, z2, t2) = q in
+  let a = smul (ssub y1 x1) (ssub y2 x2) in
+  let bb = smul (sadd y1 x1) (sadd y2 x2) in
+  let cc = smul (smul b t1) t2 in
+  let dd = smul (sadd z1 z1) z2 in
+  let e = ssub bb a in
+  let f = ssub dd cc in
+  let gg = sadd dd cc in
+  let h = sadd bb a in
+  (smul e f, smul gg h, smul f gg, smul e h)
+
+[@@"opaque_to_smt"]
+let point_double_sv (#c: ctx) (p: sp c) : sp c =
+  let (x1, y1, z1, _) = p in
+  let a = smul x1 x1 in
+  let b = smul y1 y1 in
+  let cc = smul (sadd z1 z1) z1 in
+  let h = sadd a b in
+  let xy = sadd x1 y1 in
+  let e = ssub h (smul xy xy) in
+  let gg = ssub a b in
+  let f = sadd cc gg in
+  (smul e f, smul gg h, smul f gg, smul e h)
+
+let tof (x: elem m0) : E.elem = m0_lem (); x
+let fromf (x: E.elem) : elem m0 = m0_lem (); x
+
+let o : fops m0 =
+  m0_lem ();
+  { add = (fun x y -> E.fadd x y); sub = (fun x y -> E.fsub x y); mul = (fun x y -> E.fmul x y) }
+
+let o_eqs () : Lemma ((forall (x y: elem m0). o.add x y == E.fadd (tof x) (tof y)) /\
+                      (forall (x y: elem m0). o.sub x y == E.fsub (tof x) (tof y)) /\
+                      (forall (x y: elem m0). o.mul x y == E.fmul (tof x) (tof y)) /\
+                      (forall (x: elem m0). fromf (tof x) == x) /\
+                      (forall (x: E.elem). tof (fromf x) == x)) = m0_lem ()
+
+let o_ok () : Lemma (fops_ok o) =
+  m0_lem ();
+  let aux (x y: elem m0) : Lemma (o.sub x y == (x - y) % m0) =
+    FStar.Math.Lemmas.lemma_mod_plus (x - y) 1 m0 in
+  FStar.Classical.forall_intro_2 aux
+
+let tof4 (#c: ctx { c.m == m0 }) (p: sp c) : Ed.ext_point =
+  let (x, y, z, t) = p in (tof (vl x), tof (vl y), tof (vl z), tof (vl t))
+
+(** Opaque names for the specification's point operations, so that the
+    solver sees their field arithmetic only when asked to. *)
+[@@"opaque_to_smt"]
+let padd (p q: Ed.ext_point) : Ed.ext_point = Ed.point_add p q
+
+[@@"opaque_to_smt"]
+let pdbl (p: Ed.ext_point) : Ed.ext_point = Ed.point_double p
+
+[@@"opaque_to_smt"]
+let pneg (p: Ed.ext_point) : Ed.ext_point = Ed.point_negate p
+
+#push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
+let point_add_val (c: ctx { c.m == m0 }) (b: sv c) (p q: sp c)
+  : Lemma (requires ok c /\ c.o == o /\ vl b == d2l)
+          (ensures tof4 (point_add_sv b p q) == padd (tof4 p) (tof4 q))
+  = m0_lem (); d_lem (); o_eqs ();
+    FStar.Pervasives.reveal_opaque (`%padd) padd;
+    FStar.Pervasives.reveal_opaque (`%point_add_sv) (point_add_sv #c)
+
+let point_double_val (c: ctx { c.m == m0 }) (p: sp c)
+  : Lemma (requires ok c /\ c.o == o)
+          (ensures tof4 (point_double_sv p) == pdbl (tof4 p))
+  = m0_lem (); o_eqs ();
+    FStar.Pervasives.reveal_opaque (`%pdbl) pdbl;
+    FStar.Pervasives.reveal_opaque (`%point_double_sv) (point_double_sv #c)
+#pop-options
+
+(** Environments read through [tof], for an environment built with
+    [fromf]. *)
+#push-options "--fuel 11 --ifuel 0"
+%ENVF%
+#pop-options
+
+(** {2 Constants, the curve, and hypotheses} *)
+
+let kc (c: ctx) (v: nat) : sv c = sconst c (v % c.m)
+
+let cst (v: nat) : E.elem = tof (v % m0)
+
+let one_lem () : Lemma (E.one == 1) = ()
+
+let cst_lem () : Lemma (cst 0 == 0 /\ cst 1 == E.one /\ cst 2 == 2 /\ cst 4 == 4 /\
+                        cst dl == Ed.d /\ cst dinvl == dinvl) =
+  m0_lem (); d_lem (); one_lem ();
+  assert_norm (0 % m0 == 0); assert_norm (1 % m0 == 1);
+  assert_norm (2 % m0 == 2); assert_norm (4 % m0 == 4)
+
+let cst_small (v: nat) : Lemma (requires v < m0) (ensures cst v == v) =
+  m0_lem (); FStar.Math.Lemmas.small_mod v m0
+
+let kc_val (c: ctx) (v: nat)
+  : Lemma (requires c.m == m0) (ensures tof (vl (kc c v)) == cst v)
+  = ()
+
+(** The two sides of the homogeneous curve equation, exactly as in
+    [Spec.Ed25519.Group.on_curve]. *)
+[@@"opaque_to_smt"]
+let hl (p: Ed.ext_point) : E.elem =
+  let (x, y, z, _) = p in E.fmul (E.fsub (E.fmul y y) (E.fmul x x)) (E.fmul z z)
+
+[@@"opaque_to_smt"]
+let hr (p: Ed.ext_point) : E.elem =
+  let (x, y, z, _) = p in
+  E.fadd (E.fmul (E.fmul z z) (E.fmul z z)) (E.fmul Ed.d (E.fmul (E.fmul x x) (E.fmul y y)))
+
+[@@"opaque_to_smt"]
+let hl_sv (#c: ctx) (p: sp c) : sv c =
+  let (x, y, z, _) = p in smul (ssub (smul y y) (smul x x)) (smul z z)
+
+[@@"opaque_to_smt"]
+let hr_sv (#c: ctx) (p: sp c) : sv c =
+  let (x, y, z, _) = p in
+  sadd (smul (smul z z) (smul z z)) (smul (kc c dl) (smul (smul x x) (smul y y)))
+
+(** [on_curve], behind a name. *)
+[@@"opaque_to_smt"]
+let onc (p: Ed.ext_point) : prop =
+  let (x, y, z, t) = p in z <> 0 /\ E.fmul x y == E.fmul z t /\ hl p == hr p
+
+(** The point [(u, v, 1, uv)], and the affine curve equation at it. *)
+[@@"opaque_to_smt"]
+let cpt (u v: E.elem) : Ed.ext_point = (u, v, E.one, E.fmul u v)
+
+[@@"opaque_to_smt"]
+let on (u v: E.elem) : prop = hl (cpt u v) == hr (cpt u v)
+
+(** Scaling all four coordinates. *)
+[@@"opaque_to_smt"]
+let sc (k: E.elem) (p: Ed.ext_point) : Ed.ext_point =
+  let (x, y, z, t) = p in (E.fmul k x, E.fmul k y, E.fmul k z, E.fmul k t)
+
+let env_at (c: ctx { c.m == m0 }) (i: nat) : E.elem = tof (nth0 0 c.env i)
+
+(** The affine equation as a rule [u^2 v^2 -> (v^2 - u^2 - 1) / d]. *)
+[@@"opaque_to_smt"]
+let aff_hyp (c: ctx) (i j: (k: nat { k < c.nv })) : hyp c =
+  let u = svar c i in
+  let v = svar c j in
+  (smul (smul u u) (smul v v), smul (kc c dinvl) (ssub (ssub (smul v v) (smul u u)) (kc c 1)))
+
+(** {2 Points built from the environment} *)
+
+let aff (#c: ctx) (i j: (k: nat { k < c.nv })) : sp c =
+  (svar c i, svar c j, kc c 1, smul (svar c i) (svar c j))
+
+let var4 (#c: ctx) (i j k l: (k: nat { k < c.nv })) : sp c =
+  (svar c i, svar c j, svar c k, svar c l)
+
+let sinf (c: ctx) : sp c = (kc c 0, kc c 1, kc c 1, kc c 0)
+
+let ksc (#c: ctx) (s: sv c) (p: sp c) : sp c =
+  let (x, y, z, t) = p in (smul s x, smul s y, smul s z, smul s t)
+
+let sneg (#c: ctx) (p: sp c) : sp c =
+  let (x, y, z, t) = p in (ssub (kc c 0) x, y, z, ssub (kc c 0) t)
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 40"
+let eqn_val (c: ctx) (p: sp c)
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures tof (vl (hl_sv p)) == hl (tof4 p) /\ tof (vl (hr_sv p)) == hr (tof4 p))
+  = o_eqs (); d_lem (); m0_lem ();
+    FStar.Pervasives.reveal_opaque (`%hl_sv) (hl_sv #c);
+    FStar.Pervasives.reveal_opaque (`%hr_sv) (hr_sv #c);
+    FStar.Pervasives.reveal_opaque (`%hl) hl;
+    FStar.Pervasives.reveal_opaque (`%hr) hr
+
+let aff_val (c: ctx) (i j: (k: nat { k < c.nv }))
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures tof4 (aff #c i j) == cpt (env_at c i) (env_at c j))
+  = cst_lem (); m0_lem (); o_eqs (); assert_norm (1 % m0 == 1);
+    FStar.Pervasives.reveal_opaque (`%cpt) cpt
+
+let var4_val (c: ctx) (i j k l: (k: nat { k < c.nv }))
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures tof4 (var4 #c i j k l) == (env_at c i, env_at c j, env_at c k, env_at c l))
+  = ()
+
+let sinf_val (c: ctx)
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures tof4 (sinf c) == Ed.point_at_infinity)
+  = cst_lem (); m0_lem (); assert_norm (1 % m0 == 1); assert_norm (0 % m0 == 0)
+
+let ksc_val (c: ctx) (s: sv c) (p: sp c)
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures tof4 (ksc s p) == sc (tof (vl s)) (tof4 p))
+  = o_eqs (); FStar.Pervasives.reveal_opaque (`%sc) sc
+
+let sneg_val (c: ctx) (p: sp c)
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures tof4 (sneg p) == pneg (tof4 p))
+  = o_eqs (); cst_lem (); m0_lem (); assert_norm (0 % m0 == 0);
+    FStar.Pervasives.reveal_opaque (`%pneg) pneg
+
+let aff_hyp_val (c: ctx) (i j: (k: nat { k < c.nv }))
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures (let u = env_at c i in let v = env_at c j in
+                    tof (vl (fst (aff_hyp c i j))) == E.fmul (E.fmul u u) (E.fmul v v) /\
+                    tof (vl (snd (aff_hyp c i j))) ==
+                      E.fmul (cst dinvl) (E.fsub (E.fsub (E.fmul v v) (E.fmul u u)) E.one)))
+  = o_eqs (); cst_lem (); m0_lem ();
+    FStar.Pervasives.reveal_opaque (`%aff_hyp) aff_hyp
+#pop-options
+
+(** The rule is sound: [(v^2 - u^2 - 1)/d - u^2 v^2] is [1/d] times the
+    difference of the two sides of the equation. *)
+let kaff_chk (o': fops m0) (env: list (elem m0)) : bool =
+  let c = base m0 fl o' 2 env in
+  let p = aff #c 0 1 in
+  let h = aff_hyp c 0 1 in
+  Nil? (fst (ssub (ssub (snd h) (fst h)) (smul (kc c dinvl) (ssub (hl_sv p) (hr_sv p)))))
+
+let kaff_ok (o': fops m0) (env: list (elem m0)) : Lemma (kaff_chk o' env == true) =
+  assert (kaff_chk o' env == true) by (poly_tac ())
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 50"
+let kaff (u v: E.elem)
+  : Lemma (E.fsub (E.fmul (cst dinvl) (E.fsub (E.fsub (E.fmul v v) (E.fmul u u)) E.one))
+                  (E.fmul (E.fmul u u) (E.fmul v v)) ==
+           E.fmul (cst dinvl) (E.fsub (hl (cpt u v)) (hr (cpt u v))))
+  = let env = [fromf u; fromf v] in
+    kaff_ok o env;
+    o_ok ();
+    base_ok m0 fl o 2 env;
+    let c = base m0 fl o 2 env in
+    envf2 c u v;
+    o_eqs ();
+    let p = aff #c 0 1 in
+    let h = aff_hyp c 0 1 in
+    aff_val c 0 1;
+    eqn_val c p;
+    aff_hyp_val c 0 1;
+    kc_val c dinvl;
+    let lhs = ssub (snd h) (fst h) in
+    let rhs = smul (kc c dinvl) (ssub (hl_sv p) (hr_sv p)) in
+    assert (Nil? (fst (ssub lhs rhs)));
+    sv_eq lhs rhs
+
+let fsub_zero (a b: E.elem) : Lemma (requires E.fsub a b == 0) (ensures a == b) =
+  m0_lem ();
+  FStar.Math.Lemmas.lemma_mod_plus (a - b) 1 E.prime;
+  if a >= b then FStar.Math.Lemmas.small_mod (a - b) E.prime
+  else FStar.Math.Lemmas.small_mod (a - b + E.prime) E.prime
+
+let fsub_self (a: E.elem) : Lemma (E.fsub a a == 0) =
+  m0_lem (); FStar.Math.Lemmas.cancel_mul_mod 1 E.prime
+
+let aff_hyp_ok (c: ctx) (i j: (k: nat { k < c.nv }))
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o /\ on (env_at c i) (env_at c j))
+          (ensures vl (fst (aff_hyp c i j)) == vl (snd (aff_hyp c i j)))
+  = let u = env_at c i in
+    let v = env_at c j in
+    aff_hyp_val c i j;
+    kaff u v;
+    FStar.Pervasives.reveal_opaque (`%on) on;
+    fsub_self (hl (cpt u v));
+    fsub_zero (tof (vl (snd (aff_hyp c i j)))) (tof (vl (fst (aff_hyp c i j))));
+    o_eqs ()
+#pop-options
+
+(** A polynomial given as a list of (coefficient, exponent vector) terms. *)
+let rec smon (#c: ctx) (i: nat) (es: list nat) : Tot (sv c) (decreases es) =
+  match es with
+  | [] -> kc c 1
+  | e :: r -> if i < c.nv then smul (spow (svar c i) e) (smon (i + 1) r) else kc c 1
+
+let rec spoly (#c: ctx) (ts: list (nat & list nat)) : Tot (sv c) (decreases ts) =
+  match ts with
+  | [] -> kc c 0
+  | (k, es) :: r -> sadd (smul (kc c k) (smon 0 es)) (spoly r)
