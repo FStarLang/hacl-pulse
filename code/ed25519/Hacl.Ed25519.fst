@@ -54,6 +54,7 @@ module Smul = Spec.Ed25519.Smul
 module Table = Hacl.Impl.Table
 module Sub = Hacl.Impl.Sub
 module Tables = Hacl.Ed25519.Tables
+module MG = Hacl.Ed25519.PointMulG
 module Scalar = Hacl.Ed25519.Scalar
 module Limb = Hacl.Impl.Limb
 module B32 = Spec.Bignum256
@@ -65,8 +66,10 @@ module SHA2 = Spec.SHA2
 
 (** {2 The base point}
 
-    [g] is a constant, so its extended coordinates are built on the spot
-    from the two tables: [z] is one and [t] is [x y]. *)
+    A fixed-base window: {!Hacl.Ed25519.PointMulG} splits the scalar into
+    four sixty-four-bit pieces and walks them together against four
+    compiled-in base points, which is sixteen rungs rather than
+    sixty-four. *)
 
 fn point_mul_g (ox oy oz ot: A.array S64.t) (ks: A.array S8.t)
                (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
@@ -83,33 +86,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   pure (P.pt_ok wx wy wz wt /\ GR.on_curve (P.pt wx wy wz wt) /\
         E.point_equal (P.pt wx wy wz wt) (E.point_mul_g vk))
 {
-  A.pts_to_len ox;
-  let zz = S64.zero;
-  let z128 : S128.t = S128.zero;
-  let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| z128; 9sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut a5 = [| zz; 5sz |]; A.pts_to_len a5; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len a4; A.pts_to_len a5;
-
-  (* The tables are read-only, but the window wants the four coordinates
-     at one permission, so the two constants are copied in. *)
-  let gxt = Table.table Tables.gx_arr 5sz;
-  copy a4 gxt;
-  Table.drop_table gxt;
-  let gyt = Table.table Tables.gy_arr 5sz;
-  copy a5 gyt;
-  Table.drop_table gyt;
-  Tables.gx_ok ();
-  Tables.gy_ok ();
-  assert_norm (1 < base);
-  P.set_small a1 1uL;
-  fmul a2 a4 a5;
-  with vgx. assert (A.pts_to a4 vgx);
-  with vgy. assert (A.pts_to a5 vgy);
-  with vgz. assert (A.pts_to a1 vgz);
-  with vgt. assert (A.pts_to a2 vgt);
-  assert (pure (P.pt vgx vgy vgz vgt == E.g));
-  GR.g_on_curve ();
-  W.point_mul_win ox oy oz ot a4 a5 a1 a2 ks;
-  ()
+  MG.point_mul_g_win ox oy oz ot ks;
 }
 
 (** {2 Compressing a multiple of the base point}

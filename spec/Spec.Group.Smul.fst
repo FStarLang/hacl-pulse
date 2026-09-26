@@ -291,3 +291,37 @@ let ladder_is_smul (#a: Type) (g: grp a) (n: nat) (k: nat) (p: a)
     assert_norm (pow2 0 == 1)
 
 #pop-options
+
+(** {2 Repeated doubling}
+
+    A fixed-base window needs the points [2^(64 j) G] compiled into the
+    binary, and the only honest way to say what those constants are is as
+    the result of a doubling chain.  [dblk n q] is [n] doublings; the
+    lemma says that if [q] is a multiple of [p] then so is the chain, with
+    the multiplier shifted left by [n].
+
+    The chain itself is evaluated by the normaliser on concrete field
+    elements, once, at typechecking time.  What cannot be evaluated is
+    [smul (2^64) p], which is [2^64] additions; that is what this lemma is
+    for. *)
+
+#push-options "--fuel 1 --ifuel 0 --z3rlimit 50"
+
+let rec dblk (#a: Type) (g: grp a) (n: nat) (q: a) : Tot a (decreases n) =
+  if n = 0 then q else dblk g (n - 1) (g.dbl q)
+
+let rec dblk_ok (#a: Type) (g: grp a) (n: nat) (m: nat) (p q: a)
+  : Lemma (requires g.ok p /\ g.ok q /\ g.eqv q (smul g m p))
+          (ensures g.ok (dblk g n q) /\
+                   g.eqv (dblk g n q) (smul g (pow2 n * m) p))
+          (decreases n)
+  = if n = 0 then assert_norm (pow2 0 == 1)
+    else begin
+      smul_dbl_congr g m p q;
+      dblk_ok g (n - 1) (2 * m) p (g.dbl q);
+      Math.pow2_plus 1 (n - 1);
+      assert_norm (pow2 1 == 2);
+      Math.paren_mul_right (pow2 (n - 1)) 2 m
+    end
+
+#pop-options
