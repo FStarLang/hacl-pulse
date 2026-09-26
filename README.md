@@ -29,8 +29,9 @@ where HACL\* uses a window, and on the elliptic curves, where what is left is
 the scalar multiplication rather than the field: P-256's variable-base ECDH
 is now *faster* than the reference at 0.76x, secp256k1's is within 1.73x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
-a time, as Ed25519 now does too; what is left there is that every operation
-starting from the generator lacks the table HACL\* has compiled in.  See [Performance](#performance).
+a time, as Ed25519 now does too, and now that Ed25519 multiplies the
+generator out of four compiled-in base points rather than one.  See
+[Performance](#performance).
 
 ```
 make            verify, extract, compile, test
@@ -748,7 +749,7 @@ Ed25519 lives on the same prime as X25519, so it reuses
 `Hacl.Curve25519.Field` unchanged -- the same five limbs of fifty-one bits,
 the same `fmul`, the same inversion chain.  Nothing in the signature scheme
 needed a second field implementation, which is the main reason the whole of
-`code/ed25519` is seven modules.
+`code/ed25519` is eight modules.
 
 Its *scalar* arithmetic, mod the group order `q`, is a different matter: it
 is eight limbs of thirty-two bits and always was, and for a while it shared
@@ -794,6 +795,31 @@ proves it -- `recover_x` returns a square root of `(y^2 - 1)/(d y^2 + 1)`,
 which is the affine equation solved for `x`.  The three places that compress
 a multiple of the generator are one function, `point_mul_g_compress`, so the
 congruence argument is made once.
+
+**The generator has its own window.**  Signing and key generation multiply a
+point that is known at compile time, and `Hacl.Ed25519.PointMulG` preprocesses
+it: the scalar splits into four sixty-four-bit pieces and
+
+```
+k G = k0 G + k1 (2^64 G) + k2 (2^128 G) + k3 (2^192 G)
+```
+
+lets the four pieces share one doubling chain, so sixteen rungs of four
+doublings and four additions replace sixty-four rungs of four and one.  A
+hundred and eighty-four point operations against three hundred and
+thirty-five, table building included.  The three extra base points are
+constants, and saying what such a constant *is* is the difficulty: `[2^64] G`
+is two-to-the-sixty-fourth additions and cannot be unfolded, so
+`Spec.Ed25519.Base` states it as a doubling *chain* (`Spec.Group.Smul.dblk`),
+which the normaliser evaluates on concrete field elements at typechecking
+time -- sixty-four doublings in about a second -- and `dblk_ok` converts into
+a statement about `smul`.  They are stored affine, which makes both the chain
+equation and the curve equation decidable by `assert_norm`, so no SMT query
+ever sees them; the nine field constants are `opaque_to_smt` for the same
+reason.  `Hacl.Ed25519.PointWin`'s table layer carries a scale so that both
+windows can share it: entry `d` of the `j`-th table has to be described as
+the `d 2^{64j}`-th multiple of `G`, not the `d`-th multiple of `2^{64j} G`,
+because it is `G` that the answer is a multiple of.
 
 **Failure is public.**  Decompression can fail, and a signature can be
 invalid; neither fact is secret, so both are ordinary `bool`s rather than
@@ -2127,8 +2153,8 @@ reference**.
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
-| secp256k1 ECDSA sign | -- | 169 us | 65 us | **2.58x** |  |  |
-| Ed25519 sign | -- | 200 us | 64 us | **3.11x** |  |  |
+| Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
+| secp256k1 ECDSA sign | -- | 172 us | 65 us | **2.63x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
@@ -2194,10 +2220,14 @@ reference if it is the same algorithm at the same width.
 now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
 so the field arithmetic is the same shape, and with the field marked
 `CInline` X25519 is within 1.26x -- what is left there is the ladder itself,
-which has had no attention.  Ed25519 is further behind because HACL\* multiplies by
-the generator out of a table compiled into the binary and this does not; the
-*variable-base* half of that gap is closed, and closing it was worth 22% of
-key generation, 19% of signing and 18% of verification.  P-256 and secp256k1
+which has had no attention.  Ed25519 is further behind, but much
+less so than it was: both halves of its scalar multiplication have now been
+windowed.  The variable-base half was worth 22% of key generation, 19% of
+signing and 18% of verification; the fixed-base half, which splits the scalar
+into four sixty-four-bit pieces and walks them together against [2^64] G,
+[2^128] G and [2^192] G as well as G, was worth a further 28% of key
+generation and 23% of signing.  Key generation went from 3.40x of the
+reference to **1.91x** and signing from 3.82x to **2.35x**.  P-256 and secp256k1
 were behind for three reasons; secp256k1 is now behind for one and P-256 for
 two.  The plainest has been removed for both: the 256-bit core they share was
 eight limbs of thirty-two bits, so a field multiply did sixty-four schoolbook
@@ -2958,7 +2988,23 @@ rough order of value:
    treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
    subtractions rather than a multiply -- and has not had it.
 
-4. **The fixed-base window**, for secp256k1 and Ed25519.  The variable-base
+4. **The fixed-base window**, now wanted only for secp256k1.  Ed25519 has
+   it: `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
+   sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
+   `2^128 G` and `2^192 G`, so that one doubling chain serves all four and
+   sixteen rungs suffice.  184 point operations against 335: key generation
+   from 84.8 us to **60.7** (gcc) and 77.8 to **51.3** (clang), 3.40x of
+   HACL\* to **1.91x** and 2.45x to **1.61x**; signing from 200.0 to
+   **153.9** and 191.3 to **139.0**; verification, which does one fixed-base
+   and one variable-base multiplication, from 202.7 to **187.5** and 188.6 to
+   **165.1**.  The three extra base points are compiled in as nine field
+   constants; `spec/Spec.Ed25519.Base.fst` says what they are by a doubling
+   chain the normaliser evaluates, and `Spec.Group.Smul.dblk_ok` turns that
+   into a statement about `smul`.  A further 30% is available by compiling in
+   the four tables of sixteen entries rather than building them, at the price
+   of 256 field constants instead of 9; that is a change to the first twenty
+   lines of `Hacl.Ed25519.PointMulG`.  secp256k1, whose `secret-to-public` is
+   3.16x and whose signing is 2.63x, has had none of this.  The variable-base
    half is **done on all three curves**: `code/k256/Hacl.K256.PointWin.fst`,
    `code/p256/Hacl.P256.PointWin.fst` and
    `code/ed25519/Hacl.Ed25519.PointWin.fst` walk the scalar four bits at a
@@ -2972,7 +3018,8 @@ rough order of value:
    from 2.40x to **1.73x**, P-256's from 1.14x to **0.76x**, the first
    asymmetric primitive here that is ahead of the reference, and Ed25519
    signing from 3.82x to **3.11x** under gcc and 4.21x to **2.94x** under
-   clang.
+   clang.  Its table layer now carries a scale, which is what lets the
+   fixed-base window above reuse all of it.
 
    The proof is reusable and that was the point.  `spec/Spec.Group.Smul.fst`
    is a commutative group as an abstract record -- the operation, the
