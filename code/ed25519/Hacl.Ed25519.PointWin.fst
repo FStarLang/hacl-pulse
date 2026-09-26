@@ -200,37 +200,37 @@ let rep_elim (x y z t: Seq.seq S64.t) (n: nat) (p: E.ext_point)
     entry is carried by the opaque {!rep}, so none of it does. *)
 
 [@@"opaque_to_smt"]
-let ent (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (d: nat) : prop =
+let ent (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (n d: nat) : prop =
   pok (entry tx d) (entry ty d) (entry tz d) (entry tt d) /\
-  rep (entry tx d) (entry ty d) (entry tz d) (entry tt d) d p
+  rep (entry tx d) (entry ty d) (entry tz d) (entry tt d) (d * n) p
 
 let ent_intro (tx ty tz tt sx sy sz st: Seq.seq S64.t) (p: E.ext_point)
-              (d: nat)
+              (n d: nat)
   : Lemma (requires entry tx d == sx /\ entry ty d == sy /\
                     entry tz d == sz /\ entry tt d == st /\
-                    pok sx sy sz st /\ rep sx sy sz st d p)
-          (ensures ent tx ty tz tt p d)
+                    pok sx sy sz st /\ rep sx sy sz st (d * n) p)
+          (ensures ent tx ty tz tt p n d)
   = reveal_opaque (`%ent) ent
 
 (** An entry that was not written is still what it was. *)
 let ent_eq (tx ty tz tt tx' ty' tz' tt': Seq.seq S64.t) (p: E.ext_point)
-           (d: nat)
-  : Lemma (requires ent tx ty tz tt p d /\ entry tx' d == entry tx d /\
+           (n d: nat)
+  : Lemma (requires ent tx ty tz tt p n d /\ entry tx' d == entry tx d /\
                     entry ty' d == entry ty d /\ entry tz' d == entry tz d /\
                     entry tt' d == entry tt d)
-          (ensures ent tx' ty' tz' tt' p d)
+          (ensures ent tx' ty' tz' tt' p n d)
   = reveal_opaque (`%ent) ent
 
-let tok (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (upto: nat) : prop =
-  forall (d: nat). d < upto ==> ent tx ty tz tt p d
+let tok (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (n: nat) (upto: nat) : prop =
+  forall (d: nat). d < upto ==> ent tx ty tz tt p n d
 
 (** Reading one entry back out, as a lemma so that the caller's query never
     has to instantiate the quantifier itself. *)
-let tok_get (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (d: nat)
-  : Lemma (requires tok tx ty tz tt p 16 /\ d < 16)
+let tok_get (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (n d: nat)
+  : Lemma (requires tok tx ty tz tt p n 16 /\ d < 16)
           (ensures pok (entry tx d) (entry ty d) (entry tz d) (entry tt d) /\
                    rep (entry tx d) (entry ty d) (entry tz d) (entry tt d)
-                       d p)
+                       (d * n) p)
   = reveal_opaque (`%ent) ent
 
 (** The entry that was just written is the one the index names.  Stated as
@@ -238,26 +238,26 @@ let tok_get (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (d: nat)
     the triviality it looks: left to itself the solver reproves the entry
     from scratch rather than matching it, and with the curve in scope that
     is twenty minutes and a timeout. *)
-let ent_same (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (e dd: nat)
-  : Lemma (requires ent tx ty tz tt p e /\ dd == e)
-          (ensures ent tx ty tz tt p dd)
+let ent_same (tx ty tz tt: Seq.seq S64.t) (p: E.ext_point) (n e dd: nat)
+  : Lemma (requires ent tx ty tz tt p n e /\ dd == e)
+          (ensures ent tx ty tz tt p n dd)
   = ()
 
 #push-options "--ifuel 1 --z3rlimit 100"
 let tok_extend (tx ty tz tt tx' ty' tz' tt': Seq.seq S64.t) (p: E.ext_point)
-               (e: nat)
-  : Lemma (requires tok tx ty tz tt p e /\ e < 16 /\
-                    ent tx' ty' tz' tt' p e /\
+               (n e: nat)
+  : Lemma (requires tok tx ty tz tt p n e /\ e < 16 /\
+                    ent tx' ty' tz' tt' p n e /\
                     (forall (dd: nat). dd < e ==>
                        (entry tx' dd == entry tx dd /\
                         entry ty' dd == entry ty dd /\
                         entry tz' dd == entry tz dd /\
                         entry tt' dd == entry tt dd)))
-          (ensures tok tx' ty' tz' tt' p (e + 1))
-  = introduce forall (dd: nat). dd < e + 1 ==> ent tx' ty' tz' tt' p dd
+          (ensures tok tx' ty' tz' tt' p n (e + 1))
+  = introduce forall (dd: nat). dd < e + 1 ==> ent tx' ty' tz' tt' p n dd
     with introduce _ ==> _
-    with (if dd < e then ent_eq tx ty tz tt tx' ty' tz' tt' p dd
-                    else ent_same tx' ty' tz' tt' p e dd)
+    with (if dd < e then ent_eq tx ty tz tt tx' ty' tz' tt' p n dd
+                    else ent_same tx' ty' tz' tt' p n e dd)
 #pop-options
 
 (** Where entry [d] starts, and that it is addressable. *)
@@ -281,6 +281,17 @@ let store_off (d: nat)
 let rep_cong (x y z t: Seq.seq S64.t) (a b: nat) (p: E.ext_point)
   : Lemma (requires rep x y z t a p /\ a == b) (ensures rep x y z t b p) = ()
 
+(** The scale arithmetic, proved where nothing else is in scope.  Both are
+    one step of distributivity, but a product of two variables asked for
+    in the middle of a loop whose context carries the addition law is the
+    difference between a second and twenty minutes. *)
+let mul_zero (b: nat) : Lemma (0 * b == 0) = ()
+
+let mul_succ (a b: nat) : Lemma (a * b + b == (a + 1) * b)
+  = Math.distributivity_add_left a 1 b
+
+let mul_one (a: nat) : Lemma (a * 1 == a) = ()
+
 let dbl_ok (ox oy oz ot wx wy wz wt: Seq.seq S64.t) (p: E.ext_point) (e: nat)
   : Lemma (requires oc p /\ rep ox oy oz ot e p /\
                     pt wx wy wz wt == E.point_double (pt ox oy oz ot))
@@ -299,14 +310,6 @@ let add_ok (ox oy oz ot sx sy sz st wx wy wz wt: Seq.seq S64.t)
     reveal_opaque (`%rep) rep;
     SM.smul_add_congr e d p (pt ox oy oz ot) (pt sx sy sz st)
 
-let succ_ok (ox oy oz ot wx wy wz wt: Seq.seq S64.t) (p: E.ext_point) (e: nat)
-  : Lemma (requires oc p /\ rep ox oy oz ot e p /\
-                    pt wx wy wz wt == E.point_add (pt ox oy oz ot) p)
-          (ensures rep wx wy wz wt (e + 1) p)
-  = reveal_opaque (`%oc) oc;
-    reveal_opaque (`%rep) rep;
-    SM.smul_succ_congr e p (pt ox oy oz ot)
-
 let zero_ok (wx wy wz wt: Seq.seq S64.t) (p: E.ext_point)
   : Lemma (requires oc p /\ pt wx wy wz wt == E.point_at_infinity)
           (ensures rep wx wy wz wt 0 p)
@@ -315,6 +318,16 @@ let zero_ok (wx wy wz wt: Seq.seq S64.t) (p: E.ext_point)
     GR.point_at_infinity_on_curve ();
     SM.smul_zero p;
     GR.point_equal_refl E.point_at_infinity
+
+(** A point is its own first multiple.  The scale below is one for a
+    variable-base window; a fixed-base one passes a power of two. *)
+let rep_one (x y z t: Seq.seq S64.t)
+  : Lemma (requires oc (pt x y z t)) (ensures rep x y z t 1 (pt x y z t))
+  = reveal_opaque (`%oc) oc;
+    reveal_opaque (`%rep) rep;
+    SM.smul_one (pt x y z t);
+    SM.smul_ok 1 (pt x y z t);
+    GR.point_equal_sym (SM.smul 1 (pt x y z t)) (pt x y z t)
 
 (** Leaving the abstraction: what the caller of the window is told.  The
     specification's own ladder produces a different quadruple from the
@@ -462,9 +475,17 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
-(** [build_table tx ty tz tt q] fills the sixteen entries with
-    [0]Q .. [15]Q. *)
+(** [build_table tx ty tz tt q p n] fills the sixteen entries with
+    [0]Q .. [15]Q, where [Q] is the [n]-th multiple of [P]: entry [d] is
+    recorded as the [d n]-th multiple of [P], not the [d]-th of [Q].
+
+    Carrying the scale is what lets the fixed-base window below share this
+    code.  There, four tables are built from [G], [2^64 G], [2^128 G] and
+    [2^192 G], and all four have to be described in terms of the one
+    generator, because it is [G] that the answer is a multiple of.  A
+    variable-base window passes [n = 1] and the two readings coincide. *)
 fn build_table (tx ty tz tt: A.array S64.t) (qx qy qz qt: A.array S64.t)
+               (p: erased E.ext_point) (n: erased nat)
                (#vtx #vty #vtz #vtt: erased (Seq.seq S64.t))
                (#pq: perm) (#vqx #vqy #vqz #vqt: erased (Seq.seq S64.t))
 requires
@@ -473,14 +494,15 @@ requires
   A.pts_to qz #pq vqz ** A.pts_to qt #pq vqt **
   pure (Seq.length vtx == 80 /\ Seq.length vty == 80 /\
         Seq.length vtz == 80 /\ Seq.length vtt == 80 /\
-        pok vqx vqy vqz vqt /\ oc (pt vqx vqy vqz vqt))
+        pok vqx vqy vqz vqt /\ oc (reveal p) /\
+        rep vqx vqy vqz vqt n (reveal p))
 ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to tx wx ** A.pts_to ty wy ** A.pts_to tz wz ** A.pts_to tt wt **
   A.pts_to qx #pq vqx ** A.pts_to qy #pq vqy **
   A.pts_to qz #pq vqz ** A.pts_to qt #pq vqt **
   pure (Seq.length wx == 80 /\ Seq.length wy == 80 /\
         Seq.length wz == 80 /\ Seq.length wt == 80 /\
-        tok wx wy wz wt (pt vqx vqy vqz vqt) 16)
+        tok wx wy wz wt (reveal p) (reveal n) 16)
 {
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz; A.pts_to_len tt;
   let z = S64.zero;
@@ -500,7 +522,9 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
     assert (A.pts_to cx c0x ** A.pts_to cy c0y **
             A.pts_to cz c0z ** A.pts_to ct c0t);
   pok_intro c0x c0y c0z c0t;
-  zero_ok c0x c0y c0z c0t (pt vqx vqy vqz vqt);
+  zero_ok c0x c0y c0z c0t (reveal p);
+  mul_zero (reveal n);
+  rep_cong c0x c0y c0z c0t 0 (0 * reveal n) (reveal p);
 
   let mut d = 0sz;
   while (let vd = !d; SZ.lt vd 16sz)
@@ -519,8 +543,8 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
           Seq.length wnx == nl /\ Seq.length wny == nl /\
           Seq.length wnz == nl /\ Seq.length wnt == nl /\
           pok wcx wcy wcz wct /\
-          rep wcx wcy wcz wct (SZ.v vd) (pt vqx vqy vqz vqt) /\
-          tok wx wy wz wt (pt vqx vqy vqz vqt) (SZ.v vd))
+          rep wcx wcy wcz wct (SZ.v vd * reveal n) (reveal p) /\
+          tok wx wy wz wt (reveal p) (reveal n) (SZ.v vd))
   decreases (16 - SZ.v (!d))
   {
     let vd = !d;
@@ -542,14 +566,17 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
     tbl_shape wz wz' wcz (SZ.v vd);
     tbl_shape wt wt' wct (SZ.v vd);
     ent_intro wx' wy' wz' wt' wcx wcy wcz wct
-              (pt vqx vqy vqz vqt) (SZ.v vd);
-    tok_extend wx wy wz wt wx' wy' wz' wt' (pt vqx vqy vqz vqt) (SZ.v vd);
+              (reveal p) (reveal n) (SZ.v vd);
+    tok_extend wx wy wz wt wx' wy' wz' wt' (reveal p) (reveal n) (SZ.v vd);
     point_add nx ny nz nt cx cy cz ct qx qy qz qt;
     with wnx wny wnz wnt.
       assert (A.pts_to nx wnx ** A.pts_to ny wny **
               A.pts_to nz wnz ** A.pts_to nt wnt);
-    succ_ok wcx wcy wcz wct wnx wny wnz wnt
-            (pt vqx vqy vqz vqt) (SZ.v vd);
+    add_ok wcx wcy wcz wct vqx vqy vqz vqt wnx wny wnz wnt
+           (reveal p) (SZ.v vd * reveal n) (reveal n);
+    mul_succ (SZ.v vd) (reveal n);
+    rep_cong wnx wny wnz wnt (SZ.v vd * reveal n + reveal n)
+             ((SZ.v vd + 1) * reveal n) (reveal p);
     pok_intro wnx wny wnz wnt;
     CF.copy cx nx; CF.copy cy ny; CF.copy cz nz; CF.copy ct nt;
     d := SZ.add vd 1sz;
@@ -665,7 +692,8 @@ ensures exists* (wx wy wz wt wux wuy wuz wut: Seq.seq S64.t).
 
 fn win_add (ox oy oz ot ux uy uz ut sx sy sz st: A.array S64.t)
            (tx ty tz tt: A.array S64.t) (dig: S64.t)
-           (p: erased E.ext_point) (e: erased nat) (d: erased nat)
+           (p: erased E.ext_point) (n: erased nat)
+           (e: erased nat) (d: erased nat)
            (#vox #voy #voz #vot: erased (Seq.seq S64.t))
            (#vux #vuy #vuz #vut: erased (Seq.seq S64.t))
            (#vsx #vsy #vsz #vst: erased (Seq.seq S64.t))
@@ -684,7 +712,7 @@ requires
         Seq.length vtz == 80 /\ Seq.length vtt == 80 /\
         pok vox voy voz vot /\ oc (reveal p) /\
         rep vox voy voz vot e (reveal p) /\
-        tok vtx vty vtz vtt (reveal p) 16 /\
+        tok vtx vty vtz vtt (reveal p) (reveal n) 16 /\
         reveal d < 16 /\ S64.v dig == reveal d)
 ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
@@ -697,7 +725,7 @@ ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
         Seq.length wsx == nl /\ Seq.length wsy == nl /\
         Seq.length wsz == nl /\ Seq.length wst == nl /\
         pok wx wy wz wt /\
-        rep wx wy wz wt (reveal e + reveal d) (reveal p))
+        rep wx wy wz wt (reveal e + reveal d * reveal n) (reveal p))
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz; A.pts_to_len ut;
@@ -711,7 +739,7 @@ ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
   table_select st tt 5sz dig d;
   entry_def vtx (reveal d); entry_def vty (reveal d);
   entry_def vtz (reveal d); entry_def vtt (reveal d);
-  tok_get vtx vty vtz vtt (reveal p) (reveal d);
+  tok_get vtx vty vtz vtt (reveal p) (reveal n) (reveal d);
   with wsx wsy wsz wst.
     assert (A.pts_to sx wsx ** A.pts_to sy wsy **
             A.pts_to sz wsz ** A.pts_to st wst);
@@ -721,7 +749,7 @@ ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
     assert (A.pts_to ux u1x ** A.pts_to uy u1y **
             A.pts_to uz u1z ** A.pts_to ut u1t);
   add_ok vox voy voz vot wsx wsy wsz wst u1x u1y u1z u1t
-         (reveal p) (reveal e) (reveal d);
+         (reveal p) (reveal e) (reveal d * reveal n);
   pok_intro u1x u1y u1z u1t;
   CF.copy ox ux; CF.copy oy uy; CF.copy oz uz; CF.copy ot ut;
   ()
@@ -784,7 +812,8 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz; A.pts_to_len st;
 
   pok_intro vqx vqy vqz vqt;
-  build_table tx ty tz tt qx qy qz qt;
+  rep_one vqx vqy vqz vqt;
+  build_table tx ty tz tt qx qy qz qt (hide (pt vqx vqy vqz vqt)) (hide 1);
   set_infinity ox oy oz ot;
   with o0x o0y o0z o0t.
     assert (A.pts_to ox o0x ** A.pts_to oy o0y **
@@ -817,7 +846,7 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
           Seq.length wsz == nl /\ Seq.length wst == nl /\
           Seq.length wtx == 80 /\ Seq.length wty == 80 /\
           Seq.length wtz == 80 /\ Seq.length wtt == 80 /\
-          tok wtx wty wtz wtt (pt vqx vqy vqz vqt) 16 /\
+          tok wtx wty wtz wtt (pt vqx vqy vqz vqt) 1 16 /\
           pok wx wy wz wt /\
           rep wx wy wz wt (B.le_nat vk / pow2 (SZ.v vj))
               (pt vqx vqy vqz vqt))
@@ -832,11 +861,12 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
     win_dbl4 ox oy oz ot ux uy uz ut (hide (pt vqx vqy vqz vqt))
              (hide (B.le_nat vk / pow2 (SZ.v vj)));
     win_add ox oy oz ot ux uy uz ut sx sy sz st tx ty tz tt dig
-            (hide (pt vqx vqy vqz vqt))
+            (hide (pt vqx vqy vqz vqt)) (hide 1)
             (hide (16 * (B.le_nat vk / pow2 (SZ.v vj))))
             (hide (B.le_nat vk / pow2 (SZ.v j2) % 16));
     pow2_cong (SZ.v j2 + 4) (SZ.v vj);
     digit_split (B.le_nat vk) (SZ.v j2);
+    mul_one (B.le_nat vk / pow2 (SZ.v j2) % 16);
     with wx wy wz wt.
       assert (A.pts_to ox wx ** A.pts_to oy wy **
               A.pts_to oz wz ** A.pts_to ot wt);
