@@ -122,9 +122,9 @@ cast at the boundary.
 There is none, and there is no Vale dependency.  Where a specific
 microarchitecture matters the answer is a C intrinsic behind a narrow,
 axiomatized interface, verified against the same specification as the portable
-code and tested against an independent transcription of the standard: AES-NI
-and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the Intel SHA
-extensions under SHA-256 and SHA-224.  Each is selected at run time by
+code and tested against an independent transcription of the standard: AES-NI,
+`AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
+Intel SHA extensions under SHA-256 and SHA-224.  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
 ## How a hash is put together
@@ -1205,7 +1205,10 @@ So the S-box is computed:
 with `ginv` an addition chain of fifteen multiplications in GF(2^8) -- the
 inverse is `x^254`, and `x^254 = ((x^2 . x)^4 . (x^2 . x))^16 . ((x^2 . x)^4
 . (x^2 . x)) . x^2` when written to share subterms -- and `affine` eight
-rotations and a xor.  `Spec.AES.sbox_is_algebraic` is the lemma that this
+rotations and a xor.  That costs about three hundred and fifty serially
+dependent operations per byte, which the cipher never pays because `AESENC`
+has the S-box inside it, and which the *key schedule* paid forty times per
+message until `AESKEYGENASSIST` was bound; see below.  `Spec.AES.sbox_is_algebraic` is the lemma that this
 agrees with the 256-entry table of the standard, which is stated once, proved
 once by `assert_norm`, and never unfolded again: `sbox_list` is
 `opaque_to_smt`, because a 256-element literal in the solver's context makes
@@ -1372,9 +1375,66 @@ on four thousand random inputs.  Perturbing one coefficient of the reference
 makes all 4097 cases fail, which is the check that the test is checking
 something.
 
-The key schedule is still the portable one.  It runs once per message rather
-than once per block, and `AESKEYGENASSIST` takes a round constant as an
-immediate, so it would need one extern per round.
+**The key schedule needed the same treatment, and was worth more than the
+cipher.**  It runs once per message rather than once per block, which is why
+it was left alone at first --- but a message can be sixty-four bytes long,
+and then it is the entire cost.  The portable S-box is the algebraic one: an
+inverse in GF(2^8) computed as *a^254* by fifteen field multiplications, each
+seven `xtime`s and eight conditional exclusive-ors.  That is about three
+hundred and fifty operations, and because each depends on the one before it
+is also about three hundred and fifty cycles.  An AES-128 schedule needs
+forty of them and an AES-256 schedule fifty-two, so expanding a key cost
+fourteen thousand cycles --- more than a thousand cycles per round key, for
+an operation that touches 176 bytes.  A table would be four cycles, but the
+input is the key, so a table would be a cache-timing oracle on the key and is
+not an option.
+
+The measurement that found it is the plainest one available: AES-256's
+fixed per-call cost divided by AES-128's is 18289/14044 = 1.302, and 52/40 =
+1.300.  Nothing else in the call has that ratio.
+
+`AESKEYGENASSIST` does four S-box lookups in one instruction, in constant
+time, and is exactly what the hardware provides for this.  It also
+exclusive-ors in a round constant taken as an immediate, which is why this
+was passed over once before: an immediate needs one extern per value, and
+there are ten of them.  But the round constant may be *zero*, and then the
+instruction is nothing but `SubWord` --- and `Hacl.AES.Key` already carries
+the round constant in a register and exclusive-ors it in itself.  So one
+binding serves every round.  `Hacl.Vec128.subword` is that binding, and its
+axiom is about the four bytes it is used for:
+
+    assume val subword (a: t)
+      : r: t { forall (i: nat). i < 4 ==>
+                 Seq.index (bv r) (8 + i) == sbox (Seq.index (bv a) (12 + i)) }
+
+`Hacl.AES.SubWord` dispatches on `Vec.supported ()` exactly as
+`Hacl.AES.Block` does, and both branches leave the same specification value
+behind, so `Hacl.AES.Key` proves nothing new: the four calls to `sbox_impl`
+became one call to `subword4` and four array reads.  The scratch block is the
+caller's, so a whole key schedule allocates sixteen bytes once and branches
+thirteen times.
+
+Expanding an AES-128 key went from 14,044 cycles to 1,021.  What that is
+worth depends entirely on the message, because the cost it removes is flat:
+
+| AES-128-GCM | before | after | speedup | was | now |
+|---|---:|---:|---:|---:|---:|
+| 64 bytes | 13 MB/s | 138 MB/s | **10.3x** | 77.45x | **7.54x** |
+| 1 KiB | 172 MB/s | 637 MB/s | **3.70x** | 18.16x | **4.97x** |
+| 16 KiB | 672 MB/s | 812 MB/s | **1.21x** | 5.38x | **4.51x** |
+| 256 KiB | 803 MB/s | 809 MB/s | 1.01x | 4.53x | **4.48x** |
+
+AES-256 is the same shape and a little larger, because its schedule is a
+little longer: 10 MB/s to 117 at sixty-four bytes, 84.56x of the reference
+down to **7.43x**.  The last two columns are against EverCrypt's Vale
+assembly, and its own numbers did not move between the two runs.
+
+Nothing in the cipher, the counter mode or the GHASH changed.  The lesson is
+the one the whole performance section keeps repeating in different words:
+the profile was never taken, and a cost that is invisible in a bulk
+throughput number can be the entire cost of a realistic call.  Sixty-four
+bytes is a TLS record header, a QUIC packet, a database field --- and it was
+running at thirteen megabytes a second.
 
 ### SHA-NI, where the instruction is four rounds wide
 
@@ -2196,7 +2256,7 @@ reference**.
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
 | Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
-| AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
+| AES-128-GCM | 256 KiB | 324 us | 72 us | **4.48x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -2456,12 +2516,23 @@ left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
 MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
-256 KiB, twelve times the reference, and is now 325 -- four AES blocks in
+256 KiB, twelve times the reference, and is now 324 -- four AES blocks in
 flight at a time, four GHASH blocks against the precomputed powers of the hash
 key, and a GF(2^128) reduction by shifts rather than by a second multiply.
 The remaining 4.5x is against hand-written assembly that interleaves six
 blocks and aggregates the GHASH reduction across them, and both of those are
 reachable from here.
+
+Its *small*-message row was worked on separately and much later, after a
+profile that should have been taken years earlier: the key schedule was
+computing its S-box algebraically, which is three hundred and fifty
+dependent operations a byte and fourteen thousand cycles a call, paid on
+every AEAD call whatever the message length.  Binding `AESKEYGENASSIST` with
+a zero round constant -- a single extern, because the round constant is
+already carried in a register and exclusive-ored in by hand -- took that to a
+thousand cycles, and sixty-four-byte AES-128-GCM from 77.45x of the reference
+to **7.54x**.  The architecture section has the details.  The general lesson
+is that a bulk throughput benchmark hides flat costs perfectly.
 
 The benchmark harness and a long write-up of each optimization are kept
 outside the repository; the numbers above are reproducible with any AEAD/hash
@@ -2971,8 +3042,9 @@ The two legacy hashes are there too: SHA-1 one-shot, incremental and under
 HMAC, and MD5 one-shot and incremental, which is everything HACL\* offers
 for it.
 
-AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, and the
-Intel SHA extensions sit under SHA-256 and SHA-224, each chosen at run time.
+AES-NI, the carry-less-multiply GHASH and the `AESKEYGENASSIST` key schedule
+all sit under AES-GCM, and the Intel SHA extensions sit under SHA-256 and
+SHA-224, each chosen at run time.
 
 Beyond the subset, Salsa20 is there with HSalsa20 and XSalsa20 under it,
 and so is the whole of the original NaCl interface: `crypto_secretbox`,

@@ -2,11 +2,11 @@
  *
  * Every `assume val` in that module is a claim about a hardware instruction
  * that F* cannot check.  This test checks them: `aesenc` is claimed to be
- * `Spec.AES.round` and `aesenclast` to be `Spec.AES.last_round`, and the
- * reference below is a direct transcription of FIPS 197 -- its own S-box
- * table, its own ShiftRows, its own MixColumns -- written from the standard
- * rather than shared with anything in the library, so agreement is evidence
- * and not a tautology.
+ * `Spec.AES.round`, `aesenclast` to be `Spec.AES.last_round` and `subword`
+ * to be four S-box lookups, and the reference below is a direct
+ * transcription of FIPS 197 -- its own S-box table, its own ShiftRows, its
+ * own MixColumns -- written from the standard rather than shared with
+ * anything in the library, so agreement is evidence and not a tautology.
  *
  * It runs on a fixed set of edge cases and then on pseudo-random inputs, and
  * it is skipped, not failed, on a machine without the instructions.  The
@@ -133,6 +133,18 @@ TEST_NI static int one(const uint8_t st[16], const uint8_t k[16], const char *wh
   Hacl_Vec128_store(got, Hacl_Vec128_xor(Hacl_Vec128_load((uint8_t *)st),
                                          Hacl_Vec128_load((uint8_t *)k)));
   ref_xor(expected, st, k);
+  if (memcmp(got, expected, 16) != 0) {
+    r |= check(what, got, expected, 16);
+  }
+
+  /* [subword] is AESKEYGENASSIST with a zero round constant.  The axiom
+     claims only that bytes eight to eleven of the result are the S-box
+     applied to bytes twelve to fifteen of the argument, so only those four
+     are compared; the rest of the expected block is copied from the result
+     so that a failure prints the whole register. */
+  Hacl_Vec128_store(got, Hacl_Vec128_subword(Hacl_Vec128_load((uint8_t *)st)));
+  memcpy(expected, got, 16);
+  for (int i = 0; i < 4; i++) expected[8 + i] = sbox[st[12 + i]];
   if (memcmp(got, expected, 16) != 0) {
     r |= check(what, got, expected, 16);
   }
