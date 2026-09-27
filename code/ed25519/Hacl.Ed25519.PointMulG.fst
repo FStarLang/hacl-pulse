@@ -69,6 +69,7 @@ module E = Spec.Ed25519
 module GR = Spec.Ed25519.Group
 module SM = Spec.Ed25519.Smul
 module Base = Spec.Ed25519.Base
+module Split = Spec.Group.Split4
 module B = Hacl.Spec.Bytes
 module Math = FStar.Math.Lemmas
 module P = Hacl.Ed25519.Point
@@ -112,20 +113,20 @@ let b3_rep (x y z t: Seq.seq S64.t)
 (** The accumulator starts at nothing, which is [hi k 16]. *)
 let hi_start (wx wy wz wt: Seq.seq S64.t) (k: nat)
   : Lemma (requires W.oc E.g /\ P.pt wx wy wz wt == E.point_at_infinity)
-          (ensures W.rep wx wy wz wt (Base.hi k 16) E.g)
+          (ensures W.rep wx wy wz wt (Split.hi k 16) E.g)
   = W.zero_ok wx wy wz wt E.g;
-    Base.hi_top k
+    Split.hi_top k
 
 (** And ends at the scalar itself. *)
 let hi_end (wx wy wz wt: Seq.seq S64.t) (k: Seq.lseq S8.t 32)
   : Lemma (requires W.oc E.g /\ W.pok wx wy wz wt /\
-                    W.rep wx wy wz wt (Base.hi (B.le_nat k) 0) E.g)
+                    W.rep wx wy wz wt (Split.hi (B.le_nat k) 0) E.g)
           (ensures P.pt_ok wx wy wz wt /\ GR.on_curve (P.pt wx wy wz wt) /\
                    GR.on_curve (E.point_mul_g k) /\
                    E.point_equal (P.pt wx wy wz wt) (E.point_mul_g k))
   = B.le_nat_bound k;
-    Base.hi_bot (B.le_nat k);
-    W.rep_cong wx wy wz wt (Base.hi (B.le_nat k) 0) (B.le_nat k) E.g;
+    Split.hi_bot (B.le_nat k);
+    W.rep_cong wx wy wz wt (Split.hi (B.le_nat k) 0) (B.le_nat k) E.g;
     W.rep_elim wx wy wz wt (B.le_nat k) E.g;
     W.pok_elim wx wy wz wt;
     W.win_done wx wy wz wt E.g k
@@ -136,14 +137,14 @@ let hi_end (wx wy wz wt: Seq.seq S64.t) (k: Seq.lseq S8.t 32)
 let rung_step (wx wy wz wt: Seq.seq S64.t) (k: nat) (i: nat { i < 16 })
   : Lemma (requires
              W.rep wx wy wz wt
-               (16 * Base.hi k (i + 1) +
-                Base.dig k 0 i * 1 +
-                Base.dig k 1 i * pow2 64 +
-                Base.dig k 2 i * pow2 128 +
-                Base.dig k 3 i * pow2 192) E.g)
-          (ensures W.rep wx wy wz wt (Base.hi k i) E.g)
-  = Base.hi_step k i;
-    W.mul_one (Base.dig k 0 i)
+               (16 * Split.hi k (i + 1) +
+                Split.dig k 0 i * 1 +
+                Split.dig k 1 i * pow2 64 +
+                Split.dig k 2 i * pow2 128 +
+                Split.dig k 3 i * pow2 192) E.g)
+          (ensures W.rep wx wy wz wt (Split.hi k i) E.g)
+  = Split.hi_step k i;
+    W.mul_one (Split.dig k 0 i)
 
 (** The window index and the four bit positions it names. *)
 let pos_ok (i: nat { i < 16 }) (j: nat { j < 4 })
@@ -225,13 +226,13 @@ requires
         Seq.length v3x == 80 /\ Seq.length v3y == 80 /\
         Seq.length v3z == 80 /\ Seq.length v3t == 80 /\
         W.oc E.g /\ W.pok vox voy voz vot /\
-        W.rep vox voy voz vot (Base.hi k (reveal i + 1)) E.g /\
+        W.rep vox voy voz vot (Split.hi k (reveal i + 1)) E.g /\
         W.tok v0x v0y v0z v0t E.g 1 16 /\
         W.tok v1x v1y v1z v1t E.g (pow2 64) 16 /\
         W.tok v2x v2y v2z v2t E.g (pow2 128) 16 /\
         W.tok v3x v3y v3z v3t E.g (pow2 192) 16 /\
-        S64.v d0 == Base.dig k 0 i /\ S64.v d1 == Base.dig k 1 i /\
-        S64.v d2 == Base.dig k 2 i /\ S64.v d3 == Base.dig k 3 i)
+        S64.v d0 == Split.dig k 0 i /\ S64.v d1 == Split.dig k 1 i /\
+        S64.v d2 == Split.dig k 2 i /\ S64.v d3 == Split.dig k 3 i)
 ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz ** A.pts_to ut wut **
@@ -248,22 +249,22 @@ ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
         Seq.length wuz == nl /\ Seq.length wut == nl /\
         Seq.length wsx == nl /\ Seq.length wsy == nl /\
         Seq.length wsz == nl /\ Seq.length wst == nl /\
-        W.pok wx wy wz wt /\ W.rep wx wy wz wt (Base.hi k i) E.g)
+        W.pok wx wy wz wt /\ W.rep wx wy wz wt (Split.hi k i) E.g)
 {
-  let e0 : erased nat = hide (Base.hi k (reveal i + 1));
+  let e0 : erased nat = hide (Split.hi k (reveal i + 1));
   W.win_dbl4 ox oy oz ot ux uy uz ut (hide E.g) e0;
   W.win_add ox oy oz ot ux uy uz ut sx sy sz st t0x t0y t0z t0t d0
             (hide E.g) (hide 1) (hide (16 * reveal e0))
-            (hide (Base.dig k 0 i));
-  let e1 : erased nat = hide (16 * reveal e0 + Base.dig k 0 i * 1);
+            (hide (Split.dig k 0 i));
+  let e1 : erased nat = hide (16 * reveal e0 + Split.dig k 0 i * 1);
   W.win_add ox oy oz ot ux uy uz ut sx sy sz st t1x t1y t1z t1t d1
-            (hide E.g) (hide (pow2 64)) e1 (hide (Base.dig k 1 i));
-  let e2 : erased nat = hide (reveal e1 + Base.dig k 1 i * pow2 64);
+            (hide E.g) (hide (pow2 64)) e1 (hide (Split.dig k 1 i));
+  let e2 : erased nat = hide (reveal e1 + Split.dig k 1 i * pow2 64);
   W.win_add ox oy oz ot ux uy uz ut sx sy sz st t2x t2y t2z t2t d2
-            (hide E.g) (hide (pow2 128)) e2 (hide (Base.dig k 2 i));
-  let e3 : erased nat = hide (reveal e2 + Base.dig k 2 i * pow2 128);
+            (hide E.g) (hide (pow2 128)) e2 (hide (Split.dig k 2 i));
+  let e3 : erased nat = hide (reveal e2 + Split.dig k 2 i * pow2 128);
   W.win_add ox oy oz ot ux uy uz ut sx sy sz st t3x t3y t3z t3t d3
-            (hide E.g) (hide (pow2 192)) e3 (hide (Base.dig k 3 i));
+            (hide E.g) (hide (pow2 192)) e3 (hide (Split.dig k 3 i));
   with wx wy wz wt.
     assert (A.pts_to ox wx ** A.pts_to oy wy **
             A.pts_to oz wz ** A.pts_to ot wt);
@@ -510,7 +511,7 @@ ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
           Seq.length wsx == nl /\ Seq.length wsy == nl /\
           Seq.length wsz == nl /\ Seq.length wst == nl /\
           W.pok wx wy wz wt /\
-          W.rep wx wy wz wt (Base.hi (B.le_nat vk) (SZ.v vi)) E.g)
+          W.rep wx wy wz wt (Split.hi (B.le_nat vk) (SZ.v vi)) E.g)
   decreases (SZ.v (!i))
   {
     let vi = !i;
