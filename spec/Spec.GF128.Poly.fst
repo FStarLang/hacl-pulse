@@ -700,15 +700,20 @@ let halves (x y u v: block) =
 
 #push-options "--z3rlimit 200"
 
-(** The whole multiplication, in the shape the implementation has it: three
-    carry-less products, six registers, and the answer is the exclusive-or of
-    the three low halves. *)
-let gmul_three (x y u1 v1 u2 v2 u3 v3: block)
-  : Lemma (requires halves x y u1 v1 /\ halves v1 r_block u2 v2 /\
-                    halves v2 r_block u3 v3)
-          (ensures gmul x y == gadd u1 (gadd u2 u3))
-  = gmul_split x y u1 v1;
-    gmul_split v1 r_block u2 v2;
+(** The reduction on its own: a product by [r_block] twice terminates,
+    because [r_block] has degree seven, so the high half of [v1 * R] has
+    degree at most six and {i its} high half is empty.
+
+    This is stated separately from [gmul_three] below because it does not
+    mention the operands at all --- it is a fact about one register and the
+    reduction constant.  That is what lets several products be accumulated
+    before anything is reduced: the sum of the high halves is reduced once
+    rather than each high half separately.  See
+    [Spec.GF128.Algebra.gmul_defer4]. *)
+let mul_r_two (v1 u2 v2 u3 v3: block)
+  : Lemma (requires halves v1 r_block u2 v2 /\ halves v2 r_block u3 v3)
+          (ensures gmul v1 r_block == gadd u2 u3)
+  = gmul_split v1 r_block u2 v2;
     FStar.Classical.forall_intro (FStar.Classical.move_requires (mul_r_high v1));
     assert (small_deg v2);
     FStar.Classical.forall_intro
@@ -718,6 +723,16 @@ let gmul_three (x y u1 v1 u2 v2 u3 v3: block)
     gmul_split v2 r_block u3 v3;
     gmul_zero r_block;
     gadd_zero u3
+
+(** The whole multiplication, in the shape the implementation has it: three
+    carry-less products, six registers, and the answer is the exclusive-or of
+    the three low halves. *)
+let gmul_three (x y u1 v1 u2 v2 u3 v3: block)
+  : Lemma (requires halves x y u1 v1 /\ halves v1 r_block u2 v2 /\
+                    halves v2 r_block u3 v3)
+          (ensures gmul x y == gadd u1 (gadd u2 u3))
+  = gmul_split x y u1 v1;
+    mul_r_two v1 u2 v2 u3 v3
 
 #pop-options
 

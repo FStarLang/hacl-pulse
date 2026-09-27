@@ -1270,6 +1270,54 @@ work is that multiplying by *x^j* commutes with multiplication, and
 commutativity of the convolution.  Nothing there ever looks inside the
 reduction polynomial.
 
+**And the four blocks share one reduction.**  Once the multiplies are
+independent, the next thing to notice is that the reduction, not the
+multiplication, is most of what they cost: `raw_product` is four
+`PCLMULQDQ`s and about a dozen other operations, and the two `mul_r_vec`
+calls that fold the 256-bit result back into the field are about twenty
+shifts and exclusive-ors each.  A four-block turn was therefore running
+eight folds for sixteen multiplies.
+
+It needs one.  The 256-bit carry-less product is linear in each operand, so
+four products can be accumulated as two registers -- the sum of the four low
+halves and the sum of the four high halves -- and the fold applied once to
+that sum.  `Hacl.AES.GF128.NI.gmul4_vec` is that: four `raw_product`s, six
+exclusive-ors, and then exactly the tail `gmul_vec` already had.  A four-block
+turn goes from roughly two hundred and fifty vector operations to a hundred
+and ten.
+
+The specification side is three small lemmas and no new reasoning about the
+reduction polynomial at all.  `Spec.GF128.Poly.mul_r_two` is the existing
+`gmul_three` with its first line removed -- the statement that folding twice
+terminates, said about one register rather than about a product, which is
+what makes it reusable.  `Spec.GF128.Algebra.gmul_defer4` combines four
+applications of `gmul_split` with distributivity of `gmul` over `gadd`, which
+`Spec.GF128.Algebra` already had for the Horner rearrangement.  And
+`Spec.CLMUL.bswap_gadd` says byte reversal commutes with exclusive-or, which
+is one line -- both sides are the same `Seq.init` -- and is what lets the six
+exclusive-ors happen in the multiplier's bit order, so three byte reversals
+happen at the end rather than twelve.
+
+Measured on 256 KiB: GHASH alone went from 2.11 cycles per byte to **1.28**,
+and AES-128-GCM from 3.68 to **2.88**, which is the first time it has been
+over a gigabyte a second.  The counter-mode half, measured the same way by
+difference, did not move -- 1.58 against 1.60 -- which is the control.  The
+benchmark row follows: 809 MB/s to **1034** on 256 KiB under gcc, 4.48x of
+EverCrypt's Vale assembly down to **3.52x**, and under clang 868 MB/s to
+**1052**, 4.22x down to **3.46x**.  AES-256-GCM moves the same way, 4.41x to
+**3.50x**.
+
+The generated assembly says what changed and what is left.  A four-block turn
+is 205 instructions for sixty-four bytes, or 3.2 per byte, which at the
+three-wide issue this machine manages on vector code is 1.28 cycles a byte:
+GHASH is now bound by instruction count rather than by the multiply latency
+it used to be bound by, which is the difference between a dependency problem
+and a work problem.  Of those 205, sixteen are `PCLMULQDQ` and about forty
+are the single remaining fold.  There are seven `PSHUFB`s and not eleven,
+because the four byte reversals of the hash-key powers are loop-invariant and
+gcc hoists them; that they are invariant is a consequence of accumulating in
+the multiplier's bit order rather than GHASH's.
+
 **Everything counts in bytes.**  FIPS 197 describes the key expansion in
 four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
 it that way puts a multiplication by four in front of every buffer index and
@@ -2259,7 +2307,7 @@ reference**.
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
 | Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
-| AES-128-GCM | 256 KiB | 324 us | 72 us | **4.48x** |  |  |
+| AES-128-GCM | 256 KiB | 254 us | 72 us | **3.52x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -2519,12 +2567,14 @@ left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
 MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
-256 KiB, twelve times the reference, and is now 324 -- four AES blocks in
+256 KiB, twelve times the reference, and is now 254 -- four AES blocks in
 flight at a time, four GHASH blocks against the precomputed powers of the hash
-key, and a GF(2^128) reduction by shifts rather than by a second multiply.
-The remaining 4.5x is against hand-written assembly that interleaves six
-blocks and aggregates the GHASH reduction across them, and both of those are
-reachable from here.
+key, a GF(2^128) reduction by shifts rather than by a second multiply, and
+that reduction now performed once for every four blocks rather than once per
+block.  Deferring the reduction was worth 2.11 cycles a byte to 1.28 in GHASH
+alone and took the whole primitive past a gigabyte a second for the first
+time.  The remaining 3.5x is against hand-written assembly that interleaves
+six blocks, and that is reachable from here.
 
 Its *small*-message row was worked on separately and much later, after a
 profile that should have been taken years earlier: the key schedule was
@@ -3104,9 +3154,30 @@ rough order of value:
    facts.  The measured shape of the gap says what they are worth: on
    variable-base ECDH, where HACL\* has no table either, P-256 is within
    1.15x; on fixed-base it is 2.59x.
-2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
-   256-bit products before reducing rather than after.  Needs one new
-   specification fact: additivity of `Spec.GF128.Poly.halves`.
+2. **One GF(2^128) reduction per four GHASH blocks**, **done**.  The four-way
+   loop used to compute four full products, reducing each 256-bit product to
+   128 bits before adding it to the accumulator, so the reduction ran four
+   times per sixty-four bytes even though it is linear and could run once.
+   It now accumulates the four raw 256-bit products and folds a single time.
+   Three specification facts were needed and none of them says anything new
+   about the reduction polynomial: `Spec.GF128.Poly.mul_r_two`, factored out
+   of the existing `gmul_three`, which lets one fold serve a doubled
+   argument; `Spec.CLMUL.bswap_gadd`, additivity of the byte reversal, one
+   line by extensionality; and `Spec.GF128.Algebra.gmul_defer4`, which is
+   `gmul_split` four times, a regrouping of the eight resulting half-products
+   into a low sum and a high sum, and `gmul_gadd_left` three times to pull
+   the multiplication by `r` out of the high sum.  The code is
+   `Hacl.AES.GF128.NI.gmul4_vec`, whose postcondition is exactly
+   `Spec.GF128.Algebra.sum4` of the four products -- the shape `horner4`
+   already wanted -- so it dropped into `ghash_loop4_ni` with no glue.
+   GHASH alone went from 2.11 cycles a byte to **1.28**, whole-primitive
+   AES-128-GCM from 3.68 to **2.88**, and the benchmark row from 4.48x of
+   EverCrypt to **3.52x**, past a gigabyte a second for the first time.  The
+   CTR half did not move, which is the control.  What is left in the same
+   direction is an eight-block window: the single remaining fold is about
+   forty of the two hundred and five instructions a four-block turn now
+   takes, so halving its frequency again is worth roughly a further ten per
+   cent of GHASH, at the cost of `h^5` through `h^8` and a `regroup8`.
 3. **Special-prime reduction for P-256**, in place of the shared general
    Montgomery core.  secp256k1's half of this is **done**: `code/k256` now
    runs on a five-limb, radix-2^52, lazily reduced field with the fold
