@@ -293,6 +293,16 @@ static void Hacl_P256_Encode_store_point(uint8_t *b, uint64_t *x, uint64_t *y, u
 static bool Hacl_HPKE_KEM_dh_impl__DH_P256(uint8_t *out, uint8_t *sk, uint8_t *pk);
 static const uint64_t Hacl_P256_Tables_gxm_arr[4] = { 8784043285714375740ULL, 8483257759279461889ULL, 8789745728267363600ULL, 1770019616739251654ULL };
 static const uint64_t Hacl_P256_Tables_gym_arr[4] = { 15992936863339206154ULL, 10037038012062884956ULL, 15197544864945402661ULL, 9615747158586711429ULL };
+static const uint64_t Hacl_P256_TablesG_q1xm_arr[4] = { 5733697799130763963ULL, 962857090393715865ULL, 10538932452511329419ULL, 3413281437172590207ULL };
+static const uint64_t Hacl_P256_TablesG_q1ym_arr[4] = { 6635428480179771287ULL, 4404718679994229138ULL, 329074170931436370ULL, 17746708206910902139ULL };
+static const uint64_t Hacl_P256_TablesG_q2xm_arr[4] = { 7109145612337154341ULL, 10502845970727626855ULL, 6527587047878193251ULL, 7049690136888681718ULL };
+static const uint64_t Hacl_P256_TablesG_q2ym_arr[4] = { 16750703006415156202ULL, 2559311261501721445ULL, 1222802194566919230ULL, 18019462938525560766ULL };
+static const uint64_t Hacl_P256_TablesG_q3xm_arr[4] = { 6266830413981331818ULL, 10890859480409122410ULL, 738708598357264321ULL, 9241173142142102299ULL };
+static const uint64_t Hacl_P256_TablesG_q3ym_arr[4] = { 9152169484987657321ULL, 12122430118903337055ULL, 14270062735458703743ULL, 13877635605034675649ULL };
+static void Hacl_P256_PointMulG_build_tables(uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *px, uint64_t *py, uint64_t *pz);
+static void Hacl_P256_PointMulG_rung(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t d0, uint64_t d1, uint64_t d2, uint64_t d3);
+static void Hacl_P256_PointMulG_win_loop(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *ks);
+static void Hacl_P256_PointMulG_point_mul_g_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks);
 static void Hacl_P256_PointMul_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks);
 static bool Hacl_HPKE_KEM_stp_impl__DH_P256(uint8_t *out, uint8_t *sk);
 static void Hacl_HPKE_KEM_kem_sid__DH_P256(uint8_t *out);
@@ -5276,26 +5286,149 @@ static bool Hacl_HPKE_KEM_dh_impl__DH_P256(uint8_t *out, uint8_t *sk, uint8_t *p
   else return false;
 }
 
-static void Hacl_P256_PointMul_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks) {
+static void Hacl_P256_PointMulG_build_tables(uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *px, uint64_t *py, uint64_t *pz) {
+  uint64_t *ct = (uint64_t *)Hacl_P256_Tables_gxm_arr;
+  Hacl_P256_Field_fcopy(px, ct);
+  uint64_t *ct1 = (uint64_t *)Hacl_P256_Tables_gym_arr;
+  Hacl_P256_Field_fcopy(py, ct1);
+  Hacl_P256_Field_fone(pz);
+  Hacl_P256_PointWin_build_table(t0x, t0y, t0z, px, py, pz);
+  uint64_t *ct2 = (uint64_t *)Hacl_P256_TablesG_q1xm_arr;
+  Hacl_P256_Field_fcopy(px, ct2);
+  uint64_t *ct3 = (uint64_t *)Hacl_P256_TablesG_q1ym_arr;
+  Hacl_P256_Field_fcopy(py, ct3);
+  Hacl_P256_Field_fone(pz);
+  Hacl_P256_PointWin_build_table(t1x, t1y, t1z, px, py, pz);
+  uint64_t *ct4 = (uint64_t *)Hacl_P256_TablesG_q2xm_arr;
+  Hacl_P256_Field_fcopy(px, ct4);
+  uint64_t *ct5 = (uint64_t *)Hacl_P256_TablesG_q2ym_arr;
+  Hacl_P256_Field_fcopy(py, ct5);
+  Hacl_P256_Field_fone(pz);
+  Hacl_P256_PointWin_build_table(t2x, t2y, t2z, px, py, pz);
+  uint64_t *ct6 = (uint64_t *)Hacl_P256_TablesG_q3xm_arr;
+  Hacl_P256_Field_fcopy(px, ct6);
+  uint64_t *ct7 = (uint64_t *)Hacl_P256_TablesG_q3ym_arr;
+  Hacl_P256_Field_fcopy(py, ct7);
+  Hacl_P256_Field_fone(pz);
+  Hacl_P256_PointWin_build_table(t3x, t3y, t3z, px, py, pz);
+}
+
+static void Hacl_P256_PointMulG_rung(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t d0, uint64_t d1, uint64_t d2, uint64_t d3) {
+  Hacl_P256_PointWin_win_dbl4(ox, oy, oz, ux, uy, uz);
+  Hacl_P256_PointWin_win_add(ox, oy, oz, ux, uy, uz, sx, sy, sz, t0x, t0y, t0z, d0);
+  Hacl_P256_PointWin_win_add(ox, oy, oz, ux, uy, uz, sx, sy, sz, t1x, t1y, t1z, d1);
+  Hacl_P256_PointWin_win_add(ox, oy, oz, ux, uy, uz, sx, sy, sz, t2x, t2y, t2z, d2);
+  Hacl_P256_PointWin_win_add(ox, oy, oz, ux, uy, uz, sx, sy, sz, t3x, t3y, t3z, d3);
+}
+
+static void Hacl_P256_PointMulG_win_loop(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *ks) {
+  Hacl_P256_PointStep_set_infinity(ox, oy, oz);
+  size_t i = 16;
+  while (i > 0) {
+    size_t vi = i;
+    size_t i2 = (vi - 1);
+    size_t sh = (i2 * 4);
+    uint64_t d0 = Hacl_Impl_Mont4_adigit(ks, sh);
+    uint64_t d1 = Hacl_Impl_Mont4_adigit(ks, (sh + 64));
+    uint64_t d2 = Hacl_Impl_Mont4_adigit(ks, (sh + 128));
+    uint64_t d3 = Hacl_Impl_Mont4_adigit(ks, (sh + 192));
+    Hacl_P256_PointMulG_rung(ox, oy, oz, ux, uy, uz, sx, sy, sz, t0x, t0y, t0z, t1x, t1y, t1z, t2x, t2y, t2z, t3x, t3y, t3z, d0, d1, d2, d3);
+    i = i2;
+  }
+}
+
+static void Hacl_P256_PointMulG_point_mul_g_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t a1[4];
+  uint64_t px[4];
   for (size_t _ci1 = 0; _ci1 < 4; _ci1++) {
-    a1[_ci1] = z;
+    px[_ci1] = z;
   }
-  uint64_t a2[4];
+  uint64_t py[4];
   for (size_t _ci2 = 0; _ci2 < 4; _ci2++) {
-    a2[_ci2] = z;
+    py[_ci2] = z;
   }
-  uint64_t a3[4];
+  uint64_t pz[4];
   for (size_t _ci3 = 0; _ci3 < 4; _ci3++) {
-    a3[_ci3] = z;
+    pz[_ci3] = z;
   }
-  Hacl_P256_Field_fone(a3);
-  uint64_t *tx = (uint64_t *)Hacl_P256_Tables_gxm_arr;
-  Hacl_P256_Field_fcopy(a1, tx);
-  uint64_t *ty = (uint64_t *)Hacl_P256_Tables_gym_arr;
-  Hacl_P256_Field_fcopy(a2, ty);
-  Hacl_P256_PointMul_point_mul(ox, oy, oz, a1, a2, a3, ks);
+  uint64_t ux[4];
+  for (size_t _ci4 = 0; _ci4 < 4; _ci4++) {
+    ux[_ci4] = z;
+  }
+  uint64_t uy[4];
+  for (size_t _ci5 = 0; _ci5 < 4; _ci5++) {
+    uy[_ci5] = z;
+  }
+  uint64_t uz[4];
+  for (size_t _ci6 = 0; _ci6 < 4; _ci6++) {
+    uz[_ci6] = z;
+  }
+  uint64_t sx[4];
+  for (size_t _ci7 = 0; _ci7 < 4; _ci7++) {
+    sx[_ci7] = z;
+  }
+  uint64_t sy[4];
+  for (size_t _ci8 = 0; _ci8 < 4; _ci8++) {
+    sy[_ci8] = z;
+  }
+  uint64_t sz[4];
+  for (size_t _ci9 = 0; _ci9 < 4; _ci9++) {
+    sz[_ci9] = z;
+  }
+  uint64_t t0x[64];
+  for (size_t _ci10 = 0; _ci10 < 64; _ci10++) {
+    t0x[_ci10] = z;
+  }
+  uint64_t t0y[64];
+  for (size_t _ci11 = 0; _ci11 < 64; _ci11++) {
+    t0y[_ci11] = z;
+  }
+  uint64_t t0z[64];
+  for (size_t _ci12 = 0; _ci12 < 64; _ci12++) {
+    t0z[_ci12] = z;
+  }
+  uint64_t t1x[64];
+  for (size_t _ci13 = 0; _ci13 < 64; _ci13++) {
+    t1x[_ci13] = z;
+  }
+  uint64_t t1y[64];
+  for (size_t _ci14 = 0; _ci14 < 64; _ci14++) {
+    t1y[_ci14] = z;
+  }
+  uint64_t t1z[64];
+  for (size_t _ci15 = 0; _ci15 < 64; _ci15++) {
+    t1z[_ci15] = z;
+  }
+  uint64_t t2x[64];
+  for (size_t _ci16 = 0; _ci16 < 64; _ci16++) {
+    t2x[_ci16] = z;
+  }
+  uint64_t t2y[64];
+  for (size_t _ci17 = 0; _ci17 < 64; _ci17++) {
+    t2y[_ci17] = z;
+  }
+  uint64_t t2z[64];
+  for (size_t _ci18 = 0; _ci18 < 64; _ci18++) {
+    t2z[_ci18] = z;
+  }
+  uint64_t t3x[64];
+  for (size_t _ci19 = 0; _ci19 < 64; _ci19++) {
+    t3x[_ci19] = z;
+  }
+  uint64_t t3y[64];
+  for (size_t _ci20 = 0; _ci20 < 64; _ci20++) {
+    t3y[_ci20] = z;
+  }
+  uint64_t t3z[64];
+  for (size_t _ci21 = 0; _ci21 < 64; _ci21++) {
+    t3z[_ci21] = z;
+  }
+  Hacl_P256_PointMulG_build_tables(t0x, t0y, t0z, t1x, t1y, t1z, t2x, t2y, t2z, t3x, t3y, t3z, px, py, pz);
+  Hacl_P256_PointMulG_win_loop(ox, oy, oz, ux, uy, uz, sx, sy, sz, t0x, t0y, t0z, t1x, t1y, t1z, t2x, t2y, t2z, t3x, t3y, t3z, ks);
+}
+
+static void Hacl_P256_PointMul_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks) {
+  Hacl_P256_PointMulG_point_mul_g_win(ox, oy, oz, ks);
 }
 
 bool Hacl_P256_Ecdh_dh_initiator(uint8_t *out, uint8_t *sk) {

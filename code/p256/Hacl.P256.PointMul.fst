@@ -45,6 +45,7 @@ module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
+module MG = Hacl.P256.PointMulG
 module Loops = Hacl.Spec.Loops
 
 (** {2 The window}
@@ -83,7 +84,13 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   ()
 }
 
-(** [out := [k] G]. *)
+(** [out := [k] G].
+
+    The generator is known at compile time, so this does not go through
+    the variable-base window above: {!Hacl.P256.PointMulG} splits the
+    scalar into four sixty-four-bit pieces and walks them together against
+    [G], [2^64 G], [2^128 G] and [2^192 G], which is a hundred and
+    eighty-four point operations against three hundred and thirty-five. *)
 fn point_mul_g (ox oy oz: A.array S64.t) (ks: A.array S64.t)
                (#vox #voy #voz: erased (Seq.seq S64.t))
                (#pk: perm) (#vk: erased (Seq.seq S64.t))
@@ -97,20 +104,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
         GR.on_curve (P.point_mul_g (eval (vals vk))) /\
         GR.peq (pt wx wy wz) (P.point_mul_g (eval (vals vk))))
 {
-  let z = S64.zero;
-  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  fone a3;
-  (* [point_add] wants its three input coordinates at one permission, and
-     the constant tables hand back one existential permission each.  A copy
-     into owned buffers is cheaper than teaching the prover to split. *)
-  let tx = fgx ();
-  fcopy a1 tx;
-  drop_table tx;
-  let ty = fgy ();
-  fcopy a2 ty;
-  drop_table ty;
-  GR.g_on_curve ();
-  point_mul ox oy oz a1 a2 a3 ks;
+  MG.point_mul_g_win ox oy oz ks;
   ()
 }
 
