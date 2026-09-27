@@ -29,8 +29,9 @@ where HACL\* uses a window, and on the elliptic curves, where what is left is
 the scalar multiplication rather than the field: P-256's variable-base ECDH
 is now *faster* than the reference at 0.76x, secp256k1's is within 1.73x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
-a time, as Ed25519 now does too, and now that Ed25519 multiplies the
-generator out of four compiled-in base points rather than one.  See
+a time, as Ed25519 now does too, and now that Ed25519 and secp256k1 both
+multiply the generator out of four compiled-in base points rather than one.
+See
 [Performance](#performance).
 
 ```
@@ -899,7 +900,8 @@ test and the scalar reduction never appear in the same verification context,
 and `Hacl.P256.Key` (private keys, the scalar field) and
 `Hacl.P256.Key.Public` (public keys, the field) are separate files for no
 other reason.  `code/k256` is the same twenty for the same reason, plus the
-four modules of its own radix-52 base field.
+four modules of its own radix-52 base field and the two of its fixed-base
+window.
 
 **`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
 addition formulas are Renes-Costello-Batina, twelve field multiplications
@@ -991,6 +993,23 @@ second curve's spec side cost one second.  The Montgomery field made P-256's
 implementation side harder rather than easier -- even its coordinate
 projection carries two of those literals -- so its loop invariant is stated
 over limb sequences rather than over points.
+
+**The generator has its own window.**  Signing and `secret-to-public`
+multiply a point that is known at compile time, so `Hacl.K256.PointMulG`
+does not walk the scalar bit by bit at all: it splits it into four
+sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
+`2^128 G` and `2^192 G`, sixteen rungs of four doublings and four
+additions, 184 point operations rather than 335.  `Spec.K256.Base` says
+what the three extra base points are, as a doubling chain the normaliser
+evaluates at typechecking time, and `Spec.Group.Smul.dblk_ok` turns that
+into a statement about `smul`; their six field constants are
+`Hacl.K256.Tables52G`, in a module of their own because eight
+two-hundred-and-fifty-six-bit literals in one solver context stop
+`Hacl.K256.Tables52` terminating.  Everything below the rung is
+`Hacl.K256.PointWin`'s, whose table layer carries a scale for exactly this
+reason; the scalar arithmetic is `Spec.Group.Split4`, shared with Ed25519.
+secp256k1 `secret-to-public` went from 155 us to **111** and signing from
+172 to **126**.
 
 **`a = 0` is a shorter addition law, not a special case of the same one.**
 Renes-Costello-Batina give separate algorithms for `a = -3` (4 and 6) and
@@ -2153,8 +2172,8 @@ reference**.
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
+| secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
 | Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
-| secp256k1 ECDSA sign | -- | 172 us | 65 us | **2.63x** |  |  |
 | AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
@@ -2227,9 +2246,11 @@ signing and 18% of verification; the fixed-base half, which splits the scalar
 into four sixty-four-bit pieces and walks them together against [2^64] G,
 [2^128] G and [2^192] G as well as G, was worth a further 28% of key
 generation and 23% of signing.  Key generation went from 3.40x of the
-reference to **1.91x** and signing from 3.82x to **2.35x**.  P-256 and secp256k1
-were behind for three reasons; secp256k1 is now behind for one and P-256 for
-two.  The plainest has been removed for both: the 256-bit core they share was
+reference to **1.91x** and signing from 3.82x to **2.35x**.  secp256k1 has now
+had the same treatment, and with it P-256 is the only curve here still
+walking the generator bit by bit.  P-256 and secp256k1
+were behind for three reasons; secp256k1 is now behind for none of them in
+particular and P-256 for two.  The plainest has been removed for both: the 256-bit core they share was
 eight limbs of thirty-two bits, so a field multiply did sixty-four schoolbook
 products and sixty-four reduction products, and it is now four limbs of
 sixty-four, which does sixteen and sixteen.  Measured directly, our secp256k1
@@ -2259,10 +2280,17 @@ the reference and is now **0.76x** it, the first asymmetric primitive here
 that is faster than HACL\*'s portable C.  clang agrees within 3% on both
 curves.  What remains is the *fixed*-base side, where HACL\* has a window
 compiled in and this does not: signing, verification and secret-to-public all
-start from a multiplication by the generator, and that is why secp256k1's
-three such rows are still between 2.6x and 3.5x while its variable-base ECDH
-is at 1.73x.  P-256 has still not had the special-prime field, only the
-window.
+start from a multiplication by the generator.  secp256k1 has now had that
+too: `Hacl.K256.PointMulG` splits the scalar into four sixty-four-bit pieces
+and walks them together against `G`, `2^64 G`, `2^128 G` and `2^192 G`, 184
+point operations against 335, and its three fixed-base rows moved together
+-- `secret-to-public` from 155 us to **111** and 3.16x to **2.27x**, signing
+from 172 to **126** and 2.63x to **1.91x**, verification, which does one
+fixed-base and one variable-base multiplication, from 319 to **271**.
+Variable-base ECDH is untouched at 155 us and 1.71x, which is the check that
+the work went where it was supposed to.  clang agrees within 5%.  P-256 has
+had neither the special-prime field nor the fixed-base window, only the
+variable-base one.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -2988,8 +3016,8 @@ rough order of value:
    treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
    subtractions rather than a multiply -- and has not had it.
 
-4. **The fixed-base window**, now wanted only for secp256k1.  Ed25519 has
-   it: `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
+4. **The fixed-base window**, now wanted only for P-256.  Ed25519 and
+   secp256k1 have it: `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
    sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
    `2^128 G` and `2^192 G`, so that one doubling chain serves all four and
    sixteen rungs suffice.  184 point operations against 335: key generation
@@ -3003,8 +3031,14 @@ rough order of value:
    into a statement about `smul`.  A further 30% is available by compiling in
    the four tables of sixteen entries rather than building them, at the price
    of 256 field constants instead of 9; that is a change to the first twenty
-   lines of `Hacl.Ed25519.PointMulG`.  secp256k1, whose `secret-to-public` is
-   3.16x and whose signing is 2.63x, has had none of this.  The variable-base
+   lines of `Hacl.Ed25519.PointMulG`.  secp256k1 has had the same, in
+   `code/k256/Hacl.K256.PointMulG.fst`, with six field constants rather than
+   nine because a projective point has three coordinates where an extended
+   one has four: `secret-to-public` went from 155 us to **111** and 3.16x to
+   **2.27x**, signing from 172 to **126** and 2.63x to **1.91x**, and
+   verification from 319 to **271**.  The scalar arithmetic the two share is
+   `spec/Spec.Group.Split4.fst`.  P-256, whose `dh-initiator` is 1.74x and
+   whose signing is 1.68x, has had none of this.  The variable-base
    half is **done on all three curves**: `code/k256/Hacl.K256.PointWin.fst`,
    `code/p256/Hacl.P256.PointWin.fst` and
    `code/ed25519/Hacl.Ed25519.PointWin.fst` walk the scalar four bits at a
@@ -3059,17 +3093,20 @@ rough order of value:
    the curve, it takes fifteen seconds.  Keep the seventy-eight-digit
    literal out of the query, whatever the query is about.
 
-   What is left is the fixed-base window.  Signing, verification and
-   secret-to-public all begin with a multiplication by the generator, where
-   HACL\* has a table compiled in and this does not, and that is the whole of
-   why secp256k1's three such rows sit between 2.6x and 3.5x while its
-   variable-base ECDH is at 1.73x.  The same is now true of Ed25519, whose
-   three rows sit between 2.45x and 3.11x for that one reason, and it is the
-   largest single gap left.  The hard part is proving a compiled-in table of
-   multiples of the generator correct: `smul (d * 2^(64i)) g` cannot simply
-   be unfolded, so it wants either a handful of compiled-in base points and
-   run-time additions, or normalization of a 256-step `repeati` over concrete
-   field arithmetic.
+   What is left is the fixed-base window, and only on P-256.  Signing,
+   verification and key agreement all begin with a multiplication by the
+   generator, where HACL\* has a table compiled in.  Ed25519 and secp256k1
+   now have one too, and both moved by roughly the same amount: Ed25519 key
+   generation from 3.40x to 1.91x, secp256k1 `secret-to-public` from 3.16x
+   to 2.27x.  The hard part was proving a compiled-in multiple of the
+   generator correct, since `smul (2^64) g` cannot simply be unfolded; the
+   answer both curves use is to state it as a doubling *chain*
+   (`Spec.Group.Smul.dblk`), which the normaliser evaluates on concrete
+   field elements at typechecking time, and convert with `dblk_ok`.  P-256
+   can have the same, and the four modules it would copy --
+   `Spec.Group.Split4`, `Spec.K256.Base`, `Hacl.K256.Tables52G` and
+   `Hacl.K256.PointMulG` -- are now written twice each, which is the point
+   at which the third is cheap.
 5. **Taking over the remaining sixty-seven compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
