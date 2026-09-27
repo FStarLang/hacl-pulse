@@ -45,6 +45,7 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module Math = FStar.Math.Lemmas
+module SW = Hacl.AES.SubWord
 
 (** This module is arithmetic-heavy, and the default SMT encoding boxes
     every integer operation, which hides the structure of the products from
@@ -327,21 +328,26 @@ let rcon_keep (v: variant) (b: nat)
     property alone. *)
 
 fn ks_word_impl ([@@@FStar.Attributes.monomorphize] p: params)
-                (w: A.array S8.t) (b: SZ.t) (rc: S8.t)
+                (w: A.array S8.t) (sb: A.array S8.t) (b: SZ.t) (rc: S8.t)
                 (#key: erased (Seq.lseq elem (keylen p.pv)))
+                (#vsb: erased (Seq.seq S8.t))
                 (#vw0: erased (Seq.seq S8.t))
-requires A.pts_to w vw0 ** pure (
+requires A.pts_to w vw0 ** A.pts_to sb vsb ** pure (
+  Seq.length vsb == blocklen /\
   Seq.length vw0 == xkeylen p.pv /\
   keylen p.pv <= SZ.v b /\ SZ.v b + 4 <= xkeylen p.pv /\ SZ.v b % 4 == 0 /\
   (SZ.v b % keylen p.pv == 0 ==> S8.v rc == rcon0 (SZ.v b / keylen p.pv)) /\
   (forall (j: nat). j < SZ.v b ==>
      Seq.index (vals vw0) j == Seq.index (key_expansion p.pv key) j))
-ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
+ensures exists* (vw1: Seq.seq S8.t) (vsb1: Seq.seq S8.t).
+  A.pts_to w vw1 ** A.pts_to sb vsb1 ** pure (
+  Seq.length vsb1 == blocklen /\
   Seq.length vw1 == xkeylen p.pv /\ SZ.v b + 4 <= xkeylen p.pv /\
   (forall (j: nat). j < SZ.v b + 4 ==>
      Seq.index (vals vw1) j == Seq.index (key_expansion p.pv key) j))
 {
   A.pts_to_len w;
+  A.pts_to_len sb;
   let back = SZ.sub b p.pkeylen;
   let prev = SZ.sub b 4sz;
   let a0 = A.(w.(back));
@@ -354,10 +360,14 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
   let p3 = A.(w.(SZ.add prev 3sz));
   let m = SZ.rem b p.pkeylen;
   if (m = 0sz) {
-    let t0 = bxor (sbox_impl p1) rc;
-    let t1 = sbox_impl p2;
-    let t2 = sbox_impl p3;
-    let t3 = sbox_impl p0;
+    SW.subword4 sb p1 p2 p3 p0;
+    with vsb'. assert A.pts_to sb vsb';
+    A.pts_to_len sb;
+    vals_index vsb' 8; vals_index vsb' 9; vals_index vsb' 10; vals_index vsb' 11;
+    let t0 = bxor A.(sb.(8sz)) rc;
+    let t1 = A.(sb.(9sz));
+    let t2 = A.(sb.(10sz));
+    let t3 = A.(sb.(11sz));
     A.((w.(b) <- bxor a0 t0));
     A.((w.(SZ.add b 1sz) <- bxor a1 t1));
     A.((w.(SZ.add b 2sz) <- bxor a2 t2));
@@ -367,10 +377,18 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
     A.pts_to_len w;
   } else {
     if (SZ.gt p.pkeylen 24sz && m = 16sz) {
-      A.((w.(b) <- bxor a0 (sbox_impl p0)));
-      A.((w.(SZ.add b 1sz) <- bxor a1 (sbox_impl p1)));
-      A.((w.(SZ.add b 2sz) <- bxor a2 (sbox_impl p2)));
-      A.((w.(SZ.add b 3sz) <- bxor a3 (sbox_impl p3)));
+      SW.subword4 sb p0 p1 p2 p3;
+      with vsb'. assert A.pts_to sb vsb';
+      A.pts_to_len sb;
+      vals_index vsb' 8; vals_index vsb' 9; vals_index vsb' 10; vals_index vsb' 11;
+      let s0 = A.(sb.(8sz));
+      let s1 = A.(sb.(9sz));
+      let s2 = A.(sb.(10sz));
+      let s3 = A.(sb.(11sz));
+      A.((w.(b) <- bxor a0 s0));
+      A.((w.(SZ.add b 1sz) <- bxor a1 s1));
+      A.((w.(SZ.add b 2sz) <- bxor a2 s2));
+      A.((w.(SZ.add b 3sz) <- bxor a3 s3));
       with vw1. assert A.pts_to w vw1;
       ks_join_sub p.pv key vw0 vw1 (SZ.v b);
       A.pts_to_len w;
@@ -425,10 +443,15 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** A.pts_to key #pk vkey ** 
   let mut b = p.pkeylen;
   rcon_init (keylen p.pv);
   let mut rc = S8.classify 1uy;
+  let z = S8.zero;
+  let mut sb = [| z; 16sz |];
+  A.pts_to_len sb;
   while (let vb = !b; SZ.lt vb p.pxkeylen)
-  invariant exists* (vb: SZ.t) (vrc: S8.t) (vw: Seq.seq S8.t).
-    pts_to b vb ** pts_to rc vrc ** A.pts_to w vw ** A.pts_to key #pk vkey **
+  invariant exists* (vb: SZ.t) (vrc: S8.t) (vw: Seq.seq S8.t) (vsb: Seq.seq S8.t).
+    pts_to b vb ** pts_to rc vrc ** A.pts_to w vw ** A.pts_to sb vsb **
+    A.pts_to key #pk vkey **
     pure (keylen p.pv <= SZ.v vb /\ SZ.v vb <= xkeylen p.pv /\ SZ.v vb % 4 == 0 /\
+          Seq.length vsb == blocklen /\
           Seq.length vw == xkeylen p.pv /\ Seq.length vkey == keylen p.pv /\
           S8.v vrc == rcon0 (rcidx (SZ.v vb) (keylen p.pv)) /\
           (forall (j: nat). j < SZ.v vb ==>
@@ -438,7 +461,7 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** A.pts_to key #pk vkey ** 
     let vb = !b;
     let vrc = !rc;
     rcon_prep p.pv (SZ.v vb) (S8.v vrc);
-    ks_word_impl p w vb vrc #(hide (vals vkey));
+    ks_word_impl p w sb vb vrc #(hide (vals vkey));
     let m = SZ.rem vb p.pkeylen;
     if (m = 0sz) {
       let nrc = xtime_impl vrc;

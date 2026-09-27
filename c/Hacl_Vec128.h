@@ -74,6 +74,14 @@ HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_aesenclast(Hacl_Vec128_t st,
   return _mm_aesenclast_si128(st, k);
 }
 
+/* AESKEYGENASSIST with a zero round constant.  Bytes 8..11 of the result are
+ * the S-box applied to bytes 12..15 of the argument; the rest of the result
+ * is the same for bytes 4..7 and two rotated copies, none of which is used.
+ * This is the key schedule's SubWord. */
+HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_subword(Hacl_Vec128_t a) {
+  return _mm_aeskeygenassist_si128(a, 0);
+}
+
 /* The four halves of a carry-less 64x64 -> 128 multiply.  The immediate has
  * to be a constant expression, so there is one wrapper per combination
  * rather than one taking the selector. */
@@ -277,6 +285,7 @@ HACL_VEC128_STUB2(Hacl_Vec128_sha256msg2)
 #undef HACL_VEC128_STUB2
 #define HACL_VEC128_STUB1(name)                                              \
   static inline Hacl_Vec128_t name(Hacl_Vec128_t a) { return a; }
+HACL_VEC128_STUB1(Hacl_Vec128_subword)
 HACL_VEC128_STUB1(Hacl_Vec128_shift_left_bytes_4)
 HACL_VEC128_STUB1(Hacl_Vec128_shift_right_bytes_4)
 HACL_VEC128_STUB1(Hacl_Vec128_shift_left_bytes_8)

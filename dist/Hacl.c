@@ -144,6 +144,8 @@ static uint8_t Hacl_Secret_Word_to_byte__t_1(uint64_t x);
 static uint64_t Hacl_Secret_Word_shift_right__t_1(uint64_t x, uint32_t s);
 static void Hacl_Impl_Bytes_store_be__t_1(uint8_t *b, size_t off, uint64_t x);
 static void Hacl_HPKE_compute_nonce_impl(uint8_t *out, uint8_t *bn, uint64_t sq);
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static void Hacl_AES_SubWord_subword_ni(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3);
 static uint8_t Hacl_Secret_UInt8_shift_left(uint8_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt8_shift_right(uint8_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt8_rotate(uint8_t x, uint32_t s);
@@ -155,7 +157,9 @@ static uint8_t Hacl_Secret_UInt8_select(uint8_t mask, uint8_t x, uint8_t y);
 static uint8_t Hacl_AES_Core_fmul_impl(uint8_t a, uint8_t b);
 static uint8_t Hacl_AES_Core_ginv_impl(uint8_t a);
 static uint8_t Hacl_AES_Core_sbox_impl(uint8_t x);
-static void Hacl_AES_Key_ks_word_impl__Mkparams(uint8_t *w, size_t b, uint8_t rc);
+static void Hacl_AES_SubWord_subword_portable(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3);
+static void Hacl_AES_SubWord_subword4(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3);
+static void Hacl_AES_Key_ks_word_impl__Mkparams(uint8_t *w, uint8_t *sb, size_t b, uint8_t rc);
 static void Hacl_AES_Key_key_expansion_impl__Mkparams(uint8_t *w, uint8_t *key);
 static void Hacl_Impl_Copy_fill(uint8_t *dst, uint8_t x, size_t n);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
@@ -616,7 +620,7 @@ static const uint64_t Hacl_FFDHE_Tables_ffdhe4096_arr[64] = { 0xffffffffffffffff
 static const uint64_t Hacl_FFDHE_Tables_ffdhe3072_arr[48] = { 0xffffffffffffffffULL, 0x25e41d2b66c62e37ULL, 0x3c1b20ee3fd59d7cULL, 0xabcd06bfa53ddefULL, 0x1dbf9a42d5c4484eULL, 0xabc521979b0deadaULL, 0xe86d2bc522363a0dULL, 0x5cae82ab9c9df69eULL, 0x64f2e21e71f54bffULL, 0xf4fd4452e2d74dd3ULL, 0xb4130c93bc437944ULL, 0xaefe130985139270ULL, 0x598cb0fac186d91cULL, 0x7ad91d2691f7f7eeULL, 0x61b46fc9d6e6c907ULL, 0xbc34f4def99c0238ULL, 0xde355b3b6519035bULL, 0x886b4238611fcfdcULL, 0xc6f34a26c1b2effaULL, 0xc58ef1837d1683b2ULL, 0x3bb5fcbc2ec22005ULL, 0xc3fe3b1b4c6fad73ULL, 0x8e4f1232eef28183ULL, 0x9172fe9ce98583ffULL, 0xc03404cd28342f61ULL, 0x9e02fce1cdf7e2ecULL, 0xb07a7c8ee0a6d70ULL, 0xae56ede76372bb19ULL, 0x1d4f42a3de394df4ULL, 0xb96adab760d7f468ULL, 0xd108a94bb2c8e3fbULL, 0xbc0ab182b324fb61ULL, 0x30acca4f483a797aULL, 0x1df158a136ade735ULL, 0xe2a689daf3efe872ULL, 0x984f0c70e0e68b77ULL, 0xb557135e7f57c935ULL, 0x856365553ded1af3ULL, 0x2433f51f5f066ed0ULL, 0xd3df1ed5d5fd6561ULL, 0xf681b202aec4617aULL, 0x7d2fe363630c75d8ULL, 0xcc939dce249b3ef9ULL, 0xa9e13641146433fbULL, 0xd8b9c583ce2d3695ULL, 0xafdc5620273d3cf1ULL, 0xadf85458a2bb4a9aULL, 0xffffffffffffffffULL };
 static const uint64_t Hacl_FFDHE_Tables_ffdhe2048_arr[32] = { 0xffffffffffffffffULL, 0x886b423861285c97ULL, 0xc6f34a26c1b2effaULL, 0xc58ef1837d1683b2ULL, 0x3bb5fcbc2ec22005ULL, 0xc3fe3b1b4c6fad73ULL, 0x8e4f1232eef28183ULL, 0x9172fe9ce98583ffULL, 0xc03404cd28342f61ULL, 0x9e02fce1cdf7e2ecULL, 0xb07a7c8ee0a6d70ULL, 0xae56ede76372bb19ULL, 0x1d4f42a3de394df4ULL, 0xb96adab760d7f468ULL, 0xd108a94bb2c8e3fbULL, 0xbc0ab182b324fb61ULL, 0x30acca4f483a797aULL, 0x1df158a136ade735ULL, 0xe2a689daf3efe872ULL, 0x984f0c70e0e68b77ULL, 0xb557135e7f57c935ULL, 0x856365553ded1af3ULL, 0x2433f51f5f066ed0ULL, 0xd3df1ed5d5fd6561ULL, 0xf681b202aec4617aULL, 0x7d2fe363630c75d8ULL, 0xcc939dce249b3ef9ULL, 0xa9e13641146433fbULL, 0xd8b9c583ce2d3695ULL, 0xafdc5620273d3cf1ULL, 0xadf85458a2bb4a9aULL, 0xffffffffffffffffULL };
 static uint64_t Hacl_Bignum_Base_get_bit(uint64_t *b, size_t i);
-static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, size_t b, uint8_t rc);
+static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, uint8_t *sb, size_t b, uint8_t rc);
 static void Hacl_AES_Key_key_expansion_impl__Mkparams_1(uint8_t *w, uint8_t *key);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static void Hacl_AES_NI_cipher_ni__Mkparams_1(uint8_t *st, uint8_t *w);
@@ -2623,6 +2627,17 @@ static void Hacl_HPKE_compute_nonce_impl(uint8_t *out, uint8_t *bn, uint64_t sq)
   }
 }
 
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static void Hacl_AES_SubWord_subword_ni(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3) {
+  s[12] = x0;
+  s[13] = x1;
+  s[14] = x2;
+  s[15] = x3;
+  Hacl_Vec128_t a = Hacl_Vec128_load(s);
+  Hacl_Vec128_t r = Hacl_Vec128_subword(a);
+  Hacl_Vec128_store(s, r);
+}
+
 static uint8_t Hacl_Secret_UInt8_shift_left(uint8_t x, uint32_t s) {
   return ((uint8_t)((unsigned int)(x) << (unsigned int)(s)));
 }
@@ -2725,7 +2740,19 @@ static uint8_t Hacl_AES_Core_sbox_impl(uint8_t x) {
   return Hacl_Secret_UInt8_logxor(Hacl_AES_Core_ginv_impl(x), Hacl_Secret_UInt8_logxor(r1, Hacl_Secret_UInt8_logxor(r2, Hacl_Secret_UInt8_logxor(r3, Hacl_Secret_UInt8_logxor(r4, 0x63)))));
 }
 
-static void Hacl_AES_Key_ks_word_impl__Mkparams(uint8_t *w, size_t b, uint8_t rc) {
+static void Hacl_AES_SubWord_subword_portable(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3) {
+  s[8] = Hacl_AES_Core_sbox_impl(x0);
+  s[9] = Hacl_AES_Core_sbox_impl(x1);
+  s[10] = Hacl_AES_Core_sbox_impl(x2);
+  s[11] = Hacl_AES_Core_sbox_impl(x3);
+}
+
+static void Hacl_AES_SubWord_subword4(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3) {
+  if (Hacl_Vec128_supported()) Hacl_AES_SubWord_subword_ni(s, x0, x1, x2, x3);
+  else Hacl_AES_SubWord_subword_portable(s, x0, x1, x2, x3);
+}
+
+static void Hacl_AES_Key_ks_word_impl__Mkparams(uint8_t *w, uint8_t *sb, size_t b, uint8_t rc) {
   size_t back = (b - 16);
   size_t prev = (b - 4);
   uint8_t a0 = w[back];
@@ -2738,10 +2765,12 @@ static void Hacl_AES_Key_ks_word_impl__Mkparams(uint8_t *w, size_t b, uint8_t rc
   uint8_t p3 = w[(prev + 3)];
   size_t m = (b % 16);
   if (m == 0) {
-    uint8_t t0 = Hacl_Secret_UInt8_logxor(Hacl_AES_Core_sbox_impl(p1), rc);
-    uint8_t t1 = Hacl_AES_Core_sbox_impl(p2);
-    uint8_t t2 = Hacl_AES_Core_sbox_impl(p3);
-    uint8_t t3 = Hacl_AES_Core_sbox_impl(p0);
+    Hacl_AES_SubWord_subword4(sb, p1, p2, p3, p0);
+    uint8_t __anf0 = sb[8];
+    uint8_t t0 = Hacl_Secret_UInt8_logxor(__anf0, rc);
+    uint8_t t1 = sb[9];
+    uint8_t t2 = sb[10];
+    uint8_t t3 = sb[11];
     w[b] = Hacl_Secret_UInt8_logxor(a0, t0);
     w[(b + 1)] = Hacl_Secret_UInt8_logxor(a1, t1);
     w[(b + 2)] = Hacl_Secret_UInt8_logxor(a2, t2);
@@ -2765,10 +2794,15 @@ static void Hacl_AES_Key_key_expansion_impl__Mkparams(uint8_t *w, uint8_t *key) 
   }
   size_t b = 16;
   uint8_t rc = 1;
+  uint8_t z = Hacl_Secret_UInt8_zero;
+  uint8_t sb[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    sb[_ci2] = z;
+  }
   while (b < 176) {
     size_t vb = b;
     uint8_t vrc = rc;
-    Hacl_AES_Key_ks_word_impl__Mkparams(w, vb, vrc);
+    Hacl_AES_Key_ks_word_impl__Mkparams(w, sb, vb, vrc);
     size_t m = (vb % 16);
     if (m == 0) {
       uint8_t s = Hacl_Secret_UInt8_shift_left(vrc, 1);
@@ -16362,7 +16396,7 @@ void Hacl_Bignum_Base_add_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t 
   (void)(Hacl_Bignum_Base_add_masked(res, m, n, mask));
 }
 
-static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, size_t b, uint8_t rc) {
+static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, uint8_t *sb, size_t b, uint8_t rc) {
   size_t back = (b - 32);
   size_t prev = (b - 4);
   uint8_t a0 = w[back];
@@ -16375,10 +16409,12 @@ static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, size_t b, uint8_t 
   uint8_t p3 = w[(prev + 3)];
   size_t m = (b % 32);
   if (m == 0) {
-    uint8_t t0 = Hacl_Secret_UInt8_logxor(Hacl_AES_Core_sbox_impl(p1), rc);
-    uint8_t t1 = Hacl_AES_Core_sbox_impl(p2);
-    uint8_t t2 = Hacl_AES_Core_sbox_impl(p3);
-    uint8_t t3 = Hacl_AES_Core_sbox_impl(p0);
+    Hacl_AES_SubWord_subword4(sb, p1, p2, p3, p0);
+    uint8_t __anf0 = sb[8];
+    uint8_t t0 = Hacl_Secret_UInt8_logxor(__anf0, rc);
+    uint8_t t1 = sb[9];
+    uint8_t t2 = sb[10];
+    uint8_t t3 = sb[11];
     w[b] = Hacl_Secret_UInt8_logxor(a0, t0);
     w[(b + 1)] = Hacl_Secret_UInt8_logxor(a1, t1);
     w[(b + 2)] = Hacl_Secret_UInt8_logxor(a2, t2);
@@ -16386,10 +16422,15 @@ static void Hacl_AES_Key_ks_word_impl__Mkparams_1(uint8_t *w, size_t b, uint8_t 
   }
   else {
     if (m == 16) {
-      w[b] = Hacl_Secret_UInt8_logxor(a0, Hacl_AES_Core_sbox_impl(p0));
-      w[(b + 1)] = Hacl_Secret_UInt8_logxor(a1, Hacl_AES_Core_sbox_impl(p1));
-      w[(b + 2)] = Hacl_Secret_UInt8_logxor(a2, Hacl_AES_Core_sbox_impl(p2));
-      w[(b + 3)] = Hacl_Secret_UInt8_logxor(a3, Hacl_AES_Core_sbox_impl(p3));
+      Hacl_AES_SubWord_subword4(sb, p0, p1, p2, p3);
+      uint8_t s0 = sb[8];
+      uint8_t s1 = sb[9];
+      uint8_t s2 = sb[10];
+      uint8_t s3 = sb[11];
+      w[b] = Hacl_Secret_UInt8_logxor(a0, s0);
+      w[(b + 1)] = Hacl_Secret_UInt8_logxor(a1, s1);
+      w[(b + 2)] = Hacl_Secret_UInt8_logxor(a2, s2);
+      w[(b + 3)] = Hacl_Secret_UInt8_logxor(a3, s3);
     }
     else {
       w[b] = Hacl_Secret_UInt8_logxor(a0, p0);
@@ -16410,10 +16451,15 @@ static void Hacl_AES_Key_key_expansion_impl__Mkparams_1(uint8_t *w, uint8_t *key
   }
   size_t b = 32;
   uint8_t rc = 1;
+  uint8_t z = Hacl_Secret_UInt8_zero;
+  uint8_t sb[16];
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    sb[_ci2] = z;
+  }
   while (b < 240) {
     size_t vb = b;
     uint8_t vrc = rc;
-    Hacl_AES_Key_ks_word_impl__Mkparams_1(w, vb, vrc);
+    Hacl_AES_Key_ks_word_impl__Mkparams_1(w, sb, vb, vrc);
     size_t m = (vb % 32);
     if (m == 0) {
       uint8_t s = Hacl_Secret_UInt8_shift_left(vrc, 1);

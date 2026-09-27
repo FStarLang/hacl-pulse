@@ -148,6 +148,23 @@ assume val aesenc (st k: t) : r: t { bv r == round (bv k) (bv st) }
 [@@custard_extern "Hacl_Vec128_aesenclast"; custard_c_header "Hacl_Vec128.h"]
 assume val aesenclast (st k: t) : r: t { bv r == last_round (bv k) (bv st) }
 
+(** [AESKEYGENASSIST] with a zero round constant.  The instruction computes
+    [SubWord] of two of the four input words and [RotWord (SubWord _)] of the
+    same two, exclusive-ored with the immediate; with the immediate zero the
+    rotated copies carry no extra information and only the two plain ones are
+    worth stating.  Of those, only the one taken from the top word is used
+    here, so the axiom is written over the four bytes at offset twelve.
+
+    This exists for the key schedule, whose [SubWord] is otherwise four
+    evaluations of the algebraic S-box of [Hacl.AES.Core] --- around three
+    hundred and fifty serially dependent operations each.  Nothing else in
+    the library needs it: [aesenc] already has the S-box inside it. *)
+
+[@@custard_extern "Hacl_Vec128_subword"; custard_c_header "Hacl_Vec128.h"]
+assume val subword (a: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             Seq.index (bv r) (8 + i) == sbox (Seq.index (bv a) (12 + i)) }
+
 (** {2 Carry-less multiplication}
 
     [PCLMULQDQ] multiplies one 64-bit lane of each operand, reading both as
