@@ -350,3 +350,92 @@ let horner4 (a b0 b1 b2 b3 h h2 h3 h4: block)
     gadd_assoc p q (gadd r t)
 
 #pop-options
+
+(** {2 One reduction for four products}
+
+    [Spec.GF128.Poly.gmul_three] is the shape a single multiply has in the
+    implementation: a 256-bit carry-less product, then the high half folded
+    back by two products with the reduction constant.  On this hardware the
+    product is four [PCLMULQDQ]s and the fold is about forty shifts and
+    exclusive-ors, so the reduction, not the multiplication, is most of the
+    cost.
+
+    It does not have to happen four times.  The 256-bit product is linear in
+    each operand, so four products may be accumulated as two registers --- the
+    sum of the low halves and the sum of the high halves --- and only that
+    sum reduced.  Four multiplies then cost four products and {i one} fold
+    rather than four, which is what [Hacl.AES.GF128.NI.gmul4_vec] does.
+
+    Nothing here is about the reduction polynomial.  The only facts used are
+    that [gmul] distributes over [gadd] on the left, which
+    [Spec.GF128.Poly.gmul_split] turns into a statement about halves, and
+    that exclusive-or may be regrouped. *)
+
+let sum4 (a b c d: block) : block = gadd a (gadd b (gadd c d))
+
+let sum4_bit (a b c d: block) (i: nat { i < 128 })
+  : Lemma (bit (sum4 a b c d) i ==
+           (((bit a i <> bit b i) <> bit c i) <> bit d i))
+  = gadd_bit a (gadd b (gadd c d)) i;
+    gadd_bit b (gadd c d) i;
+    gadd_bit c d i
+
+(** Four pairwise sums regrouped into two fourfold sums.  Pure exclusive-or:
+    the solver sees eight booleans per bit and does the rest. *)
+let regroup4 (u1 u2 u3 u4 w1 w2 w3 w4: block)
+  : Lemma (sum4 (gadd u1 w1) (gadd u2 w2) (gadd u3 w3) (gadd u4 w4) ==
+           gadd (sum4 u1 u2 u3 u4) (sum4 w1 w2 w3 w4))
+  = let l = sum4 (gadd u1 w1) (gadd u2 w2) (gadd u3 w3) (gadd u4 w4) in
+    let r = gadd (sum4 u1 u2 u3 u4) (sum4 w1 w2 w3 w4) in
+    let aux (i: nat { i < 128 }) : Lemma (bit l i == bit r i)
+      = sum4_bit (gadd u1 w1) (gadd u2 w2) (gadd u3 w3) (gadd u4 w4) i;
+        gadd_bit u1 w1 i; gadd_bit u2 w2 i;
+        gadd_bit u3 w3 i; gadd_bit u4 w4 i;
+        gadd_bit (sum4 u1 u2 u3 u4) (sum4 w1 w2 w3 w4) i;
+        sum4_bit u1 u2 u3 u4 i;
+        sum4_bit w1 w2 w3 w4 i
+    in
+    Classical.forall_intro aux;
+    bits_inj l r
+
+(** A product by the reduction constant distributes over a fourfold sum. *)
+let mul_r_sum4 (v1 v2 v3 v4: block)
+  : Lemma (gmul (sum4 v1 v2 v3 v4) r_block ==
+           sum4 (gmul v1 r_block) (gmul v2 r_block)
+                (gmul v3 r_block) (gmul v4 r_block))
+  = gmul_gadd_left v3 v4 r_block;
+    gmul_gadd_left v2 (gadd v3 v4) r_block;
+    gmul_gadd_left v1 (gadd v2 (gadd v3 v4)) r_block
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
+
+(** Four multiplies, four carry-less products, one reduction.
+
+    [u_i] and [v_i] are the halves of the *i*th 256-bit product, exactly as
+    [Spec.GF128.Poly.halves] states them for a single multiply.  [p] and [q]
+    are the halves of the sum of the four high halves times the reduction
+    constant, and [pp] and [qq] of the second such product; [q] necessarily
+    has degree at most six and [qq] is therefore zero, which is what
+    [Spec.GF128.Poly.mul_r_two] says.
+
+    The conclusion is the sum of the four field products, which is what
+    [Spec.GF128.Algebra.horner4] leaves a four-block GHASH step needing. *)
+let gmul_defer4 (x1 y1 u1 v1 x2 y2 u2 v2 x3 y3 u3 v3 x4 y4 u4 v4
+                 p q pp qq: block)
+  : Lemma (requires halves x1 y1 u1 v1 /\ halves x2 y2 u2 v2 /\
+                    halves x3 y3 u3 v3 /\ halves x4 y4 u4 v4 /\
+                    halves (sum4 v1 v2 v3 v4) r_block p q /\
+                    halves q r_block pp qq)
+          (ensures sum4 (gmul x1 y1) (gmul x2 y2) (gmul x3 y3) (gmul x4 y4) ==
+                   gadd (sum4 u1 u2 u3 u4) (gadd p pp))
+  = gmul_split x1 y1 u1 v1;
+    gmul_split x2 y2 u2 v2;
+    gmul_split x3 y3 u3 v3;
+    gmul_split x4 y4 u4 v4;
+    regroup4 u1 u2 u3 u4
+             (gmul v1 r_block) (gmul v2 r_block)
+             (gmul v3 r_block) (gmul v4 r_block);
+    mul_r_sum4 v1 v2 v3 v4;
+    mul_r_two (sum4 v1 v2 v3 v4) p q pp qq
+
+#pop-options

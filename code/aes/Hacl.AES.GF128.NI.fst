@@ -291,6 +291,86 @@ let gmul_vec (x y: Vec.t)
     xor_block_bv u1 (Vec.vxor u2 u3);
     Vec.vxor u1 (Vec.vxor u2 u3)
 
+(** {2 Four multiplies, one reduction}
+
+    The four-way GHASH loop needs the sum of four field products, not the
+    four products, and a 256-bit carry-less product is linear in each
+    operand.  So the four products may be accumulated as two registers ---
+    the sum of the low halves and the sum of the high halves --- and the fold
+    back into the field applied once to that sum.
+
+    That is worth a great deal, because the fold is the expensive part.  Each
+    [mul_r_vec] is about twenty shifts and exclusive-ors, and [gmul_vec] runs
+    two of them for four [PCLMULQDQ]s; doing it once for four multiplies
+    rather than four times takes a four-block turn from roughly two hundred
+    and fifty vector operations to a hundred and ten.
+
+    [Spec.GF128.Algebra.gmul_defer4] is the statement that this is the same
+    answer, and [Spec.CLMUL.bswap_gadd] is what lets the accumulation happen
+    in the multiplier's bit order: the six exclusive-ors below are on
+    unreversed registers, and only three byte reversals happen at the end
+    rather than twelve. *)
+
+inline_for_extraction
+let gmul4_vec (x1 y1 x2 y2 x3 y3 x4 y4: Vec.t)
+  : Pure Vec.t (requires True)
+         (ensures fun r -> Vec.bv r ==
+            Alg.sum4 (G.gmul (Vec.bv x1) (Vec.bv y1))
+                     (G.gmul (Vec.bv x2) (Vec.bv y2))
+                     (G.gmul (Vec.bv x3) (Vec.bv y3))
+                     (G.gmul (Vec.bv x4) (Vec.bv y4)))
+  = let a1 = raw_product x1 y1 in
+    let a2 = raw_product x2 y2 in
+    let a3 = raw_product x3 y3 in
+    let a4 = raw_product x4 y4 in
+
+    let lo = Vec.vxor (fst a1) (Vec.vxor (fst a2) (Vec.vxor (fst a3) (fst a4))) in
+    let hi = Vec.vxor (snd a1) (Vec.vxor (snd a2) (Vec.vxor (snd a3) (snd a4))) in
+
+    let p2 = mul_r_vec lo in
+    let p3 = mul_r_vec (snd p2) in
+
+    let u  = Vec.bswap hi in
+    let u2 = Vec.bswap (fst p2) in
+    let u3 = Vec.bswap (fst p3) in
+
+    (* The accumulated registers, as blocks. *)
+    xor_block_bv (fst a3) (fst a4);
+    xor_block_bv (fst a2) (Vec.vxor (fst a3) (fst a4));
+    xor_block_bv (fst a1) (Vec.vxor (fst a2) (Vec.vxor (fst a3) (fst a4)));
+    xor_block_bv (snd a3) (snd a4);
+    xor_block_bv (snd a2) (Vec.vxor (snd a3) (snd a4));
+    xor_block_bv (snd a1) (Vec.vxor (snd a2) (Vec.vxor (snd a3) (snd a4)));
+
+    (* ... reversed, which is the sum of the reversals. *)
+    CL.bswap_gadd (Vec.bv (fst a3)) (Vec.bv (fst a4));
+    CL.bswap_gadd (Vec.bv (fst a2))
+                  (G.gadd (Vec.bv (fst a3)) (Vec.bv (fst a4)));
+    CL.bswap_gadd (Vec.bv (fst a1))
+                  (G.gadd (Vec.bv (fst a2))
+                          (G.gadd (Vec.bv (fst a3)) (Vec.bv (fst a4))));
+    CL.bswap_gadd (Vec.bv (snd a3)) (Vec.bv (snd a4));
+    CL.bswap_gadd (Vec.bv (snd a2))
+                  (G.gadd (Vec.bv (snd a3)) (Vec.bv (snd a4)));
+    CL.bswap_gadd (Vec.bv (snd a1))
+                  (G.gadd (Vec.bv (snd a2))
+                          (G.gadd (Vec.bv (snd a3)) (Vec.bv (snd a4))));
+
+    Alg.gmul_defer4 (Vec.bv x1) (Vec.bv y1)
+                    (CL.bswap (Vec.bv (snd a1))) (CL.bswap (Vec.bv (fst a1)))
+                    (Vec.bv x2) (Vec.bv y2)
+                    (CL.bswap (Vec.bv (snd a2))) (CL.bswap (Vec.bv (fst a2)))
+                    (Vec.bv x3) (Vec.bv y3)
+                    (CL.bswap (Vec.bv (snd a3))) (CL.bswap (Vec.bv (fst a3)))
+                    (Vec.bv x4) (Vec.bv y4)
+                    (CL.bswap (Vec.bv (snd a4))) (CL.bswap (Vec.bv (fst a4)))
+                    (CL.bswap (Vec.bv (fst p2))) (CL.bswap (Vec.bv (snd p2)))
+                    (CL.bswap (Vec.bv (fst p3))) (CL.bswap (Vec.bv (snd p3)));
+
+    xor_block_bv u2 u3;
+    xor_block_bv u (Vec.vxor u2 u3);
+    Vec.vxor u (Vec.vxor u2 u3)
+
 (** {2 The driver} *)
 
 (** Refinement subtyping does not cross [erased], so the sixteen-byte window
@@ -557,16 +637,10 @@ ensures A.pts_to d #pd vd ** pure (
 
     let cur = !av;
     xor_block_bv cur d0;
-    let p0 = gmul_vec (Vec.vxor cur d0) y4;
-    let p1 = gmul_vec d1 y3;
-    let p2 = gmul_vec d2 y2;
-    let p3 = gmul_vec d3 y;
-    xor_block_bv p2 p3;
-    xor_block_bv p1 (Vec.vxor p2 p3);
-    xor_block_bv p0 (Vec.vxor p1 (Vec.vxor p2 p3));
+    let res = gmul4_vec (Vec.vxor cur d0) y4 d1 y3 d2 y2 d3 y;
     ghash_step4 (Vec.bv y) (Vec.bv a0) (Vec.bv y2) (Vec.bv y3) (Vec.bv y4)
                 (vals vd) (SZ.v n) (SZ.v vi);
-    av := Vec.vxor p0 (Vec.vxor p1 (Vec.vxor p2 p3));
+    av := res;
     i := vi4;
   };
 

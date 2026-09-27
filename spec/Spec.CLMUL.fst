@@ -197,6 +197,14 @@ let conv_lanes (a b: block) (k: int)
     product read backwards from [254].  Together these say what the four
     [clmul]s compute in terms of the polynomials GCM cares about. *)
 
+(** Byte reversal is a permutation of the bytes and addition is bytewise, so
+    the two commute.  This is what lets several carry-less products be
+    accumulated in the multiplier's bit order and reversed once, which is
+    the point of [Hacl.AES.GF128.NI.gmul4_vec]. *)
+let bswap_gadd (a b: block)
+  : Lemma (bswap (gadd a b) == gadd (bswap a) (bswap b))
+  = Seq.lemma_eq_intro (bswap (gadd a b)) (gadd (bswap a) (bswap b))
+
 let bswap_involutive (a: block) : Lemma (bswap (bswap a) == a)
   = Seq.lemma_eq_intro (bswap (bswap a)) a
 
