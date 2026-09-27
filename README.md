@@ -1427,7 +1427,10 @@ worth depends entirely on the message, because the cost it removes is flat:
 AES-256 is the same shape and a little larger, because its schedule is a
 little longer: 10 MB/s to 117 at sixty-four bytes, 84.56x of the reference
 down to **7.43x**.  The last two columns are against EverCrypt's Vale
-assembly, and its own numbers did not move between the two runs.
+assembly, and its own numbers did not move between the two runs.  Under
+clang the figures are 140 MB/s and **7.39x** at sixty-four bytes and 868
+MB/s and **4.22x** at 256 KiB, so neither compiler is doing anything
+special with either version.
 
 Nothing in the cipher, the counter mode or the GHASH changed.  The lesson is
 the one the whole performance section keeps repeating in different words:
