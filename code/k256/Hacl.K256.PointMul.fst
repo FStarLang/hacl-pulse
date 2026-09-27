@@ -48,6 +48,7 @@ module GR = Spec.K256.Group
 module Loops = Hacl.Spec.Loops
 module B4 = Spec.Bignum4
 module L4 = Hacl.Impl.Limb4
+module MG = Hacl.K256.PointMulG
 
 (** {2 The window}
 
@@ -85,7 +86,13 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   ()
 }
 
-(** [out := [k] G]. *)
+(** [out := [k] G].
+
+    The generator is known at compile time, so this does not go through
+    the variable-base window above: {!Hacl.K256.PointMulG} splits the
+    scalar into four sixty-four-bit pieces and walks them against four
+    compiled-in base points, sixty doublings where the ladder pays two
+    hundred and fifty-six. *)
 fn point_mul_g (ox oy oz: A.array S64.t) (ks: A.array S64.t)
                (#vox #voy #voz: erased (Seq.seq S64.t))
                (#pk: perm) (#vk: erased (Seq.seq S64.t))
@@ -99,21 +106,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
         GR.on_curve (K.point_mul_g (B4.eval (L4.vals vk))) /\
         GR.peq (pt wx wy wz) (K.point_mul_g (B4.eval (L4.vals vk))))
 {
-  let z = S64.zero;
-  let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  fone a3;
-  (* [point_add] wants its three input coordinates at one permission, and
-     the constant tables hand back one existential permission each.  A copy
-     into owned buffers is cheaper than teaching the prover to split. *)
-  let tx = fgx ();
-  fcopy a1 tx;
-  drop_table tx;
-  let ty = fgy ();
-  fcopy a2 ty;
-  drop_table ty;
-  GR.g_on_curve ();
-  point_mul ox oy oz a1 a2 a3 ks;
-  ()
+  MG.point_mul_g_win ox oy oz ks;
 }
 
 #pop-options
