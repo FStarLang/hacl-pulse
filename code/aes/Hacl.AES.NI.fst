@@ -23,11 +23,11 @@
     a perfectly predicted branch next to the work it guards, so CTR, GCM and
     everything above them get the fast path with no change of their own.
 
-    The key schedule is {i not} done here.  [Hacl.AES.Key] already computes it
-    portably and in constant time, it happens once per message rather than
-    once per block, and doing it with [AESKEYGENASSIST] would need a separate
-    extern per round constant.  This module reads the expanded key sixteen
-    bytes at a time, exactly as the portable cipher does.
+    The key schedule is {i not} done here.  [Hacl.AES.Key] computes it, with
+    [AESKEYGENASSIST] under [Hacl.AES.SubWord] when the machine has it, and
+    it happens once per message rather than once per block.  This module
+    reads the expanded key sixteen bytes at a time, exactly as the portable
+    cipher does.
 
     The two attributes are what put [target("aes,...")] on this function and
     on everything it exclusively reaches; see [Hacl.Vec128]. *)
@@ -46,6 +46,8 @@ module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
+module S32 = Hacl.Secret.UInt32
+module Math = FStar.Math.Lemmas
 module Sub = Hacl.Impl.Sub
 module Vec = Hacl.Vec128
 
@@ -258,6 +260,50 @@ ensures exists* (vm': Seq.seq S8.t).
 }
 
 
+(** {2 The counter, in a register}
+
+    [Hacl.AES.Counter.inc32_impl] is a constant-time carry chain over four
+    bytes of an array.  It is correct and it is what the portable driver
+    uses, but in the vector driver it is in the wrong place: four counters
+    per turn means four carry chains, and each one ends in a four-byte store
+    that the next sixteen-byte load has to read back, which no store-forward
+    network will do.  Reversing the block instead moves the counter to lane
+    zero and turns its big-endian reading into a little-endian one, a packed
+    add of [Hacl.Vec128.lane_one] increments it without carrying into the
+    twelve bytes above, and reversing again puts it back: three instructions,
+    all in registers.  [Hacl.AES.Counter.inc32_lanes] is the proof. *)
+
+inline_for_extraction
+let inc32_vec (c: Vec.t) : Vec.t =
+  Vec.bswap (Vec.add32 (Vec.bswap c) (Vec.lane_one ()))
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
+let inc32_vec_ok (c: Vec.t)
+  : Lemma (Vec.bv (inc32_vec c) == inc32 (Vec.bv c))
+  = let one = Vec.lane_one () in
+    let a = Vec.bswap c in
+    let s = Vec.add32 a one in
+    assert (Vec.bv a == Spec.CLMUL.bswap (Vec.bv c));
+    assert (Vec.bv (inc32_vec c) == Spec.CLMUL.bswap (Vec.bv s));
+    assert_norm (pow2 32 == 4294967296);
+    let aux (i: nat { i < 4 })
+      : Lemma (S32.v (Spec.SHANI.lane (Vec.vv s) i) ==
+                 (lane_of (Vec.bv a) i + S32.v (Spec.SHANI.lane (Vec.vv one) i))
+                 % pow2 32)
+      = lane_of_reg (Vec.vv a) i;
+        lane_of_reg (Vec.vv s) i
+    in
+    aux 0; aux 1; aux 2; aux 3;
+    lane_of_reg (Vec.vv s) 0; lane_of_reg (Vec.vv s) 1;
+    lane_of_reg (Vec.vv s) 2; lane_of_reg (Vec.vv s) 3;
+    lane_of_bound (Vec.bv a) 1; lane_of_bound (Vec.bv a) 2;
+    lane_of_bound (Vec.bv a) 3;
+    Math.small_mod (lane_of (Vec.bv a) 1) (pow2 32);
+    Math.small_mod (lane_of (Vec.bv a) 2) (pow2 32);
+    Math.small_mod (lane_of (Vec.bv a) 3) (pow2 32);
+    inc32_lanes (Vec.bv c) (Vec.bv s)
+#pop-options
+
 (** {2 Four counter-mode blocks at once}
 
     A single [AESENC] has a latency of several cycles and the rounds of one
@@ -314,18 +360,18 @@ ensures exists* (vm' vc': Seq.seq S8.t).
   A.pts_to_len ctr;
   counter_unfold (vals vc);
 
-  (* The four counter blocks, in registers, before anything else happens. *)
+  (* The four counter blocks, in registers, before anything else happens.
+     The counter is advanced in registers too, and written back once. *)
   let c0 = Vec.load ctr #(as_blk vc);
-  inc32_impl ctr;
-  with vc1. assert A.pts_to ctr vc1;
-  let c1 = Vec.load ctr #(as_blk vc1);
-  inc32_impl ctr;
-  with vc2. assert A.pts_to ctr vc2;
-  let c2 = Vec.load ctr #(as_blk vc2);
-  inc32_impl ctr;
-  with vc3. assert A.pts_to ctr vc3;
-  let c3 = Vec.load ctr #(as_blk vc3);
-  inc32_impl ctr;
+  let c1 = inc32_vec c0;
+  let c2 = inc32_vec c1;
+  let c3 = inc32_vec c2;
+  let c4 = inc32_vec c3;
+  inc32_vec_ok c0;
+  inc32_vec_ok c1;
+  inc32_vec_ok c2;
+  inc32_vec_ok c3;
+  Vec.store ctr c4 #(as_blk vc);
 
   (* Round key zero, added to all four. *)
   let k0 = Sub.sub w 0sz 16sz;
@@ -333,10 +379,10 @@ ensures exists* (vm' vc': Seq.seq S8.t).
   vals_slice vw 0 16;
   let kv0 = Vec.load k0 #(as_blk (Seq.slice vw 0 16));
   Sub.unsub_id w (SZ.v 0sz) (SZ.v 16sz) k0;
-  cipher_start p.pv (vals vw) (vals vc);
-  cipher_start p.pv (vals vw) (vals vc1);
-  cipher_start p.pv (vals vw) (vals vc2);
-  cipher_start p.pv (vals vw) (vals vc3);
+  cipher_start p.pv (vals vw) (counter_block (vals vc) 0);
+  cipher_start p.pv (vals vw) (counter_block (vals vc) 1);
+  cipher_start p.pv (vals vw) (counter_block (vals vc) 2);
+  cipher_start p.pv (vals vw) (counter_block (vals vc) 3);
 
   let mut s0 = Vec.vxor c0 kv0;
   let mut s1 = Vec.vxor c1 kv0;
@@ -352,16 +398,15 @@ ensures exists* (vm' vc': Seq.seq S8.t).
     pts_to s2 u2 ** pts_to s3 u3 ** A.pts_to w vw **
     pure (1 <= SZ.v vi /\ SZ.v vi <= nr p.pv /\ SZ.v vo == 16 * SZ.v vi /\
           Seq.length vw == xkeylen p.pv /\
-          Seq.length vc == blocklen /\ Seq.length vc1 == blocklen /\
-          Seq.length vc2 == blocklen /\ Seq.length vc3 == blocklen /\
+          Seq.length vc == blocklen /\
           rounds p.pv (vals vw) (Vec.bv u0) (SZ.v vi) ==
-            cipher p.pv (vals vw) (vals vc) /\
+            cipher p.pv (vals vw) (counter_block (vals vc) 0) /\
           rounds p.pv (vals vw) (Vec.bv u1) (SZ.v vi) ==
-            cipher p.pv (vals vw) (vals vc1) /\
+            cipher p.pv (vals vw) (counter_block (vals vc) 1) /\
           rounds p.pv (vals vw) (Vec.bv u2) (SZ.v vi) ==
-            cipher p.pv (vals vw) (vals vc2) /\
+            cipher p.pv (vals vw) (counter_block (vals vc) 2) /\
           rounds p.pv (vals vw) (Vec.bv u3) (SZ.v vi) ==
-            cipher p.pv (vals vw) (vals vc3))
+            cipher p.pv (vals vw) (counter_block (vals vc) 3))
   decreases (nr p.pv - SZ.v (!i))
   {
     let vi = !i;

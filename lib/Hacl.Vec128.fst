@@ -304,6 +304,19 @@ assume val add32 (a b: t)
              SHANI.lane (vv r) i ==
                S32.add_mod (SHANI.lane (vv a) i) (SHANI.lane (vv b) i) }
 
+(** One in lane zero and zero elsewhere, the addend of the counter-mode
+    increment.  [PADDD] does not carry between lanes, so adding this is
+    [Spec.AES.inc32] on a byte-reversed counter block; [Hacl.AES.Counter]
+    is where that is proved.  [PADDD] is SSE2, so neither
+    this nor [add32] needs a target attribute, which is what lets the same
+    binding serve the SHA-256 schedule and the AES counter. *)
+[@@custard_extern "Hacl_Vec128_lane_one"; custard_c_header "Hacl_Vec128.h"]
+assume val lane_one (_: unit)
+  : r: t { S32.v (SHANI.lane (vv r) 0) == 1 /\
+           S32.v (SHANI.lane (vv r) 1) == 0 /\
+           S32.v (SHANI.lane (vv r) 2) == 0 /\
+           S32.v (SHANI.lane (vv r) 3) == 0 }
+
 (** [PSHUFD] with [0xB1]: exchange the lanes within each pair. *)
 [@@custard_extern "Hacl_Vec128_shuffle_swap_pairs"; custard_c_header "Hacl_Vec128.h"]
 assume val shuffle_swap_pairs (a: t)

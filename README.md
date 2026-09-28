@@ -1318,6 +1318,55 @@ because the four byte reversals of the hash-key powers are loop-invariant and
 gcc hoists them; that they are invariant is a consequence of accumulating in
 the multiplier's bit order rather than GHASH's.
 
+**And the counter is a lane, not a carry chain.**  With the reduction
+deferred, GHASH stopped being the larger half of AES-GCM and the counter
+mode became it.  Reading the generated assembly for a four-block turn says
+why: a hundred and thirty-nine of its two hundred and twenty-five
+instructions were not AES at all.  They were four copies of
+`Hacl.AES.Counter.inc32_impl`, the constant-time carry chain over the last
+four bytes of the counter block -- a `not`, a `movzbl`, a subtract and a
+shift per byte to make the carry a mask rather than a branch, which is the
+right shape for a counter that might be secret and the wrong shape entirely
+for a driver that needs four consecutive counters.  Worse than the
+instruction count, each chain ends in a four-byte store to the counter array
+and the next counter starts with a sixteen-byte load of it: a narrow store
+under a wide load, which no store-forward network will satisfy, so each of
+the three round trips cost a stall and the four chains were serial.
+
+The counter never needs to be in memory.  Reversing the sixteen bytes moves
+the counter's four bytes to the bottom of the register *and* turns their
+big-endian reading into a little-endian one, which is exactly lane zero; a
+packed thirty-two bit add of one increments that lane, wrapping at 2^32 and
+carrying nothing into the twelve bytes above it, which is precisely what
+`Spec.AES.inc32` asks for; and reversing again puts it back.  Three
+instructions, and with the reversal kept across the four the whole turn is
+one `PSHUFB` and one `PADDD` per block.  `Hacl.AES.NI.inc32_vec` is that,
+and the counter is written back to the array once, at the end.
+
+No new instruction was needed: `PADDD` was already bound, for SHA-256's
+message schedule.  What it needed was to stop being under the SHA target,
+since `_mm_add_epi32` is SSE2 and part of the x86-64 baseline, so the same
+binding can be inlined into a SHA function and into an AES-NI one; the only
+new extern is the constant one-in-lane-zero.  The proof is
+`Hacl.AES.Counter.inc32_lanes`, and it is entirely bookkeeping: a lemma that
+reads a byte back out of a little-endian number
+(`Hacl.Spec.Bytes.le_nat_byte`), two that connect `Spec.SHANI.lane` -- where
+the `PADDD` axiom states itself -- to the bytes underneath it, and then
+sixteen concrete instances, one per byte of the block.  Twelve of them say
+the byte did not move and four say it is a digit of the incremented counter.
+
+A four-block turn goes from **225 instructions to 114**, and counter mode
+from 1.55 cycles a byte to **0.49** -- close to the two-per-cycle `AESENC`
+throughput this machine has, which is where a counter mode should be.  The
+GHASH half did not move, 1.23 against 1.22, which is the control.  Whole
+AES-128-GCM on 256 KiB went from 2.78 cycles a byte to **1.71**.  The
+benchmark row follows it: 1034 MB/s to **1631** under gcc, 3.52x of
+EverCrypt's Vale assembly down to **2.24x**, and under clang 1052 MB/s to
+**2025**, 3.46x down to **1.80x** -- clang schedules the four interleaved
+blocks better than gcc does, and with the counter out of the way that
+difference is no longer hidden.  AES-256-GCM moves with it, 3.50x to
+**2.28x**.
+
 **Everything counts in bytes.**  FIPS 197 describes the key expansion in
 four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
 it that way puts a multiplication by four in front of every buffer index and
@@ -2306,8 +2355,8 @@ reference**.
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
+| AES-128-GCM | 256 KiB | 161 us | 72 us | **2.24x** |  |  |
 | Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
-| AES-128-GCM | 256 KiB | 254 us | 72 us | **3.52x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -2567,13 +2616,16 @@ left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
 MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
-256 KiB, twelve times the reference, and is now 254 -- four AES blocks in
+256 KiB, twelve times the reference, and is now 161 -- four AES blocks in
 flight at a time, four GHASH blocks against the precomputed powers of the hash
-key, a GF(2^128) reduction by shifts rather than by a second multiply, and
-that reduction now performed once for every four blocks rather than once per
-block.  Deferring the reduction was worth 2.11 cycles a byte to 1.28 in GHASH
-alone and took the whole primitive past a gigabyte a second for the first
-time.  The remaining 3.5x is against hand-written assembly that interleaves
+key, a GF(2^128) reduction by shifts rather than by a second multiply, that
+reduction now performed once for every four blocks rather than once per
+block, and the counter incremented in a vector lane rather than by a
+constant-time carry chain through memory.  Deferring the reduction was worth
+2.11 cycles a byte to 1.28 in GHASH alone; putting the counter in a lane was
+worth 1.55 to 0.49 in counter mode, and removed a hundred and thirty-nine of
+the two hundred and twenty-five instructions a four-block turn was spending.
+The remaining 2.2x is against hand-written assembly that interleaves
 six blocks, and that is reachable from here.
 
 Its *small*-message row was worked on separately and much later, after a
@@ -3177,8 +3229,36 @@ rough order of value:
    direction is an eight-block window: the single remaining fold is about
    forty of the two hundred and five instructions a four-block turn now
    takes, so halving its frequency again is worth roughly a further ten per
-   cent of GHASH, at the cost of `h^5` through `h^8` and a `regroup8`.
-3. **Special-prime reduction for P-256**, in place of the shared general
+   cent of GHASH, at the cost of `h^5` through `h^8` and a `regroup8`.  With
+   the counter mode since fixed as well, GHASH is once again the larger half
+   of AES-GCM -- 1.22 cycles a byte of 1.71 -- so that window is now the
+   next thing worth doing here.
+3. **The counter block incremented in a vector lane**, **done**.  A
+   four-block turn of `Hacl.AES.NI.ctr_block4_ni` was 225 instructions for
+   sixty-four bytes, and only about seventy-eight of them were AES; a
+   hundred and thirty-nine were four copies of the constant-time byte carry
+   chain of `Hacl.AES.Counter.inc32_impl`, each ending in a four-byte store
+   to the counter array that the next iteration immediately reloaded
+   sixteen bytes wide -- a narrow store under a wide load, which stalls, and
+   the four chains were serial through it.  Reversing all sixteen bytes puts
+   the counter's four in lane zero *and* turns their big-endian reading into
+   a little-endian one, so a packed thirty-two bit add of one is exactly
+   `Spec.AES.inc32`, carrying nothing into the twelve bytes above it, and
+   reversing again puts it back.  No new instruction was needed: `PADDD` was
+   already bound for SHA-256 and only had to move out of the SHA target
+   group, `_mm_add_epi32` being SSE2 and part of the baseline; the one new
+   extern is the constant one-in-lane-zero.  The proof is
+   `Hacl.Spec.Bytes.le_nat_byte` (read a byte back out of a little-endian
+   number), `Spec.SHANI.lane_byte` (connect the lane the `PADDD` axiom
+   states itself over to the bytes underneath it),
+   `Hacl.AES.Counter.inc32_lanes` (sixteen concrete byte instances, twelve
+   saying the byte did not move and four that it is a digit of the
+   incremented counter) and `Hacl.AES.NI.inc32_vec`.  225 instructions to
+   **114**, counter mode from 1.55 cycles a byte to **0.49**, whole
+   AES-128-GCM from 2.78 to **1.71**, and the benchmark row from 3.52x of
+   EverCrypt to **2.24x** under gcc and **1.80x** under clang.  The GHASH
+   half did not move, which is the control.
+4. **Special-prime reduction for P-256**, in place of the shared general
    Montgomery core.  secp256k1's half of this is **done**: `code/k256` now
    runs on a five-limb, radix-2^52, lazily reduced field with the fold
    `2^256 = p + 2^32 + 977` in place of a Montgomery reduction, which is the
@@ -3199,7 +3279,7 @@ rough order of value:
    treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
    subtractions rather than a multiply -- and has not had it.
 
-4. **The fixed-base window**, **done on all three curves**.
+5. **The fixed-base window**, **done on all three curves**.
    `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
    sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
    `2^128 G` and `2^192 G`, so that one doubling chain serves all four and
@@ -3300,7 +3380,7 @@ rough order of value:
    twice buys.  What is still available is Plan A: compiling in the four
    tables of sixteen entries rather than building them, a further ~30% on
    each curve, at 256, 192 and 192 field constants respectively.
-5. **Taking over the remaining sixty-seven compiler specialisations**, the
+6. **Taking over the remaining sixty-seven compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and
