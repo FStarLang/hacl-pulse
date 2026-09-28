@@ -150,9 +150,7 @@ static uint8_t Hacl_Secret_UInt8_shift_left(uint8_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt8_shift_right(uint8_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt8_rotate(uint8_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt8_rotate_left(uint8_t x, uint32_t s);
-
 static uint8_t Hacl_Secret_UInt8_eq_mask(uint8_t x, uint8_t y);
-
 static uint8_t Hacl_Secret_UInt8_select(uint8_t mask, uint8_t x, uint8_t y);
 static uint8_t Hacl_AES_Core_fmul_impl(uint8_t a, uint8_t b);
 static uint8_t Hacl_AES_Core_ginv_impl(uint8_t a);
@@ -197,9 +195,7 @@ static void Hacl_AES_GCM_j0_impl__Mkparams(uint8_t *jb, uint8_t *w, uint8_t *hb,
 static void Hacl_AES_GCM_gtag_impl__Mkparams(uint8_t *tag, uint8_t *w, uint8_t *hb, uint8_t *jb, uint8_t *aad, size_t alen, uint8_t *cip, size_t clen);
 static uint8_t Hacl_Secret_UInt8_ones = 255;
 static bool Hacl_AES_GCM_tag_match(uint8_t *a, uint8_t *b);
-
 static uint8_t Hacl_Secret_UInt8_add_mod(uint8_t x, uint8_t y);
-
 static void Hacl_AES_Counter_inc32_impl(uint8_t *ctr);
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static void Hacl_AES_NI_ctr_block4_ni__Mkparams(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr);
@@ -2657,14 +2653,12 @@ static uint8_t Hacl_Secret_UInt8_rotate_left(uint8_t x, uint32_t s) {
   return Hacl_Secret_UInt8_rotate(x, (8 - s));
 }
 
-
 static uint8_t Hacl_Secret_UInt8_eq_mask(uint8_t x, uint8_t y) {
   uint8_t d = (x ^ y);
   uint64_t d64 = (uint64_t)d;
   uint64_t m = ((d64 - 1) >> 63);
   return ((uint8_t)((unsigned int)0 - (unsigned int)((uint8_t)m)));
 }
-
 
 static uint8_t Hacl_Secret_UInt8_select(uint8_t mask, uint8_t x, uint8_t y) {
   uint8_t l = (mask & x);
@@ -3612,11 +3606,9 @@ static bool Hacl_AES_GCM_tag_match(uint8_t *a, uint8_t *b) {
   return Hacl_Secret_Declassify_bool_of_mask(m);
 }
 
-
 static uint8_t Hacl_Secret_UInt8_add_mod(uint8_t x, uint8_t y) {
   return ((uint8_t)((unsigned int)(x) + (unsigned int)(y)));
 }
-
 
 static void Hacl_AES_Counter_inc32_impl(uint8_t *ctr) {
   uint8_t one = 1;
@@ -3642,13 +3634,11 @@ static void Hacl_AES_Counter_inc32_impl(uint8_t *ctr) {
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static void Hacl_AES_NI_ctr_block4_ni__Mkparams(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr) {
   Hacl_Vec128_t c0 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
-  Hacl_Vec128_t c1 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
-  Hacl_Vec128_t c2 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
-  Hacl_Vec128_t c3 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
+  Hacl_Vec128_t c1 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c0), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_t c2 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c1), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_t c3 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c2), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_t c4 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c3), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_store(ctr, c4);
   uint8_t *k0 = Hacl_Impl_Sub_sub__t(w, 0, 16);
   Hacl_Vec128_t kv0 = Hacl_Vec128_load(k0);
   Hacl_Vec128_t s0 = Hacl_Vec128_xor(c0, kv0);
@@ -16452,13 +16442,11 @@ static void Hacl_AES_GCM_gtag_impl__Mkparams_1(uint8_t *tag, uint8_t *w, uint8_t
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static void Hacl_AES_NI_ctr_block4_ni__Mkparams_1(uint8_t *msg, size_t idx, uint8_t *w, uint8_t *ctr) {
   Hacl_Vec128_t c0 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
-  Hacl_Vec128_t c1 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
-  Hacl_Vec128_t c2 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
-  Hacl_Vec128_t c3 = Hacl_Vec128_load(ctr);
-  Hacl_AES_Counter_inc32_impl(ctr);
+  Hacl_Vec128_t c1 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c0), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_t c2 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c1), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_t c3 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c2), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_t c4 = Hacl_Vec128_bswap(Hacl_Vec128_add32(Hacl_Vec128_bswap(c3), Hacl_Vec128_lane_one()));
+  Hacl_Vec128_store(ctr, c4);
   uint8_t *k0 = Hacl_Impl_Sub_sub__t(w, 0, 16);
   Hacl_Vec128_t kv0 = Hacl_Vec128_load(k0);
   Hacl_Vec128_t s0 = Hacl_Vec128_xor(c0, kv0);

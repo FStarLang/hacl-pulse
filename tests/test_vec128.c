@@ -111,6 +111,10 @@ TEST_NI static void vreduction(uint8_t *dst) {
   Hacl_Vec128_store(dst, Hacl_Vec128_reduction());
 }
 
+TEST_NI static void vlane_one(uint8_t *dst) {
+  Hacl_Vec128_store(dst, Hacl_Vec128_lane_one());
+}
+
 TEST_NI static int one(const uint8_t st[16], const uint8_t k[16], const char *what) {
   uint8_t got[16], expected[16];
   int r = 0;
@@ -432,6 +436,13 @@ int main(void) {
   k[0] = 0xe1;
   vreduction(st);
   r |= check("vec128 reduction constant", st, k, 16);
+
+  /* And the counter-mode addend is one in lane zero, which little-endian
+     puts in byte zero, and zero everywhere else. */
+  memset(k, 0, 16);
+  k[0] = 1;
+  vlane_one(st);
+  r |= check("vec128 lane_one constant", st, k, 16);
 
   /* Load and store must be the identity on the sixteen bytes in memory
      order, which is the assumption every other axiom is stated on top of. */

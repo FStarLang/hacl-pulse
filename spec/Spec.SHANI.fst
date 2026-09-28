@@ -76,6 +76,34 @@ let lanes (a: reg) : GTot (Seq.lseq S32.t 4) = words_from_le 4 a
 
 let lane (a: reg) (i: nat { i < 4 }) : GTot S32.t = Seq.index (lanes a) i
 
+(** {2 Lanes and bytes}
+
+    The two directions of the little-endian reading, stated numerically so
+    that a caller which knows one can compute the other.  [Hacl.AES.Counter]
+    uses both: the counter arrives as bytes, is incremented as a lane, and
+    is read back out as bytes. *)
+
+let lane_slice (a: reg) (i: nat { i < 4 })
+  : Lemma (sub_block #S32.t 4 a i == Seq.slice a (4 * i) (4 * i + 4))
+  = ()
+
+(** A lane is the little-endian number its four bytes make. *)
+let lane_val (a: reg) (i: nat { i < 4 })
+  : Lemma (S32.v (lane a i) == le_nat (Seq.slice a (4 * i) (4 * i + 4)))
+  = lane_slice a i;
+    le_nat_bound (sub_block #S32.t 4 a i)
+
+(** And each of those bytes is recovered from the lane by a shift and a
+    mask, which is what [Hacl.Spec.Bytes.le_nat_byte] says. *)
+let lane_byte (a: reg) (j: nat { j < 16 })
+  : Lemma (S8.v (Seq.index a j) ==
+           (S32.v (lane a (j / 4)) / pow2 (8 * (j % 4))) % 256)
+  = let i = j / 4 in
+    let k = j % 4 in
+    Math.lemma_div_mod j 4;
+    lane_val a i;
+    le_nat_byte (Seq.slice a (4 * i) (4 * i + 4)) k
+
 (** {2 Modular addition is associative}
 
     Needed because the instructions accumulate [k + w] into the round input

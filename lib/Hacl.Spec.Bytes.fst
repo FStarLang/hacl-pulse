@@ -287,6 +287,23 @@ let rec le_nat_split (s: Seq.seq S8.t) (k: nat { k <= Seq.length s })
       Math.paren_mul_right 256 (pow2 (8 * (k - 1))) (le_nat (Seq.slice s k n))
     end
 
+(** Reading a byte back out of the number.  [le_nat_split] says the number is
+    the prefix plus [2^(8k)] times the suffix and [le_nat_cons] says the
+    suffix begins with byte [k], so dividing by [2^(8k)] and taking the
+    remainder modulo 256 recovers that byte.  This is the inverse of
+    {!le_nat}, and it is what lets a computation stated on a thirty-two bit
+    lane be read back as four bytes. *)
+let le_nat_byte (s: Seq.seq S8.t) (k: nat { k < Seq.length s })
+  : Lemma (S8.v (Seq.index s k) == (le_nat s / pow2 (8 * k)) % 256)
+  = let n = Seq.length s in
+    le_nat_split s k;
+    le_nat_bound (Seq.slice s 0 k);
+    Math.lemma_div_plus (le_nat (Seq.slice s 0 k)) (le_nat (Seq.slice s k n)) (pow2 (8 * k));
+    Math.small_div (le_nat (Seq.slice s 0 k)) (pow2 (8 * k));
+    le_nat_cons s k;
+    Math.lemma_mod_plus (S8.v (Seq.index s k)) (le_nat (Seq.slice s (k + 1) n)) 256;
+    Math.small_mod (S8.v (Seq.index s k)) 256
+
 (** An all-zero sequence is zero. *)
 let rec le_nat_zeros (s: Seq.seq S8.t)
   : Lemma (requires forall (i: nat). i < Seq.length s ==> S8.v (Seq.index s i) == 0)
