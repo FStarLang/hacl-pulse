@@ -439,3 +439,172 @@ let gmul_defer4 (x1 y1 u1 v1 x2 y2 u2 v2 x3 y3 u3 v3 x4 y4 u4 v4
     mul_r_two (sum4 v1 v2 v3 v4) p q pp qq
 
 #pop-options
+
+(** {2 Eight multiplies, one reduction}
+
+    Everything above generalises, and the reason to want it is that the fold
+    is a fixed cost per group rather than per block: a four-block turn of
+    [Hacl.AES.GF128.NI.ghash_loop4_ni] is about two hundred instructions of
+    which roughly forty are the one remaining reduction, so running eight
+    blocks against eight powers of the hash key pays that forty once for a
+    hundred and twenty-eight bytes instead of twice.
+
+    None of it is new reasoning.  [sum8] is two [sum4]s added, and each of
+    the three facts the eight-way deferral needs reduces to its four-way
+    counterpart applied twice plus one regrouping of exclusive-ors. *)
+
+let sum8 (a b c d e f g h: block) : block
+  = gadd (sum4 a b c d) (sum4 e f g h)
+
+(** The one genuinely new exclusive-or fact: four terms may be paired the
+    other way round.  Eight booleans a bit, which the solver does itself. *)
+let gadd_shuffle (a b c d: block)
+  : Lemma (gadd (gadd a b) (gadd c d) == gadd (gadd a c) (gadd b d))
+  = let l = gadd (gadd a b) (gadd c d) in
+    let r = gadd (gadd a c) (gadd b d) in
+    let aux (i: nat { i < 128 }) : Lemma (bit l i == bit r i)
+      = gadd_bit (gadd a b) (gadd c d) i; gadd_bit a b i; gadd_bit c d i;
+        gadd_bit (gadd a c) (gadd b d) i; gadd_bit a c i; gadd_bit b d i
+    in
+    Classical.forall_intro aux;
+    bits_inj l r
+
+let regroup8 (u1 u2 u3 u4 u5 u6 u7 u8 w1 w2 w3 w4 w5 w6 w7 w8: block)
+  : Lemma (sum8 (gadd u1 w1) (gadd u2 w2) (gadd u3 w3) (gadd u4 w4)
+                (gadd u5 w5) (gadd u6 w6) (gadd u7 w7) (gadd u8 w8) ==
+           gadd (sum8 u1 u2 u3 u4 u5 u6 u7 u8)
+                (sum8 w1 w2 w3 w4 w5 w6 w7 w8))
+  = regroup4 u1 u2 u3 u4 w1 w2 w3 w4;
+    regroup4 u5 u6 u7 u8 w5 w6 w7 w8;
+    gadd_shuffle (sum4 u1 u2 u3 u4) (sum4 w1 w2 w3 w4)
+                 (sum4 u5 u6 u7 u8) (sum4 w5 w6 w7 w8)
+
+(** A product distributes over a fourfold sum, for any multiplier.  This is
+    [mul_r_sum4] with the reduction constant generalised; the eight-way
+    Horner step needs it at [h4] as well. *)
+let mul_sum4 (v1 v2 v3 v4 c: block)
+  : Lemma (gmul (sum4 v1 v2 v3 v4) c ==
+           sum4 (gmul v1 c) (gmul v2 c) (gmul v3 c) (gmul v4 c))
+  = gmul_gadd_left v3 v4 c;
+    gmul_gadd_left v2 (gadd v3 v4) c;
+    gmul_gadd_left v1 (gadd v2 (gadd v3 v4)) c
+
+let mul_r_sum8 (v1 v2 v3 v4 v5 v6 v7 v8: block)
+  : Lemma (gmul (sum8 v1 v2 v3 v4 v5 v6 v7 v8) r_block ==
+           sum8 (gmul v1 r_block) (gmul v2 r_block)
+                (gmul v3 r_block) (gmul v4 r_block)
+                (gmul v5 r_block) (gmul v6 r_block)
+                (gmul v7 r_block) (gmul v8 r_block))
+  = gmul_gadd_left (sum4 v1 v2 v3 v4) (sum4 v5 v6 v7 v8) r_block;
+    mul_sum4 v1 v2 v3 v4 r_block;
+    mul_sum4 v5 v6 v7 v8 r_block
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
+
+(** Eight multiplies, eight carry-less products, one reduction.  The
+    statement and the proof are [gmul_defer4]'s with four replaced by
+    eight throughout. *)
+let gmul_defer8 (x1 y1 u1 v1 x2 y2 u2 v2 x3 y3 u3 v3 x4 y4 u4 v4
+                 x5 y5 u5 v5 x6 y6 u6 v6 x7 y7 u7 v7 x8 y8 u8 v8
+                 p q pp qq: block)
+  : Lemma (requires halves x1 y1 u1 v1 /\ halves x2 y2 u2 v2 /\
+                    halves x3 y3 u3 v3 /\ halves x4 y4 u4 v4 /\
+                    halves x5 y5 u5 v5 /\ halves x6 y6 u6 v6 /\
+                    halves x7 y7 u7 v7 /\ halves x8 y8 u8 v8 /\
+                    halves (sum8 v1 v2 v3 v4 v5 v6 v7 v8) r_block p q /\
+                    halves q r_block pp qq)
+          (ensures sum8 (gmul x1 y1) (gmul x2 y2) (gmul x3 y3) (gmul x4 y4)
+                        (gmul x5 y5) (gmul x6 y6) (gmul x7 y7) (gmul x8 y8) ==
+                   gadd (sum8 u1 u2 u3 u4 u5 u6 u7 u8) (gadd p pp))
+  = gmul_split x1 y1 u1 v1;
+    gmul_split x2 y2 u2 v2;
+    gmul_split x3 y3 u3 v3;
+    gmul_split x4 y4 u4 v4;
+    gmul_split x5 y5 u5 v5;
+    gmul_split x6 y6 u6 v6;
+    gmul_split x7 y7 u7 v7;
+    gmul_split x8 y8 u8 v8;
+    regroup8 u1 u2 u3 u4 u5 u6 u7 u8
+             (gmul v1 r_block) (gmul v2 r_block)
+             (gmul v3 r_block) (gmul v4 r_block)
+             (gmul v5 r_block) (gmul v6 r_block)
+             (gmul v7 r_block) (gmul v8 r_block);
+    mul_r_sum8 v1 v2 v3 v4 v5 v6 v7 v8;
+    mul_r_two (sum8 v1 v2 v3 v4 v5 v6 v7 v8) p q pp qq
+
+#pop-options
+
+(** {2 Eight turns of Horner's rule}
+
+    The powers are generated one multiplication at a time, so what the
+    eight-way step needs -- that [h4] times the first four powers are the
+    last four -- is not immediate and has to be walked up the chain. *)
+
+let pow_mul4 (h h2 h3 h4 h5 h6 h7 h8: block)
+  : Lemma (requires h2 == gmul h h /\ h3 == gmul h2 h /\ h4 == gmul h3 h /\
+                    h5 == gmul h4 h /\ h6 == gmul h5 h /\ h7 == gmul h6 h /\
+                    h8 == gmul h7 h)
+          (ensures gmul h h4 == h5 /\ gmul h2 h4 == h6 /\
+                   gmul h3 h4 == h7 /\ gmul h4 h4 == h8)
+  = (* h * h4 = h4 * h = h5 *)
+    gmul_comm h h4;
+    (* h2 * h4 = (h * h) * h4 = h * (h * h4) = h * h5 = h5 * h = h6 *)
+    gmul_assoc h h h4;
+    gmul_comm h h5;
+    (* h3 * h4 = (h2 * h) * h4 = h2 * (h * h4) = h2 * h5 = h * (h * h5)
+                = h * h6 = h6 * h = h7 *)
+    gmul_assoc h2 h h4;
+    gmul_assoc h h h5;
+    gmul_comm h h6;
+    (* h4 * h4 = (h3 * h) * h4 = h3 * h5 = (h2 * h) * h5 = h2 * h6
+                = (h * h) * h6 = h * h7 = h8 *)
+    gmul_assoc h3 h h4;
+    gmul_assoc h2 h h5;
+    gmul_assoc h h h6;
+    gmul_comm h h7
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
+
+(** Eight turns at once, as two fours.  The first four are [horner4], the
+    second four are [horner4] again on the result, and the work is pushing
+    the multiplication by [h4] through the first group's four terms, which
+    raises each of their powers by four. *)
+let horner8 (a b0 b1 b2 b3 b4 b5 b6 b7 h h2 h3 h4 h5 h6 h7 h8: block)
+  : Lemma (requires h2 == gmul h h /\ h3 == gmul h2 h /\ h4 == gmul h3 h /\
+                    h5 == gmul h4 h /\ h6 == gmul h5 h /\ h7 == gmul h6 h /\
+                    h8 == gmul h7 h)
+          (ensures
+            (let s1 = gmul (gadd a b0) h in
+             let s2 = gmul (gadd s1 b1) h in
+             let s3 = gmul (gadd s2 b2) h in
+             let s4 = gmul (gadd s3 b3) h in
+             let s5 = gmul (gadd s4 b4) h in
+             let s6 = gmul (gadd s5 b5) h in
+             let s7 = gmul (gadd s6 b6) h in
+             gmul (gadd s7 b7) h ==
+               sum8 (gmul (gadd a b0) h8) (gmul b1 h7)
+                    (gmul b2 h6) (gmul b3 h5)
+                    (gmul b4 h4) (gmul b5 h3)
+                    (gmul b6 h2) (gmul b7 h)))
+  = let a0 = gadd a b0 in
+    let s1 = gmul a0 h in
+    let s2 = gmul (gadd s1 b1) h in
+    let s3 = gmul (gadd s2 b2) h in
+    let s4 = gmul (gadd s3 b3) h in
+    horner4 a b0 b1 b2 b3 h h2 h3 h4;
+    horner4 s4 b4 b5 b6 b7 h h2 h3 h4;
+    (* The second group's leading term splits. *)
+    gmul_gadd_left s4 b4 h4;
+    (* ... and the first group's four terms each gain a power of four. *)
+    mul_sum4 (gmul a0 h4) (gmul b1 h3) (gmul b2 h2) (gmul b3 h) h4;
+    pow_mul4 h h2 h3 h4 h5 h6 h7 h8;
+    gmul_assoc a0 h4 h4;
+    gmul_assoc b1 h3 h4;
+    gmul_assoc b2 h2 h4;
+    gmul_assoc b3 h h4;
+    (* One reassociation puts the eight terms in [sum8]'s shape. *)
+    gadd_assoc (sum4 (gmul a0 h8) (gmul b1 h7) (gmul b2 h6) (gmul b3 h5))
+               (gmul b4 h4)
+               (gadd (gmul b5 h3) (gadd (gmul b6 h2) (gmul b7 h)))
+
+#pop-options

@@ -1367,6 +1367,51 @@ blocks better than gcc does, and with the counter out of the way that
 difference is no longer hidden.  AES-256-GCM moves with it, 3.50x to
 **2.28x**.
 
+**And then eight blocks share one reduction.**  Which put GHASH back on top,
+1.22 cycles a byte of 1.71, and the fold is a cost per *group*, not per
+block: the deferral argument never cared that the group was four.  So
+`Hacl.AES.GF128.NI.gmul8_vec` runs eight products against eight powers of
+the hash key and folds once for a hundred and twenty-eight bytes where two
+turns of `gmul4_vec` folded twice.  Eight independent `PCLMULQDQ`s also give
+the multiplier twice as much to work on at once.
+
+Nothing in the algebra is new.  `Spec.GF128.Algebra.sum8` is two `sum4`s
+added; `regroup8` is `regroup4` twice and one pairing lemma; `mul_r_sum8` is
+`mul_r_sum4` twice and one distribution; and `gmul_defer8` is `gmul_defer4`
+with four replaced by eight throughout, with exactly one `mul_r_vec` pair
+still below it.  The Horner side is the only place that needed thought:
+`horner8` is `horner4` applied twice, and the work is pushing a
+multiplication by `H^4` through the first group's four terms, which raises
+each of their powers by four.  That last step is not free, because the
+powers are generated one multiplication at a time, so `pow_mul4` walks up
+the chain to show that `H^4` times each of `H`, `H^2`, `H^3` and `H^4` is
+`H^5`, `H^6`, `H^7` and `H^8`.
+
+The four-way loop did not go away.  What the eight-way pass leaves behind is
+at most one group of four, so `ghash_loop4_ni` gained a starting offset and
+now runs from where the eight-way pass stopped; the one-block loop takes the
+rest.  Three loops, two more powers' worth of setup, and all of it inside
+the same test as before: a message short of a hundred and twenty-eight bytes
+computes four powers as it always did, and one short of sixty-four computes
+none.
+
+GHASH went from 1.22 cycles a byte to **1.03** under gcc and 0.92 to
+**0.82** under clang; the counter half is the control and did not move,
+0.47 against 0.48.  The benchmark row follows: 1631 MB/s to **1868** under
+gcc, 2.24x of EverCrypt's Vale assembly down to **1.98x**, which is the
+first time this primitive has been inside a factor of two of hand-written
+assembly; under clang, 2025 to **2205**, 1.80x down to **1.68x**.
+AES-256-GCM goes 2.28x to **2.05x**.
+
+The eight-way turn is 363 instructions for a hundred and
+twenty-eight bytes against the four-way turn's 227 for sixty-four, so the
+fold really is what came out.  Forty-one of those 363 are stack traffic:
+eight powers, eight data blocks and sixteen product halves do not fit in
+sixteen registers, and gcc spills.  Accumulating the halves as they are
+produced rather than in a tree was tried, to keep fewer of them live, and
+made gcc a third *slower* -- it serialises the products when the sum is a
+chain -- so the tree stays.
+
 **Everything counts in bytes.**  FIPS 197 describes the key expansion in
 four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
 it that way puts a multiplication by four in front of every buffer index and
@@ -2355,7 +2400,7 @@ reference**.
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
-| AES-128-GCM | 256 KiB | 161 us | 72 us | **2.24x** |  |  |
+| AES-128-GCM | 256 KiB | 140 us | 71 us | **1.98x** |  |  |
 | Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
@@ -2535,7 +2580,7 @@ compilers see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-seven today -- HMAC,
+diffs them against `mk/clones.baseline`.  There are sixty-eight today -- HMAC,
 the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
@@ -2616,16 +2661,17 @@ left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
 MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
-256 KiB, twelve times the reference, and is now 161 -- four AES blocks in
-flight at a time, four GHASH blocks against the precomputed powers of the hash
-key, a GF(2^128) reduction by shifts rather than by a second multiply, that
-reduction now performed once for every four blocks rather than once per
+256 KiB, twelve times the reference, and is now 140 -- four AES blocks in
+flight at a time, eight GHASH blocks against the precomputed powers of the
+hash key, a GF(2^128) reduction by shifts rather than by a second multiply,
+that reduction now performed once for every eight blocks rather than once per
 block, and the counter incremented in a vector lane rather than by a
 constant-time carry chain through memory.  Deferring the reduction was worth
-2.11 cycles a byte to 1.28 in GHASH alone; putting the counter in a lane was
+2.11 cycles a byte to 1.28 in GHASH alone, and widening the group from four
+blocks to eight a further 1.22 to 1.03; putting the counter in a lane was
 worth 1.55 to 0.49 in counter mode, and removed a hundred and thirty-nine of
 the two hundred and twenty-five instructions a four-block turn was spending.
-The remaining 2.2x is against hand-written assembly that interleaves
+The remaining 1.98x is against hand-written assembly that interleaves
 six blocks, and that is reachable from here.
 
 Its *small*-message row was worked on separately and much later, after a
@@ -3225,14 +3271,8 @@ rough order of value:
    GHASH alone went from 2.11 cycles a byte to **1.28**, whole-primitive
    AES-128-GCM from 3.68 to **2.88**, and the benchmark row from 4.48x of
    EverCrypt to **3.52x**, past a gigabyte a second for the first time.  The
-   CTR half did not move, which is the control.  What is left in the same
-   direction is an eight-block window: the single remaining fold is about
-   forty of the two hundred and five instructions a four-block turn now
-   takes, so halving its frequency again is worth roughly a further ten per
-   cent of GHASH, at the cost of `h^5` through `h^8` and a `regroup8`.  With
-   the counter mode since fixed as well, GHASH is once again the larger half
-   of AES-GCM -- 1.22 cycles a byte of 1.71 -- so that window is now the
-   next thing worth doing here.
+   CTR half did not move, which is the control.  The eight-block window this
+   item suggested as future work has since been done, and is item 4 below.
 3. **The counter block incremented in a vector lane**, **done**.  A
    four-block turn of `Hacl.AES.NI.ctr_block4_ni` was 225 instructions for
    sixty-four bytes, and only about seventy-eight of them were AES; a
@@ -3258,7 +3298,39 @@ rough order of value:
    AES-128-GCM from 2.78 to **1.71**, and the benchmark row from 3.52x of
    EverCrypt to **2.24x** under gcc and **1.80x** under clang.  The GHASH
    half did not move, which is the control.
-4. **Special-prime reduction for P-256**, in place of the shared general
+4. **Eight GHASH blocks to a reduction**, **done**.  Item 2 left the fold as
+   a fixed cost per group rather than per block, and the deferral argument
+   never cared that the group was four.  `Hacl.AES.GF128.NI.gmul8_vec` runs
+   eight carry-less products against eight powers of the hash key and folds
+   once for a hundred and twenty-eight bytes; eight independent `PCLMULQDQ`s
+   also give the multiplier twice as much to work on at once.  None of the
+   algebra is new: `Spec.GF128.Algebra.sum8` is two `sum4`s added, `regroup8`
+   is `regroup4` twice and one pairing lemma, `mul_r_sum8` is `mul_r_sum4`
+   twice, and `gmul_defer8` is `gmul_defer4` with four replaced by eight.
+   Only the Horner side needed thought: `horner8` is `horner4` applied twice
+   with a multiplication by `H^4` pushed through the first group's four
+   terms, and because the powers are generated one multiplication at a time,
+   `pow_mul4` has to walk up the chain to show that `H^4` times each of `H`
+   to `H^4` is `H^5` to `H^8`.  The four-way loop stayed, because the
+   eight-way pass leaves at most one group of four behind: `ghash_loop4_ni`
+   gained a starting offset and picks up where the eight-way pass stopped,
+   and the one-block loop takes the rest.  The extra powers are computed
+   inside the same test as before, so a message short of a hundred and
+   twenty-eight bytes pays for none of them.  GHASH went from 1.22 cycles a
+   byte to **1.03** under gcc and 0.92 to **0.82** under clang, and the
+   benchmark row from 2.24x of EverCrypt to **1.98x** under gcc and 1.80x to
+   **1.68x** under clang -- inside a factor of two of hand-written assembly
+   for the first time.  The CTR half did not move, which is the control.
+   What is left is register pressure: eight powers, eight data blocks and
+   sixteen product halves do not fit in sixteen registers, and forty-one of
+   the eight-way turn's 363 instructions are spills.  Accumulating the halves
+   as they are produced rather than in a tree was tried, to keep fewer live,
+   and made gcc a third slower -- it serialises the products when the sum is
+   a chain.  A sixteen-way window would make that worse, not better, so this
+   is probably the end of the line for the reduction, and what is left in
+   AES-GCM is the interleaving of the two halves that EverCrypt's assembly
+   does and this code does not.
+5. **Special-prime reduction for P-256**, in place of the shared general
    Montgomery core.  secp256k1's half of this is **done**: `code/k256` now
    runs on a five-limb, radix-2^52, lazily reduced field with the fold
    `2^256 = p + 2^32 + 977` in place of a Montgomery reduction, which is the
@@ -3279,7 +3351,7 @@ rough order of value:
    treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
    subtractions rather than a multiply -- and has not had it.
 
-5. **The fixed-base window**, **done on all three curves**.
+6. **The fixed-base window**, **done on all three curves**.
    `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
    sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
    `2^128 G` and `2^192 G`, so that one doubling chain serves all four and
@@ -3380,7 +3452,7 @@ rough order of value:
    twice buys.  What is still available is Plan A: compiling in the four
    tables of sixteen entries rather than building them, a further ~30% on
    each curve, at 256, 192 and 192 field constants respectively.
-6. **Taking over the remaining sixty-seven compiler specialisations**, the
+7. **Taking over the remaining sixty-eight compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and
