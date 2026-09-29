@@ -734,15 +734,18 @@ static void Hacl_K256_Encode_to_aff_point(uint64_t *ox, uint64_t *oy, uint64_t *
 static void Hacl_K256_Field52_store(uint64_t *u, uint64_t *a);
 static void Hacl_K256_Field52_fstore(uint8_t *b, uint64_t *a);
 static void Hacl_K256_Encode_store_point(uint8_t *b, uint64_t *x, uint64_t *y, uint64_t *z);
-static const uint64_t Hacl_K256_Tables52_gx_arr[5] = { 705178180786072ULL, 3855836460717471ULL, 4089131105950716ULL, 3301581525494108ULL, 133858670344668ULL };
-static const uint64_t Hacl_K256_Tables52_gy_arr[5] = { 2199641648059576ULL, 1278080618437060ULL, 3959378566518708ULL, 3455034269351872ULL, 79417610544803ULL };
-static const uint64_t Hacl_K256_Tables52G_q1x_arr[5] = { 2217608700028605ULL, 1756680109240635ULL, 85138263733457ULL, 1374768198666177ULL, 56224678749244ULL };
-static const uint64_t Hacl_K256_Tables52G_q1y_arr[5] = { 1023548355818144ULL, 1101884390597199ULL, 3899940751803894ULL, 1389078239091652ULL, 95550264830310ULL };
-static const uint64_t Hacl_K256_Tables52G_q2x_arr[5] = { 3171320615715034ULL, 2118913159811511ULL, 2285979950419030ULL, 1674801619671769ULL, 157679956981307ULL };
-static const uint64_t Hacl_K256_Tables52G_q2y_arr[5] = { 3588227476750210ULL, 4478676213161763ULL, 1897900376058412ULL, 1012022638087211ULL, 112333245233670ULL };
-static const uint64_t Hacl_K256_Tables52G_q3x_arr[5] = { 3194056064688819ULL, 3632737019406323ULL, 3631571504093437ULL, 3337767193194036ULL, 257999926075217ULL };
-static const uint64_t Hacl_K256_Tables52G_q3y_arr[5] = { 2906033833564477ULL, 1793389228301639ULL, 2385572375144121ULL, 3100263785697161ULL, 209124003240891ULL };
-static void Hacl_K256_PointMulG_build_tables(uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *px, uint64_t *py, uint64_t *pz);
+static const uint64_t Hacl_K256_Win0_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x2815b16f81798ULL, 0xdb2dce28d959fULL, 0xe870b07029bfcULL, 0xbbac55a06295cULL, 0x79be667ef9dcULL, 0xc09b95c709ee5ULL, 0x4b8cef3ca7abaULL, 0x5c07cd85c778eULL, 0x7d6d3045406e9ULL, 0xc6047f9441edULL, 0x1f113bce036f9ULL, 0x45836f99b0860ULL, 0x89d5229b531c8ULL, 0xc31049344f85fULL, 0xf9308a019258ULL, 0xa94abe8c4cd13ULL, 0x900ee0758474fULL, 0x30b1404cc6c13ULL, 0x80f3581e49049ULL, 0xe493dbf1c10dULL, 0x8d569b240efe4ULL, 0xbddc619ab7cbaULL, 0xa5c5128e88b84ULL, 0x209355b4a7250ULL, 0x2f8bde4d1a07ULL, 0x57a1460297556ULL, 0x2f8568a18b2f0ULL, 0x55235d382f647ULL, 0xeea420453a143ULL, 0xfff97bd5755eULL, 0xbddedcac4f9bcULL, 0x7e0330e39ce92ULL, 0x2ea7a0e3d419bULL, 0xb4eaa398f365fULL, 0x5cbdf0646e5dULL, 0x84ef3e10a2a01ULL, 0x5e5af888a677ULL, 0x70f3c2f0a1bddULL, 0x351daff3843fbULL, 0x2f01e5e15ccaULL, 0xf110dfc27ccbeULL, 0x974c57e714c35ULL, 0xf559abde09796ULL, 0xf65309ad178a9ULL, 0xacd484e2f0c7ULL, 0x68e2a47e247c7ULL, 0x9b1943c2b752aULL, 0xae6ae5d3442d4ULL, 0xc86235477c7b1ULL, 0xa0434d9e47f3ULL, 0xc17895da008cbULL, 0xbe5c17891bbeULL, 0xc65aac564998ULL, 0x411e5ef4246b7ULL, 0x774ae7f858a9ULL, 0xf47070afe85aULL, 0x419620095bc5bULL, 0xd734633687cf4ULL, 0x561b15c38f004ULL, 0xd01115d548e7ULL, 0xddf8f19405aa8ULL, 0xc6610e58cddeeULL, 0x3748651b075fbULL, 0x288bc7d1d205cULL, 0xf28773c2d975ULL, 0xb241a60e823e4ULL, 0x63678949e6e49ULL, 0x7d38e3226aa7bULL, 0x719cfd64e67f0ULL, 0x499fdf9e895eULL, 0xdbcf8e27e080eULL, 0x6f3c85f79e44aULL, 0x95ff41131e594ULL, 0xea965a465ae30ULL, 0xd7924d4f7d43ULL };
+static const uint64_t Hacl_K256_Win0_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x7d08ffb10d4b8ULL, 0x48a68554199c4ULL, 0xe1108a8fd17b4ULL, 0xc4655da4fbfc0ULL, 0x483ada7726a3ULL, 0x431a950cfe52aULL, 0x653266d0e1236ULL, 0x66ceaeef7f632ULL, 0xc339a3c584194ULL, 0x1ae168fea63dULL, 0x9fd7584b8e672ULL, 0x9934c2231b6cbULL, 0xa37f3566500a9ULL, 0xe8140fe337e62ULL, 0x388f7b0f632dULL, 0x97bdc47739922ULL, 0x33bfbdfe40cfeULL, 0xea51448d967aeULL, 0x55b75642e2098ULL, 0x51ed993ea0d4ULL, 0x87d3aa6ac62d6ULL, 0x1bab0d6840dcaULL, 0x6c9c426f78827ULL, 0xe3d6d4dba9ddaULL, 0xd8ac222636e5ULL, 0x70c36b075f297ULL, 0xf6518fe4a03c8ULL, 0xf45c560de80f0ULL, 0xb620f3be96017ULL, 0xae12777aacfbULL, 0x82628087264daULL, 0xb813fde7b5a50ULL, 0x61a54dba813d0ULL, 0x5960a3178d6d8ULL, 0x6aebca40ba25ULL, 0xa2cb76cbde904ULL, 0xd6ba5b7617b5dULL, 0x32d13b4c2e213ULL, 0x9949293d082a1ULL, 0x5c4da8a74153ULL, 0xc262ac64f9c37ULL, 0xa4375f8e0f05cULL, 0x63b61e9add888ULL, 0xd9fd643809717ULL, 0xcc338921b0a7ULL, 0xee53b037368d7ULL, 0x2ed877a1593cbULL, 0x3a24c696f794cULL, 0xbc27a3b6c7e69ULL, 0x893aba425419ULL, 0xd74c9c953c61bULL, 0xe2dff9d6a8301ULL, 0x7b7b365372db1ULL, 0x5e190243dd56dULL, 0xd984a032eb6bULL, 0x51b13f4062327ULL, 0x5dd9a86d526b0ULL, 0x17bd81579238cULL, 0xe0d7a8b64537eULL, 0xa9f34ffdc815ULL, 0x5cb52db03ed81ULL, 0xda521fa91f29bULL, 0x5cdaf473a1a06ULL, 0xa89758212eb6ULL, 0xab0902e8d88ULL, 0xf40d403a13f5bULL, 0xc27a3f95bcc65ULL, 0x7b3d464464279ULL, 0x855190f044e4aULL, 0xcac2f6c4b54eULL, 0x4dc9ff6a26b58ULL, 0x2bd896d3a5c50ULL, 0x8cc6defea40afULL, 0x72a683842ec22ULL, 0x581e2872a86cULL };
+static const uint64_t Hacl_K256_Win0_tz_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_K256_Win1_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x7e0e742d0e6bdULL, 0x63db0f5e5313bULL, 0x4d6ecbf774d1ULL, 0x4e2582a2147c1ULL, 0x3322d401243cULL, 0x96d32c0ade462ULL, 0xc8eadbcf29fc6ULL, 0x4c80cd50d4cddULL, 0xbdae120ef31b0ULL, 0x8d26200250ceULL, 0x9d3f2059ab499ULL, 0x9c6e73c330abdULL, 0x67f01bc0b1329ULL, 0x5ba5d2196b3cULL, 0x78baaff3015cULL, 0x4643e1516e633ULL, 0xd072d9c8b916ULL, 0x594d03b8ed493ULL, 0xbea9ce4068a1fULL, 0x1238c0766eaeULL, 0x3e16cfd06ace6ULL, 0x36f83a20ca449ULL, 0x929ab1a23709bULL, 0xe3d4c20b84984ULL, 0x6f70f211a14aULL, 0x63330a5cd5379ULL, 0x385870bcadc30ULL, 0xaa4d2232db794ULL, 0x1382a782481b8ULL, 0x17c072d56bddULL, 0xee3ee60ee1b40ULL, 0x5b71e96247dc8ULL, 0x103ccd48ced48ULL, 0xa415f80949f19ULL, 0xe1599db29d6aULL, 0x1552788e7a66ULL, 0x282b0ec21619bULL, 0xa6a11b9cddcd7ULL, 0x9c15e7b2ea758ULL, 0x271d5b0770cbULL, 0xdfa2849c00c3eULL, 0x3c91208e2f81ULL, 0xd451859f00e8fULL, 0x6956436562d33ULL, 0xbb0b04970440ULL, 0xe87d8a8a923b7ULL, 0xeed81c5b30da1ULL, 0x8338266aef650ULL, 0x9a70540708ab6ULL, 0xac2acb9b2199ULL, 0x75b9c05dd32e6ULL, 0x51b53e5ee7e0eULL, 0x75a5fbfc663b5ULL, 0x789e9b649dbe0ULL, 0xdc5a41554195ULL, 0x3c018ca2d8daeULL, 0xf91fd25ea9579ULL, 0xcb2256eac32a5ULL, 0x92f9ba6b25ef9ULL, 0x88271c026211ULL, 0x45bac4544e7cbULL, 0x25b52960359edULL, 0x1014e99a10642ULL, 0x3b9dbe3354a57ULL, 0x156e19703987ULL, 0xbadc99c89240fULL, 0xbafa2e7b858f5ULL, 0x7e0e17674f8c4ULL, 0x7338e18ee0919ULL, 0x15b8390d652dULL, 0xbc29cc59853caULL, 0x6b9f19bf54dbfULL, 0x8e7161348e962ULL, 0x43826bca76a22ULL, 0x4269bccecb68ULL };
+static const uint64_t Hacl_K256_Win1_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x3a2e96c28b2a0ULL, 0x3ea2873af624fULL, 0xddaf9b72805f6ULL, 0x4ef5bfb019bc4ULL, 0x56e70797e966ULL, 0xa8b90f26470cULL, 0x4e72678b3ad8eULL, 0x3ee36ba1d4afbULL, 0xf437d31f6f2dcULL, 0xebed3bb4715bULL, 0xd2318fee097fdULL, 0xee8d125199681ULL, 0xd82082e91632eULL, 0xc0afafca84e0eULL, 0xad4bdcdbdb06ULL, 0xdb728c77b7805ULL, 0x2dcc74022805cULL, 0x1c3dc17094625ULL, 0x1359d6c979e2dULL, 0x8a9db02dbb27ULL, 0xbed34b602d5deULL, 0x66be5ac5ee048ULL, 0x7b99f50753295ULL, 0x7b736f95d8f34ULL, 0x791e8a309402ULL, 0xae051b108cd25ULL, 0x76265bad0df7cULL, 0xf1d034f8959acULL, 0xa064e77c1247aULL, 0xd901bdf4283dULL, 0x6265ed78f93a6ULL, 0x74bc32999de1dULL, 0xa2fc7cfa6363aULL, 0xd4a0efaf894aaULL, 0x793362232a81ULL, 0xd7258e03c9727ULL, 0xe3508a824e7a8ULL, 0x9ac877fe2a065ULL, 0xf491e457d0994ULL, 0x5d3aa45834e7ULL, 0xa982d11955a35ULL, 0x4e905dc90a799ULL, 0xab1b052fe6704ULL, 0x9f63655d2fa17ULL, 0x4067e45853afULL, 0xc124ad7cd20a6ULL, 0xbf12d27a4fa2dULL, 0x13d9eb360b0d0ULL, 0x724d1c9afa0dfULL, 0x7684428511c1ULL, 0x7db7a754a99b9ULL, 0x9076e49bcf80eULL, 0x1bf59442ff2eeULL, 0x67a76dcea5e20ULL, 0x4af3a8a63f9fULL, 0x26c0f3e1e77d9ULL, 0x6dc717d099fb4ULL, 0x5abf5acc30087ULL, 0x76aa401c8b3aeULL, 0xd719dd535071ULL, 0x392c0ad250a37ULL, 0x8d5eb439cd6d5ULL, 0x3834be89496d5ULL, 0x907da939572a6ULL, 0x6bc08d9f8f31ULL, 0xf9ef8e326f04aULL, 0xab5c1a33352e2ULL, 0x7a59f99b30367ULL, 0x8d083abdd7cccULL, 0x786cf20c8efeULL, 0x58ef535b8d367ULL, 0xa5f9e5a8a3da9ULL, 0x431a409fd3940ULL, 0x16b723c84ca9cULL, 0xed2b1c1a82c0ULL };
+static const uint64_t Hacl_K256_Win1_tz_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_K256_Win2_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0xb444c9ec4c0daULL, 0x78723ea3351b7ULL, 0x81f162ee88c56ULL, 0x5f339239c1ad9ULL, 0x8f68b9d2f63bULL, 0x47df84cf27076ULL, 0xade7627eaee68ULL, 0xfd9af59d89858ULL, 0x8158fcafebe77ULL, 0x4d49aefd784eULL, 0x2b8edd23809faULL, 0xb351d954be18eULL, 0x2451f08fd845cULL, 0x9f228ba93363fULL, 0x38381dbe2e50ULL, 0xbcb5729b62026ULL, 0xe0889d1d4ee8dULL, 0xf5c5aa78d2a3dULL, 0x6f8537d6619e1ULL, 0x7564539e85d5ULL, 0x4264897c2a310ULL, 0xa5401226303eaULL, 0xa4699a1f186aeULL, 0x2ae6f6921b82aULL, 0x49262724e437ULL, 0x66c1903663da4ULL, 0x919f5d0b81f81ULL, 0xc44aa2ba5a362ULL, 0x705e6808a6ed7ULL, 0x6a664a356aa5ULL, 0x4b079cebd2d31ULL, 0x56ff06db8d138ULL, 0x477e2f84dcc1aULL, 0xc90d5e253b3eULL, 0xe306568c1a24ULL, 0x4dacd57b4a278ULL, 0x5f1ff4082b536ULL, 0xad9ccc878f61aULL, 0x27796746ff301ULL, 0x210a917ad9dfULL, 0xc39e363136b0ULL, 0xd9aab41dd9c53ULL, 0x3fbd63374ebf8ULL, 0xcefc271b0e762ULL, 0x3b9e100e2428ULL, 0x8eb53dd90124eULL, 0x685281c85dea9ULL, 0xdb38156c1e802ULL, 0x554177e9a1946ULL, 0x7aeaca93c06cULL, 0x8f0472f485d3fULL, 0x688107beee960ULL, 0x5dedef717ca07ULL, 0xc9a92b76ca80fULL, 0xbb0aad49712aULL, 0x702d505ed815eULL, 0xabc1c017b470fULL, 0x9547ad166f440ULL, 0x4a32ebb5fad21ULL, 0x5568dac679f7ULL, 0xed33a36718dc9ULL, 0x4db01123de4aeULL, 0xafe0113e1e58bULL, 0xfcc0d4e8eb197ULL, 0x79090ac8e4eeULL, 0xc1bdc2e44a0c8ULL, 0x402ee29932abeULL, 0xc7436c32c9be7ULL, 0x943cbc9bae600ULL, 0x601e9e884807ULL, 0x9694c7f60c7d1ULL, 0xe7cd775ad2a26ULL, 0x549ba668dd71dULL, 0x7b551c03dbbceULL, 0xe77c81ade9f9ULL };
+static const uint64_t Hacl_K256_Win2_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0xcbf79501fff82ULL, 0xfe95510bfdf23ULL, 0x6be215dbbea2cULL, 0x3986de1d90c2bULL, 0x662a9f2dba06ULL, 0xb66203aa781eULL, 0x1a7df4d8466b9ULL, 0x59ca6f06e0f2dULL, 0xd135e723f2103ULL, 0xcd32fc59a10dULL, 0x7518331fed52ULL, 0xcb32d8f24dbd7ULL, 0x20eb1cc3681fcULL, 0x17dcb09405a55ULL, 0xe4a32d0a0fb9ULL, 0x2c8fadace0cf3ULL, 0xd954b79f33417ULL, 0xa722925684aacULL, 0xb3c65231df524ULL, 0xc1d685413749ULL, 0x1b6815e27ded0ULL, 0x12a75ff8ce0c4ULL, 0x714303b6d1636ULL, 0xabf95a2cfa569ULL, 0x1337e773bca7ULL, 0x313fb33fc22c4ULL, 0x127e6c04c9c28ULL, 0x6bf0cd5089916ULL, 0xe98b29f86ec19ULL, 0x449a125954fdULL, 0xb408392546e44ULL, 0x42be373826692ULL, 0xf7d0db6ffbc80ULL, 0x4260888f2b107ULL, 0xeac6fe37893ULL, 0x713fd0c7b2231ULL, 0x1aaff20bfc7f2ULL, 0x8d6737d3789e6ULL, 0xe57b7a39be81fULL, 0x670e1b5450b5ULL, 0xec16f6cdbbc8aULL, 0xa33ad31f81953ULL, 0xf475b26a2ae28ULL, 0xbb71df1533eb8ULL, 0xfafb98152d16ULL, 0x781022021e31ULL, 0xf9b90a904b3f5ULL, 0x6c1d95159bc1bULL, 0x90f04facaff04ULL, 0xdfb29b190c13ULL, 0x392503ca2f975ULL, 0xfa31670bffe79ULL, 0x297da34895a5aULL, 0x54798ecd201f7ULL, 0xea699c53c583ULL, 0xbf64c00602df0ULL, 0xeee2582151d9bULL, 0xd073f2beb05f7ULL, 0xba64580d6fe01ULL, 0x7a85f8742788ULL, 0x322b11cfae7c5ULL, 0xb70ba9008b963ULL, 0xd9aaa56dd36afULL, 0x5b8f13d816cbcULL, 0xeaab722b9190ULL, 0x93412ba00e557ULL, 0x5a6b46e659547ULL, 0xffabbb1424e0cULL, 0x8ecc714b8cfa9ULL, 0x5a7a22aa6fdcULL, 0x581f282d72449ULL, 0xf71c2986d34ecULL, 0xea81543631470ULL, 0x1321c5fc3b323ULL, 0x3acf1478eef8ULL };
+static const uint64_t Hacl_K256_Win2_tz_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_K256_Win3_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0xb58fa2120e2b3ULL, 0xce7f47f9aa7f3ULL, 0xce6e5217a58fdULL, 0xbdbae7be4ae34ULL, 0xeaa649f21f51ULL, 0xbc1cc1fc9b0a8ULL, 0x5c705f3db453dULL, 0x2279ea9e337bULL, 0x97eec2623ea50ULL, 0x3adb9db3beb9ULL, 0x3fd3a3f2e070dULL, 0x1cc52a6a98f58ULL, 0x85047e229aab7ULL, 0x4abff48731c3bULL, 0x4b72a5e9042fULL, 0xe9e0c90ae86f9ULL, 0x56963e7caf054ULL, 0x6c5fc69fefdffULL, 0x9cbb7e10955e5ULL, 0x129e53ac428eULL, 0xe7fd84a02591cULL, 0x96585125a1e9cULL, 0x5e1fd613ef549ULL, 0xc8e285a6bfbebULL, 0xa9fc93fc6539ULL, 0x700a0f85912ecULL, 0x4e4609113428ULL, 0xaaf054327f9caULL, 0x5b786ab499694ULL, 0xaa7121d4e3fbULL, 0x6e0e2d968b59ULL, 0xae13cbbc2e110ULL, 0x9b027709a28bULL, 0x9f0a6a7d7ac12ULL, 0xc940017c1a6fULL, 0x243d5e855b8daULL, 0x7d12894711922ULL, 0xee10956c75626ULL, 0x94485b85ecb6aULL, 0x60144494c8f6ULL, 0x73335726b3332ULL, 0xd073ee5de6a28ULL, 0x70bf8e0310388ULL, 0x24ec6793a5fULL, 0x1f84bb9d7eedULL, 0x95979b1972bcbULL, 0x3e241ecceb9ddULL, 0xeda1776c2f22eULL, 0x9f028f68e0213ULL, 0x3df2d057c8bbULL, 0xaa54acdefa98eULL, 0x6811ac27995cdULL, 0x991e9c7724844ULL, 0xfcd06ca8157b3ULL, 0xf13e0890945ULL, 0x6a24ffd292dcULL, 0x80b17714ce1b8ULL, 0x7bd79d9775e26ULL, 0xf934ba48070d3ULL, 0x4b9915533720ULL, 0x1c03be9f59b6bULL, 0x63c1888e2fa5eULL, 0xd5826d3e9b38cULL, 0xec7db3728a1d2ULL, 0xdde191a551ddULL, 0xd1b3423b43eebULL, 0x1bf81184feeeULL, 0xf359c5c181c94ULL, 0x5e937ea4825ffULL, 0x83c403979eb9ULL, 0xc55fdc9c6b699ULL, 0x356be46871b68ULL, 0x7b41682a86f57ULL, 0x6f7a5a16d7bf9ULL, 0x5fab012eed83ULL };
+static const uint64_t Hacl_K256_Win3_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0xa5305ba5ad93dULL, 0x65f13f7e59d47ULL, 0x879aa5a01a6b9ULL, 0xb03ac69a80f89ULL, 0xbe3279ed5bbbULL, 0xe7975f05bbddaULL, 0xf9870266cc61aULL, 0xc095ff6aad9c8ULL, 0x4e713c774de07ULL, 0x374e2d6daee7ULL, 0xba82ee96dd780ULL, 0xddd2948c3de44ULL, 0xd0f3c10b0b465ULL, 0xe1cf60277bb36ULL, 0x599e1d4e1d6aULL, 0xefdcd1e89c85dULL, 0xfd16b3e01b822ULL, 0x712183fb2a232ULL, 0x9a29b2da2115bULL, 0x415ecb958aeeULL, 0xaddef69bec2dcULL, 0x415fcf7253790ULL, 0xa9165e5ca888cULL, 0x87173e84c17a1ULL, 0x9c2ce739dc53ULL, 0x4cb264ae35978ULL, 0xa8ce056cbdb11ULL, 0x6a2edebfee134ULL, 0x9509c505266b9ULL, 0xc690f077dad0ULL, 0xd76408de572fbULL, 0xb64390c9c8fefULL, 0x5b5742ce2842cULL, 0x862013b8a1bfaULL, 0x39d922500c9bULL, 0x590f34e4bbdULL, 0xc27e3f2a4bad5ULL, 0x132e65b543955ULL, 0xe6469e8be1fd9ULL, 0x8bb5d669f681ULL, 0x428a314e8d52eULL, 0x2d436dc3a2554ULL, 0x5b9edf0c2bcceULL, 0x9ecc2547c27f7ULL, 0xee726d072bcaULL, 0x22cd3d65d09dfULL, 0x9680194771b28ULL, 0x46a684b1b9144ULL, 0x6eead6e6b23b0ULL, 0xdc7eb1c640c8ULL, 0xa7769be286767ULL, 0x5e16ceaccdc08ULL, 0x7b362db287e70ULL, 0x7c5035e3f8b0aULL, 0xadd521f1764eULL, 0xa5ffe57095ca6ULL, 0xc45b376afd433ULL, 0x5f01f57938323ULL, 0x3a226dfc0a74bULL, 0xe32775496110ULL, 0xd962926cb1410ULL, 0xbbe7154fecf6aULL, 0xc52e14e8b5738ULL, 0x75cbe0a757d61ULL, 0x5b2bfb780282ULL, 0x34086d484fb51ULL, 0xcab553fb40affULL, 0xd61b295b6bfULL, 0xee3d0bfc1e46dULL, 0x29575ff2437cULL, 0x32152c1c6c3aaULL, 0x7fea883519b17ULL, 0xd62f7b90ab11ULL, 0xd144e9ebb4113ULL, 0x2d9bfa70a3c3ULL };
+static const uint64_t Hacl_K256_Win3_tz_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
 static void Hacl_K256_PointMulG_rung(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t d0, uint64_t d1, uint64_t d2, uint64_t d3);
 static void Hacl_K256_PointMulG_win_loop(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *ks);
 static void Hacl_K256_PointMulG_point_mul_g_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks);
@@ -18792,33 +18795,6 @@ bool Hacl_K256_Ecdh_dh_responder(uint8_t *out, uint8_t *pk, uint8_t *sk) {
   else return false;
 }
 
-static void Hacl_K256_PointMulG_build_tables(uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *px, uint64_t *py, uint64_t *pz) {
-  uint64_t *ct = (uint64_t *)Hacl_K256_Tables52_gx_arr;
-  Hacl_K256_Field52_fcopy(px, ct);
-  uint64_t *ct1 = (uint64_t *)Hacl_K256_Tables52_gy_arr;
-  Hacl_K256_Field52_fcopy(py, ct1);
-  Hacl_K256_Field52_fone(pz);
-  Hacl_K256_PointWin_build_table(t0x, t0y, t0z, px, py, pz);
-  uint64_t *ct2 = (uint64_t *)Hacl_K256_Tables52G_q1x_arr;
-  Hacl_K256_Field52_fcopy(px, ct2);
-  uint64_t *ct3 = (uint64_t *)Hacl_K256_Tables52G_q1y_arr;
-  Hacl_K256_Field52_fcopy(py, ct3);
-  Hacl_K256_Field52_fone(pz);
-  Hacl_K256_PointWin_build_table(t1x, t1y, t1z, px, py, pz);
-  uint64_t *ct4 = (uint64_t *)Hacl_K256_Tables52G_q2x_arr;
-  Hacl_K256_Field52_fcopy(px, ct4);
-  uint64_t *ct5 = (uint64_t *)Hacl_K256_Tables52G_q2y_arr;
-  Hacl_K256_Field52_fcopy(py, ct5);
-  Hacl_K256_Field52_fone(pz);
-  Hacl_K256_PointWin_build_table(t2x, t2y, t2z, px, py, pz);
-  uint64_t *ct6 = (uint64_t *)Hacl_K256_Tables52G_q3x_arr;
-  Hacl_K256_Field52_fcopy(px, ct6);
-  uint64_t *ct7 = (uint64_t *)Hacl_K256_Tables52G_q3y_arr;
-  Hacl_K256_Field52_fcopy(py, ct7);
-  Hacl_K256_Field52_fone(pz);
-  Hacl_K256_PointWin_build_table(t3x, t3y, t3z, px, py, pz);
-}
-
 static void Hacl_K256_PointMulG_rung(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t d0, uint64_t d1, uint64_t d2, uint64_t d3) {
   Hacl_K256_PointWin_win_dbl4(ox, oy, oz, ux, uy, uz);
   Hacl_K256_PointWin_win_add(ox, oy, oz, ux, uy, uz, sx, sy, sz, t0x, t0y, t0z, d0);
@@ -18845,91 +18821,42 @@ static void Hacl_K256_PointMulG_win_loop(uint64_t *ox, uint64_t *oy, uint64_t *o
 
 static void Hacl_K256_PointMulG_point_mul_g_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ks) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t px[5];
-  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
-    px[_ci1] = z;
-  }
-  uint64_t py[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    py[_ci2] = z;
-  }
-  uint64_t pz[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    pz[_ci3] = z;
-  }
   uint64_t ux[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    ux[_ci4] = z;
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    ux[_ci1] = z;
   }
   uint64_t uy[5];
-  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
-    uy[_ci5] = z;
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    uy[_ci2] = z;
   }
   uint64_t uz[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    uz[_ci6] = z;
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    uz[_ci3] = z;
   }
   uint64_t sx[5];
-  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
-    sx[_ci7] = z;
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
+    sx[_ci4] = z;
   }
   uint64_t sy[5];
-  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
-    sy[_ci8] = z;
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
+    sy[_ci5] = z;
   }
   uint64_t sz[5];
-  for (size_t _ci9 = 0; _ci9 < 5; _ci9++) {
-    sz[_ci9] = z;
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
+    sz[_ci6] = z;
   }
-  uint64_t t0x[80];
-  for (size_t _ci10 = 0; _ci10 < 80; _ci10++) {
-    t0x[_ci10] = z;
-  }
-  uint64_t t0y[80];
-  for (size_t _ci11 = 0; _ci11 < 80; _ci11++) {
-    t0y[_ci11] = z;
-  }
-  uint64_t t0z[80];
-  for (size_t _ci12 = 0; _ci12 < 80; _ci12++) {
-    t0z[_ci12] = z;
-  }
-  uint64_t t1x[80];
-  for (size_t _ci13 = 0; _ci13 < 80; _ci13++) {
-    t1x[_ci13] = z;
-  }
-  uint64_t t1y[80];
-  for (size_t _ci14 = 0; _ci14 < 80; _ci14++) {
-    t1y[_ci14] = z;
-  }
-  uint64_t t1z[80];
-  for (size_t _ci15 = 0; _ci15 < 80; _ci15++) {
-    t1z[_ci15] = z;
-  }
-  uint64_t t2x[80];
-  for (size_t _ci16 = 0; _ci16 < 80; _ci16++) {
-    t2x[_ci16] = z;
-  }
-  uint64_t t2y[80];
-  for (size_t _ci17 = 0; _ci17 < 80; _ci17++) {
-    t2y[_ci17] = z;
-  }
-  uint64_t t2z[80];
-  for (size_t _ci18 = 0; _ci18 < 80; _ci18++) {
-    t2z[_ci18] = z;
-  }
-  uint64_t t3x[80];
-  for (size_t _ci19 = 0; _ci19 < 80; _ci19++) {
-    t3x[_ci19] = z;
-  }
-  uint64_t t3y[80];
-  for (size_t _ci20 = 0; _ci20 < 80; _ci20++) {
-    t3y[_ci20] = z;
-  }
-  uint64_t t3z[80];
-  for (size_t _ci21 = 0; _ci21 < 80; _ci21++) {
-    t3z[_ci21] = z;
-  }
-  Hacl_K256_PointMulG_build_tables(t0x, t0y, t0z, t1x, t1y, t1z, t2x, t2y, t2z, t3x, t3y, t3z, px, py, pz);
+  uint64_t *t0x = (uint64_t *)Hacl_K256_Win0_tx_arr;
+  uint64_t *t0y = (uint64_t *)Hacl_K256_Win0_ty_arr;
+  uint64_t *t0z = (uint64_t *)Hacl_K256_Win0_tz_arr;
+  uint64_t *t1x = (uint64_t *)Hacl_K256_Win1_tx_arr;
+  uint64_t *t1y = (uint64_t *)Hacl_K256_Win1_ty_arr;
+  uint64_t *t1z = (uint64_t *)Hacl_K256_Win1_tz_arr;
+  uint64_t *t2x = (uint64_t *)Hacl_K256_Win2_tx_arr;
+  uint64_t *t2y = (uint64_t *)Hacl_K256_Win2_ty_arr;
+  uint64_t *t2z = (uint64_t *)Hacl_K256_Win2_tz_arr;
+  uint64_t *t3x = (uint64_t *)Hacl_K256_Win3_tx_arr;
+  uint64_t *t3y = (uint64_t *)Hacl_K256_Win3_ty_arr;
+  uint64_t *t3z = (uint64_t *)Hacl_K256_Win3_tz_arr;
   Hacl_K256_PointMulG_win_loop(ox, oy, oz, ux, uy, uz, sx, sy, sz, t0x, t0y, t0z, t1x, t1y, t1z, t2x, t2y, t2z, t3x, t3y, t3z, ks);
 }
 
