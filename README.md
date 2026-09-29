@@ -754,13 +754,35 @@ the same `fmul`, the same inversion chain.  Nothing in the signature scheme
 needed a second field implementation, which is the main reason the whole of
 `code/ed25519` is eight modules.
 
-Its *scalar* arithmetic, mod the group order `q`, is a different matter: it
-is eight limbs of thirty-two bits and always was, and for a while it shared
-the field's names because the field happened to use the same radix.  The move
-to 2^51 forced the split.  `Hacl.Ed25519.Scalar` now sits on
-`Hacl.Impl.Limb` and `Spec.Bignum256` and owns its own `copy`, `load_le`,
-`store_le`, `limbs_eq` and `reduce32`; `Hacl.Ed25519` deliberately mixes the
-two, five-limb arrays for coordinates and eight-limb arrays for scalars.
+Its *scalar* arithmetic, mod the group order `q`, is a different matter,
+because `q` is not the field prime and has no special shape.  It began as
+eight limbs of thirty-two bits with every operation done bit by bit -- 512
+rounds of double-and-conditionally-subtract to reduce a SHA-512 digest, 256
+rounds to multiply -- for the reason its header gave at the time: without
+`uint128` there was no cheap way to form a 64x64 product.  That premise is
+long gone, and the module now sits on the four-limb Montgomery core in
+`code/field256`, the same `Hacl.Impl.Mont4` that secp256k1 and P-256 use,
+with the order supplied as data: `Spec.Ed25519.Scalar.qmod` is a
+`Spec.Field4.modulus` and `Hacl.Ed25519.Tables` carries its six constant
+tables.  `Hacl.Ed25519` deliberately mixes the two widths, five-limb arrays
+for coordinates and four-limb arrays for scalars.
+
+**Reducing a 512-bit digest without a Barrett step.**  `amul` insists both
+its operands are already below the modulus, so a digest cannot simply be fed
+to a wide Montgomery reduction, and reducing a bare 256-bit half would need
+conditional subtractions against tables for `8q`, `4q`, `2q` and `q` that the
+core's interface does not let a caller pass.  Cutting the digest into four
+128-bit chunks instead makes every chunk a residue for free, since `2^128 <
+q`.  What remains is to weight them, and a Montgomery multiplication by a
+constant of the form `R k mod q` cancels the radix and leaves `a k mod q`, so
+the three weights `2^128`, `2^256` and `2^384` are three ordinary constant
+multiplies against tables holding `2^384 mod q`, `2^512 mod q` and `2^640 mod
+q`.  The middle one is `R^2 mod q`, which the modulus already carries, so
+only two tables are new.  The whole reduction is three multiplies and three
+additions; the old one was five hundred and twelve conditional subtractions.
+A thirty-two-byte scalar is the same fold over two chunks.  `sign_expanded`
+minus `secret_to_public` -- all the scalar arithmetic in a signature, and
+nothing else -- went from 31 us to 1.8.
 
 **The compressed sign bit moved into the top byte.**  At radix 2^32 bit 255
 was the top bit of limb 7 and `point_compress` could set it in place before
@@ -2400,8 +2422,8 @@ reference**.
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
+| Ed25519 sign | -- | 124 us | 65 us | **1.92x** |  |  |
 | AES-128-GCM | 256 KiB | 140 us | 71 us | **1.98x** |  |  |
-| Ed25519 sign | -- | 154 us | 65 us | **2.35x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -2472,8 +2494,11 @@ windowed.  The variable-base half was worth 22% of key generation, 19% of
 signing and 18% of verification; the fixed-base half, which splits the scalar
 into four sixty-four-bit pieces and walks them together against [2^64] G,
 [2^128] G and [2^192] G as well as G, was worth a further 28% of key
-generation and 23% of signing.  Key generation went from 3.40x of the
-reference to **1.91x** and signing from 3.82x to **2.35x**.  secp256k1 and
+generation and 23% of signing.  The scalar arithmetic mod the group order,
+which used to be done a bit at a time and cost more than a fifth of a
+signature, is now four-limb Montgomery like every other curve here and costs
+almost nothing.  Key generation went from 3.40x of the reference to
+**1.94x** and signing from 3.82x to **1.92x**; verification is **2.22x**.  secp256k1 and
 P-256 have now had the same treatment, so no curve here walks its generator
 bit by bit any more.  P-256 and secp256k1 were behind for three reasons, of
 which secp256k1 now has none in particular and P-256 has one.  The plainest has been removed for both: the 256-bit core they share was
@@ -3452,7 +3477,27 @@ rough order of value:
    twice buys.  What is still available is Plan A: compiling in the four
    tables of sixteen entries rather than building them, a further ~30% on
    each curve, at 256, 192 and 192 field constants respectively.
-7. **Taking over the remaining sixty-eight compiler specialisations**, the
+7. **Ed25519's group-order arithmetic on the four-limb Montgomery core**,
+   **done**.  `Hacl.Ed25519.Scalar` was the last bit-at-a-time arithmetic in
+   the repository and the last user of the eight-limb, thirty-two-bit
+   `Spec.Bignum256` stack: reducing a SHA-512 digest was 512 rounds of
+   double-and-conditionally-subtract and multiplying two scalars was 256
+   more.  Its header explained the choice -- "here there is no `uint128`" --
+   which stopped being true with the first item of this list.  It now uses
+   `Hacl.Impl.Mont4` with the order as data, exactly as `Hacl.K256.Scalar`
+   does, and reduces a digest by cutting it into four 128-bit chunks (each
+   below `q`, so a residue for free) and folding them with three constant
+   Montgomery multiplies against `2^384 mod q`, `R^2 mod q` and `2^640 mod
+   q`; a Montgomery multiply by `R k mod q` is a plain multiply by `k`, so
+   no Barrett step and no second representation are needed.  The scalar
+   arithmetic in a signature -- `sign_expanded` less the fixed-base
+   multiplication it also does -- went from 31 us to 1.8, signing from
+   2.35x of the reference to **1.92x** with gcc and **1.62x** with clang,
+   key generation to **1.94x**/1.63x and verification to **2.22x**/1.88x.
+   What is left of the Ed25519 gap is entirely the scalar multiplication:
+   `secret_to_public` is still 2.4x, and item 6's Plan A -- compiling in the
+   four windows rather than building them -- is the next thing to try.
+8. **Taking over the remaining sixty-eight compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and

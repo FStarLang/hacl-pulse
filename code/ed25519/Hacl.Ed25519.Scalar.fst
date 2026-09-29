@@ -18,770 +18,639 @@
 
     Signing needs [(r + k s) mod q] and verification needs [S < q], where
     [q] is the order of the base point and not a prime of any convenient
-    shape.  HACL* devotes a Barrett reduction and a 5x56-bit representation
-    to this; here there is no [uint128], so both would have to be rebuilt,
-    and a scalar multiplication in the group already costs a thousand times
-    more than one modular multiply.  So the arithmetic is bitwise: the
-    accumulator is doubled and conditionally reduced once per bit.
+    shape.  Everything here is the four-limb Montgomery arithmetic of
+    {!Hacl.Impl.Mont4} with [qmod] passed as the modulus, so none of it
+    duplicates any code in the emitted C: Ed25519's scalar field, P-256's
+    two fields and secp256k1's two fields all share the same multiplier.
 
-    That makes the whole module two primitives.  {!addc_op} adds two proper
-    limb sequences and returns the carry out of the top; {!dbl_add_op}
-    doubles one and shifts a bit in.  Everything else -- conditional
-    subtraction, reduction of a 512-bit hash, multiplication -- is a loop
-    over those two.  Both are the carry chain that
-    [Spec.Curve25519.Field] already states and [Hacl.Curve25519.Field]
-    already implements, so the limbs, the radix and the bound reasoning are
-    shared with the field.
+    Values are kept in *plain* form rather than Montgomery form.  There is
+    no chain of operations here to amortise a conversion over -- signing
+    does one multiply and one addition -- and staying plain is what makes
+    the reduction below cheap.
 
-    Reducing modulo [q] never compares.  [a >= q] exactly when
-    [a + (2^256 - q)] carries out of bit 256, and in that case the low
-    limbs already hold [a - q]; so the test and the subtraction are the same
-    addition, and the answer is a select on the carry.  [2^256 - q] is
-    therefore the only constant in the module, and it lives in
-    {!Hacl.Ed25519.Tables}.
+    {b Reducing a hash.}  A SHA-512 digest is 512 bits and the order is a
+    little under 2^253, so the reduction is the expensive part, not the
+    multiply.  HACL* does a Barrett reduction in a 5x56-bit representation.
+    The cheaper thing to do with Montgomery multiplication already in hand
+    is to cut the digest into four 128-bit chunks
 
-    Every branch below is on a length or a loop counter.  The bits of the
-    scalar are secret and are consumed by masks. *)
+    {[ h = c0 + c1 2^128 + c2 2^256 + c3 2^384 ]}
+
+    each of which is below [2^128] and therefore already a residue, and to
+    fold in the three radix powers as constants.  [Spec.Ed25519.Scalar]'s
+    [mmul_const] says that multiplying a residue by a constant of the form
+    [R k mod q] cancels the [R] and leaves [a k mod q], so [c1], [c2] and
+    [c3] are multiplied by [2^384 mod q], [2^512 mod q] and [2^640 mod q]
+    respectively.  Three multiplications and three additions, with no wide
+    division, no quotient estimate and no second representation.
+
+    {b Bytes.}  Ed25519 is little-endian, so the byte layer is
+    [Spec.Ed25519.Scalar]'s mirror of {!Spec.Field4}'s rather than
+    {!Hacl.Impl.Bignum4}'s [load_be] and [store_be].
+
+    Every branch below is on a length or a loop counter.  The limbs of the
+    scalar are secret and never compared except through a mask. *)
 module Hacl.Ed25519.Scalar
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Hacl.Impl.Limb
+open Spec.Bignum4
+open Spec.Ed25519.Scalar
+open Spec.Mont4
 open Hacl.Spec.Bytes
+open Hacl.Impl.Limb4
+open Hacl.Impl.Table
+open Hacl.Impl.Bignum4
+open Hacl.Impl.Mont4
+open Hacl.Ed25519.Tables
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
-module U32 = FStar.UInt32
-module U64 = FStar.UInt64
-module UInt = FStar.UInt
-module Math = FStar.Math.Lemmas
-module Classical = FStar.Classical
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
+module S128 = Hacl.Secret.UInt128
 module Cast = Hacl.Secret.Cast
-module Loops = Hacl.Spec.Loops
-module F = Spec.Bignum256
-module Sc = Spec.Ed25519.Scalar
-module Table = Hacl.Impl.Table
-module Tables = Hacl.Ed25519.Tables
-module Declassify = Hacl.Secret.Declassify
+module Bytes = Hacl.Impl.Bytes
+module Math = FStar.Math.Lemmas
+module Classical = FStar.Classical
 
-(** This module is arithmetic-heavy, and the default SMT encoding boxes
-    every integer operation, which hides the structure of the products from
-    Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
-    only the nonlinear operators wrapped is measurably faster here. *)
-#set-options "--smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+(** {2 What a scalar is} *)
 
-(** {2 Bytes, copies and comparison}
+let qelem (v: Seq.seq S64.t) : prop = res qmod (vals v)
 
-    A scalar is eight thirty-two-bit limbs, so a limb is exactly four bytes
-    and its byte layer is a shuffle.  These used to be shared with the
-    field, but at radix [2^51] a field limb is no longer a whole number of
-    bytes and the field goes through a repacking instead; what is left is
-    the plain little-endian conversion, which belongs here. *)
+let qv (v: Seq.seq S64.t) : GTot nat = eval (vals v)
 
-let pow2_bytes (_: unit)
-  : Lemma (pow2 8 == 256 /\ pow2 16 == 65536 /\ pow2 24 == 16777216)
-  = assert_norm (pow2 8 == 256);
-    assert_norm (pow2 16 == 65536);
-    assert_norm (pow2 24 == 16777216)
+(** {2 Arithmetic facts the reduction needs}
 
-(** Eight limbs from one slice to another. *)
-fn copy (dst src: A.array S64.t)
-        (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
-requires A.pts_to dst vd ** A.pts_to src #ps vs **
-  pure (Seq.length vd == F.nl /\ Seq.length vs == F.nl)
-ensures exists* (vd': Seq.seq S64.t).
-  A.pts_to dst vd' ** A.pts_to src #ps vs ** pure (vd' == reveal vs)
+    All four are about numbers rather than about memory, so they are stated
+    and discharged here rather than inside a Pulse function, where they
+    would be proved against the whole separation-logic context. *)
+
+(** An all-zero limb sequence is zero. *)
+#push-options "--fuel 2 --ifuel 1"
+let rec eval_zeros (s: Seq.seq nat)
+  : Lemma (requires forall (i: nat). i < Seq.length s ==> Seq.index s i == 0)
+          (ensures eval s == 0)
+          (decreases Seq.length s)
+  = let n = Seq.length s in
+    if n = 0 then ()
+    else begin
+      assert (forall (i: nat). i < n - 1 ==> Seq.index (Seq.slice s 1 n) i == Seq.index s (i + 1));
+      eval_zeros (Seq.slice s 1 n)
+    end
+#pop-options
+
+(** Two limbs and two zeros hold the sixteen bytes they were read from,
+    and that number is below [2^128], so it is a residue already. *)
+let chunk_eval (s: Seq.seq nat) (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 16 /\ bnd s base /\
+                    Seq.index s 0 == le_nat (Seq.slice b 0 8) /\
+                    Seq.index s 1 == le_nat (Seq.slice b 8 16) /\
+                    Seq.index s 2 == 0 /\ Seq.index s 3 == 0)
+          (ensures eval s == le_nat b /\ eval s < pow2 128)
+  = let lo = Seq.slice s 0 2 in
+    let hi = Seq.slice s 2 4 in
+    let aux (k: nat { k < 2 })
+      : Lemma (Seq.index lo k == le_nat (Seq.slice b (8 * k) (8 * k + 8)))
+      = if k = 0 then Seq.lemma_eq_intro (Seq.slice b 0 8) (Seq.slice b (8 * 0) (8 * 0 + 8))
+        else Seq.lemma_eq_intro (Seq.slice b 8 16) (Seq.slice b (8 * 1) (8 * 1 + 8)) in
+    Classical.forall_intro aux;
+    eval_le b lo;
+    eval_split s 2;
+    assert (forall (i: nat). i < 2 ==> Seq.index hi i == 0);
+    eval_zeros hi;
+    assert_norm (rad * 2 == 128);
+    le_nat_bound b
+
+(** The same, packaged as the residue predicate the implementation speaks. *)
+let chunk_res (s: Seq.seq nat) (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 16 /\ bnd s base /\
+                    Seq.index s 0 == le_nat (Seq.slice b 0 8) /\
+                    Seq.index s 1 == le_nat (Seq.slice b 8 16) /\
+                    Seq.index s 2 == 0 /\ Seq.index s 3 == 0)
+          (ensures res qmod s /\ eval s == le_nat b)
+  = chunk_eval s b;
+    q_bound ();
+    qmod_m ();
+    assert_norm (pow2 128 < pow2 252 + 27742317777372353535851937790883648493)
+
+(** A table holding [2^e mod q] with [e = 256 + j] is a residue whose value
+    is [R 2^j mod q]: the shape {!Spec.Ed25519.Scalar.mmul_const} wants. *)
+let pow_res (e: nat) (j: nat)
+  : Lemma (requires e == 256 + j)
+          (ensures res qmod (limbs (pow2 e % q)) /\
+                   eval (limbs (pow2 e % q)) == pow2 256 * pow2 j % q)
+  = Math.pow2_plus 256 j;
+    q_bound ();
+    Math.lemma_mod_lt (pow2 e) q;
+    limbs_ok (pow2 e % q)
+
+(** [R^2 mod q] is the same shape with [j = 256]; the modulus bundle
+    already carries it. *)
+let r2_res (_: unit)
+  : Lemma (res qmod qmod.r2 /\ eval qmod.r2 == pow2 256 * pow2 256 % q)
+  = qmod_ok ();
+    Math.lemma_mod_lt (pow2 256 * pow2 256) q
+
+(** Sixty-four little-endian bytes are four 128-bit chunks. *)
+let digest_split (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length b == 64)
+          (ensures le_nat b == le_nat (Seq.slice b 0 16) +
+                               pow2 128 * le_nat (Seq.slice b 16 32) +
+                               pow2 256 * le_nat (Seq.slice b 32 48) +
+                               pow2 384 * le_nat (Seq.slice b 48 64))
+  = le_nat_split b 16;
+    let t1 = Seq.slice b 16 64 in
+    le_nat_split t1 16;
+    Seq.lemma_eq_intro (Seq.slice t1 0 16) (Seq.slice b 16 32);
+    let t2 = Seq.slice t1 16 48 in
+    Seq.lemma_eq_intro t2 (Seq.slice b 32 64);
+    le_nat_split t2 16;
+    Seq.lemma_eq_intro (Seq.slice t2 0 16) (Seq.slice b 32 48);
+    Seq.lemma_eq_intro (Seq.slice t2 16 32) (Seq.slice b 48 64);
+    Math.pow2_plus 128 128;
+    Math.pow2_plus 128 256;
+    Math.paren_mul_right (pow2 128) (pow2 128) (le_nat (Seq.slice b 32 48));
+    Math.paren_mul_right (pow2 128) (pow2 256) (le_nat (Seq.slice b 48 64))
+
+(** Thirty-two of them are two. *)
+let half_split (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length b == 32)
+          (ensures le_nat b == le_nat (Seq.slice b 0 16) +
+                               pow2 128 * le_nat (Seq.slice b 16 32))
+  = le_nat_split b 16
+
+(** Folding three terms into a running remainder is the same as reducing
+    the whole sum once. *)
+let fold_ok (a b c d: nat) (r1 r2 r3: nat)
+  : Lemma (requires r1 == (a + b) % q /\ r2 == (r1 + c) % q /\ r3 == (r2 + d) % q)
+          (ensures r3 == (a + b + c + d) % q)
+  = Math.lemma_mod_add_distr c (a + b) q;
+    Math.lemma_mod_add_distr d (a + b + c) q
+
+(** The six order tables, each behind an abstract postcondition so that
+    the callers never see the literals. *)
+
+inline_for_extraction
+fn qms () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.ms)
+{ table qms_arr 4sz }
+
+inline_for_extraction
+fn qnm () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.nm)
+{ table qnm_arr 4sz }
+
+inline_for_extraction
+fn qr2t () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == qmod.r2)
+{ table qr2_arr 4sz }
+
+inline_for_extraction
+fn qp1t () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs (pow2 384 % q))
+{ table qp1_arr 4sz }
+
+inline_for_extraction
+fn qp3t () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs (pow2 640 % q))
+{ table qp3_arr 4sz }
+
+(** {2 The ring operations} *)
+
+fn qadd (out a b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ qelem va /\ qelem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (qelem vo' /\ qv vo' == (qv va + qv vb) % q)
 {
-  A.pts_to_len dst;
-  A.pts_to_len src;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to dst v ** A.pts_to src #ps vs **
-    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
-          (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
-  decreases (8 - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = A.(src.(vi));
-    A.((dst.(vi) <- x));
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to dst v);
-  assert (pure (v `Seq.equal` reveal vs));
+  qmod_ok (); qmod_m ();
+  madd_ok qmod (vals va) (vals vb);
+  let nm = qnm ();
+  aadd out a b nm qmod;
+  drop_table nm;
 }
 
-(** Thirty-two little-endian bytes into eight limbs. *)
-fn load_le (a: A.array S64.t) (b: A.array S8.t)
-           (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
-requires A.pts_to a va ** A.pts_to b #pb vb **
-  pure (Seq.length va == F.nl /\ Seq.length vb == 32)
-ensures exists* (va': Seq.seq S64.t).
-  A.pts_to a va' ** A.pts_to b #pb vb **
-  pure (Seq.length va' == F.nl /\ F.bnd (vals va') F.base /\
-        F.eval (vals va') == le_nat vb)
+(** An ordinary product: one [mmul] to cancel a radix and one against
+    [R^2] to put it back. *)
+fn qmul (out a b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ qelem va /\ qelem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (qelem vo' /\ qv vo' == (qv va * qv vb) % q)
 {
-  A.pts_to_len a;
+  qmod_ok (); qmod_m ();
+  mmul_plain (vals va) (vals vb);
+  let z = S64.zero;
+  let mut t = [| z; 4sz |]; A.pts_to_len t; A.pts_to_len t;
+  let ms = qms ();
+  let nm = qnm ();
+  let r2 = table qr2_arr 4sz;
+  amul t a b ms nm qmu qmod;
+  amul out t r2 ms nm qmu qmod;
+  drop_table ms;
+  drop_table nm;
+  drop_table r2;
+}
+
+(** {2 Bytes in}
+
+    A limb is eight bytes, so reading one is [Hacl.Impl.Bytes.load_le] at
+    sixty-four bits and nothing else; what has to be said is only that four
+    of them in a row are the number.  That is [eval_le], and it is the same
+    lemma whether the window is two limbs or four. *)
+
+(** Two limbs from sixteen bytes, and two zeros above them: a chunk of a
+    digest, which is below [2^128] and therefore already a residue. *)
+#push-options "--z3rlimit 400"
+fn load_chunk (out: A.array S64.t) (b: A.array S8.t) (off: SZ.t)
+              (#vo: erased (Seq.seq S64.t))
+              (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to out vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ SZ.v off + 16 <= Seq.length vb /\
+        SZ.fits (SZ.v off + 16))
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to b #pb vb **
+  pure (SZ.v off + 16 <= Seq.length vb /\ qelem vo' /\
+        qv vo' == le_nat (Seq.slice vb (SZ.v off) (SZ.v off + 16)))
+{
+  A.pts_to_len out;
+  let w0 = Bytes.load_le #S64.t b off;
+  let w1 = Bytes.load_le #S64.t b (SZ.add off 8sz);
+  A.((out.(0sz) <- w0));
+  A.((out.(1sz) <- w1));
+  A.((out.(2sz) <- S64.zero));
+  A.((out.(3sz) <- S64.zero));
+  with v. assert (A.pts_to out v);
+  A.pts_to_len out;
+  vals_bnd v;
+  Seq.lemma_eq_intro
+    (Seq.slice (Seq.slice (reveal vb) (SZ.v off) (SZ.v off + 16)) 0 8)
+    (Seq.slice (reveal vb) (SZ.v off) (SZ.v off + 8));
+  Seq.lemma_eq_intro
+    (Seq.slice (Seq.slice (reveal vb) (SZ.v off) (SZ.v off + 16)) 8 16)
+    (Seq.slice (reveal vb) (SZ.v off + 8) (SZ.v off + 16));
+  chunk_res (vals v) (Seq.slice (reveal vb) (SZ.v off) (SZ.v off + 16));
+  assert (pure (eval (vals v) ==
+                le_nat (Seq.slice (reveal vb) (SZ.v off) (SZ.v off + 16))));
+}
+#pop-options
+
+(** The four unrolled reads, in the quantified form {!eval_le} wants. *)
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 200"
+let load_le_quant (b: Seq.seq S8.t) (s: Seq.seq nat)
+  : Lemma (requires Seq.length b == 32 /\ Seq.length s == nl /\
+                    Seq.index s 0 == le_nat (Seq.slice b 0 8) /\
+                    Seq.index s 1 == le_nat (Seq.slice b 8 16) /\
+                    Seq.index s 2 == le_nat (Seq.slice b 16 24) /\
+                    Seq.index s 3 == le_nat (Seq.slice b 24 32))
+          (ensures eval s == le_nat b)
+  = let aux (k: nat { k < 4 })
+      : Lemma (Seq.index s k == le_nat (Seq.slice b (8 * k) (8 * k + 8)))
+      = if k = 0 then assert (8 * 0 == 0 /\ 8 * 0 + 8 == 8)
+        else if k = 1 then assert (8 * 1 == 8 /\ 8 * 1 + 8 == 16)
+        else if k = 2 then assert (8 * 2 == 16 /\ 8 * 2 + 8 == 24)
+        else assert (8 * 3 == 24 /\ 8 * 3 + 8 == 32) in
+    Classical.forall_intro aux;
+    eval_le b s
+#pop-options
+
+#push-options "--z3rlimit 400"
+
+(** Four limbs from thirty-two bytes.  The value may be anything below
+    [2^256]; deciding whether it is a residue is the caller's business. *)
+fn load_le (out: A.array S64.t) (b: A.array S8.t)
+           (#vo: erased (Seq.seq S64.t))
+           (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to out vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length vb == 32)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to b #pb vb **
+  pure (Seq.length vo' == nl /\ bnd (vals vo') base /\
+        eval (vals vo') == le_nat vb)
+{
+  A.pts_to_len out;
   A.pts_to_len b;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to a v ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k ==
-               S8.v (Seq.index vb (4 * k)) + 256 * S8.v (Seq.index vb (4 * k + 1)) +
-               65536 * S8.v (Seq.index vb (4 * k + 2)) +
-               16777216 * S8.v (Seq.index vb (4 * k + 3))))
-  decreases (8 - SZ.v (!i))
-  {
-    let vi = !i;
-    let o = SZ.mul vi 4sz;
-    let b0 = A.(b.(o));
-    let b1 = A.(b.(SZ.add o 1sz));
-    let b2 = A.(b.(SZ.add o 2sz));
-    let b3 = A.(b.(SZ.add o 3sz));
-    assert_norm (16777216 * (pow2 8 - 1) < pow2 64);
-    assert_norm (65536 * (pow2 8 - 1) < pow2 64);
-    assert_norm (256 * (pow2 8 - 1) < pow2 64);
-    assert_norm ((pow2 8 - 1) + 256 * (pow2 8 - 1) +
-                 65536 * (pow2 8 - 1) + 16777216 * (pow2 8 - 1) < pow2 64);
-    let w = addw (addw (Cast.u8_to_u64 b0) (mulk 256uL (Cast.u8_to_u64 b1)))
-                 (addw (mulk 65536uL (Cast.u8_to_u64 b2))
-                       (mulk 16777216uL (Cast.u8_to_u64 b3)));
-    A.((a.(vi) <- w));
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to a v);
-  assert (pure (forall (k: nat). k < F.nl ==>
-                  Seq.index (vals v) k ==
-                    S8.v (Seq.index vb (4 * k)) + 256 * S8.v (Seq.index vb (4 * k + 1)) +
-                    65536 * S8.v (Seq.index vb (4 * k + 2)) +
-                    16777216 * S8.v (Seq.index vb (4 * k + 3))));
-  F.eval_bytes vb (vals v);
-  assert_norm ((pow2 8 - 1) + 256 * (pow2 8 - 1) +
-               65536 * (pow2 8 - 1) + 16777216 * (pow2 8 - 1) < F.base);
+  let w0 = Bytes.load_le #S64.t b 0sz;
+  let w1 = Bytes.load_le #S64.t b 8sz;
+  let w2 = Bytes.load_le #S64.t b 16sz;
+  let w3 = Bytes.load_le #S64.t b 24sz;
+  A.((out.(0sz) <- w0));
+  A.((out.(1sz) <- w1));
+  A.((out.(2sz) <- w2));
+  A.((out.(3sz) <- w3));
+  with v. assert (A.pts_to out v);
+  A.pts_to_len out;
+  vals_bnd v;
+  assert (pure (Seq.index (vals v) 0 == le_nat (Seq.slice (reveal vb) 0 8)));
+  assert (pure (Seq.index (vals v) 1 == le_nat (Seq.slice (reveal vb) 8 16)));
+  assert (pure (Seq.index (vals v) 2 == le_nat (Seq.slice (reveal vb) 16 24)));
+  assert (pure (Seq.index (vals v) 3 == le_nat (Seq.slice (reveal vb) 24 32)));
+  load_le_quant (reveal vb) (vals v);
+  assert (pure (eval (vals v) == le_nat (reveal vb)));
 }
+#pop-options
 
-(** Eight limbs into thirty-two little-endian bytes. *)
+(** {2 Bytes out} *)
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 200"
+
+
+(** The eight literal shifts the store loop performs, as the quantified
+    form {!Spec.Ed25519.Scalar.store_le_ok} asks for. *)
+let store_le_byte (s: Seq.seq nat) (b: Seq.seq S8.t)
+                  (k: nat { k < nl }) (m: nat { m < 8 })
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
+                    bat b (8 * k) == Seq.index s k % 256 /\
+                    bat b (8 * k + 1) == (Seq.index s k / pow2 8) % 256 /\
+                    bat b (8 * k + 2) == (Seq.index s k / pow2 16) % 256 /\
+                    bat b (8 * k + 3) == (Seq.index s k / pow2 24) % 256 /\
+                    bat b (8 * k + 4) == (Seq.index s k / pow2 32) % 256 /\
+                    bat b (8 * k + 5) == (Seq.index s k / pow2 40) % 256 /\
+                    bat b (8 * k + 6) == (Seq.index s k / pow2 48) % 256 /\
+                    bat b (8 * k + 7) == (Seq.index s k / pow2 56) % 256)
+          (ensures bat b (8 * k + m) == (Seq.index s k / pow2 (8 * m)) % 256)
+  = if m = 0 then (assert_norm (pow2 0 == 1);
+                   assert (8 * m == 0);
+                   assert (Seq.index s k / 1 == Seq.index s k))
+    else if m = 1 then assert (8 * m == 8)
+    else if m = 2 then assert (8 * m == 16)
+    else if m = 3 then assert (8 * m == 24)
+    else if m = 4 then assert (8 * m == 32)
+    else if m = 5 then assert (8 * m == 40)
+    else if m = 6 then assert (8 * m == 48)
+    else assert (8 * m == 56)
+
+let store_le_bridge (s: Seq.seq nat) (b: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
+                    (forall (k: nat). k < nl ==>
+                       bat b (8 * k) == Seq.index s k % 256 /\
+                       bat b (8 * k + 1) == (Seq.index s k / pow2 8) % 256 /\
+                       bat b (8 * k + 2) == (Seq.index s k / pow2 16) % 256 /\
+                       bat b (8 * k + 3) == (Seq.index s k / pow2 24) % 256 /\
+                       bat b (8 * k + 4) == (Seq.index s k / pow2 32) % 256 /\
+                       bat b (8 * k + 5) == (Seq.index s k / pow2 40) % 256 /\
+                       bat b (8 * k + 6) == (Seq.index s k / pow2 48) % 256 /\
+                       bat b (8 * k + 7) == (Seq.index s k / pow2 56) % 256))
+          (ensures (forall (k: nat) (m: nat). k < nl /\ m < 8 ==>
+                      bat b (8 * k + m) == (Seq.index s k / pow2 (8 * m)) % 256))
+  = introduce forall (k: nat) (m: nat). (k < nl /\ m < 8) ==>
+      bat b (8 * k + m) == (Seq.index s k / pow2 (8 * m)) % 256
+    with introduce _ ==> _
+    with store_le_byte s b k m
+
+#pop-options
+
+#push-options "--z3rlimit 600"
+
 fn store_le (b: A.array S8.t) (a: A.array S64.t)
             (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #pa va **
-  pure (Seq.length vb == 32 /\ Seq.length va == F.nl /\ F.bnd (vals va) F.base)
+  pure (Seq.length vb == 32 /\ Seq.length va == nl /\ bnd (vals va) base)
 ensures exists* (vb': Seq.seq S8.t).
   A.pts_to b vb' ** A.pts_to a #pa va **
-  pure (vb' == nat_to_le 32 (F.eval (vals va)))
+  pure (vb' == nat_to_le 32 (eval (vals va)))
 {
   A.pts_to_len b;
   A.pts_to_len a;
+  assert_norm (pow2 8 == 256);
+  assert_norm (pow2 0 == 1);
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
+  while (let vi = !i; SZ.lt vi 4sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
     pts_to i vi ** A.pts_to b v ** A.pts_to a #pa va **
-    pure (SZ.v vi <= 8 /\ Seq.length v == 32 /\
+    pure (SZ.v vi <= 4 /\ Seq.length v == 32 /\
           (forall (k: nat). k < SZ.v vi ==>
-             S8.v (Seq.index v (4 * k)) == Seq.index (vals va) k % 256 /\
-             S8.v (Seq.index v (4 * k + 1)) == Seq.index (vals va) k / 256 % 256 /\
-             S8.v (Seq.index v (4 * k + 2)) == Seq.index (vals va) k / 65536 % 256 /\
-             S8.v (Seq.index v (4 * k + 3)) == Seq.index (vals va) k / 16777216 % 256))
-  decreases (8 - SZ.v (!i))
+             S8.v (Seq.index v (8 * k)) == Seq.index (vals va) k % 256 /\
+             S8.v (Seq.index v (8 * k + 1)) == Seq.index (vals va) k / pow2 8 % 256 /\
+             S8.v (Seq.index v (8 * k + 2)) == Seq.index (vals va) k / pow2 16 % 256 /\
+             S8.v (Seq.index v (8 * k + 3)) == Seq.index (vals va) k / pow2 24 % 256 /\
+             S8.v (Seq.index v (8 * k + 4)) == Seq.index (vals va) k / pow2 32 % 256 /\
+             S8.v (Seq.index v (8 * k + 5)) == Seq.index (vals va) k / pow2 40 % 256 /\
+             S8.v (Seq.index v (8 * k + 6)) == Seq.index (vals va) k / pow2 48 % 256 /\
+             S8.v (Seq.index v (8 * k + 7)) == Seq.index (vals va) k / pow2 56 % 256))
+  decreases (4 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(a.(vi));
-    let o = SZ.mul vi 4sz;
-    pow2_bytes ();
-    A.((b.(o) <- Cast.u64_to_u8 x));
-    A.((b.(SZ.add o 1sz) <- Cast.u64_to_u8 (S64.shift_right x 8ul)));
-    A.((b.(SZ.add o 2sz) <- Cast.u64_to_u8 (S64.shift_right x 16ul)));
-    A.((b.(SZ.add o 3sz) <- Cast.u64_to_u8 (S64.shift_right x 24ul)));
+    let pos = SZ.mul 8sz vi;
+    A.((b.(pos) <- Cast.u64_to_u8 x));
+    A.((b.(SZ.add pos 1sz) <- Cast.u64_to_u8 (S64.shift_right x 8ul)));
+    A.((b.(SZ.add pos 2sz) <- Cast.u64_to_u8 (S64.shift_right x 16ul)));
+    A.((b.(SZ.add pos 3sz) <- Cast.u64_to_u8 (S64.shift_right x 24ul)));
+    A.((b.(SZ.add pos 4sz) <- Cast.u64_to_u8 (S64.shift_right x 32ul)));
+    A.((b.(SZ.add pos 5sz) <- Cast.u64_to_u8 (S64.shift_right x 40ul)));
+    A.((b.(SZ.add pos 6sz) <- Cast.u64_to_u8 (S64.shift_right x 48ul)));
+    A.((b.(SZ.add pos 7sz) <- Cast.u64_to_u8 (S64.shift_right x 56ul)));
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to b v);
-  assert (pure (Seq.length v == 32 /\ F.bnd (vals va) F.base));
-  assert (pure (forall (k: nat). k < F.nl ==>
-                  S8.v (Seq.index v (4 * k)) == Seq.index (vals va) k % 256 /\
-                  S8.v (Seq.index v (4 * k + 1)) == Seq.index (vals va) k / 256 % 256 /\
-                  S8.v (Seq.index v (4 * k + 2)) == Seq.index (vals va) k / 65536 % 256 /\
-                  S8.v (Seq.index v (4 * k + 3)) == Seq.index (vals va) k / 16777216 % 256));
-  F.store_digits (vals va) v;
-  assert (pure (v == nat_to_le 32 (F.eval (vals va))));
+  assert (pure (Seq.length v == 32 /\ bnd (vals va) base));
+  store_le_bridge (vals va) v;
+  store_le_ok (vals va) v;
+  assert (pure (v == nat_to_le 32 (eval (vals va))));
 }
 
-(** Two bounded eight-limb sequences have the same value exactly when they
-    have the same limbs, so equality is eight mask-and-combine steps. *)
-let limbs_unique_eq (a b: Seq.seq nat)
-  : Lemma (requires Seq.length a == F.nl /\ Seq.length b == F.nl /\
-                    F.bnd a F.base /\ F.bnd b F.base /\ F.eval a == F.eval b)
-          (ensures a == b)
-  = Sc.limbs_unique a (F.eval a); Sc.limbs_unique b (F.eval b)
+#pop-options
+
+(** {2 Comparison}
+
+    Used once, to decide whether the [S] half of a signature is already
+    below the order.  The limbs are canonical, so this is
+    {!Hacl.Impl.Mont4.aeq}. *)
 
 fn limbs_eq (a b: A.array S64.t)
             (#pa: perm) (#va: erased (Seq.seq S64.t))
             (#pb: perm) (#vb: erased (Seq.seq S64.t))
 requires A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length va == F.nl /\ Seq.length vb == F.nl /\
-        F.bnd (vals va) F.base /\ F.bnd (vals vb) F.base)
+  pure (Seq.length va == nl /\ Seq.length vb == nl /\
+        bnd (vals va) base /\ bnd (vals vb) base)
 returns r: bool
 ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (r == (F.eval (vals va) = F.eval (vals vb)))
+  pure (r == (eval (vals va) = eval (vals vb)))
 {
-  A.pts_to_len a; A.pts_to_len b;
-  let mut m = S64.ones;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (mm: S64.t).
-    pts_to i vi ** pts_to m mm ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 8 /\
-          (if (forall (k: nat). k < SZ.v vi ==>
-                 Seq.index (vals va) k == Seq.index (vals vb) k)
-           then S64.v mm == pow2 64 - 1 else S64.v mm == 0))
-  decreases (8 - SZ.v (!i))
-  {
-    let vi = !i;
-    let mm = !m;
-    let xa = A.(a.(vi));
-    let xb = A.(b.(vi));
-    let e = S64.eq_mask xa xb;
-    UInt.logand_lemma_1 #64 (S64.v e);
-    UInt.logand_lemma_2 #64 (S64.v e);
-    UInt.logand_commutative #64 (S64.v mm) (S64.v e);
-    m := S64.logand mm e;
-    i := SZ.add vi 1sz;
-  };
-  let mm = !m;
-  assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
-  let m8 = Cast.u64_to_u8 mm;
-  let r = Declassify.bool_of_mask m8;
-  Classical.move_requires (Seq.lemma_eq_intro (vals va)) (vals vb);
-  Classical.move_requires (limbs_unique_eq (vals va)) (vals vb);
-  r
+  aeq a b
 }
 
-(** {2 The carry chain, keeping the carry}
+(** {2 Reduction of a digest}
 
-    [Hacl.Curve25519.Field.carry_low_op] drops the carry out of the top
-    limb, because the field folds it back in with a multiply by 38.  Here
-    the carry is the answer to a question -- did the addition reach
-    [2^256]? -- so it has to come back.  The loop is the same one. *)
+    Four chunks and three constants.  The chunks are accumulated from the
+    top down so that the running sum is always a residue and the three
+    multiplications are independent of each other. *)
 
-#push-options "--z3rlimit 300"
+#push-options "--z3rlimit 400"
 
-fn carry_out_op (a: A.array S64.t) (c: erased nat) (d: erased nat)
-                (#va: erased (Seq.seq S64.t))
-requires A.pts_to a va **
-  pure (Seq.length va == F.nl /\ F.ble (vals va) c /\
-        reveal c + reveal d < F.base * (reveal d + 1) /\
-        reveal c + reveal d < pow2 64)
-returns r: S64.t
-ensures exists* (va': Seq.seq S64.t).
-  A.pts_to a va' **
-  pure (Seq.length va' == F.nl /\ vals va' == F.carry_low (vals va) /\
-        S64.v r == F.carry_out (vals va))
+(** One accumulation step, entirely in the specification: multiplying by a
+    table that holds [R k mod q] is multiplying by [k]. *)
+let fold_step (a c p: Seq.seq nat) (k: nat)
+  : Lemma (requires res qmod a /\ res qmod c /\ res qmod p /\
+                    eval p == pow2 256 * k % q)
+          (ensures res qmod (madd qmod a (mmul qmod c p)) /\
+                   eval (madd qmod a (mmul qmod c p)) == (eval a + eval c * k) % q)
+  = qmod_ok (); qmod_m ();
+    mmul_const c p k;
+    madd_ok qmod a (mmul qmod c p);
+    Math.lemma_mod_add_distr (eval a) (eval c * k) q
+
+(** One term of the fold: [acc := acc + c k mod q], where [p] is the table
+    holding [R k mod q].  [k] is ghost and only the constant is real. *)
+inline_for_extraction
+fn fold_chunk (acc c p ms nm: A.array S64.t) (k: erased nat)
+              (#vacc: erased (Seq.seq S64.t))
+              (#pc: perm) (#vc: erased (Seq.seq S64.t))
+              (#pp: perm) (#vp: erased (Seq.seq S64.t))
+              (#pm: perm) (#vms: erased (Seq.seq S64.t))
+              (#pn: perm) (#vnm: erased (Seq.seq S64.t))
+requires A.pts_to acc vacc ** A.pts_to c #pc vc ** A.pts_to p #pp vp **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
+  pure (qelem vacc /\ qelem vc /\ qelem vp /\
+        Seq.length vms == nl /\ Seq.length vnm == nl /\
+        vals vms == qmod.ms /\ vals vnm == qmod.nm /\
+        eval (vals vp) == pow2 256 * reveal k % q)
+ensures exists* (vacc': Seq.seq S64.t).
+  A.pts_to acc vacc' ** A.pts_to c #pc vc ** A.pts_to p #pp vp **
+  A.pts_to ms #pm vms ** A.pts_to nm #pn vnm **
+  pure (qelem vacc' /\ qv vacc' == (qv vacc + qv vc * reveal k) % q)
 {
-  A.pts_to_len a;
-  F.div_le_of_lt (reveal c + reveal d) F.base d;
-  Loops.repeati_zero F.carry_step (vals va);
-  let mut k = 0sz;
-  while (let vk = !k; SZ.lt vk 7sz)
-  invariant exists* (vk: SZ.t) (v: Seq.seq S64.t).
-    pts_to k vk ** A.pts_to a v **
-    pure (SZ.v vk <= 7 /\ Seq.length v == F.nl /\
-          vals v == F.carry_run (vals va) (SZ.v vk))
-  decreases (7 - SZ.v (!k))
-  {
-    with v. assert (A.pts_to a v);
-    let vk = !k;
-    F.carry_run_chained (vals va) c d (SZ.v vk);
-    F.carry_run_len (vals va) (SZ.v vk);
-    let t = A.(a.(vk));
-    let u = A.(a.(SZ.add vk 1sz));
-    Math.lemma_div_le (S64.v t) (reveal c + reveal d) F.base;
-    let lo = lo32 t;
-    let up = addw u (hi32 t);
-    A.((a.(vk) <- lo));
-    A.((a.(SZ.add vk 1sz) <- up));
-    vals_upd v (SZ.v vk) lo;
-    vals_upd (Seq.upd v (SZ.v vk) lo) (SZ.v vk + 1) up;
-    Loops.unfold_repeati (SZ.v vk) F.carry_step (vals va);
-    k := SZ.add vk 1sz;
-  };
-  with v. assert (A.pts_to a v);
-  F.carry_run_len (vals va) 7;
-  let t = A.(a.(7sz));
-  let lo = lo32 t;
-  let hi = hi32 t;
-  A.((a.(7sz) <- lo));
-  vals_upd v 7 lo;
-  assert (pure (vals (Seq.upd v 7 lo) == F.carry_low (vals va)));
-  hi
+  qmod_ok ();
+  fold_step (vals vacc) (vals vc) (vals vp) (reveal k);
+  let z = S64.zero;
+  let mut t = [| z; 4sz |]; A.pts_to_len t;
+  let mut u = [| z; 4sz |]; A.pts_to_len u; A.pts_to_len t; A.pts_to_len u;
+  amul t c p ms nm qmu qmod;
+  aadd u acc t nm qmod;
+  acopy acc u;
 }
 
 #pop-options
 
-(** {2 The two primitives} *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-(** Limbwise addition, then one carry pass.  Each column is below
-    [2 base - 1], so a single unit of headroom normalises it, and the
-    carry out is zero or one.
+(** The three folds, chained: the running remainder after the last one is
+    the whole digest reduced once. *)
+let reduce64_ok (b: Seq.seq S8.t) (r0 r1 r2 r3: nat)
+  : Lemma (requires Seq.length b == 64 /\
+                    r0 == le_nat (Seq.slice b 0 16) /\
+                    r1 == (r0 + le_nat (Seq.slice b 16 32) * pow2 128) % q /\
+                    r2 == (r1 + le_nat (Seq.slice b 32 48) * pow2 256) % q /\
+                    r3 == (r2 + le_nat (Seq.slice b 48 64) * pow2 384) % q)
+          (ensures r3 == le_nat b % q)
+  = digest_split b;
+    fold_ok r0 (le_nat (Seq.slice b 16 32) * pow2 128)
+               (le_nat (Seq.slice b 32 48) * pow2 256)
+               (le_nat (Seq.slice b 48 64) * pow2 384) r1 r2 r3
 
-    Out of place, like every loop in this file: an in-place limb update
-    forces the invariant to say what the limbs it has not reached yet
-    still hold, which doubles the quantifier and, in practice, the proof. *)
-fn addc_op (out a b: A.array S64.t)
-           (#vo: erased (Seq.seq S64.t))
-           (#pa: perm) (#va: erased (Seq.seq S64.t))
-           (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vo == F.nl /\ Seq.length va == F.nl /\ Seq.length vb == F.nl /\
-        F.bnd (vals va) F.base /\ F.bnd (vals vb) F.base)
-returns r: S64.t
+(** The single fold of the short form. *)
+let reduce32_ok (b: Seq.seq S8.t) (r0 r1: nat)
+  : Lemma (requires Seq.length b == 32 /\
+                    r0 == le_nat (Seq.slice b 0 16) /\
+                    r1 == (r0 + le_nat (Seq.slice b 16 32) * pow2 128) % q)
+          (ensures r1 == le_nat b % q)
+  = half_split b
+
+(** Sixty-four little-endian bytes, reduced. *)
+fn reduce64 (out: A.array S64.t) (h: A.array S8.t)
+            (#vo: erased (Seq.seq S64.t))
+            (#ph: perm) (#vh: erased (Seq.seq S8.t))
+requires A.pts_to out vo ** A.pts_to h #ph vh **
+  pure (Seq.length vo == nl /\ Seq.length vh == 64)
 ensures exists* (vo': Seq.seq S64.t).
-  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vo' == F.nl /\ F.bnd (vals vo') F.base /\
-        vals vo' == Sc.addc (vals va) (vals vb) /\
-        S64.v r == Sc.addc_out (vals va) (vals vb))
+  A.pts_to out vo' ** A.pts_to h #ph vh **
+  pure (qelem vo' /\ qv vo' == le_nat vh % q)
 {
-  A.pts_to_len out;
-  A.pts_to_len a;
+  A.pts_to_len h;
+  let z = S64.zero;
+  let mut c = [| z; 4sz |]; A.pts_to_len c; A.pts_to_len c;
+  let ms = qms ();
+  let nm = qnm ();
+
+  load_chunk out h 0sz;
+  with v0. assert (A.pts_to out v0);
+
+  load_chunk c h 16sz;
+  let p1 = qp1t ();
+  pow_res 384 128;
+  fold_chunk out c p1 ms nm (hide (pow2 128));
+  drop_table p1;
+  with v1. assert (A.pts_to out v1);
+
+  load_chunk c h 32sz;
+  let p2 = qr2t ();
+  r2_res ();
+  fold_chunk out c p2 ms nm (hide (pow2 256));
+  drop_table p2;
+  with v2. assert (A.pts_to out v2);
+
+  load_chunk c h 48sz;
+  let p3 = qp3t ();
+  pow_res 640 384;
+  fold_chunk out c p3 ms nm (hide (pow2 384));
+  drop_table p3;
+  with v3. assert (A.pts_to out v3);
+
+  drop_table ms;
+  drop_table nm;
+  assert (pure (qv v0 == le_nat (Seq.slice (reveal vh) 0 16)));
+  assert (pure (qv v1 == (qv v0 + le_nat (Seq.slice (reveal vh) 16 32) * pow2 128) % q));
+  assert (pure (qv v2 == (qv v1 + le_nat (Seq.slice (reveal vh) 32 48) * pow2 256) % q));
+  assert (pure (qv v3 == (qv v2 + le_nat (Seq.slice (reveal vh) 48 64) * pow2 384) % q));
+  reduce64_ok (reveal vh) (qv v0) (qv v1) (qv v2) (qv v3);
+  assert (pure (qv v3 == le_nat (reveal vh) % q));
+}
+
+(** Thirty-two little-endian bytes, reduced: the same fold over two
+    chunks.  The secret scalar and the [S] half of a signature both come
+    in this way. *)
+fn reduce32 (out: A.array S64.t) (b: A.array S8.t)
+            (#vo: erased (Seq.seq S64.t))
+            (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to out vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == nl /\ Seq.length vb == 32)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to b #pb vb **
+  pure (qelem vo' /\ qv vo' == le_nat vb % q)
+{
   A.pts_to_len b;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k == Seq.index (vals va) k + Seq.index (vals vb) k))
-  decreases (8 - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = A.(a.(vi));
-    let y = A.(b.(vi));
-    assert_norm (2 * F.base < pow2 64);
-    A.((out.(vi) <- addw x y));
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to out v);
-  F.addw_len (vals va) (vals vb);
-  assert (pure (vals v `Seq.equal` F.addw (vals va) (vals vb)));
-  F.addw_ble (vals va) (vals vb) (F.base - 1) (F.base - 1);
-  assert_norm (2 * F.base - 2 + 1 < F.base * 2);
-  assert_norm (2 * F.base - 2 + 1 < pow2 64);
-  let r = carry_out_op out (2 * F.base - 2) 1;
-  Sc.addc_ok (vals va) (vals vb);
-  r
-}
+  let z = S64.zero;
+  let mut c = [| z; 4sz |]; A.pts_to_len c; A.pts_to_len c;
+  let ms = qms ();
+  let nm = qnm ();
 
-#push-options "--z3rlimit 120"
+  load_chunk out b 0sz;
+  with v0. assert (A.pts_to out v0);
 
-(** A doubling with a bit shifted into the bottom.  Columns reach
-    [2 base - 1] here, so the chain gets two units of headroom; the carry
-    out is zero by hypothesis, so [carry_low_op] serves. *)
-fn dbl_add_op (out a: A.array S64.t) (b: S64.t { S64.v b < 2 })
-              (#vo: erased (Seq.seq S64.t))
-              (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires A.pts_to out vo ** A.pts_to a #pa va **
-  pure (Seq.length vo == F.nl /\ Seq.length va == F.nl /\
-        F.bnd (vals va) F.base /\
-        2 * F.eval (vals va) + S64.v b < pow2 256)
-ensures exists* (vo': Seq.seq S64.t).
-  A.pts_to out vo' ** A.pts_to a #pa va **
-  pure (Seq.length vo' == F.nl /\ F.bnd (vals vo') F.base /\
-        vals vo' == Sc.dbl_add (vals va) (S64.v b) /\
-        F.eval (vals vo') == 2 * F.eval (vals va) + S64.v b)
-{
-  A.pts_to_len out;
-  A.pts_to_len a;
-  let y : erased (Seq.seq nat) = hide (Seq.create 1 (S64.v b) <: Seq.seq nat);
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va **
-    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k == 2 * Seq.index (vals va) k))
-  decreases (8 - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = A.(a.(vi));
-    assert_norm (2 * F.base < pow2 64);
-    A.((out.(vi) <- addw x x));
-    i := SZ.add vi 1sz;
-  };
-  with u. assert (A.pts_to out u);
-  let z = A.(out.(0sz));
-  assert_norm (2 * F.base + 1 < pow2 64);
-  let z' = addw z b;
-  A.((out.(0sz) <- z'));
-  vals_upd u 0 z';
-  with v. assert (A.pts_to out v);
-  assert (pure (Seq.length (F.scale 2 (vals va)) == F.nl));
-  assert (pure (vals v `Seq.equal` F.addw (F.scale 2 (vals va)) (reveal y)));
-  F.scale_ble 2 (vals va) (F.base - 1);
-  assert (pure (F.ble (reveal y) 1));
-  F.addw_ble (F.scale 2 (vals va)) (reveal y) (2 * F.base - 2) 1;
-  assert_norm (2 * F.base - 1 + 2 < F.base * 3);
-  assert_norm (2 * F.base - 1 + 2 < pow2 64);
-  carry_low_op out (2 * F.base - 1) 2;
-  Sc.dbl_add_ok (vals va) (S64.v b);
-  with r. assert (A.pts_to out r);
-  assert (pure (vals r == Sc.dbl_add (vals va) (S64.v b) /\
-                F.eval (vals r) == 2 * F.eval (vals va) + S64.v b));
+  load_chunk c b 16sz;
+  let p1 = qp1t ();
+  pow_res 384 128;
+  fold_chunk out c p1 ms nm (hide (pow2 128));
+  drop_table p1;
+  with v1. assert (A.pts_to out v1);
+
+  drop_table ms;
+  drop_table nm;
+  assert (pure (qv v0 == le_nat (Seq.slice (reveal vb) 0 16)));
+  assert (pure (qv v1 == (qv v0 + le_nat (Seq.slice (reveal vb) 16 32) * pow2 128) % q));
+  reduce32_ok (reveal vb) (qv v0) (qv v1);
+  assert (pure (qv v1 == le_nat (reveal vb) % q));
 }
 
 #pop-options
-
-(** {2 Conditional subtraction}
-
-    Add [2^256 - q] into a copy; the carry out says whether the original was
-    at least [q], and if it was then the copy is the answer.  Select on the
-    carry.  Nothing here looks at a limb. *)
-
-#push-options "--z3rlimit 120"
-
-fn csub_q_op (a t: A.array S64.t)
-             (#va: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
-requires A.pts_to a va ** A.pts_to t vt **
-  pure (Seq.length va == F.nl /\ Seq.length vt == F.nl /\
-        F.bnd (vals va) F.base /\ F.eval (vals va) < 2 * Sc.q)
-ensures exists* (va': Seq.seq S64.t) (vt': Seq.seq S64.t).
-  A.pts_to a va' ** A.pts_to t vt' **
-  pure (Seq.length va' == F.nl /\ Seq.length vt' == F.nl /\
-        F.bnd (vals va') F.base /\ vals va' == Sc.csub_q (vals va) /\
-        F.eval (vals va') == F.eval (vals va) % Sc.q /\
-        F.eval (vals va') < Sc.q)
-{
-  A.pts_to_len a;
-  A.pts_to_len t;
-  let qcs = Table.table Tables.qc_arr 8sz;
-  Tables.qc_seq_ok ();
-  Sc.qc_ok ();
-  let c = addc_op t a qcs;
-  Table.drop_table qcs;
-  Sc.addc_ok (vals va) Sc.qc;
-  let m = S64.eq_mask c (S64.classify 1uL);
-  assert (pure ((S64.v m == 0) == (S64.v c <> 1)));
-  cselect a t m;
-  Sc.csub_q_ok (vals va);
-  Sc.q_bound ();
-  with va'. assert (A.pts_to a va');
-  assert (pure (vals va' == Sc.csub_q (vals va)));
-}
-
-#pop-options
-
-(** {2 The three operations} *)
-
-fn set_zero (a: A.array S64.t) (#va: erased (Seq.seq S64.t))
-requires A.pts_to a va ** pure (Seq.length va == F.nl)
-ensures exists* (va': Seq.seq S64.t).
-  A.pts_to a va' **
-  pure (Seq.length va' == F.nl /\ vals va' == Sc.zero /\
-        F.bnd (vals va') F.base /\ F.eval (vals va') == 0)
-{
-  A.pts_to_len a;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 8sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to a v **
-    pure (SZ.v vi <= 8 /\ Seq.length v == F.nl /\
-          (forall (k: nat). k < SZ.v vi ==> Seq.index (vals v) k == 0))
-  decreases (8 - SZ.v (!i))
-  {
-    let vi = !i;
-    A.((a.(vi) <- S64.classify 0uL));
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to a v);
-  Classical.forall_intro Sc.zero_index;
-  Sc.zero_ok ();
-  assert (pure (vals v `Seq.equal` Sc.zero));
-  assert (pure (F.bnd (vals v) F.base /\ F.eval (vals v) == 0));
-}
-
-#push-options "--z3rlimit 120"
-
-(** [acc := (2 acc + b) mod q]. *)
-fn qdbl_add_op (acc t1 t2: A.array S64.t) (b: S64.t { S64.v b < 2 })
-               (#vacc: erased (Seq.seq S64.t))
-               (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-requires A.pts_to acc vacc ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
-  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
-        F.bnd (vals vacc) F.base /\ F.eval (vals vacc) < Sc.q)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        vals w == Sc.qdbl_add (vals vacc) (S64.v b))
-{
-  Sc.q_bound ();
-  dbl_add_op t1 acc b;
-  csub_q_op t1 t2;
-  copy acc t1;
-  Sc.dbl_add_ok (vals vacc) (S64.v b);
-  Sc.csub_q_ok (Sc.dbl_add (vals vacc) (S64.v b));
-}
-
-(** [acc := (acc + b) mod q]. *)
-fn qadd_op (acc b t1 t2: A.array S64.t)
-           (#vacc: erased (Seq.seq S64.t))
-           (#pb: perm) (#vb: erased (Seq.seq S64.t))
-           (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-requires A.pts_to acc vacc ** A.pts_to b #pb vb **
-         A.pts_to t1 v1 ** A.pts_to t2 v2 **
-  pure (Seq.length vacc == F.nl /\ Seq.length vb == F.nl /\
-        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
-        F.bnd (vals vacc) F.base /\ F.bnd (vals vb) F.base /\
-        F.eval (vals vacc) < Sc.q /\ F.eval (vals vb) < Sc.q)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to b #pb vb ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        vals w == Sc.qadd (vals vacc) (vals vb))
-{
-  Sc.q_bound ();
-  Sc.addc_ok (vals vacc) (vals vb);
-  F.eval_bnd (Sc.addc (vals vacc) (vals vb));
-  let _ = addc_op t1 acc b;
-  csub_q_op t1 t2;
-  copy acc t1;
-  Sc.csub_q_ok (Sc.addc (vals vacc) (vals vb));
-}
-
-#pop-options
-
-(** {2 Reduction of a hash}
-
-    SHA-512 of something, read as a little-endian integer below [2^512],
-    brought into [0, q).  Five hundred and twelve doublings; each is a
-    sixteen-limb add and a conditional subtract, so about ten thousand
-    machine operations -- a fraction of one point addition. *)
-
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
-
-fn reduce_body (acc t1 t2: A.array S64.t) (h: A.array S8.t) (i: SZ.t { SZ.v i < 512 })
-               (#vacc: erased (Seq.seq S64.t))
-               (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-               (#ph: perm) (#vh: erased (Seq.seq S8.t))
-requires A.pts_to acc vacc ** A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to h #ph vh **
-  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
-        Seq.length vh == 64 /\
-        F.bnd (vals vacc) F.base /\ F.eval (vals vacc) < Sc.q)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to h #ph vh **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        vals w == Sc.reduce_step (le_nat vh) (SZ.v i) (vals vacc))
-{
-  A.pts_to_len h;
-  let bi = SZ.sub 511sz i;
-  let bj = SZ.div bi 8sz;
-  let sh = SZ.sizet_to_uint32 (SZ.rem bi 8sz);
-  assert_norm (pow2 32 > 8);
-  Math.small_mod (SZ.v (SZ.rem bi 8sz)) (pow2 32);
-  assert (pure (SZ.v bi == 511 - SZ.v i /\ SZ.v bj == SZ.v bi / 8 /\
-                U32.v sh == SZ.v bi % 8));
-  let byte = A.(h.(bj));
-  let w = Cast.u8_to_u64 byte;
-  let sr = S64.shift_right w sh;
-  assert (pure (S64.v sr == S8.v (Seq.index vh (SZ.v bi / 8)) / pow2 (SZ.v bi % 8)));
-  UInt.logand_mask #64 (S64.v sr) 1;
-  assert_norm (pow2 1 == 2);
-  let bit = S64.logand sr (S64.classify 1uL);
-  Sc.le_nat_bit vh (SZ.v bi);
-  assert (pure (S64.v bit == Sc.bit_of (le_nat vh) (SZ.v bi) /\ S64.v bit < 2));
-  qdbl_add_op acc t1 t2 bit;
-}
-
-fn reduce_op (acc t1 t2: A.array S64.t) (h: A.array S8.t)
-             (#vacc: erased (Seq.seq S64.t))
-             (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-             (#ph: perm) (#vh: erased (Seq.seq S8.t))
-requires A.pts_to acc vacc ** A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to h #ph vh **
-  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\
-        Seq.length vh == 64)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to h #ph vh **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        F.eval (vals w) == le_nat vh % Sc.q)
-{
-  A.pts_to_len h;
-  le_nat_bound vh;
-  set_zero acc;
-  Loops.repeati_zero (Sc.reduce_step (le_nat vh)) Sc.zero;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 512sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to acc v ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
-    A.pts_to h #ph vh **
-    pure (SZ.v vi <= 512 /\ Seq.length v == F.nl /\
-          Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-          vals v == Loops.repeati (SZ.v vi) (Sc.reduce_step (le_nat vh)) Sc.zero)
-  decreases (512 - SZ.v (!i))
-  {
-    let vi = !i;
-    Sc.reduce_at (le_nat vh) (SZ.v vi);
-    reduce_body acc t1 t2 h vi;
-    Loops.unfold_repeati (SZ.v vi) (Sc.reduce_step (le_nat vh)) Sc.zero;
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to acc v);
-  Sc.reduce_ok (le_nat vh);
-  assert (pure (F.bnd (vals v) F.base /\ F.eval (vals v) < Sc.q /\
-                F.eval (vals v) == le_nat vh % Sc.q));
-}
-
-#pop-options
-
-(** {2 Multiplication}
-
-    Horner over the two hundred and fifty-six bits of the multiplier, most
-    significant first.  The addition is unconditional and its result is
-    selected against the accumulator on the bit, so the running time does
-    not depend on the scalar. *)
-
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
-
-fn qmul_body (acc a n t1 t2 t3: A.array S64.t) (i: SZ.t { SZ.v i < 256 })
-             (#vacc: erased (Seq.seq S64.t))
-             (#pa: perm) (#va: erased (Seq.seq S64.t))
-             (#pn: perm) (#vn: erased (Seq.seq S64.t))
-             (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-             (#v3: erased (Seq.seq S64.t))
-requires A.pts_to acc vacc ** A.pts_to a #pa va ** A.pts_to n #pn vn **
-         A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to t3 v3 **
-  pure (Seq.length vacc == F.nl /\ Seq.length va == F.nl /\ Seq.length vn == F.nl /\
-        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\ Seq.length v3 == F.nl /\
-        F.bnd (vals vacc) F.base /\ F.eval (vals vacc) < Sc.q /\
-        F.bnd (vals va) F.base /\ F.eval (vals va) < Sc.q /\
-        F.bnd (vals vn) F.base)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
-                (w2: Seq.seq S64.t) (w3: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to a #pa va ** A.pts_to n #pn vn **
-  A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\
-        Seq.length w2 == F.nl /\ Seq.length w3 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        vals w == Sc.qmul_step (vals va) (F.eval (vals vn)) (SZ.v i) (vals vacc))
-{
-  A.pts_to_len n;
-  let bi = SZ.sub 255sz i;
-  let bj = SZ.div bi 32sz;
-  let sh = SZ.sizet_to_uint32 (SZ.rem bi 32sz);
-  assert_norm (pow2 32 > 16);
-  Math.small_mod (SZ.v (SZ.rem bi 32sz)) (pow2 32);
-  assert (pure (SZ.v bi == 255 - SZ.v i /\ SZ.v bj == SZ.v bi / 32 /\
-                U32.v sh == SZ.v bi % 32));
-  let limb = A.(n.(bj));
-  let sr = S64.shift_right limb sh;
-  assert (pure (S64.v sr ==
-                Seq.index (vals vn) (SZ.v bi / F.rad) / pow2 (SZ.v bi % F.rad)));
-  UInt.logand_mask #64 (S64.v sr) 1;
-  assert_norm (pow2 1 == 2);
-  let bit = S64.logand sr (S64.classify 1uL);
-  Sc.eval_bit (vals vn) (SZ.v bi);
-  assert (pure (S64.v bit == Sc.bit_of (F.eval (vals vn)) (SZ.v bi) /\ S64.v bit < 2));
-
-  qdbl_add_op acc t1 t2 (S64.classify 0uL);
-  with d. assert (A.pts_to acc d);
-  copy t3 acc;
-  qadd_op t3 a t1 t2;
-  let m = S64.eq_mask bit (S64.classify 1uL);
-  assert (pure ((S64.v m == 0) == (S64.v bit <> 1)));
-  cselect acc t3 m;
-  with w. assert (A.pts_to acc w);
-  assert (pure (vals w == Sc.qsel (S64.v bit) (vals d) (Sc.qadd (vals d) (vals va))));
-}
-
-fn qmul_op (acc a n t1 t2 t3: A.array S64.t)
-           (#vacc: erased (Seq.seq S64.t))
-           (#pa: perm) (#va: erased (Seq.seq S64.t))
-           (#pn: perm) (#vn: erased (Seq.seq S64.t))
-           (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-           (#v3: erased (Seq.seq S64.t))
-requires A.pts_to acc vacc ** A.pts_to a #pa va ** A.pts_to n #pn vn **
-         A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to t3 v3 **
-  pure (Seq.length vacc == F.nl /\ Seq.length va == F.nl /\ Seq.length vn == F.nl /\
-        Seq.length v1 == F.nl /\ Seq.length v2 == F.nl /\ Seq.length v3 == F.nl /\
-        F.bnd (vals va) F.base /\ F.eval (vals va) < Sc.q /\
-        F.bnd (vals vn) F.base)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t)
-                (w2: Seq.seq S64.t) (w3: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to a #pa va ** A.pts_to n #pn vn **
-  A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\
-        Seq.length w2 == F.nl /\ Seq.length w3 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        F.eval (vals w) == (F.eval (vals va) * F.eval (vals vn)) % Sc.q)
-{
-  A.pts_to_len n;
-  F.eval_bnd (vals vn);
-  set_zero acc;
-  Loops.repeati_zero (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 256sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t) (w1: Seq.seq S64.t)
-                    (w2: Seq.seq S64.t) (w3: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to acc v ** A.pts_to a #pa va ** A.pts_to n #pn vn **
-    A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-    pure (SZ.v vi <= 256 /\ Seq.length v == F.nl /\ Seq.length w1 == F.nl /\
-          Seq.length w2 == F.nl /\ Seq.length w3 == F.nl /\
-          vals v ==
-            Loops.repeati (SZ.v vi) (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero)
-  decreases (256 - SZ.v (!i))
-  {
-    let vi = !i;
-    Sc.qmul_at (vals va) (F.eval (vals vn)) (SZ.v vi);
-    qmul_body acc a n t1 t2 t3 vi;
-    Loops.unfold_repeati (SZ.v vi) (Sc.qmul_step (vals va) (F.eval (vals vn))) Sc.zero;
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to acc v);
-  Sc.qmul_ok (vals va) (F.eval (vals vn));
-  assert (pure (F.bnd (vals v) F.base /\ F.eval (vals v) < Sc.q /\
-                F.eval (vals v) == (F.eval (vals va) * F.eval (vals vn)) % Sc.q));
-}
-
-#pop-options
-
-(** {2 A thirty-two byte scalar, reduced}
-
-    The secret scalar is stored as thirty-two bytes but is used modulo the
-    group order.  Zero-extending to sixty-four bytes lets the same
-    reduction serve, and costs only the extra doublings. *)
-
-fn reduce32 (acc t1 t2: A.array S64.t) (sb: A.array S8.t)
-                   (#vacc: erased (Seq.seq S64.t))
-                   (#v1: erased (Seq.seq S64.t)) (#v2: erased (Seq.seq S64.t))
-                   (#psb: perm) (#vsb: erased (Seq.lseq S8.t 32))
-requires A.pts_to acc vacc ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
-  A.pts_to sb #psb vsb **
-  pure (Seq.length vacc == F.nl /\ Seq.length v1 == F.nl /\ Seq.length v2 == F.nl)
-ensures exists* (w: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t).
-  A.pts_to acc w ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to sb #psb vsb **
-  pure (Seq.length w == F.nl /\ Seq.length w1 == F.nl /\ Seq.length w2 == F.nl /\
-        F.bnd (vals w) F.base /\ F.eval (vals w) < Sc.q /\
-        F.eval (vals w) == le_nat vsb % Sc.q)
-{
-  A.pts_to_len sb;
-  let z8 = S8.zero;
-  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; A.pts_to_len c1;
-  Hacl.Impl.Copy.copy_prefix c1 sb 32sz;
-  with vh. assert (A.pts_to c1 vh);
-  A.pts_to_len c1;
-  le_nat_split vh 32;
-  assert (pure (forall (i: nat). i < 32 ==>
-                  S8.v (Seq.index (Seq.slice vh 32 64) i) == 0));
-  le_nat_zeros (Seq.slice vh 32 64);
-  assert (pure (Seq.equal (Seq.slice vh 0 32) vsb));
-  reduce_op acc t1 t2 c1;
-  ()
-}
 
 #pop-options
