@@ -836,29 +836,33 @@ static void Hacl_Ed25519_hash3(uint8_t *out, uint8_t *a, uint8_t *b, uint8_t *ms
 static const uint64_t Hacl_Ed25519_Tables_qr2_arr[4] = { 0xa40611e3449c0f01ULL, 0xd00e1ba768859347ULL, 0xceec73d217f5be65ULL, 0x399411b7c309a3dULL };
 static const uint64_t Hacl_Ed25519_Tables_qp3_arr[4] = { 0xe372e8efd301e8d4ULL, 0xad24db5f36cabecdULL, 0xf2ee573e5a6e5f71ULL, 0xb5c63aa97a331b4ULL };
 static void Hacl_Ed25519_Scalar_reduce64(uint64_t *out, uint8_t *h);
-static const uint64_t Hacl_Ed25519_Tables_gx_arr[5] = { 0x62d608f25d51aULL, 0x412a4b4f6592aULL, 0x75b7171a4b31dULL, 0x1ff60527118feULL, 0x216936d3cd6e5ULL };
-static const uint64_t Hacl_Ed25519_Tables_gy_arr[5] = { 0x6666666666658ULL, 0x4ccccccccccccULL, 0x1999999999999ULL, 0x3333333333333ULL, 0x6666666666666ULL };
+static const uint64_t Hacl_Ed25519_Win0_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x62d608f25d51aULL, 0x412a4b4f6592aULL, 0x75b7171a4b31dULL, 0x1ff60527118feULL, 0x216936d3cd6e5ULL, 0x5a14e2843ce0eULL, 0xa2baf48bf078ULL, 0xcf9eb0203639ULL, 0x2361e821dbe8cULL, 0x36ab384c9f5a0ULL, 0x2485fd3f8e25cULL, 0x3302c4910d58cULL, 0x36b20e98d0e60ULL, 0x7a48ffa573a1fULL, 0x67ae9c4a22928ULL, 0x2a657c4c9f870ULL, 0x3279c2a8e927ULL, 0xd483e469ce7bULL, 0xa34192ea5c3dULL, 0x203da8db56cffULL, 0x9cc0322ef233ULL, 0x727c37c34b228ULL, 0x4b6977970a067ULL, 0x43dfe77be7be8ULL, 0x49fda73eade35ULL, 0x2741a7dcbf23dULL, 0x4d8f6884ef07ULL, 0x428a6fa879666ULL, 0xe315756606eULL, 0x4c9797ba7a456ULL, 0x5981af50e4107ULL, 0x6777e39d2ab0aULL, 0x476041e0fa027ULL, 0x6a774f1f70ca5ULL, 0x14568685fcf4bULL, 0x7fdbc08a584c8ULL, 0x7700d31732770ULL, 0x13b3e4faceb19ULL, 0xdb214316ae7cULL, 0x6742e15f97d77ULL, 0x23065185715cULL, 0x385c9c0529a7cULL, 0x6508ae21b6039ULL, 0xb28df99b7037ULL, 0x357cc970c8007ULL, 0x51f224877f94fULL, 0x1db06df028892ULL, 0x2f219dc81fa39ULL, 0x6baa2385b0769ULL, 0x602c797e30ca6ULL, 0x7d2c1207cf3cbULL, 0x658b27aaa5fe5ULL, 0x1c490e34e0696ULL, 0x20bdb6783c6ebULL, 0x14e528b1154beULL, 0x2fe6678f0902dULL, 0x470b8276855ccULL, 0x289276cca56fcULL, 0x69aaf67b87006ULL, 0x4719e17e016e5ULL, 0xe073b7c05fedULL, 0x511a456f706f0ULL, 0xb4c13e210f8fULL, 0x3666d99d6f814ULL, 0x107427e0d5f36ULL, 0x67353b58515b9ULL, 0x307c730655471ULL, 0x32aec57637b9bULL, 0x55782463d44aeULL, 0x205f3b42f5884ULL, 0x17f3e66a18dc1ULL, 0x68ee03139720cULL, 0x481067b658c4dULL, 0x21aee2d637caeULL, 0x4f162deaec2ecULL };
+static const uint64_t Hacl_Ed25519_Win0_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x6666666666658ULL, 0x4ccccccccccccULL, 0x1999999999999ULL, 0x3333333333333ULL, 0x6666666666666ULL, 0x746ae6af8a3c9ULL, 0x22c870a2ac1cbULL, 0x6887d5a5ce43dULL, 0x4e10ed12f7464ULL, 0x2260cdf309232ULL, 0x3684878f5b4d4ULL, 0x2ece480608058ULL, 0x9a7bde7c5bb0ULL, 0x4d5d09350c730ULL, 0x1267b1d177ee6ULL, 0xab61ca32112fULL, 0x65d45e1fe1be7ULL, 0x355c5b133c8a0ULL, 0x2f0a3875c42c0ULL, 0x47d0e827cb159ULL, 0x21f83d676c8edULL, 0x15128616ba21aULL, 0x6491998c4a0bbULL, 0x737f016370a44ULL, 0x5f4825b298feaULL, 0x27ad0f9497ef4ULL, 0xd289ad6c183aULL, 0x53df5dfe505f0ULL, 0x4508edb84d3feULL, 0x54de3fc2886dULL, 0x4c4b59f4062b8ULL, 0xdef57e47a258ULL, 0x4dab507c220adULL, 0x297c3e732346eULL, 0x31c563e32b47dULL, 0x75ba9fc37b9b4ULL, 0x78c43dc9263c5ULL, 0x22bce3e05e0f3ULL, 0x1bcb756b784b3ULL, 0x21d30600c9e57ULL, 0x644845522f1c0ULL, 0x2646dc88618e9ULL, 0x3cb4bf47de240ULL, 0x6fa595f7e74abULL, 0x7f3d23c2c2dd0ULL, 0x74b06ae87b2cULL, 0xa7bc1d087751ULL, 0x262ff3c95da9aULL, 0x23be47226aa64ULL, 0x637ffcaa7a1b2ULL, 0x72dc36a033713ULL, 0x387938b1a8611ULL, 0x3fc3f38496164ULL, 0x5cbad37be71a0ULL, 0x2d9082313f21aULL, 0x281dc2e2de4f9ULL, 0x68a4e72cce67aULL, 0x5e096e15921faULL, 0x11738eb62731ULL, 0x4070ce608bce8ULL, 0x7e1aeea401f80ULL, 0x6451344e470fdULL, 0x36a26e0dd033eULL, 0x5ba3c23301169ULL, 0x12dbb00ded538ULL, 0x1fd98899c2839ULL, 0x50336c4cb906dULL, 0x6dc0afe9d2263ULL, 0x5c08add68bd65ULL, 0x4e50256f50c4cULL, 0x54cc4ad2e5cdfULL, 0x314335354328dULL, 0x34a4cc6b396bcULL, 0x17aa8b17b80b2ULL, 0x12cbfb2d04ff2ULL };
+static const uint64_t Hacl_Ed25519_Win0_tz_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_Ed25519_Win0_tt_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x68ab3a5b7dda3ULL, 0xeea2a5eadbbULL, 0x2af8df483c27eULL, 0x332b375274732ULL, 0x67875f0fd78b7ULL, 0x23f556d69b401ULL, 0x1383ee48056e3ULL, 0x40ed04d75e6b3ULL, 0x46e0ef2af8439ULL, 0x2498a7850b2f6ULL, 0x108fa78b3a41aULL, 0x17f62df8959bfULL, 0x6e4549d709cd6ULL, 0x28875f79bc1d6ULL, 0x2a4d025cb1dd9ULL, 0x722f6728a1358ULL, 0x3d6dba0f94bf1ULL, 0x1f0a581c6578cULL, 0x306390a5d3563ULL, 0x22783cd8d8732ULL, 0x150bcf3e801d0ULL, 0xa00124d7ec83ULL, 0x4db1fe6bee53aULL, 0x6a618b0752843ULL, 0x745c562c9c593ULL, 0x6d6c8b44ef1d2ULL, 0x28f8fb91378f9ULL, 0x79f73102ebe48ULL, 0x27c142ad4ca7ULL, 0x3c32efd109aa6ULL, 0x545565587ed1bULL, 0x543d3549c8217ULL, 0x756ead14a518cULL, 0x70dcdf416e2c4ULL, 0x119e77b11d165ULL, 0x6f41ad41a51bfULL, 0x5a689857eadf7ULL, 0x2cf664d17c339ULL, 0x5708b04614d9cULL, 0x2c4f59ecedf7eULL, 0x3386f88b2f465ULL, 0x41eee064fcb87ULL, 0x51f35d05ecf52ULL, 0x5fcedb33b56fbULL, 0x5c70fc48ea87cULL, 0x74c95035bc63eULL, 0x6967724a4a87cULL, 0x6d15dfdd3d6a7ULL, 0x149445fe88184ULL, 0x36e05f3266735ULL, 0x5cf2edb5beed4ULL, 0x3bc31f906fd70ULL, 0x5ab6fd640007ULL, 0x4511ce5535f79ULL, 0x5ae6a565800f2ULL, 0x4c3128e4b1ccbULL, 0x918b62757abdULL, 0x73401bc3c7bc3ULL, 0x4509033e9d418ULL, 0x2b344e203a485ULL, 0x4dccde8de2f53ULL, 0x23d65d1df8a45ULL, 0x5588ce16c52a9ULL, 0x23062e06eb0e6ULL, 0x412806b917be6ULL, 0x33d2ca271c2e0ULL, 0x7fccc88bc1122ULL, 0x2ff91e5c79d0dULL, 0x707c753055f9eULL, 0x66432d1463a87ULL, 0x57f335c92bf29ULL, 0x1fc815cbea281ULL, 0x5d8378be98edaULL, 0x248d5927e9120ULL, 0x5e33f00e36b77ULL };
+static const uint64_t Hacl_Ed25519_Win1_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x36b8ff4eda202ULL, 0x7daa346bd67c1ULL, 0x2822a5801e36dULL, 0x4eaea25b067daULL, 0x6222bd88bf2dfULL, 0x2aa2d8bdba597ULL, 0x337727e412228ULL, 0x682a0453a101bULL, 0x262572fd31592ULL, 0x23bc7abc84cbULL, 0x7640e33263467ULL, 0x4d99d421b1000ULL, 0x229877cb2a32aULL, 0x20e2cd45a4e5ULL, 0x132a065edb5c4ULL, 0x633fbbd39d169ULL, 0x2de1deb9e1897ULL, 0x1cb211e5ff1a1ULL, 0x252cc055229dbULL, 0x6d5066cf7137bULL, 0x2429c7b04c2cdULL, 0x1f7334164ea0eULL, 0x2e82a3d8f00c4ULL, 0x49a3fac10ad3aULL, 0x35ff8f7cdb086ULL, 0x2120a622e0213ULL, 0x4928e70b4255eULL, 0x20ca395004af1ULL, 0x137b5a74383cdULL, 0x6c6365c17f4bbULL, 0x44c675bd887d1ULL, 0x309183c31e772ULL, 0x1f3aa0d1e7794ULL, 0x2965c1800a0dfULL, 0x68b818a50b31dULL, 0x3e8be859362a9ULL, 0x285b6b601c94eULL, 0x277aacb4ea942ULL, 0x6a71a039dbb31ULL, 0x6b66159ac8702ULL, 0x50334a9d159aULL, 0x5ce33ce0e9334ULL, 0x334c4d2f28074ULL, 0x352820028e76fULL, 0x1d3b69c19baa7ULL, 0x2e27609a42401ULL, 0x2309b257e2d42ULL, 0x3da7c8d0cb2c7ULL, 0x67eb1a5a486fbULL, 0x1a12237794fd0ULL, 0x673b0f96c0677ULL, 0x2b01cac525d87ULL, 0xb716b8b91d3aULL, 0xe236c66fa7c8ULL, 0x17ffc4a242bfcULL, 0x568a17517c24dULL, 0x71c688078d879ULL, 0x3903cfd1e4425ULL, 0x2100fbefd2c49ULL, 0x6f0219bc5e589ULL, 0x4b72109a85cc5ULL, 0x761ee0187ec1cULL, 0x1c9a0cbd9bb4aULL, 0x116b7bdb3030bULL, 0x4a52307dc395eULL, 0x8dc7b4d7e206ULL, 0x422442e9ca98dULL, 0x681e8c56e3a74ULL, 0x4c8fb148d15eULL, 0x7d664177da027ULL, 0x61c7c797779d5ULL, 0x4bfbfd0827c0bULL, 0x1ba5951da73d0ULL, 0x6b19d7cc847c7ULL, 0x2ae19cea663d4ULL };
+static const uint64_t Hacl_Ed25519_Win1_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x6fa5782e45313ULL, 0x117520560d1e3ULL, 0x6df13d5042d8ULL, 0x12eeb5ed7693ULL, 0x325bb42ea4edULL, 0x511df0f29c9eeULL, 0x1e58c41b9ddb0ULL, 0x5c81ba413e52eULL, 0x58a64a8101b8eULL, 0x4d2b97a739eceULL, 0x5fa3e1dd7de2fULL, 0x3863fd1d4b30cULL, 0x7973f46ce42c3ULL, 0x3c03b16b5bdc2ULL, 0x534ef70a3532fULL, 0x347115219a417ULL, 0x68445d52b6b96ULL, 0x2e0615fe54802ULL, 0x3e441d5f1ad5fULL, 0x54bb8cd82a0a8ULL, 0x49cbaa6ce8b8aULL, 0x2fbfc351521f8ULL, 0x6ed81ad386d5cULL, 0x782aa34f434a9ULL, 0x50e1cc6871155ULL, 0x1499e5494c782ULL, 0x54c171a7d6061ULL, 0x2a7b2382370ccULL, 0x4b4641905002bULL, 0x1c5703a9d3d1aULL, 0xe4dfed398826ULL, 0x2a6b5bb8ee8e5ULL, 0x5b63d0e5a1659ULL, 0x35914773a6ba9ULL, 0x1e8b233ec0076ULL, 0x61a22c8ca96c5ULL, 0x644c063cebfdULL, 0x110cae7398c22ULL, 0x282724d9d2eacULL, 0x19dd4bef38efdULL, 0x7fbf1373fd0b9ULL, 0x7c4663d51a8e7ULL, 0x3b378c1ccc439ULL, 0x281e507cf1be7ULL, 0x68d73077fa5e3ULL, 0x684b7d2ba4f29ULL, 0x23e115d6e7ea6ULL, 0x55638174762b3ULL, 0x7797572f6eab2ULL, 0x1d079c642f577ULL, 0x555f000269875ULL, 0x33d877c0c651dULL, 0x608cf36b7dccbULL, 0x5244ca9423174ULL, 0x69b87fc7d5aefULL, 0x3a75491d8d620ULL, 0x61f40c689641eULL, 0x5d1944051bf20ULL, 0x7e71334f82709ULL, 0x64c8c5d0f490cULL, 0x3da3eb734947dULL, 0x12913b4a5f390ULL, 0x18967261e0095ULL, 0x6aaa501f214deULL, 0x6a83e11cb340fULL, 0x35d0e82761ae9ULL, 0x3b0bd222bd613ULL, 0xb8cac3dfeabULL, 0x5cf0f8a5d92b9ULL, 0x2e680498e9582ULL, 0x377e5bfcf9334ULL, 0x5a6a3140242baULL, 0x77e504b59af89ULL, 0x763f53b5953d0ULL, 0x6fc4bdd1912e5ULL };
+static const uint64_t Hacl_Ed25519_Win1_tz_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_Ed25519_Win1_tt_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x592e9b6740859ULL, 0x1d39897f0c5bfULL, 0x251580ec2af8ULL, 0x70563ccc07320ULL, 0x628b09e2c7d3aULL, 0x320ab2c14539aULL, 0x137b00f01661fULL, 0x5b6edcf358ad2ULL, 0x4243cb28d0446ULL, 0x2be24dbdd7a46ULL, 0x25b0e72ecf407ULL, 0x5e9b86d31f29eULL, 0x717e3d7ee0972ULL, 0x2d2ea94ab733aULL, 0x13de9f98824e0ULL, 0xead868ab7c70ULL, 0x37519f2944719ULL, 0x239bc7c2a540bULL, 0x7330e4f203f15ULL, 0x609142e130e7fULL, 0x289b38c30e3d7ULL, 0xa98bfd31710bULL, 0x6dec6dcfff0edULL, 0x4a8cc50bd6ec3ULL, 0x330c0a7ed1b12ULL, 0x2125c8b8f0450ULL, 0x68a693333f97eULL, 0x4db1dc8b06120ULL, 0x1547ff45b5efeULL, 0x397f5db80e233ULL, 0x795099c995b42ULL, 0x350ab19851e94ULL, 0x4657c36d323bfULL, 0x14e89c4af4304ULL, 0x76724d74dba8eULL, 0x356e7c4fdc3ULL, 0x6cce9df96746aULL, 0x231226afcf26fULL, 0xe6a709a55008ULL, 0x667fbacce0dc3ULL, 0x375c055e14773ULL, 0x5bff2ad6e8f26ULL, 0x1d069a22c054fULL, 0x7b510676d36c9ULL, 0x492034611c74ULL, 0x536d1e398a5ddULL, 0x4b74cc9f3766aULL, 0x578e721630175ULL, 0x18a9e40238fadULL, 0x533594b8b7e22ULL, 0x4c59dd4aa431bULL, 0x7464e76380fc5ULL, 0x714b55fc458fdULL, 0xb6246313a047ULL, 0x573e2870fd086ULL, 0x42f04bce66fc8ULL, 0x5dec0dc5fbd5fULL, 0x1226e1387aaa0ULL, 0x5e9ec008c01beULL, 0xc8e43546e18cULL, 0x256370cb5a454ULL, 0x3a5a52e73f7abULL, 0x60902a84204b9ULL, 0x349e23f6ad1e9ULL, 0x38ca9f6f16e0cULL, 0xbd35dde74c3dULL, 0x314202fcaf86eULL, 0x1f392acaa2ee8ULL, 0x257d726bfdd59ULL, 0x419480e62aa87ULL, 0x4d5bc000fc6b3ULL, 0x2cce6c31c323bULL, 0x17384421af80cULL, 0x3f52db867971eULL, 0x3e305c53bc3beULL };
+static const uint64_t Hacl_Ed25519_Win2_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x47ae60b7e824ULL, 0x1385ce47cbf90ULL, 0x538a682639a17ULL, 0x1964a969cc270ULL, 0x4c27afff3c45fULL, 0x7d1b43224e085ULL, 0x651f7f44d3f9dULL, 0x1f5bb93da54b1ULL, 0x57bd040abfbc8ULL, 0x786be30733efdULL, 0x5ca89f193c7c7ULL, 0x190eadb296624ULL, 0x613c26eba92ebULL, 0x28e517e9d52c5ULL, 0x9c186afb8339ULL, 0x22f04c2eaa13ULL, 0x57d69a3366d97ULL, 0x72376731a9341ULL, 0x499efc4abc0adULL, 0x21fee4804968aULL, 0x1e3a2b12d4f17ULL, 0x4b2e7932aa923ULL, 0x22727a3b68433ULL, 0x415c09f01b2eULL, 0x4a2e1f96eee4eULL, 0x1449ec0ec3464ULL, 0x54da0a6d415e8ULL, 0x27490d51894c3ULL, 0x3a33578cadec3ULL, 0x5dbd3bf95494dULL, 0xbadc76ed5685ULL, 0x35fa4ebc2326eULL, 0x5dc73aed63804ULL, 0x1e078f96abefcULL, 0x4b3702044575dULL, 0x7136e1146b3dfULL, 0x59e3baac9c516ULL, 0x25223e30d62b6ULL, 0x5b57250cc032fULL, 0x77fe8a5d490afULL, 0x35c8de42dce20ULL, 0x4f3903f2d597fULL, 0x3dd85b13817fdULL, 0x19ccf62218b91ULL, 0x3df71993fb635ULL, 0xcddd479736b0ULL, 0x216ab397f0497ULL, 0x1e1f35503332aULL, 0x6f3f6da3a0cf9ULL, 0x8f8726bcbbdeULL, 0x2e9ccb983430cULL, 0x4c8d99999422dULL, 0x7549b92767f0cULL, 0x68f157021163bULL, 0x4cf0cb74c7099ULL, 0x5f4ed0d8b6abULL, 0x371a4b0a6056cULL, 0x570359ac26890ULL, 0x61f05be0bd307ULL, 0x54d6778da5f0fULL, 0x14382c7d59993ULL, 0x7ae9d998c6fb0ULL, 0x2599ebd8e7a64ULL, 0x6a67d4c5972ULL, 0x390414491821bULL, 0x682e2c99e70f0ULL, 0x404469b48712cULL, 0x64667988eeefULL, 0x40539d99c51bdULL, 0x1432670aad334ULL, 0x7d1ff333057e4ULL, 0x5576fdf5ab79fULL, 0x6b385a10d53e8ULL, 0x40892bfbfb2d6ULL, 0x29b0c323e8469ULL };
+static const uint64_t Hacl_Ed25519_Win2_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x2bd114bf5a66bULL, 0x3ca349893cb77ULL, 0x30a70ea4342f8ULL, 0x43ecaf88f5b13ULL, 0x5f2c99e6526dcULL, 0x30712c63e2736ULL, 0x7d673ad37c9d5ULL, 0x3f4211ca9f022ULL, 0x42d9a138766eaULL, 0x653a5f772f349ULL, 0x49a357f7b062fULL, 0x577daa9fe2346ULL, 0x61928780aa0a9ULL, 0x1a9c9a34ad8a4ULL, 0x6137b0746027bULL, 0xd3e930901700ULL, 0x7512e5846260cULL, 0x2160ce6f694d9ULL, 0x28ea0b62ed0a8ULL, 0x500b7740072cbULL, 0x4b832ac846fc4ULL, 0x22e66b4cc889aULL, 0x77c36a3708a79ULL, 0x62dc64a88c45fULL, 0x6c3f24822e185ULL, 0x4e1c737e25b77ULL, 0x54f6f73f1826fULL, 0x264aae68d0b38ULL, 0x5d8431e6c6054ULL, 0x56f5f77776e9fULL, 0x27acd289b820ULL, 0x1f5f99c524904ULL, 0x581aabf8db72cULL, 0x17a97a13d4072ULL, 0x54333c50acf33ULL, 0x5c5afa5f50246ULL, 0x7c146a8b74daeULL, 0x48636448ab327ULL, 0x18b45600199caULL, 0x3c530f01e039fULL, 0x722692a09fa98ULL, 0x5439e0021cf78ULL, 0x51c729edb2aaULL, 0x69ce48b27d832ULL, 0x7dcf8776aa205ULL, 0x2aefea8b4c884ULL, 0x5d470b1df666fULL, 0x25d20223888c0ULL, 0x3dc111cc068ULL, 0x11f808ca3d11fULL, 0x507c5e74f9735ULL, 0x1c5016a149617ULL, 0x7ca26a562ea69ULL, 0x30dc2fa516024ULL, 0x5df4e013e64ULL, 0x2806f9009c619ULL, 0x675cf4e8fcfd1ULL, 0x48df9ce5e08e4ULL, 0x4ecc62b32ac58ULL, 0x5f988a1f2c959ULL, 0x3facbdff0df5aULL, 0x2b4be0de64279ULL, 0x6de9ff12603a1ULL, 0x78ebbb820348bULL, 0x69710b1edcd36ULL, 0x2cfced8a71cd3ULL, 0x3a90088ba560bULL, 0x321b83e07eceaULL, 0x597b7bd55183eULL, 0x6ef2e391ba981ULL, 0x60930c75ce1cULL, 0x5cd42b095b8efULL, 0x66c89b07042b5ULL, 0x2e5c6e0a952e8ULL, 0x39a797181bd8aULL };
+static const uint64_t Hacl_Ed25519_Win2_tz_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_Ed25519_Win2_tt_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x731c946f1338aULL, 0x4ccc75b53d3cULL, 0x6492da851e192ULL, 0x17ea70ab0003ULL, 0x5a164fd0bf46ULL, 0x4e817719f64c8ULL, 0x2aaf757adc018ULL, 0x74f63b25b13b9ULL, 0x74586c8334d2dULL, 0x12c73ed34d313ULL, 0x562410e8ef362ULL, 0x7e7115a47163ULL, 0x63082b8bba0edULL, 0x6c576f02a36f1ULL, 0x572c78d37f263ULL, 0xa584e1b381f8ULL, 0x2dc40f2fe1bb0ULL, 0x7a252afa919c4ULL, 0x7f8344713f782ULL, 0x198588f68c188ULL, 0xb2d34c797678ULL, 0x6b7b48f082a56ULL, 0x320892791968aULL, 0x130d94db67890ULL, 0x2ddebaccef8ddULL, 0x4643a2e2f2569ULL, 0x611669774e72ULL, 0x6e17d81aef50eULL, 0x60a92020f5168ULL, 0x5844f533bb02bULL, 0x271da3c1535e8ULL, 0x50808b29d87a9ULL, 0x11653cf3c08eULL, 0xee45253cfdc0ULL, 0x1d1cecdf260f8ULL, 0x566861b52ad2cULL, 0x752b00120dfc5ULL, 0x73bad60eb6373ULL, 0x40fc2927931ffULL, 0x25a2c58c77260ULL, 0xcb8d6970e9b5ULL, 0x1e291b140584aULL, 0x607784546a446ULL, 0xf74fa2c522beULL, 0x46c49dfefb5beULL, 0x181684b2460b6ULL, 0x4e00bfc81618cULL, 0x615fe58d16190ULL, 0x3d554d029d535ULL, 0x308a2fc2d525bULL, 0x68bbe81be9cc8ULL, 0x6d87286f756c8ULL, 0x3f807a456a8fULL, 0x701ac2b9e248eULL, 0x25e0b22e23b82ULL, 0x47545bc03c212ULL, 0x63a742f44ee6bULL, 0x5735298f03895ULL, 0x25e3cda9e8ca9ULL, 0x28ae8803cb684ULL, 0x4e273fb7ae6bULL, 0x349abbea2b788ULL, 0x24a4e6a4b330dULL, 0xc75513396fe7ULL, 0x7eb4c6c7e9177ULL, 0x7120e749c98baULL, 0x2064fa141e024ULL, 0x34fe13bbecea0ULL, 0x169b35efc6baULL, 0x4a7b37baf1f65ULL, 0x25af544a9a94bULL, 0x7578b03b6c66cULL, 0x52bd498306d8ULL, 0x154bac09b10d1ULL, 0x4446f2c6af923ULL };
+static const uint64_t Hacl_Ed25519_Win3_tx_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x2d644c7dad28dULL, 0x43703afa4db6fULL, 0x1f85df5ea777bULL, 0x73e16c6821b8eULL, 0x1bc7af1e38185ULL, 0x1938218028354ULL, 0x6bb1b54fa00f3ULL, 0x6e28f67cbea25ULL, 0x4b5e9141aad35ULL, 0x6bce245f8c25ULL, 0x589041b29662fULL, 0x1d6fbadddcfd7ULL, 0x1fff2d032c3bcULL, 0x2f7b21e1d64e1ULL, 0x7665908aaf444ULL, 0x5954e6c16d4f7ULL, 0x7ca457221ebb3ULL, 0x69398c394d173ULL, 0x554841a79f99dULL, 0xa09b36eb5a04ULL, 0x4d5451113735eULL, 0x2574dcfa41233ULL, 0x55926182e858bULL, 0x6b540645ad45fULL, 0x1c71ce37638e6ULL, 0x39e7f74cbc8d6ULL, 0x8d90a5963263ULL, 0x70b3f944839e5ULL, 0x7bec4bd417c4aULL, 0x3c607a84c1df2ULL, 0x2f417ffbe2da0ULL, 0x4d4c71c738621ULL, 0x5bbdfc4e85ff1ULL, 0x6331ffc9c6eb0ULL, 0x89b6cd02000bULL, 0x6b2d6fc2c9fdbULL, 0x5b0e0cf4a45c3ULL, 0x1de41b4adca18ULL, 0x6b07c3d5aa1a3ULL, 0x79e9d5b60917ULL, 0x54ba615e7bacfULL, 0x4e5177009b7b9ULL, 0x735e62946071dULL, 0x6115696f90eaULL, 0x14445439305d0ULL, 0x87787e2dd7b8ULL, 0x7bb442643ef2ULL, 0x70221dc40c4e7ULL, 0x10e30d662465aULL, 0x7b23a7dce9a09ULL, 0x13e2d3b4b1d5cULL, 0x8985fcb81ee5ULL, 0x1988a1a828025ULL, 0xa01a7d870114ULL, 0x488953fd41867ULL, 0x3403b4621d719ULL, 0x3015b2e7b4c3eULL, 0x5115565bbd38bULL, 0x3f631614c3f31ULL, 0x2396f9d65dc6bULL, 0x657b3ace3c6f8ULL, 0x366a7ba42314dULL, 0x29eb30543f7f7ULL, 0x1b6c2a1d320d3ULL, 0x229f80407ae62ULL, 0xcc1a47ce93c4ULL, 0x3393627feb977ULL, 0x1eb4e9e334c2cULL, 0x496d2855b1681ULL, 0x4c7cb3e8f525aULL, 0xdc27e0016faaULL, 0x5c13389191dadULL, 0x440264d63e1c5ULL, 0xe2d56486f232ULL, 0x2a4b994aa61f7ULL };
+static const uint64_t Hacl_Ed25519_Win3_ty_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x2f65900314833ULL, 0x24c6364e1f95eULL, 0x57701247409f8ULL, 0x797bd2f77c3bcULL, 0x61d909d855661ULL, 0x4955188a3c065ULL, 0x161bd0f1292dfULL, 0x1d521630b2506ULL, 0x6d06495669788ULL, 0x3d26989cdd0f6ULL, 0x3a00e4b704ca1ULL, 0x71715f4826e10ULL, 0x40ad025948864ULL, 0x2a3670bfc0327ULL, 0x4ed18a7c50da4ULL, 0x2eb0fa35ed926ULL, 0x49a86e7641e74ULL, 0x3b54cf41b3a7bULL, 0x85125b7595d7ULL, 0x3aa47fd60fa31ULL, 0xfee129e406cbULL, 0x7e88f52e59c7dULL, 0x2833edf503460ULL, 0x166921edd6bcdULL, 0x7880cc1c2003bULL, 0x79a86ba3cea68ULL, 0x42e6340c19d4eULL, 0x76fb861261f82ULL, 0x51d11c25d5a44ULL, 0x34518ad109941ULL, 0x16f13e8ceb88ULL, 0x4f9b762547cf1ULL, 0x72995f90f2f92ULL, 0x7ec5a1c6f7e88ULL, 0x66ef7206aa36dULL, 0x1381c04c78797ULL, 0x79470b8eb0720ULL, 0x2fe8895900193ULL, 0x5229893654a28ULL, 0x16512951d2240ULL, 0x200515d0477bcULL, 0x157fafd10b1ddULL, 0x2e35626b9af26ULL, 0x6a69f71b080cfULL, 0x2ab36d724a6ecULL, 0x2040bc9616570ULL, 0x39cf90f92e9c2ULL, 0x2edbe7e0547abULL, 0x30189d6ee99fbULL, 0x77a7fbafce1bcULL, 0x399223384410ULL, 0x14223f9006beULL, 0x50f09050a657dULL, 0x292378430245dULL, 0x7bd340fdf6e04ULL, 0x6d8b42d583ddeULL, 0x777423d7bfc3bULL, 0x48c1559a710a7ULL, 0x698034ab91fabULL, 0x675952b2e020eULL, 0x3f16fe3db85b0ULL, 0x7cd85cb93b208ULL, 0x7a019da637748ULL, 0x4f4880eb525e0ULL, 0x1d44ec76d45e6ULL, 0x18cd592e65741ULL, 0x296915f5154fdULL, 0xe85466180265ULL, 0x2ee9f744c36abULL, 0x4c957905c63cbULL, 0x57486d74dda9aULL, 0x7984da5d06098ULL, 0x5f05e86ec0601ULL, 0x61bbb3c0adce8ULL, 0x13a4a860954e7ULL };
+static const uint64_t Hacl_Ed25519_Win3_tz_arr[80] = { 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0 };
+static const uint64_t Hacl_Ed25519_Win3_tt_arr[80] = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x45216636c2c7ULL, 0x6cadbcfdf0a37ULL, 0x47c3ef66ee3c8ULL, 0x522665b326f25ULL, 0x1a340b8054b8fULL, 0x365eb8eb94b17ULL, 0x18452cd8dbe9ULL, 0xd790b46bf270ULL, 0x78813093349c2ULL, 0x7a9f6260e653aULL, 0x54343b9ec13bbULL, 0x15437f0d48d06ULL, 0x366c6c241874bULL, 0x6e66e4600d1c1ULL, 0x6bb9cf0f2d4dbULL, 0x3b1cc6b04c053ULL, 0x13e65c5705fc4ULL, 0x7f81640bc9a65ULL, 0x6ac534fc04217ULL, 0x3bd5dfb4b4648ULL, 0x30eaefc5832acULL, 0x7bb8bc02f05ULL, 0x10ee994d38e57ULL, 0xc32dd003212eULL, 0x79030a4774645ULL, 0x3c6c9e37345dULL, 0x7081214e622b1ULL, 0x60ece5ba974a8ULL, 0x179f8768deed4ULL, 0x727055e32e57ULL, 0x478374da76d28ULL, 0x5344ef62175f4ULL, 0x78f681d66e834ULL, 0x1fda3b879848dULL, 0xd2c585f51161ULL, 0x1b9bb33b94e2aULL, 0x471701c32b888ULL, 0x7201f9f3e4791ULL, 0x9c9665f45f28ULL, 0x18a2cd789580bULL, 0x46e2ce7ceecabULL, 0x5b697fb2f2e3aULL, 0x43723380b355bULL, 0x1594187a6aa3aULL, 0x3768f1d146014ULL, 0x25b1a1380ed31ULL, 0x70dbb6d788f3dULL, 0x510ca8a63cb2dULL, 0xfec9668bc1ddULL, 0x678006f65af05ULL, 0xec1fcde050f2ULL, 0x4898e6bcf3408ULL, 0x4c6e0a7708771ULL, 0x68b1dcb7e3c7fULL, 0x602833b0f078bULL, 0x72ab1e3bcf96bULL, 0x6f4bde8068edbULL, 0x4f5b5bada9c40ULL, 0x485bc50a03394ULL, 0x415d255a9d532ULL, 0x5f8864731bfcbULL, 0x7ab32c19376cdULL, 0x339acb66b1bdeULL, 0x28a92de1eb77aULL, 0x76a4d6aa450ebULL, 0x3578a80d634dbULL, 0x6b064354f9c85ULL, 0xfb9d2c116f8fULL, 0x5c1966ac524c7ULL, 0x7ed22b364f0d8ULL, 0x3af37d41878bULL, 0x21320c8533a02ULL, 0x4f99d4d5b0067ULL, 0x6dc96bcafbb01ULL, 0x55f69782ed38bULL };
 static void Hacl_Ed25519_Point_set_infinity(uint64_t *x, uint64_t *y, uint64_t *z, uint64_t *t);
-static const uint64_t Hacl_Ed25519_Tables_d2_arr[5] = { 0x69b9426b2f159ULL, 0x35050762add7aULL, 0x3cf44c0038052ULL, 0x6738cc7407977ULL, 0x2406d9dc56dffULL };
-static void Hacl_Ed25519_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1, uint64_t *x2, uint64_t *y2, uint64_t *z2, uint64_t *t2);
-static void Hacl_Ed25519_PointWin_build_table(uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t *tt, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt);
-static const uint64_t Hacl_Ed25519_Tables_b1x_arr[5] = { 0x36b8ff4eda202ULL, 0x7daa346bd67c1ULL, 0x2822a5801e36dULL, 0x4eaea25b067daULL, 0x6222bd88bf2dfULL };
-static const uint64_t Hacl_Ed25519_Tables_b1y_arr[5] = { 0x6fa5782e45313ULL, 0x117520560d1e3ULL, 0x6df13d5042d8ULL, 0x12eeb5ed7693ULL, 0x325bb42ea4edULL };
-static const uint64_t Hacl_Ed25519_Tables_b1t_arr[5] = { 0x592e9b6740859ULL, 0x1d39897f0c5bfULL, 0x251580ec2af8ULL, 0x70563ccc07320ULL, 0x628b09e2c7d3aULL };
-static const uint64_t Hacl_Ed25519_Tables_b2x_arr[5] = { 0x47ae60b7e824ULL, 0x1385ce47cbf90ULL, 0x538a682639a17ULL, 0x1964a969cc270ULL, 0x4c27afff3c45fULL };
-static const uint64_t Hacl_Ed25519_Tables_b2y_arr[5] = { 0x2bd114bf5a66bULL, 0x3ca349893cb77ULL, 0x30a70ea4342f8ULL, 0x43ecaf88f5b13ULL, 0x5f2c99e6526dcULL };
-static const uint64_t Hacl_Ed25519_Tables_b2t_arr[5] = { 0x731c946f1338aULL, 0x4ccc75b53d3cULL, 0x6492da851e192ULL, 0x17ea70ab0003ULL, 0x5a164fd0bf46ULL };
-static const uint64_t Hacl_Ed25519_Tables_b3x_arr[5] = { 0x2d644c7dad28dULL, 0x43703afa4db6fULL, 0x1f85df5ea777bULL, 0x73e16c6821b8eULL, 0x1bc7af1e38185ULL };
-static const uint64_t Hacl_Ed25519_Tables_b3y_arr[5] = { 0x2f65900314833ULL, 0x24c6364e1f95eULL, 0x57701247409f8ULL, 0x797bd2f77c3bcULL, 0x61d909d855661ULL };
-static const uint64_t Hacl_Ed25519_Tables_b3t_arr[5] = { 0x45216636c2c7ULL, 0x6cadbcfdf0a37ULL, 0x47c3ef66ee3c8ULL, 0x522665b326f25ULL, 0x1a340b8054b8fULL };
-static void Hacl_Ed25519_PointMulG_build_tables(uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t0t, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t1t, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t2t, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *t3t, uint64_t *px, uint64_t *py, uint64_t *pz, uint64_t *pw);
 static void Hacl_Ed25519_Point_point_double(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1);
 static void Hacl_Ed25519_PointWin_win_dbl4(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *ut);
+static const uint64_t Hacl_Ed25519_Tables_d2_arr[5] = { 0x69b9426b2f159ULL, 0x35050762add7aULL, 0x3cf44c0038052ULL, 0x6738cc7407977ULL, 0x2406d9dc56dffULL };
+static void Hacl_Ed25519_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1, uint64_t *x2, uint64_t *y2, uint64_t *z2, uint64_t *t2);
 static void Hacl_Ed25519_PointWin_win_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *ut, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *st, uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t *tt, uint64_t dig);
 static void Hacl_Ed25519_PointMulG_rung(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *ut, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *st, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t0t, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t1t, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t2t, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *t3t, uint64_t d0, uint64_t d1, uint64_t d2, uint64_t d3);
 static void Hacl_Ed25519_PointMulG_win_loop(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *ut, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *st, uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t0t, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t1t, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t2t, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *t3t, uint8_t *ks);
 static void Hacl_Ed25519_PointMulG_point_mul_g_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint8_t *ks);
 static void Hacl_Ed25519_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint8_t *ks);
+static void Hacl_Ed25519_PointWin_build_table(uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t *tt, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt);
 static void Hacl_Ed25519_PointWin_point_mul_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt, uint8_t *ks);
 static bool Hacl_Ed25519_Encoding_point_equal(uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1, uint64_t *x2, uint64_t *y2, uint64_t *z2, uint64_t *t2);
 static void Hacl_Ed25519_hash2(uint8_t *out, uint8_t *a, uint8_t *msg, size_t mlen);
@@ -21349,143 +21353,6 @@ static void Hacl_Ed25519_Point_set_infinity(uint64_t *x, uint64_t *y, uint64_t *
   Hacl_Ed25519_Point_set_small(t, 0);
 }
 
-static void Hacl_Ed25519_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1, uint64_t *x2, uint64_t *y2, uint64_t *z2, uint64_t *t2) {
-  uint64_t z = Hacl_Secret_UInt64_zero;
-  unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
-  uint64_t au[5];
-  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
-    au[_ci1] = z;
-  }
-  uint64_t av[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    av[_ci2] = z;
-  }
-  uint64_t aa[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    aa[_ci3] = z;
-  }
-  uint64_t ab[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    ab[_ci4] = z;
-  }
-  uint64_t ac[5];
-  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
-    ac[_ci5] = z;
-  }
-  uint64_t ae[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    ae[_ci6] = z;
-  }
-  unsigned __int128 aw[9];
-  for (size_t _ci7 = 0; _ci7 < 9; _ci7++) {
-    aw[_ci7] = z128;
-  }
-  Hacl_Curve25519_Field_fsub(au, y1, x1);
-  Hacl_Curve25519_Field_fsub(av, y2, x2);
-  Hacl_Curve25519_Field_fmul(aa, au, av);
-  Hacl_Curve25519_Field_fadd(au, y1, x1);
-  Hacl_Curve25519_Field_fadd(av, y2, x2);
-  Hacl_Curve25519_Field_fmul(ab, au, av);
-  uint64_t *dt = (uint64_t *)Hacl_Ed25519_Tables_d2_arr;
-  Hacl_Curve25519_Field_fmul(au, dt, t1);
-  Hacl_Curve25519_Field_fmul(ac, au, t2);
-  Hacl_Curve25519_Field_fscale(au, z1, 2, aw);
-  Hacl_Curve25519_Field_fmul(ae, au, z2);
-  Hacl_Curve25519_Field_fsub(au, ab, aa);
-  Hacl_Curve25519_Field_fadd(av, ab, aa);
-  Hacl_Curve25519_Field_fsub(aa, ae, ac);
-  Hacl_Curve25519_Field_fadd(ab, ae, ac);
-  Hacl_Curve25519_Field_fmul(ox, au, aa);
-  Hacl_Curve25519_Field_fmul(oy, ab, av);
-  Hacl_Curve25519_Field_fmul(oz, aa, ab);
-  Hacl_Curve25519_Field_fmul(ot, au, av);
-}
-
-static void Hacl_Ed25519_PointWin_build_table(uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t *tt, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt) {
-  uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t cx[5];
-  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
-    cx[_ci1] = z;
-  }
-  uint64_t cy[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    cy[_ci2] = z;
-  }
-  uint64_t cz[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    cz[_ci3] = z;
-  }
-  uint64_t ct[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    ct[_ci4] = z;
-  }
-  uint64_t nx[5];
-  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
-    nx[_ci5] = z;
-  }
-  uint64_t ny[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    ny[_ci6] = z;
-  }
-  uint64_t nz[5];
-  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
-    nz[_ci7] = z;
-  }
-  uint64_t nt[5];
-  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
-    nt[_ci8] = z;
-  }
-  Hacl_Ed25519_Point_set_infinity(cx, cy, cz, ct);
-  size_t d = 0;
-  while (d < 16) {
-    size_t vd = d;
-    Hacl_Bignum_Base_table_store(tx, cx, 5, (vd * 5));
-    Hacl_Bignum_Base_table_store(ty, cy, 5, (vd * 5));
-    Hacl_Bignum_Base_table_store(tz, cz, 5, (vd * 5));
-    Hacl_Bignum_Base_table_store(tt, ct, 5, (vd * 5));
-    Hacl_Ed25519_Point_point_add(nx, ny, nz, nt, cx, cy, cz, ct, qx, qy, qz, qt);
-    Hacl_Curve25519_Field_copy(cx, nx);
-    Hacl_Curve25519_Field_copy(cy, ny);
-    Hacl_Curve25519_Field_copy(cz, nz);
-    Hacl_Curve25519_Field_copy(ct, nt);
-    d = (vd + 1);
-  }
-}
-
-static void Hacl_Ed25519_PointMulG_build_tables(uint64_t *t0x, uint64_t *t0y, uint64_t *t0z, uint64_t *t0t, uint64_t *t1x, uint64_t *t1y, uint64_t *t1z, uint64_t *t1t, uint64_t *t2x, uint64_t *t2y, uint64_t *t2z, uint64_t *t2t, uint64_t *t3x, uint64_t *t3y, uint64_t *t3z, uint64_t *t3t, uint64_t *px, uint64_t *py, uint64_t *pz, uint64_t *pw) {
-  uint64_t *ct = (uint64_t *)Hacl_Ed25519_Tables_gx_arr;
-  Hacl_Curve25519_Field_copy(px, ct);
-  uint64_t *ct1 = (uint64_t *)Hacl_Ed25519_Tables_gy_arr;
-  Hacl_Curve25519_Field_copy(py, ct1);
-  Hacl_Ed25519_Point_set_small(pz, 1);
-  Hacl_Curve25519_Field_fmul(pw, px, py);
-  Hacl_Ed25519_PointWin_build_table(t0x, t0y, t0z, t0t, px, py, pz, pw);
-  uint64_t *ct2 = (uint64_t *)Hacl_Ed25519_Tables_b1x_arr;
-  Hacl_Curve25519_Field_copy(px, ct2);
-  uint64_t *ct3 = (uint64_t *)Hacl_Ed25519_Tables_b1y_arr;
-  Hacl_Curve25519_Field_copy(py, ct3);
-  uint64_t *ct4 = (uint64_t *)Hacl_Ed25519_Tables_b1t_arr;
-  Hacl_Curve25519_Field_copy(pw, ct4);
-  Hacl_Ed25519_Point_set_small(pz, 1);
-  Hacl_Ed25519_PointWin_build_table(t1x, t1y, t1z, t1t, px, py, pz, pw);
-  uint64_t *ct5 = (uint64_t *)Hacl_Ed25519_Tables_b2x_arr;
-  Hacl_Curve25519_Field_copy(px, ct5);
-  uint64_t *ct6 = (uint64_t *)Hacl_Ed25519_Tables_b2y_arr;
-  Hacl_Curve25519_Field_copy(py, ct6);
-  uint64_t *ct7 = (uint64_t *)Hacl_Ed25519_Tables_b2t_arr;
-  Hacl_Curve25519_Field_copy(pw, ct7);
-  Hacl_Ed25519_Point_set_small(pz, 1);
-  Hacl_Ed25519_PointWin_build_table(t2x, t2y, t2z, t2t, px, py, pz, pw);
-  uint64_t *ct8 = (uint64_t *)Hacl_Ed25519_Tables_b3x_arr;
-  Hacl_Curve25519_Field_copy(px, ct8);
-  uint64_t *ct9 = (uint64_t *)Hacl_Ed25519_Tables_b3y_arr;
-  Hacl_Curve25519_Field_copy(py, ct9);
-  uint64_t *ct10 = (uint64_t *)Hacl_Ed25519_Tables_b3t_arr;
-  Hacl_Curve25519_Field_copy(pw, ct10);
-  Hacl_Ed25519_Point_set_small(pz, 1);
-  Hacl_Ed25519_PointWin_build_table(t3x, t3y, t3z, t3t, px, py, pz, pw);
-}
-
 static void Hacl_Ed25519_Point_point_double(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1) {
   (void)t1;
   uint64_t z = Hacl_Secret_UInt64_zero;
@@ -21560,6 +21427,58 @@ static void Hacl_Ed25519_PointWin_win_dbl4(uint64_t *ox, uint64_t *oy, uint64_t 
   Hacl_Curve25519_Field_copy(ot, ut);
 }
 
+static void Hacl_Ed25519_Point_point_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *x1, uint64_t *y1, uint64_t *z1, uint64_t *t1, uint64_t *x2, uint64_t *y2, uint64_t *z2, uint64_t *t2) {
+  uint64_t z = Hacl_Secret_UInt64_zero;
+  unsigned __int128 z128 = Hacl_Secret_UInt128_zero;
+  uint64_t au[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    au[_ci1] = z;
+  }
+  uint64_t av[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    av[_ci2] = z;
+  }
+  uint64_t aa[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    aa[_ci3] = z;
+  }
+  uint64_t ab[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
+    ab[_ci4] = z;
+  }
+  uint64_t ac[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
+    ac[_ci5] = z;
+  }
+  uint64_t ae[5];
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
+    ae[_ci6] = z;
+  }
+  unsigned __int128 aw[9];
+  for (size_t _ci7 = 0; _ci7 < 9; _ci7++) {
+    aw[_ci7] = z128;
+  }
+  Hacl_Curve25519_Field_fsub(au, y1, x1);
+  Hacl_Curve25519_Field_fsub(av, y2, x2);
+  Hacl_Curve25519_Field_fmul(aa, au, av);
+  Hacl_Curve25519_Field_fadd(au, y1, x1);
+  Hacl_Curve25519_Field_fadd(av, y2, x2);
+  Hacl_Curve25519_Field_fmul(ab, au, av);
+  uint64_t *dt = (uint64_t *)Hacl_Ed25519_Tables_d2_arr;
+  Hacl_Curve25519_Field_fmul(au, dt, t1);
+  Hacl_Curve25519_Field_fmul(ac, au, t2);
+  Hacl_Curve25519_Field_fscale(au, z1, 2, aw);
+  Hacl_Curve25519_Field_fmul(ae, au, z2);
+  Hacl_Curve25519_Field_fsub(au, ab, aa);
+  Hacl_Curve25519_Field_fadd(av, ab, aa);
+  Hacl_Curve25519_Field_fsub(aa, ae, ac);
+  Hacl_Curve25519_Field_fadd(ab, ae, ac);
+  Hacl_Curve25519_Field_fmul(ox, au, aa);
+  Hacl_Curve25519_Field_fmul(oy, ab, av);
+  Hacl_Curve25519_Field_fmul(oz, aa, ab);
+  Hacl_Curve25519_Field_fmul(ot, au, av);
+}
+
 static void Hacl_Ed25519_PointWin_win_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *ut, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *st, uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t *tt, uint64_t dig) {
   Hacl_Bignum_Base_table_select(sx, tx, 5, dig);
   Hacl_Bignum_Base_table_select(sy, ty, 5, dig);
@@ -21618,124 +21537,110 @@ static void Hacl_Ed25519_PointMulG_win_loop(uint64_t *ox, uint64_t *oy, uint64_t
 
 static void Hacl_Ed25519_PointMulG_point_mul_g_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint8_t *ks) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t px[5];
-  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
-    px[_ci1] = z;
-  }
-  uint64_t py[5];
-  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
-    py[_ci2] = z;
-  }
-  uint64_t pz[5];
-  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
-    pz[_ci3] = z;
-  }
-  uint64_t pw[5];
-  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
-    pw[_ci4] = z;
-  }
   uint64_t ux[5];
-  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
-    ux[_ci5] = z;
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    ux[_ci1] = z;
   }
   uint64_t uy[5];
-  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
-    uy[_ci6] = z;
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    uy[_ci2] = z;
   }
   uint64_t uz[5];
-  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
-    uz[_ci7] = z;
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    uz[_ci3] = z;
   }
   uint64_t ut[5];
-  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
-    ut[_ci8] = z;
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
+    ut[_ci4] = z;
   }
   uint64_t sx[5];
-  for (size_t _ci9 = 0; _ci9 < 5; _ci9++) {
-    sx[_ci9] = z;
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
+    sx[_ci5] = z;
   }
   uint64_t sy[5];
-  for (size_t _ci10 = 0; _ci10 < 5; _ci10++) {
-    sy[_ci10] = z;
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
+    sy[_ci6] = z;
   }
   uint64_t sz[5];
-  for (size_t _ci11 = 0; _ci11 < 5; _ci11++) {
-    sz[_ci11] = z;
+  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
+    sz[_ci7] = z;
   }
   uint64_t st[5];
-  for (size_t _ci12 = 0; _ci12 < 5; _ci12++) {
-    st[_ci12] = z;
+  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
+    st[_ci8] = z;
   }
-  uint64_t t0x[80];
-  for (size_t _ci13 = 0; _ci13 < 80; _ci13++) {
-    t0x[_ci13] = z;
-  }
-  uint64_t t0y[80];
-  for (size_t _ci14 = 0; _ci14 < 80; _ci14++) {
-    t0y[_ci14] = z;
-  }
-  uint64_t t0z[80];
-  for (size_t _ci15 = 0; _ci15 < 80; _ci15++) {
-    t0z[_ci15] = z;
-  }
-  uint64_t t0t[80];
-  for (size_t _ci16 = 0; _ci16 < 80; _ci16++) {
-    t0t[_ci16] = z;
-  }
-  uint64_t t1x[80];
-  for (size_t _ci17 = 0; _ci17 < 80; _ci17++) {
-    t1x[_ci17] = z;
-  }
-  uint64_t t1y[80];
-  for (size_t _ci18 = 0; _ci18 < 80; _ci18++) {
-    t1y[_ci18] = z;
-  }
-  uint64_t t1z[80];
-  for (size_t _ci19 = 0; _ci19 < 80; _ci19++) {
-    t1z[_ci19] = z;
-  }
-  uint64_t t1t[80];
-  for (size_t _ci20 = 0; _ci20 < 80; _ci20++) {
-    t1t[_ci20] = z;
-  }
-  uint64_t t2x[80];
-  for (size_t _ci21 = 0; _ci21 < 80; _ci21++) {
-    t2x[_ci21] = z;
-  }
-  uint64_t t2y[80];
-  for (size_t _ci22 = 0; _ci22 < 80; _ci22++) {
-    t2y[_ci22] = z;
-  }
-  uint64_t t2z[80];
-  for (size_t _ci23 = 0; _ci23 < 80; _ci23++) {
-    t2z[_ci23] = z;
-  }
-  uint64_t t2t[80];
-  for (size_t _ci24 = 0; _ci24 < 80; _ci24++) {
-    t2t[_ci24] = z;
-  }
-  uint64_t t3x[80];
-  for (size_t _ci25 = 0; _ci25 < 80; _ci25++) {
-    t3x[_ci25] = z;
-  }
-  uint64_t t3y[80];
-  for (size_t _ci26 = 0; _ci26 < 80; _ci26++) {
-    t3y[_ci26] = z;
-  }
-  uint64_t t3z[80];
-  for (size_t _ci27 = 0; _ci27 < 80; _ci27++) {
-    t3z[_ci27] = z;
-  }
-  uint64_t t3t[80];
-  for (size_t _ci28 = 0; _ci28 < 80; _ci28++) {
-    t3t[_ci28] = z;
-  }
-  Hacl_Ed25519_PointMulG_build_tables(t0x, t0y, t0z, t0t, t1x, t1y, t1z, t1t, t2x, t2y, t2z, t2t, t3x, t3y, t3z, t3t, px, py, pz, pw);
+  uint64_t *t0x = (uint64_t *)Hacl_Ed25519_Win0_tx_arr;
+  uint64_t *t0y = (uint64_t *)Hacl_Ed25519_Win0_ty_arr;
+  uint64_t *t0z = (uint64_t *)Hacl_Ed25519_Win0_tz_arr;
+  uint64_t *t0t = (uint64_t *)Hacl_Ed25519_Win0_tt_arr;
+  uint64_t *t1x = (uint64_t *)Hacl_Ed25519_Win1_tx_arr;
+  uint64_t *t1y = (uint64_t *)Hacl_Ed25519_Win1_ty_arr;
+  uint64_t *t1z = (uint64_t *)Hacl_Ed25519_Win1_tz_arr;
+  uint64_t *t1t = (uint64_t *)Hacl_Ed25519_Win1_tt_arr;
+  uint64_t *t2x = (uint64_t *)Hacl_Ed25519_Win2_tx_arr;
+  uint64_t *t2y = (uint64_t *)Hacl_Ed25519_Win2_ty_arr;
+  uint64_t *t2z = (uint64_t *)Hacl_Ed25519_Win2_tz_arr;
+  uint64_t *t2t = (uint64_t *)Hacl_Ed25519_Win2_tt_arr;
+  uint64_t *t3x = (uint64_t *)Hacl_Ed25519_Win3_tx_arr;
+  uint64_t *t3y = (uint64_t *)Hacl_Ed25519_Win3_ty_arr;
+  uint64_t *t3z = (uint64_t *)Hacl_Ed25519_Win3_tz_arr;
+  uint64_t *t3t = (uint64_t *)Hacl_Ed25519_Win3_tt_arr;
   Hacl_Ed25519_PointMulG_win_loop(ox, oy, oz, ot, ux, uy, uz, ut, sx, sy, sz, st, t0x, t0y, t0z, t0t, t1x, t1y, t1z, t1t, t2x, t2y, t2z, t2t, t3x, t3y, t3z, t3t, ks);
 }
 
 static void Hacl_Ed25519_point_mul_g(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint8_t *ks) {
   Hacl_Ed25519_PointMulG_point_mul_g_win(ox, oy, oz, ot, ks);
+}
+
+static void Hacl_Ed25519_PointWin_build_table(uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t *tt, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt) {
+  uint64_t z = Hacl_Secret_UInt64_zero;
+  uint64_t cx[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    cx[_ci1] = z;
+  }
+  uint64_t cy[5];
+  for (size_t _ci2 = 0; _ci2 < 5; _ci2++) {
+    cy[_ci2] = z;
+  }
+  uint64_t cz[5];
+  for (size_t _ci3 = 0; _ci3 < 5; _ci3++) {
+    cz[_ci3] = z;
+  }
+  uint64_t ct[5];
+  for (size_t _ci4 = 0; _ci4 < 5; _ci4++) {
+    ct[_ci4] = z;
+  }
+  uint64_t nx[5];
+  for (size_t _ci5 = 0; _ci5 < 5; _ci5++) {
+    nx[_ci5] = z;
+  }
+  uint64_t ny[5];
+  for (size_t _ci6 = 0; _ci6 < 5; _ci6++) {
+    ny[_ci6] = z;
+  }
+  uint64_t nz[5];
+  for (size_t _ci7 = 0; _ci7 < 5; _ci7++) {
+    nz[_ci7] = z;
+  }
+  uint64_t nt[5];
+  for (size_t _ci8 = 0; _ci8 < 5; _ci8++) {
+    nt[_ci8] = z;
+  }
+  Hacl_Ed25519_Point_set_infinity(cx, cy, cz, ct);
+  size_t d = 0;
+  while (d < 16) {
+    size_t vd = d;
+    Hacl_Bignum_Base_table_store(tx, cx, 5, (vd * 5));
+    Hacl_Bignum_Base_table_store(ty, cy, 5, (vd * 5));
+    Hacl_Bignum_Base_table_store(tz, cz, 5, (vd * 5));
+    Hacl_Bignum_Base_table_store(tt, ct, 5, (vd * 5));
+    Hacl_Ed25519_Point_point_add(nx, ny, nz, nt, cx, cy, cz, ct, qx, qy, qz, qt);
+    Hacl_Curve25519_Field_copy(cx, nx);
+    Hacl_Curve25519_Field_copy(cy, ny);
+    Hacl_Curve25519_Field_copy(cz, nz);
+    Hacl_Curve25519_Field_copy(ct, nt);
+    d = (vd + 1);
+  }
 }
 
 static void Hacl_Ed25519_PointWin_point_mul_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ot, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *qt, uint8_t *ks) {
