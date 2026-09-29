@@ -55,7 +55,6 @@ module Cast = Hacl.Secret.Cast
 module Declassify = Hacl.Secret.Declassify
 module C = Spec.Curve25519
 module E = Spec.Ed25519
-module Sc = Spec.Ed25519.Scalar
 module P = Hacl.Ed25519.Point
 module Table = Hacl.Impl.Table
 module Tables = Hacl.Ed25519.Tables

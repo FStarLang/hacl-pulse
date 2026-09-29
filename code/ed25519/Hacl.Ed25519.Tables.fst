@@ -1,153 +1,163 @@
-(*
-   Copyright 2026 Microsoft Research
+(** Ed25519's compile-time constants.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*)
-
-(** [2^256 - q] in the program image.
-
-    The one constant the scalar arithmetic needs.  Its own module because the
-    limb values are checked against [Spec.Ed25519.Scalar.qc] one entry at a
-    time, which is an eight-line proof that has no business sitting in the
-    middle of a Pulse function, and because a [static_array] is a definition:
-    two modules declaring it would lay out two arrays. *)
+    The curve constants -- [d], [2d], a square root of [-1], the base point
+    and the three window multiples of it -- and the six four-limb tables
+    that the group order needs for Montgomery arithmetic.  Their own module
+    because each one is checked against the specification a limb at a time,
+    which has no business sitting in the middle of a Pulse function, and
+    because a [static_array] is a definition: two modules declaring it would
+    lay out two arrays. *)
 module Hacl.Ed25519.Tables
 
 open Hacl.Curve25519.Field
 
 module G = Pulse.Lib.GlobalArray
 module Seq = FStar.Seq
+module L = FStar.List.Tot
 module Classical = FStar.Classical
 module S64 = Hacl.Secret.UInt64
 module U64 = FStar.UInt64
 module F = Spec.Curve25519.Field
-module B32 = Spec.Bignum256
 module Limb = Hacl.Impl.Limb
 module C = Spec.Curve25519
 module Math = FStar.Math.Lemmas
 module Sc = Spec.Ed25519.Scalar
 module Base = Spec.Ed25519.Base
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
+module Lit4 = Hacl.Impl.Lit4
 
-(** [2^256 - q = 0xefffffffffffffffffffffffffffffffeb2106215d086329a7ed9ce5a30a2c13],
-    least significant limb first. *)
-let qc_list : list S64.t = [
-  S64.classify 0xa30a2c13uL; S64.classify 0xa7ed9ce5uL; S64.classify 0x5d086329uL; S64.classify 0xeb210621uL;
-  S64.classify 0xffffffffuL; S64.classify 0xffffffffuL; S64.classify 0xffffffffuL; S64.classify 0xefffffffuL
+(** {2 The group order}
+
+    Six tables of four limbs.  [qms] is the order itself and [qnm] its
+    two's complement, which is how a conditional subtraction is done;
+    [qr1] and [qr2] are the two Montgomery radix constants; and [qp1] and
+    [qp3] are [2^384] and [2^640] modulo the order, the two extra radix
+    powers that let a 512-bit hash be reduced by three multiplications.
+    [2^512 mod q] is the third such power and is already [qr2].
+
+    {!Hacl.Impl.Lit4} explains why each one goes through its value rather
+    than through its four indices. *)
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
+#push-options "--fuel 0 --ifuel 0"
+
+(** The group order, as four limbs. *)
+let qms_list : list S64.t = [
+  S64.classify 0x5812631a5cf5d3eduL;
+  S64.classify 0x14def9dea2f79cd6uL;
+  S64.classify 0x0000000000000000uL;
+  S64.classify 0x1000000000000000uL
 ]
 
-[@@FStar.Custard.no_specialize]
-let qc_seq : Seq.lseq S64.t 8 =
-  assert_norm (List.Tot.length qc_list == 8);
-  Seq.seq_of_list qc_list
+let qms_arr : (a: G.static_array S64.t
+                  { L4.vals (G.static_array_elems a) == Sc.qmod.ms })
+  = assert_norm (L.length qms_list == B4.nl);
+    assert_norm (Lit4.lbnd qms_list);
+    assert_norm (Lit4.leval qms_list == 7237005577332262213973186563042994240857116359379907606001950938285454250989);
+    assert_norm (Sc.q == 7237005577332262213973186563042994240857116359379907606001950938285454250989);
+    assert_norm (7237005577332262213973186563042994240857116359379907606001950938285454250989 < pow2 256);
+    Lit4.lit_limbs qms_list (Sc.q);
+    G.mk_static_array qms_list
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
+(** [2^256] less the order: subtraction without borrows. *)
+let qnm_list : list S64.t = [
+  S64.classify 0xa7ed9ce5a30a2c13uL;
+  S64.classify 0xeb2106215d086329uL;
+  S64.classify 0xffffffffffffffffuL;
+  S64.classify 0xefffffffffffffffuL
+]
 
-(** Entry by entry against the specification's [qc], and one query per
-    entry.  [qc_index] turns [Seq.init] into an arithmetic expression and
-    [assert_norm] evaluates it; the literal comes out of the list rather
-    than out of the sequence, because [FStar.Seq]'s representation is
-    abstract and the normaliser cannot see through it.  Asking for all
-    eight entries in one query is the same proof and a hundred times
-    slower: every literal above [2^250] then sits in the context of every
-    other one. *)
-let qc_len (_: unit) : Lemma (List.Tot.length qc_list == 8) =
-  assert_norm (List.Tot.length qc_list == 8)
+let qnm_arr : (a: G.static_array S64.t
+                  { L4.vals (G.static_array_elems a) == Sc.qmod.nm })
+  = assert_norm (L.length qnm_list == B4.nl);
+    assert_norm (Lit4.lbnd qnm_list);
+    assert_norm (Lit4.leval qnm_list == 108555083659983933209597798445644913612412868306260656433455633069627675388947);
+    assert_norm (pow2 256 - Sc.q == 108555083659983933209597798445644913612412868306260656433455633069627675388947);
+    assert_norm (108555083659983933209597798445644913612412868306260656433455633069627675388947 < pow2 256);
+    Lit4.lit_limbs qnm_list (pow2 256 - Sc.q);
+    G.mk_static_array qnm_list
 
-let entry (k: nat { k < B32.nl }) (x: U64.t)
-  : Lemma (requires Seq.index qc_seq k == S64.classify x /\
-                    U64.v x == (pow2 256 - Sc.q) / pow2 (B32.rad * k) % B32.base)
-          (ensures Seq.index (Limb.vals qc_seq) k == Seq.index Sc.qc k)
-  = Sc.qc_index k
+(** [R mod q] -- the Montgomery form of one. *)
+let qr1_list : list S64.t = [
+  S64.classify 0xd6ec31748d98951duL;
+  S64.classify 0xc6ef5bf4737dcf70uL;
+  S64.classify 0xfffffffffffffffeuL;
+  S64.classify 0x0fffffffffffffffuL
+]
 
-let entry_0 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 0 == Seq.index Sc.qc 0) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 0;
-  assert_norm (List.Tot.index qc_list 0 == S64.classify 0xa30a2c13uL);
-  assert_norm (U64.v 0xa30a2c13uL == (pow2 256 - Sc.q) / pow2 (B32.rad * 0) % B32.base);
-  entry 0 0xa30a2c13uL
+let qr1_arr : (a: G.static_array S64.t
+                  { L4.vals (G.static_array_elems a) == Sc.qmod.r1 })
+  = assert_norm (L.length qr1_list == B4.nl);
+    assert_norm (Lit4.lbnd qr1_list);
+    assert_norm (Lit4.leval qr1_list == 7237005577332262213973186563042994240413239274941949949428319933631315875101);
+    assert_norm (pow2 256 % Sc.q == 7237005577332262213973186563042994240413239274941949949428319933631315875101);
+    assert_norm (7237005577332262213973186563042994240413239274941949949428319933631315875101 < pow2 256);
+    Lit4.lit_limbs qr1_list (pow2 256 % Sc.q);
+    G.mk_static_array qr1_list
 
-let entry_1 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 1 == Seq.index Sc.qc 1) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 1;
-  assert_norm (List.Tot.index qc_list 1 == S64.classify 0xa7ed9ce5uL);
-  assert_norm (U64.v 0xa7ed9ce5uL == (pow2 256 - Sc.q) / pow2 (B32.rad * 1) % B32.base);
-  entry 1 0xa7ed9ce5uL
+(** [R^2 mod q] -- the Montgomery form of [R], and also the constant
+    that turns a 128-bit chunk at offset [2^256] into a residue. *)
+let qr2_list : list S64.t = [
+  S64.classify 0xa40611e3449c0f01uL;
+  S64.classify 0xd00e1ba768859347uL;
+  S64.classify 0xceec73d217f5be65uL;
+  S64.classify 0x0399411b7c309a3duL
+]
 
-let entry_2 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 2 == Seq.index Sc.qc 2) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 2;
-  assert_norm (List.Tot.index qc_list 2 == S64.classify 0x5d086329uL);
-  assert_norm (U64.v 0x5d086329uL == (pow2 256 - Sc.q) / pow2 (B32.rad * 2) % B32.base);
-  entry 2 0x5d086329uL
+let qr2_arr : (a: G.static_array S64.t
+                  { L4.vals (G.static_array_elems a) == Sc.qmod.r2 })
+  = assert_norm (L.length qr2_list == B4.nl);
+    assert_norm (Lit4.lbnd qr2_list);
+    assert_norm (Lit4.leval qr2_list == 1627715501170711445284395025044413883736156588369414752970002579683115011841);
+    assert_norm (pow2 256 * pow2 256 % Sc.q == 1627715501170711445284395025044413883736156588369414752970002579683115011841);
+    assert_norm (1627715501170711445284395025044413883736156588369414752970002579683115011841 < pow2 256);
+    Lit4.lit_limbs qr2_list (pow2 256 * pow2 256 % Sc.q);
+    G.mk_static_array qr2_list
 
-let entry_3 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 3 == Seq.index Sc.qc 3) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 3;
-  assert_norm (List.Tot.index qc_list 3 == S64.classify 0xeb210621uL);
-  assert_norm (U64.v 0xeb210621uL == (pow2 256 - Sc.q) / pow2 (B32.rad * 3) % B32.base);
-  entry 3 0xeb210621uL
+(** [2^384 mod q]: the constant that turns a 128-bit chunk at offset
+    [2^128] into a residue. *)
+let qp1_list : list S64.t = [
+  S64.classify 0x39822129a02a6271uL;
+  S64.classify 0xb64a7f435e4fdd95uL;
+  S64.classify 0x7ed9ce5a30a2c131uL;
+  S64.classify 0x02106215d086329auL
+]
 
-let entry_4 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 4 == Seq.index Sc.qc 4) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 4;
-  assert_norm (List.Tot.index qc_list 4 == S64.classify 0xffffffffuL);
-  assert_norm (U64.v 0xffffffffuL == (pow2 256 - Sc.q) / pow2 (B32.rad * 4) % B32.base);
-  entry 4 0xffffffffuL
+let qp1_arr : (a: G.static_array S64.t
+                  { L4.vals (G.static_array_elems a) == Sc.limbs (pow2 384 % Sc.q) })
+  = assert_norm (L.length qp1_list == B4.nl);
+    assert_norm (Lit4.lbnd qp1_list);
+    assert_norm (Lit4.leval qp1_list == 933572209464014797850993495837617212577308338482798680094955262100143497841);
+    assert_norm (pow2 384 % Sc.q == 933572209464014797850993495837617212577308338482798680094955262100143497841);
+    assert_norm (933572209464014797850993495837617212577308338482798680094955262100143497841 < pow2 256);
+    Lit4.lit_limbs qp1_list (pow2 384 % Sc.q);
+    G.mk_static_array qp1_list
 
-let entry_5 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 5 == Seq.index Sc.qc 5) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 5;
-  assert_norm (List.Tot.index qc_list 5 == S64.classify 0xffffffffuL);
-  assert_norm (U64.v 0xffffffffuL == (pow2 256 - Sc.q) / pow2 (B32.rad * 5) % B32.base);
-  entry 5 0xffffffffuL
+(** [2^640 mod q]: the constant for the chunk at offset [2^384]. *)
+let qp3_list : list S64.t = [
+  S64.classify 0xe372e8efd301e8d4uL;
+  S64.classify 0xad24db5f36cabecduL;
+  S64.classify 0xf2ee573e5a6e5f71uL;
+  S64.classify 0x0b5c63aa97a331b4uL
+]
 
-let entry_6 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 6 == Seq.index Sc.qc 6) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 6;
-  assert_norm (List.Tot.index qc_list 6 == S64.classify 0xffffffffuL);
-  assert_norm (U64.v 0xffffffffuL == (pow2 256 - Sc.q) / pow2 (B32.rad * 6) % B32.base);
-  entry 6 0xffffffffuL
+let qp3_arr : (a: G.static_array S64.t
+                  { L4.vals (G.static_array_elems a) == Sc.limbs (pow2 640 % Sc.q) })
+  = assert_norm (L.length qp3_list == B4.nl);
+    assert_norm (Lit4.lbnd qp3_list);
+    assert_norm (Lit4.leval qp3_list == 5138679136424097540314056911209753954303976540412756213920152942858578553044);
+    assert_norm (pow2 640 % Sc.q == 5138679136424097540314056911209753954303976540412756213920152942858578553044);
+    assert_norm (5138679136424097540314056911209753954303976540412756213920152942858578553044 < pow2 256);
+    Lit4.lit_limbs qp3_list (pow2 640 % Sc.q);
+    G.mk_static_array qp3_list
 
-let entry_7 (_: unit) : Lemma (Seq.index (Limb.vals qc_seq) 7 == Seq.index Sc.qc 7) =
-  qc_len ();
-  Seq.lemma_seq_of_list_index qc_list 7;
-  assert_norm (List.Tot.index qc_list 7 == S64.classify 0xefffffffuL);
-  assert_norm (U64.v 0xefffffffuL == (pow2 256 - Sc.q) / pow2 (B32.rad * 7) % B32.base);
-  entry 7 0xefffffffuL
-
-(** [Seq.lemma_eq_intro] wants the entries for a symbolic index, and
-    nothing tells Z3 that an index below eight is one of eight
-    numbers.  So the case split is written out. *)
-let qc_at (k: nat { k < B32.nl })
-  : Lemma (Seq.index (Limb.vals qc_seq) k == Seq.index Sc.qc k)
-  = if k = 0 then entry_0 ()
-    else if k = 1 then entry_1 ()
-    else if k = 2 then entry_2 ()
-    else if k = 3 then entry_3 ()
-    else if k = 4 then entry_4 ()
-    else if k = 5 then entry_5 ()
-    else if k = 6 then entry_6 ()
-    else entry_7 ()
-
-let qc_seq_ok (_: unit) : Lemma (Limb.vals qc_seq == Sc.qc) =
-  Classical.forall_intro qc_at;
-  Seq.lemma_eq_intro (Limb.vals qc_seq) Sc.qc
+(** The Montgomery constant. *)
+inline_for_extraction
+let qmu : (w: S64.t { S64.v w == Sc.qmod.mu }) = S64.classify 15183074304973897243uL
 
 #pop-options
-
-let qc_arr : (a: G.static_array S64.t
-                { G.static_array_elems a == (qc_seq <: Seq.seq S64.t) })
-  = G.mk_static_array qc_list
+#pop-options
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 

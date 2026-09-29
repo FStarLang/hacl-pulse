@@ -57,7 +57,8 @@ module Tables = Hacl.Ed25519.Tables
 module MG = Hacl.Ed25519.PointMulG
 module Scalar = Hacl.Ed25519.Scalar
 module Limb = Hacl.Impl.Limb
-module B32 = Spec.Bignum256
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
 module Hash = Hacl.Hash.SHA2
 module Stream = Hacl.Streaming.SHA2
 module SHA2 = Spec.SHA2
@@ -142,8 +143,8 @@ ensures exists* (vout': Seq.seq S8.t).
   pure (vout' == E.scalar_bytes (E.sha512_mod_q vh))
 {
   let zz = S64.zero;
-  let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  Scalar.reduce_op a1 a2 a3 h;
+  let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; A.pts_to_len a1;
+  Scalar.reduce64 a1 h;
   Scalar.store_le out a1;
   ()
 }
@@ -378,31 +379,30 @@ ensures exists* (vsg': Seq.seq S8.t).
   A.pts_to_len sg;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 8sz |]; A.pts_to_len a1; let mut a2 = [| zz; 8sz |]; A.pts_to_len a2; let mut a3 = [| zz; 8sz |]; A.pts_to_len a3; let mut a4 = [| zz; 8sz |]; A.pts_to_len a4; let mut a5 = [| zz; 8sz |]; A.pts_to_len a5; let mut a6 = [| zz; 8sz |]; A.pts_to_len a6; let mut a7 = [| zz; 8sz |]; A.pts_to_len a7; let mut a8 = [| zz; 5sz |]; A.pts_to_len a8; let mut a9 = [| zz; 5sz |]; A.pts_to_len a9; let mut aa = [| zz; 5sz |]; A.pts_to_len aa; let mut ab = [| zz; 5sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
+  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; let mut a2 = [| zz; 4sz |]; A.pts_to_len a2; let mut a3 = [| zz; 4sz |]; A.pts_to_len a3; let mut a4 = [| zz; 4sz |]; A.pts_to_len a4; let mut a5 = [| zz; 4sz |]; A.pts_to_len a5; let mut a8 = [| zz; 5sz |]; A.pts_to_len a8; let mut a9 = [| zz; 5sz |]; A.pts_to_len a9; let mut aa = [| zz; 5sz |]; A.pts_to_len aa; let mut ab = [| zz; 5sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
-  A.pts_to_len a5; A.pts_to_len a6; A.pts_to_len a7;
+  A.pts_to_len a5;
   A.pts_to_len a8; A.pts_to_len a9; A.pts_to_len aa; A.pts_to_len ab;
 
   hash2 c1 prefix msg mlen;
-  Scalar.reduce_op a1 a5 a6 c1;
+  Scalar.reduce64 a1 c1;
   Scalar.store_le c2 a1;
   point_mul_g_compress c3 c2;
   with vrr. assert (A.pts_to c3 vrr);
   A.pts_to_len c3;
 
   hash3 c1 c3 pub msg mlen;
-  Scalar.reduce_op a2 a5 a6 c1;
+  Scalar.reduce64 a2 c1;
   with vk. assert (A.pts_to a2 vk);
-  Scalar.reduce32 a3 a5 a6 sk;
+  Scalar.reduce32 a3 sk;
   with vsa. assert (A.pts_to a3 vsa);
-  Scalar.qmul_op a4 a2 a3 a5 a6 a7;
+  Scalar.qmul a4 a2 a3;
   with vr. assert (A.pts_to a1 vr);
   with vmm. assert (A.pts_to a4 vmm);
-  Scalar.qadd_op a1 a4 a5 a6;
-  Sc.qadd_ok (Limb.vals vr) (Limb.vals vmm);
-  Math.lemma_mod_add_distr (B32.eval (Limb.vals vr))
-    (B32.eval (Limb.vals vk) * B32.eval (Limb.vals vsa)) Sc.q;
-  Scalar.store_le c4 a1;
+  Scalar.qadd a5 a1 a4;
+  Math.lemma_mod_add_distr (B4.eval (L4.vals vr))
+    (B4.eval (L4.vals vk) * B4.eval (L4.vals vsa)) Sc.q;
+  Scalar.store_le c4 a5;
   with vss. assert (A.pts_to c4 vss);
   A.pts_to_len c4;
 
@@ -535,13 +535,12 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
   let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut c5 = [| z8; 64sz |]; A.pts_to_len c5; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len c4; A.pts_to_len c5;
 
-  let mut d1 = [| zz; 5sz |]; A.pts_to_len d1; let mut d2 = [| zz; 5sz |]; A.pts_to_len d2; let mut d3 = [| zz; 5sz |]; A.pts_to_len d3; let mut d4 = [| zz; 5sz |]; A.pts_to_len d4; let mut d5 = [| zz; 5sz |]; A.pts_to_len d5; let mut d6 = [| zz; 5sz |]; A.pts_to_len d6; let mut d7 = [| zz; 5sz |]; A.pts_to_len d7; let mut d8 = [| zz; 5sz |]; A.pts_to_len d8; let mut d9 = [| zz; 5sz |]; A.pts_to_len d9; let mut e1 = [| zz; 5sz |]; A.pts_to_len e1; let mut e2 = [| zz; 5sz |]; A.pts_to_len e2; let mut e3 = [| zz; 5sz |]; A.pts_to_len e3; let mut e4 = [| zz; 5sz |]; A.pts_to_len e4; let mut e5 = [| zz; 5sz |]; A.pts_to_len e5; let mut e6 = [| zz; 5sz |]; A.pts_to_len e6; let mut e7 = [| zz; 5sz |]; A.pts_to_len e7; let mut e8 = [| zz; 5sz |]; A.pts_to_len e8; let mut e9 = [| zz; 5sz |]; A.pts_to_len e9; let mut f1 = [| zz; 5sz |]; A.pts_to_len f1; let mut f2 = [| zz; 5sz |]; A.pts_to_len f2; let mut f3 = [| zz; 8sz |]; A.pts_to_len f3; let mut f4 = [| zz; 8sz |]; A.pts_to_len f4; let mut f5 = [| zz; 8sz |]; A.pts_to_len f5; let mut f6 = [| zz; 8sz |]; A.pts_to_len f6; let mut f7 = [| zz; 8sz |]; A.pts_to_len f7; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
+  let mut d1 = [| zz; 5sz |]; A.pts_to_len d1; let mut d2 = [| zz; 5sz |]; A.pts_to_len d2; let mut d3 = [| zz; 5sz |]; A.pts_to_len d3; let mut d4 = [| zz; 5sz |]; A.pts_to_len d4; let mut d5 = [| zz; 5sz |]; A.pts_to_len d5; let mut d6 = [| zz; 5sz |]; A.pts_to_len d6; let mut d7 = [| zz; 5sz |]; A.pts_to_len d7; let mut d8 = [| zz; 5sz |]; A.pts_to_len d8; let mut d9 = [| zz; 5sz |]; A.pts_to_len d9; let mut e1 = [| zz; 5sz |]; A.pts_to_len e1; let mut e2 = [| zz; 5sz |]; A.pts_to_len e2; let mut e3 = [| zz; 5sz |]; A.pts_to_len e3; let mut e4 = [| zz; 5sz |]; A.pts_to_len e4; let mut e5 = [| zz; 5sz |]; A.pts_to_len e5; let mut e6 = [| zz; 5sz |]; A.pts_to_len e6; let mut e7 = [| zz; 5sz |]; A.pts_to_len e7; let mut e8 = [| zz; 5sz |]; A.pts_to_len e8; let mut e9 = [| zz; 5sz |]; A.pts_to_len e9; let mut f1 = [| zz; 5sz |]; A.pts_to_len f1; let mut f2 = [| zz; 5sz |]; A.pts_to_len f2; let mut f3 = [| zz; 4sz |]; A.pts_to_len f3; let mut f4 = [| zz; 4sz |]; A.pts_to_len f4; let mut f5 = [| zz; 4sz |]; A.pts_to_len f5; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
   A.pts_to_len d5; A.pts_to_len d6; A.pts_to_len d7; A.pts_to_len d8;
   A.pts_to_len d9; A.pts_to_len e1; A.pts_to_len e2; A.pts_to_len e3;
   A.pts_to_len e4; A.pts_to_len e5; A.pts_to_len e6; A.pts_to_len e7;
   A.pts_to_len e8; A.pts_to_len e9; A.pts_to_len f1; A.pts_to_len f2;
   A.pts_to_len f3; A.pts_to_len f4; A.pts_to_len f5;
-  A.pts_to_len f6; A.pts_to_len f7;
 
   (* The two halves of the signature, in their own buffers. *)
   let g0 = Sub.sub sg 0sz 32sz;
@@ -569,7 +568,7 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
      identity, which is exactly what comparing against the reduction
      decides. *)
   Scalar.load_le f3 c2;
-  Scalar.reduce32 f4 f6 f7 c2;
+  Scalar.reduce32 f4 c2;
   with vsl. assert (A.pts_to f3 vsl);
   with vsr. assert (A.pts_to f4 vsr);
   let oks = Scalar.limbs_eq f3 f4;
@@ -589,7 +588,7 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
     with vrt. assert (A.pts_to d8 vrt);
     Scalar.store_le c3 f3;
     hash3 c5 c1 pub msg mlen;
-    Scalar.reduce_op f5 f6 f7 c5;
+    Scalar.reduce64 f5 c5;
     Scalar.store_le c4 f5;
     point_mul_g e4 e5 e6 e7 c3;
     GR.decompress_on_curve vpub (P.pt vax vay vaz vat);
@@ -607,7 +606,7 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
     with vkt. assert (A.pts_to e3 vkt);
     let r = point_equal e4 e5 e6 e7 e8 e9 f1 f2;
     verify_char vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
-                (le_nat vs0) (B32.eval (Limb.vals vacc))
+                (le_nat vs0) (B4.eval (L4.vals vacc))
                 (P.pt vbx vby vbz vbt) (P.pt vkx vky vkz vkt) r;
     r
   } else {
