@@ -32,7 +32,10 @@ X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
 generator multiply it out of four compiled-in base points rather than one.
 P-256 is the one that gained most from the latter: signing is now within
-1.08x of the reference and key agreement within 1.04x.
+1.08x of the reference and key agreement within 1.04x.  Ed25519 goes further
+still and compiles in the whole of its fixed-base window, sixty-four
+precomputed multiples of the generator, which puts signing and key generation
+within 1.46x under gcc and 1.16x under clang.
 See
 [Performance](#performance).
 
@@ -751,8 +754,9 @@ for which `ecdh` returns `false` and the shared secret is all zeros.
 Ed25519 lives on the same prime as X25519, so it reuses
 `Hacl.Curve25519.Field` unchanged -- the same five limbs of fifty-one bits,
 the same `fmul`, the same inversion chain.  Nothing in the signature scheme
-needed a second field implementation, which is the main reason the whole of
-`code/ed25519` is eight modules.
+needed a second field implementation, which is the main reason `code/ed25519`
+holds no arithmetic of its own beyond the group order: of its fourteen
+modules, four are nothing but the fixed-base window's constant tables.
 
 Its *scalar* arithmetic, mod the group order `q`, is a different matter,
 because `q` is not the field prime and has no special shape.  It began as
@@ -798,12 +802,14 @@ t)` are passed as four separate five-limb arrays side by side, because a
 struct of arrays would need its own separation discipline and Custard would
 have to lay it out.  `point_add ox oy oz ot x1 y1 z1 t1 x2 y2 z2 t2` is a
 wide signature, but the separation logic is then exactly the one the field
-operations already use.  One consequence: `point_add` and the windowed
-`point_mul_win` demand
-all four coordinates of an input at a *single shared* permission, so the
-read-only base-point table has to be copied into owned buffers before
-`point_mul_g` can use it -- `Table.table` hands back an existential
-permission per array, and four existentials are not one.
+operations already use.  One consequence: an addition against a table used to
+demand all four coordinates of the table at a *single shared* permission,
+which nothing could supply -- `Table.table` hands back an existential
+permission per array, and four existentials are not one, and Pulse can halve
+a permission but never weaken it to a stated target.  `win_add` therefore
+takes four permissions rather than one, and the fixed-base window's sixteen
+read-only arrays are read where they lie instead of being copied into owned
+buffers first.
 
 **The scalar multiplication is windowed, and that changes what the callers
 can assume.**  `Hacl.Ed25519.PointWin` walks the scalar four bits at a time
@@ -831,20 +837,39 @@ k G = k0 G + k1 (2^64 G) + k2 (2^128 G) + k3 (2^192 G)
 
 lets the four pieces share one doubling chain, so sixteen rungs of four
 doublings and four additions replace sixty-four rungs of four and one.  A
-hundred and eighty-four point operations against three hundred and
-thirty-five, table building included.  The three extra base points are
-constants, and saying what such a constant *is* is the difficulty: `[2^64] G`
-is two-to-the-sixty-fourth additions and cannot be unfolded, so
-`Spec.Ed25519.Base` states it as a doubling *chain* (`Spec.Group.Smul.dblk`),
-which the normaliser evaluates on concrete field elements at typechecking
-time -- sixty-four doublings in about a second -- and `dblk_ok` converts into
-a statement about `smul`.  They are stored affine, which makes both the chain
-equation and the curve equation decidable by `assert_norm`, so no SMT query
-ever sees them; the nine field constants are `opaque_to_smt` for the same
-reason.  `Hacl.Ed25519.PointWin`'s table layer carries a scale so that both
-windows can share it: entry `d` of the `j`-th table has to be described as
-the `d 2^{64j}`-th multiple of `G`, not the `d`-th multiple of `2^{64j} G`,
-because it is `G` that the answer is a multiple of.
+hundred and twenty-eight point operations against three hundred and
+thirty-five.
+
+The four sixteen-entry tables are *compiled in*.  They were being built on
+entry -- sixty point additions, a third of the work -- from three extra base
+points stated as doubling chains in `Spec.Ed25519.Base`.  Now all sixty-four
+multiples are constants: `Spec.Ed25519.Win0` .. `Win3` name the points and
+prove each is the multiple it claims to be, and `Hacl.Ed25519.Win0` .. `Win3`
+hold the limbs, sixteen `static const uint64_t [80]` arrays, two hundred and
+fifty-six field constants and about ten kilobytes of `.rodata`.
+
+Saying what such a constant *is* is the difficulty: `[2^64] G` is
+two-to-the-sixty-fourth additions and cannot be unfolded, so
+`Spec.Ed25519.Base` states the three scale points as doubling *chains*
+(`Spec.Group.Smul.dblk`), which the normaliser evaluates on concrete field
+elements at typechecking time -- sixty-four doublings in about a second --
+and `dblk_ok` converts into a statement about `smul`.  Each table then climbs
+from there one addition at a time, entry `d` proved equal to `e_{d-1} + e_1`
+by `assert_norm` and lifted to `smul (d n) g` by `Spec.Group.smul_add_congr`.
+Every entry is stored *affine*, `(x, y, 1, x y)`, which is what makes both
+the chain equation and the curve equation decidable by `assert_norm`, so no
+SMT query ever sees a point; a projective quadruple would carry whatever
+denominators the previous addition left, and by the fifteenth entry the
+numbers stop being ones the normaliser can compare.  The coordinates are
+`opaque_to_smt` for the same reason, and so are the four flat eighty-limb
+sequences, so that sixteen tables' worth of literals never enter the caller's
+context.  `Hacl.Impl.Lit51` cuts a list the way `entry` slices the
+sequence, so one `assert_norm` per entry-coordinate settles five limbs at
+once, and `Hacl.Ed25519.WinTable` turns four such facts into the `ent` the
+window wants.  `Hacl.Ed25519.PointWin`'s table layer carries a scale so that
+both windows can share it: entry `d` of the `j`-th table has to be described
+as the `d 2^{64j}`-th multiple of `G`, not the `d`-th multiple of `2^{64j}
+G`, because it is `G` that the answer is a multiple of.
 
 **Failure is public.**  Decompression can fail, and a signature can be
 invalid; neither fact is secret, so both are ordinary `bool`s rather than
@@ -2421,8 +2446,8 @@ reference**.
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
+| Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
 | secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
-| Ed25519 sign | -- | 124 us | 65 us | **1.92x** |  |  |
 | AES-128-GCM | 256 KiB | 140 us | 71 us | **1.98x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
@@ -2494,11 +2519,16 @@ windowed.  The variable-base half was worth 22% of key generation, 19% of
 signing and 18% of verification; the fixed-base half, which splits the scalar
 into four sixty-four-bit pieces and walks them together against [2^64] G,
 [2^128] G and [2^192] G as well as G, was worth a further 28% of key
-generation and 23% of signing.  The scalar arithmetic mod the group order,
+generation and 23% of signing; compiling in the four sixteen-entry tables of
+multiples that the fixed-base half was building on entry -- sixty point
+additions out of a hundred and eighty-eight -- was worth a further 25% of key
+generation, 25% of signing and 10% of verification.  The scalar arithmetic
+mod the group order,
 which used to be done a bit at a time and cost more than a fifth of a
 signature, is now four-limb Montgomery like every other curve here and costs
 almost nothing.  Key generation went from 3.40x of the reference to
-**1.94x** and signing from 3.82x to **1.92x**; verification is **2.22x**.  secp256k1 and
+**1.46x** and signing from 3.82x to **1.46x**; verification is **1.98x**.  Under
+clang the first two are **1.16x**.  secp256k1 and
 P-256 have now had the same treatment, so no curve here walks its generator
 bit by bit any more.  P-256 and secp256k1 were behind for three reasons, of
 which secp256k1 now has none in particular and P-256 has one.  The plainest has been removed for both: the 256-bit core they share was
@@ -3388,10 +3418,20 @@ rough order of value:
    **165.1**.  The three extra base points are compiled in as nine field
    constants; `spec/Spec.Ed25519.Base.fst` says what they are by a doubling
    chain the normaliser evaluates, and `Spec.Group.Smul.dblk_ok` turns that
-   into a statement about `smul`.  A further 30% is available by compiling in
-   the four tables of sixteen entries rather than building them, at the price
-   of 256 field constants instead of 9; that is a change to the first twenty
-   lines of `Hacl.Ed25519.PointMulG`.  secp256k1 has had the same, in
+   into a statement about `smul`.  **On Ed25519 the four tables of sixteen
+   entries are now compiled in too**, rather than built on entry: that was
+   sixty point additions out of 188, and removing them took key generation to
+   **45.7** us (gcc) and **36.0** (clang), 1.91x of HACL\* to **1.46x** and
+   1.61x to **1.16x**; signing to **93.4** and **73.5**, 1.92x to **1.46x**
+   and 1.62x to **1.15x**; verification to **150.8** and **127.6**, 2.22x to
+   **1.98x** and 1.88x to **1.69x**.  The price is 256 field constants
+   instead of 9, about ten kilobytes of `.rodata`.  `spec/Spec.Ed25519.Win0`
+   .. `Win3` name the sixty-four points and prove each is the multiple it
+   claims to be, one addition at a time from the scale point;
+   `code/ed25519/Hacl.Ed25519.Win0` .. `Win3` hold the limbs;
+   `Hacl.Impl.Lit51` cuts a literal list the way `entry` slices the sequence;
+   and `Hacl.Ed25519.WinTable` turns four limb facts into the window's `ent`.
+   secp256k1 has had the same fixed-base split, in
    `code/k256/Hacl.K256.PointMulG.fst`, with six field constants rather than
    nine because a projective point has three coordinates where an extended
    one has four: `secret-to-public` went from 155 us to **111** and 3.16x to
@@ -3461,7 +3501,7 @@ rough order of value:
    the curve, it takes fifteen seconds.  Keep the seventy-eight-digit
    literal out of the query, whatever the query is about.
 
-   Nothing is left of this item.  Signing, verification and key agreement
+   Signing, verification and key agreement
    all begin with a multiplication by the generator, where HACL\* has a
    table compiled in, and all three curves here now have one too.  The
    three moved by amounts that track how expensive their addition formulae
@@ -3474,9 +3514,22 @@ rough order of value:
    evaluates on concrete field elements at typechecking time, and convert
    with `dblk_ok`.  The third copy cost an afternoon and verified on the
    first attempt at every step, which is what writing the same four modules
-   twice buys.  What is still available is Plan A: compiling in the four
-   tables of sixteen entries rather than building them, a further ~30% on
-   each curve, at 256, 192 and 192 field constants respectively.
+   twice buys.
+
+   Plan A -- compiling in the four tables of sixteen entries rather than
+   building them -- **has now been done on Ed25519**, and took key generation
+   from 1.91x to **1.46x** and signing from 1.92x to **1.46x**, with clang at
+   **1.16x** and **1.15x**.  The proof obligation grows from three points to
+   sixty-four, but it does not get harder: each entry is one `assert_norm`
+   that it equals the previous entry plus the scale point, lifted to `smul`
+   by `Spec.Group.smul_add_congr`, and the entries are stored affine so the
+   normaliser is always comparing small numbers.  What made it awkward was
+   Pulse rather than F\*: sixteen `Table.table` calls yield sixteen
+   *different* existential permissions, and a permission can be halved but
+   never weakened to a stated target, so `win_add` had to be generalised from
+   one permission to four and sixteen binders threaded through the window
+   loop.  The same change is available on secp256k1 and P-256, at 192 field
+   constants each, and has not been made.
 7. **Ed25519's group-order arithmetic on the four-limb Montgomery core**,
    **done**.  `Hacl.Ed25519.Scalar` was the last bit-at-a-time arithmetic in
    the repository and the last user of the eight-limb, thirty-two-bit
@@ -3494,9 +3547,9 @@ rough order of value:
    multiplication it also does -- went from 31 us to 1.8, signing from
    2.35x of the reference to **1.92x** with gcc and **1.62x** with clang,
    key generation to **1.94x**/1.63x and verification to **2.22x**/1.88x.
-   What is left of the Ed25519 gap is entirely the scalar multiplication:
-   `secret_to_public` is still 2.4x, and item 6's Plan A -- compiling in the
-   four windows rather than building them -- is the next thing to try.
+   What is left of the Ed25519 gap is entirely the scalar multiplication,
+   and item 6's Plan A has since taken another quarter off it: signing and
+   key generation are now **1.46x** under gcc and **1.16x** under clang.
 8. **Taking over the remaining sixty-eight compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
