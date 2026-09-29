@@ -33,11 +33,13 @@
     chain serves all four pieces.  Sixty doublings and sixty-four
     additions replace two hundred and fifty-six and sixty-four.
 
-    The three extra base points are compiled in
-    ({!Spec.K256.Base}, {!Hacl.K256.Tables52}); their tables of sixteen
-    multiples are built on entry, sixty more additions, which is still a
-    large win and costs six field constants rather than a hundred and
-    ninety-two.
+    The four tables of sixteen multiples are compiled in as well, rather
+    than built on entry: that was sixty more additions, a third of what is
+    left.  {!Spec.K256.Win0} .. {!Spec.K256.Win3} say what the sixty-four
+    points are, {!Hacl.K256.Win0} .. {!Hacl.K256.Win3} hold their limbs,
+    and {!Hacl.K256.WinTable} is the bridge.  A hundred and ninety-two
+    field constants, about seven and a half kilobytes of [.rodata], and
+    nothing at all to do before the first rung.
 
     Everything below the rung is {!Hacl.K256.PointWin}'s, which is why
     that module's table layer carries a scale: entry [d] of the [j]-th
@@ -71,7 +73,6 @@ module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
 module GR = Spec.K256.Group
 module SM = Spec.K256.Smul
-module Base = Spec.K256.Base
 module Split = Spec.Group.Split4
 module B4 = Spec.Bignum4
 module L4 = Hacl.Impl.Limb4
@@ -79,8 +80,10 @@ module Math = FStar.Math.Lemmas
 module W = Hacl.K256.PointWin
 module G = Pulse.Lib.GlobalArray
 module Tbl = Hacl.Impl.Table
-module KT52 = Hacl.K256.Tables52
-module KT52G = Hacl.K256.Tables52G
+module W0 = Hacl.K256.Win0
+module W1 = Hacl.K256.Win1
+module W2 = Hacl.K256.Win2
+module W3 = Hacl.K256.Win3
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -89,24 +92,6 @@ module KT52G = Hacl.K256.Tables52G
     Four facts about the base points, one about the scalar, and one that
     leaves the abstraction.  Each is stated as the Pulse function that
     uses it leaves its hypotheses. *)
-
-let g_rep (x y z: Seq.seq S64.t)
-  : Lemma (requires pt x y z == K.g) (ensures W.rep K.g 1 K.g)
-  = GR.g_on_curve ();
-    W.oc_intro K.g;
-    W.rep_one K.g
-
-let q1_rep (_: unit) : Lemma (W.rep Base.q1 (pow2 64) K.g)
-  = reveal_opaque (`%W.rep) W.rep;
-    Base.q1_ok ()
-
-let q2_rep (_: unit) : Lemma (W.rep Base.q2 (pow2 128) K.g)
-  = reveal_opaque (`%W.rep) W.rep;
-    Base.q2_ok ()
-
-let q3_rep (_: unit) : Lemma (W.rep Base.q3 (pow2 192) K.g)
-  = reveal_opaque (`%W.rep) W.rep;
-    Base.q3_ok ()
 
 (** The accumulator starts at nothing, which is [hi k 16]. *)
 let hi_start (k: nat)
@@ -161,31 +146,6 @@ let dig_at (k: nat) (i: nat { i < 16 }) (j: nat { j < 4 })
 
 #pop-options
 
-(** {2 Loading a base point}
-
-    The coordinates are read-only tables, and the table build wants them
-    at one permission, so they are copied in.  [z] is one for all four --
-    the constants are stored affine. *)
-
-#push-options "--fuel 0 --ifuel 1 --z3rlimit 100"
-
-inline_for_extraction
-fn load (a: A.array S64.t) (arr: G.static_array S64.t) (x: erased K.felem)
-        (#va: erased (Seq.seq S64.t))
-requires A.pts_to a va **
-  pure (Seq.length va == nl /\
-        Seq.length (G.static_array_elems arr) == nl /\
-        vals (G.static_array_elems arr) == limbs_of (reveal x))
-ensures exists* (wa: Seq.seq S64.t).
-  A.pts_to a wa ** pure (felem (vals wa) /\ fev (vals wa) == reveal x)
-{
-  let ct = fconst arr x;
-  fcopy a ct;
-  Tbl.drop_table ct;
-}
-
-#pop-options
-
 (** {2 One rung}
 
     Four doublings, then one addition per base point.  The digits are
@@ -212,14 +172,18 @@ fn rung (ox oy oz ux uy uz sx sy sz: A.array S64.t)
         (#v1x #v1y #v1z: erased (Seq.seq S64.t))
         (#v2x #v2y #v2z: erased (Seq.seq S64.t))
         (#v3x #v3y #v3z: erased (Seq.seq S64.t))
+        (#pt0x #pt0y #pt0z: perm)
+        (#pt1x #pt1y #pt1z: perm)
+        (#pt2x #pt2y #pt2z: perm)
+        (#pt3x #pt3y #pt3z: perm)
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
   A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
-  A.pts_to t0x v0x ** A.pts_to t0y v0y ** A.pts_to t0z v0z **
-  A.pts_to t1x v1x ** A.pts_to t1y v1y ** A.pts_to t1z v1z **
-  A.pts_to t2x v2x ** A.pts_to t2y v2y ** A.pts_to t2z v2z **
-  A.pts_to t3x v3x ** A.pts_to t3y v3y ** A.pts_to t3z v3z **
+  A.pts_to t0x #pt0x v0x ** A.pts_to t0y #pt0y v0y ** A.pts_to t0z #pt0z v0z **
+  A.pts_to t1x #pt1x v1x ** A.pts_to t1y #pt1y v1y ** A.pts_to t1z #pt1z v1z **
+  A.pts_to t2x #pt2x v2x ** A.pts_to t2y #pt2y v2y ** A.pts_to t2z #pt2z v2z **
+  A.pts_to t3x #pt3x v3x ** A.pts_to t3y #pt3y v3y ** A.pts_to t3z #pt3z v3z **
   pure (Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
         Seq.length vsx == nl /\ Seq.length vsy == nl /\ Seq.length vsz == nl /\
         Seq.length v0x == 80 /\ Seq.length v0y == 80 /\ Seq.length v0z == 80 /\
@@ -238,10 +202,10 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
   A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
-  A.pts_to t0x v0x ** A.pts_to t0y v0y ** A.pts_to t0z v0z **
-  A.pts_to t1x v1x ** A.pts_to t1y v1y ** A.pts_to t1z v1z **
-  A.pts_to t2x v2x ** A.pts_to t2y v2y ** A.pts_to t2z v2z **
-  A.pts_to t3x v3x ** A.pts_to t3y v3y ** A.pts_to t3z v3z **
+  A.pts_to t0x #pt0x v0x ** A.pts_to t0y #pt0y v0y ** A.pts_to t0z #pt0z v0z **
+  A.pts_to t1x #pt1x v1x ** A.pts_to t1y #pt1y v1y ** A.pts_to t1z #pt1z v1z **
+  A.pts_to t2x #pt2x v2x ** A.pts_to t2y #pt2y v2y ** A.pts_to t2z #pt2z v2z **
+  A.pts_to t3x #pt3x v3x ** A.pts_to t3y #pt3y v3y ** A.pts_to t3z #pt3z v3z **
   pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
         Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
         pt_ok wx wy wz /\ W.rep (pt wx wy wz) (Split.hi k i) K.g)
@@ -273,98 +237,6 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
 #pop-options
 
 
-(** {2 The four tables}
-
-    The base points are staged through one triple of scratch arrays, since
-    each is dead as soon as its table is built.  All four are stored
-    affine, so [z] is one throughout.
-
-    This is a function of its own, and so is the loop below.  Between them
-    they name twenty-four arrays, and a verification condition mentioning
-    twenty-four arrays, four tables of sixteen entries and the addition
-    law is one the solver does not come back from; behind two contracts
-    each half is routine. *)
-
-#push-options "--fuel 0 --ifuel 1 --z3rlimit 300"
-
-fn build_tables (t0x t0y t0z: A.array S64.t)
-                (t1x t1y t1z: A.array S64.t)
-                (t2x t2y t2z: A.array S64.t)
-                (t3x t3y t3z: A.array S64.t)
-                (px py pz: A.array S64.t)
-                (#v0x #v0y #v0z: erased (Seq.seq S64.t))
-                (#v1x #v1y #v1z: erased (Seq.seq S64.t))
-                (#v2x #v2y #v2z: erased (Seq.seq S64.t))
-                (#v3x #v3y #v3z: erased (Seq.seq S64.t))
-                (#vpx #vpy #vpz: erased (Seq.seq S64.t))
-requires
-  A.pts_to t0x v0x ** A.pts_to t0y v0y ** A.pts_to t0z v0z **
-  A.pts_to t1x v1x ** A.pts_to t1y v1y ** A.pts_to t1z v1z **
-  A.pts_to t2x v2x ** A.pts_to t2y v2y ** A.pts_to t2z v2z **
-  A.pts_to t3x v3x ** A.pts_to t3y v3y ** A.pts_to t3z v3z **
-  A.pts_to px vpx ** A.pts_to py vpy ** A.pts_to pz vpz **
-  pure (Seq.length v0x == 80 /\ Seq.length v0y == 80 /\ Seq.length v0z == 80 /\
-        Seq.length v1x == 80 /\ Seq.length v1y == 80 /\ Seq.length v1z == 80 /\
-        Seq.length v2x == 80 /\ Seq.length v2y == 80 /\ Seq.length v2z == 80 /\
-        Seq.length v3x == 80 /\ Seq.length v3y == 80 /\ Seq.length v3z == 80 /\
-        Seq.length vpx == nl /\ Seq.length vpy == nl /\ Seq.length vpz == nl)
-ensures exists* (c0x c0y c0z c1x c1y c1z
-                 c2x c2y c2z c3x c3y c3z
-                 wpx wpy wpz: Seq.seq S64.t).
-  A.pts_to t0x c0x ** A.pts_to t0y c0y ** A.pts_to t0z c0z **
-  A.pts_to t1x c1x ** A.pts_to t1y c1y ** A.pts_to t1z c1z **
-  A.pts_to t2x c2x ** A.pts_to t2y c2y ** A.pts_to t2z c2z **
-  A.pts_to t3x c3x ** A.pts_to t3y c3y ** A.pts_to t3z c3z **
-  A.pts_to px wpx ** A.pts_to py wpy ** A.pts_to pz wpz **
-  pure (Seq.length c0x == 80 /\ Seq.length c0y == 80 /\ Seq.length c0z == 80 /\
-        Seq.length c1x == 80 /\ Seq.length c1y == 80 /\ Seq.length c1z == 80 /\
-        Seq.length c2x == 80 /\ Seq.length c2y == 80 /\ Seq.length c2z == 80 /\
-        Seq.length c3x == 80 /\ Seq.length c3y == 80 /\ Seq.length c3z == 80 /\
-        W.tok c0x c0y c0z K.g 1 16 /\
-        W.tok c1x c1y c1z K.g (pow2 64) 16 /\
-        W.tok c2x c2y c2z K.g (pow2 128) 16 /\
-        W.tok c3x c3y c3z K.g (pow2 192) 16)
-{
-  A.pts_to_len px; A.pts_to_len py; A.pts_to_len pz;
-  GR.g_on_curve ();
-  W.oc_intro K.g;
-
-  load px KT52.gx_arr (hide K.g_x);
-  load py KT52.gy_arr (hide K.g_y);
-  fone pz;
-  with g0 g1 g2.
-    assert (A.pts_to px g0 ** A.pts_to py g1 ** A.pts_to pz g2);
-  g_rep g0 g1 g2;
-  W.build_table t0x t0y t0z px py pz (hide K.g) (hide 1);
-
-  load px KT52G.q1x_arr (hide Base.q1x);
-  load py KT52G.q1y_arr (hide Base.q1y);
-  fone pz;
-  with h0 h1 h2.
-    assert (A.pts_to px h0 ** A.pts_to py h1 ** A.pts_to pz h2);
-  q1_rep ();
-  W.build_table t1x t1y t1z px py pz (hide K.g) (hide (pow2 64));
-
-  load px KT52G.q2x_arr (hide Base.q2x);
-  load py KT52G.q2y_arr (hide Base.q2y);
-  fone pz;
-  with k0 k1 k2.
-    assert (A.pts_to px k0 ** A.pts_to py k1 ** A.pts_to pz k2);
-  q2_rep ();
-  W.build_table t2x t2y t2z px py pz (hide K.g) (hide (pow2 128));
-
-  load px KT52G.q3x_arr (hide Base.q3x);
-  load py KT52G.q3y_arr (hide Base.q3y);
-  fone pz;
-  with m0 m1 m2.
-    assert (A.pts_to px m0 ** A.pts_to py m1 ** A.pts_to pz m2);
-  q3_rep ();
-  W.build_table t3x t3y t3z px py pz (hide K.g) (hide (pow2 192));
-  ()
-}
-
-#pop-options
-
 (** {2 The loop}
 
     Sixteen rungs.  The accumulator starts at the point at infinity, which
@@ -389,15 +261,19 @@ fn win_loop (ox oy oz ux uy uz sx sy sz: A.array S64.t)
             (#c1x #c1y #c1z: erased (Seq.seq S64.t))
             (#c2x #c2y #c2z: erased (Seq.seq S64.t))
             (#c3x #c3y #c3z: erased (Seq.seq S64.t))
+            (#pt0x #pt0y #pt0z: perm)
+            (#pt1x #pt1y #pt1z: perm)
+            (#pt2x #pt2y #pt2z: perm)
+            (#pt3x #pt3y #pt3z: perm)
             (#pk: perm) (#vk: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
   A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
-  A.pts_to t0x c0x ** A.pts_to t0y c0y ** A.pts_to t0z c0z **
-  A.pts_to t1x c1x ** A.pts_to t1y c1y ** A.pts_to t1z c1z **
-  A.pts_to t2x c2x ** A.pts_to t2y c2y ** A.pts_to t2z c2z **
-  A.pts_to t3x c3x ** A.pts_to t3y c3y ** A.pts_to t3z c3z **
+  A.pts_to t0x #pt0x c0x ** A.pts_to t0y #pt0y c0y ** A.pts_to t0z #pt0z c0z **
+  A.pts_to t1x #pt1x c1x ** A.pts_to t1y #pt1y c1y ** A.pts_to t1z #pt1z c1z **
+  A.pts_to t2x #pt2x c2x ** A.pts_to t2y #pt2y c2y ** A.pts_to t2z #pt2z c2z **
+  A.pts_to t3x #pt3x c3x ** A.pts_to t3y #pt3y c3y ** A.pts_to t3z #pt3z c3z **
   A.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
         Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
@@ -415,10 +291,10 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
   A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
-  A.pts_to t0x c0x ** A.pts_to t0y c0y ** A.pts_to t0z c0z **
-  A.pts_to t1x c1x ** A.pts_to t1y c1y ** A.pts_to t1z c1z **
-  A.pts_to t2x c2x ** A.pts_to t2y c2y ** A.pts_to t2z c2z **
-  A.pts_to t3x c3x ** A.pts_to t3y c3y ** A.pts_to t3z c3z **
+  A.pts_to t0x #pt0x c0x ** A.pts_to t0y #pt0y c0y ** A.pts_to t0z #pt0z c0z **
+  A.pts_to t1x #pt1x c1x ** A.pts_to t1y #pt1y c1y ** A.pts_to t1z #pt1z c1z **
+  A.pts_to t2x #pt2x c2x ** A.pts_to t2y #pt2y c2y ** A.pts_to t2z #pt2z c2z **
+  A.pts_to t3x #pt3x c3x ** A.pts_to t3y #pt3y c3y ** A.pts_to t3z #pt3z c3z **
   A.pts_to ks #pk vk **
   pure (pt_ok wx wy wz /\ GR.on_curve (pt wx wy wz) /\
         GR.on_curve (K.point_mul_g (W.kv vk)) /\
@@ -446,10 +322,10 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
     A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
     A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
     A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
-    A.pts_to t0x c0x ** A.pts_to t0y c0y ** A.pts_to t0z c0z **
-    A.pts_to t1x c1x ** A.pts_to t1y c1y ** A.pts_to t1z c1z **
-    A.pts_to t2x c2x ** A.pts_to t2y c2y ** A.pts_to t2z c2z **
-    A.pts_to t3x c3x ** A.pts_to t3y c3y ** A.pts_to t3z c3z **
+    A.pts_to t0x #pt0x c0x ** A.pts_to t0y #pt0y c0y ** A.pts_to t0z #pt0z c0z **
+    A.pts_to t1x #pt1x c1x ** A.pts_to t1y #pt1y c1y ** A.pts_to t1z #pt1z c1z **
+    A.pts_to t2x #pt2x c2x ** A.pts_to t2y #pt2y c2y ** A.pts_to t2z #pt2z c2z **
+    A.pts_to t3x #pt3x c3x ** A.pts_to t3y #pt3y c3y ** A.pts_to t3z #pt3z c3z **
     A.pts_to ks #pk vk **
     pure (SZ.v vi <= 16 /\
           Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
@@ -509,38 +385,37 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut px = [| z; 5sz |]; A.pts_to_len px;
-  let mut py = [| z; 5sz |]; A.pts_to_len py;
-  let mut pz = [| z; 5sz |]; A.pts_to_len pz;
   let mut ux = [| z; 5sz |]; A.pts_to_len ux;
   let mut uy = [| z; 5sz |]; A.pts_to_len uy;
   let mut uz = [| z; 5sz |]; A.pts_to_len uz;
   let mut sx = [| z; 5sz |]; A.pts_to_len sx;
   let mut sy = [| z; 5sz |]; A.pts_to_len sy;
   let mut sz = [| z; 5sz |]; A.pts_to_len sz;
-  let mut t0x = [| z; 80sz |]; A.pts_to_len t0x;
-  let mut t0y = [| z; 80sz |]; A.pts_to_len t0y;
-  let mut t0z = [| z; 80sz |]; A.pts_to_len t0z;
-  let mut t1x = [| z; 80sz |]; A.pts_to_len t1x;
-  let mut t1y = [| z; 80sz |]; A.pts_to_len t1y;
-  let mut t1z = [| z; 80sz |]; A.pts_to_len t1z;
-  let mut t2x = [| z; 80sz |]; A.pts_to_len t2x;
-  let mut t2y = [| z; 80sz |]; A.pts_to_len t2y;
-  let mut t2z = [| z; 80sz |]; A.pts_to_len t2z;
-  let mut t3x = [| z; 80sz |]; A.pts_to_len t3x;
-  let mut t3y = [| z; 80sz |]; A.pts_to_len t3y;
-  let mut t3z = [| z; 80sz |]; A.pts_to_len t3z;
-  A.pts_to_len px; A.pts_to_len py; A.pts_to_len pz;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz;
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz;
-  A.pts_to_len t0x; A.pts_to_len t0y; A.pts_to_len t0z;
-  A.pts_to_len t1x; A.pts_to_len t1y; A.pts_to_len t1z;
-  A.pts_to_len t2x; A.pts_to_len t2y; A.pts_to_len t2z;
-  A.pts_to_len t3x; A.pts_to_len t3y; A.pts_to_len t3z;
 
-  build_tables t0x t0y t0z t1x t1y t1z t2x t2y t2z t3x t3y t3z px py pz;
+  W0.tbl_ok (); W1.tbl_ok (); W2.tbl_ok (); W3.tbl_ok ();
+
+  let t0x = Tbl.table W0.tx_arr 80sz;
+  let t0y = Tbl.table W0.ty_arr 80sz;
+  let t0z = Tbl.table W0.tz_arr 80sz;
+  let t1x = Tbl.table W1.tx_arr 80sz;
+  let t1y = Tbl.table W1.ty_arr 80sz;
+  let t1z = Tbl.table W1.tz_arr 80sz;
+  let t2x = Tbl.table W2.tx_arr 80sz;
+  let t2y = Tbl.table W2.ty_arr 80sz;
+  let t2z = Tbl.table W2.tz_arr 80sz;
+  let t3x = Tbl.table W3.tx_arr 80sz;
+  let t3y = Tbl.table W3.ty_arr 80sz;
+  let t3z = Tbl.table W3.tz_arr 80sz;
+
   win_loop ox oy oz ux uy uz sx sy sz
            t0x t0y t0z t1x t1y t1z t2x t2y t2z t3x t3y t3z ks;
+
+  Tbl.drop_table t0x; Tbl.drop_table t0y; Tbl.drop_table t0z;
+  Tbl.drop_table t1x; Tbl.drop_table t1y; Tbl.drop_table t1z;
+  Tbl.drop_table t2x; Tbl.drop_table t2y; Tbl.drop_table t2z;
+  Tbl.drop_table t3x; Tbl.drop_table t3y; Tbl.drop_table t3z;
   ()
 }
 

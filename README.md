@@ -27,15 +27,16 @@ SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305 and HMAC-SHA-512 are all faster --
 to behind it on modular exponentiation, which is still square-and-multiply
 where HACL\* uses a window, and on the elliptic curves, where what is left is
 the scalar multiplication rather than the field: P-256's variable-base ECDH
-is now *faster* than the reference at 0.76x, secp256k1's is within 1.73x and
+is now *faster* than the reference at 0.76x, secp256k1's is within 1.75x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
 generator multiply it out of four compiled-in base points rather than one.
 P-256 is the one that gained most from the latter: signing is now within
-1.08x of the reference and key agreement within 1.04x.  Ed25519 goes further
-still and compiles in the whole of its fixed-base window, sixty-four
-precomputed multiples of the generator, which puts signing and key generation
-within 1.46x under gcc and 1.16x under clang.
+1.08x of the reference and key agreement within 1.04x.  Ed25519 and secp256k1 go
+further still and compile in the whole of their fixed-base windows,
+sixty-four precomputed multiples of the generator apiece: Ed25519 signing and
+key generation are within 1.46x under gcc and 1.16x under clang, and
+secp256k1 signing is within 1.40x and `secret-to-public` within 1.55x.
 See
 [Performance](#performance).
 
@@ -1066,17 +1067,29 @@ multiply a point that is known at compile time, so `Hacl.K256.PointMulG`
 does not walk the scalar bit by bit at all: it splits it into four
 sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
 `2^128 G` and `2^192 G`, sixteen rungs of four doublings and four
-additions, 184 point operations rather than 335.  `Spec.K256.Base` says
-what the three extra base points are, as a doubling chain the normaliser
-evaluates at typechecking time, and `Spec.Group.Smul.dblk_ok` turns that
-into a statement about `smul`; their six field constants are
-`Hacl.K256.Tables52G`, in a module of their own because eight
-two-hundred-and-fifty-six-bit literals in one solver context stop
-`Hacl.K256.Tables52` terminating.  Everything below the rung is
+additions, 184 point operations rather than 335.  Everything below the rung is
 `Hacl.K256.PointWin`'s, whose table layer carries a scale for exactly this
 reason; the scalar arithmetic is `Spec.Group.Split4`, shared with Ed25519.
-secp256k1 `secret-to-public` went from 155 us to **111** and signing from
-172 to **126**.
+
+The four sixteen-entry tables are *compiled in*, as Ed25519's are, and by the
+same construction.  They were being built on entry -- sixty point additions
+out of a hundred and eighty-four -- from three extra base points stated as
+doubling chains in `Spec.K256.Base`, which the normaliser evaluates at
+typechecking time and `Spec.Group.Smul.dblk_ok` converts into a statement
+about `smul`.  Now all sixty-four multiples are constants:
+`Spec.K256.Win0` .. `Win3` name the points and prove each is the multiple it
+claims to be, one `assert_norm` per entry that it equals the previous entry
+plus the scale point lifted by `Spec.Group.smul_add_congr`, and
+`Hacl.K256.Win0` .. `Win3` hold the limbs, twelve `static const uint64_t [80]`
+arrays in radix 2^52, a hundred and ninety-two field constants and about eight
+kilobytes of `.rodata`.  `Hacl.Impl.Lit52` cuts a literal list the way `entry`
+slices the sequence, so one `assert_norm` per entry-coordinate settles five
+limbs at once, and `Hacl.K256.WinTable` turns three such facts into the `ent`
+the window wants; it is the only module that opens the `rep` abstraction, so
+no seventy-eight-digit literal ever reaches a caller's solver context.
+`Hacl.K256.Tables52G`, which held the three extra base points' six field
+constants, is gone.  secp256k1 `secret-to-public` went from 155 us to 111 to
+**75** and signing from 172 to 126 to **91**.
 
 **`a = 0` is a shorter addition law, not a special case of the same one.**
 Renes-Costello-Batina give separate algorithms for `a = -3` (4 and 6) and
@@ -2445,9 +2458,9 @@ reference**.
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
+| secp256k1 ECDSA sign | -- | 91 us | 65 us | **1.40x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
-| secp256k1 ECDSA sign | -- | 126 us | 66 us | **1.91x** |  |  |
 | AES-128-GCM | 256 KiB | 140 us | 71 us | **1.98x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
@@ -2565,11 +2578,17 @@ start from a multiplication by the generator.  secp256k1 has now had that
 too: `Hacl.K256.PointMulG` splits the scalar into four sixty-four-bit pieces
 and walks them together against `G`, `2^64 G`, `2^128 G` and `2^192 G`, 184
 point operations against 335, and its three fixed-base rows moved together
--- `secret-to-public` from 155 us to **111** and 3.16x to **2.27x**, signing
-from 172 to **126** and 2.63x to **1.91x**, verification, which does one
-fixed-base and one variable-base multiplication, from 319 to **271**.
-Variable-base ECDH is untouched at 155 us and 1.71x, which is the check that
-the work went where it was supposed to.
+-- `secret-to-public` from 155 us to 111 and 3.16x to 2.27x, signing
+from 172 to 126 and 2.63x to 1.91x, verification, which does one
+fixed-base and one variable-base multiplication, from 319 to 271.
+Compiling in the four sixteen-entry tables that this was building on entry --
+sixty point additions out of a hundred and eighty-four, a third of the work --
+moved the same three rows again, and by about the same proportion Ed25519
+saw: `secret-to-public` from 111 us to **75** and 2.27x to **1.55x**, signing
+from 126 to **91** and 1.91x to **1.40x**, verification from 271 to **234**
+and 2.59x, ECDH, which is variable-base and only pays for the table build in
+its key-generation half, from 173 to **154** and **1.75x**.  Under clang the
+three fixed-base rows are **1.55x**, **1.50x** and **2.55x**.
 
 P-256 has now had it too, and gained more from it than either of the others.
 Its addition formula is the more expensive, so the eighty-two point
@@ -3517,9 +3536,11 @@ rough order of value:
    twice buys.
 
    Plan A -- compiling in the four tables of sixteen entries rather than
-   building them -- **has now been done on Ed25519**, and took key generation
-   from 1.91x to **1.46x** and signing from 1.92x to **1.46x**, with clang at
-   **1.16x** and **1.15x**.  The proof obligation grows from three points to
+   building them -- **has now been done on Ed25519 and on secp256k1**.  It
+   took Ed25519 key generation from 1.91x to **1.46x** and signing from 1.92x
+   to **1.46x**, with clang at **1.16x** and **1.15x**, and secp256k1
+   `secret-to-public` from 2.27x to **1.55x** and signing from 1.91x to
+   **1.40x**, with clang at **1.55x** and **1.50x**.  The proof obligation grows from three points to
    sixty-four, but it does not get harder: each entry is one `assert_norm`
    that it equals the previous entry plus the scale point, lifted to `smul`
    by `Spec.Group.smul_add_congr`, and the entries are stored affine so the
@@ -3528,8 +3549,13 @@ rough order of value:
    *different* existential permissions, and a permission can be halved but
    never weakened to a stated target, so `win_add` had to be generalised from
    one permission to four and sixteen binders threaded through the window
-   loop.  The same change is available on secp256k1 and P-256, at 192 field
-   constants each, and has not been made.
+   loop.  secp256k1's copy is `spec/Spec.K256.Win0` .. `Win3`,
+   `code/k256/Hacl.K256.Win0` .. `Win3` (twelve `static const uint64_t [80]`
+   arrays in radix 2^52, a hundred and ninety-two field constants), the
+   chunking half of `Hacl.Impl.Lit52` and `Hacl.K256.WinTable`; it cost an
+   afternoon, verified at every step on the first attempt, and let
+   `Hacl.K256.Tables52G` be deleted.  The same change is available on P-256,
+   at 192 field constants, and has not been made.
 7. **Ed25519's group-order arithmetic on the four-limb Montgomery core**,
    **done**.  `Hacl.Ed25519.Scalar` was the last bit-at-a-time arithmetic in
    the repository and the last user of the eight-limb, thirty-two-bit
