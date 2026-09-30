@@ -1643,6 +1643,89 @@ throughput number can be the entire cost of a realistic call.  Sixty-four
 bytes is a TLS record header, a QUIC packet, a database field --- and it was
 running at thirteen megabytes a second.
 
+### The key schedule with no memory in it at all
+
+`AESKEYGENASSIST` took the schedule from 14,044 cycles to 1,021 and that was
+where it was left.  A profile taken much later put the remaining cost at 258
+nanoseconds for an AES-128 schedule and 323 for AES-256, against a 329
+nanosecond fixed cost for the whole of AES-128-GCM.  The schedule was still
+almost the entire per-call overhead, and a sixty-four-byte message is
+nothing but per-call overhead.
+
+**The cost was the round trip, not the S-box.**  `subword4` -- one
+`AESKEYGENASSIST` and the loads around it -- measures 8.6 ns, and forty
+words need ten of them, so under a hundred nanoseconds of the 258 is the
+instruction.  The rest is that the schedule was a loop over *words*: load
+four bytes, exclusive-or four bytes, store four bytes, and the store of one
+word is the load of the next.  Ten store-to-load forwards per round key with
+a dependency through each of them is what four-byte granularity costs.
+
+**A whole round key is one register, and the recurrence fits in it.**  FIPS
+197 says each word is the word four back exclusive-ored with the word one
+back, except at a multiple of the key length where a transformed word is
+mixed in.  Written over sixteen bytes at once that is
+
+    K_i = (k ^ (k << 4) ^ (k << 8) ^ (k << 12)) ^ t
+
+where `k` is the round key one key-length down, the shifts are in *bytes*,
+and `t` is a term with period four: `RotWord(SubWord(w3)) ^ Rcon` at a
+multiple of the key length, `SubWord(w3)` halfway through an AES-256 round
+key.  The four-byte prefix exclusive-or is three `PSLLDQ`s and three
+`PXOR`s, and it is a prefix exclusive-or precisely because the *argument* is
+shifted rather than the running total --- shifting the total and
+exclusive-oring it back would cancel in GF(2).  The period-four term is the
+`AESKEYGENASSIST` result put through one `PSHUFB`, with the round constant
+broadcast by `PSHUFD` and exclusive-ored in, so `Hacl.Vec128` gains three
+axioms -- `bcast_rot`, `bcast_sub` and `word_bcast` -- and
+`shift_left_bytes_4` is restated byte-wise.  A round key is then eleven
+instructions, one load, one store, and no forwarding at all.
+
+**Three SMT pathologies had to be got around, and each has a name.**  The
+first is that `Spec.Byte.( ^^ )` is `U8.v (U8.logxor (uint_to_t a)
+(uint_to_t b))`, and knowing `b == 0` as integers does *not* give
+`a ^^ b == a ^^ 0`: the literal `0uy` is a bit-vector constant while
+`uint_to_t b` is a boxing application, and congruence closure does not cross
+between them.  The whole prefix-exclusive-or algebra is therefore done at
+`FStar.UInt.logxor`, where the arguments are plain integers, and brought
+back one application at a time by `lx_is`; two derived bridges, `xor_cong`
+and `xor_drop`, do all the rewriting elsewhere.
+
+The second is that a quantifier over `Seq.index x (8 + i)` will not
+discharge a goal about `Seq.index x (8 + j % 4)` with symbolic `j`, though
+ground offsets are fine because Z3 normalizes them.  So `is_rot_term`,
+`is_sub_term` and the sixteen instantiations in `round_all` are all stated
+at literal indices, the same trick `Hacl.AES.SubWord` already used.
+
+The third is the one that cost the most time.  `pfx`, the prefix
+exclusive-or, was written `unfold`, so every fact derived from it carried a
+four-term exclusive-or of conditionals; sixteen of those in one context and
+the solver spends its entire budget on the hypotheses rather than the goal.
+Making `pfx` an ordinary definition -- still unfolded by the SMT encoding,
+but folded in the terms the solver sees -- took `round_all` from a
+five-hundred-second failure to zero.  The same principle governs the rest of
+the proof: every bridge between the register's own sixteen bytes and the
+expanded key is a standalone lemma (`block_step`, `block_tele`,
+`block_grp4`, `mk_join4`, `load_index`, `grp_mod`), because inside the Pulse
+function the query also carries the heap, four separated-conjunction
+predicates and every byte of the key, and a goal as small as `Seq.length
+(Seq.slice vw0 b b2) == 16` will time out there while closing instantly on
+its own.
+
+Expanding an AES-128 key went from 258 ns to **26.4**, AES-256 from 323 to
+**49.0**, and the fixed cost of an AES-128-GCM call from 329 ns to **89.8**.
+
+| AES-128-GCM | before | after | speedup | was | now |
+|---|---:|---:|---:|---:|---:|
+| 64 bytes | 148 MB/s | 328 MB/s | **2.22x** | 7.06x | **3.18x** |
+| 1 KiB | 1,020 MB/s | 1,323 MB/s | **1.30x** | 3.11x | **2.38x** |
+| 16 KiB | 1,850 MB/s | 1,856 MB/s | 1.00x | 1.96x | 1.96x |
+
+AES-256-GCM moves the same way, 6.89x to **3.27x** at sixty-four bytes and
+3.14x to **2.41x** at a kilobyte.  Under clang the figures are 6.84x to
+**3.27x** and 2.72x to **2.03x**.  Nothing else in the benchmark moved by
+more than measurement noise, which is the control: the portable schedule is
+still there as `ks_loop_scalar` and is still what runs without AES-NI.
+
 ### SHA-NI, where the instruction is four rounds wide
 
 `SHA256RNDS2` does two rounds of the compression function and `SHA256MSG1`
@@ -3677,3 +3760,27 @@ rough order of value:
    global it is applied to carries `[@@FStar.Custard.no_specialize]` so that
    Custard's specialization key stops at the name instead of unfolding to the
    initializer.  SHA-2 is the next one to take that shape.
+
+10. **An expanded-key context for AES-GCM**, in place of expanding the key on
+    every call.  With the schedule in registers the fixed cost of an
+    AES-128-GCM call is 89.8 ns, of which 26.4 is still the schedule and the
+    rest is the GHASH key powers -- eight `PCLMULQDQ`s and eight reductions
+    to build `H` through `H^8`, which is the larger half and is not going to
+    get much smaller.  Both are functions of the key alone.  EverCrypt
+    exposes `EverCrypt_AEAD_create_in` and encrypts against the handle, so
+    the benchmark shim on the reference side pays this once and ours pays it
+    per call; an `init` plus `encrypt_with_ctx` pair would make the
+    comparison symmetric and take the sixty-four-byte row from 3.18x to
+    something close to 1.3x.  The proof burden is small -- the context is the
+    expanded key and the eight powers, and both already have their
+    specifications -- and it is mostly API design: what the context type
+    looks like, and whether the one-shot entry points stay.
+
+11. **Deferring the one-bit shift in GHASH**, which is the other 27% of the
+    eight-way loop.  `raw_product` shifts each carry-less product left by one
+    bit to correct for the reversed bit order, twenty-five `PSLLQ`s and
+    twenty-two `PSRLQ`s for eight blocks, and the shift distributes over the
+    sum, so it could be done once per group exactly as the reduction now is.
+    `Spec.CLMUL.shift_lo_gen` and `shift_hi_gen` are already generic in the
+    coefficient function; what is missing is a way to build a block from a
+    bit function, and that is the whole of the work.
