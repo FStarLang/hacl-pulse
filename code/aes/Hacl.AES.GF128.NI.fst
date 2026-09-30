@@ -679,13 +679,20 @@ let lim_bounds (n: nat)
     Math.multiple_modulo_lemma (n / 64) 64;
     Math.multiple_modulo_lemma (4 * (n / 64)) 16
 
+(** Aggregating four blocks to a reduction costs three multiplications to
+    raise the hash key to the fourth power, and saves three reductions per
+    group.  One group therefore loses, and two win: measured on a bare
+    [ghash_upd], sixty-four bytes is 69.7 ns aggregated against 64.7 serial,
+    and a hundred and twenty-eight is 100.8 against 123.4.  So the four-way
+    pass starts at two groups. *)
 inline_for_extraction
 let four_limit (n: SZ.t { SZ.v n % blocklen == 0 })
   : Pure SZ.t (requires True)
          (ensures fun r -> SZ.v r % 64 == 0 /\ SZ.v r <= SZ.v n /\
-                           SZ.v r % blocklen == 0)
+                           SZ.v r % blocklen == 0 /\
+                           (SZ.v n >= 128 ==> SZ.v r == SZ.v n - SZ.v n % 64))
   = lim_bounds (SZ.v n);
-    SZ.sub n (SZ.rem n 64sz)
+    if SZ.lt n 128sz then 0sz else SZ.sub n (SZ.rem n 64sz)
 
 (** Index arithmetic for the eight-way loop. *)
 let step8_bounds (vi lim n: nat)
@@ -717,14 +724,23 @@ let lim8_bounds (n: nat)
     Math.multiple_division_lemma (2 * (n / 128)) 64;
     Math.lemma_mult_le_right 64 (2 * (n / 128)) (n / 64)
 
+(** Eight to a reduction costs four more multiplications for [H^5] to [H^8]
+    and saves one reduction in eight rather than one in four, so it needs a
+    good deal more data to pay: measured, it is still behind the four-way
+    pass at five hundred and twelve bytes (289.8 ns against 270.4) and level
+    at seven hundred and sixty-eight.  Past that it pulls away -- four
+    kilobytes is 1,555 ns against 1,843.  The threshold is taken against
+    [lim] rather than [n] so that the eight-way limit cannot overshoot the
+    four-way one when the four-way pass has been declined. *)
 inline_for_extraction
-let eight_limit (n: SZ.t { SZ.v n % blocklen == 0 })
-  : Pure SZ.t (requires True)
+let eight_limit (n: SZ.t { SZ.v n % blocklen == 0 }) (lim: SZ.t)
+  : Pure SZ.t (requires SZ.v lim <= SZ.v n /\
+                        (SZ.v n >= 128 ==> SZ.v lim == SZ.v n - SZ.v n % 64))
          (ensures fun r -> SZ.v r % 128 == 0 /\ SZ.v r % 64 == 0 /\
                            SZ.v r % blocklen == 0 /\ SZ.v r <= SZ.v n /\
-                           SZ.v r <= SZ.v n - SZ.v n % 64)
+                           SZ.v r <= SZ.v lim)
   = lim8_bounds (SZ.v n);
-    SZ.sub n (SZ.rem n 128sz)
+    if SZ.lt n 768sz then 0sz else SZ.sub n (SZ.rem n 128sz)
 
 (** The length of the prefix being hashed, out of the Pulse context, where
     the query that establishes it competes with a hundred other hypotheses. *)
@@ -1028,7 +1044,7 @@ ensures exists* (va1: Seq.seq S8.t).
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v n / blocklen))
 {
   let lim = four_limit n;
-  let lim8 = eight_limit n;
+  let lim8 = eight_limit n lim;
   A.pts_to_len acc;
   A.pts_to_len h;
   A.pts_to_len d;

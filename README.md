@@ -1726,6 +1726,83 @@ AES-256-GCM moves the same way, 6.89x to **3.27x** at sixty-four bytes and
 more than measurement noise, which is the control: the portable schedule is
 still there as `ks_loop_scalar` and is still what runs without AES-NI.
 
+### Where the GHASH loop should start aggregating
+
+GHASH multiplies in `GF(2^128)`, and the multiplication splits into a
+carry-less product and a reduction.  The product of four blocks can be
+accumulated before a single reduction is applied -- Horner's rule run four
+terms at a time -- which is why `ghash_loop4_ni` exists, and eight at a time
+is why `ghash_loop8_ni` exists.  Aggregating is not free: four at a time
+needs `H^2`, `H^3` and `H^4`, and eight needs `H^5` through `H^8` as well,
+so entering the four-way pass costs three extra multiplications and
+entering the eight-way pass costs four more.  Those are paid once per
+*call*, not once per group, and they do not amortize when the call is
+short.
+
+The thresholds were set to the smallest size at which each pass can run at
+all: sixty-four bytes for the four-way loop and a hundred and twenty-eight
+for the eight-way one.  Measured, both are much too low.  A bare
+`ghash_upd` on this machine, gcc:
+
+| bytes | 64 | 96 | 128 | 192 | 256 | 384 | 512 | 768 | 2048 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| serial | 62.3 | 93.4 | 123.4 | 182.3 | 241.2 | 359.4 | 477.9 | 714.5 | 1888 |
+| four-way from 64 | 69.5 | 101.4 | 124.3 | 152.4 | 181.2 | 238.0 | 294.9 | 407.1 | 1013 |
+| eight-way from 128 | | | 147.6 | 176.5 | 194.7 | 238.4 | 284.5 | 376.9 | 833 |
+
+One group of four loses to four serial multiplications, because three
+multiplications have been spent to save three reductions and the reductions
+are the cheaper half.  Two groups win.  The eight-way pass is worse still:
+it is behind the four-way one all the way to five hundred and twelve bytes
+and only level at seven hundred and sixty-eight.  So the four-way pass
+starts at two groups and the eight-way pass starts at seven hundred and
+sixty-eight bytes, and below each threshold the limit is simply zero --
+which the existing contracts already allow, since `ghash_start` asks only
+for `lim % 64 == 0 /\ lim <= n` and `lim8 % 128 == 0 /\ lim8 <= lim`.  The
+one thing that needed care is the second conjunct: with independent
+thresholds `lim8` could overshoot a `lim` that had been declined, so
+`eight_limit` now takes `lim` as an argument and returns something no
+larger.  The proof is four lines and the existing `lim_bounds` and
+`lim8_bounds` do all the arithmetic.
+
+`ghash_upd` on a hundred and twenty-eight bytes goes from 151.7 ns to
+**97.9**, on a hundred and ninety-two from 179.1 to **127.5**, on two
+hundred and fifty-six from 195.1 to **155.7**; under clang, which has a
+faster serial loop and a much faster aggregated one, the same three sizes
+go 100.1 to **65.9**, 121.0 to **85.5** and 139.1 to **103.6**.  Above
+seven hundred and sixty-eight bytes nothing changes algorithmically and the
+measurements move by one to two percent in the wrong direction, which is
+the branch's effect on code layout rather than on work done.
+
+The same pass removes a smaller waste.  `ghash_upd_impl` allocates a
+sixteen-byte scratch block to hold the final partial block, zeroes it, and
+then uses it only if there is a partial block; for any length that is a
+multiple of sixteen -- which includes the length block that closes every
+GCM tag -- those sixteen stores are dead.  Moving the `let mut` inside the
+branch that reads it is a one-line change in Pulse and the frame works out
+on its own.
+
+| AES-GCM, gcc | before | after | was | now |
+|---|---:|---:|---:|---:|
+| AES-128-GCM, 64 bytes | 328 MB/s | 351 MB/s | 3.18x | **2.98x** |
+| AES-256-GCM, 64 bytes | 266 MB/s | 282 MB/s | 3.27x | **3.12x** |
+| AES-128-GCM, 256 KiB | 1,858 MB/s | 1,877 MB/s | 1.99x | 1.97x |
+
+Whole-call, a sixty-four-byte AES-128-GCM encryption goes from 169 ns to
+**157**.  Under clang the sixty-four-byte row does not move, for a reason
+worth recording: clang's serial multiplication is already fast enough
+(14.0 ns a block against gcc's 17.9) that its four-way pass wins at
+sixty-four bytes where gcc's loses, so the threshold that is right for one
+compiler is one size too high for the other.  The eight-way threshold,
+which is where the large gains are, is right for both.
+
+What is left of the fixed cost is now almost all latency.  Of the 42 ns an
+AES-128-GCM call spends in `gtag_impl` with no associated data and no
+message, 15 are one AES block encryption of `J0` and 19 are one GHASH
+multiplication of the length block, and both are dependent chains that no
+amount of dispatch tuning will shorten.  Shortening the multiplication is
+the next item: see *Deferring the one-bit shift* in the roadmap.
+
 ### SHA-NI, where the instruction is four rounds wide
 
 `SHA256RNDS2` does two rounds of the compression function and `SHA256MSG1`
@@ -3763,18 +3840,26 @@ rough order of value:
 
 10. **An expanded-key context for AES-GCM**, in place of expanding the key on
     every call.  With the schedule in registers the fixed cost of an
-    AES-128-GCM call is 89.8 ns, of which 26.4 is still the schedule and the
-    rest is the GHASH key powers -- eight `PCLMULQDQ`s and eight reductions
-    to build `H` through `H^8`, which is the larger half and is not going to
-    get much smaller.  Both are functions of the key alone.  EverCrypt
-    exposes `EverCrypt_AEAD_create_in` and encrypts against the handle, so
-    the benchmark shim on the reference side pays this once and ours pays it
-    per call; an `init` plus `encrypt_with_ctx` pair would make the
-    comparison symmetric and take the sixty-four-byte row from 3.18x to
-    something close to 1.3x.  The proof burden is small -- the context is the
-    expanded key and the eight powers, and both already have their
-    specifications -- and it is mostly API design: what the context type
-    looks like, and whether the one-shot entry points stay.
+    AES-128-GCM call is about 89 ns.  An earlier version of this entry said
+    most of that was the GHASH key powers; direct measurement says
+    otherwise, and the correction is worth keeping.  The powers are not
+    precomputed at all -- `ghash_start` builds them inside the call and only
+    when it is going to run an aggregated pass, which on a short message it
+    now does not.  The 89 ns is 26.6 for the schedule, 2.4 for `H`, 42 in
+    `gtag_impl` and the rest stack setup, and of those only the first two
+    are functions of the key alone.  So a context is worth about 29 ns, not
+    60: the sixty-four-byte call would go from 157 ns to roughly 128, which
+    is 2.98x to about **2.4x** rather than the 1.3x claimed here before.
+
+    It is still worth doing, because the comparison is currently asymmetric
+    -- EverCrypt exposes `EverCrypt_AEAD_create_in` and encrypts against the
+    handle, so the benchmark shim on the reference side pays the schedule
+    once and ours pays it per call -- and because a context is the natural
+    place to cache the key powers as well, which would make the aggregated
+    thresholds of the previous section irrelevant and turn the whole 64-byte
+    GHASH into one group of four.  The proof burden is small; it is mostly
+    API design: what the context type looks like, and whether the one-shot
+    entry points stay.
 
 11. **Deferring the one-bit shift in GHASH**, which is the other 27% of the
     eight-way loop.  `raw_product` shifts each carry-less product left by one
