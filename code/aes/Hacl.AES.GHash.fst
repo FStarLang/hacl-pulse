@@ -194,12 +194,14 @@ ensures exists* (va1: Seq.seq S8.t).
   ghash_loop_done (vals vd) (SZ.v vi);
   ghash_pad (vals vh) (vals va0) (vals vd);
 
-  let z = S8.zero;
-  let mut tb = [| z; 16sz |];
-  A.pts_to_len tb;
-  A.pts_to_len tb;
-
+  (* The scratch block is allocated inside the branch that uses it: a whole
+     number of blocks is the common case, and sixteen byte stores that are
+     never read are not free. *)
   if (SZ.gt rem 0sz) {
+    let z = S8.zero;
+    let mut tb = [| z; 16sz |];
+    A.pts_to_len tb;
+    A.pts_to_len tb;
     Copy.copy_range tb 0sz data vi rem;
     with vb. assert A.pts_to tb vb;
     tail_eq vd vb (SZ.v vi);

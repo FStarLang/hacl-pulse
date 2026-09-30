@@ -3789,8 +3789,12 @@ static Hacl_Vec128_t Hacl_AES_GF128_NI_ghash_start(Hacl_Vec128_t a0, Hacl_Vec128
 
 __attribute__((target("aes,pclmul,ssse3,sse4.1")))
 static void Hacl_AES_GF128_NI_ghash_loop_ni(uint8_t *acc, uint8_t *h, uint8_t *d, size_t n) {
-  size_t lim = (n - (n % 64));
-  size_t lim8 = (n - (n % 128));
+  size_t lim;
+  if (n < 128) lim = 0;
+  else lim = (n - (n % 64));
+  size_t lim8;
+  if (n < 768) lim8 = 0;
+  else lim8 = (n - (n % 128));
   Hacl_Vec128_t y = Hacl_Vec128_load(h);
   Hacl_Vec128_t a0 = Hacl_Vec128_load(acc);
   Hacl_Vec128_t r = Hacl_AES_GF128_NI_ghash_start(a0, y, d, n, lim8, lim);
@@ -4037,12 +4041,12 @@ static void Hacl_AES_GHash_ghash_upd_impl(uint8_t *acc, uint8_t *h, uint8_t *dat
     i = (vi + 16);
   }
   size_t rem = (n - i);
-  uint8_t z = Hacl_Secret_UInt8_zero;
-  uint8_t tb[16];
-  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
-    tb[_ci2] = z;
-  }
   if (rem > 0) {
+    uint8_t z = Hacl_Secret_UInt8_zero;
+    uint8_t tb[16];
+    for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+      tb[_ci2] = z;
+    }
     Hacl_Impl_Copy_copy_range(tb, 0, data, i, rem);
     Hacl_AES_GMul_gmul_add_impl(acc, h, tb, 0);
   }
