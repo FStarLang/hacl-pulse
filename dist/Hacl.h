@@ -94,6 +94,7 @@ void Hacl_Bignum_Convert_from_bytes_be(uint64_t *res, size_t n, uint8_t *b);
 uint64_t Hacl_Bignum_Base_sub(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
 uint64_t Hacl_Bignum_Base_lt_mask(uint64_t *a, uint64_t *b, size_t n);
 void Hacl_Bignum_Montgomery_from_mont(uint64_t *res, uint64_t *a, uint64_t *tmp, uint64_t *nmod, size_t nn, uint64_t mu);
+void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n);
 void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
 void Hacl_Bignum_Convert_to_bytes_be(uint8_t *b, uint64_t *a, size_t n);
 bool Hacl_FFDHE_ffdhe8192_shared_secret(uint8_t *ss, uint8_t *sk, uint8_t *pk);
@@ -112,7 +113,6 @@ void Hacl_Bignum_Montgomery_modulo(uint64_t *res, uint64_t *a, uint64_t *acc, ui
 void Hacl_Bignum_Convert_to_bytes_le(uint8_t *b, uint64_t *a, size_t n);
 void Hacl_Bignum_Convert_from_bytes_le(uint64_t *res, size_t n, uint8_t *b);
 uint64_t Hacl_Bignum_Base_eq_mask(uint64_t *a, uint64_t *b, size_t n);
-void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n);
 void Hacl_Bignum_Base_sub_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);
 uint64_t Hacl_Bignum_Base_add(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
 void Hacl_Bignum_Base_add_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);

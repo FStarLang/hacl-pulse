@@ -447,8 +447,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
   A.pts_to_len wide;
   A.pts_to_len nmod;
   modulus_low vn;
-  copy t acc nn;
-  mont_mul res acc t wide nmod nn mu;
+  mont_sqr res acc wide nmod nn mu;
   with vsq. assert (A.pts_to res vsq);
   exp_sq_step (num vacc) (num vsq) anum e (wt (SZ.v nn)) (num vn)
               (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);

@@ -24,9 +24,11 @@ thirty-four C test harnesses in `tests/`.
 
 Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
 SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305 and HMAC-SHA-512 are all faster --
-to behind it on modular exponentiation, which is still square-and-multiply
-where HACL\* uses a window, and on the elliptic curves, where what is left is
-the scalar multiplication rather than the field: P-256's variable-base ECDH
+to behind it on the elliptic curves, where what is left is
+the scalar multiplication rather than the field.  Modular exponentiation --
+RSA-PSS, FFDHE and the generic modexp -- has crossed over: a 4-bit window, a
+four-at-a-time inner row and a triangle squaring put all three of those rows
+between 0.92x and 0.97x, faster than the reference.  On the curves: P-256's variable-base ECDH
 is now *faster* than the reference at 0.76x, secp256k1's is within 1.75x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
@@ -2443,21 +2445,21 @@ reference**.
 | ChaCha20 | 256 KiB | 494 us | 854 us | **0.58x** | 93 us | 5.30x |
 | SHAKE128 | 256 KiB | 883 us | 1,489 us | **0.59x** |  |  |
 | ChaCha20-Poly1305 | 256 KiB | 808 us | 1,059 us | **0.76x** | 148 us | 5.46x |
+| RSA-PSS-2048 sign | -- | 4.4 ms | 4.7 ms | **0.94x** |  |  |
+| FFDHE-2048 | -- | 4.5 ms | 4.6 ms | **0.96x** |  |  |
+| RSA-2048 modexp | -- | 4.4 ms | 4.6 ms | **0.97x** |  |  |
 | SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
 | HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
 | BLAKE2s | 256 KiB | 595 us | 572 us | **1.04x** |  |  |
 | P-256 ECDH | -- | 165 us | 159 us | **1.04x** |  |  |
 | P-256 ECDSA verify | -- | 449 us | 427 us | **1.05x** |  |  |
 | P-256 ECDSA sign | -- | 182 us | 169 us | **1.08x** |  |  |
+| RSA-PSS-2048 verify | -- | 166 us | 145 us | **1.14x** |  |  |
 | Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
-| RSA-PSS-2048 sign | -- | 5.7 ms | 4.7 ms | **1.23x** |  |  |
 | X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
-| FFDHE-2048 | -- | 5.8 ms | 4.6 ms | **1.25x** |  |  |
-| RSA-2048 modexp | -- | 5.7 ms | 4.5 ms | **1.26x** |  |  |
 | NaCl secretbox | 256 KiB | 809 us | 645 us | **1.26x** |  |  |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
 | Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
-| RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
 | secp256k1 ECDSA sign | -- | 91 us | 65 us | **1.40x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
@@ -2495,8 +2497,33 @@ FFDHE and the generic modexp move together, because they are one cause and
 not three: they are the same ladder.  That ladder used to be
 square-and-multiply, two multiplications per exponent bit against HACL\*'s
 five per four bits, and those three rows sat at 1.98x.  They now run the
-same 4-bit window as the reference, which is worth 1.56x on gcc and 1.58x on
-clang, and they have come down to about 1.25x.
+same 4-bit window as the reference, which was worth 1.56x on gcc and 1.58x
+on clang and brought them to about 1.25x.  Two changes to the inner loop
+have since taken them past it, to 0.94x--0.97x under gcc and 0.92x--0.94x
+under clang.
+
+The first is that the row of an `n x n` multiply is now taken four columns
+at a time, with a one-at-a-time tail, which is what HACL\*'s own inner loop
+does: four independent `mulx` chains in one iteration have loads to overlap
+with, where a single column has only the loop back-edge.  That alone took
+`mont_mul` from 2,243 ns to 1,990, level with the reference's 1,986.
+
+The second is a dedicated squaring.  A square has the same columns as a
+general product, but the off-diagonal ones come in pairs -- `a_i a_j` occurs
+at weight `i + j` once in each of two rows -- so `Hacl.Bignum.Base.sqr`
+computes only the strict upper triangle, doubles the whole of it once, and
+then adds the `n` diagonal terms `a_i^2` at weight `2i`.  That is `n(n-1)/2`
+products against `n^2`: for the thirty-two limbs of a 2048-bit modulus, 496
+against 1,024.  Measured, 579 ns against the full multiply's 931, and within
+5% of HACL\*'s own `bn_sqr` at 550.  Since a 4-bit-window 2048-bit
+exponentiation is about 2,048 squarings against 512 multiplies, four fifths
+of the work is now going through the cheaper path.
+
+The invariant that makes the triangle correct is `A_k^2 = 2 T_k + D_k`,
+where `A_k` is the prefix of the input, `T_k` the triangle so far and `D_k`
+the diagonal; it survives `A := A + a b^k` because `(x + a b^k)^2 = x^2 + 2 x
+a b^k + a^2 b^{2k}`, which is one lemma.  The doubling cannot carry out,
+because `2 T_n <= A_n^2 < b^{2n}`.
 
 The verify row came down separately and much further.  It is a 2048-bit
 exponentiation by 65537, seventeen bits, so the ladder is short and almost
@@ -2506,13 +2533,14 @@ exponent ladder over the *Montgomery* exponent --- squaring doubles it, a
 single modular doubling adds one --- seeded at the topmost limb of the
 modulus rather than at one, which reaches the same value in about a dozen
 squarings and sixty-five doublings: 32.5 us, 11.1x faster, and 2.9x faster
-than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198.
+than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198, and the squaring has since taken it to 166.
 
-What is left is no longer algorithmic.  Both sides now issue very nearly the
-same number of `mont_mul`s; ours cost about 2.19 us each against the
-reference's 1.77, and closing *that* means going at the inner
-multiply-and-reduce loop rather than at the exponent.  It is worth saying
-plainly that this is 1.25x behind and not parity.
+What is left on these rows is the reduction, not the multiply: a 32-limb
+`reduction` costs 1,035 ns to the multiply's 931 and the squaring's 579, so
+it is now the larger half of both `mont_mul` and `mont_sqr`.  HACL\* has an
+*almost*-Montgomery variant that skips the final conditional subtraction
+inside the ladder and corrects once at the end; that is the next thing to
+try, and it is worth roughly the conditional subtraction per step.
 
 An earlier version of this table put the modexp row at 0.70x and concluded
 that the generic bignum was ahead.  That was wrong, and the way it was wrong
@@ -3576,7 +3604,44 @@ rough order of value:
    What is left of the Ed25519 gap is entirely the scalar multiplication,
    and item 6's Plan A has since taken another quarter off it: signing and
    key generation are now **1.46x** under gcc and **1.16x** under clang.
-8. **Taking over the remaining sixty-eight compiler specialisations**, the
+8. **The inner loop of the Montgomery multiply**, **done**.  The four modexp
+   rows -- RSA-PSS signing, FFDHE, the generic 2048-bit modexp and RSA-PSS
+   verification -- had come down to about 1.25x on the window alone, and
+   what was left was the `n x n` multiply itself.  Two changes took them
+   past the reference.  `Hacl.Bignum.Base.mul_row` now runs four columns to
+   an iteration with a one-at-a-time tail, which is worth 11% of the
+   multiply and took `mont_mul` to 1,990 ns against HACL\*'s 1,986; and
+   `Hacl.Bignum.Base.sqr` is now a real squaring -- strict upper triangle,
+   one doubling, then the `n` diagonal terms -- at 579 ns against the full
+   multiply's 931 and HACL\*'s `bn_sqr` at 550.  Four fifths of the
+   multiplications in a 4-bit-window exponentiation are squarings, so
+   `Hacl.Bignum.Montgomery.mont_sqr` is the one that matters and
+   `Hacl.Bignum.Exponentiation.mont_sq` now calls it instead of copying the
+   accumulator and going through `mont_mul`.  RSA-PSS signing 1.23x to
+   **0.94x**, FFDHE 1.25x to **0.96x**, the generic modexp 1.26x to
+   **0.97x**, RSA-PSS verification 1.38x to **1.14x**; under clang,
+   **0.92x**, **0.92x**, **0.94x** and **1.12x**.  What is left is the
+   reduction rather than the multiply, and the next thing to try is HACL\*'s
+   almost-Montgomery variant, which skips the conditional subtraction inside
+   the ladder and corrects once at the end.
+
+   The proof cost of this was not the algebra, which is three lemmas, but a
+   solver behaviour worth writing down: F\* proves the loop body's
+   postcondition at `j + 1` and then has to accept it as the invariant at
+   `SZ.v (SZ.add j 1sz)`, and merging two integer terms that are equal by
+   arithmetic underneath an uninterpreted `pre` or `wt` is a propagation
+   from the arithmetic theory into congruence closure that Z3, in a body
+   carrying three arrays, will not make -- it burns the whole rlimit and
+   fails.  Stated as its own lemma with the equation as a hypothesis
+   (`idx_subst`, `tri_subst`, `dg_subst`, `pw_ext`) it is instant.  The same
+   shape was already lurking in `Hacl.Bignum.Montgomery.ladder_step`, whose
+   two branches reach `2 e + SZ.v bit` and are asked for `2 e` and `2 e +
+   1`: that query had been running for over ninety minutes without
+   returning.  Splitting the conditional half out as `ladder_bit`, with a
+   contract naming only the two arrays it touches, took the whole module
+   from not terminating to **two minutes**.
+
+9. **Taking over the remaining sixty-eight compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and

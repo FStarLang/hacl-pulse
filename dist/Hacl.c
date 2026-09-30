@@ -606,6 +606,7 @@ static void Hacl_Bignum_Montgomery_copy_upper(uint64_t *res, uint64_t *c, size_t
 static void Hacl_Bignum_Montgomery_ladder_step(uint64_t *res, uint64_t *t1, uint64_t *t2, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu, size_t bit);
 static uint64_t Hacl_Impl_Bytes_load_be__t_2(uint8_t *b, size_t off);
 static void Hacl_Bignum_Montgomery_embed(uint64_t *tmp, uint64_t *a, size_t nn);
+static void Hacl_Bignum_Montgomery_mont_sqr(uint64_t *res, uint64_t *a, uint64_t *tmp, uint64_t *nmod, size_t nn, uint64_t mu);
 static void Hacl_Bignum_Exponentiation_mont_sq(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu);
 static void Hacl_Bignum_Exponentiation_mont_sq4(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu);
 static void Hacl_Bignum_Exponentiation_mont_win_mul(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, uint64_t *tbl, uint64_t dig, size_t nn, uint64_t mu);
@@ -15893,9 +15894,10 @@ static void Hacl_Bignum_Base_copy(uint64_t *res, uint64_t *a, size_t n) {
 }
 
 static uint64_t Hacl_Bignum_Base_mul_row(uint64_t *res, uint64_t *a, size_t n, uint64_t bi, size_t off) {
+  size_t n4 = (n - (n % 4));
   size_t j = 0;
   uint64_t c = Hacl_Secret_UInt64_zero;
-  while (j < n) {
+  while (j < n4) {
     size_t vj = j;
     uint64_t vc = c;
     size_t pos = (off + vj);
@@ -15905,10 +15907,48 @@ static uint64_t Hacl_Bignum_Base_mul_row(uint64_t *res, uint64_t *a, size_t n, u
     uint64_t r = Hacl_Secret_Cast_u128_to_u64(t);
     uint64_t co = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(t, 64));
     res[pos] = r;
-    c = co;
-    j = (vj + 1);
+    size_t pos1 = (off + (vj + 1));
+    uint64_t aj1 = a[(vj + 1)];
+    uint64_t rj1 = res[pos1];
+    unsigned __int128 t1 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(aj1, bi), Hacl_Secret_Cast_u64_to_u128(rj1)), Hacl_Secret_Cast_u64_to_u128(co));
+    uint64_t r1 = Hacl_Secret_Cast_u128_to_u64(t1);
+    uint64_t co1 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(t1, 64));
+    res[pos1] = r1;
+    size_t pos2 = (off + (vj + 2));
+    uint64_t aj2 = a[(vj + 2)];
+    uint64_t rj2 = res[pos2];
+    unsigned __int128 t2 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(aj2, bi), Hacl_Secret_Cast_u64_to_u128(rj2)), Hacl_Secret_Cast_u64_to_u128(co1));
+    uint64_t r2 = Hacl_Secret_Cast_u128_to_u64(t2);
+    uint64_t co2 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(t2, 64));
+    res[pos2] = r2;
+    size_t pos3 = (off + (vj + 3));
+    uint64_t aj3 = a[(vj + 3)];
+    uint64_t rj3 = res[pos3];
+    unsigned __int128 t3 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(aj3, bi), Hacl_Secret_Cast_u64_to_u128(rj3)), Hacl_Secret_Cast_u64_to_u128(co2));
+    uint64_t r3 = Hacl_Secret_Cast_u128_to_u64(t3);
+    uint64_t co3 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(t3, 64));
+    res[pos3] = r3;
+    size_t vj4 = (vj + 4);
+    c = co3;
+    j = vj4;
   }
-  return c;
+  size_t j1 = j;
+  uint64_t c1 = c;
+  while (j1 < n) {
+    size_t vj1 = j1;
+    uint64_t vc1 = c1;
+    size_t pos_1 = (off + vj1);
+    uint64_t aj_1 = a[vj1];
+    uint64_t rj_1 = res[pos_1];
+    unsigned __int128 t_1 = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(aj_1, bi), Hacl_Secret_Cast_u64_to_u128(rj_1)), Hacl_Secret_Cast_u64_to_u128(vc1));
+    uint64_t r_1 = Hacl_Secret_Cast_u128_to_u64(t_1);
+    uint64_t co_1 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(t_1, 64));
+    res[pos_1] = r_1;
+    size_t vj11 = (vj1 + 1);
+    c1 = co_1;
+    j1 = vj11;
+  }
+  return c1;
 }
 
 void Hacl_Bignum_Base_mul(uint64_t *res, uint64_t *a, uint64_t *b, size_t n) {
@@ -16068,9 +16108,51 @@ void Hacl_Bignum_Montgomery_from_mont(uint64_t *res, uint64_t *a, uint64_t *tmp,
   Hacl_Bignum_Montgomery_reduction(res, tmp, nmod, nn, mu);
 }
 
+void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n) {
+  Hacl_Bignum_Base_zero(res, (n + n));
+  size_t i = 0;
+  while (i < n) {
+    size_t vi = i;
+    uint64_t bi = a[vi];
+    size_t pos = (vi + vi);
+    uint64_t c = Hacl_Bignum_Base_mul_row(res, a, vi, bi, vi);
+    res[pos] = c;
+    size_t vi1 = (vi + 1);
+    i = vi1;
+  }
+  (void)(Hacl_Bignum_Base_double(res, (n + n)));
+  size_t i2 = 0;
+  uint64_t cc = Hacl_Secret_UInt64_zero;
+  while (i2 < n) {
+    size_t vk = i2;
+    uint64_t vc = cc;
+    uint64_t ak = a[vk];
+    size_t p0 = (vk + vk);
+    size_t p1 = (p0 + 1);
+    uint64_t x0 = res[p0];
+    uint64_t x1 = res[p1];
+    unsigned __int128 t = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_mul_wide(ak, ak), Hacl_Secret_Cast_u64_to_u128(x0)), Hacl_Secret_Cast_u64_to_u128(vc));
+    uint64_t r0 = Hacl_Secret_Cast_u128_to_u64(t);
+    uint64_t h0 = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(t, 64));
+    unsigned __int128 u = Hacl_Secret_UInt128_add_mod(Hacl_Secret_UInt128_add_mod(Hacl_Secret_Cast_u64_to_u128(x1), Hacl_Secret_Cast_u64_to_u128(h0)), Hacl_Secret_Cast_u64_to_u128(Hacl_Secret_UInt64_zero));
+    uint64_t r1 = Hacl_Secret_Cast_u128_to_u64(u);
+    uint64_t co = Hacl_Secret_Cast_u128_to_u64(Hacl_Secret_UInt128_shift_right(u, 64));
+    res[p0] = r0;
+    res[p1] = r1;
+    cc = co;
+    size_t vk1 = (vk + 1);
+    i2 = vk1;
+  }
+}
+
+static void Hacl_Bignum_Montgomery_mont_sqr(uint64_t *res, uint64_t *a, uint64_t *tmp, uint64_t *nmod, size_t nn, uint64_t mu) {
+  Hacl_Bignum_Base_sqr(tmp, a, nn);
+  Hacl_Bignum_Montgomery_reduction(res, tmp, nmod, nn, mu);
+}
+
 static void Hacl_Bignum_Exponentiation_mont_sq(uint64_t *acc, uint64_t *res, uint64_t *t, uint64_t *wide, uint64_t *nmod, size_t nn, uint64_t mu) {
-  Hacl_Bignum_Base_copy(t, acc, nn);
-  Hacl_Bignum_Montgomery_mont_mul(res, acc, t, wide, nmod, nn, mu);
+  (void)t;
+  Hacl_Bignum_Montgomery_mont_sqr(res, acc, wide, nmod, nn, mu);
   Hacl_Bignum_Base_copy(acc, res, nn);
 }
 
@@ -16660,19 +16742,6 @@ uint64_t Hacl_Bignum_Base_eq_mask(uint64_t *a, uint64_t *b, size_t n) {
     i = (vi + 1);
   }
   return acc;
-}
-
-void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n) {
-  Hacl_Bignum_Base_zero(res, (n + n));
-  size_t i = 0;
-  while (i < n) {
-    size_t vi = i;
-    uint64_t bi = a[vi];
-    uint64_t c = Hacl_Bignum_Base_mul_row(res, a, n, bi, vi);
-    size_t pos = (n + vi);
-    res[pos] = c;
-    i = (vi + 1);
-  }
 }
 
 void Hacl_Bignum_Base_sub_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n) {
