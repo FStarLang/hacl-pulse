@@ -51,6 +51,7 @@ open Spec.GF128
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Poly = Spec.GF128.Poly
+module Alg = Spec.GF128.Algebra
 
 (** {2 The little-endian bit view} *)
 
@@ -447,6 +448,62 @@ let clmul_halves (x y qlo qhi: block)
         bswap_conv x y (126 - k)
     in
     FStar.Classical.forall_intro aux
+
+(** {3 The same without the shift}
+
+    The one-bit shift exists only to cancel the one-off in [bswap_conv].  If
+    it is omitted the unshifted pair reverses to the two halves of the
+    product polynomial {i shifted up by one place}, which is a polynomial of
+    256 coefficients like any other but not the product of two blocks --
+    hence [Poly.halvesp] rather than [Poly.halves]. *)
+
+(** The product polynomial of two blocks, shifted up one place: what a
+    multiplier without the shift leaves in its two registers. *)
+let pshift1 (x y: block) : poly =
+  pshift (pmul (Poly.pbits x) (Poly.pbits y)) 1
+
+let clmul_halves_ns (x y lo hi: block)
+  : Lemma (requires is_lo x y lo /\ is_hi x y hi)
+          (ensures Poly.halvesp (pshift1 x y) (bswap hi) (bswap lo))
+  = let pp = pmul (Poly.pbits x) (Poly.pbits y) in
+    let aux (k: nat { k < 128 })
+      : Lemma (bit (bswap hi) k == pget (pshift pp 1) k /\
+               bit (bswap lo) k == pget (pshift pp 1) (128 + k))
+      = bswap_bit hi k;
+        bswap_bit lo k;
+        bswap_conv x y (255 - k);
+        bswap_conv x y (127 - k);
+        pshift_get pp 1 k;
+        pshift_get pp 1 (128 + k)
+    in
+    FStar.Classical.forall_intro aux
+
+(** And so a multiplier without the shift computes [x] times the field
+    product: the three low halves added together are [xtimes (gmul x y)].
+    Pre-dividing one operand by [x] -- which costs one shift, once, at key
+    setup -- therefore recovers the product exactly. *)
+
+(** The bridge: the reduction of the shifted product is the field product of
+    [x] with [y] advanced once.  Both halves of the identity are needed --
+    [Spec.GF128.Algebra.pmod_shift1] to get [x] times the product, and
+    [Spec.GF128.Algebra.gmul_xt_right] to move that [x] into the operand,
+    where a key pre-divided once at setup cancels it. *)
+#push-options "--fuel 2"
+let pmodx (x y: block)
+  : Lemma (Poly.pmod (pshift1 x y) 256 == gmul x (Poly.xtimes y))
+  = Poly.pcoef_top x y;
+    Alg.pmod_shift1 (pmul (Poly.pbits x) (Poly.pbits y)) 256;
+    Poly.gmul_is_pmod x y;
+    Alg.gmul_xt_right x y 1
+#pop-options
+
+let gmulx_three (x y u1 v1 u2 v2 u3 v3: block)
+  : Lemma (requires Poly.halvesp (pshift1 x y) u1 v1 /\
+                    Poly.halves v1 r_block u2 v2 /\
+                    Poly.halves v2 r_block u3 v3)
+          (ensures gmul x (Poly.xtimes y) == gadd u1 (gadd u2 u3))
+  = Poly.pmod_three (pshift1 x y) u1 v1 u2 v2 u3 v3;
+    pmodx x y
 
 #pop-options
 

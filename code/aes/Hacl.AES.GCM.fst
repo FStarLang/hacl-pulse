@@ -51,6 +51,7 @@ module U64 = FStar.UInt64
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module G = Spec.GF128
+module Poly = Spec.GF128.Poly
 module Copy = Hacl.Impl.Copy
 module Bytes = Hacl.Impl.Bytes
 module Declassify = Hacl.Secret.Declassify
@@ -100,7 +101,16 @@ let msg_bits_fit (n: nat)
 
 (** {2 The pieces} *)
 
-(** [hb := hkey], the encryption of the zero block. *)
+(** [hb := hkey / x], the encryption of the zero block divided by [x].
+
+    GHASH's multiplier omits the one-bit shift that would line the carry-less
+    product up with GHASH's bit order, and so computes [x] times the field
+    product; the hash key is therefore stored pre-divided, once, here, and
+    every multiplication the cipher goes on to do comes out exact at no cost.
+    See [Hacl.AES.GF128.NI.raw_product].  Nothing outside this file sees the
+    difference: the key array is private to the context and the two routines
+    that read it, [j0_impl] and [gtag_impl], ask only that advancing it once
+    gives the real key. *)
 
 fn hkey_impl ([@@@FStar.Attributes.monomorphize] p: params)
              (hb: A.array S8.t) (w: A.array S8.t)
@@ -109,13 +119,16 @@ requires A.pts_to hb vh0 ** A.pts_to w vw ** pure (
   Seq.length vh0 == blocklen /\ Seq.length vw == xkeylen p.pv)
 ensures exists* (vh1: Seq.seq S8.t). A.pts_to hb vh1 ** A.pts_to w vw ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh1 == blocklen /\
-  vals vh1 == hkey p.pv (vals vw))
+  Poly.xtimes (vals vh1) == hkey p.pv (vals vw))
 {
   A.pts_to_len hb;
   Copy.fill hb S8.zero 16sz;
   with vz. assert A.pts_to hb vz;
   zeroed vz;
   cipher_impl p hb w;
+  with vk. assert A.pts_to hb vk;
+  Poly.xtimes_xdiv (vals vk);
+  Hacl.AES.GF128.xdiv_impl hb;
 }
 
 (** The length block: the two lengths in bits, big end first. *)
@@ -151,7 +164,7 @@ fn j0_impl ([@@@FStar.Attributes.monomorphize] p: params)
 requires A.pts_to jb vj0 ** A.pts_to w vw ** A.pts_to hb vh **
          A.pts_to iv #pi viv ** pure (
   Seq.length vj0 == blocklen /\ Seq.length vw == xkeylen p.pv /\
-  Seq.length vh == blocklen /\ vals vh == hkey p.pv (vals vw) /\
+  Seq.length vh == blocklen /\ Poly.xtimes (vals vh) == hkey p.pv (vals vw) /\
   iv_ok (vals viv) /\ SZ.fits (Seq.length viv + blocklen))
          ** pure (SZ.v n == Seq.length viv)
 ensures exists* (vj1: Seq.seq S8.t).
@@ -207,7 +220,7 @@ requires A.pts_to tag vt0 ** A.pts_to w vw ** A.pts_to hb vh **
          A.pts_to jb vj ** A.pts_to aad #pa va ** A.pts_to cip #pc vc ** pure (
   Seq.length vt0 == taglen /\ Seq.length vw == xkeylen p.pv /\
   Seq.length vh == blocklen /\ Seq.length vj == blocklen /\
-  vals vh == hkey p.pv (vals vw) /\
+  Poly.xtimes (vals vh) == hkey p.pv (vals vw) /\
   aad_ok (vals va) /\ msg_ok (vals vc) /\
   SZ.fits (Seq.length va + blocklen) /\ SZ.fits (Seq.length vc + blocklen))
          ** pure (SZ.v alen == Seq.length va)

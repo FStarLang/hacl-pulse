@@ -86,17 +86,38 @@ let xor_block_bv (a b: Vec.t)
 (** Every register is a block, so its bits vanish outside the register. *)
 let bounded_lebiti (a: Vec.t) : Lemma (CL.bounded (CL.lebiti (Vec.bv a))) = ()
 
-(** {2 One shifted product}
+(** {2 One product, unshifted}
 
     Given [x] and [y], the two halves of their carry-less product, brought
-    back into GHASH's bit order.  Everything here is one instruction. *)
+    back into GHASH's bit order.  Everything here is one instruction.
+
+    The customary one-bit left shift of the 256-bit pair is {i not} here.
+    GHASH's bit order is the reverse of the multiplier's, and the reversal
+    leaves the product one place out -- coefficient [m] of what the hardware
+    computes is coefficient [254 - m] of the polynomial GHASH wants, not
+    [255 - m] -- so every implementation of GHASH on [PCLMULQDQ] has had to
+    shift the pair by one to line them up.  That is six instructions on the
+    critical path of every multiplication, about a fifth of the whole.
+
+    Omitting it leaves the halves of the product {i times x}, so the routine
+    computes [x * a * b] rather than [a * b].  Every multiplication GHASH
+    performs has a power of the hash key as one operand, so dividing the
+    hash key by [x] once, when the key is set up, cancels the factor
+    everywhere at no cost at all.  [Spec.GF128.Poly.xdiv] is that division
+    and [Spec.CLMUL.gmulx_three] is the identity.
+
+    The arrangement is Gueron and Kounavis's; what is new here is that it is
+    proved rather than argued, and the proof came to three short lemmas
+    ([Spec.GF128.Poly.psplit], [Spec.GF128.Algebra.pmod_shift1] and
+    [Spec.GF128.Poly.xtimes_xdiv]) because the reduction was already stated
+    as a linear map on coefficient sequences. *)
 
 inline_for_extraction
 let raw_product (x y: Vec.t)
   : Pure (Vec.t & Vec.t) (requires True)
          (ensures fun r ->
-            Poly.halves (Vec.bv x) (Vec.bv y)
-                        (CL.bswap (Vec.bv (snd r))) (CL.bswap (Vec.bv (fst r))))
+            Poly.halvesp (CL.pshift1 (Vec.bv x) (Vec.bv y))
+                         (CL.bswap (Vec.bv (snd r))) (CL.bswap (Vec.bv (fst r))))
   = let xa = Vec.bswap x in
     let yb = Vec.bswap y in
 
@@ -116,32 +137,9 @@ let raw_product (x y: Vec.t)
     Classical.forall_intro (xor_bits hh midhi);
     CL.lo_of_lanes (Vec.bv x) (Vec.bv y) (Vec.bv ll) (Vec.bv mid) (Vec.bv lo);
     CL.hi_of_lanes (Vec.bv x) (Vec.bv y) (Vec.bv hh) (Vec.bv mid) (Vec.bv hi);
+    CL.clmul_halves_ns (Vec.bv x) (Vec.bv y) (Vec.bv lo) (Vec.bv hi);
 
-    (* The one-bit left shift of the 256-bit pair.  [c] and [d] carry the top
-       bit of each low lane into the lane above it, and [c] additionally
-       carries the top bit of [lo] into [hi]. *)
-    let c = Vec.shift_right_lanes64 lo 63ul in
-    let d = Vec.shift_right_lanes64 hi 63ul in
-    let qlo = Vec.vxor (Vec.shift_left_lanes64 lo 1ul)
-                       (Vec.shift_left_bytes_8 c) in
-    let qhi = Vec.vxor (Vec.vxor (Vec.shift_left_lanes64 hi 1ul)
-                                 (Vec.shift_left_bytes_8 d))
-                       (Vec.shift_right_bytes_8 c) in
-
-    Classical.forall_intro
-      (xor_bits (Vec.shift_left_lanes64 lo 1ul) (Vec.shift_left_bytes_8 c));
-    Classical.forall_intro
-      (xor_bits (Vec.shift_left_lanes64 hi 1ul) (Vec.shift_left_bytes_8 d));
-    Classical.forall_intro
-      (xor_bits (Vec.vxor (Vec.shift_left_lanes64 hi 1ul)
-                          (Vec.shift_left_bytes_8 d))
-                (Vec.shift_right_bytes_8 c));
-    CL.shift_lo (Vec.bv x) (Vec.bv y) (Vec.bv lo) (Vec.bv c) (Vec.bv qlo);
-    CL.shift_hi (Vec.bv x) (Vec.bv y) (Vec.bv lo) (Vec.bv hi)
-                (Vec.bv c) (Vec.bv d) (Vec.bv qhi);
-    CL.clmul_halves (Vec.bv x) (Vec.bv y) (Vec.bv qlo) (Vec.bv qhi);
-
-    (qlo, qhi)
+    (lo, hi)
 
 (** {2 Multiplying by the reduction constant}
 
@@ -274,7 +272,8 @@ let mul_r_vec (a: Vec.t)
 inline_for_extraction
 let gmul_vec (x y: Vec.t)
   : Pure Vec.t (requires True)
-         (ensures fun r -> Vec.bv r == G.gmul (Vec.bv x) (Vec.bv y))
+         (ensures fun r ->
+            Vec.bv r == G.gmul (Vec.bv x) (Poly.xtimes (Vec.bv y)))
   = let p1 = raw_product x y in
     let qlo = fst p1 in
     let qhi = snd p1 in
@@ -283,7 +282,7 @@ let gmul_vec (x y: Vec.t)
     let u1 = Vec.bswap qhi in
     let u2 = Vec.bswap (fst p2) in
     let u3 = Vec.bswap (fst p3) in
-    Poly.gmul_three (Vec.bv x) (Vec.bv y)
+    CL.gmulx_three (Vec.bv x) (Vec.bv y)
                     (Vec.bv u1) (CL.bswap (Vec.bv qlo))
                     (Vec.bv u2) (CL.bswap (Vec.bv (snd p2)))
                     (Vec.bv u3) (CL.bswap (Vec.bv (snd p3)));
@@ -349,10 +348,10 @@ inline_for_extraction
 let gmul4_vec (x1 y1 x2 y2 x3 y3 x4 y4: Vec.t)
   : Pure Vec.t (requires True)
          (ensures fun r -> Vec.bv r ==
-            Alg.sum4 (G.gmul (Vec.bv x1) (Vec.bv y1))
-                     (G.gmul (Vec.bv x2) (Vec.bv y2))
-                     (G.gmul (Vec.bv x3) (Vec.bv y3))
-                     (G.gmul (Vec.bv x4) (Vec.bv y4)))
+            Alg.sum4 (G.gmul (Vec.bv x1) (Poly.xtimes (Vec.bv y1)))
+                     (G.gmul (Vec.bv x2) (Poly.xtimes (Vec.bv y2)))
+                     (G.gmul (Vec.bv x3) (Poly.xtimes (Vec.bv y3)))
+                     (G.gmul (Vec.bv x4) (Poly.xtimes (Vec.bv y4))))
   = let a1 = raw_product x1 y1 in
     let a2 = raw_product x2 y2 in
     let a3 = raw_product x3 y3 in
@@ -368,16 +367,20 @@ let gmul4_vec (x1 y1 x2 y2 x3 y3 x4 y4: Vec.t)
     let u2 = Vec.bswap (fst p2) in
     let u3 = Vec.bswap (fst p3) in
 
-    Alg.gmul_defer4 (Vec.bv x1) (Vec.bv y1)
+    Alg.pmod_defer4 (CL.pshift1 (Vec.bv x1) (Vec.bv y1))
+                    (CL.pshift1 (Vec.bv x2) (Vec.bv y2))
+                    (CL.pshift1 (Vec.bv x3) (Vec.bv y3))
+                    (CL.pshift1 (Vec.bv x4) (Vec.bv y4))
                     (CL.bswap (Vec.bv (snd a1))) (CL.bswap (Vec.bv (fst a1)))
-                    (Vec.bv x2) (Vec.bv y2)
                     (CL.bswap (Vec.bv (snd a2))) (CL.bswap (Vec.bv (fst a2)))
-                    (Vec.bv x3) (Vec.bv y3)
                     (CL.bswap (Vec.bv (snd a3))) (CL.bswap (Vec.bv (fst a3)))
-                    (Vec.bv x4) (Vec.bv y4)
                     (CL.bswap (Vec.bv (snd a4))) (CL.bswap (Vec.bv (fst a4)))
                     (CL.bswap (Vec.bv (fst p2))) (CL.bswap (Vec.bv (snd p2)))
                     (CL.bswap (Vec.bv (fst p3))) (CL.bswap (Vec.bv (snd p3)));
+    CL.pmodx (Vec.bv x1) (Vec.bv y1);
+    CL.pmodx (Vec.bv x2) (Vec.bv y2);
+    CL.pmodx (Vec.bv x3) (Vec.bv y3);
+    CL.pmodx (Vec.bv x4) (Vec.bv y4);
 
     xor_block_bv u2 u3;
     xor_block_bv u (Vec.vxor u2 u3);
@@ -399,14 +402,14 @@ inline_for_extraction
 let gmul8_vec (x1 y1 x2 y2 x3 y3 x4 y4 x5 y5 x6 y6 x7 y7 x8 y8: Vec.t)
   : Pure Vec.t (requires True)
          (ensures fun r -> Vec.bv r ==
-            Alg.sum8 (G.gmul (Vec.bv x1) (Vec.bv y1))
-                     (G.gmul (Vec.bv x2) (Vec.bv y2))
-                     (G.gmul (Vec.bv x3) (Vec.bv y3))
-                     (G.gmul (Vec.bv x4) (Vec.bv y4))
-                     (G.gmul (Vec.bv x5) (Vec.bv y5))
-                     (G.gmul (Vec.bv x6) (Vec.bv y6))
-                     (G.gmul (Vec.bv x7) (Vec.bv y7))
-                     (G.gmul (Vec.bv x8) (Vec.bv y8)))
+            Alg.sum8 (G.gmul (Vec.bv x1) (Poly.xtimes (Vec.bv y1)))
+                     (G.gmul (Vec.bv x2) (Poly.xtimes (Vec.bv y2)))
+                     (G.gmul (Vec.bv x3) (Poly.xtimes (Vec.bv y3)))
+                     (G.gmul (Vec.bv x4) (Poly.xtimes (Vec.bv y4)))
+                     (G.gmul (Vec.bv x5) (Poly.xtimes (Vec.bv y5)))
+                     (G.gmul (Vec.bv x6) (Poly.xtimes (Vec.bv y6)))
+                     (G.gmul (Vec.bv x7) (Poly.xtimes (Vec.bv y7)))
+                     (G.gmul (Vec.bv x8) (Poly.xtimes (Vec.bv y8))))
   = let a1 = raw_product x1 y1 in
     let a2 = raw_product x2 y2 in
     let a3 = raw_product x3 y3 in
@@ -428,24 +431,32 @@ let gmul8_vec (x1 y1 x2 y2 x3 y3 x4 y4 x5 y5 x6 y6 x7 y7 x8 y8: Vec.t)
     let u2 = Vec.bswap (fst p2) in
     let u3 = Vec.bswap (fst p3) in
 
-    Alg.gmul_defer8 (Vec.bv x1) (Vec.bv y1)
+    Alg.pmod_defer8 (CL.pshift1 (Vec.bv x1) (Vec.bv y1))
+                    (CL.pshift1 (Vec.bv x2) (Vec.bv y2))
+                    (CL.pshift1 (Vec.bv x3) (Vec.bv y3))
+                    (CL.pshift1 (Vec.bv x4) (Vec.bv y4))
+                    (CL.pshift1 (Vec.bv x5) (Vec.bv y5))
+                    (CL.pshift1 (Vec.bv x6) (Vec.bv y6))
+                    (CL.pshift1 (Vec.bv x7) (Vec.bv y7))
+                    (CL.pshift1 (Vec.bv x8) (Vec.bv y8))
                     (CL.bswap (Vec.bv (snd a1))) (CL.bswap (Vec.bv (fst a1)))
-                    (Vec.bv x2) (Vec.bv y2)
                     (CL.bswap (Vec.bv (snd a2))) (CL.bswap (Vec.bv (fst a2)))
-                    (Vec.bv x3) (Vec.bv y3)
                     (CL.bswap (Vec.bv (snd a3))) (CL.bswap (Vec.bv (fst a3)))
-                    (Vec.bv x4) (Vec.bv y4)
                     (CL.bswap (Vec.bv (snd a4))) (CL.bswap (Vec.bv (fst a4)))
-                    (Vec.bv x5) (Vec.bv y5)
                     (CL.bswap (Vec.bv (snd a5))) (CL.bswap (Vec.bv (fst a5)))
-                    (Vec.bv x6) (Vec.bv y6)
                     (CL.bswap (Vec.bv (snd a6))) (CL.bswap (Vec.bv (fst a6)))
-                    (Vec.bv x7) (Vec.bv y7)
                     (CL.bswap (Vec.bv (snd a7))) (CL.bswap (Vec.bv (fst a7)))
-                    (Vec.bv x8) (Vec.bv y8)
                     (CL.bswap (Vec.bv (snd a8))) (CL.bswap (Vec.bv (fst a8)))
                     (CL.bswap (Vec.bv (fst p2))) (CL.bswap (Vec.bv (snd p2)))
                     (CL.bswap (Vec.bv (fst p3))) (CL.bswap (Vec.bv (snd p3)));
+    CL.pmodx (Vec.bv x1) (Vec.bv y1);
+    CL.pmodx (Vec.bv x2) (Vec.bv y2);
+    CL.pmodx (Vec.bv x3) (Vec.bv y3);
+    CL.pmodx (Vec.bv x4) (Vec.bv y4);
+    CL.pmodx (Vec.bv x5) (Vec.bv y5);
+    CL.pmodx (Vec.bv x6) (Vec.bv y6);
+    CL.pmodx (Vec.bv x7) (Vec.bv y7);
+    CL.pmodx (Vec.bv x8) (Vec.bv y8);
 
     xor_block_bv u2 u3;
     xor_block_bv u (Vec.vxor u2 u3);
@@ -468,7 +479,7 @@ requires A.pts_to a va ** A.pts_to h vh ** pure (
 ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   Seq.length va == blocklen /\ Seq.length vh == blocklen /\
   Seq.length va' == blocklen /\
-  vals va' == G.gmul (vals va) (vals vh))
+  vals va' == G.gmul (vals va) (Poly.xtimes (vals vh)))
 {
   A.pts_to_len a;
   A.pts_to_len h;
@@ -506,7 +517,7 @@ ensures exists* (va': Seq.seq S8.t).
   SZ.v off + blocklen <= Seq.length vb /\ Seq.length va' == blocklen /\
   vals va' == G.gmul (G.gadd (vals va)
                              (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
-                     (vals vh))
+                     (Poly.xtimes (vals vh)))
 {
   A.pts_to_len a;
   A.pts_to_len h;
@@ -772,18 +783,18 @@ requires A.pts_to d #pd vd ** pure (
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   SZ.v lim <= SZ.v n /\ SZ.v lim % 64 == 0 /\
   SZ.v start <= SZ.v lim /\ SZ.v start % 64 == 0 /\
-  Vec.bv cur0 == G.ghash_from (Vec.bv y) (reveal acc0)
+  Vec.bv cur0 == G.ghash_from (Poly.xtimes (Vec.bv y)) (reveal acc0)
                               (Seq.slice (vals vd) 0 (SZ.v n))
                               (SZ.v start / blocklen) /\
-  Vec.bv y2 == G.gmul (Vec.bv y) (Vec.bv y) /\
-  Vec.bv y3 == G.gmul (Vec.bv y2) (Vec.bv y) /\
-  Vec.bv y4 == G.gmul (Vec.bv y3) (Vec.bv y))
+  Poly.xtimes (Vec.bv y2) == G.gmul (Poly.xtimes (Vec.bv y)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y3) == G.gmul (Poly.xtimes (Vec.bv y2)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y4) == G.gmul (Poly.xtimes (Vec.bv y3)) (Poly.xtimes (Vec.bv y)))
 returns r: Vec.t
 ensures A.pts_to d #pd vd ** pure (
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
   SZ.v lim / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-  Vec.bv r == G.ghash_from (Vec.bv y) (reveal acc0)
+  Vec.bv r == G.ghash_from (Poly.xtimes (Vec.bv y)) (reveal acc0)
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v lim / blocklen))
 {
   A.pts_to_len d;
@@ -802,7 +813,7 @@ ensures A.pts_to d #pd vd ** pure (
           SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
           SZ.v lim <= SZ.v n /\ SZ.v lim % 64 == 0 /\
           SZ.v vi / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-          Vec.bv cur == G.ghash_from (Vec.bv y) (reveal acc0)
+          Vec.bv cur == G.ghash_from (Poly.xtimes (Vec.bv y)) (reveal acc0)
                                      (Seq.slice (vals vd) 0 (SZ.v n))
                                      (SZ.v vi / blocklen))
   decreases (SZ.v n - SZ.v (!i))
@@ -837,7 +848,9 @@ ensures A.pts_to d #pd vd ** pure (
     let cur = !av;
     xor_block_bv cur d0;
     let res = gmul4_vec (Vec.vxor cur d0) y4 d1 y3 d2 y2 d3 y;
-    ghash_step4 (Vec.bv y) (reveal acc0) (Vec.bv y2) (Vec.bv y3) (Vec.bv y4)
+    ghash_step4 (Poly.xtimes (Vec.bv y)) (reveal acc0)
+                (Poly.xtimes (Vec.bv y2)) (Poly.xtimes (Vec.bv y3))
+                (Poly.xtimes (Vec.bv y4))
                 (vals vd) (SZ.v n) (SZ.v vi);
     av := res;
     i := vi4;
@@ -862,26 +875,26 @@ fn ghash_loop8_ni (a0 y y2 y3 y4 y5 y6 y7 y8: Vec.t) (d: A.array S8.t)
 requires A.pts_to d #pd vd ** pure (
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   SZ.v lim <= SZ.v n /\ SZ.v lim % 128 == 0 /\
-  Vec.bv y2 == G.gmul (Vec.bv y) (Vec.bv y) /\
-  Vec.bv y3 == G.gmul (Vec.bv y2) (Vec.bv y) /\
-  Vec.bv y4 == G.gmul (Vec.bv y3) (Vec.bv y) /\
-  Vec.bv y5 == G.gmul (Vec.bv y4) (Vec.bv y) /\
-  Vec.bv y6 == G.gmul (Vec.bv y5) (Vec.bv y) /\
-  Vec.bv y7 == G.gmul (Vec.bv y6) (Vec.bv y) /\
-  Vec.bv y8 == G.gmul (Vec.bv y7) (Vec.bv y))
+  Poly.xtimes (Vec.bv y2) == G.gmul (Poly.xtimes (Vec.bv y)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y3) == G.gmul (Poly.xtimes (Vec.bv y2)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y4) == G.gmul (Poly.xtimes (Vec.bv y3)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y5) == G.gmul (Poly.xtimes (Vec.bv y4)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y6) == G.gmul (Poly.xtimes (Vec.bv y5)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y7) == G.gmul (Poly.xtimes (Vec.bv y6)) (Poly.xtimes (Vec.bv y)) /\
+  Poly.xtimes (Vec.bv y8) == G.gmul (Poly.xtimes (Vec.bv y7)) (Poly.xtimes (Vec.bv y)))
 returns r: Vec.t
 ensures A.pts_to d #pd vd ** pure (
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
   SZ.v lim / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-  Vec.bv r == G.ghash_from (Vec.bv y) (Vec.bv a0)
+  Vec.bv r == G.ghash_from (Poly.xtimes (Vec.bv y)) (Vec.bv a0)
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v lim / blocklen))
 {
   A.pts_to_len d;
   Math.lemma_div_le (SZ.v lim) (SZ.v n) blocklen;
   Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
   Math.euclidean_division_definition (SZ.v n) blocklen;
-  ghash_zero (Vec.bv y) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
+  ghash_zero (Poly.xtimes (Vec.bv y)) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
   let mut av = a0;
   let mut i = 0sz;
 
@@ -893,7 +906,7 @@ ensures A.pts_to d #pd vd ** pure (
           SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
           SZ.v lim <= SZ.v n /\ SZ.v lim % 128 == 0 /\
           SZ.v vi / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-          Vec.bv cur == G.ghash_from (Vec.bv y) (Vec.bv a0)
+          Vec.bv cur == G.ghash_from (Poly.xtimes (Vec.bv y)) (Vec.bv a0)
                                      (Seq.slice (vals vd) 0 (SZ.v n))
                                      (SZ.v vi / blocklen))
   decreases (SZ.v n - SZ.v (!i))
@@ -953,8 +966,11 @@ ensures A.pts_to d #pd vd ** pure (
     xor_block_bv cur d0;
     let res = gmul8_vec (Vec.vxor cur d0) y8 d1 y7 d2 y6 d3 y5
                         d4 y4 d5 y3 d6 y2 d7 y;
-    ghash_step8 (Vec.bv y) (Vec.bv a0) (Vec.bv y2) (Vec.bv y3) (Vec.bv y4)
-                (Vec.bv y5) (Vec.bv y6) (Vec.bv y7) (Vec.bv y8)
+    ghash_step8 (Poly.xtimes (Vec.bv y)) (Vec.bv a0)
+                (Poly.xtimes (Vec.bv y2)) (Poly.xtimes (Vec.bv y3))
+                (Poly.xtimes (Vec.bv y4)) (Poly.xtimes (Vec.bv y5))
+                (Poly.xtimes (Vec.bv y6)) (Poly.xtimes (Vec.bv y7))
+                (Poly.xtimes (Vec.bv y8))
                 (vals vd) (SZ.v n) (SZ.v vi);
     av := res;
     i := vi8;
@@ -963,6 +979,20 @@ ensures A.pts_to d #pd vd ** pure (
   let fin = !av;
   fin
 }
+
+(** One step of the power recurrence, in the pre-divided representation.
+
+    The loops below hold the powers of the hash key divided by [x], because
+    that is what makes the multiplier's omitted shift cancel.  The recurrence
+    itself is unchanged -- [y_(i+1) := gmul_vec y_i y_1] -- and this lemma is
+    the one line that says so: advancing both sides once turns the relation
+    the multiplier gives into the relation the loops assume. *)
+#push-options "--fuel 2 --ifuel 0"
+let power_step (a b: G.block)
+  : Lemma (Poly.xtimes (G.gmul a (Poly.xtimes b)) ==
+           G.gmul (Poly.xtimes a) (Poly.xtimes b))
+  = Alg.gmul_xt_left a (Poly.xtimes b) 1
+#pop-options
 
 (** Entering the block loops: the eight-way pass, then the four-way pass for
     the group of four it may have left behind, and otherwise nothing at all.
@@ -987,7 +1017,7 @@ ensures A.pts_to d #pd vd ** pure (
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
   SZ.v lim / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-  Vec.bv r == G.ghash_from (Vec.bv y) (Vec.bv a0)
+  Vec.bv r == G.ghash_from (Poly.xtimes (Vec.bv y)) (Vec.bv a0)
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v lim / blocklen))
 {
   A.pts_to_len d;
@@ -998,15 +1028,27 @@ ensures A.pts_to d #pd vd ** pure (
   Math.euclidean_division_definition (SZ.v n) blocklen;
   if SZ.gt lim 0sz
   {
+    (* [gmul_vec x k] is [x] times [k] advanced once, so the powers come out
+       pre-divided too: starting the recurrence at [h/x] gives [h^i/x] at
+       every step, which is exactly what the loops below want.  The step from
+       [bv y_(i+1) == gmul (bv y_i) (xtimes (bv y))] to the relation between
+       the advanced powers is [Spec.GF128.Algebra.gmul_xt_left]. *)
     let y2 = gmul_vec y y;
+    power_step (Vec.bv y) (Vec.bv y);
     let y3 = gmul_vec y2 y;
+    power_step (Vec.bv y2) (Vec.bv y);
     let y4 = gmul_vec y3 y;
+    power_step (Vec.bv y3) (Vec.bv y);
     if SZ.gt lim8 0sz
     {
       let y5 = gmul_vec y4 y;
+      power_step (Vec.bv y4) (Vec.bv y);
       let y6 = gmul_vec y5 y;
+      power_step (Vec.bv y5) (Vec.bv y);
       let y7 = gmul_vec y6 y;
+      power_step (Vec.bv y6) (Vec.bv y);
       let y8 = gmul_vec y7 y;
+      power_step (Vec.bv y7) (Vec.bv y);
       let r8 = ghash_loop8_ni a0 y y2 y3 y4 y5 y6 y7 y8 d n lim8;
       Math.multiple_modulo_lemma (SZ.v lim8 / 128 * 2) 64;
       Math.euclidean_division_definition (SZ.v lim8) 128;
@@ -1014,13 +1056,13 @@ ensures A.pts_to d #pd vd ** pure (
     }
     else
     {
-      ghash_zero (Vec.bv y) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
+      ghash_zero (Poly.xtimes (Vec.bv y)) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
       ghash_loop4_ni a0 y y2 y3 y4 d n 0sz lim #(hide (Vec.bv a0))
     }
   }
   else
   {
-    ghash_zero (Vec.bv y) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
+    ghash_zero (Poly.xtimes (Vec.bv y)) (Vec.bv a0) (Seq.slice (vals vd) 0 (SZ.v n));
     a0
   }
 }
@@ -1040,7 +1082,7 @@ ensures exists* (va1: Seq.seq S8.t).
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
   SZ.v n / blocklen == G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-  vals va1 == G.ghash_from (vals vh) (vals va0)
+  vals va1 == G.ghash_from (Poly.xtimes (vals vh)) (vals va0)
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v n / blocklen))
 {
   let lim = four_limit n;
@@ -1066,7 +1108,7 @@ ensures exists* (va1: Seq.seq S8.t).
           SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
           Vec.vv y == reveal vh /\
           SZ.v vi / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-          Vec.bv cur == G.ghash_from (vals vh) (vals va0)
+          Vec.bv cur == G.ghash_from (Poly.xtimes (vals vh)) (vals va0)
                                      (Seq.slice (vals vd) 0 (SZ.v n))
                                      (SZ.v vi / blocklen))
   decreases (SZ.v n - SZ.v (!i))
@@ -1081,7 +1123,7 @@ ensures exists* (va1: Seq.seq S8.t).
     let cur = !av;
     xor_block_bv cur dv;
     let r = gmul_vec (Vec.vxor cur dv) y;
-    ghash_step (vals vh) (vals va0) (vals vd) (SZ.v n) (SZ.v vi);
+    ghash_step (Poly.xtimes (vals vh)) (vals va0) (vals vd) (SZ.v n) (SZ.v vi);
     Math.division_addition_lemma (SZ.v vi) blocklen 1;
     av := r;
     i := vi2;
