@@ -1884,6 +1884,66 @@ over twelve A/B builds afterwards, since a cheaper serial multiply could in
 principle have moved the crossovers; 128 and 768 are still the right
 choices, because the aggregated passes got cheaper by the same factor.
 
+### An expanded-key context for AES-GCM
+
+Every AES-GCM call in this repository used to begin by expanding the key:
+about 26 ns of `AESKEYGENASSIST` for AES-128, one block encryption for the
+GHASH subkey, and since the previous section 5 ns more to divide that
+subkey by `x`.  None of it depends on the nonce, the associated data or the
+message, and a caller that talks to the same peer more than once was paying
+for all of it on every message.  The comparison was asymmetric too:
+EverCrypt exposes `EverCrypt_AEAD_create_in` and encrypts against the
+handle, so the benchmark's reference side paid the schedule once and this
+side paid it per call.
+
+The split is the obvious one.  `Spec.GCM.gcm_encrypt_w` is `gcm_encrypt`
+with the expansion already done --- it takes `w`, the round keys, instead
+of `key` --- and `gcm_encrypt` is now literally `gcm_encrypt_w v
+(key_expansion v key)`, so the two compose by unfolding one definition and
+no caller is ever asked to reason about what a round key is.  On the
+implementation side `expand_impl` is the key-expansion and subkey steps,
+`encrypt_w` and `decrypt_w` are everything after them, and the one-shot
+`encrypt` and `decrypt` are the two in sequence over a stack context.  The
+whole change verified first try, which is what one hopes for from a
+refactoring that moves no proof.
+
+The context is two arrays, not one.  `ek` is the round keys, 176 bytes for
+AES-128 and 240 for AES-256; `hk` is the sixteen-byte GHASH subkey, held
+divided by `x`.  One array would have been tidier in the header and much
+less tidy in the proof: every function underneath wants a whole array it
+can be handed, `Hacl.Impl.Sub` lends out one window at a time, and nothing
+here needs the two to be adjacent.
+
+| AES-GCM, 64 bytes | one-shot | expanded | gain | was | now |
+|---|---:|---:|---:|---:|---:|
+| AES-128-GCM, gcc | 357 MB/s | **496 MB/s** | +38.9% | 2.92x | **2.11x** |
+| AES-256-GCM, gcc | 291 MB/s | **462 MB/s** | +58.8% | 2.99x | **1.90x** |
+| AES-128-GCM, clang | 326 MB/s | **477 MB/s** | +46.3% | 3.19x | **2.18x** |
+| AES-256-GCM, clang | 285 MB/s | **444 MB/s** | +55.8% | 3.06x | **1.97x** |
+| AES-128-GCM, 1 KiB, gcc | 1,555 MB/s | **1,695 MB/s** | +9.0% | 2.02x | **1.87x** |
+| AES-256-GCM, 1 KiB, clang | 1,551 MB/s | **1,784 MB/s** | +15.0% | 1.81x | **1.57x** |
+
+Measured directly, the fixed cost removed is 35.6 ns: a sixteen-byte
+AES-128-GCM encryption goes from 131.4 ns to **95.8**, sixty-four bytes
+from 166.6 to **132.7**, a kilobyte from 600.5 to **569.2**.  That is more
+than the 29 ns the roadmap predicted, the difference being the key division
+the previous section added.  AES-256-GCM gains more than AES-128 because
+its schedule is half again as long, and at sixty-four bytes it is now
+**1.90x** of EverCrypt's Vale assembly, the first AES-GCM measurement in
+this repository to go under 2x at a short length.
+
+The entry points are `Hacl_AES_GCM_aes128_expand`,
+`Hacl_AES_GCM_aes128_encrypt_expanded` and
+`Hacl_AES_GCM_aes128_decrypt_expanded`, and the same three for AES-256; the
+one-shot four are unchanged.  `tests/test_gcm.c` now runs all 450 CAVP
+cases through both paths.
+
+Caching the key powers in the context as well is the obvious next step: it
+would make the aggregation thresholds of two sections ago irrelevant and
+turn a sixty-four-byte GHASH into a single group of four.  It is a larger
+change than this one, because the powers are vectors and the context is
+bytes.
+
 ### SHA-NI, where the instruction is four rounds wide
 
 `SHA256RNDS2` does two rounds of the compression function and `SHA256MSG1`
@@ -3919,32 +3979,16 @@ rough order of value:
    Custard's specialization key stops at the name instead of unfolding to the
    initializer.  SHA-2 is the next one to take that shape.
 
-10. **An expanded-key context for AES-GCM**, in place of expanding the key on
-    every call.  With the schedule in registers the fixed cost of an
-    AES-128-GCM call is about 89 ns.  An earlier version of this entry said
-    most of that was the GHASH key powers; direct measurement says
-    otherwise, and the correction is worth keeping.  The powers are not
-    precomputed at all -- `ghash_start` builds them inside the call and only
-    when it is going to run an aggregated pass, which on a short message it
-    now does not.  The 89 ns is 26.6 for the schedule, 2.4 for `H`, 42 in
-    `gtag_impl` and the rest stack setup, and of those only the first two
-    are functions of the key alone.  So a context is worth about 29 ns, not
-    60: the sixty-four-byte call would go from 157 ns to roughly 128, which
-    is 2.98x to about **2.4x** rather than the 1.3x claimed here before.
-
-    It is still worth doing, and the GHASH work since this entry was written
-    has made it more so: the key is now divided by `x` at expansion time, so
-    a one-shot call pays 5 ns for something a context would do once, and the
-    sixteen-byte row is the only AES-GCM measurement that did not improve.
-    It is also worth doing because the comparison is currently asymmetric
-    -- EverCrypt exposes `EverCrypt_AEAD_create_in` and encrypts against the
-    handle, so the benchmark shim on the reference side pays the schedule
-    once and ours pays it per call -- and because a context is the natural
-    place to cache the key powers as well, which would make the aggregated
-    thresholds of the previous section irrelevant and turn the whole 64-byte
-    GHASH into one group of four.  The proof burden is small; it is mostly
-    API design: what the context type looks like, and whether the one-shot
-    entry points stay.
+10. ~~**An expanded-key context for AES-GCM**~~ --- done; see *An
+    expanded-key context for AES-GCM* above.  The estimate here was 29 ns
+    and the measurement was 35.6, the difference being the key division
+    roadmap item 11 added after this entry was written.  Sixty-four-byte
+    AES-128-GCM went from 2.92x of EverCrypt to **2.11x** and AES-256-GCM
+    to **1.90x**.  The remaining half of the idea --- caching the GHASH key
+    powers in the context, which would make the aggregation thresholds
+    irrelevant and turn a sixty-four-byte GHASH into one group of four ---
+    is not done, and is the larger half: the powers are vectors and the
+    context is bytes.
 
 11. ~~**Deferring the one-bit shift in GHASH**~~ --- done, and in a stronger
     form than this entry proposed.  The plan was to hoist the one-bit shift

@@ -118,6 +118,12 @@ uint64_t Hacl_Bignum_Base_add(uint64_t *res, uint64_t *a, uint64_t *b, size_t n)
 void Hacl_Bignum_Base_add_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);
 bool Hacl_AES_GCM_aes256_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 void Hacl_AES_GCM_aes256_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+bool Hacl_AES_GCM_aes256_decrypt_expanded(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes256_encrypt_expanded(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes256_expand(uint8_t *ek, uint8_t *hk, uint8_t *key);
+bool Hacl_AES_GCM_aes128_decrypt_expanded(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes128_encrypt_expanded(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes128_expand(uint8_t *ek, uint8_t *hk, uint8_t *key);
 bool Hacl_HMAC_DRBG_generate_sha512(uint8_t *out, size_t olen, uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *additional, size_t alen);
 void Hacl_HMAC_DRBG_reseed_sha512(uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *entropy, size_t elen, uint8_t *additional, size_t alen);
 void Hacl_HMAC_DRBG_instantiate_sha512(uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *entropy, size_t elen, uint8_t *nonce, size_t nlen, uint8_t *personal, size_t plen);

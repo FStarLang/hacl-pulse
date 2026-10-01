@@ -318,6 +318,161 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb ** pure (
   r
 }
 
+(** {2 The key schedule as a separate step}
+
+    Expanding the key is a fixed cost of about 26 ns for AES-128, and
+    dividing the hash key by [x] another 5, and neither depends on the
+    nonce, the associated data or the message.  A caller that talks to the
+    same peer more than once should pay for them once, so the two directions
+    below are split: {!expand_impl} does everything that is a function of
+    the key alone, and {!encrypt_w} and {!decrypt_w} do the rest.
+
+    The context is two arrays rather than one, because every function that
+    reads it wants a whole array and nothing here needs the two to be
+    adjacent.  [ek] is the round keys, [xkeylen] bytes of them; [hk] is the
+    GHASH subkey, sixteen bytes, held divided by [x] as {!hkey_impl}
+    explains.
+
+    The specification of {!encrypt_w} is [Spec.GCM.gcm_encrypt_w], which is
+    [gcm_encrypt] with the expansion already done, so composing the two
+    steps is by definition and the caller is never asked to reason about
+    what a round key is. *)
+
+fn expand_impl ([@@@FStar.Attributes.monomorphize] p: params)
+               (ek: A.array S8.t) (hk: A.array S8.t) (key: A.array S8.t)
+               (#ve0 #vh0: erased (Seq.seq S8.t))
+               (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+requires A.pts_to ek ve0 ** A.pts_to hk vh0 ** A.pts_to key #pk vkey ** pure (
+  Seq.length ve0 == xkeylen p.pv /\ Seq.length vh0 == blocklen /\
+  Seq.length vkey == keylen p.pv)
+ensures exists* (ve1 vh1: Seq.seq S8.t).
+  A.pts_to ek ve1 ** A.pts_to hk vh1 ** A.pts_to key #pk vkey ** pure (
+  Seq.length ve1 == xkeylen p.pv /\ Seq.length vh1 == blocklen /\
+  Seq.length vkey == keylen p.pv /\
+  vals ve1 == key_expansion p.pv (vals vkey) /\
+  Poly.xtimes (vals vh1) == hkey p.pv (vals ve1))
+{
+  key_expansion_impl p ek key;
+  hkey_impl p hk ek;
+}
+
+(** In place: [msg] comes back holding the ciphertext and [tag] the tag. *)
+
+fn encrypt_w ([@@@FStar.Attributes.monomorphize] p: params)
+             (ek: A.array S8.t) (hk: A.array S8.t)
+             (iv: A.array S8.t) (iv_len: SZ.t) (aad: A.array S8.t) (aad_len: SZ.t)
+             (msg: A.array S8.t) (msg_len: SZ.t) (tag: A.array S8.t)
+             (#ve #vh: erased (Seq.seq S8.t))
+             (#pi: perm) (#viv: erased (Seq.seq S8.t))
+             (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+             (#vm0 #vt0: erased (Seq.seq S8.t))
+requires A.pts_to ek ve ** A.pts_to hk vh **
+         A.pts_to iv #pi viv ** A.pts_to aad #pa vaad **
+         A.pts_to msg vm0 ** A.pts_to tag vt0 ** pure (
+  Seq.length ve == xkeylen p.pv /\ Seq.length vh == blocklen /\
+  Poly.xtimes (vals vh) == hkey p.pv (vals ve) /\
+  Seq.length vt0 == taglen /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  SZ.fits (Seq.length viv + blocklen) /\ SZ.fits (Seq.length vaad + blocklen) /\
+  SZ.fits (Seq.length vm0 + blocklen))
+         ** pure (SZ.v iv_len == Seq.length viv)
+         ** pure (SZ.v aad_len == Seq.length vaad)
+         ** pure (SZ.v msg_len == Seq.length vm0)
+ensures exists* (vm1 vt1: Seq.seq S8.t).
+  A.pts_to ek ve ** A.pts_to hk vh **
+  A.pts_to iv #pi viv ** A.pts_to aad #pa vaad **
+  A.pts_to msg vm1 ** A.pts_to tag vt1 ** pure (
+  Seq.length vm1 == Seq.length vm0 /\ Seq.length vt1 == taglen /\
+  Seq.length ve == xkeylen p.pv /\ Seq.length vh == blocklen /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  (vals vm1, vals vt1) ==
+    gcm_encrypt_w p.pv (vals ve) (vals viv) (vals vaad) (vals vm0))
+{
+  A.pts_to_len msg;
+  A.pts_to_len tag;
+
+  let z = S8.zero;
+  let mut jarr = [| z; 16sz |];
+  A.pts_to_len jarr;
+  A.pts_to_len jarr;
+  let mut carr = [| z; 16sz |];
+  A.pts_to_len carr;
+  A.pts_to_len carr;
+
+  j0_impl p jarr ek hk iv iv_len;
+  Copy.copy_exact carr jarr 16sz;
+  inc32_impl carr;
+  ctr_encrypt_impl p msg msg_len ek carr;
+  gtag_impl p tag ek hk jarr aad aad_len msg msg_len;
+
+  ()
+}
+
+(** In place on success only: a wrong tag leaves [msg] untouched. *)
+
+fn decrypt_w ([@@@FStar.Attributes.monomorphize] p: params)
+             (ek: A.array S8.t) (hk: A.array S8.t)
+             (iv: A.array S8.t) (iv_len: SZ.t) (aad: A.array S8.t) (aad_len: SZ.t)
+             (msg: A.array S8.t) (msg_len: SZ.t) (tag: A.array S8.t)
+             (#ve #vh: erased (Seq.seq S8.t))
+             (#pi: perm) (#viv: erased (Seq.seq S8.t))
+             (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+             (#pt: perm) (#vtag: erased (Seq.seq S8.t))
+             (#vm0: erased (Seq.seq S8.t))
+requires A.pts_to ek ve ** A.pts_to hk vh **
+         A.pts_to iv #pi viv ** A.pts_to aad #pa vaad **
+         A.pts_to msg vm0 ** A.pts_to tag #pt vtag ** pure (
+  Seq.length ve == xkeylen p.pv /\ Seq.length vh == blocklen /\
+  Poly.xtimes (vals vh) == hkey p.pv (vals ve) /\
+  Seq.length vtag == taglen /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  SZ.fits (Seq.length viv + blocklen) /\ SZ.fits (Seq.length vaad + blocklen) /\
+  SZ.fits (Seq.length vm0 + blocklen))
+         ** pure (SZ.v iv_len == Seq.length viv)
+         ** pure (SZ.v aad_len == Seq.length vaad)
+         ** pure (SZ.v msg_len == Seq.length vm0)
+returns r: bool
+ensures exists* (vm1: Seq.seq S8.t).
+  A.pts_to ek ve ** A.pts_to hk vh **
+  A.pts_to iv #pi viv ** A.pts_to aad #pa vaad **
+  A.pts_to msg vm1 ** A.pts_to tag #pt vtag ** pure (
+  Seq.length vm1 == Seq.length vm0 /\
+  Seq.length ve == xkeylen p.pv /\ Seq.length vh == blocklen /\
+  Seq.length vtag == taglen /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  (let d = gcm_decrypt_w p.pv (vals ve) (vals viv) (vals vaad)
+                         (vals vm0) (vals vtag) in
+   (r ==> Some? d /\ vals vm1 == Some?.v d) /\
+   ((~r) ==> None? d /\ vm1 == reveal vm0)))
+{
+  A.pts_to_len msg;
+  A.pts_to_len tag;
+
+  let z = S8.zero;
+  let mut jarr = [| z; 16sz |];
+  A.pts_to_len jarr;
+  A.pts_to_len jarr;
+  let mut carr = [| z; 16sz |];
+  A.pts_to_len carr;
+  A.pts_to_len carr;
+  let mut tarr = [| z; 16sz |];
+  A.pts_to_len tarr;
+  A.pts_to_len tarr;
+
+  j0_impl p jarr ek hk iv iv_len;
+  gtag_impl p tarr ek hk jarr aad aad_len msg msg_len;
+  let ok = tag_match tarr tag;
+
+  if ok {
+    Copy.copy_exact carr jarr 16sz;
+    inc32_impl carr;
+    ctr_encrypt_impl p msg msg_len ek carr;
+    true
+  } else {
+    false
+  }
+}
+
 (** {2 The two directions} *)
 
 (** In place: [msg] comes back holding the ciphertext and [tag] the tag. *)
@@ -358,20 +513,9 @@ ensures exists* (vm1 vt1: Seq.seq S8.t).
   let mut harr = [| z; 16sz |];
   A.pts_to_len harr;
   A.pts_to_len harr;
-  let mut jarr = [| z; 16sz |];
-  A.pts_to_len jarr;
-  A.pts_to_len jarr;
-  let mut carr = [| z; 16sz |];
-  A.pts_to_len carr;
-  A.pts_to_len carr;
 
-  key_expansion_impl p warr key;
-  hkey_impl p harr warr;
-  j0_impl p jarr warr harr iv iv_len;
-  Copy.copy_exact carr jarr 16sz;
-  inc32_impl carr;
-  ctr_encrypt_impl p msg msg_len warr carr;
-  gtag_impl p tag warr harr jarr aad aad_len msg msg_len;
+  expand_impl p warr harr key;
+  encrypt_w p warr harr iv iv_len aad aad_len msg msg_len tag;
 
   ()
 }
@@ -418,30 +562,9 @@ ensures exists* (vm1: Seq.seq S8.t).
   let mut harr = [| z; 16sz |];
   A.pts_to_len harr;
   A.pts_to_len harr;
-  let mut jarr = [| z; 16sz |];
-  A.pts_to_len jarr;
-  A.pts_to_len jarr;
-  let mut carr = [| z; 16sz |];
-  A.pts_to_len carr;
-  A.pts_to_len carr;
-  let mut tarr = [| z; 16sz |];
-  A.pts_to_len tarr;
-  A.pts_to_len tarr;
 
-  key_expansion_impl p warr key;
-  hkey_impl p harr warr;
-  j0_impl p jarr warr harr iv iv_len;
-  gtag_impl p tarr warr harr jarr aad aad_len msg msg_len;
-  let ok = tag_match tarr tag;
-
-  if ok {
-    Copy.copy_exact carr jarr 16sz;
-    inc32_impl carr;
-    ctr_encrypt_impl p msg msg_len warr carr;
-    true
-  } else {
-    false
-  }
+  expand_impl p warr harr key;
+  decrypt_w p warr harr iv iv_len aad aad_len msg msg_len tag
 }
 
 #pop-options
@@ -571,6 +694,169 @@ ensures exists* (vm1: Seq.seq S8.t).
    ((~r) ==> None? d /\ vm1 == reveal vm0)))
 {
   decrypt params256 key iv iv_len aad aad_len msg msg_len tag
+}
+
+(** {2 The expanded-key entry points}
+
+    The same four, with the key schedule hoisted out.  [ek] is 176 bytes for
+    AES-128 and 240 for AES-256; [hk] is always sixteen.  Both are written by
+    [expand] and then only read, but they are passed with full ownership,
+    because everything underneath wants a whole array it can be handed:
+
+      void Hacl_AES_GCM_aes128_expand(uint8_t *ek, uint8_t *hk, uint8_t *key);
+      void Hacl_AES_GCM_aes128_encrypt_expanded(uint8_t *tag, uint8_t *msg,
+                                                size_t msg_len,
+                                                uint8_t *ek, uint8_t *hk,
+                                                uint8_t *iv, size_t iv_len,
+                                                uint8_t *aad, size_t aad_len);
+
+    There is nothing secret about the split: [aes128_encrypt] is
+    [aes128_expand] followed by [aes128_encrypt_expanded] on a stack
+    context, and [gcm_encrypt] is [gcm_encrypt_w] of [key_expansion], so the
+    two specifications compose by unfolding one definition. *)
+
+fn aes128_expand (ek: A.array S8.t) (hk: A.array S8.t) (key: A.array S8.t)
+       (#ve0 #vh0: erased (Seq.seq S8.t))
+       (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+requires A.pts_to ek ve0 ** A.pts_to hk vh0 ** A.pts_to key #pk vkey ** pure (
+  Seq.length ve0 == 176 /\ Seq.length vh0 == 16 /\ Seq.length vkey == 16)
+ensures exists* (ve1 vh1: Seq.seq S8.t).
+  A.pts_to ek ve1 ** A.pts_to hk vh1 ** A.pts_to key #pk vkey ** pure (
+  Seq.length ve1 == 176 /\ Seq.length vh1 == 16 /\ Seq.length vkey == 16 /\
+  vals ve1 == key_expansion AES128 (vals vkey) /\
+  Poly.xtimes (vals vh1) == hkey AES128 (vals ve1))
+{
+  expand_impl params128 ek hk key;
+}
+
+fn aes128_encrypt_expanded (tag: A.array S8.t) (msg: A.array S8.t) (msg_len: SZ.t)
+       (ek: A.array S8.t) (hk: A.array S8.t) (iv: A.array S8.t) (iv_len: SZ.t)
+       (aad: A.array S8.t) (aad_len: SZ.t)
+       (#vt0 #vm0 #ve #vh: erased (Seq.seq S8.t))
+       (#pi: perm) (#viv: erased (Seq.seq S8.t))
+       (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+requires A.pts_to tag vt0 ** A.pts_to msg vm0 ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vt0 == 16 /\ Seq.length vm0 == SZ.v msg_len /\
+  Seq.length ve == 176 /\ Seq.length vh == 16 /\
+  Poly.xtimes (vals vh) == hkey AES128 (vals ve) /\
+  Seq.length viv == SZ.v iv_len /\ Seq.length vaad == SZ.v aad_len /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  SZ.fits (SZ.v iv_len + 16) /\ SZ.fits (SZ.v aad_len + 16) /\
+  SZ.fits (SZ.v msg_len + 16))
+ensures exists* (vt1 vm1: Seq.seq S8.t).
+  A.pts_to tag vt1 ** A.pts_to msg vm1 ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vt1 == 16 /\ Seq.length vm1 == SZ.v msg_len /\
+  Seq.length ve == 176 /\ Seq.length vh == 16 /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  (vals vm1, vals vt1) == gcm_encrypt_w AES128 (vals ve) (vals viv)
+                                        (vals vaad) (vals vm0))
+{
+  encrypt_w params128 ek hk iv iv_len aad aad_len msg msg_len tag;
+}
+
+fn aes128_decrypt_expanded (msg: A.array S8.t) (msg_len: SZ.t) (tag: A.array S8.t)
+       (ek: A.array S8.t) (hk: A.array S8.t) (iv: A.array S8.t) (iv_len: SZ.t)
+       (aad: A.array S8.t) (aad_len: SZ.t)
+       (#vm0 #ve #vh: erased (Seq.seq S8.t))
+       (#pt: perm) (#vtag: erased (Seq.seq S8.t))
+       (#pi: perm) (#viv: erased (Seq.seq S8.t))
+       (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+requires A.pts_to msg vm0 ** A.pts_to tag #pt vtag ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vtag == 16 /\ Seq.length vm0 == SZ.v msg_len /\
+  Seq.length ve == 176 /\ Seq.length vh == 16 /\
+  Poly.xtimes (vals vh) == hkey AES128 (vals ve) /\
+  Seq.length viv == SZ.v iv_len /\ Seq.length vaad == SZ.v aad_len /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  SZ.fits (SZ.v iv_len + 16) /\ SZ.fits (SZ.v aad_len + 16) /\
+  SZ.fits (SZ.v msg_len + 16))
+returns r: bool
+ensures exists* (vm1: Seq.seq S8.t).
+  A.pts_to msg vm1 ** A.pts_to tag #pt vtag ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vm1 == SZ.v msg_len /\ Seq.length vtag == 16 /\
+  Seq.length ve == 176 /\ Seq.length vh == 16 /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  (let d = gcm_decrypt_w AES128 (vals ve) (vals viv) (vals vaad)
+                         (vals vm0) (vals vtag) in
+   (r ==> Some? d /\ vals vm1 == Some?.v d) /\
+   ((~r) ==> None? d /\ vm1 == reveal vm0)))
+{
+  decrypt_w params128 ek hk iv iv_len aad aad_len msg msg_len tag
+}
+
+fn aes256_expand (ek: A.array S8.t) (hk: A.array S8.t) (key: A.array S8.t)
+       (#ve0 #vh0: erased (Seq.seq S8.t))
+       (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+requires A.pts_to ek ve0 ** A.pts_to hk vh0 ** A.pts_to key #pk vkey ** pure (
+  Seq.length ve0 == 240 /\ Seq.length vh0 == 16 /\ Seq.length vkey == 32)
+ensures exists* (ve1 vh1: Seq.seq S8.t).
+  A.pts_to ek ve1 ** A.pts_to hk vh1 ** A.pts_to key #pk vkey ** pure (
+  Seq.length ve1 == 240 /\ Seq.length vh1 == 16 /\ Seq.length vkey == 32 /\
+  vals ve1 == key_expansion AES256 (vals vkey) /\
+  Poly.xtimes (vals vh1) == hkey AES256 (vals ve1))
+{
+  expand_impl params256 ek hk key;
+}
+
+fn aes256_encrypt_expanded (tag: A.array S8.t) (msg: A.array S8.t) (msg_len: SZ.t)
+       (ek: A.array S8.t) (hk: A.array S8.t) (iv: A.array S8.t) (iv_len: SZ.t)
+       (aad: A.array S8.t) (aad_len: SZ.t)
+       (#vt0 #vm0 #ve #vh: erased (Seq.seq S8.t))
+       (#pi: perm) (#viv: erased (Seq.seq S8.t))
+       (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+requires A.pts_to tag vt0 ** A.pts_to msg vm0 ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vt0 == 16 /\ Seq.length vm0 == SZ.v msg_len /\
+  Seq.length ve == 240 /\ Seq.length vh == 16 /\
+  Poly.xtimes (vals vh) == hkey AES256 (vals ve) /\
+  Seq.length viv == SZ.v iv_len /\ Seq.length vaad == SZ.v aad_len /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  SZ.fits (SZ.v iv_len + 16) /\ SZ.fits (SZ.v aad_len + 16) /\
+  SZ.fits (SZ.v msg_len + 16))
+ensures exists* (vt1 vm1: Seq.seq S8.t).
+  A.pts_to tag vt1 ** A.pts_to msg vm1 ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vt1 == 16 /\ Seq.length vm1 == SZ.v msg_len /\
+  Seq.length ve == 240 /\ Seq.length vh == 16 /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  (vals vm1, vals vt1) == gcm_encrypt_w AES256 (vals ve) (vals viv)
+                                        (vals vaad) (vals vm0))
+{
+  encrypt_w params256 ek hk iv iv_len aad aad_len msg msg_len tag;
+}
+
+fn aes256_decrypt_expanded (msg: A.array S8.t) (msg_len: SZ.t) (tag: A.array S8.t)
+       (ek: A.array S8.t) (hk: A.array S8.t) (iv: A.array S8.t) (iv_len: SZ.t)
+       (aad: A.array S8.t) (aad_len: SZ.t)
+       (#vm0 #ve #vh: erased (Seq.seq S8.t))
+       (#pt: perm) (#vtag: erased (Seq.seq S8.t))
+       (#pi: perm) (#viv: erased (Seq.seq S8.t))
+       (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+requires A.pts_to msg vm0 ** A.pts_to tag #pt vtag ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vtag == 16 /\ Seq.length vm0 == SZ.v msg_len /\
+  Seq.length ve == 240 /\ Seq.length vh == 16 /\
+  Poly.xtimes (vals vh) == hkey AES256 (vals ve) /\
+  Seq.length viv == SZ.v iv_len /\ Seq.length vaad == SZ.v aad_len /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  SZ.fits (SZ.v iv_len + 16) /\ SZ.fits (SZ.v aad_len + 16) /\
+  SZ.fits (SZ.v msg_len + 16))
+returns r: bool
+ensures exists* (vm1: Seq.seq S8.t).
+  A.pts_to msg vm1 ** A.pts_to tag #pt vtag ** A.pts_to ek ve **
+  A.pts_to hk vh ** A.pts_to iv #pi viv ** A.pts_to aad #pa vaad ** pure (
+  Seq.length vm1 == SZ.v msg_len /\ Seq.length vtag == 16 /\
+  Seq.length ve == 240 /\ Seq.length vh == 16 /\
+  iv_ok (vals viv) /\ aad_ok (vals vaad) /\ msg_ok (vals vm0) /\
+  (let d = gcm_decrypt_w AES256 (vals ve) (vals viv) (vals vaad)
+                         (vals vm0) (vals vtag) in
+   (r ==> Some? d /\ vals vm1 == Some?.v d) /\
+   ((~r) ==> None? d /\ vm1 == reveal vm0)))
+{
+  decrypt_w params256 ek hk iv iv_len aad aad_len msg msg_len tag
 }
 
 #pop-options
