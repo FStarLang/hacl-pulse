@@ -215,6 +215,144 @@ let xtimes_bit (v: block) (i: nat { i < 128 })
     r_bit i;
     if Seq.index v (blocklen - 1) % 2 = 0 then () else gadd_bit (shift_right_1 v) r_block i
 
+(** {2 Dividing by [x]}
+
+    [xtimes] is a bijection -- [x] is invertible, the field polynomial having
+    a constant term -- and its inverse is as cheap: shift the other way, and
+    if the bit that falls off the {i bottom} is set, put [x^127] back and add
+    the reduction constant divided by [x], which is [x^127 + x^6 + x^1 + 1].
+
+    This is what lets a carry-less multiplier omit its one-bit shift: by
+    [Spec.CLMUL.gmulx_three] such a multiplier computes [x] times the field
+    product, so storing [xdiv h] in place of the hash key once, at setup,
+    makes every later multiplication come out exact.  See the GHASH section
+    of the README. *)
+
+let shl_byte (a: block) (i: nat { i < blocklen }) : elem =
+  let carry : elem = if i = blocklen - 1 then 0 else Seq.index a (i + 1) / 128 in
+  (Seq.index a i % 128) * 2 + carry
+
+let shift_left_1 (a: block) : block =
+  Seq.init blocklen (fun i -> shl_byte a i)
+
+#push-options "--z3rlimit 400"
+
+let shl_byte_bit (x: elem) (c: bool) (b: nat { b < 8 })
+  : Lemma (((((x % 128) * 2 + (if c then 1 else 0)) / pow2 (7 - b)) % 2 = 1)
+           == (if b = 7 then c else ((x / pow2 (6 - b)) % 2 = 1)))
+  = let cv = if c then 1 else 0 in
+    let y = (x % 128) * 2 + cv in
+    if b = 7
+    then begin
+      assert_norm (pow2 0 == 1);
+      Math.lemma_mod_plus cv (x % 128) 2;
+      Math.small_mod cv 2
+    end
+    else begin
+      let n = 6 - b in
+      Math.pow2_plus 1 n;
+      Math.division_multiplication_lemma y 2 (pow2 n);
+      Math.lemma_div_plus cv (x % 128) 2;
+      Math.small_division_lemma_1 cv 2;
+      assert (y / pow2 (7 - b) == (x % 128) / pow2 n);
+      Math.pow2_plus n (b + 1);
+      assert_norm (pow2 7 == 128);
+      Math.euclidean_division_definition x 128;
+      Math.lemma_div_plus (x % 128) (x / 128) (pow2 n) ;
+      Math.pow2_double_mult (pow2 b);
+      Math.lemma_mod_plus ((x % 128) / pow2 n) (pow2 b * (x / 128)) 2
+    end
+
+let shl_bit (a: block) (i: nat { i < 128 })
+  : Lemma (bit (shift_left_1 a) i == (i < 127 && bit a (i + 1)))
+  = let j = i / 8 in
+    let b = i % 8 in
+    Math.euclidean_division_definition i 8;
+    let c = if j = blocklen - 1 then false
+            else Seq.index a (j + 1) / 128 = 1 in
+    Math.lemma_div_lt (Seq.index a (j + 1 - (if j = blocklen - 1 then 1 else 0))) 8 7;
+    assert (shl_byte a j == (Seq.index a j % 128) * 2 + (if c then 1 else 0));
+    shl_byte_bit (Seq.index a j) c b;
+    if b = 7
+    then begin
+      if j = blocklen - 1 then ()
+      else begin
+        assert_norm (pow2 7 == 128);
+        Math.lemma_div_plus 0 (j + 1) 8;
+        Math.lemma_mod_plus 0 (j + 1) 8
+      end
+    end
+    else begin
+      Math.lemma_div_plus (b + 1) j 8;
+      Math.lemma_mod_plus (b + 1) j 8;
+      Math.small_division_lemma_1 (b + 1) 8;
+      Math.small_mod (b + 1) 8
+    end
+
+#pop-options
+
+(** [R / x == x^127 + x^6 + x^1 + 1]: byte 0 gets bits 0, 1 and 6, which is
+    [0xc2], and byte 15 gets bit 127, which is [1]. *)
+let rdiv_block : block =
+  Seq.init blocklen (fun i -> (if i = 0 then 0xc2
+                               else if i = blocklen - 1 then 1
+                               else 0) <: elem)
+
+#push-options "--z3rlimit 200"
+
+let rdiv_bit (i: nat { i < 128 })
+  : Lemma (bit rdiv_block i == (i = 0 || i = 1 || i = 6 || i = 127))
+  = if i < 8
+    then begin
+      assert_norm (bit rdiv_block 0 == true);
+      assert_norm (bit rdiv_block 1 == true);
+      assert_norm (bit rdiv_block 2 == false);
+      assert_norm (bit rdiv_block 3 == false);
+      assert_norm (bit rdiv_block 4 == false);
+      assert_norm (bit rdiv_block 5 == false);
+      assert_norm (bit rdiv_block 6 == true);
+      assert_norm (bit rdiv_block 7 == false)
+    end
+    else if i < 120 then Math.small_division_lemma_1 0 (pow2 (7 - i % 8))
+    else begin
+      assert_norm (bit rdiv_block 120 == false);
+      assert_norm (bit rdiv_block 121 == false);
+      assert_norm (bit rdiv_block 122 == false);
+      assert_norm (bit rdiv_block 123 == false);
+      assert_norm (bit rdiv_block 124 == false);
+      assert_norm (bit rdiv_block 125 == false);
+      assert_norm (bit rdiv_block 126 == false);
+      assert_norm (bit rdiv_block 127 == true)
+    end
+
+#pop-options
+
+let xdiv (v: block) : block =
+  if bit v 0 then gadd (shift_left_1 v) rdiv_block else shift_left_1 v
+
+let xdiv_bit (v: block) (j: nat { j < 128 })
+  : Lemma (bit (xdiv v) j ==
+             (if j = 127 then bit v 0
+              else (j < 127 && bit v (j + 1)) <>
+                   (bit v 0 && (j = 0 || j = 1 || j = 6))))
+  = shl_bit v j;
+    rdiv_bit j;
+    if bit v 0 then gadd_bit (shift_left_1 v) rdiv_block j else ()
+
+#push-options "--z3rlimit 200 --fuel 0 --ifuel 1"
+
+(** The point of it all: [xdiv] undoes [xtimes]. *)
+let xtimes_xdiv (v: block) : Lemma (xtimes (xdiv v) == v)
+  = let aux (i: nat { i < 128 }) : Lemma (bit (xtimes (xdiv v)) i == bit v i)
+      = xtimes_bit (xdiv v) i;
+        xdiv_bit v 127;
+        if i > 0 then xdiv_bit v (i - 1) else ()
+    in
+    FStar.Classical.forall_intro aux;
+    bits_inj (xtimes (xdiv v)) v
+
+#pop-options
+
 (** {2 The bits of a block, as a polynomial} *)
 
 let pbits (a: block) : poly = Seq.init 128 (fun i -> bit a i)
@@ -604,6 +742,69 @@ let gmul_split_bit (x y u v: block) (i: nat { i < 128 })
     gmul_split_low x y u i;
     gmul_split_high x y v i
 
+(** {3 The same split over any polynomial at all}
+
+    Nothing in the three lemmas above is about a product: they read the two
+    halves of a 256-coefficient polynomial and reduce it.  Stating that
+    separately is what lets the implementation drop the one-bit shift, whose
+    effect is to hand the reduction a {i different} polynomial -- the product
+    multiplied by [x] -- which is no longer of the form [pmul (pbits x)
+    (pbits y)] for any pair of blocks.  See [pmod_shift1] in
+    [Spec.GF128.Algebra] for what that costs, which is one factor of [x]. *)
+
+let pterm_p (a: poly) (i: nat { i < 128 }) (k: int) : bool =
+  pget a k && bit (xpowi k) i
+
+let psplit_low (a: poly) (u: block) (i: nat { i < 128 })
+  : Lemma (requires forall (k: nat). k < 128 ==> bit u k == pget a k)
+          (ensures xsum (pterm_p a i) 0 128 == bit u i)
+  = let aux (k: int)
+      : Lemma (0 <= k /\ k < 128 /\ k <> i ==> pterm_p a i k == false)
+      = if 0 <= k && k < 128 then xpow_mono k i else ()
+    in
+    FStar.Classical.forall_intro aux;
+    xpow_mono i i;
+    xsum_one (pterm_p a i) 0 128 i
+
+let psplit_high (a: poly) (v: block) (i: nat { i < 128 })
+  : Lemma (requires forall (k: nat). k < 128 ==> bit v k == pget a (128 + k))
+          (ensures xsum (pterm_p a i) 128 128 == bit (gmul v r_block) i)
+  = let aux (m: int)
+      : Lemma (0 <= m /\ m < 128 ==>
+               pterm_p a i (m + 128) ==
+                 (pget (pbits v) m && bit (xti r_block m) i))
+      = if 0 <= m && m < 128 then xpow_high m else ()
+    in
+    FStar.Classical.forall_intro aux;
+    xsum_shift (pterm_p a i) 128 128 128;
+    xsum_ext (fun m -> pterm_p a i (m + 128))
+             (fun m -> pget (pbits v) m && bit (xti r_block m) i) 0 128;
+    accum_bit v r_block 128 i;
+    pmod_pmul v r_block;
+    gmul_is_pmod v r_block
+
+let psplit_bit (a: poly) (u v: block) (i: nat { i < 128 })
+  : Lemma (requires (forall (k: nat). k < 128 ==> bit u k == pget a k) /\
+                    (forall (k: nat). k < 128 ==> bit v k == pget a (128 + k)))
+          (ensures bit (pmod a 256) i == (bit u i <> bit (gmul v r_block) i))
+  = pmod_bit a 256 i;
+    xsum_ext (fun k -> pget a k && bit (xpowi k) i) (pterm_p a i) 0 256;
+    xsum_split (pterm_p a i) 0 128 128;
+    psplit_low a u i;
+    psplit_high a v i
+
+let psplit (a: poly) (u v: block)
+  : Lemma (requires (forall (k: nat). k < 128 ==> bit u k == pget a k) /\
+                    (forall (k: nat). k < 128 ==> bit v k == pget a (128 + k)))
+          (ensures pmod a 256 == gadd u (gmul v r_block))
+  = let aux (i: nat { i < 128 })
+      : Lemma (bit (pmod a 256) i == bit (gadd u (gmul v r_block)) i)
+      = psplit_bit a u v i;
+        gadd_bit u (gmul v r_block) i
+    in
+    FStar.Classical.forall_intro aux;
+    bits_inj (pmod a 256) (gadd u (gmul v r_block))
+
 (** The whole of the reduction step, as an implementation can use it: given
     the two halves of the carry-less product, the field product is the low
     half exclusive-ored with the high half times the reduction constant. *)
@@ -611,13 +812,15 @@ let gmul_split (x y u v: block)
   : Lemma (requires (forall (k: nat). k < 128 ==> bit u k == pcoef x y k) /\
                     (forall (k: nat). k < 128 ==> bit v k == pcoef x y (128 + k)))
           (ensures gmul x y == gadd u (gmul v r_block))
-  = let aux (i: nat { i < 128 })
-      : Lemma (bit (gmul x y) i == bit (gadd u (gmul v r_block)) i)
-      = gmul_split_bit x y u v i;
-        gadd_bit u (gmul v r_block) i
-    in
-    FStar.Classical.forall_intro aux;
-    bits_inj (gmul x y) (gadd u (gmul v r_block))
+  = gmul_is_pmod x y;
+    psplit (pmul (pbits x) (pbits y)) u v
+
+(** The product of two blocks has degree at most 254, so its coefficient at
+    255 -- the one the shift below would push out of range -- is zero. *)
+let pcoef_top (x y: block) : Lemma (pcoef x y 255 == false)
+  = pmul_get (pbits x) (pbits y) 255;
+    conv_def (pbits x) (pbits y) 255 (fun _ -> false);
+    xsum_zero (fun (_: int) -> false) 0 128
 
 #pop-options
 
@@ -694,6 +897,15 @@ let gadd_zero (a: block) : Lemma (gadd a zero == a)
   = FStar.Classical.forall_intro (gadd_bit a zero);
     bits_inj (gadd a zero) a
 
+(** The same as [halves] below, but for the two halves of an arbitrary
+    256-coefficient polynomial rather than of a product.  A multiplier that
+    omits the customary one-bit shift produces the halves of the product
+    {i shifted}, which is no longer a product of two blocks, so the reduction
+    has to be stated at this generality to apply to it. *)
+let halvesp (a: poly) (u v: block) =
+  (forall (k: nat). k < 128 ==> bit u k == pget a k) /\
+  (forall (k: nat). k < 128 ==> bit v k == pget a (128 + k))
+
 let halves (x y u v: block) =
   (forall (k: nat). k < 128 ==> bit u k == pcoef x y k) /\
   (forall (k: nat). k < 128 ==> bit v k == pcoef x y (128 + k))
@@ -723,6 +935,16 @@ let mul_r_two (v1 u2 v2 u3 v3: block)
     gmul_split v2 r_block u3 v3;
     gmul_zero r_block;
     gadd_zero u3
+
+(** The reduction of an arbitrary 256-coefficient polynomial, in the shape
+    the implementation has it: its two halves plus the two rounds of
+    multiplication by [R] that bring the high half down. *)
+let pmod_three (a: poly) (u1 v1 u2 v2 u3 v3: block)
+  : Lemma (requires halvesp a u1 v1 /\ halves v1 r_block u2 v2 /\
+                    halves v2 r_block u3 v3)
+          (ensures pmod a 256 == gadd u1 (gadd u2 u3))
+  = psplit a u1 v1;
+    mul_r_two v1 u2 v2 u3 v3
 
 (** The whole multiplication, in the shape the implementation has it: three
     carry-less products, six registers, and the answer is the exclusive-or of

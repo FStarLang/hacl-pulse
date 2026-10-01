@@ -143,6 +143,56 @@ let rec xt_bsum (f: int -> block) (n: nat) (j: nat)
       xt_gadd (f (n - 1)) (bsum f (n - 1)) j
     end
 
+(** {2 Shifting a polynomial by one is multiplying its reduction by [x]}
+
+    This is the identity the module docstring of [Spec.GF128.Poly] promises:
+    reduction is linear, and [x^(k+1)] is [x^k] advanced once, so shifting the
+    coefficient sequence up by one place and reducing gives the same block as
+    reducing and then advancing once.  The one hypothesis is that the top
+    coefficient of the window being reduced is zero, since the shift would
+    otherwise push a live term past the end of the window and lose it.
+
+    It is what makes a carry-less multiplier that omits the customary one-bit
+    shift usable: such a multiplier returns the product polynomial shifted up
+    by one, and this lemma says that reduces to [x] times the field product. *)
+
+#push-options "--fuel 3 --ifuel 1"
+let rec bsum_shift1 (g: int -> block) (n: nat)
+  : Lemma (requires g 0 == zero)
+          (ensures bsum g (n + 1) == bsum (fun k -> g (k + 1)) n)
+          (decreases n)
+  = if n = 0 then gadd_zero zero
+    else bsum_shift1 g (n - 1)
+
+let pmod_unfold (b: poly) (n: nat)
+  : Lemma (pmod b n == bsum (fun k -> if pget b k then xpowi k else zero) n)
+  = ()
+
+let pmod_shift1 (a: poly) (n: pos)
+  : Lemma (requires pget a (n - 1) == false)
+          (ensures pmod (pshift a 1) n == xtimes (pmod a n))
+  = let f (k: int) : block = if pget a k then xpowi k else zero in
+    let g (k: int) : block = if pget a (k - 1) then xpowi k else zero in
+    let h (k: int) : block = g (k + 1) in
+    (* The left-hand side is [bsum g n]: shifting the coefficient sequence up
+       by one place is the same as asking for the coefficient one lower. *)
+    Classical.forall_intro (pshift_get a 1);
+    pmod_unfold (pshift a 1) n;
+    pmod_unfold a n;
+    bsum_ext (fun k -> if pget (pshift a 1) k then xpowi k else zero) g n;
+    (* [g 0] is zero because there is no coefficient below zero, so the sum
+       may be reindexed: [bsum g n == bsum h (n - 1)]. *)
+    bsum_shift1 g (n - 1);
+    (* The right-hand side is [bsum h n] by linearity of [xtimes], and its
+       top term is [g n], which the hypothesis makes zero. *)
+    xt_bsum f n 1;
+    let aux (k: nat) : Lemma (xt (f k) 1 == h k) = xtimes_zero () in
+    Classical.forall_intro aux;
+    bsum_ext (fun k -> xt (f k) 1) h n;
+    gadd_zero_left (bsum h (n - 1))
+
+#pop-options
+
 (** {2 The product as a sum over the bits of the left operand}
 
     [accum] is what [gmul_loop] accumulates and [Spec.GF128.Poly] has already
@@ -438,6 +488,31 @@ let gmul_defer4 (x1 y1 u1 v1 x2 y2 u2 v2 x3 y3 u3 v3 x4 y4 u4 v4
     mul_r_sum4 v1 v2 v3 v4;
     mul_r_two (sum4 v1 v2 v3 v4) p q pp qq
 
+(** The same with the four products replaced by four arbitrary
+    256-coefficient polynomials.  A multiplier that omits the customary
+    one-bit shift produces the halves of the product {i shifted}, which is
+    not a product of two blocks, so the deferral has to be stated at this
+    generality to apply to it -- see [Spec.CLMUL.gmulx_three].  Nothing in
+    the proof changes but the name of the splitting lemma. *)
+let pmod_defer4 (a1 a2 a3 a4: poly)
+                (u1 v1 u2 v2 u3 v3 u4 v4 p q pp qq: block)
+  : Lemma (requires halvesp a1 u1 v1 /\ halvesp a2 u2 v2 /\
+                    halvesp a3 u3 v3 /\ halvesp a4 u4 v4 /\
+                    halves (sum4 v1 v2 v3 v4) r_block p q /\
+                    halves q r_block pp qq)
+          (ensures sum4 (pmod a1 256) (pmod a2 256)
+                        (pmod a3 256) (pmod a4 256) ==
+                   gadd (sum4 u1 u2 u3 u4) (gadd p pp))
+  = psplit a1 u1 v1;
+    psplit a2 u2 v2;
+    psplit a3 u3 v3;
+    psplit a4 u4 v4;
+    regroup4 u1 u2 u3 u4
+             (gmul v1 r_block) (gmul v2 r_block)
+             (gmul v3 r_block) (gmul v4 r_block);
+    mul_r_sum4 v1 v2 v3 v4;
+    mul_r_two (sum4 v1 v2 v3 v4) p q pp qq
+
 #pop-options
 
 (** {2 Eight multiplies, one reduction}
@@ -524,6 +599,36 @@ let gmul_defer8 (x1 y1 u1 v1 x2 y2 u2 v2 x3 y3 u3 v3 x4 y4 u4 v4
     gmul_split x6 y6 u6 v6;
     gmul_split x7 y7 u7 v7;
     gmul_split x8 y8 u8 v8;
+    regroup8 u1 u2 u3 u4 u5 u6 u7 u8
+             (gmul v1 r_block) (gmul v2 r_block)
+             (gmul v3 r_block) (gmul v4 r_block)
+             (gmul v5 r_block) (gmul v6 r_block)
+             (gmul v7 r_block) (gmul v8 r_block);
+    mul_r_sum8 v1 v2 v3 v4 v5 v6 v7 v8;
+    mul_r_two (sum8 v1 v2 v3 v4 v5 v6 v7 v8) p q pp qq
+
+(** And the eight-way deferral over arbitrary polynomials, which is what the
+    shiftless multiplier needs. *)
+let pmod_defer8 (a1 a2 a3 a4 a5 a6 a7 a8: poly)
+                (u1 v1 u2 v2 u3 v3 u4 v4 u5 v5 u6 v6 u7 v7 u8 v8
+                 p q pp qq: block)
+  : Lemma (requires halvesp a1 u1 v1 /\ halvesp a2 u2 v2 /\
+                    halvesp a3 u3 v3 /\ halvesp a4 u4 v4 /\
+                    halvesp a5 u5 v5 /\ halvesp a6 u6 v6 /\
+                    halvesp a7 u7 v7 /\ halvesp a8 u8 v8 /\
+                    halves (sum8 v1 v2 v3 v4 v5 v6 v7 v8) r_block p q /\
+                    halves q r_block pp qq)
+          (ensures sum8 (pmod a1 256) (pmod a2 256) (pmod a3 256) (pmod a4 256)
+                        (pmod a5 256) (pmod a6 256) (pmod a7 256) (pmod a8 256) ==
+                   gadd (sum8 u1 u2 u3 u4 u5 u6 u7 u8) (gadd p pp))
+  = psplit a1 u1 v1;
+    psplit a2 u2 v2;
+    psplit a3 u3 v3;
+    psplit a4 u4 v4;
+    psplit a5 u5 v5;
+    psplit a6 u6 v6;
+    psplit a7 u7 v7;
+    psplit a8 u8 v8;
     regroup8 u1 u2 u3 u4 u5 u6 u7 u8
              (gmul v1 r_block) (gmul v2 r_block)
              (gmul v3 r_block) (gmul v4 r_block)

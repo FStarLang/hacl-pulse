@@ -1801,7 +1801,88 @@ AES-128-GCM call spends in `gtag_impl` with no associated data and no
 message, 15 are one AES block encryption of `J0` and 19 are one GHASH
 multiplication of the length block, and both are dependent chains that no
 amount of dispatch tuning will shorten.  Shortening the multiplication is
-the next item: see *Deferring the one-bit shift* in the roadmap.
+the next section.
+
+### Removing the one-bit shift from GHASH
+
+GHASH numbers the bits of a block the other way round from `PCLMULQDQ`.
+After reversing the bytes, the carry-less product of two GHASH blocks sits
+one bit too low, and `raw_product` has always corrected it the obvious way:
+shift the 255-bit product left by one before reducing.  There is no
+128-bit shift instruction, so that is a `PSRLQ`, a `PSLLQ`, a byte shift
+and three `POR`s per product --- six instructions, and in the eight-way
+loop eight products are formed before anything is reduced, so the shift was
+the single largest item left in the multiplier.  The roadmap proposed
+hoisting it out of the loop and doing it once per group, which the
+linearity of the shift permits.
+
+It can be removed altogether instead.  Write `NS(a, b)` for what the
+multiplier computes without the shift; then `NS(a, b) = x * (a * b)` in the
+field.  If the hash key is stored pre-divided by `x` --- `H' = H / x`, done
+once, when the key is expanded --- then `NS(a, H') = a * H` exactly, and
+every multiplication the cipher will ever do is correct with no shift at
+all.  The key powers need no correction either: starting the recurrence at
+`H'` gives `H^i / x` at every step, which is precisely the pre-divided form
+of `H^i`.  That is one lemma, `power_step`, three lines long.
+
+`Hacl.AES.GF128`, `.GMul` and `.GHash` have no public exports --- only
+`Hacl.AES.GCM` uses them --- so the representation of the key array could
+simply be changed, and the specification of every function that mentions
+it now reads `Poly.xtimes (vals vh)` where it used to read `vals vh`.  The
+portable multiplier, which does not have the shift to begin with, pays one
+extra `shift_reduce_impl` per block to compensate; against the
+128-iteration bit loop it already runs, that is free.
+
+The proof is four new pieces of polynomial algebra.  `clmul_halves_ns` says
+the two unshifted registers reverse to the halves of `pshift P 1`, where
+`P` is the carry-less product.  `psplit` reduces an arbitrary
+256-coefficient polynomial given its two halves --- the existing
+`gmul_split` did this only for products, and generalising it off products
+is what makes the rest possible.  `pmod_shift1` says
+`pmod (pshift a 1) n == xtimes (pmod a n)` whenever `a` has no coefficient
+at `n - 1`, which is the one place the representation of `pmod` as a sum
+over set bits pays for itself: it is a restatement of
+`x^(k+1) = x * x^k` and nothing else.  The side condition is discharged by
+`pcoef_top`, which says the product of two 128-bit blocks has no `x^255`
+term.  Composing them with the existing `gmul_xt_right` gives
+`pmod (pshift1 x y) 256 == gmul x (xtimes y)`, which is the whole claim.
+
+Dividing by `x` is the mirror image of multiplying by it: shift the block
+left by one bit, and if the bit that fell off the bottom was set, add
+`R / x`, which is `x^127 + x^6 + x + 1` --- `0xc2` in byte zero and `1` in
+byte fifteen.  `xdiv_impl` is sixteen byte operations and
+`Spec.GF128.Poly.xtimes_xdiv` proves it inverts `xtimes`.  It is worth
+writing the loop so that byte fifteen, which has no successor to take a
+carry from, is handled after the loop rather than by a test inside it: the
+test was the only branch in the body and removing it took the function
+from 13.8 ns to **5.1**, which at sixteen bytes is most of what the change
+wins back on the GHASH side.
+
+| AES-GCM | before | after | gain | was | now |
+|---|---:|---:|---:|---:|---:|
+| AES-128-GCM, 256 KiB, gcc | 1,877 MB/s | **2,329 MB/s** | +24.1% | 1.97x | **1.58x** |
+| AES-128-GCM, 16 KiB, gcc | 1,860 MB/s | **2,326 MB/s** | +25.1% | 1.97x | **1.57x** |
+| AES-128-GCM dec, 16 KiB, gcc | 1,869 MB/s | **2,318 MB/s** | +24.0% | 1.98x | **1.58x** |
+| AES-256-GCM, 256 KiB, gcc | 1,692 MB/s | **2,039 MB/s** | +20.5% | 2.03x | **1.69x** |
+| AES-128-GCM, 1 KiB, gcc | 1,323 MB/s | **1,555 MB/s** | +17.5% | 2.40x | **2.02x** |
+| AES-128-GCM, 256 KiB, clang | 2,185 MB/s | **2,610 MB/s** | +19.5% | 1.67x | **1.40x** |
+| AES-128-GCM, 16 KiB, clang | 2,206 MB/s | **2,633 MB/s** | +19.4% | 1.65x | **1.38x** |
+| AES-256-GCM, 256 KiB, clang | 1,920 MB/s | **2,261 MB/s** | +17.8% | 1.77x | **1.50x** |
+
+Measured against the previous commit back to back on the same core, the
+whole-call numbers are +29.5% at 256 KiB, +22% at a kilobyte, +12.5% at
+256 bytes, +4.2% at sixty-four bytes and **-2.0%** at sixteen, where the
+5 ns of key division still outweighs what two GHASH multiplications save.
+That last row is an artefact of the one-shot API expanding the key on every
+call, and it is the best argument yet for the expanded-key context in the
+roadmap: a context divides the key once and the sixteen-byte row joins the
+others.
+
+A standalone `ghash_upd` fell 21% at sixteen bytes rising to 30% at two
+kilobytes.  The four-way and eight-way dispatch thresholds were re-swept
+over twelve A/B builds afterwards, since a cheaper serial multiply could in
+principle have moved the crossovers; 128 and 768 are still the right
+choices, because the aggregated passes got cheaper by the same factor.
 
 ### SHA-NI, where the instruction is four rounds wide
 
@@ -2623,7 +2704,7 @@ reference**.
 | secp256k1 ECDSA sign | -- | 91 us | 65 us | **1.40x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
-| AES-128-GCM | 256 KiB | 140 us | 71 us | **1.98x** |  |  |
+| AES-128-GCM | 256 KiB | 112 us | 71 us | **1.58x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
@@ -3851,7 +3932,11 @@ rough order of value:
     60: the sixty-four-byte call would go from 157 ns to roughly 128, which
     is 2.98x to about **2.4x** rather than the 1.3x claimed here before.
 
-    It is still worth doing, because the comparison is currently asymmetric
+    It is still worth doing, and the GHASH work since this entry was written
+    has made it more so: the key is now divided by `x` at expansion time, so
+    a one-shot call pays 5 ns for something a context would do once, and the
+    sixteen-byte row is the only AES-GCM measurement that did not improve.
+    It is also worth doing because the comparison is currently asymmetric
     -- EverCrypt exposes `EverCrypt_AEAD_create_in` and encrypts against the
     handle, so the benchmark shim on the reference side pays the schedule
     once and ours pays it per call -- and because a context is the natural
@@ -3861,11 +3946,8 @@ rough order of value:
     API design: what the context type looks like, and whether the one-shot
     entry points stay.
 
-11. **Deferring the one-bit shift in GHASH**, which is the other 27% of the
-    eight-way loop.  `raw_product` shifts each carry-less product left by one
-    bit to correct for the reversed bit order, twenty-five `PSLLQ`s and
-    twenty-two `PSRLQ`s for eight blocks, and the shift distributes over the
-    sum, so it could be done once per group exactly as the reduction now is.
-    `Spec.CLMUL.shift_lo_gen` and `shift_hi_gen` are already generic in the
-    coefficient function; what is missing is a way to build a block from a
-    bit function, and that is the whole of the work.
+11. ~~**Deferring the one-bit shift in GHASH**~~ --- done, and in a stronger
+    form than this entry proposed.  The plan was to hoist the one-bit shift
+    out of `raw_product` and do it once per aggregated group.  The shift can
+    be removed outright instead: see *Removing the one-bit shift from
+    GHASH* above.  Bulk AES-GCM gained 29%.

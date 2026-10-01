@@ -43,6 +43,8 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module UInt = FStar.UInt
 module Copy = Hacl.Impl.Copy
+module Poly = Spec.GF128.Poly
+module Math = FStar.Math.Lemmas
 
 (** This module is arithmetic-heavy, and the default SMT encoding boxes
     every integer operation, which hides the structure of the products from
@@ -263,6 +265,130 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to v v1 ** pure (
   reduce_eq vs v1 (Seq.index (vals v0) (blocklen - 1) % 2 = 1);
   A.pts_to_len v;
 }
+
+(** {2 The inverse step: dividing by [x]}
+
+    Multiplication by [x] is invertible, and the inverse is the mirror image
+    of [shift_reduce_impl]: shift the whole block the other way, and when the
+    bit that fell off the {i bottom} was set, add [R / x], which is
+    [x^127 + x^6 + x + 1] -- [0xc2] in byte zero and [1] in byte fifteen.
+
+    It is called exactly once, when a GCM key is expanded.  GHASH's
+    multiplier omits the one-bit shift that would line the carry-less
+    product up with GHASH's bit order, and so computes [x] times the field
+    product; holding the hash key divided by [x] cancels that factor in every
+    multiplication the cipher will ever do.  See
+    [Hacl.AES.GF128.NI.raw_product] and [Spec.GF128.Poly.xtimes_xdiv].
+
+    The loop runs from byte zero upwards, so byte [k + 1], which supplies the
+    carry into byte [k], is still untouched when it is read.  The last byte
+    has no successor to take a carry from, so it is handled after the loop
+    rather than by a test inside it: the test is the only branch in an
+    otherwise straight-line body, and the loop is short enough that paying
+    for it sixteen times is a measurable part of a GCM key expansion. *)
+
+let shl_eq (v0 v: Seq.seq S8.t) (n: nat)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length v == blocklen /\
+             n == blocklen /\
+             (forall (j: nat). j < blocklen ==>
+                Seq.index (vals v) j ==
+                  (if j < n
+                   then Poly.shl_byte (vals v0) j
+                   else Seq.index (vals v0) j)))
+          (ensures vals v == Poly.shift_left_1 (vals v0))
+  = Seq.lemma_eq_intro (vals v) (Poly.shift_left_1 (vals v0))
+
+(** [R / x] touches bytes zero and fifteen only, and a byte xored with zero
+    is itself. *)
+let rdiv_eq (v0 v: Seq.seq S8.t) (odd: bool)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length v == blocklen /\
+             Seq.index (vals v) 0 ==
+               Seq.index (vals v0) 0 ^^ (if odd then 0xc2 else 0) /\
+             Seq.index (vals v) (blocklen - 1) ==
+               Seq.index (vals v0) (blocklen - 1) ^^ (if odd then 1 else 0) /\
+             (forall (j: nat). 0 < j /\ j < blocklen - 1 ==>
+                Seq.index (vals v) j == Seq.index (vals v0) j))
+          (ensures vals v == (if odd then gadd (vals v0) Poly.rdiv_block
+                              else vals v0))
+  = FStar.Classical.forall_intro xor_zero;
+    if odd then Seq.lemma_eq_intro (vals v) (gadd (vals v0) Poly.rdiv_block)
+    else Seq.lemma_eq_intro (vals v) (vals v0)
+
+(** A carry bit into the bottom of an even byte is disjoint from it. *)
+let or_low (c r: elem)
+  : Lemma (requires (c == 0 \/ c == 1) /\ r % 2 == 0)
+          (ensures UInt.logor #8 r c == r + c)
+  = assert_norm (pow2 1 == 2);
+    UInt.logor_disjoint #8 r c 1
+
+#push-options "--z3rlimit 1500"
+fn xdiv_impl (v: A.array S8.t) (#v0: erased (Seq.seq S8.t))
+requires A.pts_to v v0 ** pure (Seq.length v0 == blocklen)
+ensures exists* (v1: Seq.seq S8.t). A.pts_to v v1 ** pure (
+  Seq.length v0 == blocklen /\ Seq.length v1 == blocklen /\
+  vals v1 == Poly.xdiv (vals v0))
+{
+  A.pts_to_len v;
+  let one = S8.classify 1uy;
+  let first = A.(v.(0sz));
+  let msb = S8.shift_right first 7ul;
+  assert_norm (pow2 7 == 128);
+  Math.lemma_div_lt (S8.v first) 8 7;
+  Math.small_mod (S8.v first / 128) 2;
+  let rmask = S8.eq_mask msb one;
+
+  let mut i = 0sz;
+  while (let vi = !i; SZ.lt vi 15sz)
+  invariant exists* (vi: SZ.t) (vv: Seq.seq S8.t).
+    pts_to i vi ** A.pts_to v vv **
+    pure (SZ.v vi <= blocklen - 1 /\ Seq.length vv == blocklen /\
+          Seq.length v0 == blocklen /\
+          (forall (j: nat). j < blocklen ==>
+             Seq.index (vals vv) j ==
+               (if j < SZ.v vi then Poly.shl_byte (vals v0) j
+                else Seq.index (vals v0) j)))
+  decreases (blocklen - 1 - SZ.v (!i))
+  {
+    let vi = !i;
+    let cur = A.(v.(vi));
+    let rest = S8.shift_left cur 1ul;
+    with vv. assert A.pts_to v vv;
+    let nxt = A.(v.(SZ.add vi 1sz));
+    let carry = S8.shift_right nxt 7ul;
+    Math.lemma_div_lt (S8.v nxt) 8 7;
+    or_low (S8.v carry) (S8.v rest);
+    let r = S8.logor rest carry;
+    vals_upd vv (SZ.v vi) r;
+    A.((v.(vi) <- r));
+    i := SZ.add vi 1sz;
+  };
+  let last = A.(v.(15sz));
+  let lrest = S8.shift_left last 1ul;
+  with vw. assert A.pts_to v vw;
+  or_low 0 (S8.v lrest);
+  vals_upd vw 15 lrest;
+  A.((v.(15sz) <- lrest));
+  with vs. assert A.pts_to v vs;
+  shl_eq v0 vs blocklen;
+
+  let b0 = A.(v.(0sz));
+  let c2 = S8.classify 0xc2uy;
+  let red0 = S8.select rmask c2 S8.zero;
+  let nb0 = bxor b0 red0;
+  vals_upd vs 0 nb0;
+  A.((v.(0sz) <- nb0));
+  with vt. assert A.pts_to v vt;
+  let b15 = A.(v.(15sz));
+  let red15 = S8.select rmask one S8.zero;
+  let nb15 = bxor b15 red15;
+  vals_upd vt 15 nb15;
+  A.((v.(15sz) <- nb15));
+  with v1. assert A.pts_to v v1;
+  assert (pure (bit (vals v0) 0 == (Seq.index (vals v0) 0 / 128 = 1)));
+  rdiv_eq vs v1 (bit (vals v0) 0);
+  A.pts_to_len v;
+}
+#pop-options
 
 (** [z := z + v] when the mask is all ones, and nothing when it is all
     zeroes -- the conditional accumulation of algorithm 1, branch-free. *)
