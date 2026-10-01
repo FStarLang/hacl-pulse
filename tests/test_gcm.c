@@ -45,9 +45,27 @@ typedef struct {
   const uint8_t *tag;
 } gcm_case;
 
+/* Every case is run twice: once through the one-shot entry points, which
+   expand the key themselves, and once through the expanded-key ones, which
+   take a context the caller built.  The two must agree on all 450. */
+static int expanded = 0;
+
 static void gcm_encrypt(int bits, uint8_t *t, uint8_t *m, size_t mlen,
                         const uint8_t *k, const uint8_t *iv, size_t ivlen,
                         const uint8_t *aad, size_t aadlen) {
+  if (expanded) {
+    uint8_t ek[240], hk[16];
+    if (bits == 128) {
+      Hacl_AES_GCM_aes128_expand(ek, hk, (uint8_t *)k);
+      Hacl_AES_GCM_aes128_encrypt_expanded(t, m, mlen, ek, hk, (uint8_t *)iv,
+                                           ivlen, (uint8_t *)aad, aadlen);
+    } else {
+      Hacl_AES_GCM_aes256_expand(ek, hk, (uint8_t *)k);
+      Hacl_AES_GCM_aes256_encrypt_expanded(t, m, mlen, ek, hk, (uint8_t *)iv,
+                                           ivlen, (uint8_t *)aad, aadlen);
+    }
+    return;
+  }
   if (bits == 128)
     Hacl_AES_GCM_aes128_encrypt(t, m, mlen, (uint8_t *)k, (uint8_t *)iv,
                                     ivlen, (uint8_t *)aad, aadlen);
@@ -59,6 +77,19 @@ static void gcm_encrypt(int bits, uint8_t *t, uint8_t *m, size_t mlen,
 static bool gcm_decrypt(int bits, uint8_t *m, size_t mlen, const uint8_t *t,
                         const uint8_t *k, const uint8_t *iv, size_t ivlen,
                         const uint8_t *aad, size_t aadlen) {
+  if (expanded) {
+    uint8_t ek[240], hk[16];
+    if (bits == 128) {
+      Hacl_AES_GCM_aes128_expand(ek, hk, (uint8_t *)k);
+      return Hacl_AES_GCM_aes128_decrypt_expanded(m, mlen, (uint8_t *)t, ek, hk,
+                                                  (uint8_t *)iv, ivlen,
+                                                  (uint8_t *)aad, aadlen);
+    }
+    Hacl_AES_GCM_aes256_expand(ek, hk, (uint8_t *)k);
+    return Hacl_AES_GCM_aes256_decrypt_expanded(m, mlen, (uint8_t *)t, ek, hk,
+                                                (uint8_t *)iv, ivlen,
+                                                (uint8_t *)aad, aadlen);
+  }
   if (bits == 128)
     return Hacl_AES_GCM_aes128_decrypt(m, mlen, (uint8_t *)t, (uint8_t *)k,
                                            (uint8_t *)iv, ivlen,
@@ -13047,10 +13078,11 @@ static const gcm_case cases[450] = {
 };
 
 int main(void) {
-  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++)
-    run(&cases[i]);
+  for (expanded = 0; expanded < 2; expanded++)
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++)
+      run(&cases[i]);
   if (failures == 0) {
-    printf("test_gcm: all %d CAVP cases passed\n",
+    printf("test_gcm: all %d CAVP cases passed, one-shot and expanded\n",
            (int)(sizeof cases / sizeof cases[0]));
     return 0;
   }

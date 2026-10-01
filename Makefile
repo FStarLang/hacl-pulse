@@ -142,6 +142,8 @@ CUSTARD_ENTRIES += $(addprefix Hacl.HMAC.DRBG., \
   instantiate_sha512 reseed_sha512 generate_sha512)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.AES.GCM., \
+  aes128_expand aes128_encrypt_expanded aes128_decrypt_expanded \
+  aes256_expand aes256_encrypt_expanded aes256_decrypt_expanded \
   aes128_encrypt aes128_decrypt aes256_encrypt aes256_decrypt)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Base., \
