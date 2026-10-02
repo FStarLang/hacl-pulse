@@ -437,3 +437,114 @@ let le_bytes_split (lo hi: nat) (k: nat)
     end
 
 #pop-options
+
+(** {2 Straight-line word loads}
+
+    The loops above read one byte per iteration and fold it into an
+    accumulator with [acc * 256 + b].  That is the shortest code, but every
+    iteration depends on the previous one, so reading a sixty-four bit word
+    costs eight serially dependent shift-or pairs -- and because the trip
+    count is [nbytes], a field of the class rather than a literal, no C
+    compiler unrolls it.  Measured on Poly1305, where two such loads happen
+    per sixteen-byte block, that loop was worth about a fifth of the whole
+    running time.
+
+    The alternative is to place each byte at its own bit offset and merge the
+    four terms, [b0 | b1 << 8 | b2 << 16 | b3 << 24].  The four loads and the
+    four shifts are independent, so the chain is three [or]s deep instead of
+    eight shift-ors, and clang recognizes the pattern outright and emits a
+    single word load.  The lemmas below are what that costs in proof: one
+    that says extending a prefix by one byte adds that byte scaled by its
+    offset, and one that says [logor] of an accumulator and a byte placed
+    above it is their sum. *)
+
+#push-options "--fuel 2 --ifuel 0 --z3rlimit 40"
+
+(** [le_nat] of a one-byte sequence is that byte. *)
+let le_nat_one (s: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == 1) (ensures le_nat s == S8.v (Seq.index s 0))
+  = assert (Seq.length (Seq.slice s 1 1) == 0)
+
+(** [be_nat] of a one-byte sequence is that byte. *)
+let be_nat_one (s: Seq.seq S8.t)
+  : Lemma (requires Seq.length s == 1) (ensures be_nat s == S8.v (Seq.index s 0))
+  = assert (Seq.length (Seq.slice s 0 0) == 0)
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 40"
+
+(** Extending a little-endian prefix on the right adds the new byte scaled by
+    [2^(8k)], which is exactly the term a straight-line load contributes. *)
+let le_nat_prefix (s: Seq.seq S8.t) (k: nat { k < Seq.length s })
+  : Lemma (le_nat (Seq.slice s 0 (k + 1)) ==
+           le_nat (Seq.slice s 0 k) + pow2 (8 * k) * S8.v (Seq.index s k))
+  = let p = Seq.slice s 0 (k + 1) in
+    le_nat_split p k;
+    Seq.lemma_eq_intro (Seq.slice p 0 k) (Seq.slice s 0 k);
+    Seq.lemma_eq_intro (Seq.slice p k (k + 1)) (Seq.create 1 (Seq.index s k));
+    le_nat_one (Seq.slice p k (k + 1))
+
+(** The same for big-endian, where the byte at index [k] of an [n] byte window
+    sits at offset [8 * (n - 1 - k)].  Stated on the running accumulator
+    [be_nat (prefix) * 2^(8 * (n - 1 - k))] so that the equation is again
+    "add one scaled byte". *)
+let be_nat_prefix (s: Seq.seq S8.t) (k: nat { k < Seq.length s })
+  : Lemma (let n = Seq.length s in
+           be_nat (Seq.slice s 0 (k + 1)) * pow2 (8 * (n - 1 - k)) ==
+           be_nat (Seq.slice s 0 k) * pow2 (8 * (n - k)) +
+           pow2 (8 * (n - 1 - k)) * S8.v (Seq.index s k))
+  = let n = Seq.length s in
+    be_nat_snoc s k;
+    Math.pow2_plus (8 * (n - 1 - k)) 8;
+    Math.paren_mul_right (be_nat (Seq.slice s 0 k)) 256 (pow2 (8 * (n - 1 - k)))
+
+(** A byte shifted up by [sh] bits, where there is room for it. *)
+let byte_at (#t: Type0) {| w: word t |} (b: S8.t) (sh: nat) (s: U32.t)
+  : Lemma (requires U32.v s == sh /\ sh + 8 <= bits #t)
+          (ensures v (shift_left #t (of_byte b) s) == pow2 sh * S8.v b /\
+                   v (shift_left #t (of_byte b) s) < pow2 (sh + 8))
+  = let x : t = of_byte b in
+    Math.pow2_plus sh 8;
+    Math.pow2_le_compat (bits #t) (sh + 8);
+    assert (v x * pow2 sh < pow2 (sh + 8));
+    Math.small_mod (v x * pow2 sh) (pow2 (bits #t))
+
+(** Merging that byte into a little-endian accumulator that occupies only the
+    bits below [8k].  The two have no bit in common, so [logor] is [+]. *)
+let or_byte_le (#t: Type0) {| w: word t |} (a: t) (b: S8.t) (k: pos) (s: U32.t)
+  : Lemma (requires U32.v s == 8 * k /\ 8 * k + 8 <= bits #t /\ v a < pow2 (8 * k))
+          (ensures v (logor #t a (shift_left #t (of_byte b) s)) ==
+                   v a + pow2 (8 * k) * S8.v b)
+  = byte_at #t b (8 * k) s;
+    let h : t = shift_left #t (of_byte b) s in
+    Math.multiple_modulo_lemma (S8.v b) (pow2 (8 * k));
+    assert (v h % pow2 (8 * k) == 0);
+    UInt.logor_disjoint #(bits #t) (v h) (v a) (8 * k);
+    UInt.logor_commutative #(bits #t) (v a) (v h)
+
+(** The big-endian mirror: the accumulator holds the high bits and is a
+    multiple of [2^(sh + 8)], the new byte sits just below it. *)
+let or_byte_be (#t: Type0) {| w: word t |} (a: t) (b: S8.t) (sh: nat) (s: U32.t)
+  : Lemma (requires U32.v s == sh /\ sh + 8 < bits #t /\ v a % pow2 (sh + 8) == 0)
+          (ensures v (logor #t a (shift_left #t (of_byte b) s)) ==
+                   v a + pow2 sh * S8.v b)
+  = byte_at #t b sh s;
+    let h : t = shift_left #t (of_byte b) s in
+    UInt.logor_disjoint #(bits #t) (v a) (v h) (sh + 8)
+
+(** Joining two halves: the low half occupies the bits below [8k] and the
+    high half is shifted up to meet it.  This is what makes a sixty-four bit
+    load two independent thirty-two bit ones. *)
+let or_half (#t: Type0) {| w: word t |} (lo hi: t) (k: pos) (s: U32.t)
+  : Lemma (requires U32.v s == 8 * k /\ 16 * k == bits #t /\
+                    v lo < pow2 (8 * k) /\ v hi < pow2 (8 * k))
+          (ensures v (logor #t lo (shift_left #t hi s)) == v lo + pow2 (8 * k) * v hi)
+  = let h : t = shift_left #t hi s in
+    Math.pow2_plus (8 * k) (8 * k);
+    Math.small_mod (v hi * pow2 (8 * k)) (pow2 (bits #t));
+    Math.multiple_modulo_lemma (v hi) (pow2 (8 * k));
+    UInt.logor_disjoint #(bits #t) (v h) (v lo) (8 * k);
+    UInt.logor_commutative #(bits #t) (v lo) (v h)
+
+#pop-options

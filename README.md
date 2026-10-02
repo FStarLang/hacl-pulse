@@ -558,12 +558,35 @@ which is exactly what `fmul` accepts.  So the main loop is a load, five adds
 and a multiply, with no carry propagation between them.
 
 **A block is loaded as two words, not five bytes at a time.**  Two
-`load_le #uint64` calls give the low and high halves; four of the five limbs
+`load_le #uint64` calls give the low and high halves -- and those two calls
+were, until recently, a fifth of the entire running time, for reasons that
+had nothing to do with Poly1305 and are described in
+[A machine word is not eight bytes in a loop](#a-machine-word-is-not-eight-bytes-in-a-loop); four of the five limbs
 are a shift and a mask of one of them, and limb two is the only one that
 straddles the boundary -- twelve bits from the low word, fourteen from the
 high.  There is no `logor` anywhere: the operands are disjoint by size, so a
 plain addition is equal to the disjunction and avoids `logor_disjoint`
 entirely.
+
+**`r` is nine limbs, not five.**  The wraparound in the schoolbook product
+multiplies `h_i * r_j` by five whenever `i + j` exceeds four, ten times in
+all.  `load_r` precomputes `5*r_1 .. 5*r_4` into `r[5..8]` once per message
+and `mul_limbs` multiplies by those instead, which is the form HACL\* uses
+and which turns thirty-five multiplies into twenty-five.  It is worth about
+2%: gcc was already compiling `5 * x` to one `lea`, so the ten extra
+multiplies did not exist in the object code.  It is kept because it is
+strictly less work and because the `has5` invariant that carries it costs
+one conjunct.
+
+**The carry chain is two chains, not one.**  The six carries after a
+multiplication used to run `0 -> 1 -> 2 -> 3 -> 4 -> 0 -> 1`, six deep.  They
+now start in two places at once -- one chain at limb zero, one at limb three,
+each carrying two places, with the wrap from the top rejoining them -- which
+is four steps with two independent shifts in each, again HACL\*'s shape.
+That one is worth nothing measurable, and is recorded here because "shorten
+the dependency chain" is exactly the kind of change that *sounds* like it
+must help: the chain was never the critical path.  What was is in
+[A machine word is not eight bytes in a loop](#a-machine-word-is-not-eight-bytes-in-a-loop).
 
 **A short block is padded, not shifted.**  The specification's value of a
 block of *n* bytes is `le_nat b + 2^(8n)`, and for a full block the `2^128`
@@ -2745,7 +2768,7 @@ reference**.
 | HMAC-SHA-512 | 256 KiB | 770 us | 1,361 us | **0.57x** |  |  |
 | ChaCha20 | 256 KiB | 494 us | 854 us | **0.58x** | 93 us | 5.30x |
 | SHAKE128 | 256 KiB | 883 us | 1,489 us | **0.59x** |  |  |
-| ChaCha20-Poly1305 | 256 KiB | 808 us | 1,059 us | **0.76x** | 148 us | 5.46x |
+| ChaCha20-Poly1305 | 256 KiB | 758 us | 1,066 us | **0.71x** | 149 us | 5.09x |
 | RSA-PSS-2048 sign | -- | 4.4 ms | 4.7 ms | **0.94x** |  |  |
 | FFDHE-2048 | -- | 4.5 ms | 4.6 ms | **0.96x** |  |  |
 | RSA-2048 modexp | -- | 4.4 ms | 4.6 ms | **0.97x** |  |  |
@@ -2755,19 +2778,19 @@ reference**.
 | P-256 ECDH | -- | 165 us | 159 us | **1.04x** |  |  |
 | P-256 ECDSA verify | -- | 449 us | 427 us | **1.05x** |  |  |
 | P-256 ECDSA sign | -- | 182 us | 169 us | **1.08x** |  |  |
+| Poly1305 | 256 KiB | 239 us | 210 us | **1.14x** | 58 us | 4.15x |
 | RSA-PSS-2048 verify | -- | 166 us | 145 us | **1.14x** |  |  |
+| NaCl secretbox | 256 KiB | 773 us | 649 us | **1.19x** |  |  |
 | Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
 | X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
-| NaCl secretbox | 256 KiB | 809 us | 645 us | **1.26x** |  |  |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
-| Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
 | secp256k1 ECDSA sign | -- | 91 us | 65 us | **1.40x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
 | AES-128-GCM | 256 KiB | 112 us | 71 us | **1.58x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
-deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
+deal: 5.3x for ChaCha20, 4.2x for Poly1305, 5.1x for ChaCha20-Poly1305, 6.9x
 for HMAC-SHA-256 once EverCrypt reaches the SHA-EXT assembly.  Those are the
 four places where a portable scalar implementation, however well extracted,
 simply cannot compete, and they are the honest ceiling on what the work in
@@ -3092,6 +3115,73 @@ The benchmark harness and a long write-up of each optimization are kept
 outside the repository; the numbers above are reproducible with any AEAD/hash
 benchmark that links `dist/Hacl.c` on one side and HACL\*'s `dist/gcc-compatible`
 on the other.
+
+### A machine word is not eight bytes in a loop
+
+`Hacl.Impl.Bytes.load_le` and `load_be` read a 32- or 64-bit word out of a
+byte array, and for most of this repository's life they did it the obvious
+way: one loop, one byte per iteration, `acc = acc * 256 + b`.  That is the
+shortest code and the shortest proof -- one invariant, one `le_nat_cons` --
+and it is the single most expensive line in the library.
+
+Two things are wrong with it.  The first is that every iteration depends on
+the previous one, so reading a sixty-four-bit word is eight serially
+dependent shift-or pairs, something like twelve cycles, where the machine has
+an instruction that does it in one.  The second is subtler and is the reason
+no compiler rescued it: the trip count is `nbytes`, a *field* of the `word`
+class, and Custard emits a class field as a C global.  `while (j < n)` with
+`n` loaded from memory is not a loop any compiler will unroll, so the
+eight-byte read never even got the chance to be recognized as a byte-gather
+pattern.
+
+The fix is to read four bytes with no loop at all --
+
+```c
+b[off] | (b[off+1] << 8) | (b[off+2] << 16) | (b[off+3] << 24)
+```
+
+-- and to make a sixty-four-bit read two of those joined by a shift.  Four is
+the right width because `bits` is at least thirty-two for every instance of
+the class, so the four-byte reader needs no precondition and both instances
+can use it; `load_le` keeps its old signature and dispatches on `nbytes`,
+with the original loop left behind as the branch for a width that is neither
+four nor eight.  Nothing reaches that branch, because `word` has exactly two
+instances, but leaving it there means the code does not depend on that fact.
+
+What this costs in proof is two lemmas and a little bookkeeping.
+`le_nat_prefix` says that extending a little-endian prefix by one byte adds
+that byte scaled by `2^(8k)`, which is the term the straight-line code
+contributes; `or_byte_le` says that `logor` of an accumulator below `2^(8k)`
+and a byte placed at `8k` is their sum, which is `FStar.UInt.logor_disjoint`
+with the operands in the right order.  Big-endian needs the mirror of each,
+stated on the running accumulator `be_nat (prefix) * 2^(8(n-1-k))` so that
+the equation is again "add one scaled byte".  The four steps themselves are
+hoisted out of the Pulse code into `le4_ok` and `be4_ok`, pure lemmas whose
+parameters are the four machine values the body computes and whose
+hypotheses are the equations relating them -- the solver never has to look
+inside a `logor` of a `shift_left` and reason about `le_nat` at the same
+time.
+
+It is worth **1.18x on Poly1305 under gcc and 1.54x under clang**, which
+takes Poly1305 from 1.35x of HACL\* to 1.14x, and under clang past it.  The
+same two loads per sixteen-byte block were a fifth of the entire running
+time.  ChaCha20-Poly1305 gains 6%, NaCl's secretbox 19%, SHA-512 and
+HMAC-SHA-512 4-5% under clang.  clang recognizes the four-way or-tree and
+emits a single `movl`; gcc does not merge it, but four independent loads and
+three `or`s still beat an eight-deep dependent chain.
+
+**The matching change to `store_le` was measured and thrown away.**  It is
+the same idea -- four independent right shifts and four byte stores instead
+of a loop that shifts the word down eight bits at a time -- it verified, and
+it cost ChaCha20 and Salsa20 12%.  The reason is the asymmetry hidden in the
+paragraph above: a *store* loop writes to consecutive addresses with no
+dependency between iterations, so gcc, which does know `nbytes` is four after
+interprocedural constant propagation even though it will not unroll against
+it, was already vectorizing ChaCha20's sixteen-word keystream store into SSE.
+Writing the stores out by hand gave the vectorizer a shape it did not
+recognize and lost more than the straight-line code won.  The load loop had
+no such escape hatch, because a serial dependency cannot be vectorized at
+all.  Keeping the loads and reverting the stores is the whole of this change.
 
 ### Measuring on a shared machine
 
