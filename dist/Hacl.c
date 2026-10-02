@@ -72,12 +72,14 @@ static size_t Hacl_Hash_SHA2_Core_block_len_sz__t = (((size_t)16ULL) * ((size_t)
 static size_t Hacl_Hash_SHA2_Core_len_len_sz__t = (((size_t)2ULL) * ((size_t)4ULL));
 static uint32_t Hacl_Secret_UInt32_zero = 0;
 static uint32_t Hacl_Secret_Word_zero__t = 0;
-static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
-static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Word_shift_left__t(uint32_t x, uint32_t s);
 static uint32_t Hacl_Secret_Cast_u8_to_u32(uint8_t x);
 static uint32_t Hacl_Secret_Word_of_byte__t(uint8_t b);
+static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y);
+static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y);
+static uint32_t Hacl_Impl_Bytes_load_be4__t(uint8_t *b, size_t off);
+static uint32_t Hacl_Impl_Bytes_load_be_loop__t(uint8_t *b, size_t off);
 static uint32_t Hacl_Impl_Bytes_load_be__t(uint8_t *b, size_t off);
 static uint32_t Hacl_Secret_UInt32_add_mod(uint32_t x, uint32_t y);
 static uint32_t Hacl_Secret_Word_add_mod__t(uint32_t x, uint32_t y);
@@ -330,6 +332,8 @@ static uint32_t Spec_Chacha20_c0 = 0x61707865U;
 static uint32_t Spec_Chacha20_c1 = 0x3320646eU;
 static uint32_t Spec_Chacha20_c2 = 0x79622d32U;
 static uint32_t Spec_Chacha20_c3 = 0x6b206574U;
+static uint32_t Hacl_Impl_Bytes_load_le4__t(uint8_t *b, size_t off);
+static uint32_t Hacl_Impl_Bytes_load_le_loop__t(uint8_t *b, size_t off);
 static uint32_t Hacl_Impl_Bytes_load_le__t(uint8_t *b, size_t off);
 static void Hacl_Chacha20_init_state(uint32_t *st, uint8_t *key, uint8_t *nonce, uint32_t ctr0);
 static uint32_t Hacl_Secret_UInt32_rotate_left(uint32_t x, uint32_t s);
@@ -349,11 +353,13 @@ static uint64_t Hacl_Secret_Word_Instances_sz_lo_64(size_t x);
 static uint64_t Hacl_Secret_Word_of_sizet_lo__t(size_t x);
 static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint64_t x);
 static void Hacl_Chacha20Poly1305_write_len_block(uint8_t *lb, size_t la, size_t lc);
-static uint64_t Hacl_Secret_Word_zero__t_1 = 0;
+static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s);
-static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
+static uint64_t Hacl_Impl_Bytes_load_le4__t_1(uint8_t *b, size_t off);
+static uint64_t Hacl_Secret_Word_zero__t_1 = 0;
+static uint64_t Hacl_Impl_Bytes_load_le_loop__t_1(uint8_t *b, size_t off);
 static uint64_t Hacl_Impl_Bytes_load_le__t_1(uint8_t *b, size_t off);
 static void Hacl_Poly1305_Load_load_r(uint64_t *r, uint8_t *k);
 static void Hacl_Poly1305_Field_set_zero(uint64_t *h);
@@ -387,6 +393,8 @@ static size_t Hacl_HPKE_kdf_len__t_3 = 64;
 static void Hacl_HPKE_suite_id_impl__t_2(uint8_t *out);
 static size_t Hacl_Hash_SHA2_Core_block_len_sz__t_1 = (((size_t)16ULL) * ((size_t)8ULL));
 static size_t Hacl_Hash_SHA2_Core_len_len_sz__t_1 = (((size_t)2ULL) * ((size_t)8ULL));
+static uint64_t Hacl_Impl_Bytes_load_be4__t_1(uint8_t *b, size_t off);
+static uint64_t Hacl_Impl_Bytes_load_be_loop__t_1(uint8_t *b, size_t off);
 static uint64_t Hacl_Impl_Bytes_load_be__t_1(uint8_t *b, size_t off);
 static uint64_t Hacl_Secret_Word_add_mod__t_1(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_UInt64_logxor(uint64_t x, uint64_t y);
@@ -1949,14 +1957,6 @@ static void Hacl_HPKE_KEM_kem_sid__DH_X25519(uint8_t *out) {
   out[4] = lo;
 }
 
-static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y) {
-  return (x | y);
-}
-
-static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y) {
-  return Hacl_Secret_UInt32_logor(x, y);
-}
-
 static uint32_t Hacl_Secret_UInt32_shift_left(uint32_t x, uint32_t s) {
   return (x << s);
 }
@@ -1973,7 +1973,26 @@ static uint32_t Hacl_Secret_Word_of_byte__t(uint8_t b) {
   return Hacl_Secret_Cast_u8_to_u32(b);
 }
 
-static uint32_t Hacl_Impl_Bytes_load_be__t(uint8_t *b, size_t off) {
+static uint32_t Hacl_Secret_UInt32_logor(uint32_t x, uint32_t y) {
+  return (x | y);
+}
+
+static uint32_t Hacl_Secret_Word_logor__t(uint32_t x, uint32_t y) {
+  return Hacl_Secret_UInt32_logor(x, y);
+}
+
+static uint32_t Hacl_Impl_Bytes_load_be4__t(uint8_t *b, size_t off) {
+  uint8_t c0 = b[off];
+  uint8_t c1 = b[(off + 1)];
+  uint8_t c2 = b[(off + 2)];
+  uint8_t c3 = b[(off + 3)];
+  uint32_t a0 = Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c0), 24);
+  uint32_t a1 = Hacl_Secret_Word_logor__t(a0, Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c1), 16));
+  uint32_t a2 = Hacl_Secret_Word_logor__t(a1, Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c2), 8));
+  return Hacl_Secret_Word_logor__t(a2, Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c3), 0));
+}
+
+static uint32_t Hacl_Impl_Bytes_load_be_loop__t(uint8_t *b, size_t off) {
   size_t n = Hacl_Secret_Word_nbytes__t;
   uint32_t z = Hacl_Secret_Word_zero__t;
   uint32_t acc = z;
@@ -1986,6 +2005,18 @@ static uint32_t Hacl_Impl_Bytes_load_be__t(uint8_t *b, size_t off) {
     j = (vj + 1);
   }
   return acc;
+}
+
+static uint32_t Hacl_Impl_Bytes_load_be__t(uint8_t *b, size_t off) {
+  if (Hacl_Secret_Word_nbytes__t == 4) return Hacl_Impl_Bytes_load_be4__t(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t == 8) {
+      uint32_t hi = Hacl_Impl_Bytes_load_be4__t(b, off);
+      uint32_t lo = Hacl_Impl_Bytes_load_be4__t(b, (off + 4));
+      return Hacl_Secret_Word_logor__t(lo, Hacl_Secret_Word_shift_left__t(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_be_loop__t(b, off);
+  }
 }
 
 static uint32_t Hacl_Secret_UInt32_add_mod(uint32_t x, uint32_t y) {
@@ -5996,7 +6027,18 @@ static bool Hacl_HPKE_setup_base_r__t_2(uint32_t *kt, uint32_t *ivt, uint8_t *ke
   return Hacl_HPKE_setup_r_impl__t_2(kt, ivt, key, base_nonce, sq, exporter, enc, skR, info, info_len, n1, 0, n2, 0);
 }
 
-static uint32_t Hacl_Impl_Bytes_load_le__t(uint8_t *b, size_t off) {
+static uint32_t Hacl_Impl_Bytes_load_le4__t(uint8_t *b, size_t off) {
+  uint8_t c0 = b[off];
+  uint8_t c1 = b[(off + 1)];
+  uint8_t c2 = b[(off + 2)];
+  uint8_t c3 = b[(off + 3)];
+  uint32_t a0 = Hacl_Secret_Word_of_byte__t(c0);
+  uint32_t a1 = Hacl_Secret_Word_logor__t(a0, Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c1), 8));
+  uint32_t a2 = Hacl_Secret_Word_logor__t(a1, Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c2), 16));
+  return Hacl_Secret_Word_logor__t(a2, Hacl_Secret_Word_shift_left__t(Hacl_Secret_Word_of_byte__t(c3), 24));
+}
+
+static uint32_t Hacl_Impl_Bytes_load_le_loop__t(uint8_t *b, size_t off) {
   size_t n = Hacl_Secret_Word_nbytes__t;
   uint32_t z = Hacl_Secret_Word_zero__t;
   uint32_t acc = z;
@@ -6010,6 +6052,18 @@ static uint32_t Hacl_Impl_Bytes_load_le__t(uint8_t *b, size_t off) {
     j = (vj + 1);
   }
   return acc;
+}
+
+static uint32_t Hacl_Impl_Bytes_load_le__t(uint8_t *b, size_t off) {
+  if (Hacl_Secret_Word_nbytes__t == 4) return Hacl_Impl_Bytes_load_le4__t(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t == 8) {
+      uint32_t lo = Hacl_Impl_Bytes_load_le4__t(b, off);
+      uint32_t hi = Hacl_Impl_Bytes_load_le4__t(b, (off + 4));
+      return Hacl_Secret_Word_logor__t(lo, Hacl_Secret_Word_shift_left__t(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_le_loop__t(b, off);
+  }
 }
 
 static void Hacl_Chacha20_init_state(uint32_t *st, uint8_t *key, uint8_t *nonce, uint32_t ctr0) {
@@ -6212,6 +6266,10 @@ static void Hacl_Chacha20Poly1305_write_len_block(uint8_t *lb, size_t la, size_t
   Hacl_Impl_Bytes_store_le__t_1(lb, 8, wc);
 }
 
+static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
+  return Hacl_Secret_Cast_u8_to_u64(b);
+}
+
 static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
   return (x | y);
 }
@@ -6224,11 +6282,18 @@ static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s) {
   return Hacl_Secret_UInt64_shift_left(x, s);
 }
 
-static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
-  return Hacl_Secret_Cast_u8_to_u64(b);
+static uint64_t Hacl_Impl_Bytes_load_le4__t_1(uint8_t *b, size_t off) {
+  uint8_t c0 = b[off];
+  uint8_t c1 = b[(off + 1)];
+  uint8_t c2 = b[(off + 2)];
+  uint8_t c3 = b[(off + 3)];
+  uint64_t a0 = Hacl_Secret_Word_of_byte__t_1(c0);
+  uint64_t a1 = Hacl_Secret_Word_logor__t_1(a0, Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c1), 8));
+  uint64_t a2 = Hacl_Secret_Word_logor__t_1(a1, Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c2), 16));
+  return Hacl_Secret_Word_logor__t_1(a2, Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c3), 24));
 }
 
-static uint64_t Hacl_Impl_Bytes_load_le__t_1(uint8_t *b, size_t off) {
+static uint64_t Hacl_Impl_Bytes_load_le_loop__t_1(uint8_t *b, size_t off) {
   size_t n = Hacl_Secret_Word_nbytes__t_1;
   uint64_t z = Hacl_Secret_Word_zero__t_1;
   uint64_t acc = z;
@@ -6244,11 +6309,28 @@ static uint64_t Hacl_Impl_Bytes_load_le__t_1(uint8_t *b, size_t off) {
   return acc;
 }
 
+static uint64_t Hacl_Impl_Bytes_load_le__t_1(uint8_t *b, size_t off) {
+  if (Hacl_Secret_Word_nbytes__t_1 == 4) return Hacl_Impl_Bytes_load_le4__t_1(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t_1 == 8) {
+      uint64_t lo = Hacl_Impl_Bytes_load_le4__t_1(b, off);
+      uint64_t hi = Hacl_Impl_Bytes_load_le4__t_1(b, (off + 4));
+      return Hacl_Secret_Word_logor__t_1(lo, Hacl_Secret_Word_shift_left__t_1(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_le_loop__t_1(b, off);
+  }
+}
+
 static void Hacl_Poly1305_Load_load_r(uint64_t *r, uint8_t *k) {
+  uint64_t zr = Hacl_Secret_UInt64_zero;
+  uint64_t rtmp[5];
+  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+    rtmp[_ci1] = zr;
+  }
   uint8_t z8 = 0;
   uint8_t tarr[16];
-  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
-    tarr[_ci1] = z8;
+  for (size_t _ci2 = 0; _ci2 < 16; _ci2++) {
+    tarr[_ci2] = z8;
   }
   Hacl_Impl_Copy_copy_range(tarr, 0, k, 0, 16);
   uint8_t m0f = 0xf;
@@ -6269,11 +6351,25 @@ static void Hacl_Poly1305_Load_load_r(uint64_t *r, uint8_t *k) {
   tarr[12] = Hacl_Secret_UInt8_logand(c12, mfc);
   uint64_t lo = Hacl_Impl_Bytes_load_le__t_1(tarr, 0);
   uint64_t hi = Hacl_Impl_Bytes_load_le__t_1(tarr, 8);
-  r[0] = Hacl_Secret_UInt64_logand(lo, 0x3ffffffULL);
-  r[1] = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_shift_right(lo, 26), 0x3ffffffULL);
-  r[2] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_right(lo, 52), Hacl_Secret_UInt64_shift_left(Hacl_Secret_UInt64_logand(hi, 0x3fff), 12));
-  r[3] = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_shift_right(hi, 14), 0x3ffffffULL);
-  r[4] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_right(hi, 40), Hacl_Secret_UInt64_zero);
+  rtmp[0] = Hacl_Secret_UInt64_logand(lo, 0x3ffffffULL);
+  rtmp[1] = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_shift_right(lo, 26), 0x3ffffffULL);
+  rtmp[2] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_right(lo, 52), Hacl_Secret_UInt64_shift_left(Hacl_Secret_UInt64_logand(hi, 0x3fff), 12));
+  rtmp[3] = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_shift_right(hi, 14), 0x3ffffffULL);
+  rtmp[4] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_shift_right(hi, 40), Hacl_Secret_UInt64_zero);
+  uint64_t a0 = rtmp[0];
+  uint64_t a1 = rtmp[1];
+  uint64_t a2 = rtmp[2];
+  uint64_t a3 = rtmp[3];
+  uint64_t a4 = rtmp[4];
+  r[0] = a0;
+  r[1] = a1;
+  r[2] = a2;
+  r[3] = a3;
+  r[4] = a4;
+  r[5] = Hacl_Secret_UInt64_mul_mod(5, a1);
+  r[6] = Hacl_Secret_UInt64_mul_mod(5, a2);
+  r[7] = Hacl_Secret_UInt64_mul_mod(5, a3);
+  r[8] = Hacl_Secret_UInt64_mul_mod(5, a4);
 }
 
 static void Hacl_Poly1305_Field_set_zero(uint64_t *h) {
@@ -6324,6 +6420,10 @@ static void Hacl_Poly1305_Field_mul_limbs(uint64_t *d, uint64_t *h, uint64_t *r)
   uint64_t r2 = r[2];
   uint64_t r3 = r[3];
   uint64_t r4 = r[4];
+  uint64_t q1 = r[5];
+  uint64_t q2 = r[6];
+  uint64_t q3 = r[7];
+  uint64_t q4 = r[8];
   uint64_t p00 = Hacl_Secret_UInt64_mul_mod(h0, r0);
   uint64_t p01 = Hacl_Secret_UInt64_mul_mod(h0, r1);
   uint64_t p02 = Hacl_Secret_UInt64_mul_mod(h0, r2);
@@ -6333,38 +6433,38 @@ static void Hacl_Poly1305_Field_mul_limbs(uint64_t *d, uint64_t *h, uint64_t *r)
   uint64_t p11 = Hacl_Secret_UInt64_mul_mod(h1, r1);
   uint64_t p12 = Hacl_Secret_UInt64_mul_mod(h1, r2);
   uint64_t p13 = Hacl_Secret_UInt64_mul_mod(h1, r3);
-  uint64_t p14 = Hacl_Secret_UInt64_mul_mod(h1, r4);
+  uint64_t p14 = Hacl_Secret_UInt64_mul_mod(h1, q4);
   uint64_t p20 = Hacl_Secret_UInt64_mul_mod(h2, r0);
   uint64_t p21 = Hacl_Secret_UInt64_mul_mod(h2, r1);
   uint64_t p22 = Hacl_Secret_UInt64_mul_mod(h2, r2);
-  uint64_t p23 = Hacl_Secret_UInt64_mul_mod(h2, r3);
-  uint64_t p24 = Hacl_Secret_UInt64_mul_mod(h2, r4);
+  uint64_t p23 = Hacl_Secret_UInt64_mul_mod(h2, q3);
+  uint64_t p24 = Hacl_Secret_UInt64_mul_mod(h2, q4);
   uint64_t p30 = Hacl_Secret_UInt64_mul_mod(h3, r0);
   uint64_t p31 = Hacl_Secret_UInt64_mul_mod(h3, r1);
-  uint64_t p32 = Hacl_Secret_UInt64_mul_mod(h3, r2);
-  uint64_t p33 = Hacl_Secret_UInt64_mul_mod(h3, r3);
-  uint64_t p34 = Hacl_Secret_UInt64_mul_mod(h3, r4);
+  uint64_t p32 = Hacl_Secret_UInt64_mul_mod(h3, q2);
+  uint64_t p33 = Hacl_Secret_UInt64_mul_mod(h3, q3);
+  uint64_t p34 = Hacl_Secret_UInt64_mul_mod(h3, q4);
   uint64_t p40 = Hacl_Secret_UInt64_mul_mod(h4, r0);
-  uint64_t p41 = Hacl_Secret_UInt64_mul_mod(h4, r1);
-  uint64_t p42 = Hacl_Secret_UInt64_mul_mod(h4, r2);
-  uint64_t p43 = Hacl_Secret_UInt64_mul_mod(h4, r3);
-  uint64_t p44 = Hacl_Secret_UInt64_mul_mod(h4, r4);
-  uint64_t s1 = Hacl_Secret_UInt64_add_mod(p00, Hacl_Secret_UInt64_mul_mod(5, p14));
-  uint64_t s2 = Hacl_Secret_UInt64_add_mod(s1, Hacl_Secret_UInt64_mul_mod(5, p23));
-  uint64_t s3 = Hacl_Secret_UInt64_add_mod(s2, Hacl_Secret_UInt64_mul_mod(5, p32));
-  uint64_t e0 = Hacl_Secret_UInt64_add_mod(s3, Hacl_Secret_UInt64_mul_mod(5, p41));
+  uint64_t p41 = Hacl_Secret_UInt64_mul_mod(h4, q1);
+  uint64_t p42 = Hacl_Secret_UInt64_mul_mod(h4, q2);
+  uint64_t p43 = Hacl_Secret_UInt64_mul_mod(h4, q3);
+  uint64_t p44 = Hacl_Secret_UInt64_mul_mod(h4, q4);
+  uint64_t s1 = Hacl_Secret_UInt64_add_mod(p00, p14);
+  uint64_t s2 = Hacl_Secret_UInt64_add_mod(s1, p23);
+  uint64_t s3 = Hacl_Secret_UInt64_add_mod(s2, p32);
+  uint64_t e0 = Hacl_Secret_UInt64_add_mod(s3, p41);
   uint64_t s11 = Hacl_Secret_UInt64_add_mod(p01, p10);
-  uint64_t s21 = Hacl_Secret_UInt64_add_mod(s11, Hacl_Secret_UInt64_mul_mod(5, p24));
-  uint64_t s31 = Hacl_Secret_UInt64_add_mod(s21, Hacl_Secret_UInt64_mul_mod(5, p33));
-  uint64_t e1 = Hacl_Secret_UInt64_add_mod(s31, Hacl_Secret_UInt64_mul_mod(5, p42));
+  uint64_t s21 = Hacl_Secret_UInt64_add_mod(s11, p24);
+  uint64_t s31 = Hacl_Secret_UInt64_add_mod(s21, p33);
+  uint64_t e1 = Hacl_Secret_UInt64_add_mod(s31, p42);
   uint64_t s12 = Hacl_Secret_UInt64_add_mod(p02, p11);
   uint64_t s22 = Hacl_Secret_UInt64_add_mod(s12, p20);
-  uint64_t s32 = Hacl_Secret_UInt64_add_mod(s22, Hacl_Secret_UInt64_mul_mod(5, p34));
-  uint64_t e2 = Hacl_Secret_UInt64_add_mod(s32, Hacl_Secret_UInt64_mul_mod(5, p43));
+  uint64_t s32 = Hacl_Secret_UInt64_add_mod(s22, p34);
+  uint64_t e2 = Hacl_Secret_UInt64_add_mod(s32, p43);
   uint64_t s13 = Hacl_Secret_UInt64_add_mod(p03, p12);
   uint64_t s23 = Hacl_Secret_UInt64_add_mod(s13, p21);
   uint64_t s33 = Hacl_Secret_UInt64_add_mod(s23, p30);
-  uint64_t e3 = Hacl_Secret_UInt64_add_mod(s33, Hacl_Secret_UInt64_mul_mod(5, p44));
+  uint64_t e3 = Hacl_Secret_UInt64_add_mod(s33, p44);
   uint64_t s14 = Hacl_Secret_UInt64_add_mod(p04, p13);
   uint64_t s24 = Hacl_Secret_UInt64_add_mod(s14, p22);
   uint64_t s34 = Hacl_Secret_UInt64_add_mod(s24, p31);
@@ -6382,16 +6482,16 @@ static void Hacl_Poly1305_Field_carry_chain_impl(uint64_t *h, uint64_t *d) {
   uint64_t e2 = d[2];
   uint64_t e3 = d[3];
   uint64_t e4 = d[4];
-  uint64_t f1 = Hacl_Secret_UInt64_add_mod(e1, Hacl_Secret_UInt64_shift_right(e0, 26));
-  uint64_t f2 = Hacl_Secret_UInt64_add_mod(e2, Hacl_Secret_UInt64_shift_right(f1, 26));
-  uint64_t f3 = Hacl_Secret_UInt64_add_mod(e3, Hacl_Secret_UInt64_shift_right(f2, 26));
-  uint64_t f4 = Hacl_Secret_UInt64_add_mod(e4, Hacl_Secret_UInt64_shift_right(f3, 26));
-  uint64_t g0 = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_logand(e0, 0x3ffffffULL), Hacl_Secret_UInt64_mul_mod(5, Hacl_Secret_UInt64_shift_right(f4, 26)));
-  h[0] = Hacl_Secret_UInt64_logand(g0, 0x3ffffffULL);
-  h[1] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_logand(f1, 0x3ffffffULL), Hacl_Secret_UInt64_shift_right(g0, 26));
-  h[2] = Hacl_Secret_UInt64_logand(f2, 0x3ffffffULL);
-  h[3] = Hacl_Secret_UInt64_logand(f3, 0x3ffffffULL);
-  h[4] = Hacl_Secret_UInt64_logand(f4, 0x3ffffffULL);
+  uint64_t x1 = Hacl_Secret_UInt64_add_mod(e1, Hacl_Secret_UInt64_shift_right(e0, 26));
+  uint64_t x4 = Hacl_Secret_UInt64_add_mod(e4, Hacl_Secret_UInt64_shift_right(e3, 26));
+  uint64_t x01 = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_logand(e0, 0x3ffffffULL), Hacl_Secret_UInt64_mul_mod(5, Hacl_Secret_UInt64_shift_right(x4, 26)));
+  uint64_t x2 = Hacl_Secret_UInt64_add_mod(e2, Hacl_Secret_UInt64_shift_right(x1, 26));
+  uint64_t x31 = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_logand(e3, 0x3ffffffULL), Hacl_Secret_UInt64_shift_right(x2, 26));
+  h[0] = Hacl_Secret_UInt64_logand(x01, 0x3ffffffULL);
+  h[1] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_logand(x1, 0x3ffffffULL), Hacl_Secret_UInt64_shift_right(x01, 26));
+  h[2] = Hacl_Secret_UInt64_logand(x2, 0x3ffffffULL);
+  h[3] = Hacl_Secret_UInt64_logand(x31, 0x3ffffffULL);
+  h[4] = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_logand(x4, 0x3ffffffULL), Hacl_Secret_UInt64_shift_right(x31, 26));
 }
 
 static void Hacl_Poly1305_Field_fmul(uint64_t *h, uint64_t *r, uint64_t *d) {
@@ -6519,7 +6619,8 @@ static void Hacl_Poly1305_Load_store_tag(uint8_t *out, uint64_t *h, uint8_t *k) 
   uint64_t slo = Hacl_Impl_Bytes_load_le__t_1(k, 16);
   uint64_t shi = Hacl_Impl_Bytes_load_le__t_1(k, 24);
   uint64_t tlo = Hacl_Secret_UInt64_add_mod(lo, slo);
-  uint64_t carry = Hacl_Secret_UInt64_logand(Hacl_Secret_UInt64_lt_mask(tlo, lo), 1);
+  uint64_t mask = Hacl_Secret_UInt64_lt_mask(tlo, lo);
+  uint64_t carry = Hacl_Secret_UInt64_logand(mask, 1);
   uint64_t thi = Hacl_Secret_UInt64_add_mod(Hacl_Secret_UInt64_add_mod(hi, shi), carry);
   Hacl_Impl_Bytes_store_le__t_1(out, 0, tlo);
   Hacl_Impl_Bytes_store_le__t_1(out, 8, thi);
@@ -6528,8 +6629,8 @@ static void Hacl_Poly1305_Load_store_tag(uint8_t *out, uint64_t *h, uint8_t *k) 
 static void Hacl_Chacha20Poly1305_aead_tag(uint8_t *tag, uint8_t *aad, size_t alen, uint8_t *ct, size_t clen, uint8_t *key) {
   uint64_t z = Hacl_Secret_UInt64_zero;
   uint8_t z8 = 0;
-  uint64_t rarr[5];
-  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+  uint64_t rarr[9];
+  for (size_t _ci1 = 0; _ci1 < 9; _ci1++) {
     rarr[_ci1] = z;
   }
   uint64_t harr[5];
@@ -6796,7 +6897,18 @@ static void Hacl_HPKE_suite_id_impl__t_2(uint8_t *out) {
   out[9] = a1;
 }
 
-static uint64_t Hacl_Impl_Bytes_load_be__t_1(uint8_t *b, size_t off) {
+static uint64_t Hacl_Impl_Bytes_load_be4__t_1(uint8_t *b, size_t off) {
+  uint8_t c0 = b[off];
+  uint8_t c1 = b[(off + 1)];
+  uint8_t c2 = b[(off + 2)];
+  uint8_t c3 = b[(off + 3)];
+  uint64_t a0 = Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c0), 24);
+  uint64_t a1 = Hacl_Secret_Word_logor__t_1(a0, Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c1), 16));
+  uint64_t a2 = Hacl_Secret_Word_logor__t_1(a1, Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c2), 8));
+  return Hacl_Secret_Word_logor__t_1(a2, Hacl_Secret_Word_shift_left__t_1(Hacl_Secret_Word_of_byte__t_1(c3), 0));
+}
+
+static uint64_t Hacl_Impl_Bytes_load_be_loop__t_1(uint8_t *b, size_t off) {
   size_t n = Hacl_Secret_Word_nbytes__t_1;
   uint64_t z = Hacl_Secret_Word_zero__t_1;
   uint64_t acc = z;
@@ -6809,6 +6921,18 @@ static uint64_t Hacl_Impl_Bytes_load_be__t_1(uint8_t *b, size_t off) {
     j = (vj + 1);
   }
   return acc;
+}
+
+static uint64_t Hacl_Impl_Bytes_load_be__t_1(uint8_t *b, size_t off) {
+  if (Hacl_Secret_Word_nbytes__t_1 == 4) return Hacl_Impl_Bytes_load_be4__t_1(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t_1 == 8) {
+      uint64_t hi = Hacl_Impl_Bytes_load_be4__t_1(b, off);
+      uint64_t lo = Hacl_Impl_Bytes_load_be4__t_1(b, (off + 4));
+      return Hacl_Secret_Word_logor__t_1(lo, Hacl_Secret_Word_shift_left__t_1(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_be_loop__t_1(b, off);
+  }
 }
 
 static uint64_t Hacl_Secret_Word_add_mod__t_1(uint64_t x, uint64_t y) {
@@ -16070,18 +16194,15 @@ void Hacl_Bignum_Montgomery_precomp(uint64_t *res, uint64_t *t1, uint64_t *t2, u
 }
 
 static uint64_t Hacl_Impl_Bytes_load_be__t_2(uint8_t *b, size_t off) {
-  size_t n = Hacl_Secret_Word_nbytes__t_1;
-  uint64_t z = Hacl_Secret_Word_zero__t_1;
-  uint64_t acc = z;
-  size_t j = 0;
-  while (j < n) {
-    size_t vj = j;
-    uint8_t byte = b[(off + vj)];
-    uint64_t a = acc;
-    acc = Hacl_Secret_Word_logor__t_1(Hacl_Secret_Word_shift_left__t_1(a, 8), Hacl_Secret_Word_of_byte__t_1(byte));
-    j = (vj + 1);
+  if (Hacl_Secret_Word_nbytes__t_1 == 4) return Hacl_Impl_Bytes_load_be4__t_1(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t_1 == 8) {
+      uint64_t hi = Hacl_Impl_Bytes_load_be4__t_1(b, off);
+      uint64_t lo = Hacl_Impl_Bytes_load_be4__t_1(b, (off + 4));
+      return Hacl_Secret_Word_logor__t_1(lo, Hacl_Secret_Word_shift_left__t_1(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_be_loop__t_1(b, off);
   }
-  return acc;
 }
 
 void Hacl_Bignum_Convert_from_bytes_be(uint64_t *res, size_t n, uint8_t *b) {
@@ -23776,18 +23897,15 @@ void Hacl_Streaming_HMAC_hmac_sha224_init(uint32_t *acc, uint8_t *buf, size_t *t
 }
 
 static uint32_t Hacl_Impl_Bytes_load_be__t_3(uint8_t *b, size_t off) {
-  size_t n = Hacl_Secret_Word_nbytes__t;
-  uint32_t z = Hacl_Secret_Word_zero__t;
-  uint32_t acc = z;
-  size_t j = 0;
-  while (j < n) {
-    size_t vj = j;
-    uint8_t byte = b[(off + vj)];
-    uint32_t a = acc;
-    acc = Hacl_Secret_Word_logor__t(Hacl_Secret_Word_shift_left__t(a, 8), Hacl_Secret_Word_of_byte__t(byte));
-    j = (vj + 1);
+  if (Hacl_Secret_Word_nbytes__t == 4) return Hacl_Impl_Bytes_load_be4__t(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t == 8) {
+      uint32_t hi = Hacl_Impl_Bytes_load_be4__t(b, off);
+      uint32_t lo = Hacl_Impl_Bytes_load_be4__t(b, (off + 4));
+      return Hacl_Secret_Word_logor__t(lo, Hacl_Secret_Word_shift_left__t(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_be_loop__t(b, off);
   }
-  return acc;
 }
 
 static void Hacl_Hash_SHA1_Core_ws_expand(uint32_t *wsb, uint8_t *block, size_t off) {
@@ -24214,8 +24332,8 @@ static void Hacl_Poly1305_absorb_tail(uint64_t *h, uint64_t *r, uint64_t *d, uin
 
 void Hacl_Poly1305_mac(uint8_t *out, uint8_t *msg, size_t len, uint8_t *key) {
   uint64_t z = Hacl_Secret_UInt64_zero;
-  uint64_t rarr[5];
-  for (size_t _ci1 = 0; _ci1 < 5; _ci1++) {
+  uint64_t rarr[9];
+  for (size_t _ci1 = 0; _ci1 < 9; _ci1++) {
     rarr[_ci1] = z;
   }
   uint64_t harr[5];
@@ -24555,19 +24673,15 @@ static void Hacl_Hash_Blake2_read_block__t(uint8_t *blk, uint8_t *s, size_t len,
 }
 
 static uint32_t Hacl_Impl_Bytes_load_le__t_2(uint8_t *b, size_t off) {
-  size_t n = Hacl_Secret_Word_nbytes__t;
-  uint32_t z = Hacl_Secret_Word_zero__t;
-  uint32_t acc = z;
-  size_t j = 0;
-  while (j < n) {
-    size_t vj = j;
-    size_t pos = ((off + n) - (vj + 1));
-    uint8_t byte = b[pos];
-    uint32_t a = acc;
-    acc = Hacl_Secret_Word_logor__t(Hacl_Secret_Word_shift_left__t(a, 8), Hacl_Secret_Word_of_byte__t(byte));
-    j = (vj + 1);
+  if (Hacl_Secret_Word_nbytes__t == 4) return Hacl_Impl_Bytes_load_le4__t(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t == 8) {
+      uint32_t lo = Hacl_Impl_Bytes_load_le4__t(b, off);
+      uint32_t hi = Hacl_Impl_Bytes_load_le4__t(b, (off + 4));
+      return Hacl_Secret_Word_logor__t(lo, Hacl_Secret_Word_shift_left__t(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_le_loop__t(b, off);
   }
-  return acc;
 }
 
 static void Hacl_Hash_Blake2_load_block__t(uint32_t *mw, uint8_t *blk) {
@@ -33172,19 +33286,15 @@ static void Hacl_Hash_Blake2_read_block__t_1(uint8_t *blk, uint8_t *s, size_t le
 }
 
 static uint64_t Hacl_Impl_Bytes_load_le__t_3(uint8_t *b, size_t off) {
-  size_t n = Hacl_Secret_Word_nbytes__t_1;
-  uint64_t z = Hacl_Secret_Word_zero__t_1;
-  uint64_t acc = z;
-  size_t j = 0;
-  while (j < n) {
-    size_t vj = j;
-    size_t pos = ((off + n) - (vj + 1));
-    uint8_t byte = b[pos];
-    uint64_t a = acc;
-    acc = Hacl_Secret_Word_logor__t_1(Hacl_Secret_Word_shift_left__t_1(a, 8), Hacl_Secret_Word_of_byte__t_1(byte));
-    j = (vj + 1);
+  if (Hacl_Secret_Word_nbytes__t_1 == 4) return Hacl_Impl_Bytes_load_le4__t_1(b, off);
+  else {
+    if (Hacl_Secret_Word_nbytes__t_1 == 8) {
+      uint64_t lo = Hacl_Impl_Bytes_load_le4__t_1(b, off);
+      uint64_t hi = Hacl_Impl_Bytes_load_le4__t_1(b, (off + 4));
+      return Hacl_Secret_Word_logor__t_1(lo, Hacl_Secret_Word_shift_left__t_1(hi, 32));
+    }
+    else return Hacl_Impl_Bytes_load_le_loop__t_1(b, off);
   }
-  return acc;
 }
 
 static void Hacl_Hash_Blake2_load_block__t_1(uint64_t *mw, uint8_t *blk) {
