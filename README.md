@@ -3183,6 +3183,82 @@ recognize and lost more than the straight-line code won.  The load loop had
 no such escape hatch, because a serial dependency cannot be vectorized at
 all.  Keeping the loads and reverting the stores is the whole of this change.
 
+### A bit string is a number
+
+ML-KEM's `ByteEncode_d` packs 256 coefficients of `d` bits each into `32 d`
+bytes, and `ByteDecode_d` unpacks them.  FIPS 203 states both of them one
+bit at a time: bit `j` of the output is bit `j mod d` of coefficient
+`j div d`.  `Spec.MLKEM.Encode` follows the standard, and the
+implementation used to follow the specification, which means it computed a
+division and a remainder by `d` for every bit it moved.  `d` is a
+parameter rather than a constant, so those were real divisions --- three
+thousand of them to encode one twelve-bit key polynomial.
+
+gcc had been hiding how much that cost.  Its interprocedural constant
+propagation would clone the encoder on `d`, which turns each division into
+a multiply and a shift, and when the translation unit grew past the clone
+budget the clone went away.  Bisecting the resulting slowdown with
+`__attribute__((noclone))`, one candidate function at a time, showed the
+encoder was the whole of it.
+
+The fix is not to make a division cheaper but to notice that there is no
+division in the problem.  Packing 256 `d`-bit values least significant
+first is exactly writing down the integer
+
+    N = sum_j f_j 2^(d j)
+
+and reading a byte string least significant first is exactly
+`Hacl.Spec.Bytes.le_nat`.  Both coders are the identity on one `256 d`-bit
+number.  Once that is said, the implementation is free to move bits in and
+out of `N` in whatever chunks suit the machine, because any two ways of
+chopping up the same number agree.
+
+So both are a sixty-four bit shift register.  The encoder holds the bits
+packed so far and not yet written, pushes each coefficient in at the top,
+and writes a byte off the bottom whenever eight have accumulated:
+
+    acc += (f[i] & mask_d) << nb;  nb += d;
+    while (nb >= 8) { out[o++] = acc;  acc >>= 8;  nb -= 8; }
+
+The decoder runs the same register backwards, pulling a byte in whenever
+fewer than `d` bits are left.  There is no division anywhere, and the
+loops are the ones a C programmer would have written.
+
+`Spec.MLKEM.Pack` is the module that makes this legal.  It is pure
+arithmetic --- it mentions neither `q` nor the NTT nor any parameter set
+--- and says that `enc_num`'s bits are `coeff_bit`'s, that its bytes are
+`byte_encode`'s, and that `bits_val` is a window of `le_nat`.  Two
+decisions in it are worth copying elsewhere:
+
+*The register is narrow, so use arithmetic rather than bits.*  It is never
+wider than `8 + d <= 20` bits.  That makes each step's two operands
+provably disjoint and their sum provably within range, so the bits can be
+combined with `add_mod` instead of `logor`.  The generated code is
+identical --- the compiler sees the same instruction either way --- and
+the proof needs no bitwise reasoning at all, which is the part that is
+expensive to automate.
+
+*Mask rather than assume.*  `enc_num` takes each coefficient modulo `2^d`
+rather than requiring the caller to have reduced it.  This costs one `AND`
+per coefficient and removes a precondition from every caller, and it is
+sound precisely because `coeff_bit` never reads above bit `d` either, so
+the two agree on inputs that are not reduced as well as on inputs that
+are.
+
+Measured on ML-KEM-768, in microseconds:
+
+| | gcc before | gcc after | | clang before | clang after | |
+| --- | --- | --- | --- | --- | --- | --- |
+| keypair | 116.8 | 98.1 | 1.19x | 192.1 | 95.4 | **2.01x** |
+| encapsulate | 154.2 | 105.5 | **1.46x** | 171.6 | 124.7 | 1.38x |
+| decapsulate | 199.5 | 137.0 | **1.46x** | 233.8 | 172.7 | 1.35x |
+
+Decapsulation gains from the *encoder* as much as from the decoder,
+because the Fujisaki-Okamoto transform re-encrypts in order to check.  The
+clang key generation column is the one to dwell on: clang never cloned
+anything, so it had been paying every division in full, and key generation
+encodes two complete twelve-bit vectors.
+
 ### Measuring on a shared machine
 
 A change confined to MD5 once appeared to cost BLAKE2b 62% and Ed25519 75%.
@@ -3243,9 +3319,9 @@ measured the same way as the rest of this section:
 
 | operation | 512 | 768 | 1024 |
 | --- | --- | --- | --- |
-| keypair | 73 us | 116 us | 172 us |
-| encapsulate | 101 us | 153 us | 224 us |
-| decapsulate | 134 us | 199 us | 283 us |
+| keypair | 60 us | 98 us | 143 us |
+| encapsulate | 66 us | 105 us | 152 us |
+| decapsulate | 90 us | 137 us | 194 us |
 
 Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
@@ -3259,16 +3335,15 @@ layers written out, with a Barrett reduction on every product and no
 lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
 look first if these ever need to be faster.
 
-There is also a specialisation gap of exactly the kind the note below this
-table is about.  `make clones-available` says gcc would clone ML-KEM's
-noise sampler, its polynomial encoder and its key generation on the
-parameters they are passed, and would clone SHA3-512 on the constant
-lengths ML-KEM calls it with, but that the interprocedural budget is
-spent.  Recompiling with the budget raised is worth **1.32x** on
-encapsulation and **1.24x** on decapsulation -- 153 to 117 microseconds
-and 199 to 160 -- and nothing at all on key generation.  By the policy
-here that gap is ours to close in F\*, not the compiler's to close if it
-happens to have room; it is on the roadmap and it is not closed yet.
+These numbers used to be half again as large, and the reason they are not
+is *A bit string is a number* below.  There was a specialisation gap here
+of exactly the kind the note below this table is about: `make
+clones-available` said gcc would clone ML-KEM's polynomial encoder on the
+bit width it is passed but that the interprocedural budget was spent, and
+raising the budget was worth 1.32x on encapsulation.  That turned out to
+be the compiler papering over a bit-serial coder, and the fix was to
+rewrite the coder rather than to recover the clone.  Nothing in
+`clones-available` is worth anything measurable on ML-KEM now.
 
 ## Proof engineering notes
 
@@ -3403,6 +3478,29 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 * **A `while` needs a `decreases`.**  Without one the loop is `stt_div`, and
   the error surfaces far away as "cannot compose computations in this divergent
   block", naming the effect rather than the missing clause.
+* **A `decreases` measure must stay non-negative *after* the body.**  A fill
+  loop running `while (nb < d) { nb += 8; }` has the obvious measure `d - nb`,
+  which is positive on entry to the body and negative on the way out of it.
+  `<<` on `int` is well-founded only on the non-negative part, so this fails
+  at the loop's last iteration with a `_ << meas` goal that looks arithmetic
+  and is not.  `d + 8 - nb`, with `nb < d + 8` carried in the invariant, is
+  the same measure shifted into range.
+* **Lead a hard linear goal up a staircase.**  After a loop on `i`, proving
+  `SZ.v i == 256` from `~(SZ.v i < 256)` and `SZ.v i <= 256` timed out at
+  rlimit 600 --- not because it is hard, but because the loop invariant
+  leaves a quantified frame condition and a `pow2`-laden equation in scope
+  for Z3 to flail at.  Writing `assert (256 <= SZ.v i); assert (SZ.v i <=
+  256); assert (SZ.v i == 256)` makes all three discharge instantly at rlimit
+  40.  Each `assert` is its own query with its own, much smaller, set of
+  relevant facts.
+* **Hoist each nonlinear step into a lemma whose arguments are the machine
+  values.**  Inside a Pulse loop body the context is enormous; `d * (i + 1) <=
+  256 * d` asked there can cost the whole rlimit, and asked in a four-line
+  top-level lemma it costs nothing.  `Spec.MLKEM.Pack.enc_room` and `dec_room`
+  exist only for this.  The rule of thumb that fell out: if a goal mentions a
+  product of two variables, it does not belong in Pulse code.
+* **`by` is a reserved word.**  `let by = ...` is a syntax error reported at
+  the column of the `=`, with no mention of the name.
 * **`--split_queries` is not a pragma.**  When a four-conjunct postcondition
   times out, the lever available is `--fuel`/`--ifuel` and splitting the
   function, not splitting the query.
@@ -4044,16 +4142,27 @@ rough order of value:
    nothing measurable, so taking *those* over is a tidying exercise rather
    than a performance one.
 
-   The ones gcc would perform and cannot are a different matter, and ML-KEM
-   is where that now bites: `make clones-available` wants to clone the noise
-   sampler on eta, the polynomial encoder on the bit width, key generation on
-   the parameter set, and SHA3-512 on its constant call lengths, and the
-   budget is spent.  Raising it is worth 1.32x on encapsulation and 1.24x on
-   decapsulation, so this one is a performance item -- the largest single
-   number left in this list.  Splitting the
-   distribution into several translation units is *not* the fix here -- it
-   moves the budget rather than removing the dependency on it, and costs
-   inlining across the new boundaries.
+   The ones gcc would perform and cannot *looked* like a different matter,
+   and ML-KEM looked like where it bit: `make clones-available` wanted to
+   clone the noise sampler on eta, the polynomial encoder on the bit width,
+   key generation on the parameter set, and SHA3-512 on its constant call
+   lengths, and the budget was spent.  Raising it was worth 1.32x on
+   encapsulation and 1.24x on decapsulation.  Bisecting that number with
+   `__attribute__((noclone))`, one candidate at a time, showed it was
+   entirely the encoder -- and that the right fix was not to get the clone
+   back but to stop needing it, which is what *A bit string is a number*
+   above does.  The other twelve entries in `clones-available` were then
+   measured to be worth nothing on ML-KEM, so what remains of this item is
+   the tidying exercise after all.  Splitting the distribution into several
+   translation units is still *not* the fix -- it moves the budget rather
+   than removing the dependency on it, and costs inlining across the new
+   boundaries.
+
+   The lesson generalises, and is worth stating plainly: a specialisation
+   the compiler grants at its own discretion is usually hiding an
+   algorithmic problem that it is papering over.  `clones-available` is
+   better read as a list of places to look than as a list of speedups
+   owed.
 
    Part of this is a mechanical sweep: a table that never varies should not
    be a parameter at all.  BLAKE2's schedule, BLAKE2's initialisation vector
