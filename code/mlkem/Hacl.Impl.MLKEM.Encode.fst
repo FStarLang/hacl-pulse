@@ -34,6 +34,8 @@ module Hacl.Impl.MLKEM.Encode
 open Pulse.Lib.Pervasives
 open Spec.MLKEM.Zq
 open Spec.MLKEM.Encode
+open Spec.MLKEM.Pack
+open Hacl.Spec.Bytes
 open Hacl.Impl.MLKEM.Zq
 
 module A = Pulse.Lib.Array
@@ -49,96 +51,33 @@ module U32 = FStar.UInt32
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-(** {2 Encoding} *)
+(** {2 Encoding}
 
-(** Bit [pos] of the coefficient sequence: bit [pos mod d] of coefficient
-    [pos / d], counting from the least significant. *)
-inline_for_extraction
-fn coeff_bit_impl (f: A.array zqt) (d: SZ.t) (pos: SZ.t)
-                  (#p: perm) (#vf: erased (Seq.seq zqt))
-requires A.pts_to f #p vf **
-         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n)
-returns b: S16.t
-ensures A.pts_to f #p vf **
-        pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\
-              S16.v b == coeff_bit (SZ.v d) (as_nats vf) (SZ.v pos))
-{
-  A.pts_to_len f;
-  HSZ.fits32 ();
-  assert_norm (12 * 256 < pow2 32);
-  SZ.fits_u32_implies_fits (SZ.v d * n);
-  if (SZ.lt pos (SZ.mul d 256sz)) {
-    div_lt (SZ.v pos) n (SZ.v d);
-    let i = SZ.div pos d;
-    let r = SZ.rem pos d;
-    let x = A.(f.(i));
-    let y = S16.shift_right x (SZ.sizet_to_uint32 r);
-    S16.logand_mask_low y 1ul;
-    assert_norm (pow2 1 == 2);
-    S16.logand y (S16.mask_low 1ul)
-  } else {
-    S16.zero
-  }
-}
+    Both coders run a shift register.  FIPS 203 states them bit by bit and
+    {!Spec.MLKEM.Encode} follows it, but a bit-serial implementation
+    divides by [d] twice for every bit it moves, and [d] is a parameter,
+    so those are real divisions: twelve bits of key is three thousand of
+    them.  {!Spec.MLKEM.Pack} says instead what the bit string is --- the
+    integer [sum_j f_j 2^(d j)], whose little-endian bytes are the
+    encoding --- and that one number can be filled and emptied in whatever
+    chunks suit the machine.
 
-(** Eight of them, least significant first.  Written out rather than
-    folded because the specification is written out. *)
-inline_for_extraction
-fn encode_byte (f: A.array zqt) (d: SZ.t) (i: SZ.t)
-               (#p: perm) (#vf: erased (Seq.seq zqt))
-requires A.pts_to f #p vf **
-         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\ SZ.v i < 32 * SZ.v d)
-returns b: S8.t
-ensures A.pts_to f #p vf **
-        pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\
-              S8.v b == byte_val (SZ.v d) (as_nats vf) (SZ.v i))
-{
-  HSZ.fits32 ();
-  assert_norm (12 * 256 < pow2 32);
-  SZ.fits_u32_implies_fits (8 * SZ.v i + 8);
-  assert_norm (pow2 1 == 2);
-  assert_norm (pow2 2 == 4);
-  assert_norm (pow2 3 == 8);
-  assert_norm (pow2 4 == 16);
-  assert_norm (pow2 5 == 32);
-  assert_norm (pow2 6 == 64);
-  assert_norm (pow2 7 == 128);
-  assert_norm (pow2 8 == 256);
-  assert_norm (pow2 16 == 65536);
-  let base = SZ.mul 8sz i;
-  let b0 = coeff_bit_impl f d base;
-  let b1 = coeff_bit_impl f d (SZ.add base 1sz);
-  let b2 = coeff_bit_impl f d (SZ.add base 2sz);
-  let b3 = coeff_bit_impl f d (SZ.add base 3sz);
-  let b4 = coeff_bit_impl f d (SZ.add base 4sz);
-  let b5 = coeff_bit_impl f d (SZ.add base 5sz);
-  let b6 = coeff_bit_impl f d (SZ.add base 6sz);
-  let b7 = coeff_bit_impl f d (SZ.add base 7sz);
-  assert (pure (S16.v b0 < 2 /\ S16.v b1 < 2 /\ S16.v b2 < 2 /\ S16.v b3 < 2 /\
-                S16.v b4 < 2 /\ S16.v b5 < 2 /\ S16.v b6 < 2 /\ S16.v b7 < 2));
-  let a1 = S16.add_mod b0 (S16.shift_left b1 1ul);
-  assert (pure (S16.v a1 == S16.v b0 + 2 * S16.v b1 /\ S16.v a1 <= 3));
-  let a2 = S16.add_mod a1 (S16.shift_left b2 2ul);
-  assert (pure (S16.v a2 == S16.v a1 + 4 * S16.v b2 /\ S16.v a2 <= 7));
-  let a3 = S16.add_mod a2 (S16.shift_left b3 3ul);
-  assert (pure (S16.v a3 == S16.v a2 + 8 * S16.v b3 /\ S16.v a3 <= 15));
-  let a4 = S16.add_mod a3 (S16.shift_left b4 4ul);
-  assert (pure (S16.v a4 == S16.v a3 + 16 * S16.v b4 /\ S16.v a4 <= 31));
-  let a5 = S16.add_mod a4 (S16.shift_left b5 5ul);
-  assert (pure (S16.v a5 == S16.v a4 + 32 * S16.v b5 /\ S16.v a5 <= 63));
-  let a6 = S16.add_mod a5 (S16.shift_left b6 6ul);
-  assert (pure (S16.v a6 == S16.v a5 + 64 * S16.v b6 /\ S16.v a6 <= 127));
-  let a7 = S16.add_mod a6 (S16.shift_left b7 7ul);
-  assert (pure (S16.v a7 == S16.v a6 + 128 * S16.v b7 /\ S16.v a7 < 256));
-  S16.lo a7
-}
+    So [encode_poly] holds a sixty-four bit register containing the bits
+    packed so far and not yet written out, pushes each coefficient in at
+    the top with a shift and an add, and writes a byte off the bottom
+    whenever eight have accumulated.  [decode_poly] runs the same register
+    the other way.  Neither divides by anything, and the register is never
+    wider than [8 + d <= 20] bits, so the shifts and adds are exact and
+    the arithmetic is plain. *)
+
+#push-options "--z3rlimit 150"
 
 (** [out <- ByteEncode_d f], [32 d] bytes of it. *)
 fn encode_poly (out: A.array S8.t) (f: A.array zqt) (d: SZ.t)
-               (#p: perm) (#vo: erased (Seq.seq S8.t)) (#vf: erased (Seq.seq zqt))
-requires A.pts_to out vo ** A.pts_to f #p vf **
+               (#p: perm) (#vout: erased (Seq.seq S8.t)) (#vf: erased (Seq.seq zqt))
+requires A.pts_to out vout ** A.pts_to f #p vf **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
-               Seq.length vf == n /\ Seq.length vo == 32 * SZ.v d)
+               Seq.length vf == n /\ Seq.length vout == 32 * SZ.v d)
 ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\
               v == byte_encode (SZ.v d) (as_nats vf))
@@ -147,33 +86,97 @@ ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
   A.pts_to_len f;
   HSZ.fits32 ();
   assert_norm (32 * 12 < pow2 32);
+  assert_norm (pow2 12 == 4096);
+  assert_norm (pow2 20 < pow2 64);
   SZ.fits_u32_implies_fits (32 * SZ.v d);
-  let len = SZ.mul 32sz d;
+  let dd = SZ.sizet_to_uint32 d;
+  enc_num_zero (SZ.v d) (as_nats vf);
+  assert_norm (pow2 0 == 1);
+  let mut acc = S64.zero;
+  let mut nb = 0sz;
+  let mut o = 0sz;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi len)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** A.pts_to out v ** A.pts_to f #p vf **
-    pure (SZ.v vi <= 32 * SZ.v d /\ Seq.length v == 32 * SZ.v d /\
-          1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\
-          (forall (k: nat). k < SZ.v vi ==>
+  while (let vi = !i; SZ.lt vi 256sz)
+  invariant exists* (vi vn vo: SZ.t) (va: S64.t) (v: Seq.seq S8.t).
+    pts_to i vi ** pts_to nb vn ** pts_to o vo ** pts_to acc va **
+    A.pts_to out v ** A.pts_to f #p vf **
+    pure (SZ.v vi <= n /\ SZ.v vn < 8 /\
+          SZ.v d * SZ.v vi == 8 * SZ.v vo + SZ.v vn /\
+          SZ.v vo <= 32 * SZ.v d /\
+          1 <= SZ.v d /\ SZ.v d <= 12 /\
+          Seq.length vf == n /\ Seq.length v == 32 * SZ.v d /\
+          S64.v va == enc_num (SZ.v d) (as_nats vf) (SZ.v vi) / pow2 (8 * SZ.v vo) /\
+          (forall (k: nat). k < SZ.v vo ==>
              Seq.index v k == Seq.index (byte_encode (SZ.v d) (as_nats vf)) k))
-  decreases (32 * SZ.v d - SZ.v (!i))
+  decreases (n - SZ.v (!i))
   {
     let vi = !i;
-    let b = encode_byte f d vi;
-    byte_encode_index (SZ.v d) (as_nats vf) (SZ.v vi);
-    A.((out.(vi) <- b));
-    SZ.fits_u32_implies_fits (SZ.v vi + 1);
+    let vn = !nb;
+    let vo = !o;
+    let va = !acc;
+    let x = A.(f.(vi));
+    S16.logand_mask_low x dd;
+    let c = S16.logand x (S16.mask_low dd);
+    assert (pure (S16.v c == S16.v x % pow2 (SZ.v d)));
+    Math.pow2_le_compat 12 (SZ.v d);
+    Math.lemma_mult_le_right (pow2 (SZ.v vn)) (S16.v c) 4096;
+    Math.pow2_le_compat 8 (SZ.v vn);
+    Math.pow2_plus 12 8;
+    Math.small_mod (S16.v c * pow2 (SZ.v vn)) (pow2 64);
+    let y = S64.shift_left (Cast.u16_to_u64 c) (SZ.sizet_to_uint32 vn);
+    assert (pure (S64.v y == S16.v c * pow2 (SZ.v vn)));
+    enc_acc_bound (SZ.v d) (as_nats vf) (SZ.v vi) (SZ.v vo) (SZ.v vn);
+    enc_push (SZ.v d) (as_nats vf) (SZ.v vi) (SZ.v vo) (SZ.v vn);
+    Math.small_mod (S64.v va + S64.v y) (pow2 64);
+    acc := S64.add_mod va y;
+    nb := SZ.add vn d;
     i := SZ.add vi 1sz;
+    Math.lemma_mult_le_left (SZ.v d) (SZ.v vi + 1) 256;
+    Math.distributivity_add_right (SZ.v d) (SZ.v vi) 1;
+    while (let vn' = !nb; SZ.gte vn' 8sz)
+    invariant exists* (vn vo: SZ.t) (va: S64.t) (v: Seq.seq S8.t).
+      pts_to i (SZ.add vi 1sz) ** pts_to nb vn ** pts_to o vo ** pts_to acc va **
+      A.pts_to out v ** A.pts_to f #p vf **
+      pure (SZ.v vn < 8 + SZ.v d /\
+            SZ.v d * (SZ.v vi + 1) == 8 * SZ.v vo + SZ.v vn /\
+            SZ.v vo <= 32 * SZ.v d /\
+            1 <= SZ.v d /\ SZ.v d <= 12 /\ SZ.v vi < n /\
+            Seq.length vf == n /\ Seq.length v == 32 * SZ.v d /\
+            S64.v va == enc_num (SZ.v d) (as_nats vf) (SZ.v vi + 1) / pow2 (8 * SZ.v vo) /\
+            (forall (k: nat). k < SZ.v vo ==>
+               Seq.index v k == Seq.index (byte_encode (SZ.v d) (as_nats vf)) k))
+    decreases (SZ.v (!nb))
+    {
+      let vn = !nb;
+      let vo = !o;
+      let va = !acc;
+      enc_room (SZ.v d) (SZ.v vi) (SZ.v vo) (SZ.v vn);
+      byte_encode_prefix (SZ.v d) (as_nats vf) (SZ.v vi + 1) (SZ.v vo);
+      assert_norm (pow2 8 == 256);
+      A.((out.(vo) <- Cast.u64_to_u8 va));
+      enc_flush (SZ.v d) (as_nats vf) (SZ.v vi + 1) (SZ.v vo);
+      acc := S64.shift_right va 8ul;
+      nb := SZ.sub vn 8sz;
+      o := SZ.add vo 1sz;
+    }
   };
+  with vie vne voe. assert (pts_to i vie ** pts_to nb vne ** pts_to o voe);
+  assert (pure (256 <= SZ.v vie));
+  assert (pure (SZ.v vie <= 256));
+  assert (pure (SZ.v vie == 256));
+  enc_done (SZ.v d) (SZ.v vie) (SZ.v voe) (SZ.v vne);
   with v. assert (A.pts_to out v);
   Seq.lemma_eq_intro v (byte_encode (SZ.v d) (as_nats vf));
   assert (pure (v == byte_encode (SZ.v d) (as_nats vf)));
 }
 
+#pop-options
+
 (** {2 Decoding} *)
 
-(** Bit [pos] of a byte string, least significant first. *)
+(** Bit [pos] of a byte string, least significant first.  The accumulator
+    loops below do not need this, but centred binomial sampling still reads
+    one bit at a time, and it reads only [2 eta] of them per coefficient. *)
 inline_for_extraction
 fn stream_bit_impl (b: A.array S8.t) (blen: SZ.t) (pos: SZ.t)
                    (#p: perm) (#vb: erased (Seq.seq S8.t))
@@ -198,50 +201,7 @@ ensures A.pts_to b #p vb **
   }
 }
 
-(** [d] bits starting at [off], read as a little-endian integer.  The loop
-    runs from the least significant bit up, which is why the specification
-    needs {!Spec.MLKEM.Encode.bits_val_snoc}: it is written the other way
-    round. *)
-inline_for_extraction
-fn bits_val_impl (b: A.array S8.t) (blen: SZ.t) (off: SZ.t) (d: SZ.t)
-                 (#p: perm) (#vb: erased (Seq.seq S8.t))
-requires A.pts_to b #p vb **
-         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vb == SZ.v blen /\
-               SZ.v off <= 12 * n)
-returns x: S16.t
-ensures A.pts_to b #p vb **
-        pure (Seq.length vb == SZ.v blen /\ 1 <= SZ.v d /\ SZ.v d <= 12 /\
-              S16.v x == bits_val vb (SZ.v off) (SZ.v d))
-{
-  A.pts_to_len b;
-  HSZ.fits32 ();
-  assert_norm (pow2 12 == 4096);
-  assert_norm (4096 < pow2 16);
-  assert_norm (12 * n + 12 < pow2 32);
-  let mut acc = S16.zero;
-  let mut j = 0sz;
-  while (let vj = !j; SZ.lt vj d)
-  invariant exists* (vj: SZ.t) (a: S16.t).
-    pts_to j vj ** pts_to acc a ** A.pts_to b #p vb **
-    pure (SZ.v vj <= SZ.v d /\ Seq.length vb == SZ.v blen /\
-          1 <= SZ.v d /\ SZ.v d <= 12 /\ SZ.v off <= 12 * n /\
-          S16.v a == bits_val vb (SZ.v off) (SZ.v vj))
-  decreases (SZ.v d - SZ.v (!j))
-  {
-    let vj = !j;
-    let a = !acc;
-    SZ.fits_u32_implies_fits (SZ.v off + SZ.v vj);
-    SZ.fits_u32_implies_fits (SZ.v vj + 1);
-    let bit = stream_bit_impl b blen (SZ.add off vj);
-    bits_val_snoc vb (SZ.v off) (SZ.v vj + 1);
-    Math.pow2_le_compat 12 (SZ.v vj + 1);
-    Math.pow2_lt_compat 12 (SZ.v vj);
-    Math.small_mod (S16.v a + pow2 (SZ.v vj) * S16.v bit) (pow2 16);
-    acc := S16.add_mod a (S16.shift_left bit (SZ.sizet_to_uint32 vj));
-    j := SZ.add vj 1sz;
-  };
-  !acc
-}
+#push-options "--z3rlimit 600"
 
 (** [dst <- ByteDecode_d b].  For [d < 12] the result is below [2^d] and
     already canonical; only [d = 12] can exceed [q], and it cannot exceed
@@ -261,35 +221,93 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
   A.pts_to_len b;
   HSZ.fits32 ();
   assert_norm (32 * 12 < pow2 32);
+  assert_norm (pow2 12 == 4096);
   assert_norm (pow2 12 < 2 * q);
+  assert_norm (pow2 20 < pow2 64);
   SZ.fits_u32_implies_fits (32 * SZ.v d);
-  let blen = SZ.mul 32sz d;
+  let dd = SZ.sizet_to_uint32 d;
+  let mut acc = S64.zero;
+  let mut nb = 0sz;
+  let mut pos = 0sz;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 256sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq zqt).
-    pts_to i vi ** A.pts_to dst v ** A.pts_to b #p vb **
-    pure (SZ.v vi <= n /\ Seq.length v == n /\ Seq.length vb == 32 * SZ.v d /\
+  invariant exists* (vi vn vp: SZ.t) (va: S64.t) (v: Seq.seq zqt).
+    pts_to i vi ** pts_to nb vn ** pts_to pos vp ** pts_to acc va **
+    A.pts_to dst v ** A.pts_to b #p vb **
+    pure (SZ.v vi <= n /\ SZ.v vn < 8 /\
+          8 * SZ.v vp == SZ.v d * SZ.v vi + SZ.v vn /\
           1 <= SZ.v d /\ SZ.v d <= 12 /\
+          Seq.length v == n /\ Seq.length vb == 32 * SZ.v d /\
+          S64.v va == le_nat vb / pow2 (SZ.v d * SZ.v vi) % pow2 (SZ.v vn) /\
           (forall (k: nat). k < SZ.v vi ==>
              S16.v (Seq.index v k) == Seq.index (byte_decode (SZ.v d) vb) k))
   decreases (n - SZ.v (!i))
   {
     let vi = !i;
-    Math.lemma_mult_le_right (SZ.v d) (SZ.v vi) n;
-    Math.lemma_mult_le_left n (SZ.v d) 12;
-    assert_norm (12 * n < pow2 32);
-    SZ.fits_u32_implies_fits (SZ.v vi * SZ.v d);
-    SZ.fits_u32_implies_fits (SZ.v vi + 1);
-    let x = bits_val_impl b blen (SZ.mul vi d) d;
+    while (let vn' = !nb; SZ.lt vn' d)
+    invariant exists* (vn vp: SZ.t) (va: S64.t) (v: Seq.seq zqt).
+      pts_to i vi ** pts_to nb vn ** pts_to pos vp ** pts_to acc va **
+      A.pts_to dst v ** A.pts_to b #p vb **
+      pure (SZ.v vi < n /\ SZ.v vn < SZ.v d + 8 /\
+            8 * SZ.v vp == SZ.v d * SZ.v vi + SZ.v vn /\
+            1 <= SZ.v d /\ SZ.v d <= 12 /\
+            Seq.length v == n /\ Seq.length vb == 32 * SZ.v d /\
+            S64.v va == le_nat vb / pow2 (SZ.v d * SZ.v vi) % pow2 (SZ.v vn) /\
+            (forall (k: nat). k < SZ.v vi ==>
+               S16.v (Seq.index v k) == Seq.index (byte_decode (SZ.v d) vb) k))
+    decreases (SZ.v d + 8 - SZ.v (!nb))
+    {
+      let vn = !nb;
+      let vp = !pos;
+      let va = !acc;
+      dec_room (SZ.v d) (SZ.v vi) (SZ.v vp) (SZ.v vn);
+      let bk = A.(b.(vp));
+      Math.pow2_le_compat 12 (SZ.v vn);
+      Math.lemma_mult_le_right (pow2 (SZ.v vn)) (S8.v bk) 256;
+      Math.pow2_plus 8 12;
+      Math.small_mod (S8.v bk * pow2 (SZ.v vn)) (pow2 64);
+      let y = S64.shift_left (Cast.u8_to_u64 bk) (SZ.sizet_to_uint32 vn);
+      assert (pure (S64.v y == S8.v bk * pow2 (SZ.v vn)));
+      dec_read vb (SZ.v d * SZ.v vi) (SZ.v vn) (SZ.v vp);
+      Math.pow2_le_compat 20 (SZ.v vn + 8);
+      Math.small_mod (S64.v va + S64.v y) (pow2 64);
+      Math.lemma_mod_lt (le_nat vb / pow2 (SZ.v d * SZ.v vi)) (pow2 (SZ.v vn + 8));
+      acc := S64.add_mod va y;
+      nb := SZ.add vn 8sz;
+      SZ.fits_u32_implies_fits (SZ.v vp + 1);
+      pos := SZ.add vp 1sz;
+    };
+    let vn = !nb;
+    let va = !acc;
+    S64.logand_mask_low va dd;
+    let m = S64.logand va (S64.mask_low dd);
+    dec_val vb (SZ.v d * SZ.v vi) (SZ.v vn) (SZ.v d);
+    assert (pure (S64.v m == bits_val vb (SZ.v d * SZ.v vi) (SZ.v d)));
     Math.pow2_le_compat 12 (SZ.v d);
+    Math.pow2_le_compat 16 (SZ.v d);
+    Math.small_mod (S64.v m) (pow2 16);
+    let x = Cast.u64_to_u16 m;
     byte_decode_index (SZ.v d) vb (SZ.v vi);
+    Math.swap_mul (SZ.v vi) (SZ.v d);
     A.((dst.(vi) <- csub x));
+    dec_take vb (SZ.v d * SZ.v vi) (SZ.v vn) (SZ.v d);
+    Math.distributivity_add_right (SZ.v d) (SZ.v vi) 1;
+    acc := S64.shift_right va dd;
+    nb := SZ.sub vn d;
+    SZ.fits_u32_implies_fits (SZ.v vi + 1);
     i := SZ.add vi 1sz;
   };
-  with v. assert (A.pts_to dst v);
+  with vie vne vpe vae v.
+    assert (pts_to i vie ** pts_to nb vne ** pts_to pos vpe **
+            pts_to acc vae ** A.pts_to dst v);
+  assert (pure (256 <= SZ.v vie));
+  assert (pure (SZ.v vie <= 256));
+  assert (pure (SZ.v vie == 256));
   as_poly_intro v (byte_decode (SZ.v d) vb);
   assert (pure (as_poly v == byte_decode (SZ.v d) vb));
 }
+
+#pop-options
 
 (** {2 Compression} *)
 
