@@ -76,9 +76,8 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%K.point_add) K.point_add;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 5sz |]; A.pts_to_len a0; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut aw = [| zz; 5sz |]; A.pts_to_len aw; let mut au = [| zz; 5sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len a4; A.pts_to_len aw; A.pts_to_len au;
-  let bc = fb3 ();
+  let mut a0 = [| zz; 5sz |]; A.pts_to_len a0; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut aw = [| zz; 5sz |]; A.pts_to_len aw; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  A.pts_to_len a4; A.pts_to_len aw;
   fmul a0 x1 x2;
   fmul a1 y1 y2;
   fmul a2 z1 z2;
@@ -103,17 +102,18 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   fadd oy a0 a2;
   fsub aw ox oy;
   fcopy oy aw;
-  fcopy au a0;
-  fadd ox a0 au;
-  fadd aw ox a0;
-  fcopy a0 aw;
-  fmul aw bc a2;
-  fcopy a2 aw;
+  with va0. assert (A.pts_to a0 va0);
+  three_x (fev (vals va0));
+  fsmall a0 3uL;
+  with va2. assert (A.pts_to a2 va2);
+  b3_x (fev (vals va2));
+  fsmall a2 21uL;
   fadd oz a1 a2;
   fsub aw a1 a2;
   fcopy a1 aw;
-  fmul aw bc oy;
-  fcopy oy aw;
+  with voy1. assert (A.pts_to oy voy1);
+  b3_x (fev (vals voy1));
+  fsmall oy 21uL;
   fmul ox a4 oy;
   fmul a2 a3 a1;
   fsub aw a2 ox;
@@ -130,7 +130,6 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   fcopy oz aw;
   fadd aw oz a0;
   fcopy oz aw;
-  drop_table bc;
   ()
 }
 
@@ -152,30 +151,25 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%K.point_double) K.point_double;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 5sz |]; A.pts_to_len a0; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut aw = [| zz; 5sz |]; A.pts_to_len aw; let mut au = [| zz; 5sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len a4; A.pts_to_len aw; A.pts_to_len au;
-  let bc = fb3 ();
+  let mut a0 = [| zz; 5sz |]; A.pts_to_len a0; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; let mut aw = [| zz; 5sz |]; A.pts_to_len aw; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  A.pts_to_len a4; A.pts_to_len aw;
   fsqr a0 y;
-  fcopy au a0;
-  fadd oz a0 au;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
+  with va0. assert (A.pts_to a0 va0);
+  eight_x (fev (vals va0));
+  fcopy oz a0;
+  fsmall oz 8uL;
   fmul a1 y z;
   fsqr a2 z;
-  fmul aw bc a2;
-  fcopy a2 aw;
+  with va2. assert (A.pts_to a2 va2);
+  b3_x (fev (vals va2));
+  fsmall a2 21uL;
   fmul ox a2 oz;
   fadd oy a0 a2;
   fmul aw a1 oz;
   fcopy oz aw;
-  fcopy au a2;
-  fadd a1 a2 au;
-  fadd aw a1 a2;
-  fcopy a2 aw;
+  with vb2. assert (A.pts_to a2 vb2);
+  three_x (fev (vals vb2));
+  fsmall a2 3uL;
   fsub aw a0 a2;
   fcopy a0 aw;
   fmul aw a0 oy;
@@ -184,10 +178,9 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   fcopy oy aw;
   fmul a1 x y;
   fmul ox a0 a1;
-  fcopy au ox;
-  fadd aw ox au;
-  fcopy ox aw;
-  drop_table bc;
+  with vox. assert (A.pts_to ox vox);
+  two_x (fev (vals vox));
+  fsmall ox 2uL;
   ()
 }
 
