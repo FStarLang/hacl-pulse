@@ -14,11 +14,17 @@ extern "C" {
 #endif
 
 typedef struct FStar_Pervasives_Native_tuple2__t_t_s FStar_Pervasives_Native_tuple2__t_t;
+typedef struct FStar_Pervasives_Native_tuple3__t_t_t_s FStar_Pervasives_Native_tuple3__t_t_t;
 typedef struct FStar_Pervasives_Native_tuple2__uint32_uint32_s FStar_Pervasives_Native_tuple2__uint32_uint32;
 
 struct FStar_Pervasives_Native_tuple2__t_t_s {
   Hacl_Vec128_t _1;
   Hacl_Vec128_t _2;
+};
+struct FStar_Pervasives_Native_tuple3__t_t_t_s {
+  Hacl_Vec128_t _1;
+  Hacl_Vec128_t _2;
+  Hacl_Vec128_t _3;
 };
 struct FStar_Pervasives_Native_tuple2__uint32_uint32_s {
   uint32_t _1;
