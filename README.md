@@ -29,7 +29,7 @@ the scalar multiplication rather than the field.  Modular exponentiation --
 RSA-PSS, FFDHE and the generic modexp -- has crossed over: a 4-bit window, a
 four-at-a-time inner row and a triangle squaring put all three of those rows
 between 0.92x and 0.97x, faster than the reference.  On the curves: P-256's variable-base ECDH
-is now *faster* than the reference at 0.76x, secp256k1's is within 1.75x and
+is now *faster* than the reference at 0.76x, secp256k1's is within 1.39x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
 generator multiply it out of four compiled-in base points rather than one.
@@ -38,7 +38,9 @@ P-256 is the one that gained most from the latter: signing is now within
 further still and compile in the whole of their fixed-base windows,
 sixty-four precomputed multiples of the generator apiece: Ed25519 signing and
 key generation are within 1.46x under gcc and 1.16x under clang, and
-secp256k1 signing is within 1.40x and `secret-to-public` within 1.55x.
+secp256k1 signing is within 1.19x and `secret-to-public` within 1.28x, now
+that its small multiples -- twenty-one, eight, three, two -- are a
+limb-by-limb multiply rather than a full field multiplication.
 See
 [Performance](#performance).
 
@@ -2782,9 +2784,9 @@ reference**.
 | RSA-PSS-2048 verify | -- | 166 us | 145 us | **1.14x** |  |  |
 | NaCl secretbox | 256 KiB | 773 us | 649 us | **1.19x** |  |  |
 | Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
+| secp256k1 ECDSA sign | -- | 79 us | 66 us | **1.19x** |  |  |
 | X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
-| secp256k1 ECDSA sign | -- | 91 us | 65 us | **1.40x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
 | AES-128-GCM | 256 KiB | 112 us | 71 us | **1.58x** |  |  |
@@ -3182,6 +3184,63 @@ Writing the stores out by hand gave the vectorizer a shape it did not
 recognize and lost more than the straight-line code won.  The load loop had
 no such escape hatch, because a serial dependency cannot be vectorized at
 all.  Keeping the loads and reverting the stores is the whole of this change.
+
+### Twenty-one is not a field element
+
+The complete addition formulas of Renes, Costello and Batina are stated
+against a field, so they say `fmul b3 t` where they mean twenty-one times
+`t`, and `fadd x x` where they mean twice `x`.  `Spec.K256` keeps the
+published listings verbatim, which is the right thing for a specification
+and the wrong thing for the code underneath it.  Taken literally,
+`fmul b3 t` is a five-by-five schoolbook -- twenty-five word
+multiplications and a carry pass one width up -- to multiply by a number
+that fits in five bits, and the `8x` in the doubling is three carry
+passes.
+
+`Hacl.K256.Field52.fsmall` multiplies every limb by a small constant and
+runs one carry pass: five word multiplications instead of twenty-five.  It
+works because a limb is under `2^53` and the constants the formulas use
+are at most thirty-two, so the product still fits in a word, and because
+`carry_chain` is parameterised by the bound it is entering with rather
+than hard-wired to one operation.  The bound is stated once at the largest
+-- for every `n <= 32` at once -- rather than one shape per constant: the
+pass that follows is the same either way and the slack costs nothing.
+
+Four lemmas in `Spec.K256.Field52` do the whole translation between what
+the formulas say and what the code does:
+
+```fstar
+let two_x   (x: K.felem) : Lemma (K.fadd x x == (2 * x) % prime) = ()
+let three_x (x: K.felem) : Lemma (K.fadd (K.fadd x x) x == (3 * x) % prime)
+  = Math.lemma_mod_add_distr x (x + x) prime
+```
+
+and two more for `8x` and for `b3`.  `fsmall` is in place on a single
+array, which is what every one of the seven call sites wants and which
+sidesteps the aliasing that `fsmall a2 a2 21` would otherwise force the
+separation logic to argue about.  The `b3` constant table and the second
+scratch element both became dead and are gone.
+
+It is worth 1.15x to 1.24x on every secp256k1 operation under gcc and
+1.07x to 1.13x under clang.  What is left of the secp256k1 gap is
+algorithmic: HACL\*'s variable-base multiplication and its verification
+use the GLV endomorphism and Shamir's trick, which this repository
+declines for the reason given in `Hacl.K256.PointMulD`.
+
+Six experiments were run at the C level before any of this was written in
+Pulse, and three of them were worth exactly nothing, which is the more
+useful half of the result.  gcc already CSEs `fmul(out, a, a)` down to the
+fifteen distinct products, so a hand-written symmetric squaring buys
+nothing and `fsqr` can go on being `fcopy` then `fmul`.  It already
+unrolls the carry chain.  It already eliminates the `fcopy` churn around
+aliased calls.  A full lazy-reduction rewrite -- dropping the carry pass
+from `fadd` and `fsub` and reducing explicitly, which is what HACL\* does
+-- measured six per cent on top of this, and was not worth the proof
+cost.  The rule that falls out: only shapes the compiler *cannot* fix are
+worth fixing by hand, and a twenty-five-multiplication product where a
+five-multiplication one would do is such a shape.  Straight-lining `fadd`
+and `fsub`, which were loops over the five limbs, is the other such shape
+and is worth another three per cent.
 
 ### A bit string is a number
 
@@ -4194,3 +4253,24 @@ rough order of value:
     out of `raw_product` and do it once per aggregated group.  The shift can
     be removed outright instead: see *Removing the one-bit shift from
     GHASH* above.  Bulk AES-GCM gained 29%.
+
+12. **The GLV endomorphism and Shamir's trick for secp256k1.**  With the
+    small multiples of *Twenty-one is not a field element* in, secp256k1
+    signing is within **1.19x** of HACL\* and `secret-to-public` within
+    **1.28x**, but verification is still **2.12x** under gcc and 2.29x
+    under clang.  What is left is entirely algorithmic, and it is two
+    things.  First, verification computes `u1 G + u2 P` as two independent
+    scalar multiplications; Shamir's trick interleaves them against a
+    joint table and does one pass of doublings instead of two.
+    `Hacl.K256.PointMulD` currently declines it, with a docstring saying
+    why, and that docstring is the thing to revisit.  Second, secp256k1
+    has an efficiently computable endomorphism: `lambda * (x, y) ==
+    (beta x, y)`, which splits a 256-bit scalar into two 128-bit halves
+    and halves the number of doublings again.  HACL\* does both.  Together
+    they are roughly a factor of two on verification and about 30% on
+    variable-base ECDH, and neither is small: the scalar splitting needs
+    its own correctness proof, and the joint table needs the
+    constant-time lookup to range over sixteen combined points rather
+    than sixteen multiples of one.  Ed25519 verification, at **1.98x**,
+    wants the Shamir half of this for the same reason, and has no
+    endomorphism to go with it.
