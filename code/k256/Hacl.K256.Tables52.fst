@@ -64,23 +64,6 @@ let b_arr : (a: G.static_array S64.t
     lit_limbs b_list K.b_coeff;
     G.mk_static_array b_list
 
-(** [3b = 21], which is what the complete addition formulas multiply by. *)
-let b3_list : list S64.t = [
-  S64.classify 21uL; S64.classify 0uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL
-]
-
-let b3_arr : (a: G.static_array S64.t
-                  { Seq.length (G.static_array_elems a) == nl /\
-                    vals (G.static_array_elems a) == limbs_of K.b3 })
-  = assert_norm (L.length b3_list == nl);
-    assert_norm (lbnd b3_list);
-    assert_norm (leval b3_list == 21);
-    assert_norm (K.b3 == 21);
-    assert_norm (21 < pow2 256);
-    lit_limbs b3_list K.b3;
-    G.mk_static_array b3_list
-
 (** The base point. *)
 let gx_list : list S64.t = [
   S64.classify 705178180786072uL; S64.classify 3855836460717471uL;

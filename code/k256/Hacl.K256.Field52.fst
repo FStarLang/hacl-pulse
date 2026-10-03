@@ -341,22 +341,17 @@ ensures exists* (vout': Seq.seq S64.t).
   A.pts_to_len out;
   A.pts_to_len a;
   A.pts_to_len b;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 5sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (SZ.v vi <= 5 /\ Seq.length v == nl /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k == Seq.index (vals va) k + Seq.index (vals vb) k))
-  decreases (5 - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = A.(a.(vi));
-    let y = A.(b.(vi));
-    assert_norm (lim + lim < pow2 64);
-    A.((out.(vi) <- addw x y));
-    i := SZ.add vi 1sz;
-  };
+  assert_norm (lim + lim < pow2 64);
+  let x0 = A.(a.(0sz)); let y0 = A.(b.(0sz));
+  let x1 = A.(a.(1sz)); let y1 = A.(b.(1sz));
+  let x2 = A.(a.(2sz)); let y2 = A.(b.(2sz));
+  let x3 = A.(a.(3sz)); let y3 = A.(b.(3sz));
+  let x4 = A.(a.(4sz)); let y4 = A.(b.(4sz));
+  A.((out.(0sz) <- addw x0 y0));
+  A.((out.(1sz) <- addw x1 y1));
+  A.((out.(2sz) <- addw x2 y2));
+  A.((out.(3sz) <- addw x3 y3));
+  A.((out.(4sz) <- addw x4 y4));
   with v. assert (A.pts_to out v);
   assert (pure (vals v `Seq.equal` Spec.Bignum52.addw (vals va) (vals vb)));
   addw_ble (vals va) (vals vb) lim lim;
@@ -369,6 +364,61 @@ ensures exists* (vout': Seq.seq S64.t).
   fadd_spec_ok (vals va) (vals vb);
   assert (pure (felem (vals v')));
 }
+
+(** {2 A small multiplier}
+
+    Twenty-one, eight, three, two: the addition formulas are full of small
+    multiples, and writing them as field multiplications or as repeated
+    additions both overpay.  Five word multiplications and one carry pass
+    do any of them, because thirty-two times a limb still fits in a word.
+
+    In place, on one array: every call site wants to overwrite its
+    argument, and a separate destination would only make the separation
+    logic argue about an aliasing that never happens. *)
+
+#push-options "--z3rlimit 120"
+
+[@@ FStar.Attributes.CInline]
+fn fsmall (a: A.array S64.t) (n: U64.t { U64.v n <= 32 })
+          (#va: erased (Seq.seq S64.t))
+requires A.pts_to a va ** pure (felem (vals va))
+ensures exists* (va': Seq.seq S64.t).
+  A.pts_to a va' **
+  pure (felem (vals va') /\ fev (vals va') == (U64.v n * fev (vals va)) % prime)
+{
+  A.pts_to_len a;
+  assert_norm (32 * lim < pow2 64);
+  let x0 = A.(a.(0sz));
+  let x1 = A.(a.(1sz));
+  let x2 = A.(a.(2sz));
+  let x3 = A.(a.(3sz));
+  let x4 = A.(a.(4sz));
+  Math.lemma_mult_le_left (U64.v n) (S64.v x0) lim;
+  Math.lemma_mult_le_left (U64.v n) (S64.v x1) lim;
+  Math.lemma_mult_le_left (U64.v n) (S64.v x2) lim;
+  Math.lemma_mult_le_left (U64.v n) (S64.v x3) lim;
+  Math.lemma_mult_le_left (U64.v n) (S64.v x4) lim;
+  Math.lemma_mult_le_right lim (U64.v n) 32;
+  A.((a.(0sz) <- mulk n x0));
+  A.((a.(1sz) <- mulk n x1));
+  A.((a.(2sz) <- mulk n x2));
+  A.((a.(3sz) <- mulk n x3));
+  A.((a.(4sz) <- mulk n x4));
+  with v. assert (A.pts_to a v);
+  assert (pure (vals v `Seq.equal` scale (U64.v n) (vals va)));
+  scale_ble (U64.v n) (vals va) lim;
+  ble_mono (scale (U64.v n) (vals va)) (U64.v n * lim) (32 * lim);
+  assert_norm (32 * lim + 64 < base * 65);
+  assert_norm (32 * lim + 64 < pow2 64);
+  assert_norm (base + cf * 64 < pow2 64);
+  carry_chain a (32 * lim) 64;
+  with v'. assert (A.pts_to a v');
+  assert (pure (vals v' == fsmall_spec (U64.v n) (vals va)));
+  fsmall_spec_ok (U64.v n) (vals va);
+  assert (pure (felem (vals v')));
+}
+
+#pop-options
 
 (** {2 Subtraction}
 
@@ -399,23 +449,13 @@ ensures exists* (vout': Seq.seq S64.t).
   let x0 = A.(a.(0sz));
   let y0 = A.(b.(0sz));
   A.((out.(0sz) <- subw (addw x0 (S64.classify 288230101273742272uL)) y0));
-  let mut i = 1sz;
-  while (let vi = !i; SZ.lt vi 4sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to out v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    pure (1 <= SZ.v vi /\ SZ.v vi <= 4 /\ Seq.length v == nl /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index (vals v) k ==
-               Seq.index (vals va) k + Seq.index p64 k - Seq.index (vals vb) k))
-  decreases (4 - SZ.v (!i))
-  {
-    let vi = !i;
-    p64_index (SZ.v vi);
-    let x = A.(a.(vi));
-    let y = A.(b.(vi));
-    A.((out.(vi) <- subw (addw x (S64.classify 288230376151711680uL)) y));
-    i := SZ.add vi 1sz;
-  };
+  p64_index 1; p64_index 2; p64_index 3;
+  let x1 = A.(a.(1sz)); let y1 = A.(b.(1sz));
+  let x2 = A.(a.(2sz)); let y2 = A.(b.(2sz));
+  let x3 = A.(a.(3sz)); let y3 = A.(b.(3sz));
+  A.((out.(1sz) <- subw (addw x1 (S64.classify 288230376151711680uL)) y1));
+  A.((out.(2sz) <- subw (addw x2 (S64.classify 288230376151711680uL)) y2));
+  A.((out.(3sz) <- subw (addw x3 (S64.classify 288230376151711680uL)) y3));
   p64_index 4;
   let x4 = A.(a.(4sz));
   let y4 = A.(b.(4sz));
@@ -1233,13 +1273,6 @@ fn fb () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.b_coeff)
 { fconst KT52.b_arr K.b_coeff }
-
-(** [3b = 21], which is the only coefficient the complete formulas need. *)
-inline_for_extraction
-fn fb3 () requires emp returns s: A.array S64.t
-ensures exists* (p: perm) (v: Seq.seq S64.t).
-  A.pts_to s #p v ** pure (felem (vals v) /\ fev (vals v) == K.b3)
-{ fconst KT52.b3_arr K.b3 }
 
 inline_for_extraction
 fn fgx () requires emp returns s: A.array S64.t

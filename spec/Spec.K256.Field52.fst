@@ -314,6 +314,57 @@ let fadd_spec_ok (a b: Seq.seq nat)
     Math.lemma_mod_add_distr (eval a % prime) (eval b) prime;
     Math.lemma_mod_add_distr (eval b) (eval a) prime
 
+(** {3 A small multiplier}
+
+    The addition formulas multiply by [b3 = 21] twice and take small
+    multiples -- two, three, eight -- of an element several more times.
+    Written as a field multiplication that is twenty-five word
+    multiplications, and written as repeated addition it is a carry pass
+    each time.  Multiplying every limb by the constant is five word
+    multiplications and one pass, because a limb is under [2^53] and
+    thirty-two of it still fits in a word.
+
+    The bound is stated for every [n] at once, at the largest, so there is
+    one shape of carry pass rather than one per constant; the slack costs
+    nothing, since the pass that follows is the same either way. *)
+
+let fsmall_spec (n: nat) (a: Seq.seq nat) : Seq.seq nat = carry_pass (scale n a)
+
+let fsmall_spec_ok (n: nat) (a: Seq.seq nat)
+  : Lemma (requires felem a /\ n <= 32)
+          (ensures felem (fsmall_spec n a) /\
+                   fev (fsmall_spec n a) == (n * fev a) % prime)
+  = scale_ble n a lim;
+    Math.lemma_mult_le_right lim n 32;
+    ble_mono (scale n a) (n * lim) (32 * lim);
+    assert_norm (32 * lim + 64 < base * 65);
+    assert_norm (base - 1 + cf * ((32 * lim + 64) / base) <= lim);
+    pass (scale n a) (32 * lim) 64 lim;
+    eval_scale n a;
+    Math.lemma_mod_mul_distr_r n (eval a) prime
+
+(** {3 The small multiples the addition formulas take}
+
+    {!Spec.K256.point_add} and {!Spec.K256.point_double} are the
+    Renes-Costello-Batina listings kept verbatim, so they say [fadd x x]
+    where they mean [2 x] and [fmul b3 t] where they mean [21 t].  These
+    four lemmas are the whole of the translation. *)
+
+let two_x (x: K.felem) : Lemma (K.fadd x x == (2 * x) % prime) = ()
+
+let three_x (x: K.felem) : Lemma (K.fadd (K.fadd x x) x == (3 * x) % prime)
+  = Math.lemma_mod_add_distr x (x + x) prime
+
+let eight_x (x: K.felem)
+  : Lemma (K.fadd (K.fadd (K.fadd x x) (K.fadd x x))
+                  (K.fadd (K.fadd x x) (K.fadd x x)) == (8 * x) % prime)
+  = Math.lemma_mod_add_distr ((x + x) % prime) (x + x) prime;
+    Math.lemma_mod_add_distr (x + x) ((x + x) % prime) prime;
+    Math.lemma_mod_add_distr ((4 * x) % prime) (4 * x) prime;
+    Math.lemma_mod_add_distr (4 * x) ((4 * x) % prime) prime
+
+let b3_x (x: K.felem) : Lemma (K.fmul K.b3 x == (21 * x) % prime) = ()
+
 (** {3 Subtraction}
 
     [p64] dominates every limb of the subtrahend, so the difference is taken
