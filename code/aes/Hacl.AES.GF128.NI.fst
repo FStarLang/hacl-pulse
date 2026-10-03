@@ -690,20 +690,21 @@ let lim_bounds (n: nat)
     Math.multiple_modulo_lemma (n / 64) 64;
     Math.multiple_modulo_lemma (4 * (n / 64)) 16
 
-(** Aggregating four blocks to a reduction costs three multiplications to
-    raise the hash key to the fourth power, and saves three reductions per
-    group.  One group therefore loses, and two win: measured on a bare
-    [ghash_upd], sixty-four bytes is 69.7 ns aggregated against 64.7 serial,
-    and a hundred and twenty-eight is 100.8 against 123.4.  So the four-way
-    pass starts at two groups. *)
+(** Aggregating four blocks to a reduction used to cost three
+    multiplications to raise the hash key to the fourth power, which one
+    group did not earn back: measured on a bare [ghash_upd], sixty-four
+    bytes was 69.7 ns aggregated against 64.7 serial, so the pass began at
+    two groups.  The powers now come out of the expanded-key context, where
+    they were computed once, so there is nothing to earn back and the pass
+    begins as soon as there is a group to run it on. *)
 inline_for_extraction
 let four_limit (n: SZ.t { SZ.v n % blocklen == 0 })
   : Pure SZ.t (requires True)
          (ensures fun r -> SZ.v r % 64 == 0 /\ SZ.v r <= SZ.v n /\
                            SZ.v r % blocklen == 0 /\
-                           (SZ.v n >= 128 ==> SZ.v r == SZ.v n - SZ.v n % 64))
+                           SZ.v r == SZ.v n - SZ.v n % 64)
   = lim_bounds (SZ.v n);
-    if SZ.lt n 128sz then 0sz else SZ.sub n (SZ.rem n 64sz)
+    SZ.sub n (SZ.rem n 64sz)
 
 (** Index arithmetic for the eight-way loop. *)
 let step8_bounds (vi lim n: nat)
@@ -735,23 +736,23 @@ let lim8_bounds (n: nat)
     Math.multiple_division_lemma (2 * (n / 128)) 64;
     Math.lemma_mult_le_right 64 (2 * (n / 128)) (n / 64)
 
-(** Eight to a reduction costs four more multiplications for [H^5] to [H^8]
-    and saves one reduction in eight rather than one in four, so it needs a
-    good deal more data to pay: measured, it is still behind the four-way
-    pass at five hundred and twelve bytes (289.8 ns against 270.4) and level
-    at seven hundred and sixty-eight.  Past that it pulls away -- four
-    kilobytes is 1,555 ns against 1,843.  The threshold is taken against
-    [lim] rather than [n] so that the eight-way limit cannot overshoot the
-    four-way one when the four-way pass has been declined. *)
+(** Eight to a reduction used to cost four more multiplications for [H^5]
+    to [H^8] and saves one reduction in eight rather than one in four, so it
+    needed a good deal of data to pay: it was behind the four-way pass at
+    five hundred and twelve bytes (289.8 ns against 270.4) and level at
+    seven hundred and sixty-eight.  With the powers held in the context that
+    threshold goes the same way as the four-way one, and for the same
+    reason.  The bound is still taken against [lim] rather than [n] so that
+    the eight-way limit cannot overshoot the four-way one. *)
 inline_for_extraction
 let eight_limit (n: SZ.t { SZ.v n % blocklen == 0 }) (lim: SZ.t)
   : Pure SZ.t (requires SZ.v lim <= SZ.v n /\
-                        (SZ.v n >= 128 ==> SZ.v lim == SZ.v n - SZ.v n % 64))
+                        SZ.v lim == SZ.v n - SZ.v n % 64)
          (ensures fun r -> SZ.v r % 128 == 0 /\ SZ.v r % 64 == 0 /\
                            SZ.v r % blocklen == 0 /\ SZ.v r <= SZ.v n /\
                            SZ.v r <= SZ.v lim)
   = lim8_bounds (SZ.v n);
-    if SZ.lt n 768sz then 0sz else SZ.sub n (SZ.rem n 128sz)
+    SZ.sub n (SZ.rem n 128sz)
 
 (** The length of the prefix being hashed, out of the Pulse context, where
     the query that establishes it competes with a hundred other hypotheses. *)
@@ -994,26 +995,58 @@ let power_step (a b: G.block)
   = Alg.gmul_xt_left a (Poly.xtimes b) 1
 #pop-options
 
+(** One power out of the context.
+
+    The window is reached with {!Hacl.Impl.Sub.sub}, which is a pointer
+    offset and nothing else; the receipt is traded straight back, so the
+    caller sees the array it handed over. *)
+[@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+inline_for_extraction
+fn load_pow (h: A.array S8.t) (i: SZ.t)
+            (#ph: perm) (#vh: erased (Seq.seq S8.t))
+requires A.pts_to h #ph vh ** pure (Seq.length vh == 128 /\ SZ.v i < 8)
+returns r: Vec.t
+ensures A.pts_to h #ph vh **
+  pure (Seq.length vh == 128 /\ Vec.bv r == Alg.hblk (vals vh) (SZ.v i))
+{
+  A.pts_to_len h;
+  vals_len vh;
+  let lo = SZ.mul i 16sz;
+  let hi = SZ.add lo 16sz;
+  let b = Sub.sub h lo hi;
+  vals_slice vh (SZ.v lo) (SZ.v hi);
+  let r = Vec.load b #(as_blk (Seq.slice vh (SZ.v lo) (SZ.v hi)));
+  Sub.unsub_id h (SZ.v lo) (SZ.v hi) b;
+  vals_len (Vec.vv r);
+  r
+}
+
 (** Entering the block loops: the eight-way pass, then the four-way pass for
     the group of four it may have left behind, and otherwise nothing at all.
     Kept in a function of its own so that the branches are checked against a
     handful of hypotheses rather than against everything the caller knows.
 
-    The powers of the hash key are computed here, inside the test, so a
-    message too short to reach either loop pays for none of them.  Four more
-    multiplies than before is about a hundred cycles, and they are only
-    incurred once a hundred and twenty-eight bytes are in hand. *)
+    The powers of the hash key are read out of the expanded-key context,
+    where [Hacl.AES.GCM.hkey_impl] put them.  They used to be computed here,
+    on every call, which is seven multiplications a message rather than
+    seven a key, and which is why both aggregation thresholds existed.  A
+    message too short to reach either loop still pays nothing: the loads are
+    inside the test. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
   custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
-fn ghash_start (a0: Vec.t) (y: Vec.t) (d: A.array S8.t)
+fn ghash_start (a0: Vec.t) (y: Vec.t) (h: A.array S8.t) (d: A.array S8.t)
                (n: SZ.t) (lim8: SZ.t) (lim: SZ.t)
+               (#ph: perm) (#vh: erased (Seq.seq S8.t))
                (#pd: perm) (#vd: erased (Seq.seq S8.t))
-requires A.pts_to d #pd vd ** pure (
+requires A.pts_to h #ph vh ** A.pts_to d #pd vd ** pure (
+  Alg.pows_ok (vals vh) /\ Seq.length vh == 128 /\
+  Vec.bv y == Alg.hblk (vals vh) 0 /\
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   SZ.v lim <= SZ.v n /\ SZ.v lim % 64 == 0 /\
   SZ.v lim8 <= SZ.v lim /\ SZ.v lim8 % 128 == 0)
 returns r: Vec.t
-ensures A.pts_to d #pd vd ** pure (
+ensures A.pts_to h #ph vh ** A.pts_to d #pd vd ** pure (
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
   SZ.v lim / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
@@ -1021,34 +1054,24 @@ ensures A.pts_to d #pd vd ** pure (
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v lim / blocklen))
 {
   A.pts_to_len d;
+  A.pts_to_len h;
   vals_len vd;
+  vals_len vh;
   slice_len_mod vd (SZ.v n);
   Math.lemma_div_le (SZ.v lim) (SZ.v n) blocklen;
   Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
   Math.euclidean_division_definition (SZ.v n) blocklen;
   if SZ.gt lim 0sz
   {
-    (* [gmul_vec x k] is [x] times [k] advanced once, so the powers come out
-       pre-divided too: starting the recurrence at [h/x] gives [h^i/x] at
-       every step, which is exactly what the loops below want.  The step from
-       [bv y_(i+1) == gmul (bv y_i) (xtimes (bv y))] to the relation between
-       the advanced powers is [Spec.GF128.Algebra.gmul_xt_left]. *)
-    let y2 = gmul_vec y y;
-    power_step (Vec.bv y) (Vec.bv y);
-    let y3 = gmul_vec y2 y;
-    power_step (Vec.bv y2) (Vec.bv y);
-    let y4 = gmul_vec y3 y;
-    power_step (Vec.bv y3) (Vec.bv y);
+    let y2 = load_pow h 1sz;
+    let y3 = load_pow h 2sz;
+    let y4 = load_pow h 3sz;
     if SZ.gt lim8 0sz
     {
-      let y5 = gmul_vec y4 y;
-      power_step (Vec.bv y4) (Vec.bv y);
-      let y6 = gmul_vec y5 y;
-      power_step (Vec.bv y5) (Vec.bv y);
-      let y7 = gmul_vec y6 y;
-      power_step (Vec.bv y6) (Vec.bv y);
-      let y8 = gmul_vec y7 y;
-      power_step (Vec.bv y7) (Vec.bv y);
+      let y5 = load_pow h 4sz;
+      let y6 = load_pow h 5sz;
+      let y7 = load_pow h 6sz;
+      let y8 = load_pow h 7sz;
       let r8 = ghash_loop8_ni a0 y y2 y3 y4 y5 y6 y7 y8 d n lim8;
       Math.multiple_modulo_lemma (SZ.v lim8 / 128 * 2) 64;
       Math.euclidean_division_definition (SZ.v lim8) 128;
@@ -1073,16 +1096,16 @@ fn ghash_loop_ni (acc: A.array S8.t) (h: A.array S8.t) (d: A.array S8.t) (n: SZ.
                  (#va0 #vh: erased (Seq.seq S8.t))
                  (#pd: perm) (#vd: erased (Seq.seq S8.t))
 requires A.pts_to acc va0 ** A.pts_to h vh ** A.pts_to d #pd vd ** pure (
-  Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+  Seq.length va0 == blocklen /\ Alg.pows_ok (vals vh) /\ Seq.length vh == 128 /\
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0)
 ensures exists* (va1: Seq.seq S8.t).
   A.pts_to acc va1 ** A.pts_to h vh ** A.pts_to d #pd vd ** pure (
-  Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+  Seq.length va0 == blocklen /\ Seq.length vh == 128 /\
   Seq.length va1 == blocklen /\
   SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
   Seq.length (Seq.slice (vals vd) 0 (SZ.v n)) % blocklen == 0 /\
   SZ.v n / blocklen == G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-  vals va1 == G.ghash_from (Poly.xtimes (vals vh)) (vals va0)
+  vals va1 == G.ghash_from (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
                            (Seq.slice (vals vd) 0 (SZ.v n)) (SZ.v n / blocklen))
 {
   let lim = four_limit n;
@@ -1090,12 +1113,13 @@ ensures exists* (va1: Seq.seq S8.t).
   A.pts_to_len acc;
   A.pts_to_len h;
   A.pts_to_len d;
+  vals_len vh;
   Math.multiple_division_lemma (SZ.v n / blocklen) blocklen;
   Math.euclidean_division_definition (SZ.v n) blocklen;
 
-  let y = Vec.load h #(as_blk vh);
+  let y = load_pow h 0sz;
   let a0 = Vec.load acc #(as_blk va0);
-  let r = ghash_start a0 y d n lim8 lim;
+  let r = ghash_start a0 y h d n lim8 lim;
   let mut av = r;
   let mut i = lim;
 
@@ -1104,11 +1128,11 @@ ensures exists* (va1: Seq.seq S8.t).
     pts_to i vi ** pts_to av cur **
     A.pts_to acc va0 ** A.pts_to h vh ** A.pts_to d #pd vd **
     pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
-          Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+          Seq.length va0 == blocklen /\ Seq.length vh == 128 /\
           SZ.v n <= Seq.length vd /\ SZ.v n % blocklen == 0 /\
-          Vec.vv y == reveal vh /\
+          Vec.bv y == Alg.hblk (vals vh) 0 /\
           SZ.v vi / blocklen <= G.nblocks (Seq.slice (vals vd) 0 (SZ.v n)) /\
-          Vec.bv cur == G.ghash_from (Poly.xtimes (vals vh)) (vals va0)
+          Vec.bv cur == G.ghash_from (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
                                      (Seq.slice (vals vd) 0 (SZ.v n))
                                      (SZ.v vi / blocklen))
   decreases (SZ.v n - SZ.v (!i))
@@ -1123,7 +1147,7 @@ ensures exists* (va1: Seq.seq S8.t).
     let cur = !av;
     xor_block_bv cur dv;
     let r = gmul_vec (Vec.vxor cur dv) y;
-    ghash_step (Poly.xtimes (vals vh)) (vals va0) (vals vd) (SZ.v n) (SZ.v vi);
+    ghash_step (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vd) (SZ.v n) (SZ.v vi);
     Math.division_addition_lemma (SZ.v vi) blocklen 1;
     av := r;
     i := vi2;

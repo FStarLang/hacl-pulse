@@ -71,6 +71,7 @@ open Spec.GF128.Poly
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
+module S8 = Hacl.Secret.UInt8
 
 #push-options "--fuel 1 --ifuel 0 --z3rlimit 150"
 
@@ -712,4 +713,46 @@ let horner8 (a b0 b1 b2 b3 b4 b5 b6 b7 h h2 h3 h4 h5 h6 h7 h8: block)
                (gmul b4 h4)
                (gadd (gmul b5 h3) (gadd (gmul b6 h2) (gmul b7 h)))
 
+#pop-options
+
+(** {2 The powers of the hash key, as an array of bytes}
+
+    The aggregated loops below consume four or eight blocks against the
+    first four or eight powers of the hash key.  Computing them costs three
+    or seven multiplications, which is why the aggregation used to begin
+    only once there were two groups to pay for it; held in the expanded-key
+    context instead, they are free, and the aggregation begins as soon as
+    there is one group.
+
+    The context holds them in the same pre-divided representation as the key
+    itself -- [h^i / x] rather than [h^i] -- because that is the form
+    [Hacl.AES.GF128.NI.gmul_vec] both consumes and produces.  The predicate
+    is the recurrence rather than a closed form: each power is the one
+    before it times the key, which is exactly what the loops need and
+    exactly what the expansion establishes, one step at a time. *)
+
+let hblk (v: Seq.seq elem) (i: nat) : GTot block =
+  if 16 * i + 16 <= Seq.length v then Seq.slice v (16 * i) (16 * i + 16) else zero
+
+let pow_step (v: Seq.seq elem) (i: pos) : prop =
+  xtimes (hblk v i) == gmul (xtimes (hblk v (i - 1))) (xtimes (hblk v 0))
+
+let powlen : nat = 128
+
+let pows_ok (v: Seq.seq elem) : prop =
+  Seq.length v == powlen /\
+  pow_step v 1 /\ pow_step v 2 /\ pow_step v 3 /\ pow_step v 4 /\
+  pow_step v 5 /\ pow_step v 6 /\ pow_step v 7
+
+(** Advancing both sides of one step of the recurrence.
+
+    The implementation's multiplier computes [gmul a (xtimes b)] -- the real
+    product with one shift omitted -- so a chain of them starting at [h/x]
+    gives [h^i/x] at every step.  This is the one line that says so, and it
+    is what turns what the multiplier gives into what {!pow_step} asks
+    for. *)
+#push-options "--fuel 2 --ifuel 0"
+let pow_adv (a b: block)
+  : Lemma (xtimes (gmul a (xtimes b)) == gmul (xtimes a) (xtimes b))
+  = gmul_xt_left a (xtimes b) 1
 #pop-options

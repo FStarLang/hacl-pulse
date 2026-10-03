@@ -54,7 +54,7 @@ static void gcm_encrypt(int bits, uint8_t *t, uint8_t *m, size_t mlen,
                         const uint8_t *k, const uint8_t *iv, size_t ivlen,
                         const uint8_t *aad, size_t aadlen) {
   if (expanded) {
-    uint8_t ek[240], hk[16];
+    uint8_t ek[240], hk[128];
     if (bits == 128) {
       Hacl_AES_GCM_aes128_expand(ek, hk, (uint8_t *)k);
       Hacl_AES_GCM_aes128_encrypt_expanded(t, m, mlen, ek, hk, (uint8_t *)iv,
@@ -78,7 +78,7 @@ static bool gcm_decrypt(int bits, uint8_t *m, size_t mlen, const uint8_t *t,
                         const uint8_t *k, const uint8_t *iv, size_t ivlen,
                         const uint8_t *aad, size_t aadlen) {
   if (expanded) {
-    uint8_t ek[240], hk[16];
+    uint8_t ek[240], hk[128];
     if (bits == 128) {
       Hacl_AES_GCM_aes128_expand(ek, hk, (uint8_t *)k);
       return Hacl_AES_GCM_aes128_decrypt_expanded(m, mlen, (uint8_t *)t, ek, hk,
