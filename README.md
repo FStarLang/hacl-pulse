@@ -1933,8 +1933,9 @@ whole change verified first try, which is what one hopes for from a
 refactoring that moves no proof.
 
 The context is two arrays, not one.  `ek` is the round keys, 176 bytes for
-AES-128 and 240 for AES-256; `hk` is the sixteen-byte GHASH subkey, held
-divided by `x`.  One array would have been tidier in the header and much
+AES-128 and 240 for AES-256; `hk` is the GHASH subkey, held divided by `x`
+-- sixteen bytes at the time of this section, a hundred and twenty-eight
+once the next one puts the key's powers beside it.  One array would have been tidier in the header and much
 less tidy in the proof: every function underneath wants a whole array it
 can be handed, `Hacl.Impl.Sub` lends out one window at a time, and nothing
 here needs the two to be adjacent.
@@ -1963,11 +1964,75 @@ The entry points are `Hacl_AES_GCM_aes128_expand`,
 one-shot four are unchanged.  `tests/test_gcm.c` now runs all 450 CAVP
 cases through both paths.
 
-Caching the key powers in the context as well is the obvious next step: it
-would make the aggregation thresholds of two sections ago irrelevant and
-turn a sixty-four-byte GHASH into a single group of four.  It is a larger
-change than this one, because the powers are vectors and the context is
-bytes.
+Caching the key powers in the context as well is the obvious next step, and
+is the next section.
+
+### The powers of the key belong with the key
+
+Sixty-four bytes of AES-128-GCM was, for a long time, the largest gap in
+the library.  The diagnosis is blunt and took one experiment: stub GHASH
+out of the generated C entirely and a sixty-four-byte encryption falls
+from 131.0 ns to **57.8**.  GHASH is seventy-three of those hundred and
+thirty-one nanoseconds, and sixty-one per cent of the time at sixteen
+kilobytes.
+
+*Where the GHASH loop should start aggregating* explains why the fast loop
+was not being used on short messages: four-way aggregation needs `H^2`,
+`H^3` and `H^4`, eight-way needs `H^5` through `H^8`, and those were
+computed at the top of every call by three and then four serial
+multiplications.  Three dependent carry-less products and their reductions
+cost more than one group of four saves, which is why the four-way
+threshold sat at a hundred and twenty-eight bytes and the eight-way one
+higher still.  Lowering the thresholds and changing nothing else makes
+matters worse, exactly as that section predicted: the four-way pass from
+sixty-four bytes measures 142.0 ns against a 129.8 ns baseline.
+
+But the powers are a function of the key alone, and the library has had an
+expanded-key context since the previous section.  So the context grows from
+sixteen bytes to a hundred and twenty-eight, holding `h/x`, `h^2/x`, ...
+`h^8/x` -- the same pre-divided representation the key itself already used,
+because that is what the multiplier both consumes and produces, so nothing
+else in the file changes shape.  `hkey_impl` builds the eight with seven
+calls to the dispatching `gmul_impl`, once per key.  `ghash_start` loads
+what it used to compute, both thresholds become unconditional, and the
+whole-block loop runs four-way from the first sixty-four bytes and
+eight-way from the first hundred and twenty-eight.
+
+**The specification states the recurrence, not a closed form.**
+`Spec.GF128.Algebra.pows_ok` says only that each window of the context is
+the previous one advanced by the first.  That is exactly what the loops
+consume and exactly what the expansion establishes, one step at a time, so
+nothing anywhere has to know what `h^5` *is*.  `pow_adv` is the one line
+that turns what the multiplier gives -- `gmul a (xtimes b)`, the real
+product with one shift omitted -- into what the recurrence asks for, and it
+is a single application of `gmul_xt_left`.
+
+**Where a fact is proved matters more than whether it is true.**  Proving
+`pows_ok` at the point where the array is written asks the solver to work
+in a context holding eight intermediate array states and the frames that
+relate them; the seventh step of the recurrence then times out where the
+first and the sixth do not.  `pows_build` takes the eight blocks and the
+seven products between them, and nothing else, and goes through at once.
+The windows themselves come back from the array with one
+`Seq.lemma_eq_intro` each.
+
+Measured on one core, best of three interleaved rounds, AES-128-GCM
+encryption with a sixteen-byte AAD, in nanoseconds:
+
+| | gcc before | gcc after | clang before | clang after |
+|---|---:|---:|---:|---:|
+| 64 bytes | 129.8 | **114.6** | 134.5 | **114.9** |
+| 128 bytes | 170.7 | **138.3** | 157.8 | **135.6** |
+| 256 bytes | 236.9 | **189.5** | 212.2 | **184.9** |
+| 1024 bytes | 600.6 | **509.7** | 499.6 | **462.0** |
+| 16384 bytes | 6958 | 6889 | 6010 | 6042 |
+
+In the published suite the four short-message GCM rows move and nothing
+else does.  Sixty-four-byte AES-128-GCM goes from 2.14x of EverCrypt to
+**1.87x** and AES-256-GCM to **1.71x**.  Bulk GHASH is untouched by this
+change and is where the remaining gap lives: thirteen and a half cycles
+per sixteen-byte block, against four `PCLMULQDQ` that Karatsuba would make
+three and a per-block byte reversal that a pre-swapped key would remove.
 
 ### SHA-NI, where the instruction is four rounds wide
 
@@ -2789,7 +2854,7 @@ reference**.
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
-| AES-128-GCM | 256 KiB | 112 us | 71 us | **1.58x** |  |  |
+| AES-128-GCM | 256 KiB | 112 us | 72 us | **1.56x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.2x for Poly1305, 5.1x for ChaCha20-Poly1305, 6.9x
@@ -4245,8 +4310,8 @@ rough order of value:
     to **1.90x**.  The remaining half of the idea --- caching the GHASH key
     powers in the context, which would make the aggregation thresholds
     irrelevant and turn a sixty-four-byte GHASH into one group of four ---
-    is not done, and is the larger half: the powers are vectors and the
-    context is bytes.
+    is done too; see *The powers of the key belong with the key* above.
+    Sixty-four-byte AES-128-GCM is now **1.87x** and AES-256-GCM **1.71x**.
 
 11. ~~**Deferring the one-bit shift in GHASH**~~ --- done, and in a stronger
     form than this entry proposed.  The plan was to hoist the one-bit shift
