@@ -2032,7 +2032,71 @@ else does.  Sixty-four-byte AES-128-GCM goes from 2.14x of EverCrypt to
 **1.87x** and AES-256-GCM to **1.71x**.  Bulk GHASH is untouched by this
 change and is where the remaining gap lives: thirteen and a half cycles
 per sixteen-byte block, against four `PCLMULQDQ` that Karatsuba would make
-three and a per-block byte reversal that a pre-swapped key would remove.
+three.  That is the next section.
+
+### Karatsuba, and what a group of blocks may put off
+
+An assembly census of the inlined eight-way GHASH loop says where the
+thirteen and a half cycles go: 247 instructions for eight blocks, of which
+32 are `PCLMULQDQ` and **82** are plain register copies.  The multiplier is
+not the bottleneck; the traffic around it is.
+
+Two of the four multiplies a block are the crossed terms, and only their
+sum is ever used.  Over a field of characteristic two Karatsuba computes
+that sum exactly, with no borrow to carry and no wider intermediate:
+
+```
+(x0 + x1)(y0 + y1) + x0 y0 + x1 y1  =  x0 y1 + x1 y0
+```
+
+Folding an operand's two lanes together is a shift and an exclusive-or, and
+taking the two square terms back out is two more, so the trade is one
+`PCLMULQDQ` against about five cheap instructions.  **On its own that is
+not a win.**  The first version of this change did exactly that and cost
+128-byte AES-GCM twelve per cent while gaining five on bulk: with nothing
+to amortise, the fold sits on the dependency chain and the saved multiply
+does not pay for it.
+
+What makes it pay is that everything Karatsuba adds is *linear*, and the
+bulk loop adds eight products together before it reduces.  Both the
+correction that removes the squares and the assembly of the middle term
+into the two halves therefore commute with that sum, and may be done once
+for the group rather than once a block.  So `kara_parts` leaves three raw
+registers behind -- low, high, and the folded product -- the loop keeps
+three accumulators instead of two, and `kara_fold` runs once at the end:
+twenty-four multiplies a group instead of thirty-two, and six cheap
+instructions a group instead of forty.
+
+**The proof deferred the same way the code did.**  `Spec.CLMUL` gains
+`kmid` for the correction and `kfold_lo`/`kfold_hi` for the assembly, each
+with a bit-level characterisation and additivity over sums of four and of
+eight.  The per-block halves then exist only as ghost blocks that are never
+computed, and `Spec.GF128.Algebra.pmod_defer4` and `pmod_defer8` -- which
+already took the per-block halves as arbitrary blocks rather than as
+registers -- go through unchanged.  The Karatsuba identity itself is two
+applications of the bilinearity of `conv` over `padd` that `Spec.CarryLess`
+already had.  Nothing in the reduction, or in the argument that removes the
+one-bit shift, moved at all.
+
+A single multiplication keeps all four multiplies, for the reason the
+twelve-per-cent regression showed: `raw_product` is unchanged, and only
+`gmul4_vec` and `gmul8_vec` are Karatsuba.
+
+The eight-way loop body is now 194 instructions with 24 `PCLMULQDQ` and 58
+register copies; the four-way body 118 with 12.  In the published suite
+AES-GCM moves and nothing else does:
+
+| | gcc | clang |
+|---|---:|---:|
+| AES-128-GCM, 1 KiB | 1.09x | 1.10x |
+| AES-128-GCM, 16 KiB | 1.09x | 1.14x |
+| AES-128-GCM, 256 KiB | 1.09x | 1.14x |
+| AES-128-GCM dec, 16 KiB | 1.09x | 1.13x |
+| AES-256-GCM, 256 KiB | 1.08x | 1.12x |
+
+Against EverCrypt, 256 KiB AES-128-GCM goes from 1.56x to **1.43x** under
+gcc and to **1.22x** under clang.  No benchmark in the suite regresses by
+as much as two per cent under either compiler.
 
 ### SHA-NI, where the instruction is four rounds wide
 
@@ -2852,9 +2916,9 @@ reference**.
 | secp256k1 ECDSA sign | -- | 79 us | 66 us | **1.19x** |  |  |
 | X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
+| AES-128-GCM | 256 KiB | 103 us | 72 us | **1.43x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 | Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
-| AES-128-GCM | 256 KiB | 112 us | 72 us | **1.56x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.2x for Poly1305, 5.1x for ChaCha20-Poly1305, 6.9x
@@ -4339,3 +4403,15 @@ rough order of value:
     than sixteen multiples of one.  Ed25519 verification, at **1.98x**,
     wants the Shamir half of this for the same reason, and has no
     endomorphism to go with it.
+
+13. ~~**Karatsuba in the bulk GHASH multiplier**~~ --- done; see
+    *Karatsuba, and what a group of blocks may put off* above.  The entry
+    proposed trading one of the four carry-less multiplies a block for the
+    Karatsuba fold, which on its own is a loss; what makes it pay is that
+    both the squares correction and the assembly of the halves are linear
+    and so may be deferred to the end of an aggregated group, the same
+    argument that defers the reduction.  Twenty-four multiplies a group of
+    eight instead of thirty-two, and the loop body down from 247
+    instructions to 194.  Bulk AES-GCM gained 9% under gcc and 14% under
+    clang; 256 KiB AES-128-GCM is now **1.43x** of EverCrypt under gcc and
+    **1.22x** under clang.
