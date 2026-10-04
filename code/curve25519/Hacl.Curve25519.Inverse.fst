@@ -73,11 +73,9 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
         fev (vals va') == C.fexp (fev (vals va)) 2)
 {
   copy c1 a;
-  copy c2 a;
   with u1. assert (A.pts_to c1 u1);
-  with u2. assert (A.pts_to c2 u2);
-  assert (pure (vals u1 == vals va /\ vals u2 == vals va));
-  fmul a c1 c2;
+  assert (pure (vals u1 == vals va));
+  fsqr a c1;
   with v'. assert (A.pts_to a v');
   C.fexp_two (fev (vals va));
   assert (pure (fev (vals v') == C.fexp (fev (vals va)) 2));
