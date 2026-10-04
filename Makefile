@@ -149,6 +149,12 @@ CUSTARD_ENTRIES += $(addprefix Hacl.AES.GCM., \
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Base., \
   zero add sub add_mod sub_mod mul sqr lt_mask eq_mask table_select)
 
+# Exported for tests/test_consttime.c, which times each of them once per
+# value of the secret they branch on.  See "The compiler is allowed to undo
+# a constant-time algorithm" in README.md.
+CUSTARD_ENTRIES += Hacl.Impl.Select.eq_mask_bytes
+CUSTARD_ENTRIES += Hacl.AES.Core.sbox_impl
+
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Convert., \
   from_bytes_be from_bytes_le to_bytes_be to_bytes_le)
 

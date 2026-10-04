@@ -163,7 +163,6 @@ static uint8_t Hacl_Secret_UInt8_rotate(uint8_t x, uint32_t s);
 static uint8_t Hacl_Secret_UInt8_rotate_left(uint8_t x, uint32_t s);
 static uint8_t Hacl_AES_Core_fmul_impl(uint8_t a, uint8_t b);
 static uint8_t Hacl_AES_Core_ginv_impl(uint8_t a);
-static uint8_t Hacl_AES_Core_sbox_impl(uint8_t x);
 static void Hacl_AES_SubWord_subword_portable(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3);
 static void Hacl_AES_SubWord_subword4(uint8_t *s, uint8_t x0, uint8_t x1, uint8_t x2, uint8_t x3);
 static void Hacl_AES_Key_ks_word_impl__Mkparams(uint8_t *w, uint8_t *sb, size_t b, uint8_t rc);
@@ -523,7 +522,6 @@ static void Hacl_Impl_MLKEM_Vec_mat_vec_mul_impl(uint16_t *dst, uint16_t *m, uin
 static void Hacl_Impl_MLKEM_Vec_vec_intt_impl(uint16_t *v, uint16_t *tmp, size_t k);
 static void Hacl_Impl_MLKEM_VecCodec_vec_compress_impl(uint16_t *dst, uint16_t *src, size_t d, size_t k);
 static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, uint8_t *msg, uint8_t *rnd, size_t k, size_t eta1, size_t eta2, size_t du, size_t dv);
-static uint8_t Hacl_Impl_Select_eq_mask_bytes(uint8_t *a, uint8_t *b, size_t len);
 static void Hacl_Impl_MLKEM_Hash_hash_j_impl_(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_MLKEM_Hash_hash_j_impl(uint8_t *out, uint8_t *msg, size_t msg_len);
 static void Hacl_Impl_Select_select_copy(uint8_t *dst, size_t dbase, uint8_t *x, uint8_t *y, size_t len, uint8_t mask);
@@ -2858,7 +2856,7 @@ static uint8_t Hacl_AES_Core_ginv_impl(uint8_t a) {
   return Hacl_AES_Core_fmul_impl(e127, e127);
 }
 
-static uint8_t Hacl_AES_Core_sbox_impl(uint8_t x) {
+uint8_t Hacl_AES_Core_sbox_impl(uint8_t x) {
   uint8_t r1 = Hacl_Secret_UInt8_rotate_left(Hacl_AES_Core_ginv_impl(x), 1);
   uint8_t r2 = Hacl_Secret_UInt8_rotate_left(Hacl_AES_Core_ginv_impl(x), 2);
   uint8_t r3 = Hacl_Secret_UInt8_rotate_left(Hacl_AES_Core_ginv_impl(x), 3);
@@ -12219,7 +12217,7 @@ static void Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl(uint8_t *ct, uint8_t *ekey, u
   Hacl_Impl_Copy_copy_at(ct, c1len, c2, c2len);
 }
 
-static uint8_t Hacl_Impl_Select_eq_mask_bytes(uint8_t *a, uint8_t *b, size_t len) {
+uint8_t Hacl_Impl_Select_eq_mask_bytes(uint8_t *a, uint8_t *b, size_t len) {
   uint8_t acc = Hacl_Secret_UInt8_ones;
   size_t i = 0;
   while (i < len) {

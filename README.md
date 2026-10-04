@@ -2162,10 +2162,33 @@ clang numbers were never constant-time numbers, and a table of them is a
 table of a different algorithm.  X25519 is untouched, because the
 Montgomery ladder selects with `cswap` and not with a table.
 
-The library has other masked selections, and nothing here proves they are
-safe; what this episode establishes is that the question has to be asked of
-the emitted code, one primitive at a time, and that a timing test over the
-secret is how to ask it.
+**The rest of the library was then asked the same question.**
+`tests/test_consttime.c` is the standing audit: it runs each of the
+library's masked selections once per value of the secret it selects on and
+fails on a spread.  Six are covered.  The secret-indexed table read at the
+four-limb width P-256 uses, since the limb count is what decides whether
+the unrolled scan is small enough for the compiler to find specialisation
+worthwhile.  The whole X25519 scalar multiplication, timed over scalars of
+all-zero, all-one and alternating bits -- `cswap` is `CInline` and has no
+external definition to call, and the ladder is the stronger statement in
+any case, because if any one of its 255 swaps branched the scalars would
+not agree.  The two bignum comparisons, timed by the position of the first
+differing limb, which is what an early exit would leak.  ML-KEM's
+ciphertext comparison, timed the same way: the Fujisaki--Okamoto transform
+re-encrypts and compares, and a compare that stopped early would make the
+implicit-rejection path distinguishable and cost the KEM its CCA security.
+And the AES S-box, over all 256 input bytes -- there is no S-box table
+here, the inverse is computed in the field, which is a hundred and twenty
+masked selects on the bits of a secret byte whose value ranges over
+exactly the small set that invites enumeration.
+
+All six are flat under both compilers: 1.4% to 3.2% under gcc and 1.4% to
+3.5% under clang, against thresholds of 10--75%.  Two of those thresholds
+are known to bite -- splicing the old `table_select` back in fails the
+`table_select` row at 141% -- so the test is not merely asserting that
+timing is noisy.  The audit is not a proof and it is not exhaustive; it is
+a question asked of the compiler that is actually in use, which is the only
+form the question can take.
 
 ### A square is not a product
 
@@ -4572,21 +4595,22 @@ rough order of value:
     is the measurement saying that k256's time is not in the multiply.
     Item 12 is where it is.
 
-15. **Audit the remaining masked selections against the compiler.**  The
-    secret-indexed table read turned out to be compiled by clang `-O3`
-    into a sixteen-way branch cascade on the secret digit; see *The
-    compiler is allowed to undo a constant-time algorithm* above.  That
-    was one function, found by accident, and nothing has established that
-    the rest of the library is safe.  The candidates are the Montgomery
-    ladder's `cswap`, `Hacl.Impl.Select`, ML-KEM's constant-time
-    comparisons and rejection sampling, the RSA and bignum masked paths,
-    and every use of `Hacl.Secret`'s `select` and `masked` where the
-    surrounding loop has a trip count known at compile time -- which is
-    the condition that lets the optimizer enumerate the secret's values.
-    The method is the one in `tests/test_launder.c`: time the shipped
-    function once per value of the secret and fail on a spread.  It
-    should become a standing test over every primitive with a
-    secret-dependent select, not a single test over the one case that was
-    caught.  Where a leak is found, the two levers are the value barrier
-    `Hacl.Launder.launder` and restructuring the loop so the optimizer
-    cannot see a constant trip count over the secret's range.
+15. ~~**Audit the remaining masked selections against the compiler**~~ ---
+    done for six of them; see *The compiler is allowed to undo a
+    constant-time algorithm* above.  The secret-indexed table read was
+    found by accident to compile, under clang `-O3`, into a sixteen-way
+    branch cascade on the secret digit, so the question had to be asked of
+    everything else.  `tests/test_consttime.c` now asks it as a standing
+    test: the table read at P-256's four-limb width, the whole X25519
+    ladder over scalars of all-zero, all-one and alternating bits, the two
+    bignum comparisons by position of the first differing limb, ML-KEM's
+    Fujisaki--Okamoto ciphertext comparison the same way, and the AES
+    S-box over all 256 input bytes.  All six are flat to 3.5% under both
+    compilers.  What remains is the long tail: ML-KEM's compression and
+    sampling, which compare against the fixed modulus 3329 rather than
+    against a range of literals and are therefore a weaker candidate, the
+    conditional subtractions in the Montgomery reduction, and the
+    `Hacl.Secret` selects inside the point formulas.  The method is the
+    one the test uses, and the two levers where a leak is found are the
+    value barrier `Hacl.Launder.launder` and restructuring the loop so the
+    optimizer cannot see a constant trip count over the secret's range.

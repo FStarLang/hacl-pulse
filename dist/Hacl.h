@@ -35,6 +35,7 @@ struct FStar_Pervasives_Native_tuple2__uint32_uint32_s {
 void Hacl_Curve25519_scalarmult(uint8_t *out, uint8_t *k, uint8_t *u);
 bool Hacl_Curve25519_ecdh(uint8_t *out, uint8_t *k, uint8_t *u);
 void Hacl_Curve25519_secret_to_public(uint8_t *out, uint8_t *k);
+uint8_t Hacl_AES_Core_sbox_impl(uint8_t x);
 bool Hacl_AES_GCM_aes128_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_open(uint8_t *pt, uint8_t *enc, uint8_t *skR, uint8_t *info, size_t info_len, uint8_t *aad, size_t aad_len, uint8_t *ct, size_t ct_len, uint8_t *tag);
 void Hacl_AES_GCM_aes128_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
@@ -66,6 +67,7 @@ bool Hacl_MLKEM1024_dk_valid(uint8_t *dk);
 bool Hacl_MLKEM1024_ek_valid(uint8_t *ek);
 void Hacl_Hash_SHA3_sha3_512(uint8_t *out, uint8_t *msg, size_t msg_len);
 void Hacl_Hash_SHA3_shake256(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len);
+uint8_t Hacl_Impl_Select_eq_mask_bytes(uint8_t *a, uint8_t *b, size_t len);
 void Hacl_MLKEM1024_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk);
 void Hacl_MLKEM1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m);
 void Hacl_MLKEM1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z);
