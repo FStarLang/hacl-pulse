@@ -74,6 +74,18 @@ let double_ok (x: nat)
     Math.lemma_mod_plus_distr_l x x C.prime;
     Math.lemma_mod_plus_distr_r (x % C.prime) x C.prime
 
+(** Doubling a factor and multiplying, or multiplying and doubling the
+    product: the same element.  That is what lets a doubling square [z1]
+    and scale the square by two, rather than scale [z1] and multiply --
+    fifteen limb products in place of twenty-five. *)
+let dblmul (a b: C.elem)
+  : Lemma (C.fmul (C.fadd a a) b == C.fadd (C.fmul a b) (C.fmul a b))
+  = C.prime_gt_one ();
+    Math.lemma_mod_mul_distr_l (a + a) b C.prime;
+    Math.distributivity_add_left a a b;
+    Math.lemma_mod_plus_distr_l (a * b) (a * b) C.prime;
+    Math.lemma_mod_plus_distr_r ((a * b) % C.prime) (a * b) C.prime
+
 (** {2 Addition}
 
     "add-2008-hwcd-3".  Six scratch elements and the multiplier's own
@@ -199,20 +211,21 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len aa; A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len aw;
 
   (* aa = x1^2, ab = y1^2, ac = 2 z1^2 *)
-  copy au x1;
-  fmul aa au x1;
-  copy au y1;
-  fmul ab au y1;
-  fscale au z1 2uL aw;
-  with vu. assert (A.pts_to au vu);
-  double_ok (eval (vals vz1));
-  assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul ac au z1;
+  fsqr aa x1;
+  fsqr ab y1;
+  fsqr au z1;
+  with vq. assert (A.pts_to au vq);
+  assert (pure (fev (vals vq) == C.fmul (fev (vals vz1)) (fev (vals vz1))));
+  fscale ac au 2uL aw;
+  with vu. assert (A.pts_to ac vu);
+  double_ok (eval (vals vq));
+  dblmul (fev (vals vz1)) (fev (vals vz1));
+  assert (pure (fev (vals vu) ==
+                C.fmul (C.fadd (fev (vals vz1)) (fev (vals vz1))) (fev (vals vz1))));
 
   (* ar = (x1 + y1)^2 *)
   fadd au x1 y1;
-  copy av au;
-  fmul ar av au;
+  fsqr ar au;
 
   (* H = aa + ab, E = H - ar, G = aa - ab, F = ac + G *)
   fadd av aa ab;

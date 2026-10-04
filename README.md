@@ -2098,6 +2098,73 @@ Against EverCrypt, 256 KiB AES-128-GCM goes from 1.56x to **1.43x** under
 gcc and to **1.22x** under clang.  No benchmark in the suite regresses by
 as much as two per cent under either compiler.
 
+### A square is not a product
+
+Every field in this library squared a number the obvious way: copy the
+argument and call the multiply.  `fsqr out a` was `copy c a; fmul out a c`.
+That is correct, it is one line, and for a five-limb representation it is
+twenty-five wide multiplies where fifteen are enough.
+
+**The schoolbook product of a sequence with itself is symmetric about its
+diagonal.**  Column *k* of `a * b` is the sum of `a_i * b_j` over `i + j = k`;
+when `b` is `a`, the term `a_i * a_j` and the term `a_j * a_i` are the same
+product appearing twice in the same column.  Pair them, and the column has
+one diagonal term `a_i * a_i` when *k* is even and nothing but doubled
+off-diagonal terms besides.  Five columns of five products become five
+columns of at most three.
+
+The factor of two is carried **in the word, before the widening**.  For
+Curve25519 at radix 2^51 the limbs are below `2^52`, so `2 * a_i` and even
+`38 * a_i` still fit in a machine word; the doubling is a single shift on a
+64-bit register rather than an addition on a 128-bit accumulator.  The five
+columns are then
+
+```
+c0 = a0*a0 + (38 a4)*a1 + (38 a2)*a3
+c1 = (2 a0)*a1 + (38 a4)*a2 + (19 a3)*a3
+c2 = (2 a0)*a2 + a1*a1 + (38 a4)*a3
+c3 = (2 a0)*a3 + (2 a1)*a2 + (19 a4)*a4
+c4 = (2 a0)*a4 + (2 a1)*a3 + a2*a2
+```
+
+where the scaling by 19 is the same wrap past `2^255 - 19` that `fmul`
+already does.
+
+**The columns are unchanged, and that is why the proof was cheap.**  The
+largest column here is `77 lim^2`, against the `95 lim^2` the multiply's
+carry chain is already proved to accept.  So nothing downstream needs a new
+argument: `fsqr` hands its five 128-bit columns to the *same* `chain`, the
+same wrap, the same final narrowing.  The new lemmas in
+`spec/Spec.Curve25519.Columns.fst` do not specify squaring at all --- each
+one states the paired form of a column and derives it from the existing
+column lemma with `b := a`, nudged by two facts an SMT solver will not find
+on its own, that `x*y + y*x == (2x)*y` and that `x*(19y) + y*(19x) ==
+(38y)*x`.  All five verified on the first attempt.
+
+Wiring it in meant deleting things.  The Montgomery ladder had a sixth
+scratch buffer `t6` threaded through `add_and_double`, `ladder_one`,
+`ladder` and `scalarmult` for no reason other than to hold the copy; it is
+gone.  `fsqr_ip` in the inversion chain loses a copy and an array.
+Ed25519's `point_double` squared **inline** --- `copy au x1; fmul aa au x1`
+--- rather than calling the field's `fsqr`, three times, so the three sites
+had to be found and replaced individually; the same was true of the `y^2` in
+point decompression.  While there, `2 z1^2` is now computed as a square
+followed by a doubling rather than a doubling followed by a multiply, which
+needs one more field lemma and saves another twenty-five multiplies.
+
+X25519 is 8-9% faster, Ed25519 verification 8-13%, key generation 6-9%,
+under both compilers.
+
+**It does not pay everywhere, and the measurement is the only way to
+know.**  The same rewrite for K256's five-limb radix-2^52 field verified
+just as easily and made the field squaring 32% faster in isolation under
+clang --- and then made `k256-ecdsa-verify` 3% *slower* under clang while
+making it 5% faster under gcc.  The arithmetic saved is real but small
+against what k256 verification actually spends its time on, and at that
+scale it is lost in how the two compilers choose to inline and lay out the
+point doubling around it.  That change was reverted.  k256's gap is not in
+the multiply; it is in the scalar decomposition, which is a separate item.
+
 ### SHA-NI, where the instruction is four rounds wide
 
 `SHA256RNDS2` does two rounds of the compression function and `SHA256MSG1`
@@ -2909,16 +2976,16 @@ reference**.
 | P-256 ECDH | -- | 165 us | 159 us | **1.04x** |  |  |
 | P-256 ECDSA verify | -- | 449 us | 427 us | **1.05x** |  |  |
 | P-256 ECDSA sign | -- | 182 us | 169 us | **1.08x** |  |  |
+| X25519 | -- | 50 us | 44 us | **1.14x** | 36 us | 1.39x |
 | Poly1305 | 256 KiB | 239 us | 210 us | **1.14x** | 58 us | 4.15x |
 | RSA-PSS-2048 verify | -- | 166 us | 145 us | **1.14x** |  |  |
 | NaCl secretbox | 256 KiB | 773 us | 649 us | **1.19x** |  |  |
 | Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
 | secp256k1 ECDSA sign | -- | 79 us | 66 us | **1.19x** |  |  |
-| X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
+| Ed25519 sign | -- | 84 us | 65 us | **1.30x** |  |  |
 | AES-128-GCM | 256 KiB | 103 us | 72 us | **1.43x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
-| Ed25519 sign | -- | 93 us | 64 us | **1.46x** |  |  |
 
 The last two columns say what vector code is worth, and it is worth a great
 deal: 5.3x for ChaCha20, 4.2x for Poly1305, 5.1x for ChaCha20-Poly1305, 6.9x
@@ -4415,3 +4482,23 @@ rough order of value:
     instructions to 194.  Bulk AES-GCM gained 9% under gcc and 14% under
     clang; 256 KiB AES-128-GCM is now **1.43x** of EverCrypt under gcc and
     **1.22x** under clang.
+
+14. ~~**A dedicated squaring for the field**~~ --- done; see *A square is
+    not a product* above.  Every field in the library squared by copying
+    its argument and calling the multiply, which for five limbs is
+    twenty-five wide multiplies where fifteen suffice.  Pairing the
+    off-diagonal products of the symmetric schoolbook and carrying the
+    factor of two in the word rather than in the 128-bit accumulator
+    leaves the column bounds inside what the multiply's carry chain is
+    already proved to accept, so the chain, the wrap and the narrowing are
+    reused unchanged and the whole proof is five lemmas derived from the
+    existing column lemmas with `b := a`.  X25519 gained 10-12% under gcc
+    and 11% under clang, Ed25519 verification 14% and 7%, signing 12% and
+    6%.  Ed25519's `point_double` squared inline rather than through the
+    field's `fsqr` and had to be rewritten site by site; while there,
+    `2 z1^2` became a square followed by a doubling.  The same rewrite for
+    secp256k1's radix-2^52 field verified just as easily and was reverted:
+    it is 32% faster in isolation under clang and still made
+    `k256-ecdsa-verify` 3% slower there while gaining 5% under gcc, which
+    is the measurement saying that k256's time is not in the multiply.
+    Item 12 is where it is.

@@ -567,8 +567,7 @@ ensures exists* (wx: Seq.seq S64.t).
   C.prime_gt_one ();
 
   (* b1 = y^2, u = b1 - 1, v = d b1 + 1 *)
-  copy b7 yb;
-  fmul b1 b7 yb;
+  fsqr b1 yb;
   fsub b2 b1 b6;
   with su. assert (A.pts_to b2 su);
   let dt = Table.table Tables.d_arr 5sz;
