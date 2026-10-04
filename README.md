@@ -34,13 +34,16 @@ X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
 generator multiply it out of four compiled-in base points rather than one.
 P-256 is the one that gained most from the latter: signing is now within
-1.08x of the reference and key agreement within 1.04x.  Ed25519 and secp256k1 go
+1.06x of the reference and key agreement within 1.05x.  Ed25519 and secp256k1 go
 further still and compile in the whole of their fixed-base windows,
 sixty-four precomputed multiples of the generator apiece: Ed25519 signing and
-key generation are within 1.46x under gcc and 1.16x under clang, and
-secp256k1 signing is within 1.19x and `secret-to-public` within 1.28x, now
+key generation are within 1.23x under gcc and 1.37x under clang, and
+secp256k1 signing is within 1.15x and `secret-to-public` within 1.24x, now
 that its small multiples -- twenty-one, eight, three, two -- are a
-limb-by-limb multiply rather than a full field multiplication.
+limb-by-limb multiply rather than a full field multiplication.  The clang
+numbers on all of these rose when the secret-indexed table read was made
+genuinely constant-time; see [The compiler is allowed to undo a
+constant-time algorithm](#the-compiler-is-allowed-to-undo-a-constant-time-algorithm).
 See
 [Performance](#performance).
 
@@ -2098,6 +2101,72 @@ Against EverCrypt, 256 KiB AES-128-GCM goes from 1.56x to **1.43x** under
 gcc and to **1.22x** under clang.  No benchmark in the suite regresses by
 as much as two per cent under either compiler.
 
+### The compiler is allowed to undo a constant-time algorithm
+
+A windowed scalar multiplication reads one of sixteen precomputed points,
+and the four bits that say which one are secret.  The read is therefore
+written to touch all sixteen: build a mask per entry, all ones for the one
+wanted and all zeroes for the other fifteen, and fold every entry through
+its own mask.  `Hacl.Bignum.Base.table_select` is that loop, and Ed25519,
+P-256, secp256k1 and the generic modular exponentiation all go through it.
+
+**The verified statement is about the value, and the property wanted is not
+about the value.**  F\* proves that `table_select` returns entry *d*.  It
+has no vocabulary for "and takes the same time whichever *d* that was",
+because that is a claim about emitted instructions, not about a result.
+The constant-time argument is carried entirely by the expectation that a C
+compiler will emit mask arithmetic as mask arithmetic.
+
+It is not obliged to.  The sixteen masks are sixteen comparisons of a
+runtime value against the literals zero through fifteen; a compiler that
+unrolls the loop sees that, and may decide the cheapest correct code is a
+cascade that tests the secret digit and jumps straight to the entry it
+names.  **clang at `-O3` did exactly this.**  Timed once per digit, the
+shipped lookup rose monotonically from 3.7ns at *d* = 0 to 8.9ns at
+*d* = 15 — a 158% spread, which is the whole digit legible from outside.
+gcc, on the same source, was flat to 1%.
+
+Two changes fix it, and both were measured before being written.
+
+**A value barrier on the mask.**  `Hacl.Launder.launder` is the identity,
+and its whole content is that the generated C contains a call the optimizer
+cannot see through — an empty `asm` statement with a `"+r"` constraint,
+which emits no instruction but returns a value the compiler knows nothing
+about.  A laundered mask cannot be recognised as the result of a
+comparison, so there is no comparison left to turn into a branch.  The
+barrier goes on the mask, not on the secret: laundering the secret would
+leave the sixteen comparisons against literals exactly where they were.
+
+**The order of the two loops.**  Accumulating into `res[j]` makes a chain
+of sixteen read-modify-writes through memory on every limb, and since the
+limb count is a run-time value neither loop can be unrolled around it.
+Running the sixteen entries *innermost* keeps the accumulator in a register
+and gives the inner loop a trip count known at compile time.  That is worth
+about 40% on its own.
+
+The spread goes from 158% to 1.2% under clang and stays flat under gcc, and
+the lookup itself drops from 57ns to 34ns under gcc.  `tests/test_launder.c`
+is the regression test: it times the shipped function once per digit and
+fails if the spread exceeds 75%, which the old code does at 141%.
+
+**What this costs, and why the cost is not a regression.**  Measured over
+the whole suite: under gcc, Ed25519 key generation is 6% faster, signing
+5%, verification 4%, secp256k1 signing 4% and `secret-to-public` 3%, and
+P-256 verification 2% -- gcc was doing the masked work all along and now
+does it in a better loop.  Under clang the same rows go the other way:
+Ed25519 key generation and signing 21% slower, verification 12%,
+secp256k1 `secret-to-public` 10%, signing 7%, ECDSA verification 6%, the
+four P-256 operations 3-4%, and the 2048-bit constant-time modexp 2%.
+That is the price of the masked scan actually happening.  Those earlier
+clang numbers were never constant-time numbers, and a table of them is a
+table of a different algorithm.  X25519 is untouched, because the
+Montgomery ladder selects with `cswap` and not with a table.
+
+The library has other masked selections, and nothing here proves they are
+safe; what this episode establishes is that the question has to be asked of
+the emitted code, one primitive at a time, and that a timing test over the
+secret is how to ask it.
+
 ### A square is not a product
 
 Every field in this library squared a number the obvious way: copy the
@@ -2972,18 +3041,18 @@ reference**.
 | RSA-2048 modexp | -- | 4.4 ms | 4.6 ms | **0.97x** |  |  |
 | SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
 | HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
+| P-256 ECDSA verify | -- | 446 us | 433 us | **1.03x** |  |  |
 | BLAKE2s | 256 KiB | 595 us | 572 us | **1.04x** |  |  |
-| P-256 ECDH | -- | 165 us | 159 us | **1.04x** |  |  |
-| P-256 ECDSA verify | -- | 449 us | 427 us | **1.05x** |  |  |
-| P-256 ECDSA sign | -- | 182 us | 169 us | **1.08x** |  |  |
+| P-256 ECDH | -- | 166 us | 158 us | **1.05x** |  |  |
+| P-256 ECDSA sign | -- | 182 us | 171 us | **1.06x** |  |  |
 | X25519 | -- | 50 us | 44 us | **1.14x** | 36 us | 1.39x |
 | Poly1305 | 256 KiB | 239 us | 210 us | **1.14x** | 58 us | 4.15x |
 | RSA-PSS-2048 verify | -- | 166 us | 145 us | **1.14x** |  |  |
+| secp256k1 ECDSA sign | -- | 76 us | 67 us | **1.15x** |  |  |
 | NaCl secretbox | 256 KiB | 773 us | 649 us | **1.19x** |  |  |
 | Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
-| secp256k1 ECDSA sign | -- | 79 us | 66 us | **1.19x** |  |  |
+| Ed25519 sign | -- | 80 us | 65 us | **1.23x** |  |  |
 | BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
-| Ed25519 sign | -- | 84 us | 65 us | **1.30x** |  |  |
 | AES-128-GCM | 256 KiB | 103 us | 72 us | **1.43x** |  |  |
 | MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
 
@@ -4502,3 +4571,22 @@ rough order of value:
     `k256-ecdsa-verify` 3% slower there while gaining 5% under gcc, which
     is the measurement saying that k256's time is not in the multiply.
     Item 12 is where it is.
+
+15. **Audit the remaining masked selections against the compiler.**  The
+    secret-indexed table read turned out to be compiled by clang `-O3`
+    into a sixteen-way branch cascade on the secret digit; see *The
+    compiler is allowed to undo a constant-time algorithm* above.  That
+    was one function, found by accident, and nothing has established that
+    the rest of the library is safe.  The candidates are the Montgomery
+    ladder's `cswap`, `Hacl.Impl.Select`, ML-KEM's constant-time
+    comparisons and rejection sampling, the RSA and bignum masked paths,
+    and every use of `Hacl.Secret`'s `select` and `masked` where the
+    surrounding loop has a trip count known at compile time -- which is
+    the condition that lets the optimizer enumerate the secret's values.
+    The method is the one in `tests/test_launder.c`: time the shipped
+    function once per value of the secret and fail on a spread.  It
+    should become a standing test over every primitive with a
+    secret-dependent select, not a single test over the one case that was
+    caught.  Where a leak is found, the two levers are the value barrier
+    `Hacl.Launder.launder` and restructuring the loop so the optimizer
+    cannot see a constant trip count over the secret's range.

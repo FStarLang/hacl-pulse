@@ -147,7 +147,7 @@ CUSTARD_ENTRIES += $(addprefix Hacl.AES.GCM., \
   aes128_encrypt aes128_decrypt aes256_encrypt aes256_decrypt)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Base., \
-  zero add sub add_mod sub_mod mul sqr lt_mask eq_mask)
+  zero add sub add_mod sub_mod mul sqr lt_mask eq_mask table_select)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Convert., \
   from_bytes_be from_bytes_le to_bytes_be to_bytes_le)

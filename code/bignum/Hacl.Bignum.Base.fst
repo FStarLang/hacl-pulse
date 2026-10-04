@@ -57,6 +57,7 @@ module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module S128 = Hacl.Secret.UInt128
+module Launder = Hacl.Launder
 
 module UInt = FStar.UInt
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -1542,61 +1543,57 @@ ensures A.pts_to b #pb vb ** pure (S64.v d == num vb / pow2 (SZ.v i) % 16)
   S64.logand x (S64.mask_low 4ul)
 }
 
-(** Reading a table entry out of a flat array, as a sequence slice. *)
-let sel_eq_at (v vt vres: Seq.seq S64.t) (off n: nat) (k: nat)
-  : Lemma (requires Seq.length v == n /\ Seq.length vres == n /\
-                    off + n <= Seq.length vt /\
-                    (forall (j: nat). j < n ==>
-                       Seq.index v j ==
-                         (if k = 1 then Seq.index vt (off + j)
-                          else Seq.index vres j)))
-          (ensures (k == 1 ==> v == Seq.slice vt off (off + n)) /\
-                   (k == 0 ==> v == vres))
-  = if k = 1 then Seq.lemma_eq_intro v (Seq.slice vt off (off + n))
-    else Seq.lemma_eq_intro v vres
+(** {2 The secret-indexed table read}
 
-(** [cselect_at res tbl n off m k] is {!cselect} reading the [n] limbs of
-    [tbl] that begin at [off]. *)
-fn cselect_at (res: A.array S64.t) (tbl: A.array S64.t) (n: SZ.t) (off: SZ.t)
-              (m: S64.t) (k: erased nat)
-              (#vres: erased (Seq.seq S64.t)) (#pt: perm)
-              (#vt: erased (Seq.seq S64.t))
-requires A.pts_to res vres ** A.pts_to tbl #pt vt **
-  pure (Seq.length vres == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
-        SZ.fits (SZ.v off + SZ.v n) /\ is_mask m /\ stands_for m (reveal k))
-ensures exists* (v: Seq.seq S64.t).
-  A.pts_to res v ** A.pts_to tbl #pt vt **
-  pure (Seq.length v == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
-        (reveal k == 1 ==>
-           v == Seq.slice vt (SZ.v off) (SZ.v off + SZ.v n)) /\
-        (reveal k == 0 ==> v == reveal vres))
-{
-  A.pts_to_len res;
-  A.pts_to_len tbl;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to res v ** A.pts_to tbl #pt vt **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
-          SZ.v off + SZ.v n <= Seq.length vt /\
-          (forall (k2: nat). k2 < SZ.v vi ==>
-             Seq.index v k2 ==
-               (if reveal k = 1 then Seq.index vt (SZ.v off + k2)
-                else Seq.index vres k2)) /\
-          (forall (k2: nat). SZ.v vi <= k2 /\ k2 < SZ.v n ==>
-             Seq.index v k2 == Seq.index vres k2))
-  decreases (SZ.v n - SZ.v (!i))
-  {
-    let vi = !i;
-    let ai = A.(tbl.(SZ.add off vi));
-    let ri = A.(res.(vi));
-    A.((res.(vi) <- S64.select m ai ri));
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to res v);
-  sel_eq_at v vt vres (SZ.v off) (SZ.v n) (reveal k);
-  ()
-}
+    A windowed scalar multiplication reads the entry of a sixteen-entry
+    table named by four bits of the scalar, and those four bits are secret.
+    The read therefore has to touch all sixteen entries and take the same
+    time whichever one was wanted, which is what masking does: build a mask
+    per entry, all ones for the one asked for and all zeroes for the other
+    fifteen, and fold every entry through its own mask.
+
+    Two things about the loop below are there for the compiler rather than
+    for the proof, and both were put there after measuring.
+
+    The first is {!Hacl.Launder.launder} on each mask.  Without it the
+    sixteen masks are sixteen comparisons of a runtime value against the
+    literals zero through fifteen, and a compiler is entitled to emit that
+    as a cascade of tests on the secret -- clang at [-O3] did, and the
+    lookup's running time then rose monotonically with the digit, which is
+    the whole secret leaking.  See [tests/test_launder.c].
+
+    The second is the order of the two loops.  Accumulating into [res.(j)]
+    makes a chain of sixteen read-modify-writes through memory on every
+    limb, and because [n] is a run-time value neither loop can be unrolled
+    around it.  Running the entries innermost instead keeps the accumulator
+    in a register, and the inner loop then has a trip count of sixteen that
+    is known at compile time.  That is worth about 40% on both compilers. *)
+
+(** The mask that entry [i] of the table carries when entry [k] is the one
+    being read.  Stated as a predicate rather than inline so that the
+    invariant does not become a conditional the solver splits on. *)
+let mask_for (m: S64.t) (i k: nat) : prop =
+  (i == k ==> S64.v m == pow2 64 - 1) /\ (~(i == k) ==> S64.v m == 0)
+
+let mask_for_is_mask (m: S64.t) (i k: nat)
+  : Lemma (requires mask_for m i k) (ensures is_mask m)
+  = ()
+
+(** Or-ing with zero, on each side.  [v_extensional] carries these from
+    values to terms. *)
+let or_zero (x: S64.t) : Lemma (S64.logor x S64.zero == x)
+  = UInt.logor_lemma_1 #64 (S64.v x)
+
+let zero_or (x: S64.t) : Lemma (S64.logor S64.zero x == x)
+  = UInt.logor_commutative #64 (S64.v S64.zero) (S64.v x);
+    UInt.logor_lemma_1 #64 (S64.v x)
+
+(** The last entry still fits: [15 * n + (n - 1)] is below [16 * n]. *)
+let entry_in_range (e j n: nat)
+  : Lemma (requires e < 16 /\ j < n) (ensures e * n + j < 16 * n)
+  = Math.lemma_mult_le_right n (e + 1) 16
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
 
 (** [table_select res tbl n d] copies entry [d] of a sixteen-entry table of
     [n]-limb numbers into [res].  Every entry is read and fifteen of them
@@ -1618,26 +1615,87 @@ ensures exists* (v: Seq.seq S64.t).
   A.pts_to_len res;
   A.pts_to_len tbl;
   assert_norm (pow2 64 - 1 =!= 0);
+
+  (* The sixteen masks, each laundered as it is stored. *)
+  let zm = S64.zero;
+  let mut mk = [| zm; 16sz |];
+  A.pts_to_len mk;
   let mut e = 0sz;
   let mut ec = S64.classify 0uL;
-  while (let ve = !e; SZ.lt ve (SZ.uint_to_t 16))
-  invariant exists* (ve: SZ.t) (vec: S64.t) (v: Seq.seq S64.t).
-    pts_to e ve ** pts_to ec vec ** A.pts_to res v ** A.pts_to tbl #pt vt **
-    pure (SZ.v ve <= 16 /\ S64.v vec == SZ.v ve /\ Seq.length v == SZ.v n /\
-          Seq.length vt == 16 * SZ.v n /\ reveal k < 16 /\
-          (reveal k < SZ.v ve ==>
-             v == Seq.slice vt (reveal k * SZ.v n)
-                              (reveal k * SZ.v n + SZ.v n)))
+  while (let ve = !e; SZ.lt ve 16sz)
+  invariant exists* (ve: SZ.t) (vec: S64.t) (wm: Seq.seq S64.t).
+    pts_to e ve ** pts_to ec vec ** A.pts_to mk wm **
+    pure (SZ.v ve <= 16 /\ S64.v vec == SZ.v ve /\ Seq.length wm == 16 /\
+          (forall (i: nat). i < SZ.v ve ==>
+             mask_for (Seq.index wm i) i (reveal k)))
   decreases (16 - SZ.v (!e))
   {
     let ve = !e;
     let vec = !ec;
-    let m = S64.eq_mask d vec;
-    cselect_at res tbl n (SZ.mul ve n) m (if SZ.v ve = reveal k then 1 else 0);
+    let m = Launder.launder (S64.eq_mask d vec);
+    A.(mk.(ve) <- m);
     ec := S64.add_mod vec (S64.classify 1uL);
     e := SZ.add ve 1sz;
-  }
+  };
+
+  (* One limb at a time, with the sixteen entries innermost. *)
+  let mut j = 0sz;
+  while (let vj = !j; SZ.lt vj n)
+  invariant exists* (vj: SZ.t) (wm: Seq.seq S64.t) (wres: Seq.seq S64.t).
+    pts_to j vj ** A.pts_to mk wm ** A.pts_to res wres **
+    A.pts_to tbl #pt vt **
+    pure (SZ.v vj <= SZ.v n /\ Seq.length wm == 16 /\
+          Seq.length wres == SZ.v n /\ Seq.length vt == 16 * SZ.v n /\
+          SZ.fits (16 * SZ.v n) /\ reveal k < 16 /\
+          (forall (i: nat). i < 16 ==>
+             mask_for (Seq.index wm i) i (reveal k)) /\
+          (forall (j2: nat). j2 < SZ.v vj ==>
+             Seq.index wres j2 ==
+               Seq.index vt (reveal k * SZ.v n + j2)))
+  decreases (SZ.v n - SZ.v (!j))
+  {
+    let vj = !j;
+    let mut acc = S64.zero;
+    let mut e2 = 0sz;
+    while (let ve2 = !e2; SZ.lt ve2 16sz)
+    invariant exists* (ve2: SZ.t) (vacc: S64.t) (wm: Seq.seq S64.t).
+      pts_to e2 ve2 ** pts_to acc vacc ** A.pts_to mk wm **
+      A.pts_to tbl #pt vt **
+      pure (SZ.v ve2 <= 16 /\ Seq.length wm == 16 /\
+            Seq.length vt == 16 * SZ.v n /\ SZ.fits (16 * SZ.v n) /\
+            reveal k < 16 /\ SZ.v vj < SZ.v n /\
+            (forall (i: nat). i < 16 ==>
+               mask_for (Seq.index wm i) i (reveal k)) /\
+            vacc == (if reveal k < SZ.v ve2
+                     then Seq.index vt (reveal k * SZ.v n + SZ.v vj)
+                     else S64.zero))
+    decreases (16 - SZ.v (!e2))
+    {
+      let ve2 = !e2;
+      let vacc = !acc;
+      let m = A.(mk.(ve2));
+      mask_for_is_mask m (SZ.v ve2) (reveal k);
+      entry_in_range (SZ.v ve2) (SZ.v vj) (SZ.v n);
+      let x = A.(tbl.(SZ.add (SZ.mul ve2 n) vj));
+      or_zero vacc;
+      zero_or x;
+      acc := S64.logor vacc (masked m x);
+      e2 := SZ.add ve2 1sz;
+    };
+    let vacc = !acc;
+    A.(res.(vj) <- vacc);
+    j := SZ.add vj 1sz;
+  };
+
+  with wres. assert (A.pts_to res wres);
+  Math.lemma_mult_le_right (SZ.v n) (reveal k + 1) 16;
+  Seq.lemma_eq_intro wres
+    (Seq.slice vt (reveal k * SZ.v n) (reveal k * SZ.v n + SZ.v n));
+  ()
 }
+
+#pop-options
+
 
 (** [table_store tbl src n off] writes the [n] limbs of [src] into [tbl] at
     [off] and leaves the rest of [tbl] alone.  Only the table's construction
