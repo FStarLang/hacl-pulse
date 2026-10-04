@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "Hacl_Vec128.h"
+#include "Hacl_Launder.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +42,7 @@ bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_seal(uint8_t *enc, uint8_t *ct, ui
 bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_setup_base_r(uint8_t *key, uint8_t *base_nonce, uint64_t *sq, uint8_t *exporter, uint8_t *enc, uint8_t *skR, uint8_t *info, size_t info_len);
 bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_setup_base_s(uint8_t *enc, uint8_t *key, uint8_t *base_nonce, uint64_t *sq, uint8_t *exporter, uint8_t *skE, uint8_t *pkR, uint8_t *info, size_t info_len);
 bool Hacl_P256_Sec1_uncompressed_to_raw(uint8_t *out, uint8_t *pk);
+void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d);
 bool Hacl_P256_Ecdh_dh_responder(uint8_t *out, uint8_t *pk, uint8_t *sk);
 bool Hacl_P256_Ecdh_dh_initiator(uint8_t *out, uint8_t *sk);
 void Hacl_P256_Sec1_raw_to_uncompressed(uint8_t *out, uint8_t *pk);

@@ -294,8 +294,7 @@ static void Hacl_P256_PointWin_build_table(uint64_t *tx, uint64_t *ty, uint64_t 
 static uint64_t Hacl_Impl_Mont4_adigit(uint64_t *s, size_t i);
 static void Hacl_P256_Point_point_double(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *x, uint64_t *y, uint64_t *z);
 static void Hacl_P256_PointWin_win_dbl4(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz);
-static void Hacl_Bignum_Base_cselect_at(uint64_t *res, uint64_t *tbl, size_t n, size_t off, uint64_t m);
-static void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d);
+static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
 static void Hacl_P256_PointWin_win_add(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *ux, uint64_t *uy, uint64_t *uz, uint64_t *sx, uint64_t *sy, uint64_t *sz, uint64_t *tx, uint64_t *ty, uint64_t *tz, uint64_t dig);
 static void Hacl_P256_PointWin_point_mul_win(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *ks);
 static void Hacl_P256_PointMul_point_mul(uint64_t *ox, uint64_t *oy, uint64_t *oz, uint64_t *qx, uint64_t *qy, uint64_t *qz, uint64_t *ks);
@@ -357,7 +356,6 @@ static uint64_t Hacl_Secret_Word_of_sizet_lo__t(size_t x);
 static void Hacl_Impl_Bytes_store_le__t_1(uint8_t *b, size_t off, uint64_t x);
 static void Hacl_Chacha20Poly1305_write_len_block(uint8_t *lb, size_t la, size_t lc);
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b);
-static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y);
 static uint64_t Hacl_Secret_Word_shift_left__t_1(uint64_t x, uint32_t s);
 static uint64_t Hacl_Impl_Bytes_load_le4__t_1(uint8_t *b, size_t off);
@@ -5168,27 +5166,41 @@ static void Hacl_P256_PointWin_win_dbl4(uint64_t *ox, uint64_t *oy, uint64_t *oz
   Hacl_P256_Field_fcopy(oz, uz);
 }
 
-static void Hacl_Bignum_Base_cselect_at(uint64_t *res, uint64_t *tbl, size_t n, size_t off, uint64_t m) {
-  size_t i = 0;
-  while (i < n) {
-    size_t vi = i;
-    uint64_t ai = tbl[(off + vi)];
-    uint64_t ri = res[vi];
-    res[vi] = Hacl_Secret_UInt64_select(m, ai, ri);
-    i = (vi + 1);
-  }
+static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
+  return (x | y);
 }
 
-static void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d) {
+void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d) {
+  uint64_t zm = Hacl_Secret_UInt64_zero;
+  uint64_t mk[16];
+  for (size_t _ci1 = 0; _ci1 < 16; _ci1++) {
+    mk[_ci1] = zm;
+  }
   size_t e = 0;
   uint64_t ec = 0;
   while (e < 16) {
     size_t ve = e;
     uint64_t vec = ec;
-    uint64_t m = Hacl_Secret_UInt64_eq_mask(d, vec);
-    Hacl_Bignum_Base_cselect_at(res, tbl, n, (ve * n), m);
+    uint64_t m = Hacl_Launder_u64(Hacl_Secret_UInt64_eq_mask(d, vec));
+    mk[ve] = m;
     ec = Hacl_Secret_UInt64_add_mod(vec, 1);
     e = (ve + 1);
+  }
+  size_t j = 0;
+  while (j < n) {
+    size_t vj = j;
+    uint64_t acc = Hacl_Secret_UInt64_zero;
+    size_t e2 = 0;
+    while (e2 < 16) {
+      size_t ve2 = e2;
+      uint64_t vacc = acc;
+      uint64_t m_1 = mk[ve2];
+      uint64_t x = tbl[((ve2 * n) + vj)];
+      acc = Hacl_Secret_UInt64_logor(vacc, Hacl_Secret_UInt64_select(m_1, x, Hacl_Secret_UInt64_zero));
+      e2 = (ve2 + 1);
+    }
+    res[vj] = acc;
+    j = (vj + 1);
   }
 }
 
@@ -6055,10 +6067,6 @@ static void Hacl_Chacha20Poly1305_write_len_block(uint8_t *lb, size_t la, size_t
 
 static uint64_t Hacl_Secret_Word_of_byte__t_1(uint8_t b) {
   return Hacl_Secret_Cast_u8_to_u64(b);
-}
-
-static uint64_t Hacl_Secret_UInt64_logor(uint64_t x, uint64_t y) {
-  return (x | y);
 }
 
 static uint64_t Hacl_Secret_Word_logor__t_1(uint64_t x, uint64_t y) {
