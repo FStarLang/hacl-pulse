@@ -22,10 +22,16 @@ the NIST CAVP sets for AES-GCM and HMAC-DRBG, the FrodoKEM known-answer
 tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
 thirty-four C test harnesses in `tests/`.
 
-Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
-SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305 and HMAC-SHA-512 are all faster --
-to behind it on the elliptic curves, where what is left is
-the scalar multiplication rather than the field.  Modular exponentiation --
+Performance is measured against HACL\* configured for the machine and allowed
+everything it has -- Vale assembly, AVX2, BMI2/ADX -- because that is what a
+caller choosing HACL\* would actually get.  On that comparison SHA-3, SHAKE,
+SHA-512, HMAC-SHA-512 and BLAKE2b are faster, two thirds of the suite is
+within 20%, and the remaining ceiling is the three primitives where AVX2
+lanes are worth four to five times a scalar implementation: ChaCha20,
+Poly1305 and ChaCha20-Poly1305.  Against HACL\*'s *portable* C -- the
+like-for-like comparison, same algorithm and same instruction set -- the
+hashes are all ahead and what is behind is the elliptic curves, where what
+is left is the scalar multiplication rather than the field.  Modular exponentiation --
 RSA-PSS, FFDHE and the generic modexp -- has crossed over: a 4-bit window, a
 four-at-a-time inner row and a triangle squaring put all three of those rows
 between 0.92x and 0.97x, faster than the reference.  On the curves: P-256's variable-base ECDH
@@ -253,6 +259,21 @@ one scratch block that holds `K0 ^ ipad` and later `K0 ^ opad`, and one digest
 — and calls `hash_prefixed` twice.  HMAC of a gigabyte costs the same memory as
 HMAC of a byte, with no state machine.  `hash_prefixed` is also what the
 incremental interface is built on; see below.
+
+That generality had a cost that took a while to see.  `hash_prefixed` is
+generic in the word type, so it cannot branch into the SHA-EXT
+implementation, which exists only at thirty-two-bit words -- and the
+dispatch on `sha_supported ()` lived only in the one-shot hash.  HMAC-SHA-256
+therefore ran scalar compression rounds on a machine whose plain SHA-256 was
+issuing `sha256rnds2`, and cost five times what hashing the same bytes cost.
+There is no way for code at an abstract word type to obtain the equality
+witness it would need, and an implementation-dispatch method has no business
+in a typeclass that is otherwise a statement about values, so
+`Hacl.Hash.SHA2.NI.hash_prefixed_ni` and `Hacl.HMAC.NI.hmac_impl_ni` are
+transcriptions at `S32.t`, in the same way `hash_blocks_ni` already was.
+`hmac_sha224` and `hmac_sha256` pick between them at run time.  A 256 KiB
+HMAC-SHA-256 went from 1,136 us to 227 us, which is exactly what hashing
+256 KiB costs.
 
 ### HKDF's one scratch buffer
 
@@ -3033,65 +3054,85 @@ core was healthy (see
 
 There are two reference columns, because there are two different questions.
 
+**HACL\* best** is HACL\* configured for this machine and allowed everything it
+has: EverCrypt's runtime multiplexing onto Vale's SHA-EXT assembly, the AVX2
+ChaCha20 and Poly1305, the vectorized BLAKE2, and the BMI2/ADX Curve25519.
+This is what a caller who reaches for HACL\* on this machine actually gets, so
+it is the ratio the table is sorted by and the one in bold.  Where HACL\* has
+no specialised backend for a primitive the two reference columns are the same
+number.
+
 **HACL\*** is HACL\*'s **portable scalar C** -- not its AVX2 or AVX-512
 variants -- except for AES-GCM, where HACL\* has no portable implementation at
 all and the reference is EverCrypt dispatching to Vale assembly.  This is the
 like-for-like comparison: same algorithm, same instruction set, two extraction
-pipelines.  It is the column that says anything about Pulse.
-
-**HACL\* best** is HACL\* configured for this machine and allowed everything
-it has: EverCrypt's runtime multiplexing onto Vale's SHA-EXT assembly, the
-AVX2 ChaCha20 and Poly1305, the vectorized BLAKE2, and the BMI2/ADX
-Curve25519.  hacl-pulse has no vectorized or assembly backend, so this column
-is not a fair fight and is not meant to be one; it is there to size the gap
-that a future vectorization effort would have to close.  It is shown only
-where it differs from the scalar reference by more than 3%.
+pipelines.  It is the column that isolates the extraction pipeline from the
+instruction set, which is the only thing a reader can conclude about Pulse
+from a benchmark; but it is not what a user would be choosing between, which
+is why it is no longer the headline.
 
 Ratios are hacl-pulse over the reference, so **below 1.00 is faster than the
 reference**.
 
-| primitive | size | hacl-pulse | HACL\* | ratio | HACL\* best | ratio |
+| primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| SHA-256 | 256 KiB | 227 us | 1,098 us | **0.21x** | 164 us | 1.39x |
-| SHA3-256 | 256 KiB | 985 us | 1,839 us | **0.54x** |  |  |
-| SHA-512 | 256 KiB | 770 us | 1,364 us | **0.57x** |  |  |
-| HMAC-SHA-512 | 256 KiB | 770 us | 1,361 us | **0.57x** |  |  |
-| ChaCha20 | 256 KiB | 494 us | 854 us | **0.58x** | 93 us | 5.30x |
-| SHAKE128 | 256 KiB | 883 us | 1,489 us | **0.59x** |  |  |
-| ChaCha20-Poly1305 | 256 KiB | 758 us | 1,066 us | **0.71x** | 149 us | 5.09x |
-| RSA-PSS-2048 sign | -- | 4.4 ms | 4.7 ms | **0.94x** |  |  |
-| FFDHE-2048 | -- | 4.5 ms | 4.6 ms | **0.96x** |  |  |
-| RSA-2048 modexp | -- | 4.4 ms | 4.6 ms | **0.97x** |  |  |
-| SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
-| HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
-| P-256 ECDSA verify | -- | 446 us | 433 us | **1.03x** |  |  |
-| BLAKE2s | 256 KiB | 595 us | 572 us | **1.04x** |  |  |
-| P-256 ECDH | -- | 166 us | 158 us | **1.05x** |  |  |
-| P-256 ECDSA sign | -- | 182 us | 171 us | **1.06x** |  |  |
-| X25519 | -- | 50 us | 44 us | **1.14x** | 36 us | 1.39x |
-| Poly1305 | 256 KiB | 239 us | 210 us | **1.14x** | 58 us | 4.15x |
-| RSA-PSS-2048 verify | -- | 166 us | 145 us | **1.14x** |  |  |
-| secp256k1 ECDSA sign | -- | 76 us | 67 us | **1.15x** |  |  |
-| NaCl secretbox | 256 KiB | 773 us | 649 us | **1.19x** |  |  |
-| Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
-| Ed25519 sign | -- | 80 us | 65 us | **1.23x** |  |  |
-| BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
-| AES-128-GCM | 256 KiB | 103 us | 72 us | **1.43x** |  |  |
-| MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
+| SHA3-256 | 256 KiB | 984 us | 1.8 ms | **0.54x** | 1.8 ms | 0.54x |
+| HMAC-SHA-512 | 256 KiB | 754 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
+| SHA-512 | 256 KiB | 759 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
+| SHAKE128 | 256 KiB | 882 us | 1.5 ms | **0.59x** | 1.5 ms | 0.60x |
+| BLAKE2b | 256 KiB | 381 us | 438 us | **0.87x** | 310 us | 1.23x |
+| RSA-PSS-2048 sign | -- | 4.4 ms | 4.7 ms | **0.95x** | 4.7 ms | 0.95x |
+| FFDHE-2048 | -- | 4.4 ms | 4.6 ms | **0.96x** | 4.6 ms | 0.96x |
+| RSA-2048 modexp | -- | 4.4 ms | 4.5 ms | **0.97x** | 4.5 ms | 0.98x |
+| P-256 ECDSA verify | -- | 438 us | 425 us | **1.03x** | 426 us | 1.03x |
+| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.04x** | 1.5 ms | 1.04x |
+| P-256 ECDH | -- | 162 us | 155 us | **1.04x** | 156 us | 1.03x |
+| P-256 ECDSA sign | -- | 177 us | 168 us | **1.05x** | 168 us | 1.05x |
+| BLAKE2s | 256 KiB | 606 us | 576 us | **1.05x** | 571 us | 1.06x |
+| RSA-PSS-2048 verify | -- | 166 us | 144 us | **1.15x** | 144 us | 1.15x |
+| secp256k1 ECDSA sign | -- | 76 us | 65 us | **1.16x** | 65 us | 1.17x |
+| NaCl secretbox | 256 KiB | 767 us | 643 us | **1.19x** | 642 us | 1.19x |
+| Salsa20 | 256 KiB | 531 us | 435 us | **1.22x** | 435 us | 1.22x |
+| Ed25519 sign | -- | 80 us | 64 us | **1.24x** | 64 us | 1.24x |
+| X25519 | -- | 50 us | 36 us | **1.40x** | 45 us | 1.13x |
+| HMAC-SHA-256 | 256 KiB | 227 us | 163 us | **1.40x** | 1.1 ms | 0.21x |
+| SHA-256 | 256 KiB | 227 us | 162 us | **1.40x** | 1.1 ms | 0.21x |
+| AES-128-GCM | 256 KiB | 103 us | 71 us | **1.45x** | 71 us | 1.45x |
+| MD5 | 256 KiB | 632 us | 432 us | **1.46x** | 431 us | 1.47x |
+| Poly1305 | 256 KiB | 236 us | 56 us | **4.18x** | 208 us | 1.14x |
+| ChaCha20-Poly1305 | 256 KiB | 757 us | 147 us | **5.14x** | 1.1 ms | 0.72x |
+| ChaCha20 | 256 KiB | 493 us | 93 us | **5.31x** | 851 us | 0.58x |
 
-The last two columns say what vector code is worth, and it is worth a great
-deal: 5.3x for ChaCha20, 4.2x for Poly1305, 5.1x for ChaCha20-Poly1305, 6.9x
-for HMAC-SHA-256 once EverCrypt reaches the SHA-EXT assembly.  Those are the
-four places where a portable scalar implementation, however well extracted,
-simply cannot compete, and they are the honest ceiling on what the work in
-this repository can reach without a vector backend.  Two of the entries go the
-other way and are worth recording: HACL\*'s AVX2 BLAKE2b is *slower* than its
-own scalar C on this machine (438 us against 312), and every vectorized
-primitive loses at 64 bytes, where the setup outweighs the body.  SHA-EXT
-beats hacl-pulse's SHA-256 by only 1.39x, which is the narrowest of these
-margins, and for a different reason: both sides are already issuing
-`sha256rnds2`, so that row is this repository's intrinsics against Vale's
-hand-written assembly rather than scalar against vector.
+Against what HACL\* can actually do on this machine, two thirds of the suite
+is within 20% and five primitives are ahead: SHA-3 and SHAKE, where HACL\*
+has no vector sponge; SHA-512 and HMAC-SHA-512, where it has none either; and
+BLAKE2b, where HACL\*'s own AVX2 implementation is *slower* on this machine
+than its own scalar C (438 us against 310), so "best" picks the wrong one.
+Everything from P-256 down to MD5 sits between 1.03x and 1.46x, which is the
+cost of a portable scalar implementation meeting hand-tuned scalar code.
+
+The honest ceiling is the bottom three rows.  ChaCha20 at 5.31x, Poly1305 at
+4.18x and ChaCha20-Poly1305 at 5.14x are not implementation defects; they are
+what thirty-two-byte-wide AVX2 lanes are worth on a stream cipher and a
+one-pass MAC, and no amount of work on scalar C will close them.  Closing
+those three needs a vector backend, which is a different project.
+
+HMAC-SHA-256 used to be the worst row in this table at 6.84x, worse than
+ChaCha20, and it did not belong there.  The SHA-EXT dispatch in this
+repository existed only in the one-shot hash; HMAC hashes `(K0 ^ ipad) || msg`
+through a *prefixed* hash that is generic in the word type, and generic code
+cannot branch into an implementation that exists only at thirty-two-bit words.
+So HMAC-SHA-256 ran scalar rounds on a machine whose plain SHA-256 was already
+issuing `sha256rnds2`.  A specialised `hash_prefixed_ni` and `hmac_impl_ni`
+took the 256 KiB case from 1,136 us to 227 us -- 5.0x, and now exactly the
+cost of hashing the same bytes, which is the right answer -- and the row from
+6.84x to 1.40x.  HKDF-extract came along for the ride at 1.82x.
+
+That leaves SHA-256 and HMAC-SHA-256 tied at 1.40x against Vale's SHA-EXT
+assembly, which is this repository's intrinsics against hand-written assembly
+rather than scalar against vector, and is the narrowest of the remaining
+gaps.  Every vectorized primitive still loses at 64 bytes, where the setup
+outweighs the body.
 
 Three things account for most of the spread against the scalar reference.
 
@@ -3296,7 +3337,7 @@ compilers see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-eight today -- HMAC,
+diffs them against `mk/clones.baseline`.  There are sixty-nine today -- HMAC,
 the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
@@ -4614,3 +4655,32 @@ rough order of value:
     one the test uses, and the two levers where a leak is found are the
     value barrier `Hacl.Launder.launder` and restructuring the loop so the
     optimizer cannot see a constant trip count over the secret's range.
+
+16. **Why is clang's SHA-EXT code three times gcc's?**  The same
+    `update_block_ni`, compiled by gcc, does a 256 KiB SHA-256 in 227 us;
+    compiled by clang 20 it takes 678 us, which is 165 ns a block against
+    55.  It is not the dispatch -- forcing the scalar path makes clang
+    1,300 us, so the intrinsics are still winning, just by half as much as
+    they should.  It is not unrolling: `-O2` and `-O3 -fno-unroll-loops`
+    are within 2% of `-O3`.  Both compilers emit the same count of
+    `sha256rnds2`, `sha256msg1` and `sha256msg2`.  What differs is that
+    clang emits `update_block_ni` as a standalone function of 23,392
+    instructions containing 4,746 `mov`s, where gcc inlines it into the
+    block loop; the suspicion is register allocation around the `Vec.t`
+    values in the message schedule, with the sixteen live `__m128i` of the
+    schedule spilling.  Under clang this is now the largest reachable gap
+    in the suite -- SHA-256 and HMAC-SHA-256 at about 4.1x HACL\* best --
+    and it is a code-generation question rather than an algorithmic one,
+    which makes it both the cheapest and the least predictable item here.
+
+17. **A vector backend.**  ChaCha20 at 5.31x, Poly1305 at 4.18x and
+    ChaCha20-Poly1305 at 5.14x against HACL\* best are the three rows that
+    no further work on scalar C can reach, and together they are most of
+    what is left in the table.  HACL\* gets them from a `vec_t` typeclass
+    instantiated at 128, 256 and 512 bits with runtime dispatch.  The same
+    shape would work here -- `Hacl.Vec128` already exists for AES-NI,
+    CLMUL and SHA-EXT, so the dispatch machinery and the clone-tracking
+    that goes with it are in place; what is missing is the four-lane and
+    eight-lane state for the stream ciphers and the lane-reduction for
+    Poly1305.  This is a project rather than a change, and it is listed
+    here mainly so the ceiling in the performance table has a name.
