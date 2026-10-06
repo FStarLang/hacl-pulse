@@ -426,6 +426,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   padded_shape (Seq.append pre vin);
   let ntail = tail_len rem;
   let base = SZ.sub len rem;
+  assert (pure (SZ.v base == SZ.v len - SZ.v rem));
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 128sz |];
   A.pts_to_len tarr;
@@ -440,6 +441,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   Math.multiple_division_lemma (SZ.v ntail / block_len) block_len;
   Math.multiply_fractions (SZ.v ntail) block_len;
   let ntb = SZ.div ntail 64sz;
+  assert (pure (SZ.v ntb == SZ.v ntail / 64));
 
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj ntb)
