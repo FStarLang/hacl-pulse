@@ -900,13 +900,6 @@ let bit_cases (b: SZ.t) (c: bool)
                    (c == false ==> SZ.v b == 1))
   = ()
 
-(** Pulse records the hypothesis of a branch as [rewrites_to_p c b], which
-    the encoding does not relate to [c == b] on its own; this turns it back
-    into the equation the branch bodies below need. *)
-let rw_elim (#t: Type) (x y: t)
-  : Lemma (requires rewrites_to_p x y) (ensures x == y)
-  = ()
-
 (** The even rung has nothing to do, but the exponent is still written
     [e + b] with [b] the (zero) bit, so the equality has to be transported;
     like {!ladder_odd}, it is proved here so the ladder's join sees a fact
@@ -1079,11 +1072,9 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
     pure (Seq.length v == SZ.v nn /\ num v < num vn /\
           num v == (pw 2 (2 * reveal e + SZ.v bit) * wt (SZ.v nn)) % num vn)
   {
-    rw_elim even true;
     ladder_even (num vhalf) (2 * reveal e) (wt (SZ.v nn)) (num vn) (SZ.v bit);
     ()
   } else {
-    rw_elim even false;
     double_mod res nmod nn;
     with vfin. assert (A.pts_to res vfin);
     ladder_odd (num vhalf) (num vfin) (2 * reveal e) (wt (SZ.v nn)) (num vn);
