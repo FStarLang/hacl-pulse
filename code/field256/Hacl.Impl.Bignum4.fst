@@ -133,17 +133,33 @@ ensures exists* (vt': Seq.seq S128.t).
   };
   with v. assert (A.pts_to t v);
   addw_srow_ble (vals128 vt) (vals vms) (Seq.length vt) (S64.v u) (SZ.v i) nl c;
+  assert (pure (vals128 v ==
+                  addw (vals128 vt)
+                       (srow (Seq.length vt) (S64.v u) (vals vms) (SZ.v i) nl)));
+  assert (pure (S64.v u == mdigit (S64.v mu) (SZ.v i) (vals128 vt)));
   let x = A.(t.(i));
   let lo = Cast.u64_to_u128 (lo64d x);
   let hi = hi64d x;
   A.((t.(i) <- lo));
   vals128_upd v (SZ.v i) lo;
   with v1. assert (A.pts_to t v1);
+  assert (pure (vals128 v1 ==
+                  Seq.upd (vals128 v) (SZ.v i) (vat (vals128 v) (SZ.v i) % base)));
   let ip = SZ.add i 1sz;
   let y = A.(t.(ip));
   let up = addd y hi;
   A.((t.(ip) <- up));
   vals128_upd v1 (SZ.v i + 1) up;
+  with v2. assert (A.pts_to t v2);
+  (* The two writes above are exactly [carry_step i], and [mstep] is that
+     applied to the row the loop built. *)
+  assert (pure (vals128 v2 ==
+                  Seq.upd (vals128 v1) (SZ.v i + 1)
+                          (vat (vals128 v1) (SZ.v i + 1) +
+                           vat (vals128 v) (SZ.v i) / base)));
+  assert (pure (SZ.v i + 1 < Seq.length (vals128 v)));
+  assert (pure (vals128 v2 == carry_step (SZ.v i) (vals128 v)));
+  assert (pure (vals128 v2 == mstep (vals vms) (S64.v mu) (SZ.v i) (vals128 vt)));
   ()
 }
 
@@ -466,7 +482,17 @@ ensures exists* (vw': Seq.seq S128.t).
   assert (pure (vals128 v `Seq.equal` addw (vals va) (compl (vals vb))));
   let a0 = A.(a.(0sz));
   let b0 = A.(b.(0sz));
-  let nv0 = addd (addd (widen a0) (widen (subw top b0))) (widen (S64.classify 1uL));
+  (* The two limbs and the carried one are each below the radix, so the sum
+     is nowhere near a wide word; say so, rather than leaving it to the
+     solver among the sequence facts above. *)
+  assert (pure (S64.v a0 < base /\ S64.v (subw top b0) < base));
+  assert (pure (S128.v (widen a0) < base /\
+                S128.v (widen (subw top b0)) < base /\
+                S128.v (widen (S64.classify 1uL)) == 1));
+  assert_norm (base + base + 1 < pow2 128);
+  let s0 = addd (widen a0) (widen (subw top b0));
+  assert (pure (S128.v s0 < base + base));
+  let nv0 = addd s0 (widen (S64.classify 1uL));
   A.((w.(0sz) <- nv0));
   vals128_upd v 0 nv0;
   with v1. assert (A.pts_to w v1);
@@ -910,6 +936,39 @@ ensures exists* (va': Seq.seq S64.t).
 #push-options "--z3rlimit 600"
 
 [@@ FStar.Attributes.CInline]
+(** One more limb's worth of bytes in the loop invariant of {!store_be}: the
+    trichotomy is trivial, but it is the kind of step the solver will not
+    reach once the eight writes of the body are in scope. *)
+let store_be_extend (v: Seq.seq S8.t) (s: Seq.seq nat) (n: nat { n < nl })
+  : Lemma (requires Seq.length v == 32 /\ Seq.length s == nl /\
+                    (forall (k: nat). k < n ==>
+                       S8.v (Seq.index v (8 * (nl - 1 - k))) == Seq.index s k / pow2 56 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 1)) == Seq.index s k / pow2 48 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 2)) == Seq.index s k / pow2 40 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 3)) == Seq.index s k / pow2 32 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 4)) == Seq.index s k / pow2 24 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 5)) == Seq.index s k / pow2 16 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 6)) == Seq.index s k / pow2 8 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 7)) == Seq.index s k / pow2 0 % 256) /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n))) == Seq.index s n / pow2 56 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 1)) == Seq.index s n / pow2 48 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 2)) == Seq.index s n / pow2 40 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 3)) == Seq.index s n / pow2 32 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 4)) == Seq.index s n / pow2 24 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 5)) == Seq.index s n / pow2 16 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 6)) == Seq.index s n / pow2 8 % 256 /\
+                    S8.v (Seq.index v (8 * (nl - 1 - n) + 7)) == Seq.index s n / pow2 0 % 256)
+          (ensures (forall (k: nat). k < n + 1 ==>
+                       S8.v (Seq.index v (8 * (nl - 1 - k))) == Seq.index s k / pow2 56 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 1)) == Seq.index s k / pow2 48 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 2)) == Seq.index s k / pow2 40 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 3)) == Seq.index s k / pow2 32 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 4)) == Seq.index s k / pow2 24 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 5)) == Seq.index s k / pow2 16 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 6)) == Seq.index s k / pow2 8 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 7)) == Seq.index s k / pow2 0 % 256))
+  = ()
+
 fn store_be (b: A.array S8.t) (a: A.array S64.t)
             (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #pa va **
@@ -948,6 +1007,17 @@ ensures exists* (vb': Seq.seq S8.t).
     A.((b.(SZ.add pos 5sz) <- Cast.u64_to_u8 (S64.shift_right x 16ul)));
     A.((b.(SZ.add pos 6sz) <- Cast.u64_to_u8 (S64.shift_right x 8ul)));
     A.((b.(SZ.add pos 7sz) <- Cast.u64_to_u8 x));
+    with v. assert (A.pts_to b v);
+    assert (pure (
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)))) == Seq.index (vals va) (SZ.v vi) / pow2 56 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 1)) == Seq.index (vals va) (SZ.v vi) / pow2 48 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 2)) == Seq.index (vals va) (SZ.v vi) / pow2 40 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 3)) == Seq.index (vals va) (SZ.v vi) / pow2 32 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 4)) == Seq.index (vals va) (SZ.v vi) / pow2 24 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 5)) == Seq.index (vals va) (SZ.v vi) / pow2 16 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 6)) == Seq.index (vals va) (SZ.v vi) / pow2 8 % 256 /\
+      S8.v (Seq.index v (8 * (nl - 1 - (SZ.v vi)) + 7)) == Seq.index (vals va) (SZ.v vi) / pow2 0 % 256));
+    store_be_extend v (vals va) (SZ.v vi);
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to b v);

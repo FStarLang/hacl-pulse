@@ -371,7 +371,7 @@ let tbl_extend (v v' src: Seq.seq S64.t) (nn anum rr: nat) (nN: pos) (e: nat)
        num (entry v' nn dd) < nN)
     with introduce _ ==> _
     with (if dd < e then tbl_below v v' nn anum rr nN e dd
-          else tbl_at v' src nn anum rr nN e dd)
+          else begin assert (dd == e); tbl_at v' src nn anum rr nN e dd end)
 #pop-options
 
 (** Where entry [vd] of the table starts, and that it is addressable. *)
@@ -848,7 +848,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
     branch, which is why the module that provides the branch is named for
     what it gives up. *)
 
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 200 --z3refresh"
 
 (** [mod_exp_vartime] is {!mod_exp_consttime} with the multiply skipped on
     zero bits.  Its timing reveals the exponent, so the exponent must be

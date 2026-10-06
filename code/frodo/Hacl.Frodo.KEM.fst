@@ -79,6 +79,7 @@ let append2_eq (a b res: Seq.seq S8.t)
           (ensures res == Seq.append a b)
   = Seq.lemma_eq_intro res (Seq.append a b)
 
+#push-options "--z3rlimit 100"
 let append4_eq (a b c d res: Seq.seq S8.t)
   : Lemma (requires Seq.length res == Seq.length a + Seq.length b + Seq.length c + Seq.length d /\
                     (forall (k: nat). k < Seq.length a ==> Seq.index res k == Seq.index a k) /\
@@ -90,7 +91,13 @@ let append4_eq (a b c d res: Seq.seq S8.t)
                        Seq.index res (Seq.length a + Seq.length b + Seq.length c + k) ==
                          Seq.index d k))
           (ensures res == Seq.append a (Seq.append b (Seq.append c d)))
-  = Seq.lemma_eq_intro res (Seq.append a (Seq.append b (Seq.append c d)))
+  = (* The three nested lengths, which the pointwise step below needs and
+       which the solver no longer derives on its own. *)
+    Seq.lemma_len_append c d;
+    Seq.lemma_len_append b (Seq.append c d);
+    Seq.lemma_len_append a (Seq.append b (Seq.append c d));
+    Seq.lemma_eq_intro res (Seq.append a (Seq.append b (Seq.append c d)))
+#pop-options
 
 (** A one-byte domain separator in front of a seed. *)
 let cons_eq (x: S8.t) (s res: Seq.seq S8.t)
@@ -293,6 +300,9 @@ let enc_ct_eq (p: params)
       (ensures (let ct, b2, v2 = F.enc_ct p mu pk seed_se in
                 vct == ct /\ vbp == b2 /\ vv == v2))
   = ()
+(* A fresh solver context: the queries for [keypair_coins] above leave the
+   solver slow enough that the ones here time out. *)
+#push-options "--z3refresh"
 
 (** The ciphertext, and the two matrices that went into it reduced to
     [logq] bits.  Decapsulation re-runs this and compares those two against
@@ -358,7 +368,18 @@ ensures exists* vct vbp vv.
   with vbb. assert (A.pts_to bb vbb);
   slice_eq vpk 16 vbb;
   assert (pure (vbb == Seq.slice vpk bytes_seed_a (crypto_publickeybytes p)));
+  (* [unpack] takes its byte buffer at the indexed length
+     [d * (len / 8)]; spell that out for [vbb]. *)
+  assert (pure (SZ.v ents % 8 == 0 /\ SZ.v ents / 8 == SZ.v nn));
+  assert (pure (Seq.length vbb == SZ.v pmb));
+  assert (pure (Seq.length vbb == SZ.v d * (SZ.v ents / 8)));
   let mut bm = [| (S16.zero <: S16.t); ents |];
+  Seq.lemma_create_len (SZ.v ents) (S16.zero <: S16.t);
+  assert (pure (SZ.v d <= 16 /\ SZ.v ents <= 8 * 1344));
+  Math.lemma_mult_le_right (SZ.v ents) (SZ.v d) 16;
+  Math.lemma_mult_le_left 16 (SZ.v ents) (8 * 1344);
+  assert_norm (16 * (8 * 1344) < pow2 32);
+  assert (pure (SZ.v d * SZ.v ents < pow2 32));
   Pack.unpack bm bb d ents;
   with vbm. assert (A.pts_to bm vbm);
   assert (pure (vbm == F.unpack_n p vbb));
@@ -384,6 +405,18 @@ ensures exists* vct vbp vv.
   let mut sp = [| (S16.zero <: S16.t); ents |];
   let mut ep = [| (S16.zero <: S16.t); ents |];
   let mut epp = [| (S16.zero <: S16.t); 64sz |];
+  (* [sample_matrix] takes its byte buffer at the indexed length [blen] and
+     slices three disjoint windows out of it. *)
+  A.pts_to_len r;
+  Seq.lemma_create_len (SZ.v ents) (S16.zero <: S16.t);
+  Seq.lemma_create_len 64 (S16.zero <: S16.t);
+  assert (pure (Seq.length vr == SZ.v rlen /\
+                SZ.v smb == 2 * (8 * SZ.v nn) /\
+                SZ.v two_smb == 2 * SZ.v smb /\
+                SZ.v rlen == 2 * SZ.v smb + 128));
+  Seq.lemma_len_slice vr 0 (2 * (8 * SZ.v nn));
+  Seq.lemma_len_slice vr (SZ.v smb) (SZ.v smb + 2 * (8 * SZ.v nn));
+  Seq.lemma_len_slice vr (SZ.v two_smb) (SZ.v two_smb + 2 * (8 * 8));
   Sample.sample_matrix p cdf sp r 8sz nn rlen 0sz;
   Sample.sample_matrix p cdf ep r 8sz nn rlen smb;
   Sample.sample_matrix p cdf epp r 8sz 8sz rlen two_smb;
@@ -440,6 +473,8 @@ ensures exists* vct vbp vv.
 
 
 (** {2 Encapsulation} *)
+#pop-options
+
 
 (** Encapsulation from an explicit message.  The API draws [mu] at random;
     decapsulation supplies the message it recovered. *)

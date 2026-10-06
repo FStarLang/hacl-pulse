@@ -47,7 +47,8 @@ make FSTAR_ROOT=$HOME/tools/fstar-v2026.09.20   # unpacked release tarball
 make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
 ```
 
-The tree is verified against the release above.
+The tree is verified against the release above, and also against the
+`nightly-2026-09-28` build of `master`.
 
 ## Layout
 
