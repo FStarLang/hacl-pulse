@@ -63,7 +63,6 @@ Hacl_Impl_MLKEM_KEM_encaps_impl
 Hacl_Impl_MLKEM_KPKE_kpke_encrypt_impl
 Hacl_Impl_MLKEM_Sample_sample_ntt_impl
 Hacl_Impl_Mont4_ageq
-Hacl_Impl_Sub_sub__t_2
 Hacl_RSAPSS_MGF_mgf_impl__t
 Hacl_RSAPSS_MGF_mgf_impl__t_1
 Hacl_RSAPSS_MGF_mgf_impl__t_2
