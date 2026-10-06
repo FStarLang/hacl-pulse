@@ -1068,6 +1068,12 @@ let shift_num (n: nat) (q: nat) (r: nat)
   = Math.pow2_plus (rad * q) r;
     Math.division_multiplication_lemma n (wt q) (pow2 r)
 
+(** [rad] is sixty-four, so splitting an index by Euclidean division and
+    splitting it by limb are the same split. *)
+let split_index (i: nat) : Lemma (rad * (i / 64) + i % 64 == i)
+  = Math.euclidean_division_definition i 64;
+    assert_norm (rad == 64)
+
 (** Bit [i] of the number is bit [i mod 64] of limb [i / 64]. *)
 let num_bit (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
   : Lemma (S64.v (Seq.index v (i / 64)) / pow2 (i % 64) % 2 == num v / pow2 i % 2)
@@ -1077,8 +1083,7 @@ let num_bit (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
     assert (num v / wt q % pow2 64 == S64.v (Seq.index v q));
     shift_in_limb (num v / wt q) r;
     assert (S64.v (Seq.index v q) / pow2 r % 2 == (num v / wt q) / pow2 r % 2);
-    Math.euclidean_division_definition i 64;
-    assert_norm (rad == 64);
+    split_index i;
     assert (rad * q + r == i);
     shift_num (num v) q r;
     assert (num v / pow2 i == (num v / wt q) / pow2 r)
@@ -1157,8 +1162,7 @@ let num_bits_at (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
     shift_in_limb_w (num v / wt q) r w;
     assert (S64.v (Seq.index v q) / pow2 r % pow2 w ==
             (num v / wt q) / pow2 r % pow2 w);
-    Math.euclidean_division_definition i 64;
-    assert_norm (rad == 64);
+    split_index i;
     assert (rad * q + r == i);
     shift_num (num v) q r;
     assert (num v / pow2 i == (num v / wt q) / pow2 r)

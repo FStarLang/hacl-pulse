@@ -137,6 +137,12 @@ ensures A.pts_to mu #p vmu **
 }
 
 (** [m <- key_encode p mu]. *)
+(** The [i]th chunk of [mu] stays inside it. *)
+let chunk_bound (nb: nat) (i: nat { i < nbar })
+  : Lemma (i * nb + nb <= nb * nbar)
+  = Math.lemma_mult_le_right nb (i + 1) nbar;
+    Math.distributivity_add_left i 1 nb
+
 fn key_encode ([@@@FStar.Attributes.monomorphize] p: params)
               (m: A.array S16.t) (mu: A.array S8.t)
               (#pm: perm) (#vm: erased (Seq.seq S16.t))
@@ -164,7 +170,8 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
   decreases (nbar - SZ.v (!i))
   {
     let vi = !i;
-    Math.lemma_mult_le_right (SZ.v nb) (SZ.v vi + 1) nbar;
+    assert (pure (SZ.v vi < nbar));
+    chunk_bound (SZ.v nb) (SZ.v vi);
     assert (pure (SZ.v vi * SZ.v nb + SZ.v nb <= Seq.length vmu));
     let x = chunk mu (SZ.mul vi nb) nb;
     assert (pure (S64.v x == F.mu_chunk p vmu (SZ.v vi)));

@@ -278,6 +278,15 @@ ensures A.pts_to out (finish vst) ** A.pts_to st #pst vst
     at 32 bits ([Spec.SHA1.Lemmas]), both the byte-level lemmas and
     [build_tail] itself are reused rather than restated. *)
 
+(** The start of the tail, counted from the two ends of [pre @ vin]: the
+    equation is linear, but the tail's context is large enough that it is
+    cheaper to discharge here, with nothing else in scope. *)
+let base_split (lpre lin len base_in rem base: nat)
+  : Lemma (requires lpre + lin == len /\ lin == base_in + rem /\
+                    base == len - rem)
+          (ensures base == lpre + base_in)
+  = ()
+
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
 
 (** The padding blocks and the digest.  Separated from [hash_impl] only so
@@ -315,6 +324,9 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   padded_shape #S32.t (Seq.append pre vin);
   let ntail = C2.tail_len #S32.t rem;
   let base = SZ.sub len rem;
+  assert (pure (SZ.v base == SZ.v len - SZ.v rem));
+  base_split (Seq.length pre) (Seq.length vin) (SZ.v len) (SZ.v base_in)
+             (SZ.v rem) (SZ.v base);
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 128sz |];
   A.pts_to_len tarr;
@@ -329,6 +341,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   Math.multiple_division_lemma (SZ.v ntail / block_len) block_len;
   Math.multiply_fractions (SZ.v ntail) block_len;
   let ntb = SZ.div ntail 64sz;
+  assert (pure (SZ.v ntb == SZ.v ntail / 64));
 
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj ntb)
