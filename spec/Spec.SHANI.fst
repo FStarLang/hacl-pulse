@@ -197,6 +197,13 @@ let msg2 (a b: reg) (i: nat { i < 4 }) : GTot S32.t =
   if i = 0 then msg2_0 a b else if i = 1 then msg2_1 a b
   else if i = 2 then msg2_2 a b else msg2_3 a b
 
+(** The four cases of [msg2], named.  Letting the solver reduce the index
+    chain itself inside [quad_holds] is what used to make that proof fit. *)
+let msg2_cases (a b: reg)
+  : Lemma (msg2 a b 0 == msg2_0 a b /\ msg2 a b 1 == msg2_1 a b /\
+           msg2 a b 2 == msg2_2 a b /\ msg2 a b 3 == msg2_3 a b)
+  = ()
+
 (** {2 The schedule identity}
 
     [ws_at] sums [sigma1 w.[j-2]], [w.[j-7]], [sigma0 w.[j-15]] and
@@ -332,9 +339,20 @@ let quad_holds (p: params S32.t) (b: Seq.lseq S32.t 16) (j: nat { 16 <= j })
     assert (lane res 0 == ws_at p b j);
     quad_lane p b j bt 1 (lane a 3);
     assert (lane res 1 == ws_at p b (j + 1));
+    msg2_cases bt a;
+    assert (lane res 0 == msg2_0 bt a);
+    assert (lane res 1 == msg2_1 bt a);
     quad_lane p b j bt 2 (ws_at p b j);
+    assert (lane res 2 == msg2_2 bt a);
+    assert (msg2_2 bt a == S32.add_mod (lane bt 2) (sig1 (msg2_0 bt a)));
+    assert (msg2_0 bt a == ws_at p b j);
+    assert (lane res 2 == S32.add_mod (lane bt 2) (sig1 (ws_at p b j)));
     assert (lane res 2 == ws_at p b (j + 2));
     quad_lane p b j bt 3 (ws_at p b (j + 1));
+    assert (lane res 3 == msg2_3 bt a);
+    assert (msg2_3 bt a == S32.add_mod (lane bt 3) (sig1 (msg2_1 bt a)));
+    assert (msg2_1 bt a == ws_at p b (j + 1));
+    assert (lane res 3 == S32.add_mod (lane bt 3) (sig1 (ws_at p b (j + 1))));
     assert (lane res 3 == ws_at p b (j + 3));
     four res (fun i -> ws_at p b (j + i))
 #pop-options

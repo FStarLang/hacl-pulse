@@ -65,6 +65,8 @@ unfold let eval5 (b a0 a1 a2 a3 a4: int) : int =
 (** [b^5], written so that the tactic and the solver see the same term. *)
 unfold let p5 (b: int) : int = b * (b * (b * (b * b)))
 
+let pow2_pos (n: nat) : Lemma (pow2 n > 0) [SMTPat (pow2 n)] = ()
+
 let as_nat5 (a0 a1 a2 a3 a4: nat) : nat =
   a0 + a1 * pow2 26 + a2 * pow2 52 + a3 * pow2 78 + a4 * pow2 104
 
@@ -709,7 +711,8 @@ let ripple_eval (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat)
   : Lemma (requires ripple e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c)
           (ensures as_nat5 t0 t1 t2 t3 t4 + c * pow2 130 == as_nat5 e0 e1 e2 e3 e4 /\
                    bounded5 t0 t1 t2 t3 t4 26)
-  = let f1 = e1 + e0 / radix in
+  = assert (prime > 0);
+let f1 = e1 + e0 / radix in
     let f2 = e2 + f1 / radix in
     let f3 = e3 + f2 / radix in
     let f4 = e4 + f3 / radix in

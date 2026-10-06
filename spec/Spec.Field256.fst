@@ -98,6 +98,14 @@ let mform (d: modulus) (x: nat) (s: Seq.seq nat) : prop =
 let limbs_n (x: nat) (n: nat) : Seq.seq nat =
   Seq.init #nat n (fun i -> x / pow2 (rad * i) % base)
 
+(** Hoisted out of [limbs_n_eval]: as a local closure this costs the solver
+    unreasonably more than as a top-level lemma. *)
+let limbs_n_index (x: nat) (n: pos) (i: nat { i < n - 1 })
+  : Lemma (Seq.index (Seq.slice (limbs_n x n) 1 n) i
+             == Seq.index (limbs_n (x / base) (n - 1)) i)
+  = Math.pow2_plus rad (rad * i);
+    Math.division_multiplication_lemma x base (pow2 (rad * i))
+
 #push-options "--z3rlimit 400"
 let rec limbs_n_eval (x: nat) (n: nat)
   : Lemma (ensures Seq.length (limbs_n x n) == n /\ bnd (limbs_n x n) base /\
@@ -107,11 +115,7 @@ let rec limbs_n_eval (x: nat) (n: nat)
     else begin
       limbs_n_eval (x / base) (n - 1);
       let t = Seq.slice (limbs_n x n) 1 n in
-      let aux (i: nat { i < n - 1 })
-        : Lemma (Seq.index t i == Seq.index (limbs_n (x / base) (n - 1)) i)
-        = Math.pow2_plus rad (rad * i);
-          Math.division_multiplication_lemma x base (pow2 (rad * i)) in
-      Classical.forall_intro aux;
+      Classical.forall_intro (limbs_n_index x n);
       Seq.lemma_eq_intro t (limbs_n (x / base) (n - 1));
       Math.distributivity_add_right rad 1 (n - 1);
       assert (rad * n == rad + rad * (n - 1));

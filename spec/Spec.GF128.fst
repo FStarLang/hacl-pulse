@@ -232,7 +232,11 @@ let rec ghash_from_append (h acc: block) (d1 d2: Seq.seq elem)
       ghash_from_append h acc d1 d2 (j - 1);
       Math.lemma_mult_le_right blocklen j (nblocks d2);
       Math.multiple_division_lemma (nblocks d2) blocklen;
-      blk_append_right d1 d2 (j - 1)
+      Math.lemma_mult_le_right blocklen (nblocks d1 + j) (nblocks (Seq.append d1 d2));
+      Math.multiple_division_lemma (nblocks (Seq.append d1 d2)) blocklen;
+      blk_append_right d1 d2 (j - 1);
+      ghash_from_step h acc (Seq.append d1 d2) (nblocks d1 + j - 1);
+      ghash_from_step h (ghash_upd h acc d1) d2 (j - 1)
     end
 
 (** Hashing [d1 ++ d2] is hashing [d1] and then hashing [d2]. *)

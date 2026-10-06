@@ -143,6 +143,13 @@ let g (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     let vb = rotate_right #t (logxor #t vb vc) p.rot4 in
     Seq.upd (Seq.upd (Seq.upd (Seq.upd v0 a va) b vb) c vc) d vd
 
+let g_length (#t: Type0) {| word t |} (p: params t)
+      (v0: Seq.lseq t 16) (a b c d: nat { a < 16 /\ b < 16 /\ c < 16 /\ d < 16 })
+      (x y: t)
+  : Lemma (Seq.length (g p v0 a b c d x y) == 16)
+          [SMTPat (g p v0 a b c d x y)]
+  = ()
+
 (** One round: the four columns, then the four diagonals, with the message
     words picked out by row [r] of [sigma].  [r] is the round number modulo
     ten, since BLAKE2b runs twelve rounds over a ten-row table.

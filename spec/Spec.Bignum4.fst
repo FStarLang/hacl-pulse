@@ -84,6 +84,7 @@ let rec eval_split (s: Seq.seq nat) (k: nat { k <= Seq.length s })
                              pow2 (rad * k) * eval (Seq.slice s k (Seq.length s)))
           (decreases k)
   = let n = Seq.length s in
+    assert (base > 0);
     if k = 0 then Seq.lemma_eq_intro (Seq.slice s 0 n) s
     else begin
       let t = Seq.slice s 1 n in

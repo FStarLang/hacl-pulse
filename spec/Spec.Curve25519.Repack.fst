@@ -99,7 +99,7 @@ let load_windows (h s: Seq.seq nat)
         else if k = 1 then lw1 h
         else if k = 2 then lw2 h
         else if k = 3 then lw3 h
-        else lw4 h in
+        else begin assert (k == 4); lw4 h end in
     Classical.forall_intro aux
 
 (** And the eight thirty-two-bit limbs as windows of the five.  Offsets
@@ -199,7 +199,7 @@ let store_windows (s u: Seq.seq nat)
         else if j = 4 then sw4 s
         else if j = 5 then sw5 s
         else if j = 6 then sw6 s
-        else sw7 s in
+        else begin assert (j == 7); sw7 s end in
     Classical.forall_intro aux
 
 #pop-options
