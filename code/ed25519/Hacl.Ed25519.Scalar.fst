@@ -117,6 +117,25 @@ ensures exists* (vd': Seq.seq S64.t).
   assert (pure (v `Seq.equal` reveal vs));
 }
 
+(* One more limb of the little-endian load laid down.  Hoisted out of the loop
+   below, where the surrounding context makes the step unprovable in practice. *)
+let load_extend (s: Seq.seq nat) (vb: Seq.seq S8.t { Seq.length vb == 32 })
+                (i: nat { i < 8 /\ i < Seq.length s }) (x: nat)
+  : Lemma (requires (forall (k: nat). k < i ==>
+                       Seq.index s k ==
+                         S8.v (Seq.index vb (4 * k)) + 256 * S8.v (Seq.index vb (4 * k + 1)) +
+                         65536 * S8.v (Seq.index vb (4 * k + 2)) +
+                         16777216 * S8.v (Seq.index vb (4 * k + 3))) /\
+                    x == S8.v (Seq.index vb (4 * i)) + 256 * S8.v (Seq.index vb (4 * i + 1)) +
+                         65536 * S8.v (Seq.index vb (4 * i + 2)) +
+                         16777216 * S8.v (Seq.index vb (4 * i + 3)))
+          (ensures (forall (k: nat). k < i + 1 ==>
+                      Seq.index (Seq.upd s i x) k ==
+                        S8.v (Seq.index vb (4 * k)) + 256 * S8.v (Seq.index vb (4 * k + 1)) +
+                        65536 * S8.v (Seq.index vb (4 * k + 2)) +
+                        16777216 * S8.v (Seq.index vb (4 * k + 3))))
+  = ()
+
 (** Thirty-two little-endian bytes into eight limbs. *)
 fn load_le (a: A.array S64.t) (b: A.array S8.t)
            (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
@@ -143,20 +162,35 @@ ensures exists* (va': Seq.seq S64.t).
   {
     let vi = !i;
     let o = SZ.mul vi 4sz;
+    assert (pure (SZ.v o == 4 * SZ.v vi));
+    let o1 = SZ.add o 1sz;
+    let o2 = SZ.add o 2sz;
+    let o3 = SZ.add o 3sz;
+    assert (pure (SZ.v o1 == SZ.v o + 1 /\ SZ.v o2 == SZ.v o + 2 /\
+                  SZ.v o3 == SZ.v o + 3));
     let b0 = A.(b.(o));
-    let b1 = A.(b.(SZ.add o 1sz));
-    let b2 = A.(b.(SZ.add o 2sz));
-    let b3 = A.(b.(SZ.add o 3sz));
+    let b1 = A.(b.(o1));
+    let b2 = A.(b.(o2));
+    let b3 = A.(b.(o3));
     assert_norm (16777216 * (pow2 8 - 1) < pow2 64);
     assert_norm (65536 * (pow2 8 - 1) < pow2 64);
     assert_norm (256 * (pow2 8 - 1) < pow2 64);
     assert_norm ((pow2 8 - 1) + 256 * (pow2 8 - 1) +
                  65536 * (pow2 8 - 1) + 16777216 * (pow2 8 - 1) < pow2 64);
-    let w = addw (addw (Cast.u8_to_u64 b0) (mulk 256uL (Cast.u8_to_u64 b1)))
-                 (addw (mulk 65536uL (Cast.u8_to_u64 b2))
-                       (mulk 16777216uL (Cast.u8_to_u64 b3)));
+    let c0 = Cast.u8_to_u64 b0;
+    let c1 = Cast.u8_to_u64 b1;
+    let c2 = Cast.u8_to_u64 b2;
+    let c3 = Cast.u8_to_u64 b3;
+    let w = addw (addw c0 (mulk 256uL c1)) (addw (mulk 65536uL c2) (mulk 16777216uL c3));
+    assert (pure (S64.v w == S8.v b0 + 256 * S8.v b1 +
+                             65536 * S8.v b2 + 16777216 * S8.v b3));
+    with v0. assert (A.pts_to a v0);
+    vals_upd v0 (SZ.v vi) w;
+    load_extend (vals v0) vb (SZ.v vi) (S64.v w);
     A.((a.(vi) <- w));
-    i := SZ.add vi 1sz;
+    let vi1 = SZ.add vi 1sz;
+    assert (pure (SZ.v vi1 == SZ.v vi + 1));
+    i := vi1;
   };
   with v. assert (A.pts_to a v);
   assert (pure (forall (k: nat). k < F.nl ==>
