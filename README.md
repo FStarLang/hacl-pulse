@@ -48,7 +48,7 @@ make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
 ```
 
 The tree is verified against the release above, and also against the
-`nightly-2026-09-28` build of `master`.
+`nightly-2026-10-06` build of `master`.
 
 ## Layout
 
