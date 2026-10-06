@@ -33,6 +33,7 @@ open Hacl.Hash.SHA2
 open Hacl.Hash.SHA2.Tables
 open Hacl.Impl.Table
 open Hacl.HMAC.Core
+open Hacl.HMAC.NI
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -40,6 +41,12 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module Vec = Hacl.Vec128
+
+(* SHA-224 and SHA-256 are the two that have an implementation on the SHA
+   instructions; the dispatch is the same shape as the one in
+   [Hacl.Hash.SHA2], and for the same reason -- the generic [hmac_impl]
+   cannot ask whether its word type is thirty-two bits wide. *)
 
 (** HMAC-SHA-224.  [out] must have room for 28 bytes. *)
 fn hmac_sha224 (out: A.array S8.t) (key: A.array S8.t) (key_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t)
@@ -63,7 +70,21 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
-  hmac_impl sha2_224 kt ivt out key key_len msg msg_len;
+  let ni = Vec.sha_supported ();
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if ni
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
+    pure (Seq.length vkey < max_input #S32.t /\
+          block_len #S32.t + Seq.length vmsg < max_input #S32.t /\
+          vout' == hmac sha2_224 vkey vmsg)
+  {
+    hmac_impl_ni sha2_224 kt ivt out key key_len msg msg_len;
+  } else {
+    hmac_impl sha2_224 kt ivt out key key_len msg msg_len;
+  };
   drop_table ivt;
   drop_table kt;
 }
@@ -90,7 +111,21 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
-  hmac_impl sha2_256 kt ivt out key key_len msg msg_len;
+  let ni = Vec.sha_supported ();
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if ni
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
+    pure (Seq.length vkey < max_input #S32.t /\
+          block_len #S32.t + Seq.length vmsg < max_input #S32.t /\
+          vout' == hmac sha2_256 vkey vmsg)
+  {
+    hmac_impl_ni sha2_256 kt ivt out key key_len msg msg_len;
+  } else {
+    hmac_impl sha2_256 kt ivt out key key_len msg msg_len;
+  };
   drop_table ivt;
   drop_table kt;
 }
