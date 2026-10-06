@@ -761,6 +761,12 @@ let num_ge_at (v: Seq.seq S64.t) (k: nat { k < Seq.length v })
     Math.lemma_mult_le_left (wt k) 1
       (Seq.index (vals v) k + base * eval (Seq.slice (vals v) (k + 1) n))
 
+(* The same, with the hypothesis in the conclusion, so that it can be called
+   unconditionally rather than from inside a branch. *)
+let num_ge_at_opt (v: Seq.seq S64.t) (k: nat { k < Seq.length v })
+  : Lemma (0 < S64.v (Seq.index v k) ==> wt k <= num v)
+  = if 0 < S64.v (Seq.index v k) then num_ge_at v k
+
 (** The modulus's bottom limb is what it is modulo the radix, which is the
     shape {!mont_cancel} wants. *)
 let modulus_low (v: Seq.seq S64.t { 0 < Seq.length v })
@@ -877,6 +883,39 @@ let mont_dbl (a e rr nN: nat)
     Math.lemma_mod_mul_distr_r 2 (pw 2 e * rr) nN;
     Math.paren_mul_right 2 (pw 2 e) rr
 
+(** The odd rung's whole arithmetic obligation, in one place: the ladder's
+    join is a small goal, and proving it in an empty context keeps it out of
+    the solver state the Montgomery multiplications leave behind. *)
+let ladder_odd (a d e rr nN: nat)
+  : Lemma (requires 0 < nN /\ a == (pw 2 e * rr) % nN /\ d == (a + a) % nN)
+          (ensures d < nN /\ d == (pw 2 (e + 1) * rr) % nN)
+  = mont_dbl a e rr nN
+
+(** The two implications a one-bit test gives, proved away from the ladder's
+    context: the step is trivial, but the solver will not get to it once the
+    Montgomery facts are in scope. *)
+let bit_cases (b: SZ.t) (c: bool)
+  : Lemma (requires SZ.v b < 2 /\ c == (SZ.v b = 0))
+          (ensures (c == true ==> SZ.v b == 0) /\
+                   (c == false ==> SZ.v b == 1))
+  = ()
+
+(** Pulse records the hypothesis of a branch as [rewrites_to_p c b], which
+    the encoding does not relate to [c == b] on its own; this turns it back
+    into the equation the branch bodies below need. *)
+let rw_elim (#t: Type) (x y: t)
+  : Lemma (requires rewrites_to_p x y) (ensures x == y)
+  = ()
+
+(** The even rung has nothing to do, but the exponent is still written
+    [e + b] with [b] the (zero) bit, so the equality has to be transported;
+    like {!ladder_odd}, it is proved here so the ladder's join sees a fact
+    rather than a goal. *)
+let ladder_even (a e rr nN b: nat)
+  : Lemma (requires 0 < nN /\ b == 0 /\ a == (pw 2 e * rr) % nN)
+          (ensures a < nN /\ a == (pw 2 (e + b) * rr) % nN)
+  = ()
+
 (** One step down a descending power of two, at the level of the exponent:
     the bits of [n] above [q] are twice those above [q + q], plus one. *)
 let half_split (n: nat) (q: pos)
@@ -919,8 +958,9 @@ ensures A.pts_to nmod #pn vn **
     let x = A.(nmod.(vi));
     let m = S64.eq_mask x z;
     let nz = U64.eq (Declassify.u64 m) 0uL;
+    num_ge_at_opt vn (SZ.v vi);
+    assert (pure (nz == true ==> 0 < S64.v (Seq.index vn (SZ.v vi))));
     if nz {
-      num_ge_at vn (SZ.v vi);
       k := vi;
     };
     i := SZ.add vi 1sz;
@@ -977,6 +1017,9 @@ ensures exists* (v: Seq.seq S64.t).
   Math.pow2_plus 1 (rad * SZ.v nn);
   ()
 }
+(* A fresh solver context: the Montgomery multiplications above leave the
+   solver too slow for the ladder's own, much smaller, arithmetic. *)
+#push-options "--z3refresh"
 
 (** One rung: the exponent doubles, and then gains [bit].  Squaring in
     Montgomery form is what doubles it, and a modular doubling is what adds
@@ -1017,15 +1060,39 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
               (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
   pw_dbl 2 (reveal e);
   copy res t2 nn;
-  if (SZ.eq bit 1sz) {
-    with vhalf. assert (A.pts_to res vhalf);
-    double_mod res nmod nn;
-    mont_dbl (num vhalf) (2 * reveal e) (wt (SZ.v nn)) (num vn);
+  with vhalf. assert (A.pts_to res vhalf);
+  assert (pure (Seq.length vhalf == SZ.v nn /\ num vhalf < num vn /\
+                num vhalf == (pw 2 (2 * reveal e) * wt (SZ.v nn)) % num vn));
+  (* Name the test rather than leaving an unreduced [match] on a
+     machine-integer comparison at the join, and keep both branches free of
+     ghost binders so the join needs no [match] typing. *)
+  with w1. assert (A.pts_to t1 w1);
+  with w2. assert (A.pts_to t2 w2);
+  with w3. assert (A.pts_to wide w3);
+  let even = SZ.eq bit 0sz;
+  assert (pure (even == (SZ.v bit = 0)));
+  bit_cases bit even;
+  if even
+  ensures exists* v.
+    A.pts_to res v ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
+    A.pts_to wide w3 ** A.pts_to nmod #pn vn **
+    pure (Seq.length v == SZ.v nn /\ num v < num vn /\
+          num v == (pw 2 (2 * reveal e + SZ.v bit) * wt (SZ.v nn)) % num vn)
+  {
+    rw_elim even true;
+    ladder_even (num vhalf) (2 * reveal e) (wt (SZ.v nn)) (num vn) (SZ.v bit);
     ()
   } else {
+    rw_elim even false;
+    double_mod res nmod nn;
+    with vfin. assert (A.pts_to res vfin);
+    ladder_odd (num vhalf) (num vfin) (2 * reveal e) (wt (SZ.v nn)) (num vn);
     ()
-  }
+  };
+  ()
 }
+
+#pop-options
 
 (** [precomp res t1 t2 wide nmod nn mu] is [res = R^2 mod nmod].  [t1] and
     [t2] are [n] limbs of scratch and [wide] is [2n]; [mu] is what

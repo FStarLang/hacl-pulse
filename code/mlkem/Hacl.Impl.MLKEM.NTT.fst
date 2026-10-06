@@ -236,11 +236,25 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
     SZ.fits_u32_implies_fits (SZ.v vb + 1);
     SZ.fits_u32_implies_fits (SZ.v vi + 1);
     let nc = SZ.add vc 1sz;
-    if (SZ.eq nc dbl) {
+    assert (pure (SZ.v nc == SZ.v vc + 1 /\ SZ.v dbl == pow2 (reveal e + 1)));
+    (* Name the comparison and restate its defining property, so that the
+       join after the branch reasons about a variable rather than about an
+       unreduced [match] on a machine-integer comparison. *)
+    let wrap = SZ.eq nc dbl;
+    assert (pure (wrap == (SZ.v nc = SZ.v dbl)));
+    if wrap {
+      assert (pure (SZ.v nc == SZ.v dbl));
       b := SZ.add vb 1sz;
       c := 0sz;
+      assert (pure (SZ.v vi + 1 == (SZ.v vb + 1) * pow2 (reveal e + 1) + 0 /\
+                    0 < pow2 (reveal e + 1)));
     } else {
+      assert (pure (SZ.v nc <> SZ.v dbl));
+      assert (pure (SZ.v nc <= SZ.v dbl));
+      assert (pure (SZ.v nc < SZ.v dbl));
       c := nc;
+      assert (pure (SZ.v vi + 1 == SZ.v vb * pow2 (reveal e + 1) + SZ.v nc));
+      assert (pure (SZ.v nc < pow2 (reveal e + 1)));
     };
     i := SZ.add vi 1sz;
   };
@@ -311,6 +325,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
     SZ.fits_u32_implies_fits (SZ.v vb + 1);
     SZ.fits_u32_implies_fits (SZ.v vi + 1);
     let nc = SZ.add vc 1sz;
+    assert (pure (SZ.v nc == SZ.v vc + 1 /\ SZ.v dbl == pow2 (reveal e + 1)));
     if (SZ.eq nc dbl) {
       b := SZ.add vb 1sz;
       c := 0sz;
@@ -423,13 +438,26 @@ ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
 }
 
 (** {2 The pointwise product}
-
     [dst <- MultiplyNTTs(a, b)].  Algorithm 11 is 128 independent products
     of linear polynomials modulo [X^2 - gamma_i]; the loop runs over the
     128 pairs and writes two coefficients at a time, and [gamma_i] comes
     out of the one zeta table by {!gammas_zetas}. *)
+(* Extending a pointwise property by the two indices just written.  Stated as
+   a top-level lemma: the case analysis is trivial here, but ruinous when it
+   has to happen inside the Pulse proof state. *)
+let extend_by_two (v: Seq.seq zqt) (res: poly) (i: nat { 2 * i + 2 <= n })
+  : Lemma (requires Seq.length v == n /\
+                    (forall (k: nat). k < 2 * i ==>
+                       S16.v (Seq.index v k) == Seq.index res k) /\
+                    S16.v (Seq.index v (2 * i)) == Seq.index res (2 * i) /\
+                    S16.v (Seq.index v (2 * i + 1)) == Seq.index res (2 * i + 1))
+          (ensures forall (k: nat). k < 2 * i + 2 ==>
+                     S16.v (Seq.index v k) == Seq.index res k)
+  = ()
+
 (** One of the 128 quadratic products, as a function of its own for the
     same reason the butterflies are. *)
+#push-options "--z3rlimit 600"
 inline_for_extraction
 fn base_mul (dst a b zt: A.array zqt) (i: SZ.t)
             (#pa #pb #pz: perm) (#vd #va #vb: erased (Seq.seq zqt))
@@ -476,9 +504,36 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
                   Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (SZ.v j)));
   assert (pure (S16.v c1 ==
                   Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (SZ.v j1)));
+  assert (pure (SZ.v j == 2 * SZ.v i /\ SZ.v j1 == 2 * SZ.v i + 1));
   A.((dst.(j) <- c0));
+  with v0. assert (A.pts_to dst v0);
+  assert (pure (Seq.index v0 (SZ.v j) == c0 /\
+                (forall (k: nat). k < Seq.length v0 /\ k <> SZ.v j ==>
+                   Seq.index v0 k == Seq.index vd k)));
   A.((dst.(j1) <- c1));
+  with v1. assert (A.pts_to dst v1);
+  assert (pure (Seq.index v1 (SZ.v j1) == c1 /\
+                (forall (k: nat). k < Seq.length v1 /\ k <> SZ.v j1 ==>
+                   Seq.index v1 k == Seq.index v0 k)));
+  assert (pure (Seq.length v1 == n /\ Seq.index v1 (SZ.v j) == c0));
+  (* The two freshly written entries, at concrete indices. *)
+  assert (pure (S16.v (Seq.index v1 (2 * SZ.v i)) ==
+                  Seq.index (multiply_ntts (as_poly va) (as_poly vb))
+                            (2 * SZ.v i)));
+  assert (pure (S16.v (Seq.index v1 (2 * SZ.v i + 1)) ==
+                  Seq.index (multiply_ntts (as_poly va) (as_poly vb))
+                            (2 * SZ.v i + 1)));
+  (* Everything below them is untouched by the two writes. *)
+  assert (pure (forall (k: nat). k < 2 * SZ.v i ==>
+                  S16.v (Seq.index v1 k) ==
+                    Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k));
+  extend_by_two v1 (multiply_ntts (as_poly va) (as_poly vb)) (SZ.v i);
+  assert (pure (forall (k: nat). k < 2 * SZ.v i + 2 ==>
+                  S16.v (Seq.index v1 k) ==
+                    Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k));
 }
+
+#pop-options
 
 fn multiply (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
