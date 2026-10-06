@@ -261,10 +261,14 @@ ensures exists* (vt1: Seq.seq S8.t).
 let mask_and (a b: nat)
   : Lemma (requires (a == 0 \/ a == 255) /\ (b == 0 \/ b == 255))
           (ensures UInt.logand #8 a b == (if a = 255 && b = 255 then 255 else 0))
-  = assert_norm (UInt.logand #8 255 255 == 255);
-    assert_norm (UInt.logand #8 255 0 == 0);
-    assert_norm (UInt.logand #8 0 255 == 0);
-    assert_norm (UInt.logand #8 0 0 == 0)
+  = (* The four cases, from the library's own lemmas: normalising [logand]
+       goes through [to_vec], which the solver no longer gets through. *)
+    assert_norm (UInt.ones 8 == 255);
+    assert_norm (UInt.zero 8 == 0);
+    UInt.logand_self #8 255;
+    UInt.logand_lemma_1 #8 255;
+    UInt.logand_lemma_1 #8 0;
+    UInt.logand_commutative #8 0 255
 
 fn tag_match (a: A.array S8.t) (b: A.array S8.t)
              (#pa: perm) (#va: erased (Seq.seq S8.t))

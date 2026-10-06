@@ -129,6 +129,8 @@ let num_above (u v: Seq.seq S64.t) (k: nat { k <= Seq.length u })
                        Seq.index v j == Seq.index u j))
           (ensures num v + pre u k == num u + pre v k)
   = let n = Seq.length u in
+    assert (Seq.length (vals u) == Seq.length u);
+    assert (Seq.length (vals v) == Seq.length v);
     eval_split (vals v) k;
     eval_split (vals u) k;
     Seq.lemma_eq_intro (Seq.slice v k n) (Seq.slice u k n);
@@ -1076,6 +1078,7 @@ let num_bit (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
     shift_in_limb (num v / wt q) r;
     assert (S64.v (Seq.index v q) / pow2 r % 2 == (num v / wt q) / pow2 r % 2);
     Math.euclidean_division_definition i 64;
+    assert_norm (rad == 64);
     assert (rad * q + r == i);
     shift_num (num v) q r;
     assert (num v / pow2 i == (num v / wt q) / pow2 r)
@@ -1100,13 +1103,19 @@ ensures A.pts_to b #pb vb **
   A.pts_to_len b;
   let q = SZ.div i (SZ.uint_to_t 64);
   let r = SZ.rem i (SZ.uint_to_t 64);
+  assert (pure (SZ.v q == SZ.v i / 64 /\ SZ.v r == SZ.v i % 64));
   let w = A.(b.(q));
-  let x = S64.shift_right w (SZ.sizet_to_uint32 r);
+  let rw = SZ.sizet_to_uint32 r;
+  assert (pure (U32.v rw == SZ.v r));
+  let x = S64.shift_right w rw;
+  assert (pure (S64.v x == S64.v w / pow2 (SZ.v i % 64)));
   assert_norm (pow2 1 == 2);
   assert_norm (pow2 1 - 1 == 1);
   UInt.logand_mask #64 (S64.v x) 1;
   let one = S64.classify 1uL;
+  assert (pure (S64.v one == 1));
   let bit = S64.logand x one;
+  assert (pure (S64.v bit == S64.v x % 2));
   assert (pure (S64.v bit ==
     S64.v (Seq.index vb (SZ.v i / 64)) / pow2 (SZ.v i % 64) % 2));
   num_bit vb (SZ.v i);
@@ -1136,6 +1145,7 @@ let shift_in_limb_w (x: nat) (r: nat) (w: nat { r + w <= 64 })
     [i / 64] at position [i mod 64].  The side condition is that they do
     not straddle the limb boundary; a window whose width divides sixty-four
     and whose position is a multiple of that width never does. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 let num_bits_at (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
                 (w: nat { i % 64 + w <= 64 })
   : Lemma (S64.v (Seq.index v (i / 64)) / pow2 (i % 64) % pow2 w ==
@@ -1148,9 +1158,11 @@ let num_bits_at (v: Seq.seq S64.t) (i: nat { i / 64 < Seq.length v })
     assert (S64.v (Seq.index v q) / pow2 r % pow2 w ==
             (num v / wt q) / pow2 r % pow2 w);
     Math.euclidean_division_definition i 64;
+    assert_norm (rad == 64);
     assert (rad * q + r == i);
     shift_num (num v) q r;
     assert (num v / pow2 i == (num v / wt q) / pow2 r)
+#pop-options
 
 (** A position that is a multiple of four leaves room for four more bits in
     the same limb, because four divides sixty-four. *)

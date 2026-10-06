@@ -128,9 +128,36 @@ ensures A.pts_to m #p vm ** pure (S8.v b == F.byte_val (SZ.v d) vm (SZ.v i))
   let a7 = S16.add_mod a6 b7;
   assert (pure (S16.v a7 == S16.v a6 + S16.v b7 /\ S16.v a7 < 256));
   let out = S16.lo a7;
+  assert (pure (S8.v out == S16.v a7 % pow2 8));
+  Math.small_mod (S16.v a7) (pow2 8);
   assert (pure (S8.v out == S16.v a7));
   out
 }
+
+(* [F.pack]'s shape lives in refinements on its return type and in the body of
+   [Seq.init_ghost]; restating both as standalone lemmas keeps them available
+   where the result is only applied. *)
+let pack_len (d: pos { d <= 16 }) (len: nat { len % 8 == 0 }) (m: Seq.lseq S16.t len)
+  : Lemma (Seq.length (F.pack d len m) == d * (len / 8))
+          [SMTPat (F.pack d len m)]
+  = ()
+
+let pack_at (d: pos { d <= 16 }) (len: nat { len % 8 == 0 }) (m: Seq.lseq S16.t len)
+            (i: nat { i < d * (len / 8) })
+  : Lemma (S8.v (Seq.index (F.pack d len m) i) == F.byte_val d m i)
+          [SMTPat (Seq.index (F.pack d len m) i)]
+  = ()
+
+(* One more byte of [F.pack] laid down; spelled out as a top-level lemma so the
+   loop below does not have to re-derive it in a large context. *)
+let pack_extend (d: pos { d <= 16 }) (m: Seq.seq S16.t) (s: Seq.seq S8.t)
+                (x: S8.t) (i: nat { i < Seq.length s })
+  : Lemma (requires (forall (k: nat). k < i ==>
+                       S8.v (Seq.index s k) == F.byte_val d m k) /\
+                    S8.v x == F.byte_val d m i)
+          (ensures (forall (k: nat). k < i + 1 ==>
+                      S8.v (Seq.index (Seq.upd s i x) k) == F.byte_val d m k))
+  = ()
 
 (** [out <- pack d m]. *)
 fn pack (out: A.array S8.t) (m: A.array S16.t) (d: SZ.t { 0 < SZ.v d /\ SZ.v d <= 16 })
@@ -159,6 +186,8 @@ ensures exists* v. A.pts_to out v ** A.pts_to m #p vm **
     let vi = !i;
     bit_offset_bound (SZ.v d) (SZ.v len) (SZ.v vi);
     let b = pack_byte m d len vi;
+    with v0. assert (A.pts_to out v0);
+    pack_extend (SZ.v d) vm v0 b (SZ.v vi);
     A.((out.(vi) <- b));
     i := SZ.add vi 1sz;
   };
@@ -166,6 +195,7 @@ ensures exists* v. A.pts_to out v ** A.pts_to m #p vm **
   assert (pure (Seq.length v == SZ.v d * (SZ.v len / 8) /\
                 (forall (k: nat). k < SZ.v d * (SZ.v len / 8) ==>
                    S8.v (Seq.index v k) == F.byte_val (SZ.v d) vm k)));
+  pack_len (SZ.v d) (SZ.v len) vm;
   Seq.lemma_eq_intro v (F.pack (SZ.v d) (SZ.v len) vm);
   assert (pure (v == F.pack (SZ.v d) (SZ.v len) vm));
 }
