@@ -168,19 +168,42 @@ ensures exists* (v1: Seq.seq t). A.pts_to vv v1 ** A.pts_to m #pm vm ** A.pts_to
   A.pts_to_len m;
   A.pts_to_len sg;
 
-  let s0 = A.(sg.(base));
-  let s1 = A.(sg.(SZ.add base 1sz));
-  let s2 = A.(sg.(SZ.add base 2sz));
-  let s3 = A.(sg.(SZ.add base 3sz));
-  let s4 = A.(sg.(SZ.add base 4sz));
-  let s5 = A.(sg.(SZ.add base 5sz));
-  let s6 = A.(sg.(SZ.add base 6sz));
-  let s7 = A.(sg.(SZ.add base 7sz));
+  (* The offsets carry their value in a refinement on [SZ.add]'s return type,
+     which is dropped when the application is left inline. *)
+  let o1 = SZ.add base 1sz;
+  let o2 = SZ.add base 2sz;
+  let o3 = SZ.add base 3sz;
+  let o4 = SZ.add base 4sz;
+  let o5 = SZ.add base 5sz;
+  let o6 = SZ.add base 6sz;
+  let o7 = SZ.add base 7sz;
+  assert (pure (SZ.v o1 == SZ.v base + 1 /\ SZ.v o2 == SZ.v base + 2 /\
+                SZ.v o3 == SZ.v base + 3 /\ SZ.v o4 == SZ.v base + 4 /\
+                SZ.v o5 == SZ.v base + 5 /\ SZ.v o6 == SZ.v base + 6 /\
+                SZ.v o7 == SZ.v base + 7));
 
-  g_impl p vv 0sz 4sz  8sz 12sz A.(m.(s0)) A.(m.(s1));
-  g_impl p vv 1sz 5sz  9sz 13sz A.(m.(s2)) A.(m.(s3));
-  g_impl p vv 2sz 6sz 10sz 14sz A.(m.(s4)) A.(m.(s5));
-  g_impl p vv 3sz 7sz 11sz 15sz A.(m.(s6)) A.(m.(s7));
+  let s0 = A.(sg.(base));
+  let s1 = A.(sg.(o1));
+  let s2 = A.(sg.(o2));
+  let s3 = A.(sg.(o3));
+  let s4 = A.(sg.(o4));
+  let s5 = A.(sg.(o5));
+  let s6 = A.(sg.(o6));
+  let s7 = A.(sg.(o7));
+
+  let m0 = A.(m.(s0));
+  let m1 = A.(m.(s1));
+  let m2 = A.(m.(s2));
+  let m3 = A.(m.(s3));
+  let m4 = A.(m.(s4));
+  let m5 = A.(m.(s5));
+  let m6 = A.(m.(s6));
+  let m7 = A.(m.(s7));
+
+  g_impl p vv 0sz 4sz  8sz 12sz m0 m1;
+  g_impl p vv 1sz 5sz  9sz 13sz m2 m3;
+  g_impl p vv 2sz 6sz 10sz 14sz m4 m5;
+  g_impl p vv 3sz 7sz 11sz 15sz m6 m7;
 }
 
 inline_for_extraction
