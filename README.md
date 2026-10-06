@@ -298,6 +298,29 @@ lets a round establish it.  The loop measure is the round counter, not the
 bytes remaining: the last round overshoots the requested length, so
 `len - base` is not a `nat`.
 
+**Expand reaches HMAC the long way round, and that cost it 1.9x.**  Giving
+`Hacl.HMAC.hmac_sha256` the SHA extensions did nothing for HKDF-expand,
+because expand does not call it: it calls `round_one` and `round_step`,
+which call the generic `hmac_impl` directly, and generic code cannot branch
+into an implementation that exists only at thirty-two-bit words.  A
+sixty-four-byte expand is two HMACs of a few dozen bytes, which is eight
+compression blocks, and at 270 ns a scalar block against 55 that accounted
+for the whole of the gap: 3,086 ns measured against a reference's 1,348.
+The three functions are therefore transcribed at `S32.t` with
+`hmac_impl_ni`, and `expand_sha224`/`expand_sha256` choose between the pair.
+Expand now costs 1,635 ns, which is exactly twice the 809 ns that
+`hmac_sha256` costs on the same inputs --- the floor for an algorithm that
+is two HMACs.
+
+That is the third copy of this shape, after `hash_blocks_ni` and
+`hmac_impl_ni`, and the pattern's cost is now plain.  A static
+specialisation hierarchy pays for an implementation choice in duplicated
+proof, where EverCrypt's runtime agility pays for it in indirect calls.
+`Hacl.HMAC.DRBG.Core`, `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and
+`Hacl.Streaming.HMAC` are still on the generic path, and a fourth copy is
+not the answer: threading the block function through the hash core so that
+one generic copy serves both is, and it is roadmap item 18.
+
 ### The incremental hash
 
 The streaming state is not a heap-allocated object with a constructor, a
@@ -3144,40 +3167,40 @@ reference**.
 
 | primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| SHA-512 | 256 KiB | 754 us | 1.4 ms | **0.55x** | 1.4 ms | 0.55x |
-| SHA3-256 | 256 KiB | 1.0 ms | 1.8 ms | **0.56x** | 1.8 ms | 0.56x |
-| HMAC-SHA-512 | 256 KiB | 760 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
-| SHAKE128 | 256 KiB | 882 us | 1.5 ms | **0.59x** | 1.5 ms | 0.59x |
-| BLAKE2b | 256 KiB | 382 us | 439 us | **0.87x** | 311 us | 1.23x |
-| FFDHE-2048 | -- | 4.5 ms | 4.6 ms | **0.97x** | 4.6 ms | 0.97x |
-| RSA-PSS-2048 sign | -- | 4.6 ms | 4.7 ms | **0.98x** | 4.7 ms | 0.98x |
-| RSA-2048 modexp | -- | 4.5 ms | 4.5 ms | **1.00x** | 4.5 ms | 1.00x |
-| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.03x** | 1.5 ms | 1.03x |
-| P-256 ECDSA verify | -- | 438 us | 426 us | **1.03x** | 425 us | 1.03x |
-| P-256 ECDH | -- | 162 us | 155 us | **1.04x** | 157 us | 1.04x |
-| BLAKE2s | 256 KiB | 605 us | 576 us | **1.05x** | 576 us | 1.05x |
-| P-256 ECDSA sign | -- | 178 us | 169 us | **1.05x** | 169 us | 1.05x |
-| RSA-PSS-2048 verify | -- | 165 us | 143 us | **1.16x** | 144 us | 1.15x |
-| secp256k1 ECDSA sign | -- | 76 us | 66 us | **1.16x** | 66 us | 1.16x |
-| HMAC-SHA-256 | 256 KiB | 190 us | 163 us | **1.17x** | 1.1 ms | 0.17x |
-| SHA-256 | 256 KiB | 190 us | 163 us | **1.17x** | 1.1 ms | 0.17x |
-| NaCl secretbox | 256 KiB | 766 us | 642 us | **1.19x** | 648 us | 1.18x |
-| Ed25519 sign | -- | 77 us | 64 us | **1.21x** | 64 us | 1.21x |
-| Salsa20 | 256 KiB | 535 us | 437 us | **1.22x** | 435 us | 1.23x |
-| X25519 | -- | 50 us | 36 us | **1.39x** | 44 us | 1.13x |
-| MD5 | 256 KiB | 622 us | 431 us | **1.44x** | 432 us | 1.44x |
-| AES-128-GCM | 256 KiB | 104 us | 71 us | **1.46x** | 71 us | 1.46x |
-| Poly1305 | 256 KiB | 237 us | 57 us | **4.14x** | 207 us | 1.14x |
-| ChaCha20-Poly1305 | 256 KiB | 762 us | 148 us | **5.15x** | 1.1 ms | 0.72x |
-| ChaCha20 | 256 KiB | 493 us | 93 us | **5.32x** | 850 us | 0.58x |
+| SHA3-256 | 256 KiB | 1.0 ms | 1.8 ms | **0.55x** | 1.8 ms | 0.55x |
+| SHA-512 | 256 KiB | 756 us | 1.4 ms | **0.55x** | 1.4 ms | 0.56x |
+| HMAC-SHA-512 | 256 KiB | 757 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
+| SHAKE128 | 256 KiB | 882 us | 1.5 ms | **0.59x** | 1.5 ms | 0.60x |
+| BLAKE2b | 256 KiB | 382 us | 438 us | **0.87x** | 312 us | 1.22x |
+| RSA-PSS-2048 sign | -- | 4.5 ms | 4.7 ms | **0.95x** | 4.7 ms | 0.95x |
+| FFDHE-2048 | -- | 4.4 ms | 4.6 ms | **0.95x** | 4.6 ms | 0.96x |
+| RSA-2048 modexp | -- | 4.4 ms | 4.5 ms | **0.98x** | 4.5 ms | 0.98x |
+| P-256 ECDSA verify | -- | 436 us | 425 us | **1.03x** | 428 us | 1.02x |
+| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.03x** | 1.5 ms | 1.04x |
+| P-256 ECDH | -- | 162 us | 155 us | **1.04x** | 156 us | 1.04x |
+| P-256 ECDSA sign | -- | 176 us | 169 us | **1.05x** | 169 us | 1.04x |
+| BLAKE2s | 256 KiB | 605 us | 571 us | **1.06x** | 573 us | 1.06x |
+| HMAC-SHA-256 | 256 KiB | 190 us | 164 us | **1.16x** | 1.1 ms | 0.17x |
+| SHA-256 | 256 KiB | 189 us | 163 us | **1.16x** | 1.1 ms | 0.17x |
+| secp256k1 ECDSA sign | -- | 76 us | 65 us | **1.16x** | 65 us | 1.16x |
+| RSA-PSS-2048 verify | -- | 166 us | 143 us | **1.16x** | 143 us | 1.16x |
+| NaCl secretbox | 256 KiB | 770 us | 643 us | **1.20x** | 644 us | 1.20x |
+| Ed25519 sign | -- | 77 us | 64 us | **1.20x** | 64 us | 1.21x |
+| Salsa20 | 256 KiB | 533 us | 435 us | **1.23x** | 435 us | 1.22x |
+| X25519 | -- | 50 us | 36 us | **1.39x** | 44 us | 1.14x |
+| MD5 | 256 KiB | 626 us | 433 us | **1.44x** | 432 us | 1.45x |
+| AES-128-GCM | 256 KiB | 103 us | 71 us | **1.44x** | 72 us | 1.44x |
+| Poly1305 | 256 KiB | 236 us | 57 us | **4.13x** | 208 us | 1.14x |
+| ChaCha20-Poly1305 | 256 KiB | 761 us | 148 us | **5.13x** | 1.1 ms | 0.72x |
+| ChaCha20 | 256 KiB | 495 us | 93 us | **5.31x** | 852 us | 0.58x |
 
 Against what HACL\* can actually do on this machine, most of the suite is
 within 20% and five primitives are ahead: SHA-3 and SHAKE, where HACL\* has
 no vector sponge; SHA-512 and HMAC-SHA-512, where it has none either; and
 BLAKE2b, where HACL\*'s own AVX2 implementation is *slower* on this machine
 than its own scalar C (439 us against 311), so "best" picks the wrong one.
-Modular exponentiation is level.  Everything from SHA-1 down to AES-GCM sits
-between 1.03x and 1.46x, which is the cost of a portable scalar
+Modular exponentiation is level.  Everything from P-256 down to AES-GCM sits
+between 1.03x and 1.44x, which is the cost of a portable scalar
 implementation meeting hand-tuned scalar code.
 
 The honest ceiling is the bottom three rows.  ChaCha20 at 5.32x, Poly1305 at
@@ -3199,7 +3222,7 @@ Then both SHA-256 rows moved again, from 227 us to 190, and under clang from
 see [One attribute in the wrong place, and three quarters of the
 time](#one-attribute-in-the-wrong-place-and-three-quarters-of-the-time).
 
-That leaves SHA-256 and HMAC-SHA-256 tied at 1.17x against Vale's SHA-EXT
+That leaves SHA-256 and HMAC-SHA-256 tied at 1.16x against Vale's SHA-EXT
 assembly, which is this repository's intrinsics against hand-written assembly
 rather than scalar against vector, and is the narrowest of the remaining
 gaps.  Every vectorized primitive still loses at 64 bytes, where the setup
@@ -4735,7 +4758,7 @@ rough order of value:
     thirty-nine `a + i` per block became thirty-nine calls.  `sub` is now
     `inline_for_extraction`.  clang's SHA-256 went from 668 us to 179 on
     256 KiB, gcc's from 227 to 190, and both SHA-256 and HMAC-SHA-256 now
-    sit at 1.17x of HACL\* best under gcc and about 1.10x under clang.
+    sit at 1.16x of HACL\* best under gcc and about 1.10x under clang.
     What remains of that row is this repository's intrinsics against Vale's
     hand-written assembly, which is a much smaller thing to chase.
 
@@ -4750,3 +4773,20 @@ rough order of value:
     eight-lane state for the stream ciphers and the lane-reduction for
     Poly1305.  This is a project rather than a change, and it is listed
     here mainly so the ceiling in the performance table has a name.
+
+18. **One hash core, two block implementations.**  `hash_blocks_ni`,
+    `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of
+    generic code at `S32.t`, differing from their originals in exactly one
+    call each.  They exist because the `word` typeclass is a statement about
+    *values* and offers no way for code at an abstract `t` to obtain the
+    witness `t == S32.t` that calling the SHA-EXT implementation needs.
+    Three copies is where the pattern stops being free: `Hacl.HMAC.DRBG.Core`,
+    `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and `Hacl.Streaming.HMAC` are all
+    still on the scalar path, and a fourth, fifth and sixth copy is not the
+    answer.  The answer is to make the block function a parameter of
+    `hash_blocks` --- a higher-order stateful argument whose specification is
+    exactly the one `update_block_impl` already has --- so that one generic
+    copy serves both and `inline_for_extraction` plus `monomorphize`
+    specialises it away in C.  That is a refactor of verified code rather
+    than a change, which is why it has not been done yet, but every
+    additional consumer of HMAC makes it more clearly correct.
