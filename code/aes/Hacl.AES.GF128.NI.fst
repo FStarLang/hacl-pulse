@@ -122,20 +122,20 @@ let raw_product (x y: Vec.t)
        carries the top bit of [lo] into [hi]. *)
     let c = Vec.shift_right_lanes64 lo 63ul in
     let d = Vec.shift_right_lanes64 hi 63ul in
-    let qlo = Vec.vxor (Vec.shift_left_lanes64 lo 1ul)
-                       (Vec.shift_left_bytes_8 c) in
-    let qhi = Vec.vxor (Vec.vxor (Vec.shift_left_lanes64 hi 1ul)
-                                 (Vec.shift_left_bytes_8 d))
-                       (Vec.shift_right_bytes_8 c) in
+    (* Each shift is named: what a shift does to the bits is a refinement on
+       its result type, and an inline application does not bring it along. *)
+    let lo1 = Vec.shift_left_lanes64 lo 1ul in
+    let hi1 = Vec.shift_left_lanes64 hi 1ul in
+    let c8 = Vec.shift_left_bytes_8 c in
+    let d8 = Vec.shift_left_bytes_8 d in
+    let c8' = Vec.shift_right_bytes_8 c in
+    let hid = Vec.vxor hi1 d8 in
+    let qlo = Vec.vxor lo1 c8 in
+    let qhi = Vec.vxor hid c8' in
 
-    Classical.forall_intro
-      (xor_bits (Vec.shift_left_lanes64 lo 1ul) (Vec.shift_left_bytes_8 c));
-    Classical.forall_intro
-      (xor_bits (Vec.shift_left_lanes64 hi 1ul) (Vec.shift_left_bytes_8 d));
-    Classical.forall_intro
-      (xor_bits (Vec.vxor (Vec.shift_left_lanes64 hi 1ul)
-                          (Vec.shift_left_bytes_8 d))
-                (Vec.shift_right_bytes_8 c));
+    Classical.forall_intro (xor_bits lo1 c8);
+    Classical.forall_intro (xor_bits hi1 d8);
+    Classical.forall_intro (xor_bits hid c8');
     CL.shift_lo (Vec.bv x) (Vec.bv y) (Vec.bv lo) (Vec.bv c) (Vec.bv qlo);
     CL.shift_hi (Vec.bv x) (Vec.bv y) (Vec.bv lo) (Vec.bv hi)
                 (Vec.bv c) (Vec.bv d) (Vec.bv qhi);

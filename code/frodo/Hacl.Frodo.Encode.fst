@@ -150,6 +150,8 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
   A.pts_to_len mu;
   Hacl.SizeT.fits32 ();
   let nb = SZ.uint32_to_sizet p.bits;
+  assert (pure (SZ.v nb == U32.v p.bits /\ SZ.v nb <= 16 /\
+                Seq.length vmu == SZ.v nb * nbar));
   let up = U32.sub p.logq p.bits;
   let mask = S64.mask_low p.bits;
   let mut i = 0sz;
@@ -163,6 +165,7 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
   {
     let vi = !i;
     Math.lemma_mult_le_right (SZ.v nb) (SZ.v vi + 1) nbar;
+    assert (pure (SZ.v vi * SZ.v nb + SZ.v nb <= Seq.length vmu));
     let x = chunk mu (SZ.mul vi nb) nb;
     assert (pure (S64.v x == F.mu_chunk p vmu (SZ.v vi)));
     let mut k = 0sz;
@@ -176,7 +179,9 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
     {
       let vk = !k;
       sh_ok p (SZ.v vk);
-      let sh = U32.mul p.bits (SZ.sizet_to_uint32 vk);
+      let vk32 = SZ.sizet_to_uint32 vk;
+      assert (pure (U32.v vk32 == SZ.v vk));
+      let sh = U32.mul p.bits vk32;
       S64.logand_mask_low (S64.shift_right x sh) p.bits;
       let y = S64.logand (S64.shift_right x sh) mask;
       ec_val_ok p (S64.v x) (SZ.v vk);

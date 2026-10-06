@@ -137,6 +137,11 @@ let fmul_unfold (a b: elem) (k: nat { k < 8 }) (prev: elem)
    bodies are large: inlining [sbox_impl] means inlining fifteen field
    multiplications of eight steps each into every query that mentions an
    S-box, which is enough to make unrelated obligations time out. *)
+(* [fmul_step]'s refinement divides by [pow2 (U32.v 0ul)]; spelling out that
+   this is a division by one is what lets the last step of [fmul_impl] close. *)
+let div_pow2_zero (x: nat) : Lemma (x / pow2 (U32.v 0ul) == x) =
+  assert_norm (pow2 (U32.v 0ul) == 1)
+
 [@@ "opaque_to_smt"]
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 30"
 let fmul_impl (a b: S8.t) : r: S8.t { S8.v r == fmul (S8.v a) (S8.v b) } =
@@ -159,6 +164,9 @@ let fmul_impl (a b: S8.t) : r: S8.t { S8.v r == fmul (S8.v a) (S8.v b) } =
   let r2 = fmul_step a2 b r3 2ul in fmul_unfold (S8.v a2) (S8.v b) 2 (S8.v r3);
   let r1 = fmul_step a1 b r2 1ul in fmul_unfold (S8.v a1) (S8.v b) 1 (S8.v r2);
   let r0 = fmul_step a b r1 0ul in fmul_unfold (S8.v a) (S8.v b) 0 (S8.v r1);
+  (* [fmul_step]'s refinement divides by [pow2 (U32.v 0ul)]. *)
+  div_pow2_zero (S8.v b);
+  assert (S8.v r0 == fmul_aux (S8.v a) (S8.v b) 8);
   r0
 #pop-options
 

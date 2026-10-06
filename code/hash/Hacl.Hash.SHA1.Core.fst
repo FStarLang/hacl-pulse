@@ -363,6 +363,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   };
   Math.multiple_modulo_lemma 1 block_len;
   Math.multiple_modulo_lemma 2 block_len;
+  assert (pure (SZ.v ntail == block_len \/ SZ.v ntail == 2 * block_len));
   Math.euclidean_division_definition (SZ.v ntail) block_len;
   assert (pure (SZ.v ntb * block_len == SZ.v ntail));
   Math.distributivity_add_left (SZ.v nblocks) (SZ.v ntb) block_len;
