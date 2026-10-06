@@ -363,6 +363,13 @@ let xt_bit_step_zero (y: block) (j: pos) (i: nat { i == 0 })
     xsum_ext (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i)
              (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128
 
+(* The boolean shuffle at the end of the step below, on its own so that it
+   is discharged in an empty context rather than among the [xsum] terms. *)
+let xt_bit_combine (b0 b1: bool) (i: nat { 0 < i /\ i < 128 })
+  : Lemma (((i > 0 && b0) <> (b1 && (i = 0 || i = 1 || i = 2 || i = 7))) ==
+           (b0 <> ((i = 1 || i = 2 || i = 7) && b1)))
+  = ()
+
 (** The step above bit [0]: the shifted bit, plus the wrapped bit where the
     reduction constant has a term. *)
 let xt_bit_step_pos (y: block) (j: pos) (i: nat { 0 < i /\ i < 128 })
@@ -383,7 +390,21 @@ let xt_bit_step_pos (y: block) (j: pos) (i: nat { 0 < i /\ i < 128 })
     xsum_xor (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) (i - 1))
              (fun m -> rb && (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127))
              0 128;
-    xsum_and rb (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128
+    xsum_and rb (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) 127) 0 128;
+    (* Spell out the chain the three [xsum] lemmas above produce, rather than
+       leaving the solver to stitch the four [xsum] terms together. *)
+    assert (xsum (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128 ==
+            (xsum (fun m -> pget (pbits y) m && bit (xpowi (m + (j - 1))) (i - 1)) 0 128 <>
+             xsum (fun m -> rb && (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127))
+                  0 128));
+    assert (xsum (fun m -> rb && (pget (pbits y) m && bit (xpowi (m + (j - 1))) 127)) 0 128 ==
+            (rb && bit (xt y (j - 1)) 127));
+    assert (xsum (fun m -> pget (pbits y) m && bit (xpowi (m + j)) i) 0 128 ==
+            (bit (xt y (j - 1)) (i - 1) <> (rb && bit (xt y (j - 1)) 127)));
+    assert (bit (xt y j) i ==
+            ((i > 0 && bit (xt y (j - 1)) (i - 1)) <>
+             (bit (xt y (j - 1)) 127 && (i = 0 || i = 1 || i = 2 || i = 7))));
+    xt_bit_combine (bit (xt y (j - 1)) (i - 1)) (bit (xt y (j - 1)) 127) i
 
 #pop-options
 

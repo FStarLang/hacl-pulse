@@ -135,6 +135,20 @@ let eval_win2 (s: Seq.seq nat) (j: nat { j <= Seq.length s }) (off: nat) (w: nat
     Math.lemma_mod_plus (vat s j / pow2 off + pow2 (rad - off) * vat s (j + 1))
                         (pow2 (2 * rad - off - w) * vat s (j + 2)) (pow2 w)
 
+(** Hoisted out of [eval_windows]: as a local closure this costs the solver
+    unreasonably more than as a top-level lemma.  The hypothesis is carried in
+    the conclusion so that [Classical.forall_intro] applies directly. *)
+let eval_windows_index (v: nat) (s: Seq.seq nat) (k: nat)
+  : Lemma ((k + 1 < Seq.length s /\
+            (forall (j: nat). j < Seq.length s ==> Seq.index s j == win v (rad * j) rad))
+           ==> Seq.index (Seq.slice s 1 (Seq.length s)) k == win (v / base) (rad * k) rad)
+  = if k + 1 < Seq.length s then begin
+      Math.distributivity_add_right rad k 1;
+      Math.pow2_plus (rad * k) rad;
+      Math.division_multiplication_lemma v (pow2 (rad * k)) base;
+      Math.division_multiplication_lemma v base (pow2 (rad * k))
+    end
+
 (** The converse: a sequence whose limbs are the successive windows of [v]
     evaluates to [v]. *)
 let rec eval_windows (v: nat) (s: Seq.seq nat)
@@ -152,14 +166,7 @@ let rec eval_windows (v: nat) (s: Seq.seq nat)
       Math.pow2_plus rad (rad * (n - 1));
       Math.lemma_div_lt_nat v (rad * n) rad;
       assert (v' < pow2 (rad * (n - 1)));
-      let aux (k: nat { k < n - 1 }) : Lemma (Seq.index t k == win v' (rad * k) rad) =
-        assert (Seq.index t k == Seq.index s (k + 1));
-        Math.distributivity_add_right rad k 1;
-        assert (Seq.index s (k + 1) == win v (rad * k + rad) rad);
-        Math.pow2_plus (rad * k) rad;
-        Math.division_multiplication_lemma v (pow2 (rad * k)) base;
-        Math.division_multiplication_lemma v base (pow2 (rad * k)) in
-      Classical.forall_intro aux;
+      Classical.forall_intro (eval_windows_index v s);
       eval_windows v' t;
       Math.euclidean_division_definition v base
     end
