@@ -234,6 +234,32 @@ int main(void) {
     TIME("ffdhe2048-shared-secret", 0, { sink += bs_ffdhe2048_ss(ss, sk_a, pk_b); });
   }
 
+  /* ---------------- ML-KEM ---------------- */
+#ifdef BS_HAVE_MLKEM
+  {
+    static uint8_t kek[1568], kdk[3168], kct[1568], kss[32];
+    uint8_t kd[32], kz[32], km[32];
+    fill(kd, 32, 61);
+    fill(kz, 32, 62);
+    fill(km, 32, 63);
+#define MLKEM_ROWS(bits_)                                                      \
+    do {                                                                       \
+      bs_mlkem##bits_##_keypair(kek, kdk, kd, kz);                             \
+      TIME("mlkem" #bits_ "-keypair", 0,                                       \
+           { bs_mlkem##bits_##_keypair(kek, kdk, kd, kz); sink += kek[0]; });  \
+      TIME("mlkem" #bits_ "-encapsulate", 0,                                   \
+           { bs_mlkem##bits_##_enc(kct, kss, kek, km); sink += kss[0]; });     \
+      bs_mlkem##bits_##_enc(kct, kss, kek, km);                                \
+      TIME("mlkem" #bits_ "-decapsulate", 0,                                   \
+           { bs_mlkem##bits_##_dec(kss, kct, kdk); sink += kss[0]; });         \
+    } while (0)
+    MLKEM_ROWS(512);
+    MLKEM_ROWS(768);
+    MLKEM_ROWS(1024);
+#undef MLKEM_ROWS
+  }
+#endif
+
   /* ---------------- HMAC-DRBG ---------------- */
   {
     static bs_drbg d;

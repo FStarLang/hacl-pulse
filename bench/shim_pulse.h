@@ -136,6 +136,23 @@ static inline void bs_bn2048_modexp(bs_bnctx *c, size_t bBits) {
                                                c->aM, c->acc, c->t, c->wide);
 }
 
+/* ---- ML-KEM ----
+   HACL* has no ML-KEM, so there is nothing to compare against and these rows
+   exist only on this side of the shim; the README reports them as absolute
+   times rather than as a ratio.  They are called directly rather than through
+   a function-pointer table because what they are usually measuring is how well
+   the parameter sets specialise, and an indirect call would hide exactly that. */
+#define BS_HAVE_MLKEM 1
+static inline void bs_mlkem512_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z) { Hacl_MLKEM512_keypair(ek, dk, d, z); }
+static inline void bs_mlkem512_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) { Hacl_MLKEM512_enc(ct, ss, ek, m); }
+static inline void bs_mlkem512_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) { Hacl_MLKEM512_dec(ss, ct, dk); }
+static inline void bs_mlkem768_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z) { Hacl_MLKEM768_keypair(ek, dk, d, z); }
+static inline void bs_mlkem768_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) { Hacl_MLKEM768_enc(ct, ss, ek, m); }
+static inline void bs_mlkem768_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) { Hacl_MLKEM768_dec(ss, ct, dk); }
+static inline void bs_mlkem1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, uint8_t *z) { Hacl_MLKEM1024_keypair(ek, dk, d, z); }
+static inline void bs_mlkem1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) { Hacl_MLKEM1024_enc(ct, ss, ek, m); }
+static inline void bs_mlkem1024_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) { Hacl_MLKEM1024_dec(ss, ct, dk); }
+
 static inline void bs_global_init(void) {}
 
 #endif
