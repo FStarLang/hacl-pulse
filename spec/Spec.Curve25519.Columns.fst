@@ -222,6 +222,86 @@ let col4 (a b: Seq.seq nat)
     p4 a b;
     ()
 
+(** {2 The five columns of a square}
+
+    When the two factors are the same sequence the schoolbook product is
+    symmetric about its diagonal, so every off-diagonal entry appears
+    twice.  Pairing the two copies up front and multiplying one of them by
+    two turns twenty-five limb products into fifteen: three to a column
+    rather than five, with the diagonal entry standing alone in columns
+    zero, two and four.
+
+    Only the {e products} are halved.  The columns themselves are the same
+    five numbers as before, so the carry chain, the wrap and the whole of
+    {!chain} are reused untouched -- which is why these lemmas are stated
+    against [fold19 (part a a nl)] rather than against a specification of
+    their own.  [sqdbl] is the pairing step: the limb products [x * 19 y]
+    and [y * 19 x] are the same number, and their sum is one product with
+    a thirty-eight in it. *)
+
+let sqdbl (x y: nat) : Lemma (x * (19 * y) + y * (19 * x) == (38 * y) * x)
+  = m19 x y;
+    m19 y x;
+    Math.swap_mul y x;
+    Math.paren_mul_right 38 y x;
+    Math.swap_mul 38 y
+
+let sqpair (x y: nat) : Lemma (x * y + y * x == (2 * x) * y)
+  = Math.swap_mul y x;
+    Math.paren_mul_right 2 x y
+
+let sq0 (a: Seq.seq nat)
+  : Lemma (vat (fold19 (part a a nl)) 0 ==
+           vat a 0 * vat a 0 +
+           (38 * vat a 4) * vat a 1 +
+           (38 * vat a 2) * vat a 3)
+  = col0 a a;
+    sqdbl (vat a 1) (vat a 4);
+    sqdbl (vat a 3) (vat a 2);
+    ()
+
+let sq1 (a: Seq.seq nat)
+  : Lemma (vat (fold19 (part a a nl)) 1 ==
+           (2 * vat a 0) * vat a 1 +
+           (38 * vat a 4) * vat a 2 +
+           (19 * vat a 3) * vat a 3)
+  = col1 a a;
+    sqpair (vat a 0) (vat a 1);
+    sqdbl (vat a 2) (vat a 4);
+    Math.swap_mul (vat a 3) (19 * vat a 3);
+    ()
+
+let sq2 (a: Seq.seq nat)
+  : Lemma (vat (fold19 (part a a nl)) 2 ==
+           (2 * vat a 0) * vat a 2 +
+           vat a 1 * vat a 1 +
+           (38 * vat a 4) * vat a 3)
+  = col2 a a;
+    sqpair (vat a 0) (vat a 2);
+    sqdbl (vat a 3) (vat a 4);
+    ()
+
+let sq3 (a: Seq.seq nat)
+  : Lemma (vat (fold19 (part a a nl)) 3 ==
+           (2 * vat a 0) * vat a 3 +
+           (2 * vat a 1) * vat a 2 +
+           (19 * vat a 4) * vat a 4)
+  = col3 a a;
+    sqpair (vat a 0) (vat a 3);
+    sqpair (vat a 1) (vat a 2);
+    Math.swap_mul (vat a 4) (19 * vat a 4);
+    ()
+
+let sq4 (a: Seq.seq nat)
+  : Lemma (vat (fold19 (part a a nl)) 4 ==
+           (2 * vat a 0) * vat a 4 +
+           (2 * vat a 1) * vat a 3 +
+           vat a 2 * vat a 2)
+  = col4 a a;
+    sqpair (vat a 0) (vat a 4);
+    sqpair (vat a 1) (vat a 3);
+    ()
+
 #pop-options
 
 (** {2 The carry chain, written out}

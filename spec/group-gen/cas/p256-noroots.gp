@@ -1,0 +1,10 @@
+p=2^256 - 2^224 + 2^192 + 2^96 - 1; b=0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b;
+pk=2^256 - 2^32 - 977;
+cert(h, p) = { my(r = lift(Mod(Mod(1,p)*x, h)^p)); my(u = lift(lift(1/Mod(r - x, h)))); Vecrev(u) };
+f = Mod(1,p)*(x^3-3*x+b);
+Q = Mod(1,p)*(x^6-15*x^4+20*b*x^3-45*x^2+12*b*x-8*b^2+27);
+print(cert(f,p)); print(cert(Q,p));
+fk = Mod(1,pk)*(x^3+7);
+print(cert(fk,pk));
+print(polrootsmod(fk,pk));
+quit;

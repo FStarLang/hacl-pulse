@@ -148,6 +148,57 @@ assume val aesenc (st k: t) : r: t { bv r == round (bv k) (bv st) }
 [@@custard_extern "Hacl_Vec128_aesenclast"; custard_c_header "Hacl_Vec128.h"]
 assume val aesenclast (st k: t) : r: t { bv r == last_round (bv k) (bv st) }
 
+(** [AESKEYGENASSIST] with a zero round constant.  The instruction computes
+    [SubWord] of two of the four input words and [RotWord (SubWord _)] of the
+    same two, exclusive-ored with the immediate; with the immediate zero the
+    rotated copies carry no extra information and only the two plain ones are
+    worth stating.  Of those, only the one taken from the top word is used
+    here, so the axiom is written over the four bytes at offset twelve.
+
+    This exists for the key schedule, whose [SubWord] is otherwise four
+    evaluations of the algebraic S-box of [Hacl.AES.Core] --- around three
+    hundred and fifty serially dependent operations each.  Nothing else in
+    the library needs it: [aesenc] already has the S-box inside it. *)
+
+[@@custard_extern "Hacl_Vec128_subword"; custard_c_header "Hacl_Vec128.h"]
+assume val subword (a: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             Seq.index (bv r) (8 + i) == sbox (Seq.index (bv a) (12 + i)) }
+
+(** [SubWord] of the top word, rotated and copied into all four words: byte
+    [i] of the result is byte [8 + ((i + 1) % 4)] of the argument.  Applied to
+    [subword]'s result that is [rot_word (sub_word w3)] four times over, which
+    is the term FIPS 197 adds to every word of a round key at a multiple of
+    the key length.  One [PSHUFB] against a constant mask. *)
+
+[@@custard_extern "Hacl_Vec128_bcast_rot"; custard_c_header "Hacl_Vec128.h"]
+assume val bcast_rot (a: t)
+  : r: t { (forall (i: nat). i < 16 ==>
+              Seq.index (bv r) i == Seq.index (bv a) (8 + ((i + 1) % 4))) /\
+           (forall (i: nat). 4 <= i /\ i < 16 ==>
+              Seq.index (bv r) i == Seq.index (bv r) (i - 4)) }
+
+(** The same without the rotation, which is what AES-256 wants halfway
+    between its round-constant steps. *)
+
+[@@custard_extern "Hacl_Vec128_bcast_sub"; custard_c_header "Hacl_Vec128.h"]
+assume val bcast_sub (a: t)
+  : r: t { (forall (i: nat). i < 16 ==>
+              Seq.index (bv r) i == Seq.index (bv a) (8 + (i % 4))) /\
+           (forall (i: nat). 4 <= i /\ i < 16 ==>
+              Seq.index (bv r) i == Seq.index (bv r) (i - 4)) }
+
+(** One byte in the low end of each of the four words and zero elsewhere.
+    The round constant wants to meet a register, and this is two instructions
+    rather than a store and a load. *)
+
+[@@custard_extern "Hacl_Vec128_word_bcast"; custard_c_header "Hacl_Vec128.h"]
+assume val word_bcast (x: S8.t)
+  : r: t { (forall (i: nat). i < 16 ==>
+              Seq.index (bv r) i == (if i % 4 = 0 then S8.v x else 0)) /\
+           (forall (i: nat). 4 <= i /\ i < 16 ==>
+              Seq.index (bv r) i == Seq.index (bv r) (i - 4)) }
+
 (** {2 Carry-less multiplication}
 
     [PCLMULQDQ] multiplies one 64-bit lane of each operand, reading both as
@@ -188,10 +239,15 @@ assume val clmul_hh (a b: t)
     The lane shifts do the same within each half, which is the one place the
     hardware's notion of "128-bit value" is not a single integer. *)
 
+(** The four-byte shift is the key schedule's, not GHASH's, so it is stated a
+    byte at a time: byte [i] of the result is byte [i - 4] of the argument,
+    and zero where that is off the end.  The eight-byte shift below belongs to
+    the multiplier and keeps the bit-level form. *)
+
 [@@custard_extern "Hacl_Vec128_shift_left_bytes_4"; custard_c_header "Hacl_Vec128.h"]
 assume val shift_left_bytes_4 (a: t)
-  : r: t { forall (k: int). 0 <= k /\ k < 128 ==>
-                            CL.lebiti (bv r) k == CL.lebiti (bv a) (k - 32) }
+  : r: t { forall (i: nat). i < 16 ==>
+             Seq.index (bv r) i == (if i < 4 then 0 else Seq.index (bv a) (i - 4)) }
 
 [@@custard_extern "Hacl_Vec128_shift_right_bytes_4"; custard_c_header "Hacl_Vec128.h"]
 assume val shift_right_bytes_4 (a: t)
@@ -286,6 +342,19 @@ assume val add32 (a b: t)
   : r: t { forall (i: nat). i < 4 ==>
              SHANI.lane (vv r) i ==
                S32.add_mod (SHANI.lane (vv a) i) (SHANI.lane (vv b) i) }
+
+(** One in lane zero and zero elsewhere, the addend of the counter-mode
+    increment.  [PADDD] does not carry between lanes, so adding this is
+    [Spec.AES.inc32] on a byte-reversed counter block; [Hacl.AES.Counter]
+    is where that is proved.  [PADDD] is SSE2, so neither
+    this nor [add32] needs a target attribute, which is what lets the same
+    binding serve the SHA-256 schedule and the AES counter. *)
+[@@custard_extern "Hacl_Vec128_lane_one"; custard_c_header "Hacl_Vec128.h"]
+assume val lane_one (_: unit)
+  : r: t { S32.v (SHANI.lane (vv r) 0) == 1 /\
+           S32.v (SHANI.lane (vv r) 1) == 0 /\
+           S32.v (SHANI.lane (vv r) 2) == 0 /\
+           S32.v (SHANI.lane (vv r) 3) == 0 }
 
 (** [PSHUFD] with [0xB1]: exchange the lanes within each pair. *)
 [@@custard_extern "Hacl_Vec128_shuffle_swap_pairs"; custard_c_header "Hacl_Vec128.h"]

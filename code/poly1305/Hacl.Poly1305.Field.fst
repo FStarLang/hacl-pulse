@@ -62,20 +62,37 @@ let feval (v: Seq.seq S64.t) : GTot nat = as_nat5 (vv v 0) (vv v 1) (vv v 2) (vv
 let bounded (v: Seq.seq S64.t) (n: nat) : GTot prop =
   bounded5 (vv v 0) (vv v 1) (vv v 2) (vv v 3) (vv v 4) n
 
+(** [r] is kept nine limbs long: the five of [r] itself, and then the four
+    multiples [5 r1], [5 r2], [5 r3], [5 r4].
+
+    Ten of the twenty-five schoolbook products land at or above [2^130] and
+    have to come down five places, which costs a multiplication by five
+    apiece -- ten extra multiplications in every block.  Five times a product
+    is the product of five times one factor, and the factor that is constant
+    for the whole message is [r], so the five can be applied four times when
+    the key is loaded instead of ten times a block.  Those four numbers are
+    under [5 * 2^26], which is still small enough that a limb of the
+    accumulator times one of them stays under [5 * 2^54] and the sum of five
+    such still under [2^59]: the bound that made this representation work in
+    the first place had the factor of five in it already. *)
+let has5 (v: Seq.seq S64.t) : GTot prop =
+  vv v 5 == 5 * vv v 1 /\ vv v 6 == 5 * vv v 2 /\
+  vv v 7 == 5 * vv v 3 /\ vv v 8 == 5 * vv v 4
+
 (** The five wide limbs of the schoolbook product, as a single named
     predicate.  Naming it matters: written out, the five equations are in
     scope for every query in [fmul], and [fmul]'s queries already carry a
     separation-logic context. *)
-let is_product (vd vh vr: Seq.seq S64.t) : GTot prop =
-  vv vd 0 == d0 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
+let is_product (e0 e1 e2 e3 e4: nat) (vh vr: Seq.seq S64.t) : GTot prop =
+  e0 == d0 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
                 (vv vr 0) (vv vr 1) (vv vr 2) (vv vr 3) (vv vr 4) /\
-  vv vd 1 == d1 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
+  e1 == d1 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
                 (vv vr 0) (vv vr 1) (vv vr 2) (vv vr 3) (vv vr 4) /\
-  vv vd 2 == d2 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
+  e2 == d2 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
                 (vv vr 0) (vv vr 1) (vv vr 2) (vv vr 3) (vv vr 4) /\
-  vv vd 3 == d3 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
+  e3 == d3 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
                 (vv vr 0) (vv vr 1) (vv vr 2) (vv vr 3) (vv vr 4) /\
-  vv vd 4 == d4 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
+  e4 == d4 (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
                 (vv vr 0) (vv vr 1) (vv vr 2) (vv vr 3) (vv vr 4)
 
 (** What [fmul] leaves behind.  Named for the same reason [is_product] is:
@@ -87,10 +104,13 @@ let fmul_post (vh vr vh': Seq.seq S64.t) : GTot prop =
   bounded vh' 27 /\ feval vh' % prime == (feval vh * feval vr) % prime
 
 (** [mul_reduce_ok] at the sequences, so that the Pulse code applies one
-    lemma to one hypothesis and never sees the arithmetic. *)
-let fmul_ok (vh vr vd vh': Seq.seq S64.t)
-  : Lemma (requires bounded vh 28 /\ bounded vr 26 /\ is_product vd vh vr /\
-                    chain (vv vd 0) (vv vd 1) (vv vd 2) (vv vd 3) (vv vd 4)
+    lemma to one hypothesis and never sees the arithmetic.  The five wide
+    limbs are plain numbers: [fmul] holds them in registers and never puts
+    them anywhere a sequence could describe. *)
+let fmul_ok (vh vr vh': Seq.seq S64.t) (e0 e1 e2 e3 e4: nat)
+  : Lemma (requires bounded vh 28 /\ bounded vr 26 /\
+                    is_product e0 e1 e2 e3 e4 vh vr /\
+                    chain e0 e1 e2 e3 e4
                           (vv vh' 0) (vv vh' 1) (vv vh' 2) (vv vh' 3) (vv vh' 4))
           (ensures fmul_post vh vr vh')
   = mul_reduce_ok (vv vh 0) (vv vh 1) (vv vh 2) (vv vh 3) (vv vh 4)
@@ -135,6 +155,15 @@ let mul26 (x y: S64.t)
     S64.mul_mod x y
 
 inline_for_extraction
+let mul26_5 (x y: S64.t)
+  : Pure S64.t (requires S64.v x < pow2 28 /\ S64.v y < 5 * pow2 26)
+               (ensures fun z -> S64.v z == S64.v x * S64.v y /\ S64.v z < 5 * pow2 54)
+  = prod_bound5 (S64.v x) (S64.v y);
+    assert_norm (5 * pow2 54 < pow2 64);
+    Math.small_mod (S64.v x * S64.v y) (pow2 64);
+    S64.mul_mod x y
+
+inline_for_extraction
 let times5 (x: S64.t)
   : Pure S64.t (requires 5 * S64.v x < pow2 64)
                (ensures fun z -> S64.v z == 5 * S64.v x)
@@ -143,6 +172,11 @@ let times5 (x: S64.t)
 
 let five_fits (x: nat) : Lemma (requires x < pow2 54) (ensures 5 * x < pow2 64)
   = assert_norm (5 * pow2 54 < pow2 64)
+
+(** The same, for a limb of [r] about to be multiplied by five once and for
+    all when the key is loaded. *)
+let five_small (x: nat) : Lemma (requires x < pow2 26) (ensures 5 * x < pow2 64)
+  = assert_norm (5 * pow2 26 < pow2 64)
 
 (** Twenty-one products of at most [2^54] fit under [2^59]; the solver needs
     telling that [2^59] is thirty-two times [2^54] to see it. *)
@@ -185,13 +219,14 @@ fn mul_limbs (d: A.array S64.t) (h: A.array S64.t) (r: A.array S64.t)
              (#vd: erased (Seq.seq S64.t))
              (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
 requires A.pts_to d vd ** A.pts_to h vh ** A.pts_to r vr **
-         pure (Seq.length vd == 5 /\ Seq.length vh == 5 /\ Seq.length vr == 5 /\
-               bounded vh 28 /\ bounded vr 26)
+         pure (Seq.length vd == 5 /\ Seq.length vh == 5 /\ Seq.length vr == 9 /\
+               bounded vh 28 /\ bounded vr 26 /\ has5 vr)
 ensures exists* (vd': Seq.seq S64.t).
   A.pts_to d vd' ** A.pts_to h vh ** A.pts_to r vr **
-  pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\
-        bounded vh 28 /\ bounded vr 26 /\
-        Seq.length vd' == 5 /\ bounded vd' 59 /\ is_product vd' vh vr)
+  pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\
+        bounded vh 28 /\ bounded vr 26 /\ has5 vr /\
+        Seq.length vd' == 5 /\ bounded vd' 59 /\
+        is_product (vv vd' 0) (vv vd' 1) (vv vd' 2) (vv vd' 3) (vv vd' 4) vh vr)
 {
   A.pts_to_len d;
   A.pts_to_len h;
@@ -207,6 +242,10 @@ ensures exists* (vd': Seq.seq S64.t).
   let r2 = A.(r.(2sz));
   let r3 = A.(r.(3sz));
   let r4 = A.(r.(4sz));
+  let q1 = A.(r.(5sz));
+  let q2 = A.(r.(6sz));
+  let q3 = A.(r.(7sz));
+  let q4 = A.(r.(8sz));
 
   let p00 = mul26 h0 r0;
   let p01 = mul26 h0 r1;
@@ -217,38 +256,38 @@ ensures exists* (vd': Seq.seq S64.t).
   let p11 = mul26 h1 r1;
   let p12 = mul26 h1 r2;
   let p13 = mul26 h1 r3;
-  let p14 = mul26 h1 r4;
+  let p14 = mul26_5 h1 q4;
   let p20 = mul26 h2 r0;
   let p21 = mul26 h2 r1;
   let p22 = mul26 h2 r2;
-  let p23 = mul26 h2 r3;
-  let p24 = mul26 h2 r4;
+  let p23 = mul26_5 h2 q3;
+  let p24 = mul26_5 h2 q4;
   let p30 = mul26 h3 r0;
   let p31 = mul26 h3 r1;
-  let p32 = mul26 h3 r2;
-  let p33 = mul26 h3 r3;
-  let p34 = mul26 h3 r4;
+  let p32 = mul26_5 h3 q2;
+  let p33 = mul26_5 h3 q3;
+  let p34 = mul26_5 h3 q4;
   let p40 = mul26 h4 r0;
-  let p41 = mul26 h4 r1;
-  let p42 = mul26 h4 r2;
-  let p43 = mul26 h4 r3;
-  let p44 = mul26 h4 r4;
+  let p41 = mul26_5 h4 q1;
+  let p42 = mul26_5 h4 q2;
+  let p43 = mul26_5 h4 q3;
+  let p44 = mul26_5 h4 q4;
 
-  five_fits (S64.v p14);
-  five_fits (S64.v p23);
-  five_fits (S64.v p32);
-  five_fits (S64.v p41);
-  five_fits (S64.v p24);
-  five_fits (S64.v p33);
-  five_fits (S64.v p42);
-  five_fits (S64.v p34);
-  five_fits (S64.v p43);
-  five_fits (S64.v p44);
+  times5_assoc (S64.v h1) (S64.v r4);
+  times5_assoc (S64.v h2) (S64.v r3);
+  times5_assoc (S64.v h3) (S64.v r2);
+  times5_assoc (S64.v h4) (S64.v r1);
+  times5_assoc (S64.v h2) (S64.v r4);
+  times5_assoc (S64.v h3) (S64.v r3);
+  times5_assoc (S64.v h4) (S64.v r2);
+  times5_assoc (S64.v h3) (S64.v r4);
+  times5_assoc (S64.v h4) (S64.v r3);
+  times5_assoc (S64.v h4) (S64.v r4);
 
-  let e0 = add5w p00 (times5 p14) (times5 p23) (times5 p32) (times5 p41);
-  let e1 = add5w p01 p10 (times5 p24) (times5 p33) (times5 p42);
-  let e2 = add5w p02 p11 p20 (times5 p34) (times5 p43);
-  let e3 = add5w p03 p12 p21 p30 (times5 p44);
+  let e0 = add5w p00 p14 p23 p32 p41;
+  let e1 = add5w p01 p10 p24 p33 p42;
+  let e2 = add5w p02 p11 p20 p34 p43;
+  let e3 = add5w p03 p12 p21 p30 p44;
   let e4 = add5w p04 p13 p22 p31 p40;
 
   A.((d.(0sz) <- e0));
@@ -258,10 +297,10 @@ ensures exists* (vd': Seq.seq S64.t).
   A.((d.(4sz) <- e4));
 }
 
-(** The six carries: five up, and one wrapping the top round to the bottom
-    multiplied by five, then one more up.  This computes exactly
-    [Spec.Poly1305.Field.chain] and claims nothing else; what that chain is
-    worth is [carry_chain_cong]'s business. *)
+(** The carry chain, cut in two so the halves run alongside each other: see
+    [Spec.Poly1305.Field.chain] for why.  This computes exactly that chain
+    and claims nothing else; what the chain is worth is
+    [carry_chain_cong]'s business. *)
 fn carry_chain_impl (h: A.array S64.t) (d: A.array S64.t)
                     (#vh: erased (Seq.seq S64.t)) (#vd: erased (Seq.seq S64.t))
 requires A.pts_to h vh ** A.pts_to d vd **
@@ -282,33 +321,32 @@ ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' ** A.pts_to d vd **
   chain_fits (S64.v e0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4);
   Math.pow2_lt_compat 64 60;
   Math.pow2_lt_compat 64 38;
+  Math.pow2_lt_compat 64 35;
 
-  let f1 = add2 e1 (hi26 e0);
-  let f2 = add2 e2 (hi26 f1);
-  let f3 = add2 e3 (hi26 f2);
-  let f4 = add2 e4 (hi26 f3);
-  div_bound (S64.v f4) 60 26;
-  Math.pow2_le_compat 54 34;
-  five_fits (S64.v (hi26 f4));
-  let g0 = add2 (lo26 e0) (times5 (hi26 f4));
+  let x1 = add2 e1 (hi26 e0);
+  let x4 = add2 e4 (hi26 e3);
+  five_fits (S64.v (hi26 x4));
+  let x01 = add2 (lo26 e0) (times5 (hi26 x4));
+  let x2 = add2 e2 (hi26 x1);
+  let x31 = add2 (lo26 e3) (hi26 x2);
 
-  A.((h.(0sz) <- lo26 g0));
-  A.((h.(1sz) <- add2 (lo26 f1) (hi26 g0)));
-  A.((h.(2sz) <- lo26 f2));
-  A.((h.(3sz) <- lo26 f3));
-  A.((h.(4sz) <- lo26 f4));
+  A.((h.(0sz) <- lo26 x01));
+  A.((h.(1sz) <- add2 (lo26 x1) (hi26 x01)));
+  A.((h.(2sz) <- lo26 x2));
+  A.((h.(3sz) <- lo26 x31));
+  A.((h.(4sz) <- add2 (lo26 x4) (hi26 x31)));
 }
 
 fn fmul (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
         (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
         (#vd: erased (Seq.seq S64.t))
 requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd **
-         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
-               bounded vh 28 /\ bounded vr 26)
+         pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\ Seq.length vd == 5 /\
+               bounded vh 28 /\ bounded vr 26 /\ has5 vr)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' **
-  pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\
-        bounded vh 28 /\ bounded vr 26 /\
+  pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\
+        bounded vh 28 /\ bounded vr 26 /\ has5 vr /\
         Seq.length vd' == 5 /\
         Seq.length vh' == 5 /\ fmul_post vh vr vh')
 {
@@ -316,7 +354,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   with vd'. assert (A.pts_to d vd');
   carry_chain_impl h d;
   with vh'. assert (A.pts_to h vh');
-  fmul_ok vh vr vd' vh';
+  fmul_ok vh vr vh' (vv vd' 0) (vv vd' 1) (vv vd' 2) (vv vd' 3) (vv vd' 4);
   (* A Pulse [fn] must not end with a lemma call: the function's [ensures] is
      checked at the last statement, and a trailing lemma's conclusion is not
      yet in scope there.  Any statement after it will do. *)

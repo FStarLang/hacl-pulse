@@ -445,6 +445,15 @@ let mont_split (vv v1 nc nN wnn: nat)
     modulo the [n]-limb modulus, leaving the result in [res].  [c] is
     clobbered.  [mu] must be the inverse computed by {!mont_mu}, and [c]
     must be below the modulus times [base^n]. *)
+(** [mul_row]'s contract is stated on a prefix of the multiplier, because
+    the squaring in {!Hacl.Bignum.Base} needs it that way.  Here the prefix
+    is the whole modulus, and saying so is a merge of [pre vn (SZ.v nn)]
+    with [num vn] that the solver will not make on its own inside the
+    reduction loop. *)
+let pre_len (v: Seq.seq S64.t) (k: nat)
+  : Lemma (requires k == Seq.length v) (ensures pre v k == num v)
+  = pre_full v
+
 fn reduction (res: A.array S64.t) (c: A.array S64.t) (nmod: A.array S64.t)
              (nn: SZ.t) (mu: S64.t)
              (#vres: erased (Seq.seq S64.t)) (#vc: erased (Seq.seq S64.t))
@@ -470,6 +479,7 @@ ensures exists* (v: Seq.seq S64.t) (v2: Seq.seq S64.t).
   pre_zero vn;
   pre_snoc vn 0;
   pre_mod vn 1;
+  pre_len vn (SZ.v nn);
   eval_bnd (vals vn);
   let mut i = 0sz;
   let mut ov = S64.zero;
@@ -620,6 +630,41 @@ ensures exists* (v: Seq.seq S64.t) (vt: Seq.seq S64.t).
   mul tmp a b nn;
   eval_bnd (vals vb);
   mul_bnd (num va) (num vb) (num vn) (wt (SZ.v nn));
+  reduction res tmp nmod nn mu;
+  ()
+}
+
+(** [mont_sqr res a] is [a * a / R] modulo the modulus: {!mont_mul} with
+    both operands the same, but going through {!Base.sqr} rather than
+    {!Base.mul}.  Three quarters of the multiplications in a windowed
+    exponentiation are of this shape, and the triangle costs a little over
+    half of the full [n^2], so this is where the exponentiation time goes. *)
+fn mont_sqr (res: A.array S64.t) (a: A.array S64.t) (tmp: A.array S64.t)
+            (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
+            (#vres #vtmp: erased (Seq.seq S64.t)) (#pa #pn: perm)
+            (#va: erased (Seq.seq S64.t))
+            (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to a #pa va **
+         A.pts_to tmp vtmp ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length va == SZ.v nn /\
+        Seq.length vtmp == SZ.v nn + SZ.v nn /\
+        Seq.length vn == SZ.v nn /\ 0 < SZ.v nn /\
+        SZ.fits (SZ.v nn + SZ.v nn) /\ num va < num vn /\
+        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
+ensures exists* (v: Seq.seq S64.t) (vt: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to a #pa va **
+  A.pts_to tmp vt ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ Seq.length vt == SZ.v nn + SZ.v nn /\
+        num v < num vn /\
+        (num v * wt (SZ.v nn)) % num vn == (num va * num va) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  A.pts_to_len tmp;
+  A.pts_to_len nmod;
+  sqr tmp a nn;
+  eval_bnd (vals va);
+  mul_bnd (num va) (num va) (num vn) (wt (SZ.v nn));
   reduction res tmp nmod nn mu;
   ()
 }
@@ -883,31 +928,14 @@ let mont_dbl (a e rr nN: nat)
     Math.lemma_mod_mul_distr_r 2 (pw 2 e * rr) nN;
     Math.paren_mul_right 2 (pw 2 e) rr
 
-(** The odd rung's whole arithmetic obligation, in one place: the ladder's
-    join is a small goal, and proving it in an empty context keeps it out of
-    the solver state the Montgomery multiplications leave behind. *)
-let ladder_odd (a d e rr nN: nat)
-  : Lemma (requires 0 < nN /\ a == (pw 2 e * rr) % nN /\ d == (a + a) % nN)
-          (ensures d < nN /\ d == (pw 2 (e + 1) * rr) % nN)
-  = mont_dbl a e rr nN
-
-(** The two implications a one-bit test gives, proved away from the ladder's
-    context: the step is trivial, but the solver will not get to it once the
-    Montgomery facts are in scope. *)
-let bit_cases (b: SZ.t) (c: bool)
-  : Lemma (requires SZ.v b < 2 /\ c == (SZ.v b = 0))
-          (ensures (c == true ==> SZ.v b == 0) /\
-                   (c == false ==> SZ.v b == 1))
-  = ()
-
-(** The even rung has nothing to do, but the exponent is still written
-    [e + b] with [b] the (zero) bit, so the equality has to be transported;
-    like {!ladder_odd}, it is proved here so the ladder's join sees a fact
-    rather than a goal. *)
-let ladder_even (a e rr nN b: nat)
-  : Lemma (requires 0 < nN /\ b == 0 /\ a == (pw 2 e * rr) % nN)
-          (ensures a < nN /\ a == (pw 2 (e + b) * rr) % nN)
-  = ()
+(** The exponent a rung reaches, transported to an equal one.  The two
+    branches of {!ladder_step} arrive at [2 e + SZ.v bit] with the bit
+    known to be zero or one, and the contract asks for [2 e] or [2 e + 1].
+    Those are the same number, but merging them underneath [pw] is a
+    propagation from the arithmetic theory into congruence closure that the
+    solver, in a body that carries five arrays, will not make: left to
+    itself it searches for well over an hour. *)
+let pw_ext (a x y: nat) : Lemma (requires x == y) (ensures pw a x == pw a y) = ()
 
 (** One step down a descending power of two, at the level of the exponent:
     the bits of [n] above [q] are twice those above [q + q], plus one. *)
@@ -1014,6 +1042,42 @@ ensures exists* (v: Seq.seq S64.t).
    solver too slow for the ladder's own, much smaller, arithmetic. *)
 #push-options "--z3refresh"
 
+(** The second half of a rung: add the exponent's bit, by doubling the
+    accumulator modulo the modulus or not.
+
+    It is a function of its own, and one that mentions only the two arrays
+    it touches, for the reason {!pw_ext} gives: proved in place, at the end
+    of a body that still carries five arrays and the whole squaring half,
+    the merge of [2 e + SZ.v bit] with [2 e] runs for over an hour.  With
+    the context cut down to this it is seconds. *)
+inline_for_extraction
+fn ladder_bit (res: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t)
+              (e2: erased nat) (bit: SZ.t)
+              (#vres: erased (Seq.seq S64.t)) (#pn: perm)
+              (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
+requires A.pts_to res vres ** A.pts_to nmod #pn vn **
+  pure (Seq.length vres == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        0 < SZ.v nn /\ SZ.v bit < 2 /\ num vres < num vn /\
+        num vres == (pw 2 (reveal e2) * wt (SZ.v nn)) % num vn)
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to nmod #pn vn **
+  pure (Seq.length v == SZ.v nn /\ num v < num vn /\
+        num v == (pw 2 (reveal e2 + SZ.v bit) * wt (SZ.v nn)) % num vn)
+{
+  A.pts_to_len res;
+  A.pts_to_len nmod;
+  if (SZ.eq bit 1sz) {
+    with vhalf. assert (A.pts_to res vhalf);
+    double_mod res nmod nn;
+    mont_dbl (num vhalf) (reveal e2) (wt (SZ.v nn)) (num vn);
+    pw_ext 2 (reveal e2 + 1) (reveal e2 + SZ.v bit);
+    ()
+  } else {
+    pw_ext 2 (reveal e2) (reveal e2 + SZ.v bit);
+    ()
+  }
+}
+
 (** One rung: the exponent doubles, and then gains [bit].  Squaring in
     Montgomery form is what doubles it, and a modular doubling is what adds
     the one; the contract mentions no division, so the index arithmetic of
@@ -1053,33 +1117,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
               (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
   pw_dbl 2 (reveal e);
   copy res t2 nn;
-  with vhalf. assert (A.pts_to res vhalf);
-  assert (pure (Seq.length vhalf == SZ.v nn /\ num vhalf < num vn /\
-                num vhalf == (pw 2 (2 * reveal e) * wt (SZ.v nn)) % num vn));
-  (* Name the test rather than leaving an unreduced [match] on a
-     machine-integer comparison at the join, and keep both branches free of
-     ghost binders so the join needs no [match] typing. *)
-  with w1. assert (A.pts_to t1 w1);
-  with w2. assert (A.pts_to t2 w2);
-  with w3. assert (A.pts_to wide w3);
-  let even = SZ.eq bit 0sz;
-  assert (pure (even == (SZ.v bit = 0)));
-  bit_cases bit even;
-  if even
-  ensures exists* v.
-    A.pts_to res v ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
-    A.pts_to wide w3 ** A.pts_to nmod #pn vn **
-    pure (Seq.length v == SZ.v nn /\ num v < num vn /\
-          num v == (pw 2 (2 * reveal e + SZ.v bit) * wt (SZ.v nn)) % num vn)
-  {
-    ladder_even (num vhalf) (2 * reveal e) (wt (SZ.v nn)) (num vn) (SZ.v bit);
-    ()
-  } else {
-    double_mod res nmod nn;
-    with vfin. assert (A.pts_to res vfin);
-    ladder_odd (num vhalf) (num vfin) (2 * reveal e) (wt (SZ.v nn)) (num vn);
-    ()
-  };
+  ladder_bit res nmod nn (hide (2 * reveal e)) bit;
   ()
 }
 

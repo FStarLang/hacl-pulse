@@ -32,13 +32,13 @@
     windowed algorithm needs associativity of [point_add], and nothing else
     of comparable depth.
 
-    This module states what is needed, and nothing more.  It has no
-    implementation: it is a specification of work, not an assumption.  The
-    library assumes nothing mathematical anywhere -- [Hacl.Vec128] is the
-    only [assume val] in the tree and every one of its declarations is
-    realized by a C intrinsic -- and adding an admitted group law would
-    change that, so the windowed implementations wait on these proofs rather
-    than on a decision to skip them.
+    This module states what is needed, and nothing more.  Its
+    implementation, [Spec.Ed25519.Group.fst], proves every statement with
+    no [admit] and no [assume], as do those of {!Spec.P256.Group} and
+    {!Spec.K256.Group}.  The library assumes nothing mathematical anywhere
+    -- [Hacl.Vec128] is the only [assume val] in the tree and every one of
+    its declarations is realized by a C intrinsic -- and the group laws do
+    not change that.
 
     It is worth knowing that HACL\* does not prove them.  In
     [specs/lemmas/Spec.Ed25519.Lemmas.fst] the corresponding statements read
@@ -50,8 +50,8 @@
     ]}
 
     so HACL\*'s windowed Ed25519, its windowed P-256 and its GLV secp256k1
-    all rest on the same four admitted facts.  Discharging them here would
-    be new, not a catch-up.
+    all rest on the same four admitted facts.  Discharging them here is
+    new, not a catch-up.
 
     {2 What is cheap and what is not}
 
@@ -66,21 +66,29 @@
 
     Associativity is the real content.  The standard route -- Bernstein and
     Lange's, and the one Fiat-Crypto follows -- is to clear denominators and
-    reduce the resulting polynomial identity modulo the two curve equations.
-    That last step is ideal membership: the cofactors are large and must
-    come from a Groebner basis, which F\* cannot compute.  The practical
-    shape of the proof is therefore
+    reduce the resulting polynomial identity modulo the curve equations.
+    That last step is ideal membership, and the proof takes it literally:
 
-    - compute the cofactors offline, in a computer algebra system;
-    - state the resulting identity as a polynomial equation over the field
-      with those cofactors written out;
-    - close it with [CanonCommSemiring], which proves ring identities and
-      does not need to search.
+    - every point is [Z] times a canonical point [(u, v, 1, uv)], and the
+      formulas are homogeneous, so each statement reduces to canonical
+      points;
+    - there, the affine equations become rewrite rules
+      [u^2 v^2 -> (v^2 - u^2 - 1)/d], whose leading monomials are coprime,
+      so they form a Groebner basis and reducing by them decides ideal
+      membership;
+    - a small verified polynomial arithmetic ([Spec.Group.Poly]), run by
+      the normaliser, performs the reduction and checks that the result is
+      zero ([Spec.Ed25519.GroupChecks], [Spec.Ed25519.GroupAssoc{1,2}]).
+
+    Completeness uses non-squareness of [d] (Euler's criterion, computed by
+    the normaliser) through a certificate found offline: if
+    [d u1 v1 u2 v2 = +-1] then [d w^2 = v^2] for explicit [w] and [v], and
+    [w] cannot vanish.
 
     {2 What is built on top of it}
 
-    These are consequences, not axioms, and they are not stated here: once
-    the statements below are proved, [Spec.Ed25519.point_mul] can be shown
+    These are consequences, not axioms, and they are not stated here: with
+    the statements below proved, [Spec.Ed25519.point_mul] can be shown
     equal to repeated addition, repeated addition shown to satisfy
     [smul (a + b) p == add (smul a p) (smul b p)], and the windowed
     algorithm proved against that, once, generically, for every curve in the
@@ -219,3 +227,15 @@ val point_double_is_add (p: ext_point)
 val point_compress_congr (p q: ext_point)
   : Lemma (requires on_curve p /\ on_curve q /\ point_equal p q)
           (ensures point_compress p == point_compress q)
+
+(** {2 A decompressed point is on the curve}
+
+    The windowed scalar multiplication needs [on_curve] of its input, and
+    in signature verification that input is the public key, which arrives
+    as thirty-two bytes and is decompressed.  [point_decompress] recovers
+    [x] as a square root of [(y^2 - 1)/(d y^2 + 1)], which is precisely the
+    affine curve equation solved for [x], so the recovered point is on the
+    curve -- but [Spec.Ed25519] never says so, because the double-and-add
+    implementation it was written for never needed it.  It does now. *)
+val decompress_on_curve (s: FStar.Seq.lseq Hacl.Secret.UInt8.t 32) (p: ext_point)
+  : Lemma (requires point_decompress s == Some p) (ensures on_curve p)

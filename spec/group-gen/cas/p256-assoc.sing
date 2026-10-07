@@ -1,0 +1,29 @@
+ring r = 0, (x1,y1,x2,y2,x3,y3,b), dp;
+proc padd(poly X1, poly Y1, poly Z1, poly X2, poly Y2, poly Z2)
+{
+  poly t0 = X1*X2; poly t1 = Y1*Y2; poly t2 = Z1*Z2;
+  poly t3 = X1+Y1; poly t4 = X2+Y2; t3 = t3*t4; t4 = t0+t1; t3 = t3-t4;
+  t4 = Y1+Z1; poly t5 = Y2+Z2; t4 = t4*t5; t5 = t1+t2; t4 = t4-t5;
+  poly X3 = X1+Z1; poly Y3 = X2+Z2; X3 = X3*Y3; Y3 = t0+t2; Y3 = X3-Y3;
+  poly Z3 = b*t2; X3 = Y3-Z3; Z3 = X3+X3; X3 = X3+Z3; Z3 = t1-X3; X3 = t1+X3;
+  Y3 = b*Y3; t1 = t2+t2; t2 = t1+t2; Y3 = Y3-t2; Y3 = Y3-t0; t1 = Y3+Y3; Y3 = t1+Y3;
+  t1 = t0+t0; t0 = t1+t0; t0 = t0-t2; t1 = t4*Y3; t2 = t0*Y3; Y3 = X3*Z3; Y3 = Y3+t2;
+  X3 = t3*X3; X3 = X3-t1; Z3 = t4*Z3; t1 = t3*t0; Z3 = Z3+t1;
+  list L = X3,Y3,Z3; return(L);
+}
+ideal I = y1^2-x1^3+3*x1-b, y2^2-x2^3+3*x2-b, y3^2-x3^3+3*x3-b;
+I = std(I);
+list S12 = padd(x1,y1,1,x2,y2,1);
+list L = padd(S12[1],S12[2],S12[3],x3,y3,1);
+list S23 = padd(x2,y2,1,x3,y3,1);
+list R = padd(x1,y1,1,S23[1],S23[2],S23[3]);
+"sizes L:"; size(L[1]); size(L[2]); size(L[3]);
+"reduced L:"; size(reduce(L[1],I)); size(reduce(L[2],I)); size(reduce(L[3],I));
+poly c1 = reduce(L[1]*R[3]-R[1]*L[3], I);
+"c1"; size(c1);
+poly c2 = reduce(L[1]*R[2]-R[1]*L[2], I);
+"c2"; size(c2);
+poly c3 = reduce(L[2]*R[3]-R[2]*L[3], I);
+"c3"; size(c3);
+"raw cross"; size(L[1]*R[3]-R[1]*L[3]);
+quit;

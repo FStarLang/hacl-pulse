@@ -464,6 +464,21 @@ let prod_bound (a b: nat)
     Math.lemma_mult_le_right b a (pow2 28 - 1);
     Math.lemma_mult_le_left (pow2 28 - 1) b (pow2 26 - 1)
 
+(** The same bound for a limb of [r] already multiplied by five.  Keeping the
+    five on [r], where it can be applied once when the key is loaded, rather
+    than on each of the ten products that need it, is worth ten
+    multiplications a block; the arithmetic is unchanged because
+    [a * (5 * b)] is [5 * (a * b)]. *)
+let prod_bound5 (a b: nat)
+  : Lemma (requires a < pow2 28 /\ b < 5 * pow2 26) (ensures a * b < 5 * pow2 54)
+  = Math.pow2_plus 28 26;
+    Math.lemma_mult_le_right b a (pow2 28 - 1);
+    Math.lemma_mult_le_left (pow2 28 - 1) b (5 * pow2 26 - 1)
+
+let times5_assoc (a b: nat) : Lemma (a * (5 * b) == 5 * (a * b))
+  = Math.paren_mul_right a 5 b;
+    Math.swap_mul a 5
+
 unfold let bounded5 (a0 a1 a2 a3 a4: nat) (n: nat) : prop =
   a0 < pow2 n /\ a1 < pow2 n /\ a2 < pow2 n /\ a3 < pow2 n /\ a4 < pow2 n
 
@@ -502,35 +517,58 @@ let mul_no_overflow (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4: nat)
     where its inputs came from, [carry_chain_bounds] knows nothing about the
     prime, and only [mul_reduce_ok] mentions both. *)
 
-(** The carry chain, named once so the three lemmas agree on it. *)
+(** The carry chain, named once so the three lemmas agree on it.
+
+    Carrying straight up -- limb 0 into 1, 1 into 2, and so on round the top
+    and back -- is six steps, and every one of them waits on the one before.
+    Six shift-and-adds in series is the longest dependency in the whole of
+    Poly1305, and the next block's multiplication cannot start until it has
+    finished.
+
+    So the chain is cut in two and the halves run alongside each other: one
+    starts at limb 0 and one at limb 3, each carries two places, and then
+    the wrap from the top rejoins them.  The result is the same five limbs
+    -- the lemmas below prove it -- but the longest path through it is four
+    steps, not six, and at each step there are two independent shifts for
+    the machine to issue together. *)
 let chain (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat) : prop =
-  let f1 = e1 + e0 / radix in
-  let f2 = e2 + f1 / radix in
-  let f3 = e3 + f2 / radix in
-  let f4 = e4 + f3 / radix in
-  let g0 = e0 % radix + 5 * (f4 / radix) in
-  t0 == g0 % radix /\
-  t1 == f1 % radix + g0 / radix /\
-  t2 == f2 % radix /\
-  t3 == f3 % radix /\
-  t4 == f4 % radix
+  let x0 = e0 % radix in           (* the two chains start here ... *)
+  let x1 = e1 + e0 / radix in
+  let x3 = e3 % radix in
+  let x4 = e4 + e3 / radix in
+  let x01 = x0 + 5 * (x4 / radix) in   (* ... the top wraps round to limb 0 *)
+  let x41 = x4 % radix in
+  let x11 = x1 % radix in
+  let x2 = e2 + x1 / radix in
+  let x31 = x3 + x2 / radix in
+  t0 == x01 % radix /\
+  t1 == x11 + x01 / radix /\
+  t2 == x2 % radix /\
+  t3 == x31 % radix /\
+  t4 == x41 + x31 / radix
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
 let carry_chain_cong (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
   : Lemma (requires chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
           (ensures as_nat5 t0 t1 t2 t3 t4 % prime == as_nat5 e0 e1 e2 e3 e4 % prime)
-  = let f1 = e1 + e0 / radix in
-    let f2 = e2 + f1 / radix in
-    let f3 = e3 + f2 / radix in
-    let f4 = e4 + f3 / radix in
-    let g0 = e0 % radix + 5 * (f4 / radix) in
+  = let x0 = e0 % radix in
+    let x1 = e1 + e0 / radix in
+    let x3 = e3 % radix in
+    let x4 = e4 + e3 / radix in
+    let x01 = x0 + 5 * (x4 / radix) in
+    let x41 = x4 % radix in
+    let x11 = x1 % radix in
+    let x2 = e2 + x1 / radix in
+    let x02 = x01 % radix in
+    let x12 = x11 + x01 / radix in
     carry0 e0 e1 e2 e3 e4;
-    carry1 (e0 % radix) f1 e2 e3 e4;
-    carry2 (e0 % radix) (f1 % radix) f2 e3 e4;
-    carry3 (e0 % radix) (f1 % radix) (f2 % radix) f3 e4;
-    carry_top (e0 % radix) (f1 % radix) (f2 % radix) (f3 % radix) f4;
-    carry0 g0 (f1 % radix) (f2 % radix) (f3 % radix) (f4 % radix)
+    carry3 x0 x1 e2 e3 e4;
+    carry_top x0 x1 e2 x3 x4;
+    carry1 x01 x1 e2 x3 x41;
+    carry0 x01 x11 x2 x3 x41;
+    carry2 x02 x12 x2 x3 x41;
+    carry3 x02 x12 (x2 % radix) (x3 + x2 / radix) x41
 
 #pop-options
 
@@ -549,25 +587,28 @@ let add_bound (a b: nat) (n m: nat)
 let carry_chain_bounds (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
   : Lemma (requires bounded5 e0 e1 e2 e3 e4 59 /\ chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
           (ensures bounded5 t0 t1 t2 t3 t4 27)
-  = let f1 = e1 + e0 / radix in
-    let f2 = e2 + f1 / radix in
-    let f3 = e3 + f2 / radix in
-    let f4 = e4 + f3 / radix in
-    let g0 = e0 % radix + 5 * (f4 / radix) in
+  = let x1 = e1 + e0 / radix in
+    let x3 = e3 % radix in
+    let x4 = e4 + e3 / radix in
+    let x01 = e0 % radix + 5 * (x4 / radix) in
+    let x2 = e2 + x1 / radix in
+    let x31 = x3 + x2 / radix in
     div_bound e0 59 26;
+    div_bound e3 59 26;
     add_bound e1 (e0 / radix) 59 33;
-    div_bound f1 60 26;
-    add_bound e2 (f1 / radix) 59 34;
-    div_bound f2 60 26;
-    add_bound e3 (f2 / radix) 59 34;
-    div_bound f3 60 26;
-    add_bound e4 (f3 / radix) 59 34;
-    div_bound f4 60 26;
+    add_bound e4 (e3 / radix) 59 33;
+    div_bound x4 60 26;
     assert_norm (5 * pow2 34 < pow2 37);
-    add_bound (5 * (f4 / radix)) (e0 % radix) 37 26;
-    div_bound g0 38 26;
+    add_bound (5 * (x4 / radix)) (e0 % radix) 37 26;
+    div_bound x1 60 26;
+    add_bound e2 (x1 / radix) 59 34;
+    div_bound x2 60 26;
+    add_bound (x2 / radix) x3 34 26;
+    div_bound x31 35 26;
+    div_bound x01 38 26;
     Math.pow2_lt_compat 27 26;
     Math.pow2_lt_compat 26 12;
+    Math.pow2_lt_compat 26 9;
     Math.pow2_double_sum 26
 
 #pop-options
@@ -606,27 +647,29 @@ let mul_reduce_ok (h0 h1 h2 h3 h4 r0 r1 r2 r3 r4 t0 t1 t2 t3 t4: nat)
 
 let chain_fits (e0 e1 e2 e3 e4: nat)
   : Lemma (requires bounded5 e0 e1 e2 e3 e4 59)
-          (ensures (let f1 = e1 + e0 / radix in
-                    let f2 = e2 + f1 / radix in
-                    let f3 = e3 + f2 / radix in
-                    let f4 = e4 + f3 / radix in
-                    e0 % radix + 5 * (f4 / radix) < pow2 38 /\
-                    f1 < pow2 60 /\ f2 < pow2 60 /\ f3 < pow2 60 /\ f4 < pow2 60))
-  = let f1 = e1 + e0 / radix in
-    let f2 = e2 + f1 / radix in
-    let f3 = e3 + f2 / radix in
-    let f4 = e4 + f3 / radix in
+          (ensures (let x1 = e1 + e0 / radix in
+                    let x4 = e4 + e3 / radix in
+                    let x2 = e2 + x1 / radix in
+                    let x31 = e3 % radix + x2 / radix in
+                    x1 < pow2 60 /\ x4 < pow2 60 /\ x2 < pow2 60 /\
+                    x4 / radix < pow2 54 /\
+                    e0 % radix + 5 * (x4 / radix) < pow2 38 /\
+                    x31 < pow2 35))
+  = let x1 = e1 + e0 / radix in
+    let x4 = e4 + e3 / radix in
+    let x2 = e2 + x1 / radix in
     div_bound e0 59 26;
+    div_bound e3 59 26;
     add_bound e1 (e0 / radix) 59 33;
-    div_bound f1 60 26;
-    add_bound e2 (f1 / radix) 59 34;
-    div_bound f2 60 26;
-    add_bound e3 (f2 / radix) 59 34;
-    div_bound f3 60 26;
-    add_bound e4 (f3 / radix) 59 34;
-    div_bound f4 60 26;
+    add_bound e4 (e3 / radix) 59 33;
+    div_bound x4 60 26;
+    Math.pow2_lt_compat 54 34;
     assert_norm (5 * pow2 34 < pow2 37);
-    add_bound (5 * (f4 / radix)) (e0 % radix) 37 26
+    add_bound (5 * (x4 / radix)) (e0 % radix) 37 26;
+    div_bound x1 60 26;
+    add_bound e2 (x1 / radix) 59 34;
+    div_bound x2 60 26;
+    add_bound (x2 / radix) (e3 % radix) 34 26
 
 #pop-options
 
@@ -716,10 +759,17 @@ let f1 = e1 + e0 / radix in
     let f2 = e2 + f1 / radix in
     let f3 = e3 + f2 / radix in
     let f4 = e4 + f3 / radix in
+    (* Stated one step at a time: the four congruences compose, but asking
+       the solver to compose them itself is asking it to chase four
+       rewrites through a context full of divisions, and it will not. *)
     carry0 e0 e1 e2 e3 e4;
+    assert (as_nat5 t0 f1 e2 e3 e4 == as_nat5 e0 e1 e2 e3 e4);
     carry1 t0 f1 e2 e3 e4;
+    assert (as_nat5 t0 t1 f2 e3 e4 == as_nat5 e0 e1 e2 e3 e4);
     carry2 t0 t1 f2 e3 e4;
+    assert (as_nat5 t0 t1 t2 f3 e4 == as_nat5 e0 e1 e2 e3 e4);
     carry3 t0 t1 t2 f3 e4;
+    assert (as_nat5 t0 t1 t2 t3 f4 == as_nat5 e0 e1 e2 e3 e4);
     (* the top limb is the only one left uncarried; splitting it is where the
        [2^130] comes from. *)
     Math.euclidean_division_definition f4 radix;
@@ -855,5 +905,29 @@ let add128 (lo hi slo shi: nat)
     Math.distributivity_add_right (pow2 64) hi (shi + c);
     Math.lemma_mod_plus (tlo + pow2 64 * thi) (hh / pow2 64) (pow2 128);
     Math.small_mod (tlo + pow2 64 * thi) (pow2 128)
+
+(** The whole of the tag's arithmetic in one pure step.  Left inside the
+    Pulse function the solver has to put [tag_words], [add128] and the
+    distribution of the modulus together in a query that already carries a
+    separation-logic context, and it times out. *)
+let tag_combine (a0 a1 a2 a3 a4 lo hi slo shi mask carry tlo thi s: nat)
+  : Lemma (requires bounded5 a0 a1 a2 a3 a4 26 /\
+                    lo == a0 + a1 * pow2 26 + (a2 % pow2 12) * pow2 52 /\
+                    hi == a2 / pow2 12 + a3 * pow2 14 + (a4 % pow2 24) * pow2 40 /\
+                    slo < pow2 64 /\ shi < pow2 64 /\
+                    s == slo + pow2 64 * shi /\
+                    tlo == (lo + slo) % pow2 64 /\
+                    (tlo < lo ==> mask == pow2 64 - 1) /\
+                    (tlo >= lo ==> mask == 0) /\
+                    carry == mask % 2 /\
+                    thi == ((hi + shi) % pow2 64 + carry) % pow2 64)
+          (ensures tlo + pow2 64 * thi ==
+                     (as_nat5 a0 a1 a2 a3 a4 + s) % pow2 128)
+  = tag_words a0 a1 a2 a3 a4;
+    wrap_test lo slo;
+    assert_norm ((pow2 64 - 1) % 2 == 1);
+    Math.lemma_mod_add_distr carry (hi + shi) (pow2 64);
+    add128 lo hi slo shi;
+    Math.lemma_mod_add_distr s (as_nat5 a0 a1 a2 a3 a4) (pow2 128)
 
 #pop-options

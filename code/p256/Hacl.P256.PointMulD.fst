@@ -37,6 +37,29 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module GR = Spec.P256.Group
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** Each half is only equivalent to the specification's multiple, so the
+    sum is only equivalent to the specification's sum; that is what
+    {!Spec.P256.Group.point_add_congr} says.  Stated as a lemma so that the
+    Pulse function's own query never sees [peq] unfolded. *)
+let sum_ok (a b: P.proj_point) (u1 u2: nat) (q: P.proj_point)
+  : Lemma (requires GR.on_curve a /\ GR.on_curve b /\
+                    GR.on_curve (P.point_mul_g u1) /\
+                    GR.on_curve (P.point_mul u2 q) /\
+                    GR.peq a (P.point_mul_g u1) /\
+                    GR.peq b (P.point_mul u2 q))
+          (ensures GR.on_curve (P.point_add a b) /\
+                   GR.on_curve (P.point_mul_double_g u1 u2 q) /\
+                   GR.peq (P.point_add a b)
+                          (P.point_mul_double_g u1 u2 q))
+  = GR.point_add_congr a (P.point_mul_g u1) b (P.point_mul u2 q);
+    GR.point_add_on_curve a b;
+    GR.point_add_on_curve (P.point_mul_g u1) (P.point_mul u2 q)
+
+#pop-options
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -54,24 +77,30 @@ requires
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
         Seq.length v1 == nl /\ bnd (vals v1) base /\
-        Seq.length v2 == nl /\ bnd (vals v2) base /\ pt_ok vqx vqy vqz)
+        Seq.length v2 == nl /\ bnd (vals v2) base /\
+        pt_ok vqx vqy vqz /\ GR.on_curve (pt vqx vqy vqz))
 ensures exists* (wx wy wz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to u1 #p1 v1 ** A.pts_to u2 #p2 v2 **
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
-  pure (pt_ok wx wy wz /\
-        pt wx wy wz ==
-          P.point_mul_double_g (eval (vals v1)) (eval (vals v2))
-                               (pt vqx vqy vqz))
+  pure (pt_ok wx wy wz /\ GR.on_curve (pt wx wy wz) /\
+        GR.on_curve (P.point_mul_double_g (eval (vals v1))
+                       (eval (vals v2)) (pt vqx vqy vqz)) /\
+        GR.peq (pt wx wy wz)
+               (P.point_mul_double_g (eval (vals v1))
+                  (eval (vals v2)) (pt vqx vqy vqz)))
 {
   let z = S64.zero;
   let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   A.pts_to_len a3; A.pts_to_len a4; A.pts_to_len a5;
 
   point_mul_g a0 a1 a2 u1;
+  with g0 g1 g2. assert (A.pts_to a0 g0 ** A.pts_to a1 g1 ** A.pts_to a2 g2);
   point_mul a3 a4 a5 qx qy qz u2;
+  with h0 h1 h2. assert (A.pts_to a3 h0 ** A.pts_to a4 h1 ** A.pts_to a5 h2);
   point_add ox oy oz a0 a1 a2 a3 a4 a5;
-
+  sum_ok (pt g0 g1 g2) (pt h0 h1 h2) (eval (vals v1))
+         (eval (vals v2)) (pt vqx vqy vqz);
   ()
 }
 

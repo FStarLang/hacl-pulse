@@ -96,29 +96,6 @@ ensures exists* (va': Seq.seq S64.t).
   assert (pure (eval (vals v') == U64.v x /\ bnd (vals v') base));
 }
 
-(** {2 Squaring}
-
-    [fmul] wants a destination disjoint from its arguments, so a square is a
-    copy and a multiplication. *)
-
-fn fsqr (out a c: A.array S64.t) (t: A.array S128.t)
-        (#vout: erased (Seq.seq S64.t)) (#vc: erased (Seq.seq S64.t))
-        (#vt: erased (Seq.seq S128.t))
-        (#pa: perm) (#va: erased (Seq.seq S64.t))
-requires A.pts_to out vout ** A.pts_to c vc ** A.pts_to t vt ** A.pts_to a #pa va **
-  pure (Seq.length vout == nl /\ Seq.length vc == nl /\ Seq.length vt == nw /\
-        felem (vals va))
-ensures exists* (vout': Seq.seq S64.t) (vc': Seq.seq S64.t) (vt': Seq.seq S128.t).
-  A.pts_to out vout' ** A.pts_to c vc' ** A.pts_to t vt' ** A.pts_to a #pa va **
-  pure (Seq.length vc' == nl /\ Seq.length vt' == nw /\ felem (vals vout') /\
-        fev (vals vout') == C.fmul (fev (vals va)) (fev (vals va)))
-{
-  copy c a;
-  with u. assert (A.pts_to c u);
-  assert (pure (vals u == vals va));
-  fmul out a c;
-}
-
 (** {2 One ladder step}
 
     RFC 7748 section 5's formulas, with the seven temporaries laid out so
@@ -130,39 +107,39 @@ ensures exists* (vout': Seq.seq S64.t) (vc': Seq.seq S64.t) (vt': Seq.seq S128.t
 
 #push-options "--z3rlimit 200"
 
-fn add_and_double (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6: A.array S64.t)
+fn add_and_double (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
                    (t31: A.array S128.t) (x1: A.array S64.t)
                   (#vx2: erased (Seq.seq S64.t)) (#vz2: erased (Seq.seq S64.t))
                   (#vx3: erased (Seq.seq S64.t)) (#vz3: erased (Seq.seq S64.t))
                   (#v0: erased (Seq.seq S64.t)) (#v1: erased (Seq.seq S64.t))
                   (#v2: erased (Seq.seq S64.t)) (#v3: erased (Seq.seq S64.t))
                   (#v4: erased (Seq.seq S64.t)) (#v5: erased (Seq.seq S64.t))
-                  (#v6: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
+                  (#vt: erased (Seq.seq S128.t))
                   (#p1: perm) (#vx1: erased (Seq.seq S64.t))
 requires
   A.pts_to x2 vx2 ** A.pts_to z2 vz2 ** A.pts_to x3 vx3 ** A.pts_to z3 vz3 **
   A.pts_to t0 v0 ** A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to t3 v3 **
-  A.pts_to t4 v4 ** A.pts_to t5 v5 ** A.pts_to t6 v6 ** A.pts_to t31 vt **
+  A.pts_to t4 v4 ** A.pts_to t5 v5 ** A.pts_to t31 vt **
   A.pts_to x1 #p1 vx1 **
   pure (felem (vals vx2) /\ felem (vals vz2) /\ felem (vals vx3) /\
         felem (vals vz3) /\ felem (vals vx1) /\
         Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
         Seq.length v3 == nl /\ Seq.length v4 == nl /\ Seq.length v5 == nl /\
-        Seq.length v6 == nl /\ Seq.length vt == nw)
+        Seq.length vt == nw)
 ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
                 (wx3: Seq.seq S64.t) (wz3: Seq.seq S64.t)
                 (w0: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t)
                 (w3: Seq.seq S64.t) (w4: Seq.seq S64.t) (w5: Seq.seq S64.t)
-                (w6: Seq.seq S64.t) (wt: Seq.seq S128.t).
+                (wt: Seq.seq S128.t).
   A.pts_to x2 wx2 ** A.pts_to z2 wz2 ** A.pts_to x3 wx3 ** A.pts_to z3 wz3 **
   A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-  A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t6 w6 ** A.pts_to t31 wt **
+  A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t31 wt **
   A.pts_to x1 #p1 vx1 **
   pure (felem (vals wx2) /\ felem (vals wz2) /\ felem (vals wx3) /\
         felem (vals wz3) /\
         Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
         Seq.length w3 == nl /\ Seq.length w4 == nl /\ Seq.length w5 == nl /\
-        Seq.length w6 == nl /\ Seq.length wt == nw /\
+        Seq.length wt == nw /\
         ((fev (vals wx2), fev (vals wz2)), (fev (vals wx3), fev (vals wz3))) ==
           C.add_and_double (fev (vals vx1))
             (fev (vals vx2), fev (vals vz2))
@@ -174,12 +151,12 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
   fsub t3 x3 z3;                          (* d  *)
   fmul t4 t3 t0;                      (* da *)
   fmul t5 t2 t1;                      (* cb *)
-  fsqr t2 t0 t6 t31;                      (* aa *)
-  fsqr t3 t1 t6 t31;                      (* bb *)
+  fsqr t2 t0;                             (* aa *)
+  fsqr t3 t1;                             (* bb *)
   fadd t0 t4 t5;                          (* da + cb *)
   fsub t1 t4 t5;                          (* da - cb *)
-  fsqr x3 t0 t6 t31;                      (* x3' *)
-  fsqr t4 t1 t6 t31;
+  fsqr x3 t0;                             (* x3' *)
+  fsqr t4 t1;
   fmul z3 x1 t4;                      (* z3' *)
   fsub t5 t2 t3;                          (* e = aa - bb *)
   fmul x2 t2 t3;                      (* x2' = aa * bb *)
@@ -203,7 +180,7 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
 
-fn ladder_one (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6: A.array S64.t)
+fn ladder_one (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
                (t31: A.array S128.t) (x1: A.array S64.t)
               (ks: A.array S8.t) (n: SZ.t { SZ.v n < 256 })
               (#vx2: erased (Seq.seq S64.t)) (#vz2: erased (Seq.seq S64.t))
@@ -211,33 +188,33 @@ fn ladder_one (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6: A.array S64.t)
               (#v0: erased (Seq.seq S64.t)) (#v1: erased (Seq.seq S64.t))
               (#v2: erased (Seq.seq S64.t)) (#v3: erased (Seq.seq S64.t))
               (#v4: erased (Seq.seq S64.t)) (#v5: erased (Seq.seq S64.t))
-              (#v6: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
+              (#vt: erased (Seq.seq S128.t))
               (#p1: perm) (#vx1: erased (Seq.seq S64.t))
               (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
 requires
   A.pts_to x2 vx2 ** A.pts_to z2 vz2 ** A.pts_to x3 vx3 ** A.pts_to z3 vz3 **
   A.pts_to t0 v0 ** A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to t3 v3 **
-  A.pts_to t4 v4 ** A.pts_to t5 v5 ** A.pts_to t6 v6 ** A.pts_to t31 vt **
+  A.pts_to t4 v4 ** A.pts_to t5 v5 ** A.pts_to t31 vt **
   A.pts_to x1 #p1 vx1 ** A.pts_to ks #pk vk **
   pure (felem (vals vx2) /\ felem (vals vz2) /\ felem (vals vx3) /\
         felem (vals vz3) /\ felem (vals vx1) /\
         Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
         Seq.length v3 == nl /\ Seq.length v4 == nl /\ Seq.length v5 == nl /\
-        Seq.length v6 == nl /\ Seq.length vt == nw)
+        Seq.length vt == nw)
 ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
                 (wx3: Seq.seq S64.t) (wz3: Seq.seq S64.t)
                 (w0: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t)
                 (w3: Seq.seq S64.t) (w4: Seq.seq S64.t) (w5: Seq.seq S64.t)
-                (w6: Seq.seq S64.t) (wt: Seq.seq S128.t).
+                (wt: Seq.seq S128.t).
   A.pts_to x2 wx2 ** A.pts_to z2 wz2 ** A.pts_to x3 wx3 ** A.pts_to z3 wz3 **
   A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-  A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t6 w6 ** A.pts_to t31 wt **
+  A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t31 wt **
   A.pts_to x1 #p1 vx1 ** A.pts_to ks #pk vk **
   pure (felem (vals wx2) /\ felem (vals wz2) /\ felem (vals wx3) /\
         felem (vals wz3) /\
         Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
         Seq.length w3 == nl /\ Seq.length w4 == nl /\ Seq.length w5 == nl /\
-        Seq.length w6 == nl /\ Seq.length wt == nw /\
+        Seq.length wt == nw /\
         ((fev (vals wx2), fev (vals wz2)), (fev (vals wx3), fev (vals wz3))) ==
           C.ladder_at (fev (vals vx1)) vk (SZ.v n)
             ((fev (vals vx2), fev (vals vz2)),
@@ -273,7 +250,7 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
       C.cswap (C.ith_bit vk (SZ.v bi))
         (fev (vals vx2), fev (vals vz2)) (fev (vals vx3), fev (vals vz3))));
 
-  add_and_double x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6 t31 x1;
+  add_and_double x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t31 x1;
   with ax2. assert (A.pts_to x2 ax2);
   with az2. assert (A.pts_to z2 az2);
   with ax3. assert (A.pts_to x3 ax3);
@@ -305,7 +282,7 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn ladder (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6: A.array S64.t)
+fn ladder (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
            (t31: A.array S128.t) (x1: A.array S64.t)
           (ks: A.array S8.t)
           (#vx2: erased (Seq.seq S64.t)) (#vz2: erased (Seq.seq S64.t))
@@ -313,18 +290,18 @@ fn ladder (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6: A.array S64.t)
           (#v0: erased (Seq.seq S64.t)) (#v1: erased (Seq.seq S64.t))
           (#v2: erased (Seq.seq S64.t)) (#v3: erased (Seq.seq S64.t))
           (#v4: erased (Seq.seq S64.t)) (#v5: erased (Seq.seq S64.t))
-          (#v6: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S128.t))
+          (#vt: erased (Seq.seq S128.t))
           (#p1: perm) (#vx1: erased (Seq.seq S64.t))
           (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
 requires
   A.pts_to x2 vx2 ** A.pts_to z2 vz2 ** A.pts_to x3 vx3 ** A.pts_to z3 vz3 **
   A.pts_to t0 v0 ** A.pts_to t1 v1 ** A.pts_to t2 v2 ** A.pts_to t3 v3 **
-  A.pts_to t4 v4 ** A.pts_to t5 v5 ** A.pts_to t6 v6 ** A.pts_to t31 vt **
+  A.pts_to t4 v4 ** A.pts_to t5 v5 ** A.pts_to t31 vt **
   A.pts_to x1 #p1 vx1 ** A.pts_to ks #pk vk **
   pure (felem (vals vx1) /\
         Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
         Seq.length v3 == nl /\ Seq.length v4 == nl /\ Seq.length v5 == nl /\
-        Seq.length v6 == nl /\ Seq.length vt == nw /\
+        Seq.length vt == nw /\
         felem (vals vx2) /\ felem (vals vz2) /\ felem (vals vx3) /\
         felem (vals vz3) /\
         ((fev (vals vx2), fev (vals vz2)), (fev (vals vx3), fev (vals vz3))) ==
@@ -333,15 +310,15 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
                 (wx3: Seq.seq S64.t) (wz3: Seq.seq S64.t)
                 (w0: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t)
                 (w3: Seq.seq S64.t) (w4: Seq.seq S64.t) (w5: Seq.seq S64.t)
-                (w6: Seq.seq S64.t) (wt: Seq.seq S128.t).
+                (wt: Seq.seq S128.t).
   A.pts_to x2 wx2 ** A.pts_to z2 wz2 ** A.pts_to x3 wx3 ** A.pts_to z3 wz3 **
   A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-  A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t6 w6 ** A.pts_to t31 wt **
+  A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t31 wt **
   A.pts_to x1 #p1 vx1 ** A.pts_to ks #pk vk **
   pure (felem (vals wx2) /\ felem (vals wz2) /\
         Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
         Seq.length w3 == nl /\ Seq.length w4 == nl /\ Seq.length w5 == nl /\
-        Seq.length w6 == nl /\ Seq.length wt == nw /\
+        Seq.length wt == nw /\
         (fev (vals wx2), fev (vals wz2)) ==
           fst (C.montgomery_ladder (fev (vals vx1)) vk))
 {
@@ -353,18 +330,18 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
                     (wx3: Seq.seq S64.t) (wz3: Seq.seq S64.t)
                     (w0: Seq.seq S64.t) (w1: Seq.seq S64.t) (w2: Seq.seq S64.t)
                     (w3: Seq.seq S64.t) (w4: Seq.seq S64.t) (w5: Seq.seq S64.t)
-                    (w6: Seq.seq S64.t) (wt: Seq.seq S128.t).
+                    (wt: Seq.seq S128.t).
     pts_to i vi **
     A.pts_to x2 wx2 ** A.pts_to z2 wz2 ** A.pts_to x3 wx3 ** A.pts_to z3 wz3 **
     A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 ** A.pts_to t3 w3 **
-    A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t6 w6 ** A.pts_to t31 wt **
+    A.pts_to t4 w4 ** A.pts_to t5 w5 ** A.pts_to t31 wt **
     A.pts_to x1 #p1 vx1 ** A.pts_to ks #pk vk **
     pure (SZ.v vi <= 256 /\
           felem (vals wx2) /\ felem (vals wz2) /\ felem (vals wx3) /\
           felem (vals wz3) /\
           Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
           Seq.length w3 == nl /\ Seq.length w4 == nl /\ Seq.length w5 == nl /\
-          Seq.length w6 == nl /\ Seq.length wt == nw /\
+          Seq.length wt == nw /\
           ((fev (vals wx2), fev (vals wz2)), (fev (vals wx3), fev (vals wz3))) ==
             Loops.repeati_g (SZ.v vi) (C.ladder_at (fev (vals vx1)) vk)
                             (C.ladder_init (fev (vals vx1))))
@@ -375,7 +352,7 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
     with wz2. assert (A.pts_to z2 wz2);
     with wx3. assert (A.pts_to x3 wx3);
     with wz3. assert (A.pts_to z3 wz3);
-    ladder_one x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t6 t31 x1 ks vi;
+    ladder_one x2 z2 x3 z3 t0 t1 t2 t3 t4 t5 t31 x1 ks vi;
     with ux2. assert (A.pts_to x2 ux2);
     with uz2. assert (A.pts_to z2 uz2);
     with ux3. assert (A.pts_to x3 ux3);
@@ -430,10 +407,10 @@ ensures exists* (vout': Seq.seq S8.t).
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
   let z8 = S8.classify 0uy;
-  let mut ka = [| z8; 32sz |]; A.pts_to_len ka; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut b0 = [| z; 5sz |]; A.pts_to_len b0; let mut b1 = [| z; 5sz |]; A.pts_to_len b1; let mut b2 = [| z; 5sz |]; A.pts_to_len b2; let mut b3 = [| z; 5sz |]; A.pts_to_len b3; let mut b4 = [| z; 5sz |]; A.pts_to_len b4; let mut b5 = [| z; 5sz |]; A.pts_to_len b5; let mut b6 = [| z; 5sz |]; A.pts_to_len b6; let mut bw = [| z128; 9sz |]; A.pts_to_len bw; A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut ka = [| z8; 32sz |]; A.pts_to_len ka; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut b0 = [| z; 5sz |]; A.pts_to_len b0; let mut b1 = [| z; 5sz |]; A.pts_to_len b1; let mut b2 = [| z; 5sz |]; A.pts_to_len b2; let mut b3 = [| z; 5sz |]; A.pts_to_len b3; let mut b4 = [| z; 5sz |]; A.pts_to_len b4; let mut b5 = [| z; 5sz |]; A.pts_to_len b5;  let mut bw = [| z128; 9sz |]; A.pts_to_len bw; A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len b0; A.pts_to_len b1;
   A.pts_to_len b2; A.pts_to_len b3; A.pts_to_len b4; A.pts_to_len b5;
-  A.pts_to_len b6; A.pts_to_len bw; A.pts_to_len out;
+  A.pts_to_len bw; A.pts_to_len out;
 
   clamp ka k;
   with vks. assert (A.pts_to ka vks);
@@ -451,7 +428,7 @@ ensures exists* (vout': Seq.seq S8.t).
   set_small a5 1uL;
   assert (pure (C.one == 1));
 
-  ladder a2 a3 a4 a5 b0 b1 b2 b3 b4 b5 b6 bw a1 ka;
+  ladder a2 a3 a4 a5 b0 b1 b2 b3 b4 b5 bw a1 ka;
   with wx2. assert (A.pts_to a2 wx2);
   with wz2. assert (A.pts_to a3 wz2);
 

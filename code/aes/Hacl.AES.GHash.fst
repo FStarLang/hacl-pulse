@@ -41,8 +41,11 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module G = Spec.GF128
+module Poly = Spec.GF128.Poly
 module Copy = Hacl.Impl.Copy
 module Vec = Hacl.Vec128
+module Sub = Hacl.Impl.Sub
+module Alg = Spec.GF128.Algebra
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -129,20 +132,23 @@ fn ghash_upd_impl (acc: A.array S8.t) (h: A.array S8.t) (data: A.array S8.t) (n:
                   (#va0 #vh: erased (Seq.seq S8.t))
                   (#pd: perm) (#vd: erased (Seq.seq S8.t))
 requires A.pts_to acc va0 ** A.pts_to h vh ** A.pts_to data #pd vd ** pure (
-  Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+  Seq.length va0 == blocklen /\ Alg.pows_ok (vals vh) /\ Seq.length vh == 128 /\
   SZ.fits (Seq.length vd + blocklen))
          ** pure (SZ.v n == Seq.length vd)
 ensures exists* (va1: Seq.seq S8.t).
   A.pts_to acc va1 ** A.pts_to h vh ** A.pts_to data #pd vd ** pure (
-  Seq.length va0 == blocklen /\ Seq.length vh == blocklen /\
+  Seq.length va0 == blocklen /\ Seq.length vh == 128 /\
   Seq.length va1 == blocklen /\
-  vals va1 == G.ghash_upd (vals vh) (vals va0) (pad (vals vd)))
+  vals va1 == G.ghash_upd (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
+                          (pad (vals vd)))
 {
   A.pts_to_len acc;
   A.pts_to_len h;
   A.pts_to_len data;
+  vals_len vh;
+  vals_slice vh 0 16;
 
-  ghash_start (vals vh) (vals va0) (whole (vals vd));
+  ghash_start (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (whole (vals vd));
   let mut i = 0sz;
 
   (* The whole-block loop, when the machine has the instructions for it, runs
@@ -161,8 +167,8 @@ ensures exists* (va1: Seq.seq S8.t).
     pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
           Seq.length va == blocklen /\
           SZ.v vi / blocklen <= G.nblocks (whole (vals vd)) /\
-          vals va == G.ghash_from (vals vh) (vals va0) (whole (vals vd))
-                                  (SZ.v vi / blocklen))
+          vals va == G.ghash_from (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
+                                  (whole (vals vd)) (SZ.v vi / blocklen))
   {
     Hacl.AES.GF128.NI.ghash_loop_ni acc h data nblk;
     i := nblk;
@@ -175,38 +181,44 @@ ensures exists* (va1: Seq.seq S8.t).
     pts_to i vi ** A.pts_to acc va ** A.pts_to h vh ** A.pts_to data #pd vd **
     pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
           Seq.length va == blocklen /\ Seq.length va0 == blocklen /\
-          Seq.length vh == blocklen /\ Seq.length vd == SZ.v n /\
+          Seq.length vh == 128 /\ Seq.length vd == SZ.v n /\
           SZ.fits (SZ.v n + blocklen) /\
           SZ.v vi / blocklen <= G.nblocks (whole (vals vd)) /\
-          vals va == G.ghash_from (vals vh) (vals va0) (whole (vals vd))
-                                  (SZ.v vi / blocklen))
+          vals va == G.ghash_from (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
+                                  (whole (vals vd)) (SZ.v vi / blocklen))
   decreases (SZ.v n - SZ.v (!i))
   {
     let vi = !i;
     with va. assert A.pts_to acc va;
-    ghash_body (vals vh) (vals va0) (vals vd) (SZ.v vi);
-    Hacl.AES.GMul.gmul_add_impl acc h data vi;
+    ghash_body (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vd) (SZ.v vi);
+    let hb = Sub.sub h 0sz 16sz;
+    Hacl.AES.GMul.gmul_add_impl acc hb data vi;
+    Sub.unsub_id h 0 16 hb;
     i := SZ.add vi 16sz;
   };
 
   let vi = !i;
   let rem = SZ.sub n vi;
   ghash_loop_done (vals vd) (SZ.v vi);
-  ghash_pad (vals vh) (vals va0) (vals vd);
+  ghash_pad (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vd);
 
-  let z = S8.zero;
-  let mut tb = [| z; 16sz |];
-  A.pts_to_len tb;
-  A.pts_to_len tb;
-
+  (* The scratch block is allocated inside the branch that uses it: a whole
+     number of blocks is the common case, and sixteen byte stores that are
+     never read are not free. *)
   if (SZ.gt rem 0sz) {
+    let z = S8.zero;
+    let mut tb = [| z; 16sz |];
+    A.pts_to_len tb;
+    A.pts_to_len tb;
     Copy.copy_range tb 0sz data vi rem;
     with vb. assert A.pts_to tb vb;
     tail_eq vd vb (SZ.v vi);
     Seq.lemma_eq_intro (Seq.slice (vals vb) 0 blocklen) (vals vb);
     with va. assert A.pts_to acc va;
-    ghash_one (vals vh) (vals va) (tail_block (vals vd));
-    Hacl.AES.GMul.gmul_add_impl acc h tb 0sz;
+    ghash_one (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va) (tail_block (vals vd));
+    let hb = Sub.sub h 0sz 16sz;
+    Hacl.AES.GMul.gmul_add_impl acc hb tb 0sz;
+    Sub.unsub_id h 0 16 hb;
     } else {
     }
 }

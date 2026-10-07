@@ -8,17 +8,24 @@
 #include <string.h>
 
 #include "Hacl_Vec128.h"
+#include "Hacl_Launder.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct FStar_Pervasives_Native_tuple2__t_t_s FStar_Pervasives_Native_tuple2__t_t;
+typedef struct FStar_Pervasives_Native_tuple3__t_t_t_s FStar_Pervasives_Native_tuple3__t_t_t;
 typedef struct FStar_Pervasives_Native_tuple2__uint32_uint32_s FStar_Pervasives_Native_tuple2__uint32_uint32;
 
 struct FStar_Pervasives_Native_tuple2__t_t_s {
   Hacl_Vec128_t _1;
   Hacl_Vec128_t _2;
+};
+struct FStar_Pervasives_Native_tuple3__t_t_t_s {
+  Hacl_Vec128_t _1;
+  Hacl_Vec128_t _2;
+  Hacl_Vec128_t _3;
 };
 struct FStar_Pervasives_Native_tuple2__uint32_uint32_s {
   uint32_t _1;
@@ -28,6 +35,7 @@ struct FStar_Pervasives_Native_tuple2__uint32_uint32_s {
 void Hacl_Curve25519_scalarmult(uint8_t *out, uint8_t *k, uint8_t *u);
 bool Hacl_Curve25519_ecdh(uint8_t *out, uint8_t *k, uint8_t *u);
 void Hacl_Curve25519_secret_to_public(uint8_t *out, uint8_t *k);
+uint8_t Hacl_AES_Core_sbox_impl(uint8_t x);
 bool Hacl_AES_GCM_aes128_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_open(uint8_t *pt, uint8_t *enc, uint8_t *skR, uint8_t *info, size_t info_len, uint8_t *aad, size_t aad_len, uint8_t *ct, size_t ct_len, uint8_t *tag);
 void Hacl_AES_GCM_aes128_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
@@ -35,6 +43,7 @@ bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_seal(uint8_t *enc, uint8_t *ct, ui
 bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_setup_base_r(uint8_t *key, uint8_t *base_nonce, uint64_t *sq, uint8_t *exporter, uint8_t *enc, uint8_t *skR, uint8_t *info, size_t info_len);
 bool Hacl_HPKE_Suites_x25519_sha256_aes128gcm_setup_base_s(uint8_t *enc, uint8_t *key, uint8_t *base_nonce, uint64_t *sq, uint8_t *exporter, uint8_t *skE, uint8_t *pkR, uint8_t *info, size_t info_len);
 bool Hacl_P256_Sec1_uncompressed_to_raw(uint8_t *out, uint8_t *pk);
+void Hacl_Bignum_Base_table_select(uint64_t *res, uint64_t *tbl, size_t n, uint64_t d);
 bool Hacl_P256_Ecdh_dh_responder(uint8_t *out, uint8_t *pk, uint8_t *sk);
 bool Hacl_P256_Ecdh_dh_initiator(uint8_t *out, uint8_t *sk);
 void Hacl_P256_Sec1_raw_to_uncompressed(uint8_t *out, uint8_t *pk);
@@ -58,6 +67,7 @@ bool Hacl_MLKEM1024_dk_valid(uint8_t *dk);
 bool Hacl_MLKEM1024_ek_valid(uint8_t *ek);
 void Hacl_Hash_SHA3_sha3_512(uint8_t *out, uint8_t *msg, size_t msg_len);
 void Hacl_Hash_SHA3_shake256(uint8_t *out, size_t out_len, uint8_t *msg, size_t msg_len);
+uint8_t Hacl_Impl_Select_eq_mask_bytes(uint8_t *a, uint8_t *b, size_t len);
 void Hacl_MLKEM1024_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk);
 void Hacl_MLKEM1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ekey, uint8_t *msg);
 void Hacl_MLKEM1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *dseed, uint8_t *zseed);
@@ -94,6 +104,7 @@ void Hacl_Bignum_Convert_from_bytes_be(uint64_t *res, size_t n, uint8_t *b);
 uint64_t Hacl_Bignum_Base_sub(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
 uint64_t Hacl_Bignum_Base_lt_mask(uint64_t *a, uint64_t *b, size_t n);
 void Hacl_Bignum_Montgomery_from_mont(uint64_t *res, uint64_t *a, uint64_t *tmp, uint64_t *nmod, size_t nn, uint64_t mu);
+void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n);
 void Hacl_Bignum_Exponentiation_mod_exp_consttime(uint64_t *res, uint64_t *a, uint64_t *bb, size_t bbits, uint64_t *r2, uint64_t *nmod, size_t nn, uint64_t mu, uint64_t *aM, uint64_t *acc, uint64_t *t, uint64_t *wide);
 void Hacl_Bignum_Convert_to_bytes_be(uint8_t *b, uint64_t *a, size_t n);
 bool Hacl_FFDHE_ffdhe8192_shared_secret(uint8_t *ss, uint8_t *sk, uint8_t *pk);
@@ -112,12 +123,17 @@ void Hacl_Bignum_Montgomery_modulo(uint64_t *res, uint64_t *a, uint64_t *acc, ui
 void Hacl_Bignum_Convert_to_bytes_le(uint8_t *b, uint64_t *a, size_t n);
 void Hacl_Bignum_Convert_from_bytes_le(uint64_t *res, size_t n, uint8_t *b);
 uint64_t Hacl_Bignum_Base_eq_mask(uint64_t *a, uint64_t *b, size_t n);
-void Hacl_Bignum_Base_sqr(uint64_t *res, uint64_t *a, size_t n);
 void Hacl_Bignum_Base_sub_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);
 uint64_t Hacl_Bignum_Base_add(uint64_t *res, uint64_t *a, uint64_t *b, size_t n);
 void Hacl_Bignum_Base_add_mod(uint64_t *res, uint64_t *a, uint64_t *b, uint64_t *m, size_t n);
 bool Hacl_AES_GCM_aes256_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
 void Hacl_AES_GCM_aes256_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *key, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+bool Hacl_AES_GCM_aes256_decrypt_expanded(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes256_encrypt_expanded(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes256_expand(uint8_t *ek, uint8_t *hk, uint8_t *key);
+bool Hacl_AES_GCM_aes128_decrypt_expanded(uint8_t *msg, size_t msg_len, uint8_t *tag, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes128_encrypt_expanded(uint8_t *tag, uint8_t *msg, size_t msg_len, uint8_t *ek, uint8_t *hk, uint8_t *iv, size_t iv_len, uint8_t *aad, size_t aad_len);
+void Hacl_AES_GCM_aes128_expand(uint8_t *ek, uint8_t *hk, uint8_t *key);
 bool Hacl_HMAC_DRBG_generate_sha512(uint8_t *out, size_t olen, uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *additional, size_t alen);
 void Hacl_HMAC_DRBG_reseed_sha512(uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *entropy, size_t elen, uint8_t *additional, size_t alen);
 void Hacl_HMAC_DRBG_instantiate_sha512(uint8_t *k, uint8_t *v, size_t *ctr, uint8_t *entropy, size_t elen, uint8_t *nonce, size_t nlen, uint8_t *personal, size_t plen);

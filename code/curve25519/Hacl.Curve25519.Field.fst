@@ -787,6 +787,198 @@ ensures exists* (vout': Seq.seq S64.t).
 
 #pop-options
 
+(** {2 Squaring}
+
+    A square is a product whose two factors are the same, and the
+    schoolbook product of a sequence with itself is symmetric: [a_i * a_j]
+    and [a_j * a_i] land in the same column.  Pairing them up front and
+    carrying the factor of two in the {e word} -- where it costs one
+    addition -- leaves three limb products to a column instead of five,
+    with the diagonal term standing alone in columns zero, two and four.
+    Fifteen multiplications, not twenty-five.
+
+    Nothing else changes.  [Spec.Curve25519.Columns.sq0] to [sq4] say the
+    three-product columns are the same five numbers as [fmul]'s
+    five-product ones, so the carry chain, the wrap and {!Cols.chain} are
+    reused letter for letter, and the postcondition is [fmul] applied
+    twice to the same argument -- which is what every caller wanted when
+    it copied an array and called {!fmul}.
+
+    The six scaled words are [2 a0], [2 a1], [38 a2], [19 a3], [19 a4] and
+    [38 a4]; [38 * lim] is still under [2^64], so they are words.  The
+    heaviest column is the zeroth, at [(1 + 38 + 38) * lim^2]: well inside
+    the [95 * lim^2] that {!chi} and {!cadd} were proved against, so the
+    carry stays a word too. *)
+
+(** A limb product against a scaled limb: [k] times the plain bound. *)
+let mulb (k: pos) (x y: nat)
+  : Lemma (requires x <= k * lim /\ y <= lim)
+          (ensures x * y <= k * (lim * lim))
+  = Math.lemma_mult_le_left x y lim;
+    Math.lemma_mult_le_right lim x (k * lim);
+    Math.paren_mul_right k lim lim
+
+inline_for_extraction
+let mw1 (x y: S64.t)
+  : Pure S128.t (requires S64.v x <= lim /\ S64.v y <= lim)
+                (ensures fun z -> S128.v z == S64.v x * S64.v y /\
+                                  S128.v z <= 1 * (lim * lim))
+  = mulb 1 (S64.v x) (S64.v y); S128.mul_wide x y
+
+inline_for_extraction
+let mw2 (x y: S64.t)
+  : Pure S128.t (requires S64.v x <= 2 * lim /\ S64.v y <= lim)
+                (ensures fun z -> S128.v z == S64.v x * S64.v y /\
+                                  S128.v z <= 2 * (lim * lim))
+  = mulb 2 (S64.v x) (S64.v y); S128.mul_wide x y
+
+inline_for_extraction
+let mw19 (x y: S64.t)
+  : Pure S128.t (requires S64.v x <= 19 * lim /\ S64.v y <= lim)
+                (ensures fun z -> S128.v z == S64.v x * S64.v y /\
+                                  S128.v z <= 19 * (lim * lim))
+  = mulb 19 (S64.v x) (S64.v y); S128.mul_wide x y
+
+inline_for_extraction
+let mw38 (x y: S64.t)
+  : Pure S128.t (requires S64.v x <= 38 * lim /\ S64.v y <= lim)
+                (ensures fun z -> S128.v z == S64.v x * S64.v y /\
+                                  S128.v z <= 38 * (lim * lim))
+  = mulb 38 (S64.v x) (S64.v y); S128.mul_wide x y
+
+(** Three products with multipliers summing to at most ninety-five stay
+    inside a column. *)
+let colb3 (i j k: pos) (x y z: nat)
+  : Lemma (requires x <= i * (lim * lim) /\ y <= j * (lim * lim) /\
+                    z <= k * (lim * lim) /\ i + j + k <= 95)
+          (ensures x + y + z <= colb)
+  = Math.distributivity_add_left i j (lim * lim);
+    Math.distributivity_add_left (i + j) k (lim * lim);
+    Math.lemma_mult_le_right (lim * lim) (i + j + k) 95;
+    Math.paren_mul_right 5 19 (lim * lim)
+
+(** The same from the word bounds, which is the form the call sites have. *)
+let colw3 (i j k: pos) (x0 y0 x1 y1 x2 y2: nat)
+  : Lemma (requires x0 <= i * lim /\ y0 <= lim /\ x1 <= j * lim /\ y1 <= lim /\
+                    x2 <= k * lim /\ y2 <= lim /\ i + j + k <= 95)
+          (ensures x0 * y0 + x1 * y1 + x2 * y2 <= colb)
+  = mulb i x0 y0; mulb j x1 y1; mulb k x2 y2;
+    colb3 i j k (x0 * y0) (x1 * y1) (x2 * y2)
+
+(** One column of a square: three of those, summed left to right. *)
+inline_for_extraction
+let col3s (p0 p1 p2: S128.t)
+  : Pure S128.t
+         (requires S128.v p0 + S128.v p1 + S128.v p2 <= colb)
+         (ensures fun z -> S128.v z == S128.v p0 + S128.v p1 + S128.v p2 /\
+                           S128.v z <= colb)
+  = assert_norm (colb < pow2 128);
+    addd (addd p0 p1) p2
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+
+[@@ FStar.Attributes.CInline]
+fn fsqr (out a: A.array S64.t)
+        (#vout: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to out vout ** A.pts_to a #pa va **
+  pure (Seq.length vout == nl /\ felem (vals va))
+ensures exists* (vout': Seq.seq S64.t).
+  A.pts_to out vout' ** A.pts_to a #pa va **
+  pure (felem (vals vout') /\
+        fev (vals vout') == C.fmul (fev (vals va)) (fev (vals va)))
+{
+  A.pts_to_len out;
+  A.pts_to_len a;
+  assert_norm (nl == 5);
+  let a0 = A.(a.(0sz));
+  let a1 = A.(a.(1sz));
+  let a2 = A.(a.(2sz));
+  let a3 = A.(a.(3sz));
+  let a4 = A.(a.(4sz));
+
+  (* The six scaled limbs: the twos pair the off-diagonal products, the
+     nineteens and thirty-eights fold the top of the column. *)
+  assert_norm (38 * lim < pow2 64);
+  let d0 = mulk 2uL a0;
+  let d1 = mulk 2uL a1;
+  let r2 = mulk 38uL a2;
+  let r3 = mulk 19uL a3;
+  let s4 = mulk 19uL a4;
+  let r4 = mulk 38uL a4;
+
+  colw3 1 38 38 (S64.v a0) (S64.v a0) (S64.v r4) (S64.v a1) (S64.v r2) (S64.v a3);
+  let c0 = col3s (mw1 a0 a0) (mw38 r4 a1) (mw38 r2 a3);
+  colw3 2 38 19 (S64.v d0) (S64.v a1) (S64.v r4) (S64.v a2) (S64.v r3) (S64.v a3);
+  let c1 = col3s (mw2 d0 a1) (mw38 r4 a2) (mw19 r3 a3);
+  colw3 2 1 38 (S64.v d0) (S64.v a2) (S64.v a1) (S64.v a1) (S64.v r4) (S64.v a3);
+  let c2 = col3s (mw2 d0 a2) (mw1 a1 a1) (mw38 r4 a3);
+  colw3 2 2 19 (S64.v d0) (S64.v a3) (S64.v d1) (S64.v a2) (S64.v s4) (S64.v a4);
+  let c3 = col3s (mw2 d0 a3) (mw2 d1 a2) (mw19 s4 a4);
+  colw3 2 2 1 (S64.v d0) (S64.v a4) (S64.v d1) (S64.v a3) (S64.v a2) (S64.v a2);
+  let c4 = col3s (mw2 d0 a4) (mw2 d1 a3) (mw1 a2 a2);
+
+  (* The same five columns as [fmul] on two copies of [a]. *)
+  Cols.sq0 (vals va);
+  Cols.sq1 (vals va);
+  Cols.sq2 (vals va);
+  Cols.sq3 (vals va);
+  Cols.sq4 (vals va);
+  assert (pure (Seq.length (fold19 (part (vals va) (vals va) nl)) == nl /\
+                vat (fold19 (part (vals va) (vals va) nl)) 0 == S128.v c0 /\
+                vat (fold19 (part (vals va) (vals va) nl)) 1 == S128.v c1 /\
+                vat (fold19 (part (vals va) (vals va) nl)) 2 == S128.v c2 /\
+                vat (fold19 (part (vals va) (vals va) nl)) 3 == S128.v c3 /\
+                vat (fold19 (part (vals va) (vals va) nl)) 4 == S128.v c4));
+
+  (* From here on, letter for letter the end of [fmul]. *)
+  let o0 = lo51d c0;
+  let k0 = chi c0;
+  let l1 = cadd c1 k0;
+  let o1 = lo51d l1;
+  let k1 = chi l1;
+  let l2 = cadd c2 k1;
+  let o2 = lo51d l2;
+  let k2 = chi l2;
+  let l3 = cadd c3 k2;
+  let o3 = lo51d l3;
+  let k3 = chi l3;
+  let l4 = cadd c4 k3;
+  let o4 = lo51d l4;
+  let k4 = chi l4;
+
+  assert_norm (19 * carb < pow2 64);
+  assert_norm (base + 19 * carb < pow2 64);
+  let t0 = addw o0 (mulk 19uL k4);
+  let w0 = lo51 t0;
+  let w1 = addw o1 (hi51 t0);
+
+  Cols.chain (fold19 (part (vals va) (vals va) nl));
+
+  A.((out.(0sz) <- w0));
+  A.((out.(1sz) <- w1));
+  A.((out.(2sz) <- o2));
+  A.((out.(3sz) <- o3));
+  A.((out.(4sz) <- o4));
+
+  with w. assert (A.pts_to out w);
+  assert (pure (Seq.length w == nl));
+  assert (pure (Seq.index w 0 == w0 /\ Seq.index w 1 == w1 /\
+                Seq.index w 2 == o2 /\ Seq.index w 3 == o3 /\
+                Seq.index w 4 == o4));
+  assert (pure (Seq.length (fmul_spec (vals va) (vals va)) == nl));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals va)) 0 == S64.v w0));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals va)) 1 == S64.v w1));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals va)) 2 == S64.v o2));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals va)) 3 == S64.v o3));
+  assert (pure (Seq.index (fmul_spec (vals va) (vals va)) 4 == S64.v o4));
+  Cols.five_eq (vals w) (fmul_spec (vals va) (vals va));
+  fmul_spec_ok (vals va) (vals va);
+  ()
+}
+
+#pop-options
+
 (** {2 Bytes}
 
     A fifty-one-bit limb is not a whole number of bytes, so neither

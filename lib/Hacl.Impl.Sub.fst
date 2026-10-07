@@ -60,7 +60,19 @@ let opt_index (#t: Type0) (v: Seq.seq t) (k: nat { k < Seq.length v })
 let rest (#t: Type0) (a: A.array t) (p: perm) (i j: nat) (v: Seq.seq t) : slprop =
   A.pts_to_mask a #p (opt v) (fun k -> ~(i <= k /\ k < j))
 
-(** [a[i .. j)] as an array of its own, plus a receipt for the remainder. *)
+(** [a[i .. j)] as an array of its own, plus a receipt for the remainder.
+
+    [inline_for_extraction] is not a performance hint, it is what makes the
+    paragraph above true.  Left as a real C function this is monomorphized
+    once per element type, and a monomorphization is a shared function that
+    the extraction may stamp with the [target] attribute of an unrelated
+    caller: the [uint32] instance came out carrying
+    [target("aes,pclmul,ssse3,sse4.1")] although its only callers are
+    SHA-256's.  clang will not inline a callee whose target features are not
+    a subset of the caller's, so every [a + i] in the SHA-EXT block function
+    became a real call -- thirty-nine of them per block, and three quarters
+    of the running time.  Inlined, there is no function to mislabel. *)
+inline_for_extraction
 fn sub (#t: Type0) (a: A.array t) (#p: perm) (i: SZ.t) (j: SZ.t)
        (#v: erased (Seq.seq t) { SZ.v i <= SZ.v j /\ SZ.v j <= Seq.length v /\
                                  Seq.length v == A.length a })

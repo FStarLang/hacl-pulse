@@ -74,6 +74,18 @@ let double_ok (x: nat)
     Math.lemma_mod_plus_distr_l x x C.prime;
     Math.lemma_mod_plus_distr_r (x % C.prime) x C.prime
 
+(** Doubling a factor and multiplying, or multiplying and doubling the
+    product: the same element.  That is what lets a doubling square [z1]
+    and scale the square by two, rather than scale [z1] and multiply --
+    fifteen limb products in place of twenty-five. *)
+let dblmul (a b: C.elem)
+  : Lemma (C.fmul (C.fadd a a) b == C.fadd (C.fmul a b) (C.fmul a b))
+  = C.prime_gt_one ();
+    Math.lemma_mod_mul_distr_l (a + a) b C.prime;
+    Math.distributivity_add_left a a b;
+    Math.lemma_mod_plus_distr_l (a * b) (a * b) C.prime;
+    Math.lemma_mod_plus_distr_r ((a * b) % C.prime) (a * b) C.prime
+
 (** {2 Addition}
 
     "add-2008-hwcd-3".  Six scratch elements and the multiplier's own
@@ -199,20 +211,21 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len aa; A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len aw;
 
   (* aa = x1^2, ab = y1^2, ac = 2 z1^2 *)
-  copy au x1;
-  fmul aa au x1;
-  copy au y1;
-  fmul ab au y1;
-  fscale au z1 2uL aw;
-  with vu. assert (A.pts_to au vu);
-  double_ok (eval (vals vz1));
-  assert (pure (fev (vals vu) == C.fadd (fev (vals vz1)) (fev (vals vz1))));
-  fmul ac au z1;
+  fsqr aa x1;
+  fsqr ab y1;
+  fsqr au z1;
+  with vq. assert (A.pts_to au vq);
+  assert (pure (fev (vals vq) == C.fmul (fev (vals vz1)) (fev (vals vz1))));
+  fscale ac au 2uL aw;
+  with vu. assert (A.pts_to ac vu);
+  double_ok (eval (vals vq));
+  dblmul (fev (vals vz1)) (fev (vals vz1));
+  assert (pure (fev (vals vu) ==
+                C.fmul (C.fadd (fev (vals vz1)) (fev (vals vz1))) (fev (vals vz1))));
 
   (* ar = (x1 + y1)^2 *)
   fadd au x1 y1;
-  copy av au;
-  fmul ar av au;
+  fsqr ar au;
 
   (* H = aa + ab, E = H - ar, G = aa - ab, F = ac + G *)
   fadd av aa ab;
@@ -279,7 +292,8 @@ ensures exists* (va': Seq.seq S64.t).
 
 #pop-options
 
-(** Set a point to the neutral element. *)
+(** Set a point to the neutral element.  This is where the windowed
+    scalar multiplication starts both its accumulator and its table. *)
 fn set_infinity (x y z t: A.array S64.t)
                 (#vx: erased (Seq.seq S64.t)) (#vy: erased (Seq.seq S64.t))
                 (#vz: erased (Seq.seq S64.t)) (#vt: erased (Seq.seq S64.t))
@@ -297,175 +311,5 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   set_small t 0uL;
   C.prime_gt_one ();
 }
-
-(** {2 Scalar multiplication}
-
-    Double-and-add over all two hundred and fifty-six bits, most
-    significant first, with the conditional addition done as a swap on a
-    mask.  Three points are in flight: the accumulator [a], the doubling
-    [b], and the sum [c]; the formulas cannot write their output over an
-    input, so there is no way to do it with two. *)
-
-#push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
-
-fn point_mul_step (ax ay az at ux uy uz ut sx sy sz st: A.array S64.t)
-                  (qx qy qz qt: A.array S64.t) (ks: A.array S8.t)
-                  (n: SZ.t { SZ.v n < 256 })
-                  (#vax: erased (Seq.seq S64.t)) (#vay: erased (Seq.seq S64.t))
-                  (#vaz: erased (Seq.seq S64.t)) (#vat: erased (Seq.seq S64.t))
-                  (#vux: erased (Seq.seq S64.t)) (#vuy: erased (Seq.seq S64.t))
-                  (#vuz: erased (Seq.seq S64.t)) (#vut: erased (Seq.seq S64.t))
-                  (#vsx: erased (Seq.seq S64.t)) (#vsy: erased (Seq.seq S64.t))
-                  (#vsz: erased (Seq.seq S64.t)) (#vst: erased (Seq.seq S64.t))
-                  (#pp: perm)
-                  (#vpx: erased (Seq.seq S64.t)) (#vpy: erased (Seq.seq S64.t))
-                  (#vpz: erased (Seq.seq S64.t)) (#vpt: erased (Seq.seq S64.t))
-                  (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
-requires
-  A.pts_to ax vax ** A.pts_to ay vay ** A.pts_to az vaz ** A.pts_to at vat **
-  A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz ** A.pts_to ut vut **
-  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz ** A.pts_to st vst **
-  A.pts_to qx #pp vpx ** A.pts_to qy #pp vpy **
-  A.pts_to qz #pp vpz ** A.pts_to qt #pp vpt ** A.pts_to ks #pk vk **
-  pure (pt_ok vax vay vaz vat /\ pt_ok vpx vpy vpz vpt /\
-        Seq.length vux == nl /\ Seq.length vuy == nl /\
-        Seq.length vuz == nl /\ Seq.length vut == nl /\
-        Seq.length vsx == nl /\ Seq.length vsy == nl /\
-        Seq.length vsz == nl /\ Seq.length vst == nl)
-ensures exists* (wax way waz wat wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
-  A.pts_to ax wax ** A.pts_to ay way ** A.pts_to az waz ** A.pts_to at wat **
-  A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz ** A.pts_to ut wut **
-  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz ** A.pts_to st wst **
-  A.pts_to qx #pp vpx ** A.pts_to qy #pp vpy **
-  A.pts_to qz #pp vpz ** A.pts_to qt #pp vpt ** A.pts_to ks #pk vk **
-  pure (pt_ok wax way waz wat /\
-        Seq.length wux == nl /\ Seq.length wuy == nl /\
-        Seq.length wuz == nl /\ Seq.length wut == nl /\
-        Seq.length wsx == nl /\ Seq.length wsy == nl /\
-        Seq.length wsz == nl /\ Seq.length wst == nl /\
-        pt wax way waz wat ==
-          E.point_mul_step vk (pt vpx vpy vpz vpt) (SZ.v n)
-                           (pt vax vay vaz vat))
-{
-  A.pts_to_len ks;
-  let bi = SZ.sub 255sz n;
-  let bj = SZ.div bi 8sz;
-  let sh = SZ.sizet_to_uint32 (SZ.rem bi 8sz);
-  assert_norm (pow2 32 > 8);
-  Math.small_mod (SZ.v (SZ.rem bi 8sz)) (pow2 32);
-  assert (pure (SZ.v bi == 255 - SZ.v n /\ SZ.v bj == SZ.v bi / 8 /\
-                U32.v sh == SZ.v bi % 8));
-  let byte = A.(ks.(bj));
-  let w = Cast.u8_to_u64 byte;
-  let sr = S64.shift_right w sh;
-  assert (pure (S64.v sr == S64.v w / pow2 (SZ.v bi % 8)));
-  UInt.logand_mask #64 (S64.v sr) 1;
-  let bit = S64.logand sr (S64.classify 1uL);
-  assert (pure (S64.v bit == C.ith_bit vk (SZ.v bi) /\ S64.v bit < 2));
-  let sel = S64.eq_mask bit (S64.classify 1uL);
-  assert (pure ((S64.v sel == 0) == (S64.v bit <> 1)));
-
-  point_double ux uy uz ut ax ay az at;
-  point_add sx sy sz st ux uy uz ut qx qy qz qt;
-
-  cswap sel ux sx;
-  cswap sel uy sy;
-  cswap sel uz sz;
-  cswap sel ut st;
-
-  copy ax ux;
-  copy ay uy;
-  copy az uz;
-  copy at ut;
-
-  with wax. assert (A.pts_to ax wax);
-  with way. assert (A.pts_to ay way);
-  with waz. assert (A.pts_to az waz);
-  with wat. assert (A.pts_to at wat);
-  assert (pure (pt wax way waz wat ==
-                E.point_mul_step vk (pt vpx vpy vpz vpt) (SZ.v n)
-                                 (pt vax vay vaz vat)));
-}
-
-#pop-options
-
-(** [out := [k] p].  The accumulator lives in the output, and the two
-    working points are allocated here. *)
-
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
-
-fn point_mul (ox oy oz ot: A.array S64.t) (qx qy qz qt: A.array S64.t)
-             (ks: A.array S8.t)
-             (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
-             (#voz: erased (Seq.seq S64.t)) (#vot: erased (Seq.seq S64.t))
-             (#pp: perm)
-             (#vqx: erased (Seq.seq S64.t)) (#vqy: erased (Seq.seq S64.t))
-             (#vqz: erased (Seq.seq S64.t)) (#vqt: erased (Seq.seq S64.t))
-             (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
-requires
-  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to ot vot **
-  A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy **
-  A.pts_to qz #pp vqz ** A.pts_to qt #pp vqt ** A.pts_to ks #pk vk **
-  pure (Seq.length vox == nl /\ Seq.length voy == nl /\
-        Seq.length voz == nl /\ Seq.length vot == nl /\
-        pt_ok vqx vqy vqz vqt)
-ensures exists* (wx wy wz wt: Seq.seq S64.t).
-  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
-  A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy **
-  A.pts_to qz #pp vqz ** A.pts_to qt #pp vqt ** A.pts_to ks #pk vk **
-  pure (pt_ok wx wy wz wt /\
-        pt wx wy wz wt == E.point_mul vk (pt vqx vqy vqz vqt))
-{
-  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
-  let z = S64.zero;
-  let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut a6 = [| z; 5sz |]; A.pts_to_len a6; let mut a7 = [| z; 5sz |]; A.pts_to_len a7; let mut a8 = [| z; 5sz |]; A.pts_to_len a8; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
-  A.pts_to_len a5; A.pts_to_len a6; A.pts_to_len a7; A.pts_to_len a8;
-
-  set_infinity ox oy oz ot;
-  Loops.repeati_g_zero (E.point_mul_at vk (pt vqx vqy vqz vqt)) E.point_at_infinity;
-
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 256sz)
-  invariant exists* (vi: SZ.t)
-                    (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
-    pts_to i vi **
-    A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ot wt **
-    A.pts_to a1 wux ** A.pts_to a2 wuy ** A.pts_to a3 wuz ** A.pts_to a4 wut **
-    A.pts_to a5 wsx ** A.pts_to a6 wsy ** A.pts_to a7 wsz ** A.pts_to a8 wst **
-    A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy **
-    A.pts_to qz #pp vqz ** A.pts_to qt #pp vqt ** A.pts_to ks #pk vk **
-    pure (SZ.v vi <= 256 /\ pt_ok wx wy wz wt /\
-          Seq.length wux == nl /\ Seq.length wuy == nl /\
-          Seq.length wuz == nl /\ Seq.length wut == nl /\
-          Seq.length wsx == nl /\ Seq.length wsy == nl /\
-          Seq.length wsz == nl /\ Seq.length wst == nl /\
-          pt wx wy wz wt ==
-            Loops.repeati_g (SZ.v vi) (E.point_mul_at vk (pt vqx vqy vqz vqt))
-                            E.point_at_infinity)
-  decreases (256 - SZ.v (!i))
-  {
-    let vi = !i;
-    with wx. assert (A.pts_to ox wx);
-    with wy. assert (A.pts_to oy wy);
-    with wz. assert (A.pts_to oz wz);
-    with wt. assert (A.pts_to ot wt);
-    point_mul_step ox oy oz ot a1 a2 a3 a4 a5 a6 a7 a8 qx qy qz qt ks vi;
-    with rx. assert (A.pts_to ox rx);
-    with ry. assert (A.pts_to oy ry);
-    with rz. assert (A.pts_to oz rz);
-    with rt. assert (A.pts_to ot rt);
-    Loops.unfold_repeati_g (SZ.v vi) (E.point_mul_at vk (pt vqx vqy vqz vqt))
-                           E.point_at_infinity;
-    assert (pure (pt rx ry rz rt ==
-                  Loops.repeati_g (SZ.v vi + 1)
-                    (E.point_mul_at vk (pt vqx vqy vqz vqt))
-                    E.point_at_infinity));
-    i := SZ.add vi 1sz;
-  };
-
-  ()
-}
-
-#pop-options
 
 #pop-options

@@ -39,6 +39,26 @@
 
 typedef __m128i Hacl_Vec128_t;
 
+/* {2 The baseline}
+ *
+ * SSE2 is part of the x86-64 baseline, so these two need no `target` and can
+ * therefore be inlined into an AES-NI function and into a SHA function both.
+ * `add32` is used by SHA-256's message schedule and by AES's counter; keeping
+ * it here rather than under either target is what lets it serve both. */
+
+#define HACL_VEC128_BASE __attribute__((always_inline)) static inline
+
+HACL_VEC128_BASE Hacl_Vec128_t Hacl_Vec128_add32(Hacl_Vec128_t a,
+                                                 Hacl_Vec128_t b) {
+  return _mm_add_epi32(a, b);
+}
+
+/* One in lane zero, zero in the other three: the counter-mode increment.
+ * `_mm_set_epi32` takes its arguments from the high lane down. */
+HACL_VEC128_BASE Hacl_Vec128_t Hacl_Vec128_lane_one(void) {
+  return _mm_set_epi32(0, 0, 0, 1);
+}
+
 /* `always_inline` is not an optimization request here: without it the
  * intrinsics become real calls, which is most of the instruction count. */
 #define HACL_VEC128_NI \
@@ -72,6 +92,37 @@ HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_aesenc(Hacl_Vec128_t st,
 HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_aesenclast(Hacl_Vec128_t st,
                                                     Hacl_Vec128_t k) {
   return _mm_aesenclast_si128(st, k);
+}
+
+/* AESKEYGENASSIST with a zero round constant.  Bytes 8..11 of the result are
+ * the S-box applied to bytes 12..15 of the argument; the rest of the result
+ * is the same for bytes 4..7 and two rotated copies, none of which is used.
+ * This is the key schedule's SubWord. */
+HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_subword(Hacl_Vec128_t a) {
+  return _mm_aeskeygenassist_si128(a, 0);
+}
+
+/* The key schedule's RotWord, broadcast.  Byte i of the result is byte
+ * 8 + ((i + 1) % 4) of the argument, so applied to the result of
+ * Hacl_Vec128_subword it is RotWord (SubWord w3) in all four words at once --
+ * which is exactly the term the schedule adds to every word of a round key.
+ * One PSHUFB against a constant mask. */
+HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_bcast_rot(Hacl_Vec128_t a) {
+  return _mm_shuffle_epi8(
+      a, _mm_setr_epi8(9, 10, 11, 8, 9, 10, 11, 8, 9, 10, 11, 8, 9, 10, 11, 8));
+}
+
+/* The same without the rotation, which is what AES-256 wants halfway between
+ * its round-constant steps: byte i of the result is byte 8 + (i % 4). */
+HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_bcast_sub(Hacl_Vec128_t a) {
+  return _mm_shuffle_epi8(
+      a, _mm_setr_epi8(8, 9, 10, 11, 8, 9, 10, 11, 8, 9, 10, 11, 8, 9, 10, 11));
+}
+
+/* One byte in the low end of each of the four words, zero elsewhere: the
+ * round constant, as a register, without going through memory. */
+HACL_VEC128_NI Hacl_Vec128_t Hacl_Vec128_word_bcast(uint8_t x) {
+  return _mm_set1_epi32((int)(uint32_t)x);
 }
 
 /* The four halves of a carry-less 64x64 -> 128 multiply.  The immediate has
@@ -150,11 +201,6 @@ HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_load32(uint32_t *p) {
 
 HACL_VEC128_SHA void Hacl_Vec128_store32(uint32_t *p, Hacl_Vec128_t x) {
   _mm_storeu_si128((__m128i *)(void *)p, x);
-}
-
-HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_add32(Hacl_Vec128_t a,
-                                                Hacl_Vec128_t b) {
-  return _mm_add_epi32(a, b);
 }
 
 HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_shuffle_swap_pairs(Hacl_Vec128_t a) {
@@ -277,6 +323,9 @@ HACL_VEC128_STUB2(Hacl_Vec128_sha256msg2)
 #undef HACL_VEC128_STUB2
 #define HACL_VEC128_STUB1(name)                                              \
   static inline Hacl_Vec128_t name(Hacl_Vec128_t a) { return a; }
+HACL_VEC128_STUB1(Hacl_Vec128_subword)
+HACL_VEC128_STUB1(Hacl_Vec128_bcast_rot)
+HACL_VEC128_STUB1(Hacl_Vec128_bcast_sub)
 HACL_VEC128_STUB1(Hacl_Vec128_shift_left_bytes_4)
 HACL_VEC128_STUB1(Hacl_Vec128_shift_right_bytes_4)
 HACL_VEC128_STUB1(Hacl_Vec128_shift_left_bytes_8)
@@ -301,6 +350,21 @@ static inline Hacl_Vec128_t Hacl_Vec128_reduction(void) {
   Hacl_Vec128_t r;
   memset(&r, 0, sizeof r);
   r.b[0] = 0xe1;
+  return r;
+}
+static inline Hacl_Vec128_t Hacl_Vec128_word_bcast(uint8_t x) {
+  Hacl_Vec128_t r;
+  memset(&r, 0, sizeof r);
+  r.b[0] = x;
+  r.b[4] = x;
+  r.b[8] = x;
+  r.b[12] = x;
+  return r;
+}
+static inline Hacl_Vec128_t Hacl_Vec128_lane_one(void) {
+  Hacl_Vec128_t r;
+  memset(&r, 0, sizeof r);
+  r.b[0] = 1;
   return r;
 }
 static inline Hacl_Vec128_t Hacl_Vec128_load32(uint32_t *p) {

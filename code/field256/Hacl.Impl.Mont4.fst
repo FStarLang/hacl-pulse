@@ -421,5 +421,33 @@ ensures A.pts_to s #ps vs **
   S64.sub_mod S64.zero b
 }
 
+(** Four bits of a secret number, for the windowed scalar multiplication.
+    The index is public and divisible by four; the nibble is secret, and
+    goes straight into {!Hacl.Bignum.Base.table_select}, which is where it
+    stops being something one could branch on. *)
+
+fn adigit (s: A.array S64.t) (i: SZ.t)
+          (#ps: perm) (#vs: erased (Seq.seq S64.t))
+requires A.pts_to s #ps vs **
+  pure (Seq.length vs == nl /\ bnd (vals vs) base /\
+        SZ.v i < 256 /\ SZ.v i % 4 == 0)
+returns d: S64.t
+ensures A.pts_to s #ps vs **
+  pure (S64.v d == eval (vals vs) / pow2 (SZ.v i) % 16)
+{
+  A.pts_to_len s;
+  assert_norm (rad == 64);
+  enib (vals vs) (SZ.v i);
+  let k = SZ.div i 64sz;
+  let l = A.(s.(k));
+  let r = SZ.rem i 64sz;
+  Math.small_mod (SZ.v r) (pow2 32);
+  let j = SZ.sizet_to_uint32 r;
+  assert_norm (pow2 4 - 1 == 15);
+  assert_norm (pow2 4 == 16);
+  UInt.logand_mask #64 (S64.v (S64.shift_right l j)) 4;
+  S64.logand (S64.shift_right l j) (S64.classify 15uL)
+}
+
 #pop-options
 #pop-options
