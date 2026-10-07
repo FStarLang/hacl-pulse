@@ -83,9 +83,9 @@ let o : fops m0 =
   m0_lem ();
   { add = (fun x y -> E.fadd x y); sub = (fun x y -> E.fsub x y); mul = (fun x y -> E.fmul x y) }
 
-let o_eqs () : Lemma ((forall (x y: elem m0). o.add x y == E.fadd (tof x) (tof y)) /\
-                      (forall (x y: elem m0). o.sub x y == E.fsub (tof x) (tof y)) /\
-                      (forall (x y: elem m0). o.mul x y == E.fmul (tof x) (tof y)) /\
+let o_eqs () : Lemma ((forall (x y: elem m0). tof (o.add x y) == E.fadd (tof x) (tof y)) /\
+                      (forall (x y: elem m0). tof (o.sub x y) == E.fsub (tof x) (tof y)) /\
+                      (forall (x y: elem m0). tof (o.mul x y) == E.fmul (tof x) (tof y)) /\
                       (forall (x: elem m0). fromf (tof x) == x) /\
                       (forall (x: E.elem). tof (fromf x) == x)) = m0_lem ()
 

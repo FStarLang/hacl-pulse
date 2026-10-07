@@ -121,6 +121,12 @@ let inc32_bytes (b: block) (r12 r13 r14 r15: elem)
 
 (** {2 The increment} *)
 
+(** [--z3refresh]: by the time the carry chain is reached the solver has
+    seen every digit-extraction lemma above, all of them divisions by powers
+    of two on concrete moduli, and the state they leave behind makes this
+    one function cost tens of minutes rather than a minute.  Starting it
+    from a clean solver is also faster than the module was before. *)
+#push-options "--z3refresh"
 fn inc32_impl (ctr: A.array S8.t) (#v0: erased (Seq.seq S8.t))
 requires A.pts_to ctr v0 ** pure (Seq.length v0 == blocklen)
 ensures exists* (v1: Seq.seq S8.t). A.pts_to ctr v1 ** pure (
@@ -156,6 +162,7 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to ctr v1 ** pure (
   Seq.lemma_eq_intro (vals v1) (inc32 (vals v0));
   A.pts_to_len ctr;
 }
+#pop-options
 
 
 (** {2 The increment as a lane}

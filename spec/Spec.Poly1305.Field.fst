@@ -749,6 +749,17 @@ let ripple (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat) : prop =
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+(** Splitting the one limb a ripple leaves uncarried.  The identity is
+    linear, but the context it is wanted in carries five divisions, and the
+    solver will not do the regrouping there. *)
+let top_split (t0 t1 t2 t3 t4 f4 c: nat)
+  : Lemma (requires f4 == t4 + c * radix)
+          (ensures as_nat5 t0 t1 t2 t3 f4 ==
+                     as_nat5 t0 t1 t2 t3 t4 + c * pow2 130)
+  = Math.distributivity_add_left t4 (c * radix) (pow2 104);
+    Math.paren_mul_right c radix (pow2 104);
+    Math.pow2_plus 104 26
+
 (** What a ripple is worth: the canonical part plus the carry at [2^130]. *)
 let ripple_eval (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat)
   : Lemma (requires ripple e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c)
@@ -773,9 +784,7 @@ let f1 = e1 + e0 / radix in
     (* the top limb is the only one left uncarried; splitting it is where the
        [2^130] comes from. *)
     Math.euclidean_division_definition f4 radix;
-    Math.distributivity_add_left t4 (c * radix) (pow2 104);
-    Math.paren_mul_right c radix (pow2 104);
-    Math.pow2_plus 104 26
+    top_split t0 t1 t2 t3 t4 f4 c
 
 (** Limbs a shade over the radix cannot ripple more than four out of the top. *)
 let ripple_carry_bound (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat)

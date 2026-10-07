@@ -330,6 +330,11 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out;
   A.pts_to_len h;
   A.pts_to_len k;
+  (* The key's two words are read first, so that [s_words] is discharged
+     before the tag's own arithmetic is in scope: afterwards it times out. *)
+  let slo = load_le #S64.t k 16sz;
+  let shi = load_le #S64.t k 24sz;
+  s_words vk (S64.v slo) (S64.v shi);
   let a0 = A.(h.(0sz));
   let a1 = A.(h.(1sz));
   let a2 = A.(h.(2sz));
@@ -348,10 +353,6 @@ ensures exists* (vout': Seq.seq S8.t).
   Math.pow2_lt_compat 64 52;
   let lo = add2 (add2 a0 (shl a1 26ul)) (shl (lo12 a2) 52ul);
   let hi = add2 (add2 (shr a2 12ul) (shl a3 14ul)) (shl (lo24 a4) 40ul);
-
-  let slo = load_le #S64.t k 16sz;
-  let shi = load_le #S64.t k 24sz;
-  s_words vk (S64.v slo) (S64.v shi);
 
   let tlo = S64.add_mod lo slo;
   let mask = S64.lt_mask tlo lo;

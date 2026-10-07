@@ -99,6 +99,18 @@ let split64 (k: nat) (j: nat)
     Math.division_multiplication_lemma k (pow2 (64 * j)) (pow2 64);
     Math.euclidean_division_definition (k / pow2 (64 * j)) (pow2 64)
 
+(** Three nested splits flattened into four weighted digits.  Stated on its
+    own because it is a cubic identity in [w], and the solver will not find
+    the regrouping in a context that also carries the divisions it came
+    from. *)
+let horner4 (a0 a1 a2 a3 k k1 k2 w: nat)
+  : Lemma (requires k == a0 + w * k1 /\ k1 == a1 + w * k2 /\ k2 == a2 + w * a3)
+          (ensures k == a0 + a1 * w + a2 * (w * w) + a3 * (w * w * w))
+  = Math.distributivity_add_right w a2 (w * a3);
+    Math.distributivity_add_right w a1 (w * a2 + w * (w * a3));
+    Math.paren_mul_right w w a3;
+    Math.paren_mul_right w w (w * a3)
+
 let hi_bot (k: nat { k < pow2 256 }) : Lemma (hi k 0 == k) =
   assert_norm (pow2 0 == 1);
   split64 k 0; split64 k 1; split64 k 2; split64 k 3;
@@ -109,6 +121,8 @@ let hi_bot (k: nat { k < pow2 256 }) : Lemma (hi k 0 == k) =
   assert (part k 1 0 == (k / pow2 64) % pow2 64);
   assert (part k 2 0 == (k / pow2 128) % pow2 64);
   assert (part k 3 0 == k / pow2 192);
+  horner4 (part k 0 0) (part k 1 0) (part k 2 0) (part k 3 0)
+          k (k / pow2 64) (k / pow2 128) (pow2 64);
   Math.pow2_plus 64 64;
   Math.pow2_plus 128 64
 
