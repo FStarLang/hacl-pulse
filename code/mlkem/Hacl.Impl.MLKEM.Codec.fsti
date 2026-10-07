@@ -40,7 +40,7 @@ module S16 = Hacl.Secret.UInt16
 module Seq = FStar.Seq
 
 (** [ByteEncode_d] on one polynomial. *)
-val encode_poly (out: A.array S8.t) (f: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+val encode_poly (out: A.array S8.t) (f: A.array zqt) (d: SZ.t)
                 (#vo: erased (Seq.seq S8.t)) (#p: perm) (#vf: erased (Seq.seq zqt))
   : stt unit
     (requires A.pts_to out vo ** A.pts_to f #p vf **
@@ -52,7 +52,7 @@ val encode_poly (out: A.array S8.t) (f: A.array zqt) ([@@@FStar.Attributes.monom
              Seq.length v == 32 * SZ.v d /\ v == byte_encode (SZ.v d) (as_nats vf)))
 
 (** [ByteDecode_d] on one polynomial. *)
-val decode_poly (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+val decode_poly (dst: A.array zqt) (b: A.array S8.t) (d: SZ.t)
                 (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
   : stt unit
     (requires A.pts_to dst vd ** A.pts_to b #p vb **
@@ -64,7 +64,7 @@ val decode_poly (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monom
              Seq.length vb == 32 * SZ.v d /\ as_poly v == byte_decode (SZ.v d) vb))
 
 (** [Compress_d] on one polynomial. *)
-val compress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+val compress_poly (dst src: A.array zqt) (d: SZ.t)
                   (#p: perm) (#vd #vs: erased (Seq.seq zqt))
   : stt unit
     (requires A.pts_to dst vd ** A.pts_to src #p vs **
@@ -77,7 +77,7 @@ val compress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: 
 
 (** [Decompress_d] on one polynomial.  The guard is what the decoder's
     bound establishes. *)
-val decompress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+val decompress_poly (dst src: A.array zqt) (d: SZ.t)
                     (#p: perm) (#vd #vs: erased (Seq.seq zqt))
   : stt unit
     (requires A.pts_to dst vd ** A.pts_to src #p vs **
