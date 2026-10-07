@@ -51,6 +51,7 @@ open Spec.GF128
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Poly = Spec.GF128.Poly
+module Alg = Spec.GF128.Algebra
 
 (** {2 The little-endian bit view} *)
 
@@ -196,6 +197,14 @@ let conv_lanes (a b: block) (k: int)
     reversed form; and the reversed operands' convolution is the true
     product read backwards from [254].  Together these say what the four
     [clmul]s compute in terms of the polynomials GCM cares about. *)
+
+(** Byte reversal is a permutation of the bytes and addition is bytewise, so
+    the two commute.  This is what lets several carry-less products be
+    accumulated in the multiplier's bit order and reversed once, which is
+    the point of [Hacl.AES.GF128.NI.gmul4_vec]. *)
+let bswap_gadd (a b: block)
+  : Lemma (bswap (gadd a b) == gadd (bswap a) (bswap b))
+  = Seq.lemma_eq_intro (bswap (gadd a b)) (gadd (bswap a) (bswap b))
 
 let bswap_involutive (a: block) : Lemma (bswap (bswap a) == a)
   = Seq.lemma_eq_intro (bswap (bswap a)) a
@@ -440,6 +449,62 @@ let clmul_halves (x y qlo qhi: block)
     in
     FStar.Classical.forall_intro aux
 
+(** {3 The same without the shift}
+
+    The one-bit shift exists only to cancel the one-off in [bswap_conv].  If
+    it is omitted the unshifted pair reverses to the two halves of the
+    product polynomial {i shifted up by one place}, which is a polynomial of
+    256 coefficients like any other but not the product of two blocks --
+    hence [Poly.halvesp] rather than [Poly.halves]. *)
+
+(** The product polynomial of two blocks, shifted up one place: what a
+    multiplier without the shift leaves in its two registers. *)
+let pshift1 (x y: block) : poly =
+  pshift (pmul (Poly.pbits x) (Poly.pbits y)) 1
+
+let clmul_halves_ns (x y lo hi: block)
+  : Lemma (requires is_lo x y lo /\ is_hi x y hi)
+          (ensures Poly.halvesp (pshift1 x y) (bswap hi) (bswap lo))
+  = let pp = pmul (Poly.pbits x) (Poly.pbits y) in
+    let aux (k: nat { k < 128 })
+      : Lemma (bit (bswap hi) k == pget (pshift pp 1) k /\
+               bit (bswap lo) k == pget (pshift pp 1) (128 + k))
+      = bswap_bit hi k;
+        bswap_bit lo k;
+        bswap_conv x y (255 - k);
+        bswap_conv x y (127 - k);
+        pshift_get pp 1 k;
+        pshift_get pp 1 (128 + k)
+    in
+    FStar.Classical.forall_intro aux
+
+(** And so a multiplier without the shift computes [x] times the field
+    product: the three low halves added together are [xtimes (gmul x y)].
+    Pre-dividing one operand by [x] -- which costs one shift, once, at key
+    setup -- therefore recovers the product exactly. *)
+
+(** The bridge: the reduction of the shifted product is the field product of
+    [x] with [y] advanced once.  Both halves of the identity are needed --
+    [Spec.GF128.Algebra.pmod_shift1] to get [x] times the product, and
+    [Spec.GF128.Algebra.gmul_xt_right] to move that [x] into the operand,
+    where a key pre-divided once at setup cancels it. *)
+#push-options "--fuel 2"
+let pmodx (x y: block)
+  : Lemma (Poly.pmod (pshift1 x y) 256 == gmul x (Poly.xtimes y))
+  = Poly.pcoef_top x y;
+    Alg.pmod_shift1 (pmul (Poly.pbits x) (Poly.pbits y)) 256;
+    Poly.gmul_is_pmod x y;
+    Alg.gmul_xt_right x y 1
+#pop-options
+
+let gmulx_three (x y u1 v1 u2 v2 u3 v3: block)
+  : Lemma (requires Poly.halvesp (pshift1 x y) u1 v1 /\
+                    Poly.halves v1 r_block u2 v2 /\
+                    Poly.halves v2 r_block u3 v3)
+          (ensures gmul x (Poly.xtimes y) == gadd u1 (gadd u2 u3))
+  = Poly.pmod_three (pshift1 x y) u1 v1 u2 v2 u3 v3;
+    pmodx x y
+
 #pop-options
 
 (** {2 Multiplying by the reduction constant without a multiplier}
@@ -560,3 +625,318 @@ let mul_r_halves (a ua wa: block)
     FStar.Classical.forall_intro aux
 
 #pop-options
+
+(** {2 Karatsuba, and the fold the group may defer}
+
+    The multiplier above spends four carry-less multiplies per block: the two
+    halves of the product, and the two crossed terms that make up [mid].  Only
+    the sum of the crossed terms is ever used, and Karatsuba computes that sum
+    with one multiply instead of two,
+
+      [(x0 + x1) (y0 + y1) + x0 y0 + x1 y1  =  x0 y1 + x1 y0,]
+
+    which over a field of characteristic two is exact, with no borrow to worry
+    about and no wider intermediate: the fold that would normally be the price
+    of Karatsuba is three exclusive-ors of registers already in hand.
+
+    That saving pairs with a second one.  Assembling [mid] into the two halves
+    costs a shift each way and two more exclusive-ors, and the bulk loop then
+    throws the halves of eight blocks together anyway.  Since the assembly is
+    linear in [mid], it commutes with that sum: accumulate the three raw
+    registers across the group and assemble once at the end.  The lemmas below
+    are what lets the implementation leave the per-block halves uncomputed —
+    they exist only as the ghost blocks [kfold_lo] and [kfold_hi]. *)
+
+(** Sixty-four bits up and sixty-four bits down.  A block is bytes and the
+    little-endian numbering puts bit [k] in byte [k / 8], so the shift is a
+    slice and a splice rather than any arithmetic. *)
+
+let shl8 (a: block) : block =
+  Seq.append (Seq.create 8 (0 <: elem)) (Seq.slice a 0 8)
+
+let shr8 (a: block) : block =
+  Seq.append (Seq.slice a 8 16) (Seq.create 8 (0 <: elem))
+
+let shl8_bit (a: block) (k: nat { k < 128 })
+  : Lemma (lebit (shl8 a) k == lebiti a (k - 64))
+  = reveal_opaque (`%lebit) lebit;
+    Math.lemma_div_lt_nat k 7 3;
+    if k < 64 then
+      Seq.lemma_index_app1 (Seq.create 8 (0 <: elem)) (Seq.slice a 0 8) (k / 8)
+    else begin
+      Seq.lemma_index_app2 (Seq.create 8 (0 <: elem)) (Seq.slice a 0 8) (k / 8);
+      Math.lemma_div_plus (k - 64) 8 8;
+      Math.lemma_mod_plus (k - 64) 8 8
+    end
+
+let shr8_bit (a: block) (k: nat { k < 128 })
+  : Lemma (lebit (shr8 a) k == lebiti a (k + 64))
+  = reveal_opaque (`%lebit) lebit;
+    Math.lemma_div_lt_nat k 7 3;
+    if k < 64 then begin
+      Seq.lemma_index_app1 (Seq.slice a 8 16) (Seq.create 8 (0 <: elem)) (k / 8);
+      Math.lemma_div_plus k 8 8;
+      Math.lemma_mod_plus k 8 8
+    end else
+      Seq.lemma_index_app2 (Seq.slice a 8 16) (Seq.create 8 (0 <: elem)) (k / 8)
+
+(** Both shifts are additive, which is the whole reason the fold may be put
+    off: a sum of shifted blocks is the shift of the sum. *)
+
+let shl8_gadd (a b: block)
+  : Lemma (shl8 (gadd a b) == gadd (shl8 a) (shl8 b))
+  = let aux (k: nat { k < 128 })
+      : Lemma (lebit (shl8 (gadd a b)) k == lebit (gadd (shl8 a) (shl8 b)) k)
+      = shl8_bit (gadd a b) k; shl8_bit a k; shl8_bit b k;
+        lexori a b (k - 64); lexor (shl8 a) (shl8 b) k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj (shl8 (gadd a b)) (gadd (shl8 a) (shl8 b))
+
+let shr8_gadd (a b: block)
+  : Lemma (shr8 (gadd a b) == gadd (shr8 a) (shr8 b))
+  = let aux (k: nat { k < 128 })
+      : Lemma (lebit (shr8 (gadd a b)) k == lebit (gadd (shr8 a) (shr8 b)) k)
+      = shr8_bit (gadd a b) k; shr8_bit a k; shr8_bit b k;
+        lexori a b (k + 64); lexor (shr8 a) (shr8 b) k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj (shr8 (gadd a b)) (gadd (shr8 a) (shr8 b))
+
+(** Recovering the crossed sum from the folded product: the two square terms
+    are taken back out.  This too is linear in all three arguments, so it too
+    may be put off until the end of a group -- which is what makes the
+    Karatsuba form cheaper than the four-multiply one even when nothing is
+    reused, rather than only in bulk. *)
+
+let kmid (ll hh mf: block) : block = gadd mf (gadd ll hh)
+
+let kmid_isbits (ll hh mf: block)
+  : Lemma (forall (k: int). lebiti (kmid ll hh mf) k ==
+             ((lebiti mf k <> lebiti ll k) <> lebiti hh k))
+  = FStar.Classical.forall_intro (lexori ll hh);
+    FStar.Classical.forall_intro (lexori mf (gadd ll hh))
+
+let kmid_gadd (l1 h1 f1 l2 h2 f2: block)
+  : Lemma (gadd (kmid l1 h1 f1) (kmid l2 h2 f2) ==
+           kmid (gadd l1 l2) (gadd h1 h2) (gadd f1 f2))
+  = let aux (k: nat { k < 128 })
+      : Lemma (lebit (gadd (kmid l1 h1 f1) (kmid l2 h2 f2)) k ==
+               lebit (kmid (gadd l1 l2) (gadd h1 h2) (gadd f1 f2)) k)
+      = lexor (kmid l1 h1 f1) (kmid l2 h2 f2) k;
+        kmid_isbits l1 h1 f1; kmid_isbits l2 h2 f2;
+        kmid_isbits (gadd l1 l2) (gadd h1 h2) (gadd f1 f2);
+        lexori l1 l2 k; lexori h1 h2 k; lexori f1 f2 k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj (gadd (kmid l1 h1 f1) (kmid l2 h2 f2))
+               (kmid (gadd l1 l2) (gadd h1 h2) (gadd f1 f2))
+
+let kmid_sum4 (l1 h1 f1 l2 h2 f2 l3 h3 f3 l4 h4 f4: block)
+  : Lemma (Alg.sum4 (kmid l1 h1 f1) (kmid l2 h2 f2)
+                    (kmid l3 h3 f3) (kmid l4 h4 f4) ==
+           kmid (Alg.sum4 l1 l2 l3 l4) (Alg.sum4 h1 h2 h3 h4)
+                (Alg.sum4 f1 f2 f3 f4))
+  = kmid_gadd l3 h3 f3 l4 h4 f4;
+    kmid_gadd l2 h2 f2 (gadd l3 l4) (gadd h3 h4) (gadd f3 f4);
+    kmid_gadd l1 h1 f1 (gadd l2 (gadd l3 l4)) (gadd h2 (gadd h3 h4))
+              (gadd f2 (gadd f3 f4))
+
+let kmid_sum8 (l1 h1 f1 l2 h2 f2 l3 h3 f3 l4 h4 f4
+               l5 h5 f5 l6 h6 f6 l7 h7 f7 l8 h8 f8: block)
+  : Lemma (Alg.sum8 (kmid l1 h1 f1) (kmid l2 h2 f2)
+                    (kmid l3 h3 f3) (kmid l4 h4 f4)
+                    (kmid l5 h5 f5) (kmid l6 h6 f6)
+                    (kmid l7 h7 f7) (kmid l8 h8 f8) ==
+           kmid (Alg.sum8 l1 l2 l3 l4 l5 l6 l7 l8)
+                (Alg.sum8 h1 h2 h3 h4 h5 h6 h7 h8)
+                (Alg.sum8 f1 f2 f3 f4 f5 f6 f7 f8))
+  = kmid_sum4 l1 h1 f1 l2 h2 f2 l3 h3 f3 l4 h4 f4;
+    kmid_sum4 l5 h5 f5 l6 h6 f6 l7 h7 f7 l8 h8 f8;
+    kmid_gadd (Alg.sum4 l1 l2 l3 l4) (Alg.sum4 h1 h2 h3 h4)
+              (Alg.sum4 f1 f2 f3 f4)
+              (Alg.sum4 l5 l6 l7 l8) (Alg.sum4 h5 h6 h7 h8)
+              (Alg.sum4 f5 f6 f7 f8)
+
+(** The two halves of a product, as the three registers hold them. *)
+
+let kfold_lo (ll mm: block) : block = gadd ll (shl8 mm)
+let kfold_hi (hh mm: block) : block = gadd hh (shr8 mm)
+
+(** Bit by bit, the assembled half is the raw half with the middle term
+    shifted into place -- which is exactly the shape [lo_of_lanes] asks for,
+    so the ghost block may be handed to it in place of a register. *)
+
+let kfold_lo_bit (ll mm: block) (k: nat { k < 128 })
+  : Lemma (lebit (kfold_lo ll mm) k == (lebiti ll k <> lebiti mm (k - 64)))
+  = lexor ll (shl8 mm) k; shl8_bit mm k
+
+let kfold_hi_bit (hh mm: block) (k: nat { k < 128 })
+  : Lemma (lebit (kfold_hi hh mm) k == (lebiti hh k <> lebiti mm (k + 64)))
+  = lexor hh (shr8 mm) k; shr8_bit mm k
+
+let kfold_lo_isbits (ll mm: block)
+  : Lemma (forall (k: int). 0 <= k /\ k < 128 ==>
+             lebiti (kfold_lo ll mm) k == (lebiti ll k <> lebiti mm (k - 64)))
+  = FStar.Classical.forall_intro (kfold_lo_bit ll mm)
+
+let kfold_hi_isbits (hh mm: block)
+  : Lemma (forall (k: int). 0 <= k /\ k < 128 ==>
+             lebiti (kfold_hi hh mm) k == (lebiti hh k <> lebiti mm (k + 64)))
+  = FStar.Classical.forall_intro (kfold_hi_bit hh mm)
+
+(** A register holding the assembled half is that ghost block. *)
+
+let kfold_lo_bits (ll mm v: block)
+  : Lemma (requires forall (k: int). 0 <= k /\ k < 128 ==>
+                      lebiti v k == (lebiti ll k <> lebiti mm (k - 64)))
+          (ensures v == kfold_lo ll mm)
+  = let aux (k: nat { k < 128 })
+      : Lemma (lebit v k == lebit (kfold_lo ll mm) k)
+      = kfold_lo_bit ll mm k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj v (kfold_lo ll mm)
+
+let kfold_hi_bits (hh mm v: block)
+  : Lemma (requires forall (k: int). 0 <= k /\ k < 128 ==>
+                      lebiti v k == (lebiti hh k <> lebiti mm (k + 64)))
+          (ensures v == kfold_hi hh mm)
+  = let aux (k: nat { k < 128 })
+      : Lemma (lebit v k == lebit (kfold_hi hh mm) k)
+      = kfold_hi_bit hh mm k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj v (kfold_hi hh mm)
+
+(** Assembling commutes with addition, one pair at a time and then over the
+    four and the eight the bulk loops work in. *)
+
+let kfold_lo_gadd (l1 m1 l2 m2: block)
+  : Lemma (gadd (kfold_lo l1 m1) (kfold_lo l2 m2) ==
+           kfold_lo (gadd l1 l2) (gadd m1 m2))
+  = shl8_gadd m1 m2;
+    let aux (k: nat { k < 128 })
+      : Lemma (lebit (gadd (kfold_lo l1 m1) (kfold_lo l2 m2)) k ==
+               lebit (kfold_lo (gadd l1 l2) (gadd m1 m2)) k)
+      = lexor (kfold_lo l1 m1) (kfold_lo l2 m2) k;
+        lexor l1 (shl8 m1) k; lexor l2 (shl8 m2) k;
+        lexor (gadd l1 l2) (shl8 (gadd m1 m2)) k;
+        lexor l1 l2 k; lexor (shl8 m1) (shl8 m2) k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj (gadd (kfold_lo l1 m1) (kfold_lo l2 m2))
+               (kfold_lo (gadd l1 l2) (gadd m1 m2))
+
+let kfold_hi_gadd (h1 m1 h2 m2: block)
+  : Lemma (gadd (kfold_hi h1 m1) (kfold_hi h2 m2) ==
+           kfold_hi (gadd h1 h2) (gadd m1 m2))
+  = shr8_gadd m1 m2;
+    let aux (k: nat { k < 128 })
+      : Lemma (lebit (gadd (kfold_hi h1 m1) (kfold_hi h2 m2)) k ==
+               lebit (kfold_hi (gadd h1 h2) (gadd m1 m2)) k)
+      = lexor (kfold_hi h1 m1) (kfold_hi h2 m2) k;
+        lexor h1 (shr8 m1) k; lexor h2 (shr8 m2) k;
+        lexor (gadd h1 h2) (shr8 (gadd m1 m2)) k;
+        lexor h1 h2 k; lexor (shr8 m1) (shr8 m2) k
+    in
+    FStar.Classical.forall_intro aux;
+    lebits_inj (gadd (kfold_hi h1 m1) (kfold_hi h2 m2))
+               (kfold_hi (gadd h1 h2) (gadd m1 m2))
+
+let kfold_lo_sum4 (l1 m1 l2 m2 l3 m3 l4 m4: block)
+  : Lemma (Alg.sum4 (kfold_lo l1 m1) (kfold_lo l2 m2)
+                    (kfold_lo l3 m3) (kfold_lo l4 m4) ==
+           kfold_lo (Alg.sum4 l1 l2 l3 l4) (Alg.sum4 m1 m2 m3 m4))
+  = kfold_lo_gadd l3 m3 l4 m4;
+    kfold_lo_gadd l2 m2 (gadd l3 l4) (gadd m3 m4);
+    kfold_lo_gadd l1 m1 (gadd l2 (gadd l3 l4)) (gadd m2 (gadd m3 m4))
+
+let kfold_hi_sum4 (h1 m1 h2 m2 h3 m3 h4 m4: block)
+  : Lemma (Alg.sum4 (kfold_hi h1 m1) (kfold_hi h2 m2)
+                    (kfold_hi h3 m3) (kfold_hi h4 m4) ==
+           kfold_hi (Alg.sum4 h1 h2 h3 h4) (Alg.sum4 m1 m2 m3 m4))
+  = kfold_hi_gadd h3 m3 h4 m4;
+    kfold_hi_gadd h2 m2 (gadd h3 h4) (gadd m3 m4);
+    kfold_hi_gadd h1 m1 (gadd h2 (gadd h3 h4)) (gadd m2 (gadd m3 m4))
+
+let kfold_lo_sum8 (l1 m1 l2 m2 l3 m3 l4 m4 l5 m5 l6 m6 l7 m7 l8 m8: block)
+  : Lemma (Alg.sum8 (kfold_lo l1 m1) (kfold_lo l2 m2)
+                    (kfold_lo l3 m3) (kfold_lo l4 m4)
+                    (kfold_lo l5 m5) (kfold_lo l6 m6)
+                    (kfold_lo l7 m7) (kfold_lo l8 m8) ==
+           kfold_lo (Alg.sum8 l1 l2 l3 l4 l5 l6 l7 l8)
+                    (Alg.sum8 m1 m2 m3 m4 m5 m6 m7 m8))
+  = kfold_lo_sum4 l1 m1 l2 m2 l3 m3 l4 m4;
+    kfold_lo_sum4 l5 m5 l6 m6 l7 m7 l8 m8;
+    kfold_lo_gadd (Alg.sum4 l1 l2 l3 l4) (Alg.sum4 m1 m2 m3 m4)
+                  (Alg.sum4 l5 l6 l7 l8) (Alg.sum4 m5 m6 m7 m8)
+
+let kfold_hi_sum8 (h1 m1 h2 m2 h3 m3 h4 m4 h5 m5 h6 m6 h7 m7 h8 m8: block)
+  : Lemma (Alg.sum8 (kfold_hi h1 m1) (kfold_hi h2 m2)
+                    (kfold_hi h3 m3) (kfold_hi h4 m4)
+                    (kfold_hi h5 m5) (kfold_hi h6 m6)
+                    (kfold_hi h7 m7) (kfold_hi h8 m8) ==
+           kfold_hi (Alg.sum8 h1 h2 h3 h4 h5 h6 h7 h8)
+                    (Alg.sum8 m1 m2 m3 m4 m5 m6 m7 m8))
+  = kfold_hi_sum4 h1 m1 h2 m2 h3 m3 h4 m4;
+    kfold_hi_sum4 h5 m5 h6 m6 h7 m7 h8 m8;
+    kfold_hi_gadd (Alg.sum4 h1 h2 h3 h4) (Alg.sum4 m1 m2 m3 m4)
+                  (Alg.sum4 h5 h6 h7 h8) (Alg.sum4 m5 m6 m7 m8)
+
+(** Byte reversal is additive too, so a sum of reversed blocks is the reversal
+    of the sum.  The accumulators are stated reversed and the fold is not. *)
+
+let bswap_sum4 (a b c d: block)
+  : Lemma (Alg.sum4 (bswap a) (bswap b) (bswap c) (bswap d) ==
+           bswap (Alg.sum4 a b c d))
+  = bswap_gadd c d;
+    bswap_gadd b (gadd c d);
+    bswap_gadd a (gadd b (gadd c d))
+
+let bswap_sum8 (a b c d e f g h: block)
+  : Lemma (Alg.sum8 (bswap a) (bswap b) (bswap c) (bswap d)
+                    (bswap e) (bswap f) (bswap g) (bswap h) ==
+           bswap (Alg.sum8 a b c d e f g h))
+  = bswap_sum4 a b c d;
+    bswap_sum4 e f g h;
+    bswap_gadd (Alg.sum4 a b c d) (Alg.sum4 e f g h)
+
+let bswap_inj (a b: block)
+  : Lemma (requires bswap a == bswap b) (ensures a == b)
+  = bswap_involutive a; bswap_involutive b
+
+(** {3 The Karatsuba identity}
+
+    The folded operand's low lane is the sum of the two lanes it was built
+    from: both sides are [Seq.init 64] over the same bits. *)
+
+let fold_lane (a f: block)
+  : Lemma (requires forall (k: int). 0 <= k /\ k < 128 ==>
+                      lebiti f k == (lebiti a k <> lebiti a (k + 64)))
+          (ensures lane f false == padd (lane a false) (lane a true))
+  = Seq.lemma_eq_intro (lane f false) (padd (lane a false) (lane a true))
+
+(** And the identity itself: the product of the folded operands, with the two
+    square terms taken back out, is the sum of the crossed terms. *)
+
+let kara_mid (al ah bl bh: poly) (k: int)
+  : Lemma (requires Seq.length al == 64 /\ Seq.length ah == 64)
+          (ensures ((conv (padd al ah) (padd bl bh) k <> conv al bl k) <>
+                    conv ah bh k) ==
+                   (conv al bh k <> conv ah bl k))
+  = conv_add_left al ah (padd bl bh) k 64;
+    conv_add_right al bl bh k;
+    conv_add_right ah bl bh k
+
+(** Specialised to the lanes of two registers, which is how the implementation
+    meets it, and where the sixty-four-bit lengths are still in plain sight. *)
+
+let kara_mid_lanes (xa yb: block) (k: int)
+  : Lemma (((conv (padd (lane xa false) (lane xa true))
+                  (padd (lane yb false) (lane yb true)) k <>
+             conv (lane xa false) (lane yb false) k) <>
+            conv (lane xa true) (lane yb true) k) ==
+           (conv (lane xa false) (lane yb true) k <>
+            conv (lane xa true) (lane yb false) k))
+  = kara_mid (lane xa false) (lane xa true) (lane yb false) (lane yb true) k

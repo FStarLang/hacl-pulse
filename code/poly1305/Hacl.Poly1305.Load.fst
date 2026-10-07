@@ -200,13 +200,16 @@ ensures exists* (ve': Seq.seq S64.t). A.pts_to e ve' ** A.pts_to b #pb vb **
 fn load_r (r: A.array S64.t) (k: A.array S8.t)
           (#vr: erased (Seq.seq S64.t)) (#pk: perm) (#vk: erased (Seq.seq S8.t))
 requires A.pts_to r vr ** A.pts_to k #pk vk **
-         pure (Seq.length vr == 5 /\ Seq.length vk == 32)
+         pure (Seq.length vr == 9 /\ Seq.length vk == 32)
 ensures exists* (vr': Seq.seq S64.t). A.pts_to r vr' ** A.pts_to k #pk vk **
-  pure (Seq.length vr' == 5 /\ bounded vr' 26 /\ Seq.length vk == 32 /\
-        feval vr' == Spec.r_of vk)
+  pure (Seq.length vr' == 9 /\ bounded vr' 26 /\ has5 vr' /\
+        Seq.length vk == 32 /\ feval vr' == Spec.r_of vk)
 {
   A.pts_to_len r;
   A.pts_to_len k;
+  let zr = S64.zero;
+  let mut rtmp = [| zr; 5sz |];
+  A.pts_to_len rtmp;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
   A.pts_to_len tarr;
@@ -230,7 +233,26 @@ ensures exists* (vr': Seq.seq S64.t). A.pts_to r vr' ** A.pts_to k #pk vk **
   let hi = load_le #S64.t tarr 8sz;
   le_nat_split vt 8;
   assert_norm (pow2 (8 * 8) == pow2 64);
-  store_limbs r lo hi S64.zero;
+  store_limbs rtmp lo hi S64.zero;
+  with vt5. assert (A.pts_to rtmp vt5);
+  let a0 = A.(rtmp.(0sz));
+  let a1 = A.(rtmp.(1sz));
+  let a2 = A.(rtmp.(2sz));
+  let a3 = A.(rtmp.(3sz));
+  let a4 = A.(rtmp.(4sz));
+  five_small (S64.v a1);
+  five_small (S64.v a2);
+  five_small (S64.v a3);
+  five_small (S64.v a4);
+  A.((r.(0sz) <- a0));
+  A.((r.(1sz) <- a1));
+  A.((r.(2sz) <- a2));
+  A.((r.(3sz) <- a3));
+  A.((r.(4sz) <- a4));
+  A.((r.(5sz) <- times5 a1));
+  A.((r.(6sz) <- times5 a2));
+  A.((r.(7sz) <- times5 a3));
+  A.((r.(8sz) <- times5 a4));
   ()
 }
 
@@ -280,6 +302,18 @@ let tag_bytes (vout: Seq.seq S8.t) (tlo thi n: nat)
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro vout (nat_to_le 16 n)
 
+(** The key's second half as two words.  Like the tag's arithmetic, this is
+    kept pure: slices of slices are not something the solver finds on its own
+    in a context that also carries separation logic. *)
+let s_words (vk: Seq.lseq S8.t 32) (slo shi: nat)
+  : Lemma (requires slo == le_nat (Seq.slice vk 16 24) /\
+                    shi == le_nat (Seq.slice vk 24 32))
+          (ensures Spec.s_of vk == slo + pow2 64 * shi)
+  = le_nat_split (Seq.slice vk 16 32) 8;
+    Seq.lemma_eq_intro (Seq.slice (Seq.slice vk 16 32) 0 8) (Seq.slice vk 16 24);
+    Seq.lemma_eq_intro (Seq.slice (Seq.slice vk 16 32) 8 16) (Seq.slice vk 24 32);
+    assert_norm (pow2 (8 * 8) == pow2 64)
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 fn store_tag (out: A.array S8.t) (h: A.array S64.t) (k: A.array S8.t)
@@ -317,18 +351,19 @@ ensures exists* (vout': Seq.seq S8.t).
 
   let slo = load_le #S64.t k 16sz;
   let shi = load_le #S64.t k 24sz;
-  le_nat_split (Seq.slice vk 16 32) 8;
-  Seq.lemma_eq_intro (Seq.slice (Seq.slice vk 16 32) 0 8) (Seq.slice vk 16 24);
-  Seq.lemma_eq_intro (Seq.slice (Seq.slice vk 16 32) 8 16) (Seq.slice vk 24 32);
-  assert_norm (pow2 (8 * 8) == pow2 64);
+  s_words vk (S64.v slo) (S64.v shi);
 
   let tlo = S64.add_mod lo slo;
-  wrap_test (S64.v lo) (S64.v slo);
-  let carry = bit0 (S64.lt_mask tlo lo);
+  let mask = S64.lt_mask tlo lo;
+  let carry = bit0 mask;
   let thi = S64.add_mod (S64.add_mod hi shi) carry;
-  Math.lemma_mod_add_distr (S64.v carry) (S64.v hi + S64.v shi) (pow2 64);
-  add128 (S64.v lo) (S64.v hi) (S64.v slo) (S64.v shi);
-  Math.lemma_mod_add_distr (Spec.s_of vk) (feval vh) (pow2 128);
+  (* Every step of the tag's arithmetic is in [tag_combine], a pure lemma:
+     the machine values go in and the two words come out, and none of it has
+     to be redone in a context that also carries separation logic. *)
+  tag_combine (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4)
+              (S64.v lo) (S64.v hi) (S64.v slo) (S64.v shi)
+              (S64.v mask) (S64.v carry) (S64.v tlo) (S64.v thi)
+              (Spec.s_of vk);
 
   store_le #S64.t out 0sz tlo;
   store_le #S64.t out 8sz thi;

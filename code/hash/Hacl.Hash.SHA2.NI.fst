@@ -559,3 +559,105 @@ ensures exists* vout'.
   ()
 }
 #pop-options
+
+(** {2 The prefixed hash}
+
+    HMAC hashes a block it has just built -- [K0 ^ ipad], or [K0 ^ opad] --
+    followed by a message it must not copy, so it cannot call [hash_impl] on
+    a contiguous buffer and it does not.  [Hacl.Hash.SHA2.Core.hash_prefixed]
+    absorbs the prefix block and then reads the rest out of the caller's
+    array, which is why HMAC of a gigabyte costs no more memory than HMAC of
+    a byte.  That function is generic in the word type, so like [hash_impl]
+    it cannot branch into the SHA instructions; this is it specialized.
+
+    Without this, every HMAC-SHA-256 in the library ran the scalar block
+    function even on a machine whose SHA-256 was using [SHA256RNDS2], which
+    made HMAC of a long message about five times the cost of hashing the
+    same bytes.  HKDF, HMAC-DRBG and every caller of either inherited it. *)
+
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+
+fn hash_prefixed_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
+                    (kt: A.array S32.t) (ivt: A.array S32.t) (out: A.array S8.t)
+                    (blk: A.array S8.t) (input: A.array S8.t) (lin: SZ.t)
+                    (#pk: perm) (#vk: erased (Seq.seq S32.t))
+                    (#pi: perm) (#vi: erased (Seq.seq S32.t))
+                    (#vout: erased (Seq.seq S8.t))
+                    (#pb: perm) (#vb: erased (Seq.seq S8.t))
+                    (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to blk #pb vb ** A.pts_to input #pin vin **
+         pure (is_sha256 p /\
+               reveal vk == (reveal p.k <: Seq.seq S32.t) /\
+               reveal vi == (reveal p.iv <: Seq.seq S32.t) /\
+               Seq.length vout == (hash_bytes p) /\
+               Seq.length vb == block_len #S32.t /\
+               SZ.fits (block_len #S32.t + Seq.length vin) /\
+               block_len #S32.t + Seq.length vin < pow2 61 /\
+               block_len #S32.t + Seq.length vin < max_input #S32.t)
+         ** pure (SZ.v lin == Seq.length vin)
+ensures exists* vout'.
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to blk #pb vb ** A.pts_to input #pin vin **
+  pure (Seq.length vb + Seq.length vin < max_input #S32.t /\
+        vout' == hash p (Seq.append vb vin))
+{
+  A.pts_to_len kt;
+  A.pts_to_len ivt;
+  A.pts_to_len out;
+  A.pts_to_len blk;
+  A.pts_to_len input;
+  let len = SZ.add 64sz lin;
+  let nfull = SZ.div lin 64sz;
+  let rem = SZ.rem lin 64sz;
+  let z0: S32.t = zero #S32.t;
+
+  let mut starr = [| z0; 8sz |];
+  A.pts_to_len starr;
+  let mut c = 0sz;
+  while (let vc = !c; SZ.lt vc 8sz)
+  invariant exists* (vc: SZ.t) (vst: Seq.seq S32.t).
+    pts_to c vc ** A.pts_to starr vst ** A.pts_to ivt #pi vi **
+    pure (SZ.v vc <= 8 /\ Seq.length vst == 8 /\
+          (forall (j: nat). j < SZ.v vc ==>
+             Seq.index vst j == Seq.index (reveal p.iv <: Seq.seq S32.t) j))
+  decreases (8 - SZ.v (!c))
+  {
+    let vc = !c;
+    let x = A.(ivt.(vc));
+    A.((starr.(vc) <- x));
+    c := SZ.add vc 1sz;
+  };
+  with vst_init. assert (A.pts_to starr vst_init);
+  Seq.lemma_eq_intro vst_init (reveal p.iv <: Seq.seq S32.t);
+  Seq.lemma_eq_elim vst_init (reveal p.iv <: Seq.seq S32.t);
+
+  let mut wsarr = [| z0; p.nrounds |];
+  A.pts_to_len wsarr;
+
+  Seq.lemma_len_append (reveal vb) (reveal vin);
+  padded_shape #S32.t (Seq.append vb vin);
+  padded_index_block #S32.t (Seq.append vb vin) 0;
+  append_first_block #S32.t (reveal vb) (reveal vin);
+  update_block_ni p kt wsarr starr blk 0sz;
+  repeati_g_zero (update_step p (padded #S32.t (Seq.append vb vin))) (reveal p.iv);
+  unfold_repeati_g 0 (update_step p (padded #S32.t (Seq.append vb vin))) (reveal p.iv);
+
+  Math.lemma_mod_plus (SZ.v lin) 1 (block_len #S32.t);
+  assert (pure (SZ.v rem == SZ.v len % block_len #S32.t));
+  Math.euclidean_division_definition (SZ.v lin) (block_len #S32.t);
+  Math.distributivity_add_left 1 (SZ.v nfull) (block_len #S32.t);
+  assert (pure (SZ.v len - SZ.v rem == (1 + SZ.v nfull) * block_len #S32.t));
+  Math.multiply_fractions (SZ.v lin) (block_len #S32.t);
+  Math.lemma_mult_le_left (SZ.v nfull) 1 (block_len #S32.t);
+  SZ.fits_lte (1 + SZ.v nfull) (block_len #S32.t + SZ.v lin);
+
+  hash_blocks_ni p kt wsarr starr input 1sz nfull vb;
+  let nb = SZ.add 1sz nfull;
+  let base_in = SZ.sub lin rem;
+  tail_and_finish p kt wsarr starr out input len nb base_in rem vb;
+
+  ()
+}
+
+#pop-options

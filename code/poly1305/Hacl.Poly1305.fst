@@ -144,15 +144,15 @@ fn absorb_blocks (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
 requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
          A.pts_to msg #pm vmsg **
-         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
-               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+         pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\ has5 vr /\
                16 * SZ.v n <= Seq.length vmsg /\
                feval vh % prime == reveal acc)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
   A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
-        bounded vh' 27 /\ bounded vr 26 /\ 16 * SZ.v n <= Seq.length vmsg /\
+        bounded vh' 27 /\ bounded vr 26 /\ has5 vr /\ 16 * SZ.v n <= Seq.length vmsg /\
         feval vh' % prime ==
           Spec.blocks_acc vmsg 0 (SZ.v n) (feval vr) (reveal acc))
 {
@@ -201,15 +201,15 @@ fn absorb_tail (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
                (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
 requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
          A.pts_to msg #pm vmsg **
-         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
-               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+         pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\ has5 vr /\
                SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
                feval vh % prime == reveal acc)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
   A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
-        bounded vh' 27 /\ bounded vr 26 /\
+        bounded vh' 27 /\ bounded vr 26 /\ has5 vr /\
         SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
         feval vh' % prime ==
           (if SZ.v blen = 0 then reveal acc
@@ -237,8 +237,8 @@ fn absorb_pad (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
               (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
 requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
          A.pts_to msg #pm vmsg **
-         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
-               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+         pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\ has5 vr /\
                0 < SZ.v blen /\ SZ.v blen < 16 /\
                SZ.v off + SZ.v blen <= Seq.length vmsg /\
                feval vh % prime == reveal acc)
@@ -246,7 +246,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
   A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
-        bounded vh' 27 /\ bounded vr 26 /\
+        bounded vh' 27 /\ bounded vr 26 /\ has5 vr /\
         SZ.v blen < 16 /\ SZ.v off + SZ.v blen <= Seq.length vmsg /\
         feval vh' % prime ==
           ((reveal acc +
@@ -289,15 +289,15 @@ fn absorb_seg (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
               (#pm: perm) (#vmsg: erased (Seq.seq S8.t)) (#acc: erased nat)
 requires A.pts_to h vh ** A.pts_to r vr ** A.pts_to d vd ** A.pts_to e ve **
          A.pts_to msg #pm vmsg **
-         pure (Seq.length vh == 5 /\ Seq.length vr == 5 /\ Seq.length vd == 5 /\
-               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\
+         pure (Seq.length vh == 5 /\ Seq.length vr == 9 /\ Seq.length vd == 5 /\
+               Seq.length ve == 5 /\ bounded vh 27 /\ bounded vr 26 /\ has5 vr /\
                feval vh % prime == reveal acc)
          ** pure (SZ.v len == Seq.length vmsg)
 ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' ** A.pts_to e ve' **
   A.pts_to msg #pm vmsg **
   pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ Seq.length ve' == 5 /\
-        bounded vh' 27 /\ bounded vr 26 /\
+        bounded vh' 27 /\ bounded vr 26 /\ has5 vr /\
         feval vh' % prime == Spec.seg_acc vmsg (feval vr) (reveal acc))
 {
   A.pts_to_len msg;
@@ -337,7 +337,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len msg;
   A.pts_to_len key;
   let z = S64.zero;
-  let mut rarr = [| z; 5sz |];
+  let mut rarr = [| z; 9sz |];
   A.pts_to_len rarr;
   A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];

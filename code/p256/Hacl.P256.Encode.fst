@@ -42,6 +42,7 @@ module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module GR = Spec.P256.Group
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -112,6 +113,21 @@ ensures A.pts_to x #px vx ** A.pts_to y #py vy **
     it instead. *)
 let lpt (vb: Seq.seq S8.t) : GTot (option P.proj_point) =
   if Seq.length vb = 64 then P.load_point vb else None
+
+(** A decoded point satisfies the curve equation by construction: that is
+    exactly what {!Spec.P256.load_point} checks before it returns.  The
+    windowed multiplication needs the fact as a hypothesis, so it is
+    proved here, once, where the definition is still unfolded. *)
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 50"
+let lpt_on_curve (vb: Seq.seq S8.t)
+  : Lemma (requires Some? (lpt vb))
+          (ensures GR.on_curve (Some?.v (lpt vb)))
+  = let xs = Seq.slice vb 0 32 in
+    let ys = Seq.slice vb 32 64 in
+    match P.load_felem xs, P.load_felem ys with
+    | Some x, Some y -> GR.on_curve_affine x y
+    | _ -> ()
+#pop-options
 
 fn load_point (ox oy oz: A.array S64.t) (b: A.array S8.t)
               (#vox #voy #voz: erased (Seq.seq S64.t))

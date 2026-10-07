@@ -57,6 +57,7 @@ module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module S128 = Hacl.Secret.UInt128
+module Launder = Hacl.Launder
 
 module UInt = FStar.UInt
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
@@ -774,14 +775,161 @@ let row_step (e er eva: int) (aj bi r ci ri co: int) (off j: nat)
     Math.distributivity_add_right (wt (off + j)) (aj * bi + r) ci;
     Math.distributivity_add_right (wt (off + j)) (aj * bi) r
 
-#push-options "--z3rlimit 600"
+#push-options "--z3rlimit 1200"
+
+(** The row invariant at one cursor position, transported to an equal one.
+
+    Every step of a column loop hands back the invariant at [j + 1] and is
+    asked for it at [SZ.v (SZ.add j 1sz)], and every exit hands it back at
+    [vj] and is asked for it at [n].  Those indices are equal, but only by
+    arithmetic: the solver has to merge two integer terms that it has
+    proved equal in the arithmetic theory and then propagate that merge
+    under [pre] and [wt], and inside a loop body carrying three arrays it
+    reliably fails to, burning the whole rlimit.  Stated on its own, with
+    the equation as a hypothesis, it is immediate. *)
+let idx_subst (v vorig va: Seq.seq S64.t) (off x y: nat) (c bi: int)
+  : Lemma (requires x == y /\ Seq.length v == Seq.length vorig /\
+             (forall (k: nat). off + x <= k /\ k < Seq.length v ==>
+                Seq.index v k == Seq.index vorig k) /\
+             pre v (off + x) + c * wt (off + x) ==
+               pre vorig (off + x) + (pre va x * bi) * wt off)
+          (ensures (forall (k: nat). off + y <= k /\ k < Seq.length v ==>
+                      Seq.index v k == Seq.index vorig k) /\
+                   pre v (off + y) + c * wt (off + y) ==
+                     pre vorig (off + y) + (pre va y * bi) * wt off)
+  = ()
+
+(** One column of a row: the product [a.[j] * bi] accumulated at weight
+    [off + j], with the incoming carry, leaving the outgoing one.  This is
+    the whole of {!mul_row}'s loop body, given a name so that the loop can
+    be written four columns at a time.  [vres] is the row's original
+    contents, which the invariant is stated against. *)
+inline_for_extraction
+fn col (res: A.array S64.t) (a: A.array S64.t) (bi: S64.t) (off: SZ.t)
+       (vj: SZ.t) (vc: S64.t) (n: SZ.t)
+       (vres: erased (Seq.seq S64.t))
+       (#v: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to res v ** A.pts_to a #pa va **
+  pure (SZ.v n <= Seq.length va /\ SZ.v vj < SZ.v n /\
+        SZ.v off + SZ.v n <= Seq.length vres /\
+        SZ.fits (SZ.v off + SZ.v n) /\
+        Seq.length v == Seq.length vres /\
+        (forall (k: nat). SZ.v off + SZ.v vj <= k /\ k < Seq.length v ==>
+           Seq.index v k == Seq.index vres k) /\
+        pre v (SZ.v off + SZ.v vj) + S64.v vc * wt (SZ.v off + SZ.v vj) ==
+          pre vres (SZ.v off + SZ.v vj) + (pre va (SZ.v vj) * S64.v bi) * wt (SZ.v off))
+returns c: S64.t
+ensures exists* (v2: Seq.seq S64.t).
+  A.pts_to res v2 ** A.pts_to a #pa va **
+  pure (Seq.length v2 == Seq.length vres /\
+        (forall (k: nat). SZ.v off + SZ.v vj + 1 <= k /\ k < Seq.length v2 ==>
+           Seq.index v2 k == Seq.index vres k) /\
+        pre v2 (SZ.v off + SZ.v vj + 1) + S64.v c * wt (SZ.v off + SZ.v vj + 1) ==
+          pre vres (SZ.v off + SZ.v vj + 1) +
+            (pre va (SZ.v vj + 1) * S64.v bi) * wt (SZ.v off))
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  let pos = SZ.add off vj;
+  let aj = A.(a.(vj));
+  let rj = A.(res.(pos));
+  let t = mac aj bi rj vc;
+  lo_hi t;
+  let r = lo t;
+  let co = hi t;
+  A.((res.(pos) <- r));
+  pre_upd v (SZ.v pos) r (SZ.v pos);
+  pre_snoc (Seq.upd v (SZ.v pos) r) (SZ.v pos);
+  pre_snoc vres (SZ.v pos);
+  pre_snoc va (SZ.v vj);
+  row_step (pre v (SZ.v pos)) (pre vres (SZ.v pos)) (pre va (SZ.v vj))
+           (S64.v aj) (S64.v bi) (S64.v rj) (S64.v vc) (S64.v r) (S64.v co)
+           (SZ.v off) (SZ.v vj);
+  co
+}
+
+(** The columns from [j0] up to [n], one at a time.  This is the tail of
+    {!mul_row} after the unrolled part has run; it is a separate function
+    only because proving it in place, at the bottom of a body that already
+    carries the unrolled loop, puts the solver over its budget.  [vorig] is
+    the row's contents before *any* column ran, which is what the caller's
+    invariant — and hence this contract — is stated against. *)
+inline_for_extraction
+fn cols (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t) (bi: S64.t) (off: SZ.t)
+        (j0: SZ.t) (c0: S64.t)
+        (vorig: erased (Seq.seq S64.t))
+        (#v0: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to res v0 ** A.pts_to a #pa va **
+  pure (SZ.v j0 <= SZ.v n /\ SZ.v n <= Seq.length va /\
+        SZ.v off + SZ.v n <= Seq.length vorig /\
+        SZ.fits (SZ.v off + SZ.v n) /\
+        Seq.length v0 == Seq.length vorig /\
+        (forall (k: nat). SZ.v off + SZ.v j0 <= k /\ k < Seq.length v0 ==>
+           Seq.index v0 k == Seq.index vorig k) /\
+        pre v0 (SZ.v off + SZ.v j0) + S64.v c0 * wt (SZ.v off + SZ.v j0) ==
+          pre vorig (SZ.v off + SZ.v j0) + (pre va (SZ.v j0) * S64.v bi) * wt (SZ.v off))
+returns c: S64.t
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to res v ** A.pts_to a #pa va **
+  pure (Seq.length v == Seq.length vorig /\
+        (forall (k: nat). SZ.v off + SZ.v n <= k /\ k < Seq.length v ==>
+           Seq.index v k == Seq.index vorig k) /\
+        pre v (SZ.v off + SZ.v n) + S64.v c * wt (SZ.v off + SZ.v n) ==
+          pre vorig (SZ.v off + SZ.v n) + (pre va (SZ.v n) * S64.v bi) * wt (SZ.v off))
+{
+  A.pts_to_len res;
+  A.pts_to_len a;
+  let mut j = j0;
+  let mut c = c0;
+  while (let vj = !j; SZ.lt vj n)
+  invariant exists* (vj: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
+    pts_to j vj ** pts_to c vc ** A.pts_to res v ** A.pts_to a #pa va **
+    pure (SZ.v vj <= SZ.v n /\ Seq.length v == Seq.length vorig /\
+            (forall (k: nat). SZ.v off + SZ.v vj <= k /\ k < Seq.length v ==>
+             Seq.index v k == Seq.index vorig k) /\
+          pre v (SZ.v off + SZ.v vj) + S64.v vc * wt (SZ.v off + SZ.v vj) ==
+            pre vorig (SZ.v off + SZ.v vj) +
+              (pre va (SZ.v vj) * S64.v bi) * wt (SZ.v off))
+  decreases (SZ.v n - SZ.v (!j))
+  {
+    let vj = !j;
+    let vc = !c;
+    let c1 = col res a bi off vj vc n vorig;
+    let vj1 = SZ.add vj 1sz;
+    with v2. assert (A.pts_to res v2);
+    idx_subst v2 vorig va (SZ.v off) (SZ.v vj + 1) (SZ.v vj1) (S64.v c1) (S64.v bi);
+    c := c1;
+    j := vj1;
+  };
+  with vj vc v. assert (pts_to j vj ** pts_to c vc ** A.pts_to res v);
+  idx_subst v vorig va (SZ.v off) (SZ.v vj) (SZ.v n) (S64.v vc) (S64.v bi);
+  !c
+}
+
+(** Cutting the length back to a multiple of four leaves a multiple of
+    four, and a multiple of four strictly below one is four below it.  Both
+    are trivial and both are needed at every index of the unrolled body, so
+    they are proved once here rather than sixteen times in context. *)
+let rem4 (x: nat) : Lemma ((x - x % 4) % 4 == 0) = ()
+
+let gap4 (x y: nat)
+  : Lemma (requires x % 4 == 0 /\ y % 4 == 0 /\ x < y) (ensures x + 4 <= y) = ()
+
+let step4 (x: nat) : Lemma (requires x % 4 == 0) (ensures (x + 4) % 4 == 0) = ()
 
 (** [mul_row res a n bi off] is [res += a * bi * base^off], returning the
-    limb that came out of the top of the window. *)
+    limb that came out of the top of the window.
+
+    The columns are taken four at a time and then one at a time, which is
+    what HACL\*'s own inner loop does and is worth about a fifth of it: the
+    four `mulx`-`adc` chains in one iteration have four independent loads to
+    overlap with, where a single column has only the loop back-edge.  The
+    carry is still a strict chain, so this is instruction-level overlap
+    rather than parallelism. *)
 fn mul_row (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t) (bi: S64.t) (off: SZ.t)
            (#vres: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va **
-  pure (Seq.length va == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vres /\
+  pure (SZ.v n <= Seq.length va /\ SZ.v off + SZ.v n <= Seq.length vres /\
         SZ.fits (SZ.v off + SZ.v n))
 returns c: S64.t
 ensures exists* (v: Seq.seq S64.t).
@@ -790,46 +938,45 @@ ensures exists* (v: Seq.seq S64.t).
         (forall (k: nat). SZ.v off + SZ.v n <= k /\ k < Seq.length v ==>
            Seq.index v k == Seq.index vres k) /\
         pre v (SZ.v off + SZ.v n) + S64.v c * wt (SZ.v off + SZ.v n) ==
-          pre vres (SZ.v off + SZ.v n) + (num va * S64.v bi) * wt (SZ.v off))
+          pre vres (SZ.v off + SZ.v n) + (pre va (SZ.v n) * S64.v bi) * wt (SZ.v off))
 {
   A.pts_to_len res;
   A.pts_to_len a;
   pre_zero va;
+  let n4 = SZ.sub n (SZ.rem n 4sz);
+  rem4 (SZ.v n);
   let mut j = 0sz;
   let mut c = S64.zero;
-  while (let vj = !j; SZ.lt vj n)
+  while (let vj = !j; SZ.lt vj n4)
   invariant exists* (vj: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
     pts_to j vj ** pts_to c vc ** A.pts_to res v ** A.pts_to a #pa va **
-    pure (SZ.v vj <= SZ.v n /\ Seq.length v == Seq.length vres /\
+    pure (SZ.v vj <= SZ.v n4 /\ SZ.v n4 <= SZ.v n /\ SZ.v vj % 4 == 0 /\
+          SZ.v n4 % 4 == 0 /\
+          Seq.length v == Seq.length vres /\
             (forall (k: nat). SZ.v off + SZ.v vj <= k /\ k < Seq.length v ==>
              Seq.index v k == Seq.index vres k) /\
           pre v (SZ.v off + SZ.v vj) + S64.v vc * wt (SZ.v off + SZ.v vj) ==
             pre vres (SZ.v off + SZ.v vj) + (pre va (SZ.v vj) * S64.v bi) * wt (SZ.v off))
-  decreases (SZ.v n - SZ.v (!j))
+  decreases (SZ.v n4 - SZ.v (!j))
   {
-    with v. assert (A.pts_to res v);
     let vj = !j;
     let vc = !c;
-    let pos = SZ.add off vj;
-    let aj = A.(a.(vj));
-    let rj = A.(res.(pos));
-    let t = mac aj bi rj vc;
-    lo_hi t;
-    let r = lo t;
-    let co = hi t;
-    A.((res.(pos) <- r));
-    pre_upd v (SZ.v pos) r (SZ.v pos);
-    pre_snoc (Seq.upd v (SZ.v pos) r) (SZ.v pos);
-    pre_snoc vres (SZ.v pos);
-    pre_snoc va (SZ.v vj);
-    row_step (pre v (SZ.v pos)) (pre vres (SZ.v pos)) (pre va (SZ.v vj))
-             (S64.v aj) (S64.v bi) (S64.v rj) (S64.v vc) (S64.v r) (S64.v co)
-             (SZ.v off) (SZ.v vj);
-    c := co;
-    j := SZ.add vj 1sz;
+    gap4 (SZ.v vj) (SZ.v n4);
+    let c1 = col res a bi off vj vc n vres;
+    let c2 = col res a bi off (SZ.add vj 1sz) c1 n vres;
+    let c3 = col res a bi off (SZ.add vj 2sz) c2 n vres;
+    let c4 = col res a bi off (SZ.add vj 3sz) c3 n vres;
+    step4 (SZ.v vj);
+    let vj4 = SZ.add vj 4sz;
+    with v4. assert (A.pts_to res v4);
+    idx_subst v4 vres va (SZ.v off) (SZ.v (SZ.add vj 3sz) + 1) (SZ.v vj4)
+              (S64.v c4) (S64.v bi);
+    c := c4;
+    j := vj4;
   };
-  pre_full va;
-  !c
+  let vj = !j;
+  let vc = !c;
+  cols res a n bi off vj vc vres
 }
 
 #pop-options
@@ -889,6 +1036,7 @@ ensures exists* (v: Seq.seq S64.t).
     with vold. assert (A.pts_to res vold);
     let vi = !i;
     let bi = A.(b.(vi));
+    pre_full va;
     let c = mul_row res a n bi vi;
     with v. assert (A.pts_to res v);
     let pos = SZ.add n vi;
@@ -905,9 +1053,144 @@ ensures exists* (v: Seq.seq S64.t).
   ()
 }
 
-(** [sqr res a n] is [a * a].  It is the same loop as {!mul} with both
-    operands taken from the same array, which costs nothing extra here
-    because no limb of [a] is written. *)
+(** {2 Squaring}
+
+    A square has the same columns as a general product, but the off-diagonal
+    ones come in pairs: [a_i a_j] appears at weight [i + j] once as the
+    [i]-th column of the [j]-th row and once the other way about.  So only
+    the strict upper triangle is computed, the whole of it is doubled once,
+    and the [n] diagonal terms [a_i^2] are added at weight [2i].  That is
+    [n (n-1) / 2] products where the general loop does [n^2] -- for the
+    thirty-two limbs of a 2048-bit modulus, 496 against 1024 -- and measured
+    on the extracted C it very nearly halves the multiplication.
+
+    Since three quarters of the multiplications in a windowed modular
+    exponentiation are squarings, this is the single largest saving left in
+    the generic bignum. *)
+
+#push-options "--fuel 1 --ifuel 0 --z3rlimit 60"
+
+(** The diagonal: [sum_{i<k} a_i^2 base^{2i}].  This is the one recursive
+    definition in the file and the only place fuel is needed; everything
+    below reaches it through the two lemmas that follow, at fuel zero. *)
+let rec diag (va: Seq.seq S64.t) (k: nat { k <= Seq.length va }) : GTot nat =
+  if k = 0 then 0
+  else diag va (k - 1) +
+       (S64.v (Seq.index va (k - 1)) * S64.v (Seq.index va (k - 1))) * wt (2 * (k - 1))
+
+let diag_zero (va: Seq.seq S64.t) : Lemma (diag va 0 == 0) = ()
+
+let diag_snoc (va: Seq.seq S64.t) (k: nat { k < Seq.length va })
+  : Lemma (diag va (k + 1) ==
+           diag va k + (S64.v (Seq.index va k) * S64.v (Seq.index va k)) * wt (2 * k))
+  = ()
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** The invariant of the triangle loop, one limb longer.  Writing [A] for
+    the prefix, [T] for the triangle and [D] for the diagonal, it says that
+    [A^2 = 2T + D] survives [A := A + a base^k], because
+    [(x + a b^k)^2 = x^2 + 2 x a b^k + a^2 b^{2k}]: the triangle gains the
+    row [x a] at weight [k] and the diagonal gains [a^2] at weight [2k]. *)
+let sqr_step (ak x t d: nat) (k: nat)
+  : Lemma (requires x * x == 2 * t + d)
+          (ensures (x + wt k * ak) * (x + wt k * ak) ==
+                   2 * (t + (x * ak) * wt k) + (d + (ak * ak) * wt (2 * k)))
+  = wt_add k k;
+    Math.paren_mul_right (wt k) ak (wt k * ak);
+    Math.swap_mul (wt k) ak;
+    Math.paren_mul_right ak (wt k) (wt k * ak);
+    Math.paren_mul_right ak (wt k) ak;
+    Math.swap_mul (wt k) ak;
+    Math.paren_mul_right ak ak (wt k * wt k)
+
+(** One column of the diagonal pass: [a_k^2] lands across the two limbs at
+    [2k] and [2k+1], and the carry that comes out of the pair moves to
+    [2k+2].  Everything below the pair is already final. *)
+let diag_step (e e2 d x0 x1 r0 r1 aa ci co h: int) (p: nat)
+  : Lemma (requires e + ci * wt p == e2 + d /\
+                    r0 + base * h == aa + x0 + ci /\
+                    r1 + base * co == x1 + h)
+          (ensures (e + wt p * r0 + wt (p + 1) * r1) + co * wt (p + 2) ==
+                   (e2 + wt p * x0 + wt (p + 1) * x1) + (d + aa * wt p))
+  = wt_succ p;
+    wt_succ (p + 1);
+    Math.paren_mul_right base (wt p) r1;
+    Math.paren_mul_right base base (wt p);
+    Math.paren_mul_right co base (base * wt p);
+    Math.paren_mul_right (wt p) base (r1 + base * co);
+    Math.distributivity_add_right (wt p) r0 (base * (r1 + base * co));
+    Math.distributivity_add_right (wt p) (x1 + h) 0;
+    Math.paren_mul_right (wt p) base (x1 + h);
+    Math.distributivity_add_right (wt p) (aa + x0 + ci) (base * (x1 + h));
+    Math.distributivity_add_right (wt p) aa x0;
+    Math.swap_mul (wt p) aa;
+    Math.distributivity_add_right (wt p) base 0
+
+(** A value that fits below the weight of the whole array cannot have left
+    a carry above it. *)
+(** The carry parked above a finished row, and the still-zero limb above
+    it, together move the cursor on by two. *)
+let tri_carry (v: Seq.seq S64.t) (p: nat { p + 1 < Seq.length v }) (c: S64.t)
+  : Lemma (requires S64.v (Seq.index v p) == 0 /\ S64.v (Seq.index v (p + 1)) == 0)
+          (ensures pre (Seq.upd v p c) (p + 2) == pre v p + wt p * S64.v c)
+  = pre_carry v p c;
+    pre_snoc (Seq.upd v p c) (p + 1)
+
+(** One whole step of the triangle loop, as a lemma about sequences rather
+    than about the array.  Stating it here rather than in the loop body is
+    not a matter of taste: the body would have to merge [(i+1) + (i+1)] with
+    [i + i + 2] underneath [pre], and in that context the solver does not. *)
+let tri_close (v2 v vold va: Seq.seq S64.t) (i: nat) (ak c: int)
+  : Lemma (requires
+             i < Seq.length va /\ i + i + 2 <= Seq.length v2 /\
+             S64.v (Seq.index va i) == ak /\
+             pre va i * pre va i == 2 * pre vold (i + i) + diag va i /\
+             pre v (i + i) + c * wt (i + i) ==
+               pre vold (i + i) + (pre va i * ak) * wt i /\
+             pre v2 (i + i + 2) == pre v (i + i) + wt (i + i) * c)
+          (ensures pre va (i + 1) * pre va (i + 1) ==
+                   2 * pre v2 ((i + 1) + (i + 1)) + diag va (i + 1))
+  = pre_snoc va i;
+    diag_snoc va i;
+    sqr_step ak (pre va i) (pre vold (i + i)) (diag va i) i
+
+(** The two squaring invariants transported to an equal cursor, for the
+    same reason as {!idx_subst}: the loop hands them back at [k + 1] and is
+    asked for them at [SZ.v (SZ.add k 1sz)]. *)
+let tri_subst (v va: Seq.seq S64.t) (x y: nat)
+  : Lemma (requires x == y /\ x <= Seq.length va /\
+             (forall (k: nat). x + x <= k /\ k < Seq.length v ==>
+                S64.v (Seq.index v k) == 0) /\
+             pre va x * pre va x == 2 * pre v (x + x) + diag va x)
+          (ensures (forall (k: nat). y + y <= k /\ k < Seq.length v ==>
+                      S64.v (Seq.index v k) == 0) /\
+                   pre va y * pre va y == 2 * pre v (y + y) + diag va y)
+  = ()
+
+let dg_subst (v vd va: Seq.seq S64.t) (x y: nat) (c: int)
+  : Lemma (requires x == y /\ x <= Seq.length va /\
+             Seq.length v == Seq.length vd /\
+             (forall (k: nat). x + x <= k /\ k < Seq.length v ==>
+                Seq.index v k == Seq.index vd k) /\
+             pre v (x + x) + c * wt (x + x) == pre vd (x + x) + diag va x)
+          (ensures (forall (k: nat). y + y <= k /\ k < Seq.length v ==>
+                      Seq.index v k == Seq.index vd k) /\
+                   pre v (y + y) + c * wt (y + y) == pre vd (y + y) + diag va y)
+  = ()
+
+let no_carry (x c w y: nat)
+  : Lemma (requires x + c * w == y /\ y < w /\ c <= 1) (ensures c == 0 /\ x == y)
+  = ()
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 600"
+
+(** [sqr res a n] is [a * a] in [2n] limbs: the strict upper triangle, then
+    a doubling, then the diagonal. *)
 fn sqr (res: A.array S64.t) (a: A.array S64.t) (n: SZ.t)
        (#vres: erased (Seq.seq S64.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to res vres ** A.pts_to a #pa va **
@@ -921,34 +1204,108 @@ ensures exists* (v: Seq.seq S64.t).
   A.pts_to_len a;
   zero res (SZ.add n n);
   with v0. assert (A.pts_to res v0);
-  pre_zeros v0 (SZ.v n);
+  pre_zero v0;
   pre_zero va;
+  diag_zero va;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va **
     pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n + SZ.v n /\
-          (forall (k: nat). SZ.v n + SZ.v vi <= k /\ k < Seq.length v ==>
+          (forall (k: nat). SZ.v vi + SZ.v vi <= k /\ k < Seq.length v ==>
              S64.v (Seq.index v k) == 0) /\
-          pre v (SZ.v n + SZ.v vi) == num va * pre va (SZ.v vi))
+          pre va (SZ.v vi) * pre va (SZ.v vi) ==
+            2 * pre v (SZ.v vi + SZ.v vi) + diag va (SZ.v vi))
   decreases (SZ.v n - SZ.v (!i))
   {
     with vold. assert (A.pts_to res vold);
     let vi = !i;
     let bi = A.(a.(vi));
-    let c = mul_row res a n bi vi;
+    let pos = SZ.add vi vi;
+    let c = mul_row res a vi bi vi;
     with v. assert (A.pts_to res v);
-    let pos = SZ.add n vi;
     A.((res.(pos) <- c));
-    pre_carry v (SZ.v pos) c;
-    pre_snoc va (SZ.v vi);
-    mul_outer_step (pre v (SZ.v pos)) (pre vold (SZ.v pos)) (pre va (SZ.v vi))
-                   (S64.v bi) (S64.v c) (num va) (wt (SZ.v vi)) (wt (SZ.v pos));
-    i := SZ.add vi 1sz;
+    with v2. assert (A.pts_to res v2);
+    tri_carry v (SZ.v pos) c;
+    tri_close v2 v vold va (SZ.v vi) (S64.v bi) (S64.v c);
+    let vi1 = SZ.add vi 1sz;
+    tri_subst v2 va (SZ.v vi + 1) (SZ.v vi1);
+    i := vi1;
   };
-  with v. assert (A.pts_to res v);
-  pre_full v;
+  with v1. assert (A.pts_to res v1);
+  let vie = !i;
+  tri_subst v1 va (SZ.v vie) (SZ.v n);
   pre_full va;
+  pre_full v1;
+  pre_bnd va (SZ.v n);
+  wt_add (SZ.v n) (SZ.v n);
+  Math.lemma_mult_lt_sqr (num va) (num va) (wt (SZ.v n));
+  let c0 = double res (SZ.add n n);
+  with vd. assert (A.pts_to res vd);
+  pre_full vd;
+  no_carry (num vd) (S64.v c0) (wt (SZ.v n + SZ.v n)) (num v1 + num v1);
+  diag_zero va;
+  pre_zero vd;
+  let mut i2 = 0sz;
+  let mut cc = S64.zero;
+  while (let vk = !i2; SZ.lt vk n)
+  invariant exists* (vk: SZ.t) (vc: S64.t) (v: Seq.seq S64.t).
+    pts_to i2 vk ** pts_to cc vc ** A.pts_to res v ** A.pts_to a #pa va **
+    pure (SZ.v vk <= SZ.v n /\ Seq.length v == SZ.v n + SZ.v n /\
+          S64.v vc <= 1 /\
+          (forall (k: nat). SZ.v vk + SZ.v vk <= k /\ k < Seq.length v ==>
+             Seq.index v k == Seq.index vd k) /\
+          pre v (SZ.v vk + SZ.v vk) + S64.v vc * wt (SZ.v vk + SZ.v vk) ==
+            pre vd (SZ.v vk + SZ.v vk) + diag va (SZ.v vk))
+  decreases (SZ.v n - SZ.v (!i2))
+  {
+    with v. assert (A.pts_to res v);
+    let vk = !i2;
+    let vc = !cc;
+    let ak = A.(a.(vk));
+    let p0 = SZ.add vk vk;
+    let p1 = SZ.add p0 1sz;
+    let x0 = A.(res.(p0));
+    let x1 = A.(res.(p1));
+    let t = mac ak ak x0 vc;
+    lo_hi t;
+    let r0 = lo t;
+    let h0 = hi t;
+    assert (pure (S64.v r0 + base * S64.v h0 ==
+                  S64.v ak * S64.v ak + S64.v x0 + S64.v vc));
+    let u = sum x1 h0 S64.zero;
+    carry_bit u;
+    lo_hi u;
+    let r1 = lo u;
+    let co = hi u;
+    assert (pure (S64.v r1 + base * S64.v co == S64.v x1 + S64.v h0));
+    A.((res.(p0) <- r0));
+    with w1. assert (A.pts_to res w1);
+    A.((res.(p1) <- r1));
+    with w2. assert (A.pts_to res w2);
+    pre_upd v (SZ.v p0) r0 (SZ.v p0);
+    pre_upd w1 (SZ.v p1) r1 (SZ.v p1);
+    pre_snoc w1 (SZ.v p0);
+    pre_snoc w2 (SZ.v p1);
+    pre_snoc v (SZ.v p0);
+    pre_snoc vd (SZ.v p0);
+    pre_snoc vd (SZ.v p1);
+    diag_snoc va (SZ.v vk);
+    diag_step (pre v (SZ.v p0)) (pre vd (SZ.v p0)) (diag va (SZ.v vk))
+              (S64.v x0) (S64.v x1) (S64.v r0) (S64.v r1)
+              (S64.v ak * S64.v ak) (S64.v vc) (S64.v co) (S64.v h0) (SZ.v p0);
+    cc := co;
+    let vk1 = SZ.add vk 1sz;
+    dg_subst w2 vd va (SZ.v vk + 1) (SZ.v vk1) (S64.v co);
+    i2 := vk1;
+  };
+  with vf. assert (A.pts_to res vf);
+  let cf = !cc;
+  let vke = !i2;
+  dg_subst vf vd va (SZ.v vke) (SZ.v n) (S64.v cf);
+  pre_full vf;
+  pre_full vd;
+  no_carry (num vf) (S64.v cf) (wt (SZ.v n + SZ.v n)) (num va * num va);
   ()
 }
 
@@ -1202,61 +1559,57 @@ ensures A.pts_to b #pb vb ** pure (S64.v d == num vb / pow2 (SZ.v i) % 16)
   S64.logand x (S64.mask_low 4ul)
 }
 
-(** Reading a table entry out of a flat array, as a sequence slice. *)
-let sel_eq_at (v vt vres: Seq.seq S64.t) (off n: nat) (k: nat)
-  : Lemma (requires Seq.length v == n /\ Seq.length vres == n /\
-                    off + n <= Seq.length vt /\
-                    (forall (j: nat). j < n ==>
-                       Seq.index v j ==
-                         (if k = 1 then Seq.index vt (off + j)
-                          else Seq.index vres j)))
-          (ensures (k == 1 ==> v == Seq.slice vt off (off + n)) /\
-                   (k == 0 ==> v == vres))
-  = if k = 1 then Seq.lemma_eq_intro v (Seq.slice vt off (off + n))
-    else Seq.lemma_eq_intro v vres
+(** {2 The secret-indexed table read}
 
-(** [cselect_at res tbl n off m k] is {!cselect} reading the [n] limbs of
-    [tbl] that begin at [off]. *)
-fn cselect_at (res: A.array S64.t) (tbl: A.array S64.t) (n: SZ.t) (off: SZ.t)
-              (m: S64.t) (k: erased nat)
-              (#vres: erased (Seq.seq S64.t)) (#pt: perm)
-              (#vt: erased (Seq.seq S64.t))
-requires A.pts_to res vres ** A.pts_to tbl #pt vt **
-  pure (Seq.length vres == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
-        SZ.fits (SZ.v off + SZ.v n) /\ is_mask m /\ stands_for m (reveal k))
-ensures exists* (v: Seq.seq S64.t).
-  A.pts_to res v ** A.pts_to tbl #pt vt **
-  pure (Seq.length v == SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vt /\
-        (reveal k == 1 ==>
-           v == Seq.slice vt (SZ.v off) (SZ.v off + SZ.v n)) /\
-        (reveal k == 0 ==> v == reveal vres))
-{
-  A.pts_to_len res;
-  A.pts_to_len tbl;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi n)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to res v ** A.pts_to tbl #pt vt **
-    pure (SZ.v vi <= SZ.v n /\ Seq.length v == SZ.v n /\
-          SZ.v off + SZ.v n <= Seq.length vt /\
-          (forall (k2: nat). k2 < SZ.v vi ==>
-             Seq.index v k2 ==
-               (if reveal k = 1 then Seq.index vt (SZ.v off + k2)
-                else Seq.index vres k2)) /\
-          (forall (k2: nat). SZ.v vi <= k2 /\ k2 < SZ.v n ==>
-             Seq.index v k2 == Seq.index vres k2))
-  decreases (SZ.v n - SZ.v (!i))
-  {
-    let vi = !i;
-    let ai = A.(tbl.(SZ.add off vi));
-    let ri = A.(res.(vi));
-    A.((res.(vi) <- S64.select m ai ri));
-    i := SZ.add vi 1sz;
-  };
-  with v. assert (A.pts_to res v);
-  sel_eq_at v vt vres (SZ.v off) (SZ.v n) (reveal k);
-  ()
-}
+    A windowed scalar multiplication reads the entry of a sixteen-entry
+    table named by four bits of the scalar, and those four bits are secret.
+    The read therefore has to touch all sixteen entries and take the same
+    time whichever one was wanted, which is what masking does: build a mask
+    per entry, all ones for the one asked for and all zeroes for the other
+    fifteen, and fold every entry through its own mask.
+
+    Two things about the loop below are there for the compiler rather than
+    for the proof, and both were put there after measuring.
+
+    The first is {!Hacl.Launder.launder} on each mask.  Without it the
+    sixteen masks are sixteen comparisons of a runtime value against the
+    literals zero through fifteen, and a compiler is entitled to emit that
+    as a cascade of tests on the secret -- clang at [-O3] did, and the
+    lookup's running time then rose monotonically with the digit, which is
+    the whole secret leaking.  See [tests/test_launder.c].
+
+    The second is the order of the two loops.  Accumulating into [res.(j)]
+    makes a chain of sixteen read-modify-writes through memory on every
+    limb, and because [n] is a run-time value neither loop can be unrolled
+    around it.  Running the entries innermost instead keeps the accumulator
+    in a register, and the inner loop then has a trip count of sixteen that
+    is known at compile time.  That is worth about 40% on both compilers. *)
+
+(** The mask that entry [i] of the table carries when entry [k] is the one
+    being read.  Stated as a predicate rather than inline so that the
+    invariant does not become a conditional the solver splits on. *)
+let mask_for (m: S64.t) (i k: nat) : prop =
+  (i == k ==> S64.v m == pow2 64 - 1) /\ (~(i == k) ==> S64.v m == 0)
+
+let mask_for_is_mask (m: S64.t) (i k: nat)
+  : Lemma (requires mask_for m i k) (ensures is_mask m)
+  = ()
+
+(** Or-ing with zero, on each side.  [v_extensional] carries these from
+    values to terms. *)
+let or_zero (x: S64.t) : Lemma (S64.logor x S64.zero == x)
+  = UInt.logor_lemma_1 #64 (S64.v x)
+
+let zero_or (x: S64.t) : Lemma (S64.logor S64.zero x == x)
+  = UInt.logor_commutative #64 (S64.v S64.zero) (S64.v x);
+    UInt.logor_lemma_1 #64 (S64.v x)
+
+(** The last entry still fits: [15 * n + (n - 1)] is below [16 * n]. *)
+let entry_in_range (e j n: nat)
+  : Lemma (requires e < 16 /\ j < n) (ensures e * n + j < 16 * n)
+  = Math.lemma_mult_le_right n (e + 1) 16
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
 
 (** [table_select res tbl n d] copies entry [d] of a sixteen-entry table of
     [n]-limb numbers into [res].  Every entry is read and fifteen of them
@@ -1278,26 +1631,87 @@ ensures exists* (v: Seq.seq S64.t).
   A.pts_to_len res;
   A.pts_to_len tbl;
   assert_norm (pow2 64 - 1 =!= 0);
+
+  (* The sixteen masks, each laundered as it is stored. *)
+  let zm = S64.zero;
+  let mut mk = [| zm; 16sz |];
+  A.pts_to_len mk;
   let mut e = 0sz;
   let mut ec = S64.classify 0uL;
-  while (let ve = !e; SZ.lt ve (SZ.uint_to_t 16))
-  invariant exists* (ve: SZ.t) (vec: S64.t) (v: Seq.seq S64.t).
-    pts_to e ve ** pts_to ec vec ** A.pts_to res v ** A.pts_to tbl #pt vt **
-    pure (SZ.v ve <= 16 /\ S64.v vec == SZ.v ve /\ Seq.length v == SZ.v n /\
-          Seq.length vt == 16 * SZ.v n /\ reveal k < 16 /\
-          (reveal k < SZ.v ve ==>
-             v == Seq.slice vt (reveal k * SZ.v n)
-                              (reveal k * SZ.v n + SZ.v n)))
+  while (let ve = !e; SZ.lt ve 16sz)
+  invariant exists* (ve: SZ.t) (vec: S64.t) (wm: Seq.seq S64.t).
+    pts_to e ve ** pts_to ec vec ** A.pts_to mk wm **
+    pure (SZ.v ve <= 16 /\ S64.v vec == SZ.v ve /\ Seq.length wm == 16 /\
+          (forall (i: nat). i < SZ.v ve ==>
+             mask_for (Seq.index wm i) i (reveal k)))
   decreases (16 - SZ.v (!e))
   {
     let ve = !e;
     let vec = !ec;
-    let m = S64.eq_mask d vec;
-    cselect_at res tbl n (SZ.mul ve n) m (if SZ.v ve = reveal k then 1 else 0);
+    let m = Launder.launder (S64.eq_mask d vec);
+    A.(mk.(ve) <- m);
     ec := S64.add_mod vec (S64.classify 1uL);
     e := SZ.add ve 1sz;
-  }
+  };
+
+  (* One limb at a time, with the sixteen entries innermost. *)
+  let mut j = 0sz;
+  while (let vj = !j; SZ.lt vj n)
+  invariant exists* (vj: SZ.t) (wm: Seq.seq S64.t) (wres: Seq.seq S64.t).
+    pts_to j vj ** A.pts_to mk wm ** A.pts_to res wres **
+    A.pts_to tbl #pt vt **
+    pure (SZ.v vj <= SZ.v n /\ Seq.length wm == 16 /\
+          Seq.length wres == SZ.v n /\ Seq.length vt == 16 * SZ.v n /\
+          SZ.fits (16 * SZ.v n) /\ reveal k < 16 /\
+          (forall (i: nat). i < 16 ==>
+             mask_for (Seq.index wm i) i (reveal k)) /\
+          (forall (j2: nat). j2 < SZ.v vj ==>
+             Seq.index wres j2 ==
+               Seq.index vt (reveal k * SZ.v n + j2)))
+  decreases (SZ.v n - SZ.v (!j))
+  {
+    let vj = !j;
+    let mut acc = S64.zero;
+    let mut e2 = 0sz;
+    while (let ve2 = !e2; SZ.lt ve2 16sz)
+    invariant exists* (ve2: SZ.t) (vacc: S64.t) (wm: Seq.seq S64.t).
+      pts_to e2 ve2 ** pts_to acc vacc ** A.pts_to mk wm **
+      A.pts_to tbl #pt vt **
+      pure (SZ.v ve2 <= 16 /\ Seq.length wm == 16 /\
+            Seq.length vt == 16 * SZ.v n /\ SZ.fits (16 * SZ.v n) /\
+            reveal k < 16 /\ SZ.v vj < SZ.v n /\
+            (forall (i: nat). i < 16 ==>
+               mask_for (Seq.index wm i) i (reveal k)) /\
+            vacc == (if reveal k < SZ.v ve2
+                     then Seq.index vt (reveal k * SZ.v n + SZ.v vj)
+                     else S64.zero))
+    decreases (16 - SZ.v (!e2))
+    {
+      let ve2 = !e2;
+      let vacc = !acc;
+      let m = A.(mk.(ve2));
+      mask_for_is_mask m (SZ.v ve2) (reveal k);
+      entry_in_range (SZ.v ve2) (SZ.v vj) (SZ.v n);
+      let x = A.(tbl.(SZ.add (SZ.mul ve2 n) vj));
+      or_zero vacc;
+      zero_or x;
+      acc := S64.logor vacc (masked m x);
+      e2 := SZ.add ve2 1sz;
+    };
+    let vacc = !acc;
+    A.(res.(vj) <- vacc);
+    j := SZ.add vj 1sz;
+  };
+
+  with wres. assert (A.pts_to res wres);
+  Math.lemma_mult_le_right (SZ.v n) (reveal k + 1) 16;
+  Seq.lemma_eq_intro wres
+    (Seq.slice vt (reveal k * SZ.v n) (reveal k * SZ.v n + SZ.v n));
+  ()
 }
+
+#pop-options
+
 
 (** [table_store tbl src n off] writes the [n] limbs of [src] into [tbl] at
     [off] and leaves the rest of [tbl] alone.  Only the table's construction

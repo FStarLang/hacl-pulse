@@ -48,21 +48,6 @@ module U64 = FStar.UInt64
 #push-options "--fuel 0 --ifuel 0"
 
 (** The field prime, as four limbs. *)
-let fms_list : list S64.t = [
-  S64.classify 18446744069414583343uL; S64.classify 18446744073709551615uL;
-  S64.classify 18446744073709551615uL; S64.classify 18446744073709551615uL
-]
-
-let fms_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == fmod.ms })
-  = assert_norm (L.length fms_list == nl);
-    assert_norm (lbnd fms_list);
-    assert_norm (leval fms_list == 115792089237316195423570985008687907853269984665640564039457584007908834671663);
-    assert_norm (K.prime == 115792089237316195423570985008687907853269984665640564039457584007908834671663);
-    assert_norm (115792089237316195423570985008687907853269984665640564039457584007908834671663 < pow2 256);
-    lit_limbs fms_list (K.prime);
-    G.mk_static_array fms_list
-
 (** [2^256] less the field prime: subtraction without borrows. *)
 let fnm_list : list S64.t = [
   S64.classify 4294968273uL; S64.classify 0uL;
@@ -80,37 +65,7 @@ let fnm_arr : (a: G.static_array S64.t
     G.mk_static_array fnm_list
 
 (** [R mod p] -- the Montgomery form of one. *)
-let fr1_list : list S64.t = [
-  S64.classify 4294968273uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL
-]
-
-let fr1_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == fmod.r1 })
-  = assert_norm (L.length fr1_list == nl);
-    assert_norm (lbnd fr1_list);
-    assert_norm (leval fr1_list == 4294968273);
-    assert_norm (pow2 256 % K.prime == 4294968273);
-    assert_norm (4294968273 < pow2 256);
-    lit_limbs fr1_list (pow2 256 % K.prime);
-    G.mk_static_array fr1_list
-
 (** [R^2 mod p] -- the Montgomery form of [R]. *)
-let fr2_list : list S64.t = [
-  S64.classify 8392367050913uL; S64.classify 1uL;
-  S64.classify 0uL; S64.classify 0uL
-]
-
-let fr2_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == fmod.r2 })
-  = assert_norm (L.length fr2_list == nl);
-    assert_norm (lbnd fr2_list);
-    assert_norm (leval fr2_list == 18446752466076602529);
-    assert_norm (pow2 256 * pow2 256 % K.prime == 18446752466076602529);
-    assert_norm (18446752466076602529 < pow2 256);
-    lit_limbs fr2_list (pow2 256 * pow2 256 % K.prime);
-    G.mk_static_array fr2_list
-
 (** The group order, as four limbs. *)
 let qms_list : list S64.t = [
   S64.classify 13822214165235122497uL; S64.classify 13451932020343611451uL;
@@ -266,70 +221,9 @@ let qinv_e_arr : (a: G.static_array U64.t
 
 
 (** The curve coefficient [b] in Montgomery form. *)
-let bm_list : list S64.t = [
-  S64.classify 30064777911uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL
-]
-
-let bm_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == limbs (K.b_coeff * pow2 256 % K.prime) })
-  = assert_norm (L.length bm_list == nl);
-    assert_norm (lbnd bm_list);
-    assert_norm (leval bm_list == 30064777911);
-    assert_norm (K.b_coeff * pow2 256 % K.prime == 30064777911);
-    assert_norm (30064777911 < pow2 256);
-    lit_limbs bm_list (K.b_coeff * pow2 256 % K.prime);
-    G.mk_static_array bm_list
-
 (** [3b = 21] in Montgomery form, which is what the complete formulas multiply by. *)
-let b3m_list : list S64.t = [
-  S64.classify 90194333733uL; S64.classify 0uL;
-  S64.classify 0uL; S64.classify 0uL
-]
-
-let b3m_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == limbs (K.b3 * pow2 256 % K.prime) })
-  = assert_norm (L.length b3m_list == nl);
-    assert_norm (lbnd b3m_list);
-    assert_norm (leval b3m_list == 90194333733);
-    assert_norm (K.b3 * pow2 256 % K.prime == 90194333733);
-    assert_norm (90194333733 < pow2 256);
-    lit_limbs b3m_list (K.b3 * pow2 256 % K.prime);
-    G.mk_static_array b3m_list
-
 (** The base point's [x], in Montgomery form. *)
-let gxm_list : list S64.t = [
-  S64.classify 15507633332195041431uL; S64.classify 2530505477788034779uL;
-  S64.classify 10925531211367256732uL; S64.classify 11061375339145502536uL
-]
-
-let gxm_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == limbs (K.g_x * pow2 256 % K.prime) })
-  = assert_norm (L.length gxm_list == nl);
-    assert_norm (lbnd gxm_list);
-    assert_norm (leval gxm_list == 69433378337113668455105412783699478161510570509662971881309371014080806920343);
-    assert_norm (K.g_x * pow2 256 % K.prime == 69433378337113668455105412783699478161510570509662971881309371014080806920343);
-    assert_norm (69433378337113668455105412783699478161510570509662971881309371014080806920343 < pow2 256);
-    lit_limbs gxm_list (K.g_x * pow2 256 % K.prime);
-    G.mk_static_array gxm_list
-
 (** The base point's [y], in Montgomery form. *)
-let gym_list : list S64.t = [
-  S64.classify 12780836216951778274uL; S64.classify 10231155108014310989uL;
-  S64.classify 8121878653926228278uL; S64.classify 14933801261141951190uL
-]
-
-let gym_arr : (a: G.static_array S64.t
-                  { vals (G.static_array_elems a) == limbs (K.g_y * pow2 256 % K.prime) })
-  = assert_norm (L.length gym_list == nl);
-    assert_norm (lbnd gym_list);
-    assert_norm (leval gym_list == 93740989812233943577428291822008373258935927472951925563046116858250011585506);
-    assert_norm (K.g_y * pow2 256 % K.prime == 93740989812233943577428291822008373258935927472951925563046116858250011585506);
-    assert_norm (93740989812233943577428291822008373258935927472951925563046116858250011585506 < pow2 256);
-    lit_limbs gym_list (K.g_y * pow2 256 % K.prime);
-    G.mk_static_array gym_list
-
-
 (** {2 Reading a table}
 
     Each is four limbs, and the permission never comes back: these are
@@ -360,28 +254,10 @@ ensures exists* (p: perm) (v: Seq.seq S64.t).
 { table one_arr 4sz }
 
 inline_for_extraction
-fn fms () requires emp returns s: A.array S64.t
-ensures exists* (p: perm) (v: Seq.seq S64.t).
-  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.ms)
-{ table fms_arr 4sz }
-
-inline_for_extraction
 fn fnm () requires emp returns s: A.array S64.t
 ensures exists* (p: perm) (v: Seq.seq S64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.nm)
 { table fnm_arr 4sz }
-
-inline_for_extraction
-fn fr1 () requires emp returns s: A.array S64.t
-ensures exists* (p: perm) (v: Seq.seq S64.t).
-  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r1)
-{ table fr1_arr 4sz }
-
-inline_for_extraction
-fn fr2 () requires emp returns s: A.array S64.t
-ensures exists* (p: perm) (v: Seq.seq S64.t).
-  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == fmod.r2)
-{ table fr2_arr 4sz }
 
 inline_for_extraction
 fn qms () requires emp returns s: A.array S64.t

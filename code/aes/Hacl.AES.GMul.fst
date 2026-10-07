@@ -36,6 +36,8 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module Vec = Hacl.Vec128
+module Poly = Spec.GF128.Poly
+module Alg = Spec.GF128.Algebra
 
 fn gmul_impl (a: A.array S8.t) (h: A.array S8.t)
              (#va #vh: erased (Seq.seq S8.t))
@@ -44,12 +46,14 @@ requires A.pts_to a va ** A.pts_to h vh ** pure (
 ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   Seq.length va == blocklen /\ Seq.length vh == blocklen /\
   Seq.length va' == blocklen /\
-  vals va' == gmul (vals va) (vals vh))
+  vals va' == gmul (vals va) (Poly.xtimes (vals vh)))
 {
   if Vec.supported () {
     Hacl.AES.GF128.NI.gmul_ni a h;
   } else {
     Hacl.AES.GF128.gmul_portable a h;
+    Alg.gmul_xt_right (vals va) (vals vh) 1;
+    Hacl.AES.GF128.shift_reduce_impl a;
   }
 }
 
@@ -71,12 +75,15 @@ ensures exists* (va': Seq.seq S8.t).
   SZ.v off + blocklen <= Seq.length vb /\ Seq.length va' == blocklen /\
   vals va' == gmul (gadd (vals va)
                          (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
-                   (vals vh))
+                   (Poly.xtimes (vals vh)))
 {
   if Vec.supported () {
     Hacl.AES.GF128.NI.gmul_add_ni a h b off;
   } else {
     Hacl.AES.GF128.gadd_at_impl a b off;
+    with vx. assert A.pts_to a vx;
     Hacl.AES.GF128.gmul_portable a h;
+    Alg.gmul_xt_right (vals vx) (vals vh) 1;
+    Hacl.AES.GF128.shift_reduce_impl a;
   }
 }

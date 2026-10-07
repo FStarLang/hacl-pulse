@@ -16,11 +16,10 @@
 
 (** Scalar multiplication.
 
-    Double-and-add, most significant bit first, with the choice made by a
-    mask rather than a branch: the scalar is secret in signing and in key
-    agreement, and the addition law is complete, so no doubling has to be
-    special-cased and the loop is the same 256 iterations whatever the
-    scalar is.
+    Four bits of the scalar at a time, with the table lookup done by
+    reading every entry: the scalar is secret in signing and in key
+    agreement, and the complete addition law means no case has to be
+    special-cased, so the work is the same whatever the scalar is.
 
     The scalar arrives as four limbs rather than as bytes.  Reading bit
     [i] of a number is a statement that survives any choice of radix; the
@@ -31,31 +30,34 @@ module Hacl.K256.PointMul
 #lang-pulse
 
 open Pulse.Lib.Pervasives
-open Spec.Bignum4
-open Spec.K256.Field
+open Spec.Bignum52
+open Spec.K256.Field52
 open Hacl.Impl.Limb4
 open Hacl.Impl.Mont4
 open Hacl.Impl.Table
-open Hacl.K256.Field
+open Hacl.K256.Field52
 open Hacl.K256.Point
-open Hacl.K256.PointStep
+open Hacl.K256.PointWin
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
+module GR = Spec.K256.Group
 module Loops = Hacl.Spec.Loops
+module B4 = Spec.Bignum4
+module L4 = Hacl.Impl.Limb4
+module MG = Hacl.K256.PointMulG
 
-(** {2 The loop}
+(** {2 The window}
 
-    The accumulator lives in the output; the doubling and the sum need
-    buffers of their own, because neither formula may write over an input. *)
-
-(** The bound of the loop, as a comparison whose result already carries its
-    meaning: under [--fuel 0] the literal [256sz] is [uint_to_t 256], and
-    typing it needs [pow2 64], which the solver will not compute. *)
-let lt256 (x: SZ.t) : (r: bool { r <==> SZ.v x < 256 }) = SZ.lt x 256sz
+    The work is in {!Hacl.K256.PointWin}; this module is the face the rest
+    of the library sees.  Both entry points are stated up to [peq] rather
+    than up to equality, because the window does the additions in a
+    different order from the specification's ladder and so arrives at a
+    different projective representative of the same point.  The callers
+    discharge that where they leave projective coordinates. *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -69,92 +71,42 @@ requires
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   A.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
-        Seq.length vk == nl /\ bnd (vals vk) base /\ pt_ok vqx vqy vqz)
+        Seq.length vk == B4.nl /\ B4.bnd (L4.vals vk) B4.base /\
+        pt_ok vqx vqy vqz /\ GR.on_curve (pt vqx vqy vqz))
 ensures exists* (wx wy wz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
   A.pts_to ks #pk vk **
-  pure (pt_ok wx wy wz /\
-        pt wx wy wz == K.point_mul (eval (vals vk)) (pt vqx vqy vqz))
+  pure (pt_ok wx wy wz /\ GR.on_curve (pt wx wy wz) /\
+        GR.on_curve (K.point_mul (B4.eval (L4.vals vk)) (pt vqx vqy vqz)) /\
+        GR.peq (pt wx wy wz)
+               (K.point_mul (B4.eval (L4.vals vk)) (pt vqx vqy vqz)))
 {
-  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
-  let z = S64.zero;
-  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; let mut a6 = [| z; 4sz |]; A.pts_to_len a6; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
-
-  set_infinity ox oy oz;
-  Loops.repeati_g_zero (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
-                       K.point_at_infinity;
-
-  let mut i = 0sz;
-  while (let vi = !i; lt256 vi)
-  invariant exists* (vi: SZ.t)
-                    (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
-    pts_to i vi **
-    A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
-    A.pts_to a1 wux ** A.pts_to a2 wuy ** A.pts_to a3 wuz **
-    A.pts_to a4 wsx ** A.pts_to a5 wsy ** A.pts_to a6 wsz **
-    A.pts_to qx #pp vqx ** A.pts_to qy #pp vqy ** A.pts_to qz #pp vqz **
-    A.pts_to ks #pk vk **
-    pure (SZ.v vi <= 256 /\ pt_ok wx wy wz /\
-          Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
-          Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
-          pt wx wy wz ==
-            Loops.repeati_g (SZ.v vi)
-              (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
-              K.point_at_infinity)
-  decreases (256 - SZ.v (!i))
-  {
-    let vi = !i;
-    point_mul_step ox oy oz a1 a2 a3 a4 a5 a6 qx qy qz ks vi;
-    with rx. assert (A.pts_to ox rx);
-    with ry. assert (A.pts_to oy ry);
-    with rz. assert (A.pts_to oz rz);
-    Loops.unfold_repeati_g (SZ.v vi)
-      (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz)) K.point_at_infinity;
-    assert (pure (pt rx ry rz ==
-                  Loops.repeati_g (SZ.v vi + 1)
-                    (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
-                    K.point_at_infinity));
-    i := SZ.add vi 1sz;
-  };
-
-  with rx. assert (A.pts_to ox rx);
-  with ry. assert (A.pts_to oy ry);
-  with rz. assert (A.pts_to oz rz);
-  assert (pure (pt rx ry rz ==
-                Loops.repeati_g 256
-                  (K.point_mul_at (eval (vals vk)) (pt vqx vqy vqz))
-                  K.point_at_infinity));
+  point_mul_win ox oy oz qx qy qz ks;
   ()
 }
 
-(** [out := [k] G]. *)
+(** [out := [k] G].
+
+    The generator is known at compile time, so this does not go through
+    the variable-base window above: {!Hacl.K256.PointMulG} splits the
+    scalar into four sixty-four-bit pieces and walks them against four
+    compiled-in base points, sixty doublings where the ladder pays two
+    hundred and fifty-six. *)
 fn point_mul_g (ox oy oz: A.array S64.t) (ks: A.array S64.t)
                (#vox #voy #voz: erased (Seq.seq S64.t))
                (#pk: perm) (#vk: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz ** A.pts_to ks #pk vk **
   pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
-        Seq.length vk == nl /\ bnd (vals vk) base)
+        Seq.length vk == B4.nl /\ B4.bnd (L4.vals vk) B4.base)
 ensures exists* (wx wy wz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz ** A.pts_to ks #pk vk **
-  pure (pt_ok wx wy wz /\ pt wx wy wz == K.point_mul_g (eval (vals vk)))
+  pure (pt_ok wx wy wz /\ GR.on_curve (pt wx wy wz) /\
+        GR.on_curve (K.point_mul_g (B4.eval (L4.vals vk))) /\
+        GR.peq (pt wx wy wz) (K.point_mul_g (B4.eval (L4.vals vk))))
 {
-  let z = S64.zero;
-  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  fone a3;
-  (* [point_add] wants its three input coordinates at one permission, and
-     the constant tables hand back one existential permission each.  A copy
-     into owned buffers is cheaper than teaching the prover to split. *)
-  let tx = fgx ();
-  fcopy a1 tx;
-  drop_table tx;
-  let ty = fgy ();
-  fcopy a2 ty;
-  drop_table ty;
-  point_mul ox oy oz a1 a2 a3 ks;
-  ()
+  MG.point_mul_g_win ox oy oz ks;
 }
 
 #pop-options

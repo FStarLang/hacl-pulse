@@ -151,7 +151,7 @@ ensures exists* (vtag': Seq.seq S8.t).
 
   let z = S64.zero;
   let z8 = S8.classify 0uy;
-  let mut rarr = [| z; 5sz |];
+  let mut rarr = [| z; 9sz |];
   A.pts_to_len rarr;
   A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];

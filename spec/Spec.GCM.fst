@@ -263,17 +263,44 @@ let gtag_fold (v: variant) (w: Seq.lseq elem (xkeylen v)) (jj: G.block)
 
 (** {2 The two directions} *)
 
-let gcm_encrypt (v: variant) (key: Seq.lseq elem (keylen v))
-                (iv: Seq.seq elem { iv_ok iv })
-                (a: Seq.seq elem { aad_ok a })
-                (m: Seq.seq elem { msg_ok m })
+(** Both directions begin by expanding the key, and nothing after that step
+    looks at the key again.  A caller that talks to the same peer more than
+    once should not have to pay for the expansion every time, so the two
+    functions below are the part that does not depend on the key, and
+    {!gcm_encrypt} and {!gcm_decrypt} are those applied to
+    [key_expansion v key].
+
+    The GHASH subkey is not a second parameter here.  It is a function of
+    [w] alone --- [hkey v w] is the encryption of the zero block --- so the
+    specification recomputes it and only the implementation caches it. *)
+
+let gcm_encrypt_w (v: variant) (w: Seq.lseq elem (xkeylen v))
+                  (iv: Seq.seq elem { iv_ok iv })
+                  (a: Seq.seq elem { aad_ok a })
+                  (m: Seq.seq elem { msg_ok m })
   : Seq.seq elem & Seq.lseq elem taglen =
-  let w = key_expansion v key in
   let jj = j0 v w iv in
   let c = ctr_encrypt v w (inc32 jj) m in
   Seq.lemma_init_len (Seq.length m)
     (fun i -> Seq.index m i ^^ ctr_keystream v w (inc32 jj) (Seq.length m) i);
   c, gtag v w jj a c
+
+let gcm_decrypt_w (v: variant) (w: Seq.lseq elem (xkeylen v))
+                  (iv: Seq.seq elem { iv_ok iv })
+                  (a: Seq.seq elem { aad_ok a })
+                  (c: Seq.seq elem { msg_ok c })
+                  (tag: Seq.lseq elem taglen)
+  : GTot (option (Seq.seq elem)) =
+  let jj = j0 v w iv in
+  if Seq.equal (gtag v w jj a c) tag then Some (ctr_encrypt v w (inc32 jj) c)
+  else None
+
+let gcm_encrypt (v: variant) (key: Seq.lseq elem (keylen v))
+                (iv: Seq.seq elem { iv_ok iv })
+                (a: Seq.seq elem { aad_ok a })
+                (m: Seq.seq elem { msg_ok m })
+  : Seq.seq elem & Seq.lseq elem taglen =
+  gcm_encrypt_w v (key_expansion v key) iv a m
 
 (** [None] on a tag mismatch: nothing else is returned and nothing is
     written. *)
@@ -283,7 +310,4 @@ let gcm_decrypt (v: variant) (key: Seq.lseq elem (keylen v))
                 (c: Seq.seq elem { msg_ok c })
                 (tag: Seq.lseq elem taglen)
   : GTot (option (Seq.seq elem)) =
-  let w = key_expansion v key in
-  let jj = j0 v w iv in
-  if Seq.equal (gtag v w jj a c) tag then Some (ctr_encrypt v w (inc32 jj) c)
-  else None
+  gcm_decrypt_w v (key_expansion v key) iv a c tag

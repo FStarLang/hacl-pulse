@@ -34,6 +34,8 @@ open Hacl.Hash.SHA2.Tables
 open Hacl.Impl.Table
 open Hacl.HKDF.Core
 
+module Vec = Hacl.Vec128
+
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
 module Seq = FStar.Seq
@@ -85,7 +87,22 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
-  expand_impl sha2_224 kt ivt out out_len prk prk_len info info_len;
+  let ni = Vec.sha_supported ();
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if ni
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+    pure (prk_ok sha2_224 vprk /\ info_ok sha2_224 vinfo /\
+          Seq.length vout' == Seq.length vout /\
+          Seq.length vout' <= 255 * (hash_bytes sha2_224) /\
+          vout' == expand sha2_224 vprk vinfo (Seq.length vout'))
+  {
+    expand_impl_ni sha2_224 kt ivt out out_len prk prk_len info info_len;
+  } else {
+    expand_impl sha2_224 kt ivt out out_len prk prk_len info info_len;
+  };
   drop_table ivt;
   drop_table kt;
 }
@@ -134,7 +151,22 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
-  expand_impl sha2_256 kt ivt out out_len prk prk_len info info_len;
+  let ni = Vec.sha_supported ();
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if ni
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+    pure (prk_ok sha2_256 vprk /\ info_ok sha2_256 vinfo /\
+          Seq.length vout' == Seq.length vout /\
+          Seq.length vout' <= 255 * (hash_bytes sha2_256) /\
+          vout' == expand sha2_256 vprk vinfo (Seq.length vout'))
+  {
+    expand_impl_ni sha2_256 kt ivt out out_len prk prk_len info info_len;
+  } else {
+    expand_impl sha2_256 kt ivt out out_len prk prk_len info info_len;
+  };
   drop_table ivt;
   drop_table kt;
 }

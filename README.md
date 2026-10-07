@@ -22,13 +22,36 @@ the NIST CAVP sets for AES-GCM and HMAC-DRBG, the FrodoKEM known-answer
 tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
 thirty-four C test harnesses in `tests/`.
 
-Performance ranges from ahead of HACL\*'s portable C -- SHA-256, SHA-512,
-SHA-3, SHAKE, ChaCha20, ChaCha20-Poly1305 and HMAC-SHA-512 are all faster --
-to behind it on modular exponentiation, which is still square-and-multiply
-where HACL\* uses a window, and on the elliptic curves, where what is left is
-the scalar multiplication rather than the field: X25519 is within
-1.26x, but Ed25519, P-256 and secp256k1 still multiply one bit at a time where
-HACL\* uses a precomputed window.  See [Performance](#performance).
+Performance is measured against HACL\* configured for the machine and allowed
+everything it has -- Vale assembly, AVX2, BMI2/ADX -- because that is what a
+caller choosing HACL\* would actually get.  On that comparison SHA-3, SHAKE,
+SHA-512, HMAC-SHA-512 and BLAKE2b are faster, most of the suite is
+within 20%, and the remaining ceiling is the three primitives where AVX2
+lanes are worth four to five times a scalar implementation: ChaCha20,
+Poly1305 and ChaCha20-Poly1305.  Against HACL\*'s *portable* C -- the
+like-for-like comparison, same algorithm and same instruction set -- the
+hashes are all ahead and what is behind is the elliptic curves, where what
+is left is the scalar multiplication rather than the field.  Modular exponentiation --
+RSA-PSS, FFDHE and the generic modexp -- has crossed over: a 4-bit window, a
+four-at-a-time inner row and a triangle squaring put all three of those rows
+between 0.92x and 0.97x, faster than the reference.  On the curves: P-256's variable-base ECDH
+is now *faster* than the reference at 0.76x, secp256k1's is within 1.39x and
+X25519 within 1.26x, now that the first two walk their scalars four bits at
+a time, as Ed25519 now does too, and now that all three of the curves with a
+generator multiply it out of four compiled-in base points rather than one.
+P-256 is the one that gained most from the latter: signing is now within
+1.06x of the reference and key agreement within 1.05x.  Ed25519 and secp256k1 go
+further still and compile in the whole of their fixed-base windows,
+sixty-four precomputed multiples of the generator apiece: Ed25519 signing and
+key generation are within 1.23x under gcc and 1.37x under clang, and
+secp256k1 signing is within 1.15x and `secret-to-public` within 1.24x, now
+that its small multiples -- twenty-one, eight, three, two -- are a
+limb-by-limb multiply rather than a full field multiplication.  The clang
+numbers on all of these rose when the secret-indexed table read was made
+genuinely constant-time; see [The compiler is allowed to undo a
+constant-time algorithm](#the-compiler-is-allowed-to-undo-a-constant-time-algorithm).
+See
+[Performance](#performance).
 
 ```
 make            verify, extract, compile, test
@@ -117,9 +140,9 @@ cast at the boundary.
 There is none, and there is no Vale dependency.  Where a specific
 microarchitecture matters the answer is a C intrinsic behind a narrow,
 axiomatized interface, verified against the same specification as the portable
-code and tested against an independent transcription of the standard: AES-NI
-and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the Intel SHA
-extensions under SHA-256 and SHA-224.  Each is selected at run time by
+code and tested against an independent transcription of the standard: AES-NI,
+`AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
+Intel SHA extensions under SHA-256 and SHA-224.  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
 ## How a hash is put together
@@ -238,6 +261,21 @@ one scratch block that holds `K0 ^ ipad` and later `K0 ^ opad`, and one digest
 HMAC of a byte, with no state machine.  `hash_prefixed` is also what the
 incremental interface is built on; see below.
 
+That generality had a cost that took a while to see.  `hash_prefixed` is
+generic in the word type, so it cannot branch into the SHA-EXT
+implementation, which exists only at thirty-two-bit words -- and the
+dispatch on `sha_supported ()` lived only in the one-shot hash.  HMAC-SHA-256
+therefore ran scalar compression rounds on a machine whose plain SHA-256 was
+issuing `sha256rnds2`, and cost five times what hashing the same bytes cost.
+There is no way for code at an abstract word type to obtain the equality
+witness it would need, and an implementation-dispatch method has no business
+in a typeclass that is otherwise a statement about values, so
+`Hacl.Hash.SHA2.NI.hash_prefixed_ni` and `Hacl.HMAC.NI.hmac_impl_ni` are
+transcriptions at `S32.t`, in the same way `hash_blocks_ni` already was.
+`hmac_sha224` and `hmac_sha256` pick between them at run time.  A 256 KiB
+HMAC-SHA-256 went from 1,136 us to 227 us, which is exactly what hashing
+256 KiB costs.
+
 ### HKDF's one scratch buffer
 
 `expand` hashes `T(i-1) || info || i` once per round.  `Hacl.HKDF.Core` lays
@@ -260,6 +298,29 @@ agrees with `expand_all` at any `m <= n` on the first `m` digests -- is what
 lets a round establish it.  The loop measure is the round counter, not the
 bytes remaining: the last round overshoots the requested length, so
 `len - base` is not a `nat`.
+
+**Expand reaches HMAC the long way round, and that cost it 1.9x.**  Giving
+`Hacl.HMAC.hmac_sha256` the SHA extensions did nothing for HKDF-expand,
+because expand does not call it: it calls `round_one` and `round_step`,
+which call the generic `hmac_impl` directly, and generic code cannot branch
+into an implementation that exists only at thirty-two-bit words.  A
+sixty-four-byte expand is two HMACs of a few dozen bytes, which is eight
+compression blocks, and at 270 ns a scalar block against 55 that accounted
+for the whole of the gap: 3,086 ns measured against a reference's 1,348.
+The three functions are therefore transcribed at `S32.t` with
+`hmac_impl_ni`, and `expand_sha224`/`expand_sha256` choose between the pair.
+Expand now costs 1,635 ns, which is exactly twice the 809 ns that
+`hmac_sha256` costs on the same inputs --- the floor for an algorithm that
+is two HMACs.
+
+That is the third copy of this shape, after `hash_blocks_ni` and
+`hmac_impl_ni`, and the pattern's cost is now plain.  A static
+specialisation hierarchy pays for an implementation choice in duplicated
+proof, where EverCrypt's runtime agility pays for it in indirect calls.
+`Hacl.HMAC.DRBG.Core`, `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and
+`Hacl.Streaming.HMAC` are still on the generic path, and a fourth copy is
+not the answer: threading the block function through the hash core so that
+one generic copy serves both is, and it is roadmap item 18.
 
 ### The incremental hash
 
@@ -547,12 +608,35 @@ which is exactly what `fmul` accepts.  So the main loop is a load, five adds
 and a multiply, with no carry propagation between them.
 
 **A block is loaded as two words, not five bytes at a time.**  Two
-`load_le #uint64` calls give the low and high halves; four of the five limbs
+`load_le #uint64` calls give the low and high halves -- and those two calls
+were, until recently, a fifth of the entire running time, for reasons that
+had nothing to do with Poly1305 and are described in
+[A machine word is not eight bytes in a loop](#a-machine-word-is-not-eight-bytes-in-a-loop); four of the five limbs
 are a shift and a mask of one of them, and limb two is the only one that
 straddles the boundary -- twelve bits from the low word, fourteen from the
 high.  There is no `logor` anywhere: the operands are disjoint by size, so a
 plain addition is equal to the disjunction and avoids `logor_disjoint`
 entirely.
+
+**`r` is nine limbs, not five.**  The wraparound in the schoolbook product
+multiplies `h_i * r_j` by five whenever `i + j` exceeds four, ten times in
+all.  `load_r` precomputes `5*r_1 .. 5*r_4` into `r[5..8]` once per message
+and `mul_limbs` multiplies by those instead, which is the form HACL\* uses
+and which turns thirty-five multiplies into twenty-five.  It is worth about
+2%: gcc was already compiling `5 * x` to one `lea`, so the ten extra
+multiplies did not exist in the object code.  It is kept because it is
+strictly less work and because the `has5` invariant that carries it costs
+one conjunct.
+
+**The carry chain is two chains, not one.**  The six carries after a
+multiplication used to run `0 -> 1 -> 2 -> 3 -> 4 -> 0 -> 1`, six deep.  They
+now start in two places at once -- one chain at limb zero, one at limb three,
+each carrying two places, with the wrap from the top rejoining them -- which
+is four steps with two independent shifts in each, again HACL\*'s shape.
+That one is worth nothing measurable, and is recorded here because "shorten
+the dependency chain" is exactly the kind of change that *sounds* like it
+must help: the chain was never the critical path.  What was is in
+[A machine word is not eight bytes in a loop](#a-machine-word-is-not-eight-bytes-in-a-loop).
 
 **A short block is padded, not shifted.**  The specification's value of a
 block of *n* bytes is `le_nat b + 2^(8n)`, and for a full block the `2^128`
@@ -746,16 +830,39 @@ for which `ecdh` returns `false` and the shared secret is all zeros.
 Ed25519 lives on the same prime as X25519, so it reuses
 `Hacl.Curve25519.Field` unchanged -- the same five limbs of fifty-one bits,
 the same `fmul`, the same inversion chain.  Nothing in the signature scheme
-needed a second field implementation, which is the main reason the whole of
-`code/ed25519` is six modules.
+needed a second field implementation, which is the main reason `code/ed25519`
+holds no arithmetic of its own beyond the group order: of its fourteen
+modules, four are nothing but the fixed-base window's constant tables.
 
-Its *scalar* arithmetic, mod the group order `q`, is a different matter: it
-is eight limbs of thirty-two bits and always was, and for a while it shared
-the field's names because the field happened to use the same radix.  The move
-to 2^51 forced the split.  `Hacl.Ed25519.Scalar` now sits on
-`Hacl.Impl.Limb` and `Spec.Bignum256` and owns its own `copy`, `load_le`,
-`store_le`, `limbs_eq` and `reduce32`; `Hacl.Ed25519` deliberately mixes the
-two, five-limb arrays for coordinates and eight-limb arrays for scalars.
+Its *scalar* arithmetic, mod the group order `q`, is a different matter,
+because `q` is not the field prime and has no special shape.  It began as
+eight limbs of thirty-two bits with every operation done bit by bit -- 512
+rounds of double-and-conditionally-subtract to reduce a SHA-512 digest, 256
+rounds to multiply -- for the reason its header gave at the time: without
+`uint128` there was no cheap way to form a 64x64 product.  That premise is
+long gone, and the module now sits on the four-limb Montgomery core in
+`code/field256`, the same `Hacl.Impl.Mont4` that secp256k1 and P-256 use,
+with the order supplied as data: `Spec.Ed25519.Scalar.qmod` is a
+`Spec.Field4.modulus` and `Hacl.Ed25519.Tables` carries its six constant
+tables.  `Hacl.Ed25519` deliberately mixes the two widths, five-limb arrays
+for coordinates and four-limb arrays for scalars.
+
+**Reducing a 512-bit digest without a Barrett step.**  `amul` insists both
+its operands are already below the modulus, so a digest cannot simply be fed
+to a wide Montgomery reduction, and reducing a bare 256-bit half would need
+conditional subtractions against tables for `8q`, `4q`, `2q` and `q` that the
+core's interface does not let a caller pass.  Cutting the digest into four
+128-bit chunks instead makes every chunk a residue for free, since `2^128 <
+q`.  What remains is to weight them, and a Montgomery multiplication by a
+constant of the form `R k mod q` cancels the radix and leaves `a k mod q`, so
+the three weights `2^128`, `2^256` and `2^384` are three ordinary constant
+multiplies against tables holding `2^384 mod q`, `2^512 mod q` and `2^640 mod
+q`.  The middle one is `R^2 mod q`, which the modulus already carries, so
+only two tables are new.  The whole reduction is three multiplies and three
+additions; the old one was five hundred and twelve conditional subtractions.
+A thirty-two-byte scalar is the same fold over two chunks.  `sign_expanded`
+minus `secret_to_public` -- all the scalar arithmetic in a signature, and
+nothing else -- went from 31 us to 1.8.
 
 **The compressed sign bit moved into the top byte.**  At radix 2^32 bit 255
 was the top bit of limb 7 and `point_compress` could set it in place before
@@ -771,11 +878,74 @@ t)` are passed as four separate five-limb arrays side by side, because a
 struct of arrays would need its own separation discipline and Custard would
 have to lay it out.  `point_add ox oy oz ot x1 y1 z1 t1 x2 y2 z2 t2` is a
 wide signature, but the separation logic is then exactly the one the field
-operations already use.  One consequence: `point_add` and `point_mul` demand
-all four coordinates of an input at a *single shared* permission, so the
-read-only base-point table has to be copied into owned buffers before
-`point_mul_g` can use it -- `Table.table` hands back an existential
-permission per array, and four existentials are not one.
+operations already use.  One consequence: an addition against a table used to
+demand all four coordinates of the table at a *single shared* permission,
+which nothing could supply -- `Table.table` hands back an existential
+permission per array, and four existentials are not one, and Pulse can halve
+a permission but never weaken it to a stated target.  `win_add` therefore
+takes four permissions rather than one, and the fixed-base window's sixteen
+read-only arrays are read where they lie instead of being copied into owned
+buffers first.
+
+**The scalar multiplication is windowed, and that changes what the callers
+can assume.**  `Hacl.Ed25519.PointWin` walks the scalar four bits at a time
+against a sixteen-entry table of multiples of the input point, so it returns
+a point *equivalent* to the one the specification names rather than the same
+quadruple.  Every consumer of a multiple therefore has to be shown blind to
+the difference: compression is, because it normalises through `Z^-1`
+(`point_compress_congr`); addition is, by `point_add_congr`; and the equality
+test at the end of verification is, by an argument that needs `on_curve` of
+the specification's points too.  For the public key that means knowing that
+decompression lands on the curve, which nothing needed before and
+`Spec.Ed25519` does not say, so `Spec.Ed25519.Group.decompress_on_curve`
+proves it -- `recover_x` returns a square root of `(y^2 - 1)/(d y^2 + 1)`,
+which is the affine equation solved for `x`.  The three places that compress
+a multiple of the generator are one function, `point_mul_g_compress`, so the
+congruence argument is made once.
+
+**The generator has its own window.**  Signing and key generation multiply a
+point that is known at compile time, and `Hacl.Ed25519.PointMulG` preprocesses
+it: the scalar splits into four sixty-four-bit pieces and
+
+```
+k G = k0 G + k1 (2^64 G) + k2 (2^128 G) + k3 (2^192 G)
+```
+
+lets the four pieces share one doubling chain, so sixteen rungs of four
+doublings and four additions replace sixty-four rungs of four and one.  A
+hundred and twenty-eight point operations against three hundred and
+thirty-five.
+
+The four sixteen-entry tables are *compiled in*.  They were being built on
+entry -- sixty point additions, a third of the work -- from three extra base
+points stated as doubling chains in `Spec.Ed25519.Base`.  Now all sixty-four
+multiples are constants: `Spec.Ed25519.Win0` .. `Win3` name the points and
+prove each is the multiple it claims to be, and `Hacl.Ed25519.Win0` .. `Win3`
+hold the limbs, sixteen `static const uint64_t [80]` arrays, two hundred and
+fifty-six field constants and about ten kilobytes of `.rodata`.
+
+Saying what such a constant *is* is the difficulty: `[2^64] G` is
+two-to-the-sixty-fourth additions and cannot be unfolded, so
+`Spec.Ed25519.Base` states the three scale points as doubling *chains*
+(`Spec.Group.Smul.dblk`), which the normaliser evaluates on concrete field
+elements at typechecking time -- sixty-four doublings in about a second --
+and `dblk_ok` converts into a statement about `smul`.  Each table then climbs
+from there one addition at a time, entry `d` proved equal to `e_{d-1} + e_1`
+by `assert_norm` and lifted to `smul (d n) g` by `Spec.Group.smul_add_congr`.
+Every entry is stored *affine*, `(x, y, 1, x y)`, which is what makes both
+the chain equation and the curve equation decidable by `assert_norm`, so no
+SMT query ever sees a point; a projective quadruple would carry whatever
+denominators the previous addition left, and by the fifteenth entry the
+numbers stop being ones the normaliser can compare.  The coordinates are
+`opaque_to_smt` for the same reason, and so are the four flat eighty-limb
+sequences, so that sixteen tables' worth of literals never enter the caller's
+context.  `Hacl.Impl.Lit51` cuts a list the way `entry` slices the
+sequence, so one `assert_norm` per entry-coordinate settles five limbs at
+once, and `Hacl.Ed25519.WinTable` turns four such facts into the `ent` the
+window wants.  `Hacl.Ed25519.PointWin`'s table layer carries a scale so that
+both windows can share it: entry `d` of the `j`-th table has to be described
+as the `d 2^{64j}`-th multiple of `G`, not the `d`-th multiple of `2^{64j}
+G`, because it is `G` that the answer is a multiple of.
 
 **Failure is public.**  Decompression can fail, and a signature can be
 invalid; neither fact is secret, so both are ordinary `bool`s rather than
@@ -850,11 +1020,13 @@ Solinas shape and the only one this representation collects.
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
-mentions both takes minutes.  So `code/p256` is twenty modules: the on-curve
+mentions both takes minutes.  So `code/p256` is twenty-two modules: the on-curve
 test and the scalar reduction never appear in the same verification context,
 and `Hacl.P256.Key` (private keys, the scalar field) and
 `Hacl.P256.Key.Public` (public keys, the field) are separate files for no
-other reason.  `code/k256` is the same twenty for the same reason.
+other reason.  Two more are the fixed-base window.  `code/k256` is the same
+twenty-two for the same reasons, plus the four modules of its own radix-52
+base field.
 
 **`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
 addition formulas are Renes-Costello-Batina, twelve field multiplications
@@ -863,13 +1035,39 @@ unfolded.  Once, in the scalar-multiplication loop, that is fine; on every
 iteration of a 256-step ladder it is fatal.  Sealing them means the loop
 invariant talks about `point_add` the symbol.
 
-**Scalar multiplication reads bits, so it does not use Montgomery form.**
+**Scalar multiplication reads nibbles, so it does not use Montgomery form.**
 `Hacl.P256.Key.load_scalar` produces four plain limbs with `load_be`;
-`qload` is used only where the scalar enters the order field (signing).  The
-ladder itself is a plain 256-iteration double-and-add with the addend
-selected by a constant-time swap, in its own module
-(`Hacl.P256.PointStep`) so that one step's proof does not carry the
-loop's.
+`qload` is used only where the scalar enters the order field (signing).
+`Hacl.P256.PointWin` then walks the scalar four bits at a time against a
+sixteen-entry table of small multiples of the input point, built at run time
+and read with the constant-time `Hacl.Bignum.Base.table_select`: sixty-four
+rungs of four doublings and one addition, 336 point operations rather than
+the bit-at-a-time ladder's 512, and about a third faster.  Because the
+window adds in a different order from the specification's ladder it arrives
+at a different projective representative, so `point_mul` concludes `peq`
+rather than equality and requires its input to be on the curve;
+`Hacl.P256.Encode.lpt_on_curve` supplies that, and `Ecdh`, `Sign` and
+`Verify` cash the `peq` in with `peq_to_aff_point` and
+`peq_is_point_at_infinity`.  `Hacl.P256.PointStep` is left holding only
+`set_infinity`.
+
+**The generator has its own window.**  Signing, verification and key
+agreement all begin with a multiplication by the generator, which is known
+at compile time, so `Hacl.P256.PointMulG` does not walk the scalar bit by
+bit at all: it splits it into four sixty-four-bit pieces and walks them
+together against `G`, `2^64 G`, `2^128 G` and `2^192 G`, sixteen rungs of
+four doublings and four additions, 184 point operations rather than 335.
+`Spec.P256.Base` says what the three extra base points are, as a doubling
+chain the normaliser evaluates at typechecking time, and
+`Spec.Group.Smul.dblk_ok` turns that into a statement about `smul`.  Their
+six field constants are **Montgomery forms** -- that is what this field
+runs in -- and they live in `Hacl.P256.TablesG` rather than beside the
+other eight, because a dozen two-hundred-and-fifty-six-bit literals in one
+solver context is enough to stop a file of routine limb lemmas
+terminating.  Everything below the rung is `Hacl.P256.PointWin`'s, whose
+table layer carries a scale for exactly this reason.  ECDH as initiator
+went from 272 us to **165** and signing from 287 to **182**, which is 1.04x
+and 1.08x of HACL\*.
 
 **Verification is not constant time and need not be.**
 `point_mul_double_g u1 u2 Q` is two independent multiplications and one
@@ -904,17 +1102,69 @@ both ends.
 Bitcoin's curve has a different prime, a different order, and `a = 0`
 instead of `a = -3`.  Everything else about it is P-256, and the
 implementation says so: `code/k256` is a module-for-module copy of
-`code/p256` in which only three files differ in substance.
+`code/p256` in which the curve arithmetic differs in three files, plus the
+base field, which secp256k1 has since taken its own way.
 
-**`Hacl.K256.Tables` is the whole of the difference for the field.**  The
-two moduli, their complements, the four Montgomery constants, the three
-exponents and the curve constants in Montgomery form -- about three hundred
-lines of generated literals, and the only place in the implementation where
-secp256k1's actual numbers appear.  `Hacl.K256.Field`, `Hacl.K256.Scalar`
-and `Hacl.K256.Inverse` are then the P-256 modules with those tables
-underneath, and **none of them adds a line to the emitted C**: the
-Montgomery layer takes its modulus as an argument, so the two curves share
-every field operation and differ only in the table they pass.
+**The scalar field is shared; the base field no longer is.**
+`Hacl.K256.Tables` holds the scalar modulus, its complement, the Montgomery
+constants and the exponents, and `Hacl.K256.Scalar` is the P-256 scalar
+module with those tables underneath, adding not a line to the emitted C --
+the Montgomery layer takes its modulus as an argument, so the two curves
+share every scalar operation and differ only in the table they pass.  The
+base field went its own way: secp256k1's prime is `2^256 - 2^32 - 977`, which
+is close enough to a power of two that a bit above 2^256 folds back with a
+single multiply by `2^32 + 977`, so `Hacl.K256.Field52` carries five limbs of
+fifty-two bits, leaves them lazily reduced between operations, and has no
+Montgomery factor at all.  `Hacl.K256.Tables52` holds the curve constants in
+that representation and `Hacl.K256.Exp52` the exponentiation ladder without
+the Montgomery apparatus.  P-256 still uses the shared four-limb Montgomery
+core.
+
+**The scalar multiplication is shared in shape but not in code.**  Both
+curves now walk four bits at a time against a sixteen-entry run-time table:
+`Hacl.K256.PointWin` and `Hacl.P256.PointWin` are the same file at five
+limbs and at four, 336 point operations rather than 512, worth 26% on
+secp256k1 and about a third on P-256.  The proof is deliberately split:
+`Spec.Group.Smul` is a commutative group as an abstract record and carries
+every inductive argument, including the ladder, over opaque operations;
+`Spec.K256.Smul` and `Spec.P256.Smul` instantiate it and connect each
+curve's own `point_mul` by a definitional equality of step functions.  The
+abstraction is not decoration.  `on_curve` and `peq` unfold into equations
+modulo a seventy-eight digit prime, and proving the same ladder theorem with
+them in scope does not terminate; having written it once abstractly, the
+second curve's spec side cost one second.  The Montgomery field made P-256's
+implementation side harder rather than easier -- even its coordinate
+projection carries two of those literals -- so its loop invariant is stated
+over limb sequences rather than over points.
+
+**The generator has its own window.**  Signing and `secret-to-public`
+multiply a point that is known at compile time, so `Hacl.K256.PointMulG`
+does not walk the scalar bit by bit at all: it splits it into four
+sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
+`2^128 G` and `2^192 G`, sixteen rungs of four doublings and four
+additions, 184 point operations rather than 335.  Everything below the rung is
+`Hacl.K256.PointWin`'s, whose table layer carries a scale for exactly this
+reason; the scalar arithmetic is `Spec.Group.Split4`, shared with Ed25519.
+
+The four sixteen-entry tables are *compiled in*, as Ed25519's are, and by the
+same construction.  They were being built on entry -- sixty point additions
+out of a hundred and eighty-four -- from three extra base points stated as
+doubling chains in `Spec.K256.Base`, which the normaliser evaluates at
+typechecking time and `Spec.Group.Smul.dblk_ok` converts into a statement
+about `smul`.  Now all sixty-four multiples are constants:
+`Spec.K256.Win0` .. `Win3` name the points and prove each is the multiple it
+claims to be, one `assert_norm` per entry that it equals the previous entry
+plus the scale point lifted by `Spec.Group.smul_add_congr`, and
+`Hacl.K256.Win0` .. `Win3` hold the limbs, twelve `static const uint64_t [80]`
+arrays in radix 2^52, a hundred and ninety-two field constants and about eight
+kilobytes of `.rodata`.  `Hacl.Impl.Lit52` cuts a literal list the way `entry`
+slices the sequence, so one `assert_norm` per entry-coordinate settles five
+limbs at once, and `Hacl.K256.WinTable` turns three such facts into the `ent`
+the window wants; it is the only module that opens the `rep` abstraction, so
+no seventy-eight-digit literal ever reaches a caller's solver context.
+`Hacl.K256.Tables52G`, which held the three extra base points' six field
+constants, is gone.  secp256k1 `secret-to-public` went from 155 us to 111 to
+**75** and signing from 172 to 126 to **91**.
 
 **`a = 0` is a shorter addition law, not a special case of the same one.**
 Renes-Costello-Batina give separate algorithms for `a = -3` (4 and 6) and
@@ -1090,7 +1340,10 @@ So the S-box is computed:
 with `ginv` an addition chain of fifteen multiplications in GF(2^8) -- the
 inverse is `x^254`, and `x^254 = ((x^2 . x)^4 . (x^2 . x))^16 . ((x^2 . x)^4
 . (x^2 . x)) . x^2` when written to share subterms -- and `affine` eight
-rotations and a xor.  `Spec.AES.sbox_is_algebraic` is the lemma that this
+rotations and a xor.  That costs about three hundred and fifty serially
+dependent operations per byte, which the cipher never pays because `AESENC`
+has the S-box inside it, and which the *key schedule* paid forty times per
+message until `AESKEYGENASSIST` was bound; see below.  `Spec.AES.sbox_is_algebraic` is the lemma that this
 agrees with the 256-entry table of the standard, which is stated once, proved
 once by `assert_norm`, and never unfolded again: `sbox_list` is
 `opaque_to_smt`, because a 256-element literal in the solver's context makes
@@ -1151,6 +1404,148 @@ shape multiplication is visibly linear in its first argument, so the only real
 work is that multiplying by *x^j* commutes with multiplication, and
 commutativity of the convolution.  Nothing there ever looks inside the
 reduction polynomial.
+
+**And the four blocks share one reduction.**  Once the multiplies are
+independent, the next thing to notice is that the reduction, not the
+multiplication, is most of what they cost: `raw_product` is four
+`PCLMULQDQ`s and about a dozen other operations, and the two `mul_r_vec`
+calls that fold the 256-bit result back into the field are about twenty
+shifts and exclusive-ors each.  A four-block turn was therefore running
+eight folds for sixteen multiplies.
+
+It needs one.  The 256-bit carry-less product is linear in each operand, so
+four products can be accumulated as two registers -- the sum of the four low
+halves and the sum of the four high halves -- and the fold applied once to
+that sum.  `Hacl.AES.GF128.NI.gmul4_vec` is that: four `raw_product`s, six
+exclusive-ors, and then exactly the tail `gmul_vec` already had.  A four-block
+turn goes from roughly two hundred and fifty vector operations to a hundred
+and ten.
+
+The specification side is three small lemmas and no new reasoning about the
+reduction polynomial at all.  `Spec.GF128.Poly.mul_r_two` is the existing
+`gmul_three` with its first line removed -- the statement that folding twice
+terminates, said about one register rather than about a product, which is
+what makes it reusable.  `Spec.GF128.Algebra.gmul_defer4` combines four
+applications of `gmul_split` with distributivity of `gmul` over `gadd`, which
+`Spec.GF128.Algebra` already had for the Horner rearrangement.  And
+`Spec.CLMUL.bswap_gadd` says byte reversal commutes with exclusive-or, which
+is one line -- both sides are the same `Seq.init` -- and is what lets the six
+exclusive-ors happen in the multiplier's bit order, so three byte reversals
+happen at the end rather than twelve.
+
+Measured on 256 KiB: GHASH alone went from 2.11 cycles per byte to **1.28**,
+and AES-128-GCM from 3.68 to **2.88**, which is the first time it has been
+over a gigabyte a second.  The counter-mode half, measured the same way by
+difference, did not move -- 1.58 against 1.60 -- which is the control.  The
+benchmark row follows: 809 MB/s to **1034** on 256 KiB under gcc, 4.48x of
+EverCrypt's Vale assembly down to **3.52x**, and under clang 868 MB/s to
+**1052**, 4.22x down to **3.46x**.  AES-256-GCM moves the same way, 4.41x to
+**3.50x**.
+
+The generated assembly says what changed and what is left.  A four-block turn
+is 205 instructions for sixty-four bytes, or 3.2 per byte, which at the
+three-wide issue this machine manages on vector code is 1.28 cycles a byte:
+GHASH is now bound by instruction count rather than by the multiply latency
+it used to be bound by, which is the difference between a dependency problem
+and a work problem.  Of those 205, sixteen are `PCLMULQDQ` and about forty
+are the single remaining fold.  There are seven `PSHUFB`s and not eleven,
+because the four byte reversals of the hash-key powers are loop-invariant and
+gcc hoists them; that they are invariant is a consequence of accumulating in
+the multiplier's bit order rather than GHASH's.
+
+**And the counter is a lane, not a carry chain.**  With the reduction
+deferred, GHASH stopped being the larger half of AES-GCM and the counter
+mode became it.  Reading the generated assembly for a four-block turn says
+why: a hundred and thirty-nine of its two hundred and twenty-five
+instructions were not AES at all.  They were four copies of
+`Hacl.AES.Counter.inc32_impl`, the constant-time carry chain over the last
+four bytes of the counter block -- a `not`, a `movzbl`, a subtract and a
+shift per byte to make the carry a mask rather than a branch, which is the
+right shape for a counter that might be secret and the wrong shape entirely
+for a driver that needs four consecutive counters.  Worse than the
+instruction count, each chain ends in a four-byte store to the counter array
+and the next counter starts with a sixteen-byte load of it: a narrow store
+under a wide load, which no store-forward network will satisfy, so each of
+the three round trips cost a stall and the four chains were serial.
+
+The counter never needs to be in memory.  Reversing the sixteen bytes moves
+the counter's four bytes to the bottom of the register *and* turns their
+big-endian reading into a little-endian one, which is exactly lane zero; a
+packed thirty-two bit add of one increments that lane, wrapping at 2^32 and
+carrying nothing into the twelve bytes above it, which is precisely what
+`Spec.AES.inc32` asks for; and reversing again puts it back.  Three
+instructions, and with the reversal kept across the four the whole turn is
+one `PSHUFB` and one `PADDD` per block.  `Hacl.AES.NI.inc32_vec` is that,
+and the counter is written back to the array once, at the end.
+
+No new instruction was needed: `PADDD` was already bound, for SHA-256's
+message schedule.  What it needed was to stop being under the SHA target,
+since `_mm_add_epi32` is SSE2 and part of the x86-64 baseline, so the same
+binding can be inlined into a SHA function and into an AES-NI one; the only
+new extern is the constant one-in-lane-zero.  The proof is
+`Hacl.AES.Counter.inc32_lanes`, and it is entirely bookkeeping: a lemma that
+reads a byte back out of a little-endian number
+(`Hacl.Spec.Bytes.le_nat_byte`), two that connect `Spec.SHANI.lane` -- where
+the `PADDD` axiom states itself -- to the bytes underneath it, and then
+sixteen concrete instances, one per byte of the block.  Twelve of them say
+the byte did not move and four say it is a digit of the incremented counter.
+
+A four-block turn goes from **225 instructions to 114**, and counter mode
+from 1.55 cycles a byte to **0.49** -- close to the two-per-cycle `AESENC`
+throughput this machine has, which is where a counter mode should be.  The
+GHASH half did not move, 1.23 against 1.22, which is the control.  Whole
+AES-128-GCM on 256 KiB went from 2.78 cycles a byte to **1.71**.  The
+benchmark row follows it: 1034 MB/s to **1631** under gcc, 3.52x of
+EverCrypt's Vale assembly down to **2.24x**, and under clang 1052 MB/s to
+**2025**, 3.46x down to **1.80x** -- clang schedules the four interleaved
+blocks better than gcc does, and with the counter out of the way that
+difference is no longer hidden.  AES-256-GCM moves with it, 3.50x to
+**2.28x**.
+
+**And then eight blocks share one reduction.**  Which put GHASH back on top,
+1.22 cycles a byte of 1.71, and the fold is a cost per *group*, not per
+block: the deferral argument never cared that the group was four.  So
+`Hacl.AES.GF128.NI.gmul8_vec` runs eight products against eight powers of
+the hash key and folds once for a hundred and twenty-eight bytes where two
+turns of `gmul4_vec` folded twice.  Eight independent `PCLMULQDQ`s also give
+the multiplier twice as much to work on at once.
+
+Nothing in the algebra is new.  `Spec.GF128.Algebra.sum8` is two `sum4`s
+added; `regroup8` is `regroup4` twice and one pairing lemma; `mul_r_sum8` is
+`mul_r_sum4` twice and one distribution; and `gmul_defer8` is `gmul_defer4`
+with four replaced by eight throughout, with exactly one `mul_r_vec` pair
+still below it.  The Horner side is the only place that needed thought:
+`horner8` is `horner4` applied twice, and the work is pushing a
+multiplication by `H^4` through the first group's four terms, which raises
+each of their powers by four.  That last step is not free, because the
+powers are generated one multiplication at a time, so `pow_mul4` walks up
+the chain to show that `H^4` times each of `H`, `H^2`, `H^3` and `H^4` is
+`H^5`, `H^6`, `H^7` and `H^8`.
+
+The four-way loop did not go away.  What the eight-way pass leaves behind is
+at most one group of four, so `ghash_loop4_ni` gained a starting offset and
+now runs from where the eight-way pass stopped; the one-block loop takes the
+rest.  Three loops, two more powers' worth of setup, and all of it inside
+the same test as before: a message short of a hundred and twenty-eight bytes
+computes four powers as it always did, and one short of sixty-four computes
+none.
+
+GHASH went from 1.22 cycles a byte to **1.03** under gcc and 0.92 to
+**0.82** under clang; the counter half is the control and did not move,
+0.47 against 0.48.  The benchmark row follows: 1631 MB/s to **1868** under
+gcc, 2.24x of EverCrypt's Vale assembly down to **1.98x**, which is the
+first time this primitive has been inside a factor of two of hand-written
+assembly; under clang, 2025 to **2205**, 1.80x down to **1.68x**.
+AES-256-GCM goes 2.28x to **2.05x**.
+
+The eight-way turn is 363 instructions for a hundred and
+twenty-eight bytes against the four-way turn's 227 for sixty-four, so the
+fold really is what came out.  Forty-one of those 363 are stack traffic:
+eight powers, eight data blocks and sixteen product halves do not fit in
+sixteen registers, and gcc spills.  Accumulating the halves as they are
+produced rather than in a tree was tried, to keep fewer of them live, and
+made gcc a third *slower* -- it serialises the products when the sum is a
+chain -- so the tree stays.
 
 **Everything counts in bytes.**  FIPS 197 describes the key expansion in
 four-byte words, with conditions `i mod Nk = 0` and `i mod Nk = 4`.  Writing
@@ -1257,9 +1652,723 @@ on four thousand random inputs.  Perturbing one coefficient of the reference
 makes all 4097 cases fail, which is the check that the test is checking
 something.
 
-The key schedule is still the portable one.  It runs once per message rather
-than once per block, and `AESKEYGENASSIST` takes a round constant as an
-immediate, so it would need one extern per round.
+**The key schedule needed the same treatment, and was worth more than the
+cipher.**  It runs once per message rather than once per block, which is why
+it was left alone at first --- but a message can be sixty-four bytes long,
+and then it is the entire cost.  The portable S-box is the algebraic one: an
+inverse in GF(2^8) computed as *a^254* by fifteen field multiplications, each
+seven `xtime`s and eight conditional exclusive-ors.  That is about three
+hundred and fifty operations, and because each depends on the one before it
+is also about three hundred and fifty cycles.  An AES-128 schedule needs
+forty of them and an AES-256 schedule fifty-two, so expanding a key cost
+fourteen thousand cycles --- more than a thousand cycles per round key, for
+an operation that touches 176 bytes.  A table would be four cycles, but the
+input is the key, so a table would be a cache-timing oracle on the key and is
+not an option.
+
+The measurement that found it is the plainest one available: AES-256's
+fixed per-call cost divided by AES-128's is 18289/14044 = 1.302, and 52/40 =
+1.300.  Nothing else in the call has that ratio.
+
+`AESKEYGENASSIST` does four S-box lookups in one instruction, in constant
+time, and is exactly what the hardware provides for this.  It also
+exclusive-ors in a round constant taken as an immediate, which is why this
+was passed over once before: an immediate needs one extern per value, and
+there are ten of them.  But the round constant may be *zero*, and then the
+instruction is nothing but `SubWord` --- and `Hacl.AES.Key` already carries
+the round constant in a register and exclusive-ors it in itself.  So one
+binding serves every round.  `Hacl.Vec128.subword` is that binding, and its
+axiom is about the four bytes it is used for:
+
+    assume val subword (a: t)
+      : r: t { forall (i: nat). i < 4 ==>
+                 Seq.index (bv r) (8 + i) == sbox (Seq.index (bv a) (12 + i)) }
+
+`Hacl.AES.SubWord` dispatches on `Vec.supported ()` exactly as
+`Hacl.AES.Block` does, and both branches leave the same specification value
+behind, so `Hacl.AES.Key` proves nothing new: the four calls to `sbox_impl`
+became one call to `subword4` and four array reads.  The scratch block is the
+caller's, so a whole key schedule allocates sixteen bytes once and branches
+thirteen times.
+
+Expanding an AES-128 key went from 14,044 cycles to 1,021.  What that is
+worth depends entirely on the message, because the cost it removes is flat:
+
+| AES-128-GCM | before | after | speedup | was | now |
+|---|---:|---:|---:|---:|---:|
+| 64 bytes | 13 MB/s | 138 MB/s | **10.3x** | 77.45x | **7.54x** |
+| 1 KiB | 172 MB/s | 637 MB/s | **3.70x** | 18.16x | **4.97x** |
+| 16 KiB | 672 MB/s | 812 MB/s | **1.21x** | 5.38x | **4.51x** |
+| 256 KiB | 803 MB/s | 809 MB/s | 1.01x | 4.53x | **4.48x** |
+
+AES-256 is the same shape and a little larger, because its schedule is a
+little longer: 10 MB/s to 117 at sixty-four bytes, 84.56x of the reference
+down to **7.43x**.  The last two columns are against EverCrypt's Vale
+assembly, and its own numbers did not move between the two runs.  Under
+clang the figures are 140 MB/s and **7.39x** at sixty-four bytes and 868
+MB/s and **4.22x** at 256 KiB, so neither compiler is doing anything
+special with either version.
+
+Nothing in the cipher, the counter mode or the GHASH changed.  The lesson is
+the one the whole performance section keeps repeating in different words:
+the profile was never taken, and a cost that is invisible in a bulk
+throughput number can be the entire cost of a realistic call.  Sixty-four
+bytes is a TLS record header, a QUIC packet, a database field --- and it was
+running at thirteen megabytes a second.
+
+### One attribute in the wrong place, and three quarters of the time
+
+A machine may have the SHA extensions without AES-NI, or the reverse, so
+`c/Hacl_Vec128.h` keeps them under two different `__attribute__((target(...)))`
+sets and the generated functions that use them carry the matching attribute:
+`target("aes,pclmul,ssse3,sse4.1")` for the AES and GHASH code,
+`target("ssse3,sse4.1,sha")` for SHA-256's block function.  The header says in
+as many words that nothing under one may be called from a function compiled
+under the other.
+
+Under clang, SHA-256 on 256 KiB took **668 us** where gcc took 227.  It was
+not unrolling: `-O2` and `-fno-unroll-loops` were within 2% of `-O3`.  It was
+not the dispatch: forcing the scalar path made clang 1,300 us, so the
+intrinsics were still winning, only by half of what they should.  Both
+compilers emitted the same count of `sha256rnds2`, `sha256msg1` and
+`sha256msg2`.  The tell was that `-march=native` made the whole difference
+vanish -- clang became 168 us, *faster* than gcc -- which says the problem was
+not the code but the attribute.
+
+Disassembling the block function found thirty-nine `callq` in it, all to the
+same symbol, and no `sha256msg1` or `sha256msg2` at all: they had been pushed
+out into calls.  The symbol was `Hacl_Impl_Sub_sub__t_2`, which is
+`Hacl.Impl.Sub.sub` monomorphized at `uint32`, and whose entire body is
+
+```c
+__attribute__((target("aes,pclmul,ssse3,sse4.1")))
+static uint32_t *Hacl_Impl_Sub_sub__t_2(uint32_t *a, size_t i, size_t j) {
+  (void)j;
+  return (a + i);
+}
+```
+
+Pointer arithmetic, stamped with the **AES** feature set, although its only
+callers in the entire distribution are SHA-256's.  clang will not inline a
+callee whose target features are not a subset of the caller's, and
+`aes,pclmul` is not a subset of `ssse3,sse4.1,sha`, so every `a + i` in the
+message schedule and in the round loop became a function call.  gcc inlines
+it anyway, which is why gcc never showed the problem -- though gcc was paying
+for it too, in a smaller way, by having to clone the function to do so.
+
+Deleting the attribute by hand from the generated C took clang from 668 us to
+178.  The fix in the source is not to correct the attribute but to remove the
+function: `sub` is now `inline_for_extraction`, so no monomorphization of it
+exists to be mislabelled.  Its own doc comment had always claimed that "in C
+this is pointer arithmetic and nothing else", and that is now true.
+
+| | before | after |
+| --- | ---: | ---: |
+| SHA-256, 256 KiB, gcc | 227 us | **190 us** |
+| SHA-256, 256 KiB, clang | 668 us | **179 us** |
+| HMAC-SHA-256, 256 KiB, gcc | 227 us | **190 us** |
+| HMAC-SHA-256, 256 KiB, clang | 678 us | **179 us** |
+
+Under clang that is 3.7x on both rows, and it moves SHA-256 from the largest
+reachable gap in the suite to 1.10x of HACL\* best.  gcc gains 1.20x, and
+Ed25519, HKDF-extract and the other `sub` callers gain a percent or two
+apiece.  `mk/clones.baseline` goes from sixty-nine entries to sixty-eight:
+the one that disappeared is `Hacl_Impl_Sub_sub__t_2` itself, which gcc had
+been specialising precisely because it could not be left as a call either.
+
+The general lesson is narrower than the usual one and worth stating on its
+own.  A `target` attribute is not an optimization hint, it is a *partition*
+of the program, and a function that lands in the wrong partition does not
+fail to compile and does not fail its tests --- it silently stops being
+inlinable across the boundary.  Any helper shared between two instruction-set
+paths should be `inline_for_extraction`, so that it has no single home to be
+assigned to.
+
+### The key schedule with no memory in it at all
+
+`AESKEYGENASSIST` took the schedule from 14,044 cycles to 1,021 and that was
+where it was left.  A profile taken much later put the remaining cost at 258
+nanoseconds for an AES-128 schedule and 323 for AES-256, against a 329
+nanosecond fixed cost for the whole of AES-128-GCM.  The schedule was still
+almost the entire per-call overhead, and a sixty-four-byte message is
+nothing but per-call overhead.
+
+**The cost was the round trip, not the S-box.**  `subword4` -- one
+`AESKEYGENASSIST` and the loads around it -- measures 8.6 ns, and forty
+words need ten of them, so under a hundred nanoseconds of the 258 is the
+instruction.  The rest is that the schedule was a loop over *words*: load
+four bytes, exclusive-or four bytes, store four bytes, and the store of one
+word is the load of the next.  Ten store-to-load forwards per round key with
+a dependency through each of them is what four-byte granularity costs.
+
+**A whole round key is one register, and the recurrence fits in it.**  FIPS
+197 says each word is the word four back exclusive-ored with the word one
+back, except at a multiple of the key length where a transformed word is
+mixed in.  Written over sixteen bytes at once that is
+
+    K_i = (k ^ (k << 4) ^ (k << 8) ^ (k << 12)) ^ t
+
+where `k` is the round key one key-length down, the shifts are in *bytes*,
+and `t` is a term with period four: `RotWord(SubWord(w3)) ^ Rcon` at a
+multiple of the key length, `SubWord(w3)` halfway through an AES-256 round
+key.  The four-byte prefix exclusive-or is three `PSLLDQ`s and three
+`PXOR`s, and it is a prefix exclusive-or precisely because the *argument* is
+shifted rather than the running total --- shifting the total and
+exclusive-oring it back would cancel in GF(2).  The period-four term is the
+`AESKEYGENASSIST` result put through one `PSHUFB`, with the round constant
+broadcast by `PSHUFD` and exclusive-ored in, so `Hacl.Vec128` gains three
+axioms -- `bcast_rot`, `bcast_sub` and `word_bcast` -- and
+`shift_left_bytes_4` is restated byte-wise.  A round key is then eleven
+instructions, one load, one store, and no forwarding at all.
+
+**Three SMT pathologies had to be got around, and each has a name.**  The
+first is that `Spec.Byte.( ^^ )` is `U8.v (U8.logxor (uint_to_t a)
+(uint_to_t b))`, and knowing `b == 0` as integers does *not* give
+`a ^^ b == a ^^ 0`: the literal `0uy` is a bit-vector constant while
+`uint_to_t b` is a boxing application, and congruence closure does not cross
+between them.  The whole prefix-exclusive-or algebra is therefore done at
+`FStar.UInt.logxor`, where the arguments are plain integers, and brought
+back one application at a time by `lx_is`; two derived bridges, `xor_cong`
+and `xor_drop`, do all the rewriting elsewhere.
+
+The second is that a quantifier over `Seq.index x (8 + i)` will not
+discharge a goal about `Seq.index x (8 + j % 4)` with symbolic `j`, though
+ground offsets are fine because Z3 normalizes them.  So `is_rot_term`,
+`is_sub_term` and the sixteen instantiations in `round_all` are all stated
+at literal indices, the same trick `Hacl.AES.SubWord` already used.
+
+The third is the one that cost the most time.  `pfx`, the prefix
+exclusive-or, was written `unfold`, so every fact derived from it carried a
+four-term exclusive-or of conditionals; sixteen of those in one context and
+the solver spends its entire budget on the hypotheses rather than the goal.
+Making `pfx` an ordinary definition -- still unfolded by the SMT encoding,
+but folded in the terms the solver sees -- took `round_all` from a
+five-hundred-second failure to zero.  The same principle governs the rest of
+the proof: every bridge between the register's own sixteen bytes and the
+expanded key is a standalone lemma (`block_step`, `block_tele`,
+`block_grp4`, `mk_join4`, `load_index`, `grp_mod`), because inside the Pulse
+function the query also carries the heap, four separated-conjunction
+predicates and every byte of the key, and a goal as small as `Seq.length
+(Seq.slice vw0 b b2) == 16` will time out there while closing instantly on
+its own.
+
+Expanding an AES-128 key went from 258 ns to **26.4**, AES-256 from 323 to
+**49.0**, and the fixed cost of an AES-128-GCM call from 329 ns to **89.8**.
+
+| AES-128-GCM | before | after | speedup | was | now |
+|---|---:|---:|---:|---:|---:|
+| 64 bytes | 148 MB/s | 328 MB/s | **2.22x** | 7.06x | **3.18x** |
+| 1 KiB | 1,020 MB/s | 1,323 MB/s | **1.30x** | 3.11x | **2.38x** |
+| 16 KiB | 1,850 MB/s | 1,856 MB/s | 1.00x | 1.96x | 1.96x |
+
+AES-256-GCM moves the same way, 6.89x to **3.27x** at sixty-four bytes and
+3.14x to **2.41x** at a kilobyte.  Under clang the figures are 6.84x to
+**3.27x** and 2.72x to **2.03x**.  Nothing else in the benchmark moved by
+more than measurement noise, which is the control: the portable schedule is
+still there as `ks_loop_scalar` and is still what runs without AES-NI.
+
+### Where the GHASH loop should start aggregating
+
+GHASH multiplies in `GF(2^128)`, and the multiplication splits into a
+carry-less product and a reduction.  The product of four blocks can be
+accumulated before a single reduction is applied -- Horner's rule run four
+terms at a time -- which is why `ghash_loop4_ni` exists, and eight at a time
+is why `ghash_loop8_ni` exists.  Aggregating is not free: four at a time
+needs `H^2`, `H^3` and `H^4`, and eight needs `H^5` through `H^8` as well,
+so entering the four-way pass costs three extra multiplications and
+entering the eight-way pass costs four more.  Those are paid once per
+*call*, not once per group, and they do not amortize when the call is
+short.
+
+The thresholds were set to the smallest size at which each pass can run at
+all: sixty-four bytes for the four-way loop and a hundred and twenty-eight
+for the eight-way one.  Measured, both are much too low.  A bare
+`ghash_upd` on this machine, gcc:
+
+| bytes | 64 | 96 | 128 | 192 | 256 | 384 | 512 | 768 | 2048 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| serial | 62.3 | 93.4 | 123.4 | 182.3 | 241.2 | 359.4 | 477.9 | 714.5 | 1888 |
+| four-way from 64 | 69.5 | 101.4 | 124.3 | 152.4 | 181.2 | 238.0 | 294.9 | 407.1 | 1013 |
+| eight-way from 128 | | | 147.6 | 176.5 | 194.7 | 238.4 | 284.5 | 376.9 | 833 |
+
+One group of four loses to four serial multiplications, because three
+multiplications have been spent to save three reductions and the reductions
+are the cheaper half.  Two groups win.  The eight-way pass is worse still:
+it is behind the four-way one all the way to five hundred and twelve bytes
+and only level at seven hundred and sixty-eight.  So the four-way pass
+starts at two groups and the eight-way pass starts at seven hundred and
+sixty-eight bytes, and below each threshold the limit is simply zero --
+which the existing contracts already allow, since `ghash_start` asks only
+for `lim % 64 == 0 /\ lim <= n` and `lim8 % 128 == 0 /\ lim8 <= lim`.  The
+one thing that needed care is the second conjunct: with independent
+thresholds `lim8` could overshoot a `lim` that had been declined, so
+`eight_limit` now takes `lim` as an argument and returns something no
+larger.  The proof is four lines and the existing `lim_bounds` and
+`lim8_bounds` do all the arithmetic.
+
+`ghash_upd` on a hundred and twenty-eight bytes goes from 151.7 ns to
+**97.9**, on a hundred and ninety-two from 179.1 to **127.5**, on two
+hundred and fifty-six from 195.1 to **155.7**; under clang, which has a
+faster serial loop and a much faster aggregated one, the same three sizes
+go 100.1 to **65.9**, 121.0 to **85.5** and 139.1 to **103.6**.  Above
+seven hundred and sixty-eight bytes nothing changes algorithmically and the
+measurements move by one to two percent in the wrong direction, which is
+the branch's effect on code layout rather than on work done.
+
+The same pass removes a smaller waste.  `ghash_upd_impl` allocates a
+sixteen-byte scratch block to hold the final partial block, zeroes it, and
+then uses it only if there is a partial block; for any length that is a
+multiple of sixteen -- which includes the length block that closes every
+GCM tag -- those sixteen stores are dead.  Moving the `let mut` inside the
+branch that reads it is a one-line change in Pulse and the frame works out
+on its own.
+
+| AES-GCM, gcc | before | after | was | now |
+|---|---:|---:|---:|---:|
+| AES-128-GCM, 64 bytes | 328 MB/s | 351 MB/s | 3.18x | **2.98x** |
+| AES-256-GCM, 64 bytes | 266 MB/s | 282 MB/s | 3.27x | **3.12x** |
+| AES-128-GCM, 256 KiB | 1,858 MB/s | 1,877 MB/s | 1.99x | 1.97x |
+
+Whole-call, a sixty-four-byte AES-128-GCM encryption goes from 169 ns to
+**157**.  Under clang the sixty-four-byte row does not move, for a reason
+worth recording: clang's serial multiplication is already fast enough
+(14.0 ns a block against gcc's 17.9) that its four-way pass wins at
+sixty-four bytes where gcc's loses, so the threshold that is right for one
+compiler is one size too high for the other.  The eight-way threshold,
+which is where the large gains are, is right for both.
+
+What is left of the fixed cost is now almost all latency.  Of the 42 ns an
+AES-128-GCM call spends in `gtag_impl` with no associated data and no
+message, 15 are one AES block encryption of `J0` and 19 are one GHASH
+multiplication of the length block, and both are dependent chains that no
+amount of dispatch tuning will shorten.  Shortening the multiplication is
+the next section.
+
+### Removing the one-bit shift from GHASH
+
+GHASH numbers the bits of a block the other way round from `PCLMULQDQ`.
+After reversing the bytes, the carry-less product of two GHASH blocks sits
+one bit too low, and `raw_product` has always corrected it the obvious way:
+shift the 255-bit product left by one before reducing.  There is no
+128-bit shift instruction, so that is a `PSRLQ`, a `PSLLQ`, a byte shift
+and three `POR`s per product --- six instructions, and in the eight-way
+loop eight products are formed before anything is reduced, so the shift was
+the single largest item left in the multiplier.  The roadmap proposed
+hoisting it out of the loop and doing it once per group, which the
+linearity of the shift permits.
+
+It can be removed altogether instead.  Write `NS(a, b)` for what the
+multiplier computes without the shift; then `NS(a, b) = x * (a * b)` in the
+field.  If the hash key is stored pre-divided by `x` --- `H' = H / x`, done
+once, when the key is expanded --- then `NS(a, H') = a * H` exactly, and
+every multiplication the cipher will ever do is correct with no shift at
+all.  The key powers need no correction either: starting the recurrence at
+`H'` gives `H^i / x` at every step, which is precisely the pre-divided form
+of `H^i`.  That is one lemma, `power_step`, three lines long.
+
+`Hacl.AES.GF128`, `.GMul` and `.GHash` have no public exports --- only
+`Hacl.AES.GCM` uses them --- so the representation of the key array could
+simply be changed, and the specification of every function that mentions
+it now reads `Poly.xtimes (vals vh)` where it used to read `vals vh`.  The
+portable multiplier, which does not have the shift to begin with, pays one
+extra `shift_reduce_impl` per block to compensate; against the
+128-iteration bit loop it already runs, that is free.
+
+The proof is four new pieces of polynomial algebra.  `clmul_halves_ns` says
+the two unshifted registers reverse to the halves of `pshift P 1`, where
+`P` is the carry-less product.  `psplit` reduces an arbitrary
+256-coefficient polynomial given its two halves --- the existing
+`gmul_split` did this only for products, and generalising it off products
+is what makes the rest possible.  `pmod_shift1` says
+`pmod (pshift a 1) n == xtimes (pmod a n)` whenever `a` has no coefficient
+at `n - 1`, which is the one place the representation of `pmod` as a sum
+over set bits pays for itself: it is a restatement of
+`x^(k+1) = x * x^k` and nothing else.  The side condition is discharged by
+`pcoef_top`, which says the product of two 128-bit blocks has no `x^255`
+term.  Composing them with the existing `gmul_xt_right` gives
+`pmod (pshift1 x y) 256 == gmul x (xtimes y)`, which is the whole claim.
+
+Dividing by `x` is the mirror image of multiplying by it: shift the block
+left by one bit, and if the bit that fell off the bottom was set, add
+`R / x`, which is `x^127 + x^6 + x + 1` --- `0xc2` in byte zero and `1` in
+byte fifteen.  `xdiv_impl` is sixteen byte operations and
+`Spec.GF128.Poly.xtimes_xdiv` proves it inverts `xtimes`.  It is worth
+writing the loop so that byte fifteen, which has no successor to take a
+carry from, is handled after the loop rather than by a test inside it: the
+test was the only branch in the body and removing it took the function
+from 13.8 ns to **5.1**, which at sixteen bytes is most of what the change
+wins back on the GHASH side.
+
+| AES-GCM | before | after | gain | was | now |
+|---|---:|---:|---:|---:|---:|
+| AES-128-GCM, 256 KiB, gcc | 1,877 MB/s | **2,329 MB/s** | +24.1% | 1.97x | **1.58x** |
+| AES-128-GCM, 16 KiB, gcc | 1,860 MB/s | **2,326 MB/s** | +25.1% | 1.97x | **1.57x** |
+| AES-128-GCM dec, 16 KiB, gcc | 1,869 MB/s | **2,318 MB/s** | +24.0% | 1.98x | **1.58x** |
+| AES-256-GCM, 256 KiB, gcc | 1,692 MB/s | **2,039 MB/s** | +20.5% | 2.03x | **1.69x** |
+| AES-128-GCM, 1 KiB, gcc | 1,323 MB/s | **1,555 MB/s** | +17.5% | 2.40x | **2.02x** |
+| AES-128-GCM, 256 KiB, clang | 2,185 MB/s | **2,610 MB/s** | +19.5% | 1.67x | **1.40x** |
+| AES-128-GCM, 16 KiB, clang | 2,206 MB/s | **2,633 MB/s** | +19.4% | 1.65x | **1.38x** |
+| AES-256-GCM, 256 KiB, clang | 1,920 MB/s | **2,261 MB/s** | +17.8% | 1.77x | **1.50x** |
+
+Measured against the previous commit back to back on the same core, the
+whole-call numbers are +29.5% at 256 KiB, +22% at a kilobyte, +12.5% at
+256 bytes, +4.2% at sixty-four bytes and **-2.0%** at sixteen, where the
+5 ns of key division still outweighs what two GHASH multiplications save.
+That last row is an artefact of the one-shot API expanding the key on every
+call, and it is the best argument yet for the expanded-key context in the
+roadmap: a context divides the key once and the sixteen-byte row joins the
+others.
+
+A standalone `ghash_upd` fell 21% at sixteen bytes rising to 30% at two
+kilobytes.  The four-way and eight-way dispatch thresholds were re-swept
+over twelve A/B builds afterwards, since a cheaper serial multiply could in
+principle have moved the crossovers; 128 and 768 are still the right
+choices, because the aggregated passes got cheaper by the same factor.
+
+### An expanded-key context for AES-GCM
+
+Every AES-GCM call in this repository used to begin by expanding the key:
+about 26 ns of `AESKEYGENASSIST` for AES-128, one block encryption for the
+GHASH subkey, and since the previous section 5 ns more to divide that
+subkey by `x`.  None of it depends on the nonce, the associated data or the
+message, and a caller that talks to the same peer more than once was paying
+for all of it on every message.  The comparison was asymmetric too:
+EverCrypt exposes `EverCrypt_AEAD_create_in` and encrypts against the
+handle, so the benchmark's reference side paid the schedule once and this
+side paid it per call.
+
+The split is the obvious one.  `Spec.GCM.gcm_encrypt_w` is `gcm_encrypt`
+with the expansion already done --- it takes `w`, the round keys, instead
+of `key` --- and `gcm_encrypt` is now literally `gcm_encrypt_w v
+(key_expansion v key)`, so the two compose by unfolding one definition and
+no caller is ever asked to reason about what a round key is.  On the
+implementation side `expand_impl` is the key-expansion and subkey steps,
+`encrypt_w` and `decrypt_w` are everything after them, and the one-shot
+`encrypt` and `decrypt` are the two in sequence over a stack context.  The
+whole change verified first try, which is what one hopes for from a
+refactoring that moves no proof.
+
+The context is two arrays, not one.  `ek` is the round keys, 176 bytes for
+AES-128 and 240 for AES-256; `hk` is the GHASH subkey, held divided by `x`
+-- sixteen bytes at the time of this section, a hundred and twenty-eight
+once the next one puts the key's powers beside it.  One array would have been tidier in the header and much
+less tidy in the proof: every function underneath wants a whole array it
+can be handed, `Hacl.Impl.Sub` lends out one window at a time, and nothing
+here needs the two to be adjacent.
+
+| AES-GCM, 64 bytes | one-shot | expanded | gain | was | now |
+|---|---:|---:|---:|---:|---:|
+| AES-128-GCM, gcc | 357 MB/s | **496 MB/s** | +38.9% | 2.92x | **2.11x** |
+| AES-256-GCM, gcc | 291 MB/s | **462 MB/s** | +58.8% | 2.99x | **1.90x** |
+| AES-128-GCM, clang | 326 MB/s | **477 MB/s** | +46.3% | 3.19x | **2.18x** |
+| AES-256-GCM, clang | 285 MB/s | **444 MB/s** | +55.8% | 3.06x | **1.97x** |
+| AES-128-GCM, 1 KiB, gcc | 1,555 MB/s | **1,695 MB/s** | +9.0% | 2.02x | **1.87x** |
+| AES-256-GCM, 1 KiB, clang | 1,551 MB/s | **1,784 MB/s** | +15.0% | 1.81x | **1.57x** |
+
+Measured directly, the fixed cost removed is 35.6 ns: a sixteen-byte
+AES-128-GCM encryption goes from 131.4 ns to **95.8**, sixty-four bytes
+from 166.6 to **132.7**, a kilobyte from 600.5 to **569.2**.  That is more
+than the 29 ns the roadmap predicted, the difference being the key division
+the previous section added.  AES-256-GCM gains more than AES-128 because
+its schedule is half again as long, and at sixty-four bytes it is now
+**1.90x** of EverCrypt's Vale assembly, the first AES-GCM measurement in
+this repository to go under 2x at a short length.
+
+The entry points are `Hacl_AES_GCM_aes128_expand`,
+`Hacl_AES_GCM_aes128_encrypt_expanded` and
+`Hacl_AES_GCM_aes128_decrypt_expanded`, and the same three for AES-256; the
+one-shot four are unchanged.  `tests/test_gcm.c` now runs all 450 CAVP
+cases through both paths.
+
+Caching the key powers in the context as well is the obvious next step, and
+is the next section.
+
+### The powers of the key belong with the key
+
+Sixty-four bytes of AES-128-GCM was, for a long time, the largest gap in
+the library.  The diagnosis is blunt and took one experiment: stub GHASH
+out of the generated C entirely and a sixty-four-byte encryption falls
+from 131.0 ns to **57.8**.  GHASH is seventy-three of those hundred and
+thirty-one nanoseconds, and sixty-one per cent of the time at sixteen
+kilobytes.
+
+*Where the GHASH loop should start aggregating* explains why the fast loop
+was not being used on short messages: four-way aggregation needs `H^2`,
+`H^3` and `H^4`, eight-way needs `H^5` through `H^8`, and those were
+computed at the top of every call by three and then four serial
+multiplications.  Three dependent carry-less products and their reductions
+cost more than one group of four saves, which is why the four-way
+threshold sat at a hundred and twenty-eight bytes and the eight-way one
+higher still.  Lowering the thresholds and changing nothing else makes
+matters worse, exactly as that section predicted: the four-way pass from
+sixty-four bytes measures 142.0 ns against a 129.8 ns baseline.
+
+But the powers are a function of the key alone, and the library has had an
+expanded-key context since the previous section.  So the context grows from
+sixteen bytes to a hundred and twenty-eight, holding `h/x`, `h^2/x`, ...
+`h^8/x` -- the same pre-divided representation the key itself already used,
+because that is what the multiplier both consumes and produces, so nothing
+else in the file changes shape.  `hkey_impl` builds the eight with seven
+calls to the dispatching `gmul_impl`, once per key.  `ghash_start` loads
+what it used to compute, both thresholds become unconditional, and the
+whole-block loop runs four-way from the first sixty-four bytes and
+eight-way from the first hundred and twenty-eight.
+
+**The specification states the recurrence, not a closed form.**
+`Spec.GF128.Algebra.pows_ok` says only that each window of the context is
+the previous one advanced by the first.  That is exactly what the loops
+consume and exactly what the expansion establishes, one step at a time, so
+nothing anywhere has to know what `h^5` *is*.  `pow_adv` is the one line
+that turns what the multiplier gives -- `gmul a (xtimes b)`, the real
+product with one shift omitted -- into what the recurrence asks for, and it
+is a single application of `gmul_xt_left`.
+
+**Where a fact is proved matters more than whether it is true.**  Proving
+`pows_ok` at the point where the array is written asks the solver to work
+in a context holding eight intermediate array states and the frames that
+relate them; the seventh step of the recurrence then times out where the
+first and the sixth do not.  `pows_build` takes the eight blocks and the
+seven products between them, and nothing else, and goes through at once.
+The windows themselves come back from the array with one
+`Seq.lemma_eq_intro` each.
+
+Measured on one core, best of three interleaved rounds, AES-128-GCM
+encryption with a sixteen-byte AAD, in nanoseconds:
+
+| | gcc before | gcc after | clang before | clang after |
+|---|---:|---:|---:|---:|
+| 64 bytes | 129.8 | **114.6** | 134.5 | **114.9** |
+| 128 bytes | 170.7 | **138.3** | 157.8 | **135.6** |
+| 256 bytes | 236.9 | **189.5** | 212.2 | **184.9** |
+| 1024 bytes | 600.6 | **509.7** | 499.6 | **462.0** |
+| 16384 bytes | 6958 | 6889 | 6010 | 6042 |
+
+In the published suite the four short-message GCM rows move and nothing
+else does.  Sixty-four-byte AES-128-GCM goes from 2.14x of EverCrypt to
+**1.87x** and AES-256-GCM to **1.71x**.  Bulk GHASH is untouched by this
+change and is where the remaining gap lives: thirteen and a half cycles
+per sixteen-byte block, against four `PCLMULQDQ` that Karatsuba would make
+three.  That is the next section.
+
+### Karatsuba, and what a group of blocks may put off
+
+An assembly census of the inlined eight-way GHASH loop says where the
+thirteen and a half cycles go: 247 instructions for eight blocks, of which
+32 are `PCLMULQDQ` and **82** are plain register copies.  The multiplier is
+not the bottleneck; the traffic around it is.
+
+Two of the four multiplies a block are the crossed terms, and only their
+sum is ever used.  Over a field of characteristic two Karatsuba computes
+that sum exactly, with no borrow to carry and no wider intermediate:
+
+```
+(x0 + x1)(y0 + y1) + x0 y0 + x1 y1  =  x0 y1 + x1 y0
+```
+
+Folding an operand's two lanes together is a shift and an exclusive-or, and
+taking the two square terms back out is two more, so the trade is one
+`PCLMULQDQ` against about five cheap instructions.  **On its own that is
+not a win.**  The first version of this change did exactly that and cost
+128-byte AES-GCM twelve per cent while gaining five on bulk: with nothing
+to amortise, the fold sits on the dependency chain and the saved multiply
+does not pay for it.
+
+What makes it pay is that everything Karatsuba adds is *linear*, and the
+bulk loop adds eight products together before it reduces.  Both the
+correction that removes the squares and the assembly of the middle term
+into the two halves therefore commute with that sum, and may be done once
+for the group rather than once a block.  So `kara_parts` leaves three raw
+registers behind -- low, high, and the folded product -- the loop keeps
+three accumulators instead of two, and `kara_fold` runs once at the end:
+twenty-four multiplies a group instead of thirty-two, and six cheap
+instructions a group instead of forty.
+
+**The proof deferred the same way the code did.**  `Spec.CLMUL` gains
+`kmid` for the correction and `kfold_lo`/`kfold_hi` for the assembly, each
+with a bit-level characterisation and additivity over sums of four and of
+eight.  The per-block halves then exist only as ghost blocks that are never
+computed, and `Spec.GF128.Algebra.pmod_defer4` and `pmod_defer8` -- which
+already took the per-block halves as arbitrary blocks rather than as
+registers -- go through unchanged.  The Karatsuba identity itself is two
+applications of the bilinearity of `conv` over `padd` that `Spec.CarryLess`
+already had.  Nothing in the reduction, or in the argument that removes the
+one-bit shift, moved at all.
+
+A single multiplication keeps all four multiplies, for the reason the
+twelve-per-cent regression showed: `raw_product` is unchanged, and only
+`gmul4_vec` and `gmul8_vec` are Karatsuba.
+
+The eight-way loop body is now 194 instructions with 24 `PCLMULQDQ` and 58
+register copies; the four-way body 118 with 12.  In the published suite
+AES-GCM moves and nothing else does:
+
+| | gcc | clang |
+|---|---:|---:|
+| AES-128-GCM, 1 KiB | 1.09x | 1.10x |
+| AES-128-GCM, 16 KiB | 1.09x | 1.14x |
+| AES-128-GCM, 256 KiB | 1.09x | 1.14x |
+| AES-128-GCM dec, 16 KiB | 1.09x | 1.13x |
+| AES-256-GCM, 256 KiB | 1.08x | 1.12x |
+
+Against EverCrypt, 256 KiB AES-128-GCM goes from 1.56x to **1.43x** under
+gcc and to **1.22x** under clang.  No benchmark in the suite regresses by
+as much as two per cent under either compiler.
+
+### The compiler is allowed to undo a constant-time algorithm
+
+A windowed scalar multiplication reads one of sixteen precomputed points,
+and the four bits that say which one are secret.  The read is therefore
+written to touch all sixteen: build a mask per entry, all ones for the one
+wanted and all zeroes for the other fifteen, and fold every entry through
+its own mask.  `Hacl.Bignum.Base.table_select` is that loop, and Ed25519,
+P-256, secp256k1 and the generic modular exponentiation all go through it.
+
+**The verified statement is about the value, and the property wanted is not
+about the value.**  F\* proves that `table_select` returns entry *d*.  It
+has no vocabulary for "and takes the same time whichever *d* that was",
+because that is a claim about emitted instructions, not about a result.
+The constant-time argument is carried entirely by the expectation that a C
+compiler will emit mask arithmetic as mask arithmetic.
+
+It is not obliged to.  The sixteen masks are sixteen comparisons of a
+runtime value against the literals zero through fifteen; a compiler that
+unrolls the loop sees that, and may decide the cheapest correct code is a
+cascade that tests the secret digit and jumps straight to the entry it
+names.  **clang at `-O3` did exactly this.**  Timed once per digit, the
+shipped lookup rose monotonically from 3.7ns at *d* = 0 to 8.9ns at
+*d* = 15 — a 158% spread, which is the whole digit legible from outside.
+gcc, on the same source, was flat to 1%.
+
+Two changes fix it, and both were measured before being written.
+
+**A value barrier on the mask.**  `Hacl.Launder.launder` is the identity,
+and its whole content is that the generated C contains a call the optimizer
+cannot see through — an empty `asm` statement with a `"+r"` constraint,
+which emits no instruction but returns a value the compiler knows nothing
+about.  A laundered mask cannot be recognised as the result of a
+comparison, so there is no comparison left to turn into a branch.  The
+barrier goes on the mask, not on the secret: laundering the secret would
+leave the sixteen comparisons against literals exactly where they were.
+
+**The order of the two loops.**  Accumulating into `res[j]` makes a chain
+of sixteen read-modify-writes through memory on every limb, and since the
+limb count is a run-time value neither loop can be unrolled around it.
+Running the sixteen entries *innermost* keeps the accumulator in a register
+and gives the inner loop a trip count known at compile time.  That is worth
+about 40% on its own.
+
+The spread goes from 158% to 1.2% under clang and stays flat under gcc, and
+the lookup itself drops from 57ns to 34ns under gcc.  `tests/test_launder.c`
+is the regression test: it times the shipped function once per digit and
+fails if the spread exceeds 75%, which the old code does at 141%.
+
+**What this costs, and why the cost is not a regression.**  Measured over
+the whole suite: under gcc, Ed25519 key generation is 6% faster, signing
+5%, verification 4%, secp256k1 signing 4% and `secret-to-public` 3%, and
+P-256 verification 2% -- gcc was doing the masked work all along and now
+does it in a better loop.  Under clang the same rows go the other way:
+Ed25519 key generation and signing 21% slower, verification 12%,
+secp256k1 `secret-to-public` 10%, signing 7%, ECDSA verification 6%, the
+four P-256 operations 3-4%, and the 2048-bit constant-time modexp 2%.
+That is the price of the masked scan actually happening.  Those earlier
+clang numbers were never constant-time numbers, and a table of them is a
+table of a different algorithm.  X25519 is untouched, because the
+Montgomery ladder selects with `cswap` and not with a table.
+
+**The rest of the library was then asked the same question.**
+`tests/test_consttime.c` is the standing audit: it runs each of the
+library's masked selections once per value of the secret it selects on and
+fails on a spread.  Six are covered.  The secret-indexed table read at the
+four-limb width P-256 uses, since the limb count is what decides whether
+the unrolled scan is small enough for the compiler to find specialisation
+worthwhile.  The whole X25519 scalar multiplication, timed over scalars of
+all-zero, all-one and alternating bits -- `cswap` is `CInline` and has no
+external definition to call, and the ladder is the stronger statement in
+any case, because if any one of its 255 swaps branched the scalars would
+not agree.  The two bignum comparisons, timed by the position of the first
+differing limb, which is what an early exit would leak.  ML-KEM's
+ciphertext comparison, timed the same way: the Fujisaki--Okamoto transform
+re-encrypts and compares, and a compare that stopped early would make the
+implicit-rejection path distinguishable and cost the KEM its CCA security.
+And the AES S-box, over all 256 input bytes -- there is no S-box table
+here, the inverse is computed in the field, which is a hundred and twenty
+masked selects on the bits of a secret byte whose value ranges over
+exactly the small set that invites enumeration.
+
+All six are flat under both compilers: 1.4% to 3.2% under gcc and 1.4% to
+3.5% under clang, against thresholds of 10--75%.  Two of those thresholds
+are known to bite -- splicing the old `table_select` back in fails the
+`table_select` row at 141% -- so the test is not merely asserting that
+timing is noisy.  The audit is not a proof and it is not exhaustive; it is
+a question asked of the compiler that is actually in use, which is the only
+form the question can take.
+
+### A square is not a product
+
+Every field in this library squared a number the obvious way: copy the
+argument and call the multiply.  `fsqr out a` was `copy c a; fmul out a c`.
+That is correct, it is one line, and for a five-limb representation it is
+twenty-five wide multiplies where fifteen are enough.
+
+**The schoolbook product of a sequence with itself is symmetric about its
+diagonal.**  Column *k* of `a * b` is the sum of `a_i * b_j` over `i + j = k`;
+when `b` is `a`, the term `a_i * a_j` and the term `a_j * a_i` are the same
+product appearing twice in the same column.  Pair them, and the column has
+one diagonal term `a_i * a_i` when *k* is even and nothing but doubled
+off-diagonal terms besides.  Five columns of five products become five
+columns of at most three.
+
+The factor of two is carried **in the word, before the widening**.  For
+Curve25519 at radix 2^51 the limbs are below `2^52`, so `2 * a_i` and even
+`38 * a_i` still fit in a machine word; the doubling is a single shift on a
+64-bit register rather than an addition on a 128-bit accumulator.  The five
+columns are then
+
+```
+c0 = a0*a0 + (38 a4)*a1 + (38 a2)*a3
+c1 = (2 a0)*a1 + (38 a4)*a2 + (19 a3)*a3
+c2 = (2 a0)*a2 + a1*a1 + (38 a4)*a3
+c3 = (2 a0)*a3 + (2 a1)*a2 + (19 a4)*a4
+c4 = (2 a0)*a4 + (2 a1)*a3 + a2*a2
+```
+
+where the scaling by 19 is the same wrap past `2^255 - 19` that `fmul`
+already does.
+
+**The columns are unchanged, and that is why the proof was cheap.**  The
+largest column here is `77 lim^2`, against the `95 lim^2` the multiply's
+carry chain is already proved to accept.  So nothing downstream needs a new
+argument: `fsqr` hands its five 128-bit columns to the *same* `chain`, the
+same wrap, the same final narrowing.  The new lemmas in
+`spec/Spec.Curve25519.Columns.fst` do not specify squaring at all --- each
+one states the paired form of a column and derives it from the existing
+column lemma with `b := a`, nudged by two facts an SMT solver will not find
+on its own, that `x*y + y*x == (2x)*y` and that `x*(19y) + y*(19x) ==
+(38y)*x`.  All five verified on the first attempt.
+
+Wiring it in meant deleting things.  The Montgomery ladder had a sixth
+scratch buffer `t6` threaded through `add_and_double`, `ladder_one`,
+`ladder` and `scalarmult` for no reason other than to hold the copy; it is
+gone.  `fsqr_ip` in the inversion chain loses a copy and an array.
+Ed25519's `point_double` squared **inline** --- `copy au x1; fmul aa au x1`
+--- rather than calling the field's `fsqr`, three times, so the three sites
+had to be found and replaced individually; the same was true of the `y^2` in
+point decompression.  While there, `2 z1^2` is now computed as a square
+followed by a doubling rather than a doubling followed by a multiply, which
+needs one more field lemma and saves another twenty-five multiplies.
+
+X25519 is 8-9% faster, Ed25519 verification 8-13%, key generation 6-9%,
+under both compilers.
+
+**It does not pay everywhere, and the measurement is the only way to
+know.**  The same rewrite for K256's five-limb radix-2^52 field verified
+just as easily and made the field squaring 32% faster in isolation under
+clang --- and then made `k256-ecdsa-verify` 3% *slower* under clang while
+making it 5% faster under gcc.  The arithmetic saved is real but small
+against what k256 verification actually spends its time on, and at that
+scale it is lost in how the two compilers choose to inline and lay out the
+point doubling around it.  That change was reverted.  k256's gap is not in
+the multiply; it is in the scalar decomposition, which is a separate item.
 
 ### SHA-NI, where the instruction is four rounds wide
 
@@ -2037,63 +3146,88 @@ core was healthy (see
 
 There are two reference columns, because there are two different questions.
 
+**HACL\* best** is HACL\* configured for this machine and allowed everything it
+has: EverCrypt's runtime multiplexing onto Vale's SHA-EXT assembly, the AVX2
+ChaCha20 and Poly1305, the vectorized BLAKE2, and the BMI2/ADX Curve25519.
+This is what a caller who reaches for HACL\* on this machine actually gets, so
+it is the ratio the table is sorted by and the one in bold.  Where HACL\* has
+no specialised backend for a primitive the two reference columns are the same
+number.
+
 **HACL\*** is HACL\*'s **portable scalar C** -- not its AVX2 or AVX-512
 variants -- except for AES-GCM, where HACL\* has no portable implementation at
 all and the reference is EverCrypt dispatching to Vale assembly.  This is the
 like-for-like comparison: same algorithm, same instruction set, two extraction
-pipelines.  It is the column that says anything about Pulse.
-
-**HACL\* best** is HACL\* configured for this machine and allowed everything
-it has: EverCrypt's runtime multiplexing onto Vale's SHA-EXT assembly, the
-AVX2 ChaCha20 and Poly1305, the vectorized BLAKE2, and the BMI2/ADX
-Curve25519.  hacl-pulse has no vectorized or assembly backend, so this column
-is not a fair fight and is not meant to be one; it is there to size the gap
-that a future vectorization effort would have to close.  It is shown only
-where it differs from the scalar reference by more than 3%.
+pipelines.  It is the column that isolates the extraction pipeline from the
+instruction set, which is the only thing a reader can conclude about Pulse
+from a benchmark; but it is not what a user would be choosing between, which
+is why it is no longer the headline.
 
 Ratios are hacl-pulse over the reference, so **below 1.00 is faster than the
 reference**.
 
-| primitive | size | hacl-pulse | HACL\* | ratio | HACL\* best | ratio |
+| primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| SHA-256 | 256 KiB | 227 us | 1,098 us | **0.21x** | 164 us | 1.39x |
-| SHA3-256 | 256 KiB | 985 us | 1,839 us | **0.54x** |  |  |
-| SHA-512 | 256 KiB | 770 us | 1,364 us | **0.57x** |  |  |
-| HMAC-SHA-512 | 256 KiB | 770 us | 1,361 us | **0.57x** |  |  |
-| ChaCha20 | 256 KiB | 494 us | 854 us | **0.58x** | 93 us | 5.30x |
-| SHAKE128 | 256 KiB | 883 us | 1,489 us | **0.59x** |  |  |
-| ChaCha20-Poly1305 | 256 KiB | 808 us | 1,059 us | **0.76x** | 148 us | 5.46x |
-| SHA-1 | 256 KiB | 1,514 us | 1,484 us | **1.02x** |  |  |
-| HMAC-SHA-256 | 256 KiB | 1,131 us | 1,102 us | **1.03x** | 163 us | 6.94x |
-| BLAKE2s | 256 KiB | 595 us | 572 us | **1.04x** |  |  |
-| Salsa20 | 256 KiB | 528 us | 435 us | **1.21x** |  |  |
-| RSA-PSS-2048 sign | -- | 5.7 ms | 4.7 ms | **1.23x** |  |  |
-| X25519 | -- | 55 us | 44 us | **1.25x** | 36 us | 1.53x |
-| FFDHE-2048 | -- | 5.8 ms | 4.6 ms | **1.25x** |  |  |
-| RSA-2048 modexp | -- | 5.7 ms | 4.5 ms | **1.26x** |  |  |
-| NaCl secretbox | 256 KiB | 809 us | 645 us | **1.26x** |  |  |
-| BLAKE2b | 256 KiB | 395 us | 312 us | **1.27x** | 438 us | 0.90x |
-| Poly1305 | 256 KiB | 281 us | 208 us | **1.35x** | 57 us | 4.93x |
-| RSA-PSS-2048 verify | -- | 198 us | 144 us | **1.38x** |  |  |
-| MD5 | 256 KiB | 616 us | 431 us | **1.43x** |  |  |
-| P-256 ECDSA verify | -- | 811 us | 425 us | **1.91x** |  |  |
-| Ed25519 sign | -- | 238 us | 64 us | **3.72x** |  |  |
-| AES-128-GCM | 256 KiB | 325 us | 71 us | **4.58x** |  |  |
-| secp256k1 ECDSA sign | -- | 313 us | 65 us | **4.79x** |  |  |
+| SHA3-256 | 256 KiB | 1.0 ms | 1.8 ms | **0.55x** | 1.8 ms | 0.55x |
+| SHA-512 | 256 KiB | 756 us | 1.4 ms | **0.55x** | 1.4 ms | 0.56x |
+| HMAC-SHA-512 | 256 KiB | 757 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
+| SHAKE128 | 256 KiB | 882 us | 1.5 ms | **0.59x** | 1.5 ms | 0.60x |
+| BLAKE2b | 256 KiB | 382 us | 438 us | **0.87x** | 312 us | 1.22x |
+| RSA-PSS-2048 sign | -- | 4.5 ms | 4.7 ms | **0.95x** | 4.7 ms | 0.95x |
+| FFDHE-2048 | -- | 4.4 ms | 4.6 ms | **0.95x** | 4.6 ms | 0.96x |
+| RSA-2048 modexp | -- | 4.4 ms | 4.5 ms | **0.98x** | 4.5 ms | 0.98x |
+| P-256 ECDSA verify | -- | 436 us | 425 us | **1.03x** | 428 us | 1.02x |
+| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.03x** | 1.5 ms | 1.04x |
+| P-256 ECDH | -- | 162 us | 155 us | **1.04x** | 156 us | 1.04x |
+| P-256 ECDSA sign | -- | 176 us | 169 us | **1.05x** | 169 us | 1.04x |
+| BLAKE2s | 256 KiB | 605 us | 571 us | **1.06x** | 573 us | 1.06x |
+| HMAC-SHA-256 | 256 KiB | 190 us | 164 us | **1.16x** | 1.1 ms | 0.17x |
+| SHA-256 | 256 KiB | 189 us | 163 us | **1.16x** | 1.1 ms | 0.17x |
+| secp256k1 ECDSA sign | -- | 76 us | 65 us | **1.16x** | 65 us | 1.16x |
+| RSA-PSS-2048 verify | -- | 166 us | 143 us | **1.16x** | 143 us | 1.16x |
+| NaCl secretbox | 256 KiB | 770 us | 643 us | **1.20x** | 644 us | 1.20x |
+| Ed25519 sign | -- | 77 us | 64 us | **1.20x** | 64 us | 1.21x |
+| Salsa20 | 256 KiB | 533 us | 435 us | **1.23x** | 435 us | 1.22x |
+| X25519 | -- | 50 us | 36 us | **1.39x** | 44 us | 1.14x |
+| MD5 | 256 KiB | 626 us | 433 us | **1.44x** | 432 us | 1.45x |
+| AES-128-GCM | 256 KiB | 103 us | 71 us | **1.44x** | 72 us | 1.44x |
+| Poly1305 | 256 KiB | 236 us | 57 us | **4.13x** | 208 us | 1.14x |
+| ChaCha20-Poly1305 | 256 KiB | 761 us | 148 us | **5.13x** | 1.1 ms | 0.72x |
+| ChaCha20 | 256 KiB | 495 us | 93 us | **5.31x** | 852 us | 0.58x |
 
-The last two columns say what vector code is worth, and it is worth a great
-deal: 5.3x for ChaCha20, 4.9x for Poly1305, 5.5x for ChaCha20-Poly1305, 6.9x
-for HMAC-SHA-256 once EverCrypt reaches the SHA-EXT assembly.  Those are the
-four places where a portable scalar implementation, however well extracted,
-simply cannot compete, and they are the honest ceiling on what the work in
-this repository can reach without a vector backend.  Two of the entries go the
-other way and are worth recording: HACL\*'s AVX2 BLAKE2b is *slower* than its
-own scalar C on this machine (438 us against 312), and every vectorized
-primitive loses at 64 bytes, where the setup outweighs the body.  SHA-EXT
-beats hacl-pulse's SHA-256 by only 1.39x, which is the narrowest of these
-margins, and for a different reason: both sides are already issuing
-`sha256rnds2`, so that row is this repository's intrinsics against Vale's
-hand-written assembly rather than scalar against vector.
+Against what HACL\* can actually do on this machine, most of the suite is
+within 20% and five primitives are ahead: SHA-3 and SHAKE, where HACL\* has
+no vector sponge; SHA-512 and HMAC-SHA-512, where it has none either; and
+BLAKE2b, where HACL\*'s own AVX2 implementation is *slower* on this machine
+than its own scalar C (439 us against 311), so "best" picks the wrong one.
+Modular exponentiation is level.  Everything from P-256 down to AES-GCM sits
+between 1.03x and 1.44x, which is the cost of a portable scalar
+implementation meeting hand-tuned scalar code.
+
+The honest ceiling is the bottom three rows.  ChaCha20 at 5.32x, Poly1305 at
+4.14x and ChaCha20-Poly1305 at 5.15x are not implementation defects; they are
+what thirty-two-byte-wide AVX2 lanes are worth on a stream cipher and a
+one-pass MAC, and no amount of work on scalar C will close them.  Closing
+those three needs a vector backend, which is a different project.
+
+Two rows were recently somewhere else.  HMAC-SHA-256 was the worst in the
+table at 6.84x, because the SHA-EXT dispatch existed only in the one-shot
+hash and HMAC goes through a *prefixed* hash that is generic in the word
+type; generic code cannot branch into an implementation that exists only at
+thirty-two-bit words, so HMAC ran scalar rounds on a machine already issuing
+`sha256rnds2`.  A specialised `hash_prefixed_ni` and `hmac_impl_ni` took the
+256 KiB case from 1,136 us to 227 us.
+
+Then both SHA-256 rows moved again, from 227 us to 190, and under clang from
+668 us to 179 -- 3.7x -- when a single stray `target` attribute was removed;
+see [One attribute in the wrong place, and three quarters of the
+time](#one-attribute-in-the-wrong-place-and-three-quarters-of-the-time).
+
+That leaves SHA-256 and HMAC-SHA-256 tied at 1.16x against Vale's SHA-EXT
+assembly, which is this repository's intrinsics against hand-written assembly
+rather than scalar against vector, and is the narrowest of the remaining
+gaps.  Every vectorized primitive still loses at 64 bytes, where the setup
+outweighs the body.
 
 Three things account for most of the spread against the scalar reference.
 
@@ -2113,8 +3247,33 @@ FFDHE and the generic modexp move together, because they are one cause and
 not three: they are the same ladder.  That ladder used to be
 square-and-multiply, two multiplications per exponent bit against HACL\*'s
 five per four bits, and those three rows sat at 1.98x.  They now run the
-same 4-bit window as the reference, which is worth 1.56x on gcc and 1.58x on
-clang, and they have come down to about 1.25x.
+same 4-bit window as the reference, which was worth 1.56x on gcc and 1.58x
+on clang and brought them to about 1.25x.  Two changes to the inner loop
+have since taken them past it, to 0.94x--0.97x under gcc and 0.92x--0.94x
+under clang.
+
+The first is that the row of an `n x n` multiply is now taken four columns
+at a time, with a one-at-a-time tail, which is what HACL\*'s own inner loop
+does: four independent `mulx` chains in one iteration have loads to overlap
+with, where a single column has only the loop back-edge.  That alone took
+`mont_mul` from 2,243 ns to 1,990, level with the reference's 1,986.
+
+The second is a dedicated squaring.  A square has the same columns as a
+general product, but the off-diagonal ones come in pairs -- `a_i a_j` occurs
+at weight `i + j` once in each of two rows -- so `Hacl.Bignum.Base.sqr`
+computes only the strict upper triangle, doubles the whole of it once, and
+then adds the `n` diagonal terms `a_i^2` at weight `2i`.  That is `n(n-1)/2`
+products against `n^2`: for the thirty-two limbs of a 2048-bit modulus, 496
+against 1,024.  Measured, 579 ns against the full multiply's 931, and within
+5% of HACL\*'s own `bn_sqr` at 550.  Since a 4-bit-window 2048-bit
+exponentiation is about 2,048 squarings against 512 multiplies, four fifths
+of the work is now going through the cheaper path.
+
+The invariant that makes the triangle correct is `A_k^2 = 2 T_k + D_k`,
+where `A_k` is the prefix of the input, `T_k` the triangle so far and `D_k`
+the diagonal; it survives `A := A + a b^k` because `(x + a b^k)^2 = x^2 + 2 x
+a b^k + a^2 b^{2k}`, which is one lemma.  The doubling cannot carry out,
+because `2 T_n <= A_n^2 < b^{2n}`.
 
 The verify row came down separately and much further.  It is a 2048-bit
 exponentiation by 65537, seventeen bits, so the ladder is short and almost
@@ -2124,13 +3283,14 @@ exponent ladder over the *Montgomery* exponent --- squaring doubles it, a
 single modular doubling adds one --- seeded at the topmost limb of the
 modulus rather than at one, which reaches the same value in about a dozen
 squarings and sixty-five doublings: 32.5 us, 11.1x faster, and 2.9x faster
-than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198.
+than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198, and the squaring has since taken it to 166.
 
-What is left is no longer algorithmic.  Both sides now issue very nearly the
-same number of `mont_mul`s; ours cost about 2.19 us each against the
-reference's 1.77, and closing *that* means going at the inner
-multiply-and-reduce loop rather than at the exponent.  It is worth saying
-plainly that this is 1.25x behind and not parity.
+What is left on these rows is the reduction, not the multiply: a 32-limb
+`reduction` costs 1,035 ns to the multiply's 931 and the squaring's 579, so
+it is now the larger half of both `mont_mul` and `mont_sqr`.  HACL\* has an
+*almost*-Montgomery variant that skips the final conditional subtraction
+inside the ladder and corrects once at the end; that is the next thing to
+try, and it is worth roughly the conditional subtraction per step.
 
 An earlier version of this table put the modexp row at 0.70x and concluded
 that the generic bignum was ahead.  That was wrong, and the way it was wrong
@@ -2144,22 +3304,87 @@ reference if it is the same algorithm at the same width.
 now runs at radix 2^51 like HACL\*'s `_51` with the same straight-line `fmul`,
 so the field arithmetic is the same shape, and with the field marked
 `CInline` X25519 is within 1.26x -- what is left there is the ladder itself,
-which has had no attention.  Ed25519 is further behind because it multiplies
-one bit at a time where HACL\* uses a precomputed window.  P-256 and secp256k1
-were behind for three reasons and are now behind for two.  The plainest has
-been removed: the 256-bit core they share was eight limbs of thirty-two bits,
-so a field multiply did sixty-four schoolbook products and sixty-four
-reduction products, and it is now four limbs of sixty-four, which does sixteen
-and sixteen.  Measured directly, our secp256k1 `fmul` went from 53.4 ns to
-21.5 and our P-256 `fmul` from 42.2 to 19.7, against HACL\*'s 7.0 and 16.8;
-P-256 is now within 1.17x of the reference field multiply, and the whole of
-P-256 ECDSA verification within 1.91x.  What is left is that both curves use
-the shared general Montgomery core rather than the special-prime reductions
-those two primes admit -- which is all of secp256k1's remaining gap, since
-HACL\*'s secp256k1 is five limbs of fifty-two bits with lazy reduction and no
-Montgomery factor at all -- and that both multiply scalars one bit at a time
-rather than through a precomputed window.  Both are known, localized, and
-require no new proof technique, only work.
+which has had no attention.  Ed25519 is further behind, but much
+less so than it was: both halves of its scalar multiplication have now been
+windowed.  The variable-base half was worth 22% of key generation, 19% of
+signing and 18% of verification; the fixed-base half, which splits the scalar
+into four sixty-four-bit pieces and walks them together against [2^64] G,
+[2^128] G and [2^192] G as well as G, was worth a further 28% of key
+generation and 23% of signing; compiling in the four sixteen-entry tables of
+multiples that the fixed-base half was building on entry -- sixty point
+additions out of a hundred and eighty-eight -- was worth a further 25% of key
+generation, 25% of signing and 10% of verification.  The scalar arithmetic
+mod the group order,
+which used to be done a bit at a time and cost more than a fifth of a
+signature, is now four-limb Montgomery like every other curve here and costs
+almost nothing.  Key generation went from 3.40x of the reference to
+**1.46x** and signing from 3.82x to **1.46x**; verification is **1.98x**.  Under
+clang the first two are **1.16x**.  secp256k1 and
+P-256 have now had the same treatment, so no curve here walks its generator
+bit by bit any more.  P-256 and secp256k1 were behind for three reasons, of
+which secp256k1 now has none in particular and P-256 has one.  The plainest has been removed for both: the 256-bit core they share was
+eight limbs of thirty-two bits, so a field multiply did sixty-four schoolbook
+products and sixty-four reduction products, and it is now four limbs of
+sixty-four, which does sixteen and sixteen.  Measured directly, our secp256k1
+`fmul` went from 53.4 ns to 21.5 and our P-256 `fmul` from 42.2 to 19.7.
+Second, secp256k1 no longer uses the shared general Montgomery core at all: it
+has its own five-limb, radix-2^52, lazily reduced field, the same
+representation HACL\* and libsecp256k1 use, with the special-prime fold
+`2^256 = p + 2^32 + 977` in place of a Montgomery reduction.  A latency probe
+of the two field multiplies side by side -- ours and HACL\*'s, each behind a
+call, each fed its own previous output -- puts ours at 29.4 ns against 25.9,
+so the secp256k1 field is within 14% of the reference and is no longer worth
+attention.  P-256's prime admits the same treatment and has not had it yet.
+Third, the scalar multiplication.  Both curves have now had that, on the
+variable-base side: each walks the scalar four bits at a time against a
+sixteen-entry table of small multiples of the input point, built at run time,
+so a 256-bit multiplication costs sixty-four rungs of four doublings and one
+addition plus sixteen to build the table -- 336 point operations against the
+ladder's 512.  On secp256k1 it is worth about 26%: ECDH went from 213 us to
+154 and its ratio against the reference from 2.40x to **1.73x**, ECDSA
+signing from 227 to 169, verification from 428 to 313, and secret-to-public
+from 213 to 153.  On P-256 it is worth about a third, because that curve's
+addition formula is the more expensive of the two and so the saved operations
+were worth more: ECDH as initiator went from 401 us to 271 and as responder
+from 402 to 271, signing from 417 to 287 and verification from 812 to 545.
+The responder row is the one to note -- variable-base ECDH on P-256 was 1.14x
+the reference and is now **0.76x** it, the first asymmetric primitive here
+that is faster than HACL\*'s portable C.  clang agrees within 3% on both
+curves.  What remains is the *fixed*-base side, where HACL\* has a window
+compiled in and this does not: signing, verification and secret-to-public all
+start from a multiplication by the generator.  secp256k1 has now had that
+too: `Hacl.K256.PointMulG` splits the scalar into four sixty-four-bit pieces
+and walks them together against `G`, `2^64 G`, `2^128 G` and `2^192 G`, 184
+point operations against 335, and its three fixed-base rows moved together
+-- `secret-to-public` from 155 us to 111 and 3.16x to 2.27x, signing
+from 172 to 126 and 2.63x to 1.91x, verification, which does one
+fixed-base and one variable-base multiplication, from 319 to 271.
+Compiling in the four sixteen-entry tables that this was building on entry --
+sixty point additions out of a hundred and eighty-four, a third of the work --
+moved the same three rows again, and by about the same proportion Ed25519
+saw: `secret-to-public` from 111 us to **75** and 2.27x to **1.55x**, signing
+from 126 to **91** and 1.91x to **1.40x**, verification from 271 to **234**
+and 2.59x, ECDH, which is variable-base and only pays for the table build in
+its key-generation half, from 173 to **154** and **1.75x**.  Under clang the
+three fixed-base rows are **1.55x**, **1.50x** and **2.55x**.
+
+P-256 has now had it too, and gained more from it than either of the others.
+Its addition formula is the more expensive, so the eighty-two point
+operations the window saves are worth more, and unlike the other two curves
+it starts close enough to the reference that the saving takes it to parity:
+ECDH as initiator went from 272 us to **165** and 1.73x to **1.04x**, signing
+from 287 to **182** and 1.69x to **1.08x**, and verification from 545 to
+**449** and 1.27x to **1.05x**.  ECDH as responder, which is variable-base
+and is the control, is unchanged at 275 us and **0.77x**.  P-256 is
+therefore within 10% of HACL\*'s portable C on every operation it offers and
+ahead of it on one.  Under clang it is ahead on three of the four:
+`dh-initiator` 151 us against 156 (**0.97x**), verification 393 against 429
+(**0.91x**), `dh-responder` 241 against 355 (**0.68x**), with signing at
+parity, 172 against 169 (**1.02x**).  That the two compilers disagree about
+which side of 1.0x three of these rows fall on is the right way to read
+them: the remaining difference is no longer algorithmic.  What P-256 has
+still not had is the special-prime field; that is now the only item left on
+its list.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -2214,8 +3439,8 @@ see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-four today -- HMAC,
-the SHA-2 cores, the MD5 and SHA-1 blocks -- and the list is meant to
+diffs them against `mk/clones.baseline`.  There are sixty-eight today -- HMAC,
+the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
 *would* have cloned given room.
@@ -2295,17 +3520,234 @@ left in the library.  Pricing the rest the same way: SHA-2 still owes 6%,
 MD5 3%, NaCl's secretbox 8% at 64 bytes, and nothing else moves.
 
 AES-GCM is the one row that was worked on.  It began at 875 microseconds on
-256 KiB, twelve times the reference, and is now 325 -- four AES blocks in
-flight at a time, four GHASH blocks against the precomputed powers of the hash
-key, and a GF(2^128) reduction by shifts rather than by a second multiply.
-The remaining 4.5x is against hand-written assembly that interleaves six
-blocks and aggregates the GHASH reduction across them, and both of those are
-reachable from here.
+256 KiB, twelve times the reference, and is now 140 -- four AES blocks in
+flight at a time, eight GHASH blocks against the precomputed powers of the
+hash key, a GF(2^128) reduction by shifts rather than by a second multiply,
+that reduction now performed once for every eight blocks rather than once per
+block, and the counter incremented in a vector lane rather than by a
+constant-time carry chain through memory.  Deferring the reduction was worth
+2.11 cycles a byte to 1.28 in GHASH alone, and widening the group from four
+blocks to eight a further 1.22 to 1.03; putting the counter in a lane was
+worth 1.55 to 0.49 in counter mode, and removed a hundred and thirty-nine of
+the two hundred and twenty-five instructions a four-block turn was spending.
+The remaining 1.98x is against hand-written assembly that interleaves
+six blocks, and that is reachable from here.
+
+Its *small*-message row was worked on separately and much later, after a
+profile that should have been taken years earlier: the key schedule was
+computing its S-box algebraically, which is three hundred and fifty
+dependent operations a byte and fourteen thousand cycles a call, paid on
+every AEAD call whatever the message length.  Binding `AESKEYGENASSIST` with
+a zero round constant -- a single extern, because the round constant is
+already carried in a register and exclusive-ored in by hand -- took that to a
+thousand cycles, and sixty-four-byte AES-128-GCM from 77.45x of the reference
+to **7.54x**.  The architecture section has the details.  The general lesson
+is that a bulk throughput benchmark hides flat costs perfectly.
 
 The benchmark harness and a long write-up of each optimization are kept
 outside the repository; the numbers above are reproducible with any AEAD/hash
 benchmark that links `dist/Hacl.c` on one side and HACL\*'s `dist/gcc-compatible`
 on the other.
+
+### A machine word is not eight bytes in a loop
+
+`Hacl.Impl.Bytes.load_le` and `load_be` read a 32- or 64-bit word out of a
+byte array, and for most of this repository's life they did it the obvious
+way: one loop, one byte per iteration, `acc = acc * 256 + b`.  That is the
+shortest code and the shortest proof -- one invariant, one `le_nat_cons` --
+and it is the single most expensive line in the library.
+
+Two things are wrong with it.  The first is that every iteration depends on
+the previous one, so reading a sixty-four-bit word is eight serially
+dependent shift-or pairs, something like twelve cycles, where the machine has
+an instruction that does it in one.  The second is subtler and is the reason
+no compiler rescued it: the trip count is `nbytes`, a *field* of the `word`
+class, and Custard emits a class field as a C global.  `while (j < n)` with
+`n` loaded from memory is not a loop any compiler will unroll, so the
+eight-byte read never even got the chance to be recognized as a byte-gather
+pattern.
+
+The fix is to read four bytes with no loop at all --
+
+```c
+b[off] | (b[off+1] << 8) | (b[off+2] << 16) | (b[off+3] << 24)
+```
+
+-- and to make a sixty-four-bit read two of those joined by a shift.  Four is
+the right width because `bits` is at least thirty-two for every instance of
+the class, so the four-byte reader needs no precondition and both instances
+can use it; `load_le` keeps its old signature and dispatches on `nbytes`,
+with the original loop left behind as the branch for a width that is neither
+four nor eight.  Nothing reaches that branch, because `word` has exactly two
+instances, but leaving it there means the code does not depend on that fact.
+
+What this costs in proof is two lemmas and a little bookkeeping.
+`le_nat_prefix` says that extending a little-endian prefix by one byte adds
+that byte scaled by `2^(8k)`, which is the term the straight-line code
+contributes; `or_byte_le` says that `logor` of an accumulator below `2^(8k)`
+and a byte placed at `8k` is their sum, which is `FStar.UInt.logor_disjoint`
+with the operands in the right order.  Big-endian needs the mirror of each,
+stated on the running accumulator `be_nat (prefix) * 2^(8(n-1-k))` so that
+the equation is again "add one scaled byte".  The four steps themselves are
+hoisted out of the Pulse code into `le4_ok` and `be4_ok`, pure lemmas whose
+parameters are the four machine values the body computes and whose
+hypotheses are the equations relating them -- the solver never has to look
+inside a `logor` of a `shift_left` and reason about `le_nat` at the same
+time.
+
+It is worth **1.18x on Poly1305 under gcc and 1.54x under clang**, which
+takes Poly1305 from 1.35x of HACL\* to 1.14x, and under clang past it.  The
+same two loads per sixteen-byte block were a fifth of the entire running
+time.  ChaCha20-Poly1305 gains 6%, NaCl's secretbox 19%, SHA-512 and
+HMAC-SHA-512 4-5% under clang.  clang recognizes the four-way or-tree and
+emits a single `movl`; gcc does not merge it, but four independent loads and
+three `or`s still beat an eight-deep dependent chain.
+
+**The matching change to `store_le` was measured and thrown away.**  It is
+the same idea -- four independent right shifts and four byte stores instead
+of a loop that shifts the word down eight bits at a time -- it verified, and
+it cost ChaCha20 and Salsa20 12%.  The reason is the asymmetry hidden in the
+paragraph above: a *store* loop writes to consecutive addresses with no
+dependency between iterations, so gcc, which does know `nbytes` is four after
+interprocedural constant propagation even though it will not unroll against
+it, was already vectorizing ChaCha20's sixteen-word keystream store into SSE.
+Writing the stores out by hand gave the vectorizer a shape it did not
+recognize and lost more than the straight-line code won.  The load loop had
+no such escape hatch, because a serial dependency cannot be vectorized at
+all.  Keeping the loads and reverting the stores is the whole of this change.
+
+### Twenty-one is not a field element
+
+The complete addition formulas of Renes, Costello and Batina are stated
+against a field, so they say `fmul b3 t` where they mean twenty-one times
+`t`, and `fadd x x` where they mean twice `x`.  `Spec.K256` keeps the
+published listings verbatim, which is the right thing for a specification
+and the wrong thing for the code underneath it.  Taken literally,
+`fmul b3 t` is a five-by-five schoolbook -- twenty-five word
+multiplications and a carry pass one width up -- to multiply by a number
+that fits in five bits, and the `8x` in the doubling is three carry
+passes.
+
+`Hacl.K256.Field52.fsmall` multiplies every limb by a small constant and
+runs one carry pass: five word multiplications instead of twenty-five.  It
+works because a limb is under `2^53` and the constants the formulas use
+are at most thirty-two, so the product still fits in a word, and because
+`carry_chain` is parameterised by the bound it is entering with rather
+than hard-wired to one operation.  The bound is stated once at the largest
+-- for every `n <= 32` at once -- rather than one shape per constant: the
+pass that follows is the same either way and the slack costs nothing.
+
+Four lemmas in `Spec.K256.Field52` do the whole translation between what
+the formulas say and what the code does:
+
+```fstar
+let two_x   (x: K.felem) : Lemma (K.fadd x x == (2 * x) % prime) = ()
+let three_x (x: K.felem) : Lemma (K.fadd (K.fadd x x) x == (3 * x) % prime)
+  = Math.lemma_mod_add_distr x (x + x) prime
+```
+
+and two more for `8x` and for `b3`.  `fsmall` is in place on a single
+array, which is what every one of the seven call sites wants and which
+sidesteps the aliasing that `fsmall a2 a2 21` would otherwise force the
+separation logic to argue about.  The `b3` constant table and the second
+scratch element both became dead and are gone.
+
+It is worth 1.15x to 1.24x on every secp256k1 operation under gcc and
+1.07x to 1.13x under clang.  What is left of the secp256k1 gap is
+algorithmic: HACL\*'s variable-base multiplication and its verification
+use the GLV endomorphism and Shamir's trick, which this repository
+declines for the reason given in `Hacl.K256.PointMulD`.
+
+Six experiments were run at the C level before any of this was written in
+Pulse, and three of them were worth exactly nothing, which is the more
+useful half of the result.  gcc already CSEs `fmul(out, a, a)` down to the
+fifteen distinct products, so a hand-written symmetric squaring buys
+nothing and `fsqr` can go on being `fcopy` then `fmul`.  It already
+unrolls the carry chain.  It already eliminates the `fcopy` churn around
+aliased calls.  A full lazy-reduction rewrite -- dropping the carry pass
+from `fadd` and `fsub` and reducing explicitly, which is what HACL\* does
+-- measured six per cent on top of this, and was not worth the proof
+cost.  The rule that falls out: only shapes the compiler *cannot* fix are
+worth fixing by hand, and a twenty-five-multiplication product where a
+five-multiplication one would do is such a shape.  Straight-lining `fadd`
+and `fsub`, which were loops over the five limbs, is the other such shape
+and is worth another three per cent.
+
+### A bit string is a number
+
+ML-KEM's `ByteEncode_d` packs 256 coefficients of `d` bits each into `32 d`
+bytes, and `ByteDecode_d` unpacks them.  FIPS 203 states both of them one
+bit at a time: bit `j` of the output is bit `j mod d` of coefficient
+`j div d`.  `Spec.MLKEM.Encode` follows the standard, and the
+implementation used to follow the specification, which means it computed a
+division and a remainder by `d` for every bit it moved.  `d` is a
+parameter rather than a constant, so those were real divisions --- three
+thousand of them to encode one twelve-bit key polynomial.
+
+gcc had been hiding how much that cost.  Its interprocedural constant
+propagation would clone the encoder on `d`, which turns each division into
+a multiply and a shift, and when the translation unit grew past the clone
+budget the clone went away.  Bisecting the resulting slowdown with
+`__attribute__((noclone))`, one candidate function at a time, showed the
+encoder was the whole of it.
+
+The fix is not to make a division cheaper but to notice that there is no
+division in the problem.  Packing 256 `d`-bit values least significant
+first is exactly writing down the integer
+
+    N = sum_j f_j 2^(d j)
+
+and reading a byte string least significant first is exactly
+`Hacl.Spec.Bytes.le_nat`.  Both coders are the identity on one `256 d`-bit
+number.  Once that is said, the implementation is free to move bits in and
+out of `N` in whatever chunks suit the machine, because any two ways of
+chopping up the same number agree.
+
+So both are a sixty-four bit shift register.  The encoder holds the bits
+packed so far and not yet written, pushes each coefficient in at the top,
+and writes a byte off the bottom whenever eight have accumulated:
+
+    acc += (f[i] & mask_d) << nb;  nb += d;
+    while (nb >= 8) { out[o++] = acc;  acc >>= 8;  nb -= 8; }
+
+The decoder runs the same register backwards, pulling a byte in whenever
+fewer than `d` bits are left.  There is no division anywhere, and the
+loops are the ones a C programmer would have written.
+
+`Spec.MLKEM.Pack` is the module that makes this legal.  It is pure
+arithmetic --- it mentions neither `q` nor the NTT nor any parameter set
+--- and says that `enc_num`'s bits are `coeff_bit`'s, that its bytes are
+`byte_encode`'s, and that `bits_val` is a window of `le_nat`.  Two
+decisions in it are worth copying elsewhere:
+
+*The register is narrow, so use arithmetic rather than bits.*  It is never
+wider than `8 + d <= 20` bits.  That makes each step's two operands
+provably disjoint and their sum provably within range, so the bits can be
+combined with `add_mod` instead of `logor`.  The generated code is
+identical --- the compiler sees the same instruction either way --- and
+the proof needs no bitwise reasoning at all, which is the part that is
+expensive to automate.
+
+*Mask rather than assume.*  `enc_num` takes each coefficient modulo `2^d`
+rather than requiring the caller to have reduced it.  This costs one `AND`
+per coefficient and removes a precondition from every caller, and it is
+sound precisely because `coeff_bit` never reads above bit `d` either, so
+the two agree on inputs that are not reduced as well as on inputs that
+are.
+
+Measured on ML-KEM-768, in microseconds:
+
+| | gcc before | gcc after | | clang before | clang after | |
+| --- | --- | --- | --- | --- | --- | --- |
+| keypair | 116.8 | 98.1 | 1.19x | 192.1 | 95.4 | **2.01x** |
+| encapsulate | 154.2 | 105.5 | **1.46x** | 171.6 | 124.7 | 1.38x |
+| decapsulate | 199.5 | 137.0 | **1.46x** | 233.8 | 172.7 | 1.35x |
+
+Decapsulation gains from the *encoder* as much as from the decoder,
+because the Fujisaki-Okamoto transform re-encrypts in order to check.  The
+clang key generation column is the one to dwell on: clang never cloned
+anything, so it had been paying every division in full, and key generation
+encodes two complete twelve-bit vectors.
 
 ### Measuring on a shared machine
 
@@ -2367,9 +3809,9 @@ measured the same way as the rest of this section:
 
 | operation | 512 | 768 | 1024 |
 | --- | --- | --- | --- |
-| keypair | 73 us | 113 us | 169 us |
-| encapsulate | 74 us | 115 us | 170 us |
-| decapsulate | 103 us | 158 us | 226 us |
+| keypair | 60 us | 98 us | 143 us |
+| encapsulate | 66 us | 105 us | 152 us |
+| decapsulate | 90 us | 137 us | 194 us |
 
 Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
@@ -2383,32 +3825,15 @@ layers written out, with a Barrett reduction on every product and no
 lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
 look first if these ever need to be faster.
 
-These numbers are what they are because of the note below this table.  The
-first version of this code passed the parameter set around as five
-`size_t` arguments -- `k`, `eta1`, `eta2`, `du`, `dv` -- and every loop
-bound, every buffer length and every bit width in the whole of ML-KEM was
-therefore a run-time value.  `make clones-available` said gcc would have
-specialised the encapsulation and decapsulation drivers, the K-PKE layer
-under them, the noise sampler and the polynomial coders on those
-arguments, and that the interprocedural budget was spent; recompiling with
-the budget raised was worth **1.32x** on encapsulation and **1.24x** on
-decapsulation.  By the policy below, that gap was ours to close.  The five
-arguments are now marked `[@@@FStar.Attributes.monomorphize]`, exactly as
-FrodoKEM, AES-GCM and HPKE mark their parameter records, so Custard emits
-one specialised copy of each of those functions per parameter set and the
-constants reach the loops without the C compiler having to guess.
-Encapsulation went from 153 to 115 microseconds and decapsulation from 199
-to 158; key generation, which was already being cloned, did not move.  The
-cost is 4% on the size of `dist/Hacl.c`.  `make clones-available` now finds
-nothing left to specialise in ML-KEM.
-
-What did *not* work, recorded because it is the obvious first guess:
-`inline_for_extraction` on the same functions.  Inlining the K-PKE layer
-into the three entry points gives the constants to the same loops, but the
-resulting function is large enough that the C compiler's own inlining
-heuristics start declining inside it, and measurement put the result back
-at the unspecialised numbers.  A specialised *copy* is not the same thing
-as an inlined body, and here only the copy pays.
+These numbers used to be half again as large, and the reason they are not
+is *A bit string is a number* below.  There was a specialisation gap here
+of exactly the kind the note below this table is about: `make
+clones-available` said gcc would clone ML-KEM's polynomial encoder on the
+bit width it is passed but that the interprocedural budget was spent, and
+raising the budget was worth 1.32x on encapsulation.  That turned out to
+be the compiler papering over a bit-serial coder, and the fix was to
+rewrite the coder rather than to recover the clone.  Nothing in
+`clones-available` is worth anything measurable on ML-KEM now.
 
 ## Proof engineering notes
 
@@ -2543,6 +3968,29 @@ Non-obvious things that cost time here, recorded so they cost less next time:
 * **A `while` needs a `decreases`.**  Without one the loop is `stt_div`, and
   the error surfaces far away as "cannot compose computations in this divergent
   block", naming the effect rather than the missing clause.
+* **A `decreases` measure must stay non-negative *after* the body.**  A fill
+  loop running `while (nb < d) { nb += 8; }` has the obvious measure `d - nb`,
+  which is positive on entry to the body and negative on the way out of it.
+  `<<` on `int` is well-founded only on the non-negative part, so this fails
+  at the loop's last iteration with a `_ << meas` goal that looks arithmetic
+  and is not.  `d + 8 - nb`, with `nb < d + 8` carried in the invariant, is
+  the same measure shifted into range.
+* **Lead a hard linear goal up a staircase.**  After a loop on `i`, proving
+  `SZ.v i == 256` from `~(SZ.v i < 256)` and `SZ.v i <= 256` timed out at
+  rlimit 600 --- not because it is hard, but because the loop invariant
+  leaves a quantified frame condition and a `pow2`-laden equation in scope
+  for Z3 to flail at.  Writing `assert (256 <= SZ.v i); assert (SZ.v i <=
+  256); assert (SZ.v i == 256)` makes all three discharge instantly at rlimit
+  40.  Each `assert` is its own query with its own, much smaller, set of
+  relevant facts.
+* **Hoist each nonlinear step into a lemma whose arguments are the machine
+  values.**  Inside a Pulse loop body the context is enormous; `d * (i + 1) <=
+  256 * d` asked there can cost the whole rlimit, and asked in a four-line
+  top-level lemma it costs nothing.  `Spec.MLKEM.Pack.enc_room` and `dec_room`
+  exist only for this.  The rule of thumb that fell out: if a goal mentions a
+  product of two variables, it does not belong in Pulse code.
+* **`by` is a reserved word.**  `let by = ...` is a syntax error reported at
+  the column of the `=`, with no mention of the name.
 * **`--split_queries` is not a pragma.**  When a four-conjunct postcondition
   times out, the lever available is `--fuel`/`--ifuel` and splitting the
   function, not splitting the query.
@@ -2826,8 +4274,9 @@ The two legacy hashes are there too: SHA-1 one-shot, incremental and under
 HMAC, and MD5 one-shot and incremental, which is everything HACL\* offers
 for it.
 
-AES-NI and the carry-less-multiply GHASH both sit under AES-GCM, and the
-Intel SHA extensions sit under SHA-256 and SHA-224, each chosen at run time.
+AES-NI, the carry-less-multiply GHASH and the `AESKEYGENASSIST` key schedule
+all sit under AES-GCM, and the Intel SHA extensions sit under SHA-256 and
+SHA-224, each chosen at run time.
 
 Beyond the subset, Salsa20 is there with HSalsa20 and XSalsa20 under it,
 and so is the whole of the original NaCl interface: `crypto_secretbox`,
@@ -2864,36 +4313,316 @@ rough order of value:
    signing both, and the constant-time table lookup it needs already exists:
    `Hacl.Bignum.Base.table_select`, written for the modexp window.  It needs
    associativity of the twisted Edwards addition law in extended coordinates,
-   which `Spec.Ed25519` does not have in any form today.
+   which is now proved.
 
-   That obligation, and the same one for the two Weierstrass curves, is now
+   That obligation, and the same one for the two Weierstrass curves, is
    written down: `spec/Spec.Ed25519.Group.fsti`, `spec/Spec.P256.Group.fsti`
    and `spec/Spec.K256.Group.fsti` state curve membership, projective
-   equality, closure of the addition law, and the group axioms, as
-   interfaces with no implementations --- so they are a statement of work
-   outstanding rather than an assumption, and the library still assumes
-   nothing mathematical.  Associativity is the only hard one; the rest are
-   polynomial identities or field cancellation.  Worth saying that HACL\*
-   proves none of them either: in `specs/lemmas/Spec.K256.Lemmas.fst` and
-   its Ed25519 and P-256 twins the corresponding lemmas are `admit()`, so
-   HACL\*'s windowed Ed25519, its windowed P-256 and its GLV secp256k1 all
-   rest on the same admitted facts.  Discharging them here would be new
-   work, not a catch-up.  The measured shape of the gap says what they are
-   worth: on variable-base ECDH, where HACL\* has no table either, P-256 is
-   within 1.15x; on fixed-base it is 2.59x.
-2. **One GF(2^128) reduction per four GHASH blocks**, accumulating the four
-   256-bit products before reducing rather than after.  Needs one new
-   specification fact: additivity of `Spec.GF128.Poly.halves`.
-3. **Special-prime reduction for P-256 and secp256k1** in place of the shared
-   general Montgomery core.  This is what is left on those two curves now
-   that the width is right: HACL\*'s remaining speed comes from the shape of
-   the primes, and on secp256k1 it is the whole of the gap -- five limbs of
-   fifty-two bits, lazy, with no Montgomery factor, against our four limbs of
-   sixty-four with one.
-4. **Windowed scalar multiplication** for P-256 and secp256k1, which is most
-   of what is left after (3).
-5. **Taking over the remaining sixty-four compiler specialisations**, the
-   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks.
+   equality, closure of the addition law, and the group axioms, and all
+   three are now proved, with no `admit` and no `assume`, so the library
+   still assumes nothing mathematical.  The proofs reduce every statement
+   to polynomial identities modulo the affine curve equations, which a
+   small verified polynomial arithmetic (`spec/Spec.Group.Poly.fst`) checks
+   by normalisation; completeness additionally uses Pocklington primality
+   certificates for the field primes (`spec/Spec.Group.Primes.fst`), a
+   no-roots certificate on the Weierstrass curves, and non-squareness of
+   `d` on Ed25519.  Worth saying that HACL\* proves none of them: in
+   `specs/lemmas/Spec.K256.Lemmas.fst` and its Ed25519 and P-256 twins the
+   corresponding lemmas are `admit()`, so HACL\*'s windowed Ed25519, its
+   windowed P-256 and its GLV secp256k1 all rest on the same admitted
+   facts.  The measured shape of the gap says what they are worth: on
+   variable-base ECDH, where HACL\* has no table either, P-256 is within
+   1.15x; on fixed-base it is 2.59x.
+2. **One GF(2^128) reduction per four GHASH blocks**, **done**.  The four-way
+   loop used to compute four full products, reducing each 256-bit product to
+   128 bits before adding it to the accumulator, so the reduction ran four
+   times per sixty-four bytes even though it is linear and could run once.
+   It now accumulates the four raw 256-bit products and folds a single time.
+   Three specification facts were needed and none of them says anything new
+   about the reduction polynomial: `Spec.GF128.Poly.mul_r_two`, factored out
+   of the existing `gmul_three`, which lets one fold serve a doubled
+   argument; `Spec.CLMUL.bswap_gadd`, additivity of the byte reversal, one
+   line by extensionality; and `Spec.GF128.Algebra.gmul_defer4`, which is
+   `gmul_split` four times, a regrouping of the eight resulting half-products
+   into a low sum and a high sum, and `gmul_gadd_left` three times to pull
+   the multiplication by `r` out of the high sum.  The code is
+   `Hacl.AES.GF128.NI.gmul4_vec`, whose postcondition is exactly
+   `Spec.GF128.Algebra.sum4` of the four products -- the shape `horner4`
+   already wanted -- so it dropped into `ghash_loop4_ni` with no glue.
+   GHASH alone went from 2.11 cycles a byte to **1.28**, whole-primitive
+   AES-128-GCM from 3.68 to **2.88**, and the benchmark row from 4.48x of
+   EverCrypt to **3.52x**, past a gigabyte a second for the first time.  The
+   CTR half did not move, which is the control.  The eight-block window this
+   item suggested as future work has since been done, and is item 4 below.
+3. **The counter block incremented in a vector lane**, **done**.  A
+   four-block turn of `Hacl.AES.NI.ctr_block4_ni` was 225 instructions for
+   sixty-four bytes, and only about seventy-eight of them were AES; a
+   hundred and thirty-nine were four copies of the constant-time byte carry
+   chain of `Hacl.AES.Counter.inc32_impl`, each ending in a four-byte store
+   to the counter array that the next iteration immediately reloaded
+   sixteen bytes wide -- a narrow store under a wide load, which stalls, and
+   the four chains were serial through it.  Reversing all sixteen bytes puts
+   the counter's four in lane zero *and* turns their big-endian reading into
+   a little-endian one, so a packed thirty-two bit add of one is exactly
+   `Spec.AES.inc32`, carrying nothing into the twelve bytes above it, and
+   reversing again puts it back.  No new instruction was needed: `PADDD` was
+   already bound for SHA-256 and only had to move out of the SHA target
+   group, `_mm_add_epi32` being SSE2 and part of the baseline; the one new
+   extern is the constant one-in-lane-zero.  The proof is
+   `Hacl.Spec.Bytes.le_nat_byte` (read a byte back out of a little-endian
+   number), `Spec.SHANI.lane_byte` (connect the lane the `PADDD` axiom
+   states itself over to the bytes underneath it),
+   `Hacl.AES.Counter.inc32_lanes` (sixteen concrete byte instances, twelve
+   saying the byte did not move and four that it is a digit of the
+   incremented counter) and `Hacl.AES.NI.inc32_vec`.  225 instructions to
+   **114**, counter mode from 1.55 cycles a byte to **0.49**, whole
+   AES-128-GCM from 2.78 to **1.71**, and the benchmark row from 3.52x of
+   EverCrypt to **2.24x** under gcc and **1.80x** under clang.  The GHASH
+   half did not move, which is the control.
+4. **Eight GHASH blocks to a reduction**, **done**.  Item 2 left the fold as
+   a fixed cost per group rather than per block, and the deferral argument
+   never cared that the group was four.  `Hacl.AES.GF128.NI.gmul8_vec` runs
+   eight carry-less products against eight powers of the hash key and folds
+   once for a hundred and twenty-eight bytes; eight independent `PCLMULQDQ`s
+   also give the multiplier twice as much to work on at once.  None of the
+   algebra is new: `Spec.GF128.Algebra.sum8` is two `sum4`s added, `regroup8`
+   is `regroup4` twice and one pairing lemma, `mul_r_sum8` is `mul_r_sum4`
+   twice, and `gmul_defer8` is `gmul_defer4` with four replaced by eight.
+   Only the Horner side needed thought: `horner8` is `horner4` applied twice
+   with a multiplication by `H^4` pushed through the first group's four
+   terms, and because the powers are generated one multiplication at a time,
+   `pow_mul4` has to walk up the chain to show that `H^4` times each of `H`
+   to `H^4` is `H^5` to `H^8`.  The four-way loop stayed, because the
+   eight-way pass leaves at most one group of four behind: `ghash_loop4_ni`
+   gained a starting offset and picks up where the eight-way pass stopped,
+   and the one-block loop takes the rest.  The extra powers are computed
+   inside the same test as before, so a message short of a hundred and
+   twenty-eight bytes pays for none of them.  GHASH went from 1.22 cycles a
+   byte to **1.03** under gcc and 0.92 to **0.82** under clang, and the
+   benchmark row from 2.24x of EverCrypt to **1.98x** under gcc and 1.80x to
+   **1.68x** under clang -- inside a factor of two of hand-written assembly
+   for the first time.  The CTR half did not move, which is the control.
+   What is left is register pressure: eight powers, eight data blocks and
+   sixteen product halves do not fit in sixteen registers, and forty-one of
+   the eight-way turn's 363 instructions are spills.  Accumulating the halves
+   as they are produced rather than in a tree was tried, to keep fewer live,
+   and made gcc a third slower -- it serialises the products when the sum is
+   a chain.  A sixteen-way window would make that worse, not better, so this
+   is probably the end of the line for the reduction, and what is left in
+   AES-GCM is the interleaving of the two halves that EverCrypt's assembly
+   does and this code does not.
+5. **Special-prime reduction for P-256**, in place of the shared general
+   Montgomery core.  secp256k1's half of this is **done**: `code/k256` now
+   runs on a five-limb, radix-2^52, lazily reduced field with the fold
+   `2^256 = p + 2^32 + 977` in place of a Montgomery reduction, which is the
+   representation HACL\* and libsecp256k1 use.  `spec/Spec.Bignum52.fst` is
+   the prime-free radix-52 core, `spec/Spec.K256.Field52.fst` the
+   prime-specific arithmetic, `spec/Spec.K256.Columns.fst` the bridge that
+   turns the nine-column product and its fold into the straight line the code
+   runs, `spec/Spec.K256.Freeze.fst` the canonical form, and
+   `spec/Spec.K256.Repack.fst` the bit repacking between five fifty-two-bit
+   limbs and the four sixty-four-bit ones whose byte layer was already proved.
+   `code/k256/Hacl.K256.Field52.fst` is the code, `Hacl.K256.Exp52` the
+   exponentiation ladder without the Montgomery apparatus, and
+   `Hacl.Impl.Lit52` and `Hacl.K256.Tables52` the four curve constants, which
+   are now the numbers themselves rather than multiples of `R`.  The old
+   `Hacl.K256.Field` is deleted.  It was worth 313 us to 227 on ECDSA sign and
+   291 to 213 on ECDH, and it puts our `fmul` at 29.4 ns against HACL\*'s
+   25.9, so the field is no longer the gap.  P-256's prime admits the same
+   treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
+   subtractions rather than a multiply -- and has not had it.
+
+6. **The fixed-base window**, **done on all three curves**.
+   `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
+   sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
+   `2^128 G` and `2^192 G`, so that one doubling chain serves all four and
+   sixteen rungs suffice.  184 point operations against 335: key generation
+   from 84.8 us to **60.7** (gcc) and 77.8 to **51.3** (clang), 3.40x of
+   HACL\* to **1.91x** and 2.45x to **1.61x**; signing from 200.0 to
+   **153.9** and 191.3 to **139.0**; verification, which does one fixed-base
+   and one variable-base multiplication, from 202.7 to **187.5** and 188.6 to
+   **165.1**.  The three extra base points are compiled in as nine field
+   constants; `spec/Spec.Ed25519.Base.fst` says what they are by a doubling
+   chain the normaliser evaluates, and `Spec.Group.Smul.dblk_ok` turns that
+   into a statement about `smul`.  **On Ed25519 the four tables of sixteen
+   entries are now compiled in too**, rather than built on entry: that was
+   sixty point additions out of 188, and removing them took key generation to
+   **45.7** us (gcc) and **36.0** (clang), 1.91x of HACL\* to **1.46x** and
+   1.61x to **1.16x**; signing to **93.4** and **73.5**, 1.92x to **1.46x**
+   and 1.62x to **1.15x**; verification to **150.8** and **127.6**, 2.22x to
+   **1.98x** and 1.88x to **1.69x**.  The price is 256 field constants
+   instead of 9, about ten kilobytes of `.rodata`.  `spec/Spec.Ed25519.Win0`
+   .. `Win3` name the sixty-four points and prove each is the multiple it
+   claims to be, one addition at a time from the scale point;
+   `code/ed25519/Hacl.Ed25519.Win0` .. `Win3` hold the limbs;
+   `Hacl.Impl.Lit51` cuts a literal list the way `entry` slices the sequence;
+   and `Hacl.Ed25519.WinTable` turns four limb facts into the window's `ent`.
+   secp256k1 has had the same fixed-base split, in
+   `code/k256/Hacl.K256.PointMulG.fst`, with six field constants rather than
+   nine because a projective point has three coordinates where an extended
+   one has four: `secret-to-public` went from 155 us to **111** and 3.16x to
+   **2.27x**, signing from 172 to **126** and 2.63x to **1.91x**, and
+   verification from 319 to **271**.  P-256 has had it third, in
+   `code/p256/Hacl.P256.PointMulG.fst`, and gained the most from it, because
+   its addition formula is the more expensive and it began closest to the
+   reference: `dh-initiator` went from 272 us to **165** and 1.73x to
+   **1.04x**, signing from 287 to **182** and 1.69x to **1.08x**, and
+   verification from 545 to **449** and 1.27x to **1.05x**, with variable-base
+   `dh-responder` unmoved at **0.77x** as the control.  Its six constants are
+   Montgomery forms, since that is the representation P-256's field runs in,
+   and they live in `code/p256/Hacl.P256.TablesG.fst` rather than beside the
+   other eight for the reason given there.  The scalar arithmetic all three
+   share is `spec/Spec.Group.Split4.fst`.  The variable-base
+   half is **done on all three curves**: `code/k256/Hacl.K256.PointWin.fst`,
+   `code/p256/Hacl.P256.PointWin.fst` and
+   `code/ed25519/Hacl.Ed25519.PointWin.fst` walk the scalar four bits at a
+   time
+   against a sixteen-entry table of small multiples of the input point, built
+   at run time, with `Hacl.Bignum.Base.table_select` for the constant-time
+   lookup and `Hacl.Impl.Mont4.adigit` for the nibble.  336 point operations
+   against the ladder's 512: about 26% off every secp256k1 operation,
+   about a third off every P-256 one and about a fifth off every Ed25519
+   one, taking secp256k1's variable-base ECDH
+   from 2.40x to **1.73x**, P-256's from 1.14x to **0.76x**, the first
+   asymmetric primitive here that is ahead of the reference, and Ed25519
+   signing from 3.82x to **3.11x** under gcc and 4.21x to **2.94x** under
+   clang.  Its table layer now carries a scale, which is what lets the
+   fixed-base window above reuse all of it.
+
+   The proof is reusable and that was the point.  `spec/Spec.Group.Smul.fst`
+   is a commutative group as an abstract record -- the operation, the
+   membership predicate and the equivalence are opaque function fields -- and
+   everything inductive lives there: scalar multiplication, its congruences,
+   the double-and-add ladder, and the theorem that the ladder computes it.
+   2.5 seconds.  `spec/Spec.K256.Smul.fst` instantiates it from
+   `Spec.K256.Group` and connects `Spec.K256.point_mul` by a definitional
+   equality of step functions, which mentions no equivalence and so is free:
+   0.9 seconds, against an eight-minute timeout for the same statement proved
+   directly.  `spec/Spec.P256.Smul.fst` is the same file with the P-256
+   lemmas substituted in and verified in a second on the first attempt, which
+   is exactly the return the abstraction was built for.  `spec/Spec.Ed25519.Smul.fst`
+   is the third instance and took five seconds; it is the only one that needed
+   anything new, because Ed25519's ladder is indexed by thirty-two *bytes* and
+   reads bit `i` out of byte `i / 8` where the abstract one divides by `2^i`,
+   so it proves `ith_bit_gbit` and its four-bit analogue `nibble_of_bytes`.
+   Both are arithmetic about byte strings, mention no curve, and are cheap.
+
+   The lesson generalizes past the specs: `on_curve` and `peq` unfold into
+   field equations modulo a seventy-eight-digit prime, so any query that
+   merely has them in scope pays for the whole field.  Keep them out of every
+   induction, out of every bookkeeping predicate (`opaque_to_smt`), and above
+   all out of every Pulse precondition, since a precondition is in scope for
+   the entire body.  P-256 added a fourth case: its field is Montgomery, so
+   even `pt_ok` and the coordinate projection are expensive -- the latter is
+   `eval v * R^-1 mod p`, two seventy-eight-digit literals per coordinate.
+   The invariant therefore takes the three limb *sequences*, not the point,
+   and the module went from a forty-minute timeout to ninety seconds.
+   `--query_stats` is the tool that finds this: when every reported query
+   reads 0.00 seconds and the module still runs twenty minutes, the time is
+   one *failing* query burning its whole rlimit.  Ed25519 added a fifth case,
+   one level down: `decompress_on_curve` is four lines of algebra, and
+   written over `fadd`, `fsub` and `fmul` it put `prime` in scope of a
+   degree-four nonlinear goal and ran for twenty minutes.  Restated over an
+   arbitrary positive modulus `n`, with only the last two lemmas mentioning
+   the curve, it takes fifteen seconds.  Keep the seventy-eight-digit
+   literal out of the query, whatever the query is about.
+
+   Signing, verification and key agreement
+   all begin with a multiplication by the generator, where HACL\* has a
+   table compiled in, and all three curves here now have one too.  The
+   three moved by amounts that track how expensive their addition formulae
+   are and how close to the reference they started: Ed25519 key generation
+   from 3.40x to 1.91x, secp256k1 `secret-to-public` from 3.16x to 2.27x,
+   P-256 signing from 1.69x to 1.08x.  The hard part was proving a
+   compiled-in multiple of the generator correct, since `smul (2^64) g`
+   cannot simply be unfolded; the answer all three use is to state it as a
+   doubling *chain* (`Spec.Group.Smul.dblk`), which the normaliser
+   evaluates on concrete field elements at typechecking time, and convert
+   with `dblk_ok`.  The third copy cost an afternoon and verified on the
+   first attempt at every step, which is what writing the same four modules
+   twice buys.
+
+   Plan A -- compiling in the four tables of sixteen entries rather than
+   building them -- **has now been done on Ed25519 and on secp256k1**.  It
+   took Ed25519 key generation from 1.91x to **1.46x** and signing from 1.92x
+   to **1.46x**, with clang at **1.16x** and **1.15x**, and secp256k1
+   `secret-to-public` from 2.27x to **1.55x** and signing from 1.91x to
+   **1.40x**, with clang at **1.55x** and **1.50x**.  The proof obligation grows from three points to
+   sixty-four, but it does not get harder: each entry is one `assert_norm`
+   that it equals the previous entry plus the scale point, lifted to `smul`
+   by `Spec.Group.smul_add_congr`, and the entries are stored affine so the
+   normaliser is always comparing small numbers.  What made it awkward was
+   Pulse rather than F\*: sixteen `Table.table` calls yield sixteen
+   *different* existential permissions, and a permission can be halved but
+   never weakened to a stated target, so `win_add` had to be generalised from
+   one permission to four and sixteen binders threaded through the window
+   loop.  secp256k1's copy is `spec/Spec.K256.Win0` .. `Win3`,
+   `code/k256/Hacl.K256.Win0` .. `Win3` (twelve `static const uint64_t [80]`
+   arrays in radix 2^52, a hundred and ninety-two field constants), the
+   chunking half of `Hacl.Impl.Lit52` and `Hacl.K256.WinTable`; it cost an
+   afternoon, verified at every step on the first attempt, and let
+   `Hacl.K256.Tables52G` be deleted.  The same change is available on P-256,
+   at 192 field constants, and has not been made.
+7. **Ed25519's group-order arithmetic on the four-limb Montgomery core**,
+   **done**.  `Hacl.Ed25519.Scalar` was the last bit-at-a-time arithmetic in
+   the repository and the last user of the eight-limb, thirty-two-bit
+   `Spec.Bignum256` stack: reducing a SHA-512 digest was 512 rounds of
+   double-and-conditionally-subtract and multiplying two scalars was 256
+   more.  Its header explained the choice -- "here there is no `uint128`" --
+   which stopped being true with the first item of this list.  It now uses
+   `Hacl.Impl.Mont4` with the order as data, exactly as `Hacl.K256.Scalar`
+   does, and reduces a digest by cutting it into four 128-bit chunks (each
+   below `q`, so a residue for free) and folding them with three constant
+   Montgomery multiplies against `2^384 mod q`, `R^2 mod q` and `2^640 mod
+   q`; a Montgomery multiply by `R k mod q` is a plain multiply by `k`, so
+   no Barrett step and no second representation are needed.  The scalar
+   arithmetic in a signature -- `sign_expanded` less the fixed-base
+   multiplication it also does -- went from 31 us to 1.8, signing from
+   2.35x of the reference to **1.92x** with gcc and **1.62x** with clang,
+   key generation to **1.94x**/1.63x and verification to **2.22x**/1.88x.
+   What is left of the Ed25519 gap is entirely the scalar multiplication,
+   and item 6's Plan A has since taken another quarter off it: signing and
+   key generation are now **1.46x** under gcc and **1.16x** under clang.
+8. **The inner loop of the Montgomery multiply**, **done**.  The four modexp
+   rows -- RSA-PSS signing, FFDHE, the generic 2048-bit modexp and RSA-PSS
+   verification -- had come down to about 1.25x on the window alone, and
+   what was left was the `n x n` multiply itself.  Two changes took them
+   past the reference.  `Hacl.Bignum.Base.mul_row` now runs four columns to
+   an iteration with a one-at-a-time tail, which is worth 11% of the
+   multiply and took `mont_mul` to 1,990 ns against HACL\*'s 1,986; and
+   `Hacl.Bignum.Base.sqr` is now a real squaring -- strict upper triangle,
+   one doubling, then the `n` diagonal terms -- at 579 ns against the full
+   multiply's 931 and HACL\*'s `bn_sqr` at 550.  Four fifths of the
+   multiplications in a 4-bit-window exponentiation are squarings, so
+   `Hacl.Bignum.Montgomery.mont_sqr` is the one that matters and
+   `Hacl.Bignum.Exponentiation.mont_sq` now calls it instead of copying the
+   accumulator and going through `mont_mul`.  RSA-PSS signing 1.23x to
+   **0.94x**, FFDHE 1.25x to **0.96x**, the generic modexp 1.26x to
+   **0.97x**, RSA-PSS verification 1.38x to **1.14x**; under clang,
+   **0.92x**, **0.92x**, **0.94x** and **1.12x**.  What is left is the
+   reduction rather than the multiply, and the next thing to try is HACL\*'s
+   almost-Montgomery variant, which skips the conditional subtraction inside
+   the ladder and corrects once at the end.
+
+   The proof cost of this was not the algebra, which is three lemmas, but a
+   solver behaviour worth writing down: F\* proves the loop body's
+   postcondition at `j + 1` and then has to accept it as the invariant at
+   `SZ.v (SZ.add j 1sz)`, and merging two integer terms that are equal by
+   arithmetic underneath an uninterpreted `pre` or `wt` is a propagation
+   from the arithmetic theory into congruence closure that Z3, in a body
+   carrying three arrays, will not make -- it burns the whole rlimit and
+   fails.  Stated as its own lemma with the equation as a hypothesis
+   (`idx_subst`, `tri_subst`, `dg_subst`, `pw_ext`) it is instant.  The same
+   shape was already lurking in `Hacl.Bignum.Montgomery.ladder_step`, whose
+   two branches reach `2 e + SZ.v bit` and are asked for `2 e` and `2 e +
+   1`: that query had been running for over ninety minutes without
+   returning.  Splitting the conditional half out as `ladder_bit`, with a
+   contract naming only the two arrays it touches, took the whole module
+   from not terminating to **two minutes**.
+
+9. **Taking over the remaining sixty-eight compiler specialisations**, the
+   ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
+   ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and
    clang does not grant at all.  The SHA-3 sponge and permutation were the
    first, and were worth 2.4x on a short digest; BLAKE2's compression chain
@@ -2904,17 +4633,27 @@ rough order of value:
    nothing measurable, so taking *those* over is a tidying exercise rather
    than a performance one.
 
-   The ones gcc would perform and cannot were a different matter, and ML-KEM
-   was where that bit: the encapsulation and decapsulation drivers, the
-   K-PKE layer, the noise sampler and the polynomial coders all wanted
-   specialising on the five parameters, and the budget was spent.  That one
-   is done -- the parameters are marked
-   `[@@@FStar.Attributes.monomorphize]` and Custard emits a copy per
-   parameter set -- and `make clones-available` now finds nothing left to
-   specialise there.  Splitting the
-   distribution into several translation units is *not* the fix for the rest
-   -- it moves the budget rather than removing the dependency on it, and
-   costs inlining across the new boundaries.
+   The ones gcc would perform and cannot *looked* like a different matter,
+   and ML-KEM looked like where it bit: `make clones-available` wanted to
+   clone the noise sampler on eta, the polynomial encoder on the bit width,
+   key generation on the parameter set, and SHA3-512 on its constant call
+   lengths, and the budget was spent.  Raising it was worth 1.32x on
+   encapsulation and 1.24x on decapsulation.  Bisecting that number with
+   `__attribute__((noclone))`, one candidate at a time, showed it was
+   entirely the encoder -- and that the right fix was not to get the clone
+   back but to stop needing it, which is what *A bit string is a number*
+   above does.  The other twelve entries in `clones-available` were then
+   measured to be worth nothing on ML-KEM, so what remains of this item is
+   the tidying exercise after all.  Splitting the distribution into several
+   translation units is still *not* the fix -- it moves the budget rather
+   than removing the dependency on it, and costs inlining across the new
+   boundaries.
+
+   The lesson generalises, and is worth stating plainly: a specialisation
+   the compiler grants at its own discretion is usually hiding an
+   algorithmic problem that it is papering over.  `clones-available` is
+   better read as a list of places to look than as a list of speedups
+   owed.
 
    Part of this is a mechanical sweep: a table that never varies should not
    be a parameter at all.  BLAKE2's schedule, BLAKE2's initialisation vector
@@ -2929,3 +4668,134 @@ rough order of value:
    global it is applied to carries `[@@FStar.Custard.no_specialize]` so that
    Custard's specialization key stops at the name instead of unfolding to the
    initializer.  SHA-2 is the next one to take that shape.
+
+10. ~~**An expanded-key context for AES-GCM**~~ --- done; see *An
+    expanded-key context for AES-GCM* above.  The estimate here was 29 ns
+    and the measurement was 35.6, the difference being the key division
+    roadmap item 11 added after this entry was written.  Sixty-four-byte
+    AES-128-GCM went from 2.92x of EverCrypt to **2.11x** and AES-256-GCM
+    to **1.90x**.  The remaining half of the idea --- caching the GHASH key
+    powers in the context, which would make the aggregation thresholds
+    irrelevant and turn a sixty-four-byte GHASH into one group of four ---
+    is done too; see *The powers of the key belong with the key* above.
+    Sixty-four-byte AES-128-GCM is now **1.87x** and AES-256-GCM **1.71x**.
+
+11. ~~**Deferring the one-bit shift in GHASH**~~ --- done, and in a stronger
+    form than this entry proposed.  The plan was to hoist the one-bit shift
+    out of `raw_product` and do it once per aggregated group.  The shift can
+    be removed outright instead: see *Removing the one-bit shift from
+    GHASH* above.  Bulk AES-GCM gained 29%.
+
+12. **The GLV endomorphism and Shamir's trick for secp256k1.**  With the
+    small multiples of *Twenty-one is not a field element* in, secp256k1
+    signing is within **1.19x** of HACL\* and `secret-to-public` within
+    **1.28x**, but verification is still **2.12x** under gcc and 2.29x
+    under clang.  What is left is entirely algorithmic, and it is two
+    things.  First, verification computes `u1 G + u2 P` as two independent
+    scalar multiplications; Shamir's trick interleaves them against a
+    joint table and does one pass of doublings instead of two.
+    `Hacl.K256.PointMulD` currently declines it, with a docstring saying
+    why, and that docstring is the thing to revisit.  Second, secp256k1
+    has an efficiently computable endomorphism: `lambda * (x, y) ==
+    (beta x, y)`, which splits a 256-bit scalar into two 128-bit halves
+    and halves the number of doublings again.  HACL\* does both.  Together
+    they are roughly a factor of two on verification and about 30% on
+    variable-base ECDH, and neither is small: the scalar splitting needs
+    its own correctness proof, and the joint table needs the
+    constant-time lookup to range over sixteen combined points rather
+    than sixteen multiples of one.  Ed25519 verification, at **1.98x**,
+    wants the Shamir half of this for the same reason, and has no
+    endomorphism to go with it.
+
+13. ~~**Karatsuba in the bulk GHASH multiplier**~~ --- done; see
+    *Karatsuba, and what a group of blocks may put off* above.  The entry
+    proposed trading one of the four carry-less multiplies a block for the
+    Karatsuba fold, which on its own is a loss; what makes it pay is that
+    both the squares correction and the assembly of the halves are linear
+    and so may be deferred to the end of an aggregated group, the same
+    argument that defers the reduction.  Twenty-four multiplies a group of
+    eight instead of thirty-two, and the loop body down from 247
+    instructions to 194.  Bulk AES-GCM gained 9% under gcc and 14% under
+    clang; 256 KiB AES-128-GCM is now **1.43x** of EverCrypt under gcc and
+    **1.22x** under clang.
+
+14. ~~**A dedicated squaring for the field**~~ --- done; see *A square is
+    not a product* above.  Every field in the library squared by copying
+    its argument and calling the multiply, which for five limbs is
+    twenty-five wide multiplies where fifteen suffice.  Pairing the
+    off-diagonal products of the symmetric schoolbook and carrying the
+    factor of two in the word rather than in the 128-bit accumulator
+    leaves the column bounds inside what the multiply's carry chain is
+    already proved to accept, so the chain, the wrap and the narrowing are
+    reused unchanged and the whole proof is five lemmas derived from the
+    existing column lemmas with `b := a`.  X25519 gained 10-12% under gcc
+    and 11% under clang, Ed25519 verification 14% and 7%, signing 12% and
+    6%.  Ed25519's `point_double` squared inline rather than through the
+    field's `fsqr` and had to be rewritten site by site; while there,
+    `2 z1^2` became a square followed by a doubling.  The same rewrite for
+    secp256k1's radix-2^52 field verified just as easily and was reverted:
+    it is 32% faster in isolation under clang and still made
+    `k256-ecdsa-verify` 3% slower there while gaining 5% under gcc, which
+    is the measurement saying that k256's time is not in the multiply.
+    Item 12 is where it is.
+
+15. ~~**Audit the remaining masked selections against the compiler**~~ ---
+    done for six of them; see *The compiler is allowed to undo a
+    constant-time algorithm* above.  The secret-indexed table read was
+    found by accident to compile, under clang `-O3`, into a sixteen-way
+    branch cascade on the secret digit, so the question had to be asked of
+    everything else.  `tests/test_consttime.c` now asks it as a standing
+    test: the table read at P-256's four-limb width, the whole X25519
+    ladder over scalars of all-zero, all-one and alternating bits, the two
+    bignum comparisons by position of the first differing limb, ML-KEM's
+    Fujisaki--Okamoto ciphertext comparison the same way, and the AES
+    S-box over all 256 input bytes.  All six are flat to 3.5% under both
+    compilers.  What remains is the long tail: ML-KEM's compression and
+    sampling, which compare against the fixed modulus 3329 rather than
+    against a range of literals and are therefore a weaker candidate, the
+    conditional subtractions in the Montgomery reduction, and the
+    `Hacl.Secret` selects inside the point formulas.  The method is the
+    one the test uses, and the two levers where a leak is found are the
+    value barrier `Hacl.Launder.launder` and restructuring the loop so the
+    optimizer cannot see a constant trip count over the secret's range.
+
+16. ~~**Why is clang's SHA-EXT code three times gcc's?**~~ --- answered, and
+    it was not code generation at all; see *One attribute in the wrong
+    place, and three quarters of the time* above.  A pointer-arithmetic
+    helper shared by nothing but SHA-256 had been stamped with the AES
+    feature set, and clang will not inline across a `target` mismatch, so
+    thirty-nine `a + i` per block became thirty-nine calls.  `sub` is now
+    `inline_for_extraction`.  clang's SHA-256 went from 668 us to 179 on
+    256 KiB, gcc's from 227 to 190, and both SHA-256 and HMAC-SHA-256 now
+    sit at 1.16x of HACL\* best under gcc and about 1.10x under clang.
+    What remains of that row is this repository's intrinsics against Vale's
+    hand-written assembly, which is a much smaller thing to chase.
+
+17. **A vector backend.**  ChaCha20 at 5.31x, Poly1305 at 4.18x and
+    ChaCha20-Poly1305 at 5.14x against HACL\* best are the three rows that
+    no further work on scalar C can reach, and together they are most of
+    what is left in the table.  HACL\* gets them from a `vec_t` typeclass
+    instantiated at 128, 256 and 512 bits with runtime dispatch.  The same
+    shape would work here -- `Hacl.Vec128` already exists for AES-NI,
+    CLMUL and SHA-EXT, so the dispatch machinery and the clone-tracking
+    that goes with it are in place; what is missing is the four-lane and
+    eight-lane state for the stream ciphers and the lane-reduction for
+    Poly1305.  This is a project rather than a change, and it is listed
+    here mainly so the ceiling in the performance table has a name.
+
+18. **One hash core, two block implementations.**  `hash_blocks_ni`,
+    `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of
+    generic code at `S32.t`, differing from their originals in exactly one
+    call each.  They exist because the `word` typeclass is a statement about
+    *values* and offers no way for code at an abstract `t` to obtain the
+    witness `t == S32.t` that calling the SHA-EXT implementation needs.
+    Three copies is where the pattern stops being free: `Hacl.HMAC.DRBG.Core`,
+    `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and `Hacl.Streaming.HMAC` are all
+    still on the scalar path, and a fourth, fifth and sixth copy is not the
+    answer.  The answer is to make the block function a parameter of
+    `hash_blocks` --- a higher-order stateful argument whose specification is
+    exactly the one `update_block_impl` already has --- so that one generic
+    copy serves both and `inline_for_extraction` plus `monomorphize`
+    specialises it away in C.  That is a refactor of verified code rather
+    than a change, which is why it has not been done yet, but every
+    additional consumer of HMAC makes it more clearly correct.
