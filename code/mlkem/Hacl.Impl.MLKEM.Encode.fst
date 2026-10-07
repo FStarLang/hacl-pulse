@@ -73,7 +73,7 @@ module U32 = FStar.UInt32
 #push-options "--z3rlimit 150"
 
 (** [out <- ByteEncode_d f], [32 d] bytes of it. *)
-fn encode_poly (out: A.array S8.t) (f: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+fn encode_poly (out: A.array S8.t) (f: A.array zqt) (d: SZ.t)
                (#p: perm) (#vout: erased (Seq.seq S8.t)) (#vf: erased (Seq.seq zqt))
 requires A.pts_to out vout ** A.pts_to f #p vf **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
@@ -207,7 +207,7 @@ ensures A.pts_to b #p vb **
     already canonical; only [d = 12] can exceed [q], and it cannot exceed
     [2q], so the same conditional subtraction serves both and the
     implementation never has to ask which case it is in. *)
-fn decode_poly (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+fn decode_poly (dst: A.array zqt) (b: A.array S8.t) (d: SZ.t)
                (#p: perm) (#vd: erased (Seq.seq zqt)) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
@@ -366,7 +366,7 @@ let decompress_impl (d: SZ.t { 1 <= SZ.v d /\ SZ.v d <= 11 })
 
 (** The two lifted to polynomials. *)
 
-fn compress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+fn compress_poly (dst src: A.array zqt) (d: SZ.t)
                  (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\ Seq.length vd == n /\ Seq.length vs == n)
@@ -399,7 +399,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
   assert (pure (as_nats v == poly_compress (SZ.v d) (as_poly vs)));
 }
 
-fn decompress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+fn decompress_poly (dst src: A.array zqt) (d: SZ.t)
                    (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\ Seq.length vd == n /\ Seq.length vs == n /\

@@ -3439,7 +3439,7 @@ see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-eight today -- HMAC,
+diffs them against `mk/clones.baseline`.  There are sixty-five today -- HMAC,
 the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
@@ -3454,6 +3454,14 @@ FFDHE and the bare modexp are unchanged to within a quarter of a percent.
 Which is the other half of the lesson: a clone tells you the compiler found a
 specialisation, not that the specialisation pays.  The way to find out is to
 measure, and the way to keep the answer is to write it down.
+
+Sometimes a clone is not a specialisation at all.  The survey once reported
+`Hacl_Bignum_Exponentiation_mont_sq4` under `.isra`, the suffix gcc uses when
+it rewrites a signature rather than a body, and the whole content of the
+report was that `mont_sq` took a scratch array it had stopped using.  The
+clone was gcc removing a dead argument on our behalf.  Deleting the parameter
+in F\* removed the clone, which is the right outcome: an `.isra` entry is
+usually a note that the C we emitted says something we did not mean.
 
 BLAKE2 is what the policy looks like when it is clang that was losing.  gcc
 cloned the compression function and both half-rounds, once per width, on the
@@ -3834,6 +3842,21 @@ raising the budget was worth 1.32x on encapsulation.  That turned out to
 be the compiler papering over a bit-serial coder, and the fix was to
 rewrite the coder rather than to recover the clone.  Nothing in
 `clones-available` is worth anything measurable on ML-KEM now.
+
+The coder had also been specialised by hand, with `[@@monomorphize]` on
+the bit width `d` threaded through `Hacl.Impl.MLKEM.{Encode,Codec}`, and
+that annotation outlived its reason.  Once the shift-register coder
+landed the specialisation was measured against its absence, on both
+compilers, over all three parameter sets and all three operations: every
+pair agrees to within one percent, which on this machine is noise, while
+the annotation costs five hundred and twenty-six lines of C.  It has been
+removed.  The remaining `[@@monomorphize]` annotations in ML-KEM -- on
+the rank `k`, the noise parameters `eta1`/`eta2` and the compression
+widths `du`/`dv` at the KPKE and KEM level -- are the ones that pay, and
+they are the ones measured at 1.31x on encapsulation above.  The lesson
+is the same one the clone survey teaches, applied to our own hand: a
+specialisation is justified by a measurement, not by the fact that
+something downstream of it used to be slow.
 
 ## Proof engineering notes
 
@@ -4620,7 +4643,7 @@ rough order of value:
    contract naming only the two arrays it touches, took the whole module
    from not terminating to **two minutes**.
 
-9. **Taking over the remaining sixty-eight compiler specialisations**, the
+9. **Taking over the remaining sixty-five compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and
