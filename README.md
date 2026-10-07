@@ -3843,10 +3843,14 @@ HACL\* has no ML-KEM, so the table below is absolute rather than relative,
 measured the same way as the rest of this section:
 
 | operation | 512 | 768 | 1024 |
-| --- | --- | --- | --- |
-| keypair | 60 us | 98 us | 143 us |
-| encapsulate | 66 us | 105 us | 152 us |
-| decapsulate | 90 us | 137 us | 194 us |
+| --- | ---: | ---: | ---: |
+| keypair | 60 us | 97 us | 145 us |
+| encapsulate | 66 us | 104 us | 152 us |
+| decapsulate | 91 us | 138 us | 193 us |
+
+These rows come from the same `bench.c` as everything else, guarded by
+`BS_HAVE_MLKEM` because there is no HACL\* side to compile them against, and
+the table is printed by `bench/mkkem.py` rather than typed.
 
 Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
