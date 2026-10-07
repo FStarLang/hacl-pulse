@@ -902,6 +902,9 @@ ensures exists* (v: Seq.seq S64.t).
     j := vj1;
   };
   with vj vc v. assert (pts_to j vj ** pts_to c vc ** A.pts_to res v);
+  (* The loop left because [vj] reached [n]; said on its own, so that the
+     solver is not asked for it underneath {!idx_subst}'s other premises. *)
+  assert (pure (SZ.v vj == SZ.v n));
   idx_subst v vorig va (SZ.v off) (SZ.v vj) (SZ.v n) (S64.v vc) (S64.v bi);
   !c
 }
@@ -1275,10 +1278,9 @@ ensures exists* (v: Seq.seq S64.t).
                   S64.v ak * S64.v ak + S64.v x0 + S64.v vc));
     let u = sum x1 h0 S64.zero;
     carry_bit u;
-    lo_hi u;
     let r1 = lo u;
     let co = hi u;
-    assert (pure (S64.v r1 + base * S64.v co == S64.v x1 + S64.v h0));
+    carry_fact x1 h0 S64.zero r1 co u;
     A.((res.(p0) <- r0));
     with w1. assert (A.pts_to res w1);
     A.((res.(p1) <- r1));

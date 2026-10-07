@@ -419,31 +419,30 @@ let pw_q16 (a e: nat) : Lemma (pw a (2 * (8 * e)) == pw a (16 * e)) = ()
     a table multiply are a rung of the wide ladder; pulling it out of the
     loop body is what keeps the number of arrays the solver has to track at
     once down to something it will accept. *)
-fn mont_sq (acc: A.array S64.t) (res: A.array S64.t) (t: A.array S64.t)
+fn mont_sq (acc: A.array S64.t) (res: A.array S64.t)
            (wide: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
            (anum: erased nat) (e: erased nat)
-           (#vacc #vres #vt #vwide: erased (Seq.seq S64.t)) (#pn: perm)
+           (#vacc #vres #vwide: erased (Seq.seq S64.t)) (#pn: perm)
            (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
-requires A.pts_to acc vacc ** A.pts_to res vres ** A.pts_to t vt **
+requires A.pts_to acc vacc ** A.pts_to res vres **
          A.pts_to wide vwide ** A.pts_to nmod #pn vn **
   pure (Seq.length vacc == SZ.v nn /\ Seq.length vres == SZ.v nn /\
-        Seq.length vt == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        Seq.length vn == SZ.v nn /\
         Seq.length vwide == SZ.v nn + SZ.v nn /\
         0 < SZ.v nn /\ SZ.fits (SZ.v nn + SZ.v nn) /\
         num vacc < num vn /\
         num vacc == (pw anum e * wt (SZ.v nn)) % num vn /\
         (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v v1 v2 v3: Seq.seq S64.t).
-  A.pts_to acc v ** A.pts_to res v1 ** A.pts_to t v2 **
+ensures exists* (v v1 v3: Seq.seq S64.t).
+  A.pts_to acc v ** A.pts_to res v1 **
   A.pts_to wide v3 ** A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
-        Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn + SZ.v nn /\
+        Seq.length v3 == SZ.v nn + SZ.v nn /\
         num v < num vn /\
         num v == (pw anum (2 * e) * wt (SZ.v nn)) % num vn)
 {
   A.pts_to_len acc;
   A.pts_to_len res;
-  A.pts_to_len t;
   A.pts_to_len wide;
   A.pts_to_len nmod;
   modulus_low vn;
@@ -457,34 +456,34 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
 }
 
 (** Four of them, which is the whole squaring half of a rung. *)
-fn mont_sq4 (acc: A.array S64.t) (res: A.array S64.t) (t: A.array S64.t)
+fn mont_sq4 (acc: A.array S64.t) (res: A.array S64.t)
             (wide: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
             (anum: erased nat) (e: erased nat)
-            (#vacc #vres #vt #vwide: erased (Seq.seq S64.t)) (#pn: perm)
+            (#vacc #vres #vwide: erased (Seq.seq S64.t)) (#pn: perm)
             (#vn: erased (s: Seq.seq S64.t { 0 < num s /\ 0 < Seq.length s }))
-requires A.pts_to acc vacc ** A.pts_to res vres ** A.pts_to t vt **
+requires A.pts_to acc vacc ** A.pts_to res vres **
          A.pts_to wide vwide ** A.pts_to nmod #pn vn **
   pure (Seq.length vacc == SZ.v nn /\ Seq.length vres == SZ.v nn /\
-        Seq.length vt == SZ.v nn /\ Seq.length vn == SZ.v nn /\
+        Seq.length vn == SZ.v nn /\
         Seq.length vwide == SZ.v nn + SZ.v nn /\
         0 < SZ.v nn /\ SZ.fits (SZ.v nn + SZ.v nn) /\
         num vacc < num vn /\
         num vacc == (pw anum e * wt (SZ.v nn)) % num vn /\
         (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v v1 v2 v3: Seq.seq S64.t).
-  A.pts_to acc v ** A.pts_to res v1 ** A.pts_to t v2 **
+ensures exists* (v v1 v3: Seq.seq S64.t).
+  A.pts_to acc v ** A.pts_to res v1 **
   A.pts_to wide v3 ** A.pts_to nmod #pn vn **
   pure (Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
-        Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn + SZ.v nn /\
+        Seq.length v3 == SZ.v nn + SZ.v nn /\
         num v < num vn /\
         num v == (pw anum (16 * e) * wt (SZ.v nn)) % num vn)
 {
-  mont_sq acc res t wide nmod nn mu anum e;
-  mont_sq acc res t wide nmod nn mu anum (hide (2 * reveal e));
+  mont_sq acc res wide nmod nn mu anum e;
+  mont_sq acc res wide nmod nn mu anum (hide (2 * reveal e));
   pw_q4 anum (reveal e);
-  mont_sq acc res t wide nmod nn mu anum (hide (4 * reveal e));
+  mont_sq acc res wide nmod nn mu anum (hide (4 * reveal e));
   pw_q8 anum (reveal e);
-  mont_sq acc res t wide nmod nn mu anum (hide (8 * reveal e));
+  mont_sq acc res wide nmod nn mu anum (hide (8 * reveal e));
   pw_q16 anum (reveal e);
   ()
 }
@@ -589,7 +588,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
   A.pts_to_len wide;
   A.pts_to_len nmod;
   A.pts_to_len tbl;
-  mont_sq4 acc res t wide nmod nn mu anum e;
+  mont_sq4 acc res wide nmod nn mu anum e;
   mont_win_mul acc res t wide nmod tbl dig nn mu anum
                (hide (16 * reveal e)) d;
   with vpr. assert (A.pts_to res vpr);

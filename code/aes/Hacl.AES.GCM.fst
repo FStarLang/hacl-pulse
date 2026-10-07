@@ -229,8 +229,17 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to lb v1 ** pure (
   A.pts_to_len lb;
   Math.modulo_lemma (SZ.v la) (pow2 64);
   Math.modulo_lemma (SZ.v lc) (pow2 64);
-  let x = S64.classify (U64.mul (SZ.sizet_to_uint64 la) 8uL);
-  let y = S64.classify (U64.mul (SZ.sizet_to_uint64 lc) 8uL);
+  (* The two multiplications are named, and their values said, before they
+     are classified: left inline inside [classify] the refinement on
+     [U64.mul]'s result does not reach the solver. *)
+  let la64 = SZ.sizet_to_uint64 la;
+  let lc64 = SZ.sizet_to_uint64 lc;
+  let xb = U64.mul la64 8uL;
+  let yb = U64.mul lc64 8uL;
+  assert (pure (U64.v xb == 8 * SZ.v la /\ U64.v yb == 8 * SZ.v lc));
+  let x = S64.classify xb;
+  let y = S64.classify yb;
+  assert (pure (S64.v x == 8 * SZ.v la /\ S64.v y == 8 * SZ.v lc));
   Bytes.store_be #S64.t lb 0sz x;
   Bytes.store_be #S64.t lb 8sz y;
   with v1. assert A.pts_to lb v1;
