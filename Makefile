@@ -190,13 +190,20 @@ CUSTARD_ENTRIES += $(addprefix Hacl.HPKE.Suites., \
   x25519_sha256_aes128gcm_setup_base_s x25519_sha256_aes128gcm_setup_base_r \
   x25519_sha256_aes128gcm_seal x25519_sha256_aes128gcm_open)
 
+include mk/verify.mk
+
+# mk/verify.mk comes first because it is what includes .depend, and .depend is
+# what defines ALL_CHECKED_FILES.  Prerequisites are expanded when a rule is
+# read, so an extraction rule read before that include would see an empty list
+# and dist/ would silently go stale whenever a module other than the root
+# changed.  That happened once; the symptom was a committed dist/ that did not
+# match the sources it was generated from.
 include mk/extract.mk
 
 .DEFAULT_GOAL := all
 .PHONY: all
 all: verify extract compile test
 
-include mk/verify.mk
 include mk/test.mk
 include mk/clones.mk
 

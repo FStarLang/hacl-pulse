@@ -23,15 +23,16 @@ DIST_DIR  ?= $(HACL_ROOT)/dist
 #
 # hacl-pulse needs an F* with the Pulse plugin and the Pulse libraries
 # installed, new enough to have Custard, where the extraction pipeline lives.
-# A binary release tarball from FStarLang/FStar is one -- it ships Pulse --
-# and so is a checkout of master built through stage3.
+# A nightly tarball from FStarLang/FStar is one -- it ships Pulse -- and so is
+# a checkout of master built through stage3.  The tree tracks master; past
+# releases are not supported.
 #
 # Point FSTAR_EXE at the binary, or FSTAR_ROOT at either kind of tree:
 #
-#   make FSTAR_ROOT=$HOME/tools/fstar-v2026.09.20   # unpacked release
-#   make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
+#   make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-06   # unpacked nightly
+#   make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 #
-# A release has bin/fstar.exe; a checkout has stage3/out/bin/fstar.exe, and
+# A nightly has bin/fstar.exe; a checkout has stage3/out/bin/fstar.exe, and
 # the stage3 one wins if somehow both are there, because a checkout being
 # built is the case where the two disagree.
 

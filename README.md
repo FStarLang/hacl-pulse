@@ -61,17 +61,20 @@ make test       build and run the C tests
 ```
 
 You need an F\* with the Pulse plugin and libraries installed, new enough to
-have Custard.  A [binary release](https://github.com/FStarLang/FStar/releases)
+have Custard.  A [nightly build](https://github.com/FStarLang/FStar/releases)
 is one -- the tarballs ship Pulse -- and so is a checkout of `master` built
 through `stage3`.  Point the build at either:
 
 ```
-make FSTAR_ROOT=$HOME/tools/fstar-v2026.09.20   # unpacked release tarball
-make FSTAR_ROOT=$HOME/tools/fstar               # source checkout
+make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-06   # unpacked nightly
+make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 ```
 
-The tree is verified against the release above, and also against the
-`nightly-2026-10-06` build of `master`.
+The tree tracks `master`: it is verified against the `nightly-2026-10-06`
+build above, and nothing older is supported.  F\* changes the encoding its
+proofs rest on often enough that supporting a past release means carrying
+workarounds for a solver that no longer exists, which is a worse use of the
+effort than following `master` and fixing what breaks.
 
 ## Layout
 
@@ -3445,7 +3448,7 @@ see the same code.
 
 `make clones` reports where we are still relying on the compiler's judgement:
 it compiles the distribution with gcc, lists the functions it cloned, and
-diffs them against `mk/clones.baseline`.  There are sixty-five today -- HMAC,
+diffs them against `mk/clones.baseline`.  There are sixty-three today -- HMAC,
 the SHA-2 cores, the MD5 and SHA-1 blocks, ML-KEM -- and the list is meant to
 shrink.
 `make clones-available` recompiles with the budget raised and prints what gcc
@@ -3468,6 +3471,24 @@ report was that `mont_sq` took a scratch array it had stopped using.  The
 clone was gcc removing a dead argument on our behalf.  Deleting the parameter
 in F\* removed the clone, which is the right outcome: an `.isra` entry is
 usually a note that the C we emitted says something we did not mean.
+
+The survey is also what caught a stale `dist/`.  Extraction is a
+whole-program step whose real dependency is every `.checked` file, and the
+makefile said so --- but it said so in a fragment included before the one
+that defines that list, so the list was empty and `dist/` was only rebuilt
+when the *root* module changed.  Nothing warns about this: `make extract`
+exits zero and prints nothing, which is exactly what it prints when there
+is genuinely nothing to do.  The committed C was two thousand lines out of
+date before `make clones` disagreed with the baseline and gave it away.
+The include order is now fixed, with a comment saying why it matters.
+
+Regenerating against the current toolchain then moved the baseline from
+sixty-five to sixty-three.  Three of HMAC's `hmac_cat` clones went away ---
+specialised for us upstream, and absent from `clones-available`, so this is
+a takeover and not a budget loss --- and the smaller translation unit left
+enough interprocedural budget for one more of the Frodo entry points,
+`keypair_coins__Mkparams_3`, to join the siblings of its own family that
+were already there.
 
 BLAKE2 is what the policy looks like when it is clang that was losing.  gcc
 cloned the compression function and both half-rounds, once per width, on the
@@ -4649,7 +4670,7 @@ rough order of value:
    contract naming only the two arrays it touches, took the whole module
    from not terminating to **two minutes**.
 
-9. **Taking over the remaining sixty-five compiler specialisations**, the
+9. **Taking over the remaining sixty-three compiler specialisations**, the
    ones `make clones` lists: HMAC, the SHA-2 cores, the MD5 and SHA-1 blocks,
    ML-KEM.
    Each is a speedup that gcc currently grants us at its own discretion and

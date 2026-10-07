@@ -102,6 +102,7 @@ Output is one CSV per contender per offset per round, named
 | `gap.py DIR` | rank every benchmark by hacl-pulse / HACL\*-portable |
 | `gapbest.py DIR` | rank every benchmark by hacl-pulse / HACL\*-best. **This is the ranking that chooses what to work on next.** |
 | `mktable.py DIR` | regenerate the markdown performance table in the top-level `README.md`, so those numbers are never typed by hand |
+| `mkkem.py DIR` | the same for the ML-KEM table, which is absolute rather than relative because HACL\* has no ML-KEM to compare against |
 
 `CFG` is a configuration string recorded alongside the numbers; `cfg.c` prints
 EverCrypt's view of the CPU (`shaext`, `avx2`, `aesni`, `adx`, …) so that a
