@@ -330,6 +330,9 @@ let pss_encode (#t: Type0) {| word t |} (p: params t)
   : GTot (Seq.lseq S8.t (em_len emBits))
   = let hLen = hash_bytes p in
     let dbLen = em_len emBits - hLen - 1 in
+    (* Settle the length arithmetic while the context is small: once [masked]
+       is in scope the solver spends its budget on the [word] instance. *)
+    assert (dbLen + hLen + 1 == em_len emBits);
     let h = pss_h p sLen emBits (hash p msg) salt in
     seed_ok_hash p h;
     let masked = clear_top emBits (xor_seq (pss_db p sLen emBits salt) (mgf p h dbLen)) in
