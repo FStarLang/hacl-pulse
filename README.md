@@ -61,16 +61,16 @@ make test       build and run the C tests
 ```
 
 You need an F\* with the Pulse plugin and libraries installed, new enough to
-have Custard.  A [nightly build](https://github.com/FStarLang/FStar/releases)
+have Custard.  A [nightly build](https://github.com/FStarLang/FStar-nightly/releases)
 is one -- the tarballs ship Pulse -- and so is a checkout of `master` built
 through `stage3`.  Point the build at either:
 
 ```
-make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-06   # unpacked nightly
+make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-09   # unpacked nightly
 make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 ```
 
-The tree tracks `master`: it is verified against the `nightly-2026-10-06`
+The tree tracks `master`: it is verified against the `nightly-2026-10-09`
 build above, and nothing older is supported.  F\* changes the encoding its
 proofs rest on often enough that supporting a past release means carrying
 workarounds for a solver that no longer exists, which is a worse use of the

@@ -117,6 +117,16 @@ let rows_extend (r: nat) (c: pos) (m: M.matrix r c) (i: nat { i < r })
                       M.get r c m i' j' == f i' j'))
   = ()
 
+(** The same, at the flat positions {!mul_t_as} writes to. *)
+let rows_extend_t (r: nat) (m: Seq.lseq S16.t (r * nbar)) (i: nat { i < r })
+                  (f: nat -> nat -> GTot S16.t)
+  : Lemma (requires (forall (i': nat) (j': nat). i' < i /\ j' < nbar ==>
+                       Seq.index m (i' * nbar + j') == f i' j') /\
+                    (forall (j': nat). j' < nbar ==> Seq.index m (i * nbar + j') == f i j'))
+          (ensures (forall (i': nat) (j': nat). i' < i + 1 /\ j' < nbar ==>
+                      Seq.index m (i' * nbar + j') == f i' j'))
+  = ()
+
 (** The eighteen bytes A's expansion is applied to: the row index, little
     endian, then the seed. *)
 let msg_eq (i: nat { i < pow2 16 }) (seed: Seq.lseq S8.t 16) (m: Seq.lseq S8.t 18)
@@ -283,6 +293,9 @@ ensures exists* vb.
       A.((b.(SZ.add (SZ.mul vi 8sz) vj) <- res));
       j := SZ.add vj 1sz;
     };
+    with vbf. assert (A.pts_to b vbf);
+    rows_extend_t (n p) vbf (SZ.v vi)
+      (fun i' j' -> M.dot_t (n p) (n p) nbar (F.gen_matrix p vseed) vst i' j');
     i := SZ.add vi 1sz;
   };
   with vb. assert (A.pts_to b vb);
