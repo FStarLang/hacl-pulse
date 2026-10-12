@@ -7715,3 +7715,103 @@ estimate were both plausible and both wrong.  Measure the thing, not a model
 of the thing.
 
 Commit `923e8d2`.
+
+## Part 54 — ChaCha20 on AVX2, eight blocks wide
+
+### Where the ranking pointed
+
+ChaCha20 at 5.31x, Poly1305 at 4.18x and ChaCha20-Poly1305 at 5.14x of
+HACL\* best: the three rows roadmap item 17 says no scalar work can reach.
+ChaCha20 is the one with the simplest proof shape and it is also on the
+AEAD's path, so it went first.
+
+Baseline on this machine (Xeon Gold 6140, gcc `-O3`, `taskset -c 5`, focused
+microbenchmark against the extracted `dist/Hacl.c`):
+
+| | 64 B | 1 KiB | 16 KiB | 256 KiB |
+|---|---:|---:|---:|---:|
+| ChaCha20 | 2.29 ns/B | 1.70 | 1.67 | 1.66 |
+| Poly1305 | 1.72 | 0.93 | 0.88 | 0.89 |
+| ChaCha20-Poly1305 encrypt | 6.34 | 2.79 | 2.56 | 2.54 |
+
+### Implementation
+
+**`lib/Hacl.Vec256.fst`** — fifteen `assume val`s realized by
+`c/Hacl_Vec256.h`: load/store (stated on bytes), zero, broadcast, iota,
+add, xor (stated on bytes *and* lanes, so nothing has to prove xor commutes
+with the little-endian reading), rotate (16 and 8 by `vpshufb`, the rest by
+two shifts and an or), and the six permutations of an 8 x 8 word transpose.
+`lane x i` is defined, as `words_from_le 8 (vv x)`, not assumed.
+
+**`code/chacha/Hacl.Chacha20.Vec256.fst`** — vertical layout: vector *i* is
+word *i* of eight block states.  `lane_state vs j` is block *j*'s scalar
+state; every round function proves `lanes_step v0 v1 f`, and twenty rounds
+reduce to `Spec.Chacha20.rounds` lane by lane.  `init_vec` broadcasts the
+state and sets word 12 to `bcast c + iota`; `core_vec` adds the original
+back; two `transpose`s put block *j*'s 64 bytes into `t[2j]`, `t[2j+1]`;
+sixteen 32-byte load/xor/store steps finish a 512-byte chunk.
+`encrypt_blocks8` loops over whole chunks and carries the
+`target("avx2")` prologue; `encrypt_vec` is the baseline-target dispatcher
+(`mlen >= 512 && supported ()`).  `Hacl.Chacha20.encrypt` calls it and
+starts its scalar loop at the returned offset with counter
+`ctr0 + n / 64`.  The public postcondition is unchanged.
+
+About 900 lines including proofs; the scalar driver changed by four lines.
+
+### Proof notes
+
+* **Pulse's context is too big for anything quantified.**  Every step that
+  needed `forall j < 8` over a freshly updated sequence timed out inline and
+  went through in milliseconds as a separate lemma with the exact term in
+  its statement (`line_v`, `set12_lanes`, `chunk_step`, `chunk_inv`).  The
+  rule that worked: the Pulse body only names sequences and calls lemmas.
+* **Hide the predicate when the lemma is about indices.**  Combining the
+  two transposes (`i % 2` picks which one wrote `t[i]`) timed out on
+  `i % 2 <> 0 ==> i % 2 == 1` because `tr_ok` unfolded into a quantifier
+  over lanes.  Stating the lemma for an arbitrary predicate `p` and calling
+  it at `tr_ok vk` proved instantly.
+* **`--split_queries` no longer exists** in this F\*.  A timeout is
+  reported at the first sub-goal of the whole VC, which pointed at
+  innocent refinements (`p - b >= 0`) for an hour; the real cost was the
+  nonlinear body.  Bisecting in a scratch module took eight seconds per
+  run instead of three minutes.
+* The driver lemmas (`chunk_spec`, `chunk_ext`, `chunk_ctr`) are pure
+  arithmetic on `b % 512`, `b / 64` and `max_len`; `mod512_64` (512 | b
+  implies 64 | b, and `b == (b / 64) * 64`) was the missing fact.
+
+### Measured
+
+Same harness, same core:
+
+| | 64 B | 1 KiB | 16 KiB | 256 KiB |
+|---|---:|---:|---:|---:|
+| ChaCha20, gcc | 2.41 | **0.40** | **0.36** | **0.35** |
+| ChaCha20, clang | 2.51 | **0.41** | **0.38** | **0.38** |
+| ChaCha20-Poly1305 encrypt, gcc | 6.48 | **1.47** | **1.25** | **1.25** |
+
+ChaCha20 **4.7x** on 256 KiB, the AEAD **2.0x** (its remaining cost is now
+mostly Poly1305: 0.89 of 1.25 ns/B).  At 64 B the vector code is not
+entered; the 2-5% there is within this machine's run-to-run spread for an
+unchanged Poly1305 alongside it.  A first version that called into
+`encrypt_blocks8` for every message paid its stack-array setup to return 0
+on short ones; the `mlen >= 512` guard removed it.
+
+The double-round loop stays rolled (49 `vpaddd` in the whole function) and
+gcc spills about a third of the state, which sixteen registers for sixteen
+state vectors plus temporaries makes unavoidable on AVX2; AVX-512's 32
+registers and `vprold` would remove both the spills and the shuffle-based
+rotates.
+
+`make test` passes, including two new tests: `test_vec256` (every axiom
+against a scalar transcription; swapping the `hi128` immediate fails it) and
+`test_chacha20_vec` (every length 0..2,100 at six counters including the
+last legal blocks, against an RFC 8439 block function written in the test;
+the same mutation fails it too).  `make clones` **unchanged**
+at 63.
+
+### Next
+
+Poly1305 on four 64-bit lanes (roadmap 17).  Needs 64-bit-lane axioms
+(`vpmuludq`, 64-bit add/shift/and) and a reordering lemma for four Horner
+chains in *r^4*; the per-lane limb arithmetic should reuse
+`Hacl.Poly1305.Field`.
