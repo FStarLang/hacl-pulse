@@ -1,0 +1,207 @@
+/* The axioms of lib/Hacl.Vec256.fst, checked against plain C.
+ *
+ * Every `assume val` in that module is a claim about an AVX2 instruction that
+ * F* cannot check.  This test checks each of them, on edge cases and then on
+ * pseudo-random inputs, against a scalar transcription of the axiom as
+ * written there: lane i is bytes 4i .. 4i+3 little-endian, `add32` adds
+ * modulo 2^32 lane by lane, the unpacks and the 128-bit permutes take the
+ * lanes the axiom lists.  Every rotation distance from 1 to 31 is tried,
+ * not just the four ChaCha20 uses, because the axiom quantifies over all of
+ * them.
+ *
+ * It is skipped, not failed, on a machine without AVX2.  The other half of
+ * the evidence is tests/test_chacha20.c and tests/test_chacha20_vec.c, whose
+ * long messages go through Hacl.Chacha20.Vec256 on any machine with AVX2.
+ */
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "Hacl_Vec256.h"
+
+static int failures = 0;
+
+static uint64_t prng = 0x9e3779b97f4a7c15ULL;
+
+static uint32_t next32(void) {
+  prng ^= prng << 13;
+  prng ^= prng >> 7;
+  prng ^= prng << 17;
+  return (uint32_t)(prng >> 16);
+}
+
+static void fill(uint8_t *p, size_t n) {
+  for (size_t i = 0; i < n; i++) p[i] = (uint8_t)next32();
+}
+
+static uint32_t lane(const uint8_t b[32], int i) {
+  return (uint32_t)b[4 * i] | (uint32_t)b[4 * i + 1] << 8 |
+         (uint32_t)b[4 * i + 2] << 16 | (uint32_t)b[4 * i + 3] << 24;
+}
+
+static uint32_t rotl32(uint32_t x, unsigned s) {
+  return (x << s) | (x >> (32 - s));
+}
+
+static void report(const char *name, bool ok) {
+  if (ok) {
+    printf("  ok   %s\n", name);
+  } else {
+    printf("  FAIL %s\n", name);
+    failures++;
+  }
+}
+
+#if defined(__x86_64__) || defined(__i386__)
+
+#define AVX2 __attribute__((target("avx2")))
+
+/* The lanes each permutation axiom names, as indices into a ++ b: 0..7 are
+   lanes of a, 8..15 lanes of b. */
+static const int perm_lanes[6][8] = {
+    {0, 8, 1, 9, 4, 12, 5, 13},       /* unpacklo32 */
+    {2, 10, 3, 11, 6, 14, 7, 15},     /* unpackhi32 */
+    {0, 1, 8, 9, 4, 5, 12, 13},       /* unpacklo64 */
+    {2, 3, 10, 11, 6, 7, 14, 15},     /* unpackhi64 */
+    {0, 1, 2, 3, 8, 9, 10, 11},       /* lo128 */
+    {4, 5, 6, 7, 12, 13, 14, 15},     /* hi128 */
+};
+
+static const char *perm_names[6] = {"unpacklo32", "unpackhi32", "unpacklo64",
+                                    "unpackhi64", "lo128",      "hi128"};
+
+AVX2 static Hacl_Vec256_t perm(int k, Hacl_Vec256_t a, Hacl_Vec256_t b) {
+  switch (k) {
+  case 0: return Hacl_Vec256_unpacklo32(a, b);
+  case 1: return Hacl_Vec256_unpackhi32(a, b);
+  case 2: return Hacl_Vec256_unpacklo64(a, b);
+  case 3: return Hacl_Vec256_unpackhi64(a, b);
+  case 4: return Hacl_Vec256_lo128(a, b);
+  default: return Hacl_Vec256_hi128(a, b);
+  }
+}
+
+/* rotl is always_inline and each call site in the library passes a literal;
+   a switch gives every distance its own literal call. */
+AVX2 static Hacl_Vec256_t rotl_by(Hacl_Vec256_t a, unsigned s) {
+  switch (s) {
+#define R(n) case n: return Hacl_Vec256_rotl(a, n);
+  R(1) R(2) R(3) R(4) R(5) R(6) R(7) R(8) R(9) R(10) R(11) R(12) R(13) R(14)
+  R(15) R(16) R(17) R(18) R(19) R(20) R(21) R(22) R(23) R(24) R(25) R(26)
+  R(27) R(28) R(29) R(30) R(31)
+#undef R
+  default: return a;
+  }
+}
+
+AVX2 static void run(int rounds) {
+  uint8_t a[32], b[32], r[32], buf[40];
+  bool ok;
+
+  /* load/store: bytes in memory order, at every misalignment. */
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(buf, sizeof buf);
+    for (int off = 0; off <= 8; off++) {
+      uint8_t back[40];
+      memset(back, 0xa5, sizeof back);
+      Hacl_Vec256_store(back + off, Hacl_Vec256_load(buf + off));
+      ok &= memcmp(back + off, buf + off, 32) == 0;
+      for (int i = 0; i < off; i++) ok &= back[i] == 0xa5;
+      for (int i = off + 32; i < 40; i++) ok &= back[i] == 0xa5;
+    }
+  }
+  report("vec256 load/store", ok);
+
+  Hacl_Vec256_store(r, Hacl_Vec256_zero());
+  ok = true;
+  for (int i = 0; i < 32; i++) ok &= r[i] == 0;
+  report("vec256 zero", ok);
+
+  Hacl_Vec256_store(r, Hacl_Vec256_iota());
+  ok = true;
+  for (int i = 0; i < 8; i++) ok &= lane(r, i) == (uint32_t)i;
+  report("vec256 iota", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    uint32_t x = n == 0 ? 0 : n == 1 ? 0xffffffffu : next32();
+    Hacl_Vec256_store(r, Hacl_Vec256_bcast(x));
+    for (int i = 0; i < 8; i++) ok &= lane(r, i) == x;
+  }
+  report("vec256 bcast", ok);
+
+  /* add32 carries must stop at lane boundaries. */
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    if (n == 0) {
+      memset(a, 0xff, 32);
+      memset(b, 0, 32);
+      b[0] = 1;
+      b[16] = 1;
+    }
+    Hacl_Vec256_store(r, Hacl_Vec256_add32(Hacl_Vec256_load(a),
+                                           Hacl_Vec256_load(b)));
+    for (int i = 0; i < 8; i++) ok &= lane(r, i) == lane(a, i) + lane(b, i);
+  }
+  report("vec256 add32", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    Hacl_Vec256_store(r, Hacl_Vec256_xor(Hacl_Vec256_load(a),
+                                         Hacl_Vec256_load(b)));
+    for (int i = 0; i < 32; i++) ok &= r[i] == (uint8_t)(a[i] ^ b[i]);
+  }
+  report("vec256 xor", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    if (n == 0) memset(a, 0x80, 32);
+    for (unsigned s = 1; s < 32; s++) {
+      Hacl_Vec256_store(r, rotl_by(Hacl_Vec256_load(a), s));
+      for (int i = 0; i < 8; i++) ok &= lane(r, i) == rotl32(lane(a, i), s);
+    }
+  }
+  report("vec256 rotl, every distance", ok);
+
+  for (int k = 0; k < 6; k++) {
+    char name[64];
+    ok = true;
+    for (int n = 0; n < rounds; n++) {
+      fill(a, 32);
+      fill(b, 32);
+      Hacl_Vec256_store(r, perm(k, Hacl_Vec256_load(a), Hacl_Vec256_load(b)));
+      for (int i = 0; i < 8; i++) {
+        int src = perm_lanes[k][i];
+        uint32_t want = src < 8 ? lane(a, src) : lane(b, src - 8);
+        ok &= lane(r, i) == want;
+      }
+    }
+    snprintf(name, sizeof name, "vec256 %s", perm_names[k]);
+    report(name, ok);
+  }
+}
+
+#endif
+
+int main(void) {
+  if (!Hacl_Vec256_supported()) {
+    printf("  skip vec256: no AVX2 on this machine\n");
+    return 0;
+  }
+#if defined(__x86_64__) || defined(__i386__)
+  run(1000);
+#endif
+  if (failures) {
+    printf("%d vec256 check(s) failed\n", failures);
+    return 1;
+  }
+  printf("all vec256 axioms agree with a scalar transcription\n");
+  return 0;
+}

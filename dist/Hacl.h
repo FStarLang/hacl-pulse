@@ -9,6 +9,7 @@
 
 #include "Hacl_Vec128.h"
 #include "Hacl_Launder.h"
+#include "Hacl_Vec256.h"
 
 #ifdef __cplusplus
 extern "C" {
