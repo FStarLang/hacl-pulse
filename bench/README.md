@@ -77,6 +77,12 @@ BENCH_CPU=2 BENCH_CC=gcc   BENCH_OUT=/tmp/r60g ./table.sh 3
 BENCH_CPU=2 BENCH_CC=clang BENCH_OUT=/tmp/r60c ./table.sh 3
 ```
 
+`table.sh` rebuilds HACL\* with `BENCH_CC` into
+`$HACL_STAR/dist/build-$BENCH_CC` the first time it is run for a compiler, so
+that both sides of a clang run are compiled by clang.  Until Part 57 of
+`REPORT.md` the clang table linked the checkout's gcc-built `libevercrypt.a`,
+which charged clang's own code-generation differences to hacl-pulse.
+
 Three rounds take roughly half an hour per compiler. Both compilers are always
 run: gcc and clang disagree about this code often enough, and by large enough
 margins, that a single-compiler result has twice been actively misleading — see
