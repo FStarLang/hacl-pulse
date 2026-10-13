@@ -3217,7 +3217,8 @@ seconds.
 
 ## Performance
 
-Measured on an AMD EPYC 7662 (Zen 2), gcc 15.2.0 `-O3`, pinned to one core,
+Measured on an Intel Xeon Gold 6140 (Skylake-SP; AVX2, AVX-512, ADX, no SHA
+extensions), gcc 15.2.0 `-O3`, against HACL\* `504c298`, pinned to one core,
 three rounds at two link-time code offsets, all three contenders interleaved
 inside each round, per-benchmark minimum over the runs whose canary says the
 core was healthy (see
@@ -3253,53 +3254,58 @@ reference**.
 
 | primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| SHA3-256 | 256 KiB | 1.0 ms | 1.8 ms | **0.55x** | 1.8 ms | 0.55x |
-| SHA-512 | 256 KiB | 756 us | 1.4 ms | **0.55x** | 1.4 ms | 0.56x |
-| HMAC-SHA-512 | 256 KiB | 757 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
-| SHAKE128 | 256 KiB | 882 us | 1.5 ms | **0.59x** | 1.5 ms | 0.60x |
-| BLAKE2b | 256 KiB | 382 us | 438 us | **0.87x** | 312 us | 1.22x |
-| RSA-PSS-2048 sign | -- | 4.5 ms | 4.7 ms | **0.95x** | 4.7 ms | 0.95x |
-| FFDHE-2048 | -- | 4.4 ms | 4.6 ms | **0.95x** | 4.6 ms | 0.96x |
-| RSA-2048 modexp | -- | 4.4 ms | 4.5 ms | **0.98x** | 4.5 ms | 0.98x |
-| P-256 ECDSA verify | -- | 436 us | 425 us | **1.03x** | 428 us | 1.02x |
-| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.03x** | 1.5 ms | 1.04x |
-| P-256 ECDH | -- | 162 us | 155 us | **1.04x** | 156 us | 1.04x |
-| P-256 ECDSA sign | -- | 176 us | 169 us | **1.05x** | 169 us | 1.04x |
-| BLAKE2s | 256 KiB | 605 us | 571 us | **1.06x** | 573 us | 1.06x |
-| HMAC-SHA-256 | 256 KiB | 190 us | 164 us | **1.16x** | 1.1 ms | 0.17x |
-| SHA-256 | 256 KiB | 189 us | 163 us | **1.16x** | 1.1 ms | 0.17x |
-| secp256k1 ECDSA sign | -- | 76 us | 65 us | **1.16x** | 65 us | 1.16x |
-| RSA-PSS-2048 verify | -- | 166 us | 143 us | **1.16x** | 143 us | 1.16x |
-| NaCl secretbox | 256 KiB | 770 us | 643 us | **1.20x** | 644 us | 1.20x |
-| Ed25519 sign | -- | 77 us | 64 us | **1.20x** | 64 us | 1.21x |
-| Salsa20 | 256 KiB | 533 us | 435 us | **1.23x** | 435 us | 1.22x |
-| X25519 | -- | 50 us | 36 us | **1.39x** | 44 us | 1.14x |
-| MD5 | 256 KiB | 626 us | 433 us | **1.44x** | 432 us | 1.45x |
-| AES-128-GCM | 256 KiB | 103 us | 71 us | **1.44x** | 72 us | 1.44x |
-| Poly1305 | 256 KiB | 236 us | 57 us | **4.13x** | 208 us | 1.14x |
-| ChaCha20-Poly1305 | 256 KiB | 761 us | 148 us | **5.13x** | 1.1 ms | 0.72x |
-| ChaCha20 | 256 KiB | 495 us | 93 us | **5.31x** | 852 us | 0.58x |
+| SHA3-256 | 256 KiB | 1.1 ms | 2.3 ms | **0.47x** | 2.3 ms | 0.47x |
+| SHAKE128 | 256 KiB | 870 us | 1.8 ms | **0.47x** | 1.8 ms | 0.47x |
+| SHA-512 | 256 KiB | 784 us | 1.3 ms | **0.60x** | 1.3 ms | 0.60x |
+| HMAC-SHA-512 | 256 KiB | 811 us | 1.3 ms | **0.62x** | 1.3 ms | 0.62x |
+| NaCl secretbox | 256 KiB | 565 us | 604 us | **0.93x** | 605 us | 0.93x |
+| Poly1305 | 256 KiB | 47 us | 49 us | **0.97x** | 180 us | 0.26x |
+| FFDHE-2048 | -- | 4.7 ms | 4.8 ms | **0.98x** | 4.8 ms | 0.98x |
+| RSA-PSS-2048 sign | -- | 4.8 ms | 4.8 ms | **0.99x** | 4.8 ms | 0.99x |
+| RSA-2048 modexp | -- | 4.7 ms | 4.7 ms | **1.01x** | 4.7 ms | 1.01x |
+| SHA-1 | 256 KiB | 1.6 ms | 1.6 ms | **1.02x** | 1.6 ms | 1.01x |
+| SHA-256 | 256 KiB | 1.2 ms | 1.2 ms | **1.02x** | 1.2 ms | 1.02x |
+| HMAC-SHA-256 | 256 KiB | 1.2 ms | 1.2 ms | **1.03x** | 1.2 ms | 1.02x |
+| ChaCha20-Poly1305 | 256 KiB | 150 us | 144 us | **1.04x** | 989 us | 0.15x |
+| ChaCha20 | 256 KiB | 100 us | 92 us | **1.09x** | 805 us | 0.12x |
+| Salsa20 | 256 KiB | 501 us | 424 us | **1.18x** | 424 us | 1.18x |
+| secp256k1 ECDSA sign | -- | 71 us | 58 us | **1.23x** | 58 us | 1.23x |
+| RSA-PSS-2048 verify | -- | 177 us | 139 us | **1.27x** | 140 us | 1.27x |
+| BLAKE2s | 256 KiB | 575 us | 448 us | **1.28x** | 544 us | 1.06x |
+| P-256 ECDSA verify | -- | 464 us | 361 us | **1.28x** | 362 us | 1.28x |
+| Ed25519 sign | -- | 71 us | 55 us | **1.29x** | 55 us | 1.29x |
+| BLAKE2b | 256 KiB | 390 us | 301 us | **1.30x** | 342 us | 1.14x |
+| X25519 | -- | 43 us | 33 us | **1.32x** | 38 us | 1.15x |
+| P-256 ECDH | -- | 175 us | 132 us | **1.33x** | 132 us | 1.33x |
+| P-256 ECDSA sign | -- | 193 us | 144 us | **1.34x** | 144 us | 1.34x |
+| MD5 | 256 KiB | 619 us | 395 us | **1.57x** | 395 us | 1.57x |
+| AES-128-GCM | 256 KiB | 99 us | 48 us | **2.04x** | 48 us | 2.04x |
 
-Against what HACL\* can actually do on this machine, most of the suite is
-within 20% and five primitives are ahead: SHA-3 and SHAKE, where HACL\* has
-no vector sponge; SHA-512 and HMAC-SHA-512, where it has none either; and
-BLAKE2b, where HACL\*'s own AVX2 implementation is *slower* on this machine
-than its own scalar C (439 us against 311), so "best" picks the wrong one.
-Modular exponentiation is level.  Everything from P-256 down to AES-GCM sits
-between 1.03x and 1.44x, which is the cost of a portable scalar
-implementation meeting hand-tuned scalar code.
+Against what HACL\* can actually do on this machine, all but two rows are
+within 1.35x, and nine are level or ahead: SHA-3 and SHAKE, where
+HACL\* has no vector sponge; SHA-512 and HMAC-SHA-512, where it has none
+either; the modular exponentiations; NaCl secretbox; and Poly1305, which now
+matches HACL\*'s AVX2 Poly1305.  This processor has no SHA extensions, so
+SHA-1 and SHA-256 are scalar against scalar here and level.  Everything from
+Salsa20 down to MD5 sits between 1.18x and 1.57x, which is the cost of a
+portable scalar implementation meeting hand-tuned scalar code, and the BLAKE2
+rows are behind HACL\*'s vectorized BLAKE2 rather than its scalar one.
+AES-GCM at 2.04x is the new bottom row: its reference is Vale's assembly,
+which interleaves AES-NI and `PCLMULQDQ` across blocks in a way the intrinsic
+code here does not yet.
 
-The honest ceiling is the bottom three rows.  ChaCha20 at 5.32x, Poly1305 at
-4.14x and ChaCha20-Poly1305 at 5.15x are not implementation defects; they are
-what thirty-two-byte-wide AVX2 lanes are worth on a stream cipher and a
-one-pass MAC, and no amount of work on scalar C will close them.  Closing
-those three needs a vector backend, and all three now have one (see
-[ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)
-and [Poly1305, five limbs of twenty-six bits](#poly1305-five-limbs-of-twenty-six-bits)):
-on a Xeon Gold 6140 ChaCha20 is 4.7x faster than the row above, Poly1305
-4.4x and the AEAD 4.4x, which would put all three within about 1.15x of
-HACL\* best's AVX2 code; the table has not been regenerated on the reference
-machine yet.
+The rows that were the honest ceiling are not any more.  ChaCha20,
+Poly1305 and ChaCha20-Poly1305 were at 5.31x, 4.13x and 5.13x in the previous
+table, measured on an AMD EPYC 7662: they were what thirty-two-byte-wide AVX2
+lanes are worth on a stream cipher and a one-pass MAC, and no amount of work
+on scalar C could close them.  All three now have a verified AVX2 backend
+(see [ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)
+and [Poly1305, five limbs of twenty-six bits](#poly1305-five-limbs-of-twenty-six-bits))
+and sit at 1.09x, 0.97x and 1.04x under gcc, and 1.10x, 1.00x and 1.07x under
+clang.
+
+The remainder of this section was written against the EPYC 7662 table, which
+has SHA extensions; the numbers in it are from that machine.
 
 Two rows were recently somewhere else.  HMAC-SHA-256 was the worst in the
 table at 6.84x, because the SHA-EXT dispatch existed only in the one-shot
@@ -3314,7 +3320,7 @@ Then both SHA-256 rows moved again, from 227 us to 190, and under clang from
 see [One attribute in the wrong place, and three quarters of the
 time](#one-attribute-in-the-wrong-place-and-three-quarters-of-the-time).
 
-That leaves SHA-256 and HMAC-SHA-256 tied at 1.16x against Vale's SHA-EXT
+That left SHA-256 and HMAC-SHA-256 tied at 1.16x against Vale's SHA-EXT
 assembly, which is this repository's intrinsics against hand-written assembly
 rather than scalar against vector, and is the narrowest of the remaining
 gaps.  Every vectorized primitive still loses at 64 bytes, where the setup
@@ -4907,10 +4913,10 @@ rough order of value:
     What remains of that row is this repository's intrinsics against Vale's
     hand-written assembly, which is a much smaller thing to chase.
 
-17. **A vector backend.**  ChaCha20 at 5.31x, Poly1305 at 4.18x and
-    ChaCha20-Poly1305 at 5.14x against HACL\* best are the three rows that
-    no further work on scalar C can reach, and together they are most of
-    what is left in the table.  **ChaCha20 is done**: `lib/Hacl.Vec256.fst`
+17. **A vector backend -- done.**  ChaCha20 at 5.31x, Poly1305 at 4.18x
+    and ChaCha20-Poly1305 at 5.14x against HACL\* best were the three rows
+    that no further work on scalar C could reach; they are now 1.09x, 0.97x
+    and 1.04x.  **ChaCha20 is done**: `lib/Hacl.Vec256.fst`
     is the AVX2 counterpart of `Hacl.Vec128`, fifteen axioms each tested by
     `tests/test_vec256.c`, and `Hacl.Chacha20.Vec256` is an eight-lane
     vertical ChaCha20 proved lane by lane against the scalar specification
@@ -4919,8 +4925,7 @@ rough order of value:
     64-bit lane, and `Spec.Poly1305.Vec` proves them the specification's one
     chain in *r* (4.4x on 256 KiB, Part 55); `lib/Hacl.Vec256.fst` grew to
     twenty-three axioms.  What remains is wider: AVX-512 ChaCha20 (sixteen
-    lanes) and Poly1305 (eight), both on the same pattern, and a
-    regeneration of the table on the reference machine.
+    lanes) and Poly1305 (eight), both on the same pattern.
 
 18. **One hash core, two block implementations.**  `hash_blocks_ni`,
     `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of

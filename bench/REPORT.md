@@ -7883,3 +7883,23 @@ against a bignum reference in the test).  `make clones` **unchanged** at 63.
 
 AVX-512 (ChaCha20 sixteen lanes, Poly1305 eight); regenerate the HACL\*
 comparison table on the reference machine.
+
+## Part 56 — The table, regenerated after the vector backends
+
+`table.sh 3` under gcc 15.2.0 and clang 21.1.8 on the Xeon Gold 6140 (no SHA
+extensions; EverCrypt sees `shaext=0 avx2=1 aesni=1 pclmul=1 bmi2=1 adx=1`),
+against HACL\* `504c298`.  Canaries healthy on every run.  The README table
+is the gcc run; it replaces the EPYC 7662 table.
+
+| Row (vs HACL\* best) | EPYC, before | Xeon gcc | Xeon clang |
+|---|---|---|---|
+| ChaCha20, 256 KiB | 5.31x | 1.09x | 1.10x |
+| Poly1305, 256 KiB | 4.13x | 0.97x | 1.00x |
+| ChaCha20-Poly1305, 256 KiB | 5.13x | 1.04x | 1.07x |
+
+Against portable HACL\* the three are now 0.12x, 0.26x and 0.15x.  The new
+bottom rows are AES-128-GCM (2.04x gcc / 1.84x clang, against Vale) and MD5
+(1.57x / 1.92x).  Without SHA-EXT, SHA-256 is scalar against scalar here
+(1.02x gcc, 1.10x clang).  Under clang the curve rows are notably worse than
+under gcc (X25519 1.71x, secp256k1 sign 1.59x, Ed25519 sign 1.48x) — worth a
+look on this machine.
