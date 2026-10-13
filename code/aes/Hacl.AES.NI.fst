@@ -278,13 +278,19 @@ let inc32_vec (c: Vec.t) : Vec.t =
   Vec.bswap (Vec.add32 (Vec.bswap c) (Vec.lane_one ()))
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
-let inc32_vec_ok (c: Vec.t)
-  : Lemma (Vec.bv (inc32_vec c) == inc32 (Vec.bv c))
+(** The same, for a counter already held reversed: [a] is [c] reversed,
+    and the packed add gives the next counter, still reversed.  A loop that
+    makes several counters in a row keeps them reversed between steps and
+    reverses each one once, rather than twice. *)
+let inc32_sw_ok (c a: Vec.t)
+  : Lemma (requires Vec.bv a == Spec.CLMUL.bswap (Vec.bv c))
+          (ensures Vec.bv (Vec.bswap (Vec.add32 a (Vec.lane_one ()))) == inc32 (Vec.bv c) /\
+                   Vec.bv (Vec.add32 a (Vec.lane_one ())) ==
+                     Spec.CLMUL.bswap (inc32 (Vec.bv c)))
   = let one = Vec.lane_one () in
-    let a = Vec.bswap c in
     let s = Vec.add32 a one in
-    assert (Vec.bv a == Spec.CLMUL.bswap (Vec.bv c));
-    assert (Vec.bv (inc32_vec c) == Spec.CLMUL.bswap (Vec.bv s));
+    assert (Vec.bv (Vec.bswap s) == Spec.CLMUL.bswap (Vec.bv s));
+    Spec.CLMUL.bswap_involutive (Vec.bv s);
     assert_norm (pow2 32 == 4294967296);
     let aux (i: nat { i < 4 })
       : Lemma (S32.v (Spec.SHANI.lane (Vec.vv s) i) ==
@@ -302,6 +308,10 @@ let inc32_vec_ok (c: Vec.t)
     Math.small_mod (lane_of (Vec.bv a) 2) (pow2 32);
     Math.small_mod (lane_of (Vec.bv a) 3) (pow2 32);
     inc32_lanes (Vec.bv c) (Vec.bv s)
+
+let inc32_vec_ok (c: Vec.t)
+  : Lemma (Vec.bv (inc32_vec c) == inc32 (Vec.bv c))
+  = inc32_sw_ok c (Vec.bswap c)
 #pop-options
 
 (** {2 Four counter-mode blocks at once}

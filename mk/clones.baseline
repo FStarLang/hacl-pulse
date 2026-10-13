@@ -1,5 +1,6 @@
 Hacl_AES_GCM_j0_impl__Mkparams
 Hacl_AES_GF128_NI_ghash_loop4_ni
+Hacl_AES_GF128_NI_ghash_loop8_ni
 Hacl_Bignum_Exponentiation_mod_exp_consttime
 Hacl_Ed25519_Point_point_double
 Hacl_Frodo_KEM_dec__Mkparams
