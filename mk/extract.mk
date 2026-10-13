@@ -23,8 +23,7 @@
 # instances get pinned down -- is rejected.  Naming the functions that are
 # meant to be callable from C says what we mean anyway.
 
-CUSTARD_FLAGS += --codegen Custard
-CUSTARD_FLAGS += --custard_backend C
+CUSTARD_FLAGS += --codegen C
 CUSTARD_FLAGS += --custard_monomorphize_types true
 
 # Custard normalizes each monomorphized argument and each specialized
