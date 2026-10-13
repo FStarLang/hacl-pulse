@@ -133,10 +133,17 @@ let pad_block (msg: Seq.seq S8.t) (tmp: Seq.seq S8.t) (off: nat) (blen: nat)
 
 #pop-options
 
-(** {2 The block loop} *)
+(** {2 The block loop}
+
+    Whole multiples of four blocks go to [Hacl.Poly1305.Vec256.absorb_vec]
+    first, when the processor and the length allow; the rest go one block at
+    a time.  Inlined, because once the call to the vector path is in it the
+    C compiler stops inlining it by itself, and the one-block loop is slower
+    out of line. *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
+inline_for_extraction
 fn absorb_blocks (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
                  (e: A.array S64.t) (msg: A.array S8.t) (n: SZ.t)
                  (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
@@ -158,8 +165,9 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
 {
   A.pts_to_len h;
   A.pts_to_len msg;
-  repeati_g_zero (Spec.bstep vmsg 0 (feval vr)) (reveal acc);
-  let mut i = 0sz;
+  A.pts_to_len e;
+  let k = Hacl.Poly1305.Vec256.absorb_vec h r d msg n #vh #vr #vd #pm #vmsg #acc;
+  let mut i = k;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vh1: Seq.seq S64.t) (vd1: Seq.seq S64.t)
                     (ve1: Seq.seq S64.t).

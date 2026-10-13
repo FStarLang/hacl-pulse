@@ -107,6 +107,46 @@ HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_hi128(Hacl_Vec256_t a, Hacl_Vec256_t b) {
   return _mm256_permute2x128_si256(a, b, 0x31);
 }
 
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_add64(Hacl_Vec256_t a,
+                                            Hacl_Vec256_t b) {
+  return _mm256_add_epi64(a, b);
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_mul32(Hacl_Vec256_t a,
+                                            Hacl_Vec256_t b) {
+  return _mm256_mul_epu32(a, b);
+}
+
+/* The shift count is a register operand so that a non-constant argument
+ * still compiles; every call site passes a literal, which the compiler
+ * folds into the immediate form. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_shr64(Hacl_Vec256_t a, uint32_t s) {
+  return _mm256_srl_epi64(a, _mm_cvtsi32_si128((int)s));
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_shl64(Hacl_Vec256_t a, uint32_t s) {
+  return _mm256_sll_epi64(a, _mm_cvtsi32_si128((int)s));
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_mask26(Hacl_Vec256_t a) {
+  return _mm256_and_si256(a, _mm256_set1_epi64x(0x3ffffff));
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_bcast64(uint64_t x) {
+  return _mm256_set1_epi64x((long long)x);
+}
+
+/* `_mm256_set_epi64x` takes its arguments from the top lane down. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_set64(uint64_t x0, uint64_t x1,
+                                            uint64_t x2, uint64_t x3) {
+  return _mm256_set_epi64x((long long)x3, (long long)x2, (long long)x1,
+                           (long long)x0);
+}
+
+HACL_VEC256 void Hacl_Vec256_store64(uint64_t *p, Hacl_Vec256_t x) {
+  _mm256_storeu_si256((__m256i *)(void *)p, x);
+}
+
 static inline bool Hacl_Vec256_supported(void) {
 #if defined(__GNUC__)
   __builtin_cpu_init();
@@ -164,7 +204,33 @@ HACL_VEC256_STUB2(Hacl_Vec256_unpacklo64)
 HACL_VEC256_STUB2(Hacl_Vec256_unpackhi64)
 HACL_VEC256_STUB2(Hacl_Vec256_lo128)
 HACL_VEC256_STUB2(Hacl_Vec256_hi128)
+HACL_VEC256_STUB2(Hacl_Vec256_add64)
+HACL_VEC256_STUB2(Hacl_Vec256_mul32)
 #undef HACL_VEC256_STUB2
+static inline Hacl_Vec256_t Hacl_Vec256_shr64(Hacl_Vec256_t a, uint32_t s) {
+  (void)s;
+  return a;
+}
+static inline Hacl_Vec256_t Hacl_Vec256_shl64(Hacl_Vec256_t a, uint32_t s) {
+  (void)s;
+  return a;
+}
+static inline Hacl_Vec256_t Hacl_Vec256_mask26(Hacl_Vec256_t a) { return a; }
+static inline Hacl_Vec256_t Hacl_Vec256_bcast64(uint64_t x) {
+  Hacl_Vec256_t r;
+  for (int i = 0; i < 4; i++) memcpy(&r.w[2 * i], &x, 8);
+  return r;
+}
+static inline Hacl_Vec256_t Hacl_Vec256_set64(uint64_t x0, uint64_t x1,
+                                            uint64_t x2, uint64_t x3) {
+  Hacl_Vec256_t r;
+  uint64_t x[4] = {x0, x1, x2, x3};
+  memcpy(&r, x, 32);
+  return r;
+}
+static inline void Hacl_Vec256_store64(uint64_t *p, Hacl_Vec256_t x) {
+  memcpy(p, &x, 32);
+}
 static inline bool Hacl_Vec256_supported(void) { return false; }
 
 #endif

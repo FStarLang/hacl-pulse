@@ -7815,3 +7815,71 @@ Poly1305 on four 64-bit lanes (roadmap 17).  Needs 64-bit-lane axioms
 (`vpmuludq`, 64-bit add/shift/and) and a reordering lemma for four Horner
 chains in *r^4*; the per-lane limb arithmetic should reuse
 `Hacl.Poly1305.Field`.
+
+## Part 55 — Poly1305 on AVX2, four blocks wide
+
+### Implementation
+
+**`lib/Hacl.Vec256.fst`** — eight more `assume val`s on 64-bit lanes
+(`add64`, `mul32` = `vpmuludq`, `shr64`, `shl64`, `mask26`, `bcast64`,
+`set64`, `store64`), each stated on naturals with the wrap written out.
+`lane64 v i` is a definition: lanes `2i` and `2i+1` as 32-bit words, low
+first.  Realized in `c/Hacl_Vec256.h`; `tests/test_vec256.c` checks each
+against a scalar transcription (every shift distance included).
+
+**`spec/Spec.Poly1305.Vec.fst`** — `horner_init`, `horner_step`,
+`horner_final`: four chains in *r^4* over blocks ≡ j (mod 4), finished by
+multiplying lane j by *r^(4-j)* and summing, are congruent to the
+specification's chain in *r*.
+
+**`code/poly1305/Hacl.Poly1305.Vec256.fst`** — radix 2^26, five vectors per
+accumulator.  `vfmul` is the scalar `fmul` widened (25 `vpmuludq`, the same
+two-way carry chain).  Multipliers *r^2..r^4* are computed with scalar
+`fmul` and are 27-bounded after carrying, hence `mul_reduce_ok27`.  The block
+load is two 256-bit loads plus `unpacklo64`/`unpackhi64`, which act per
+128-bit half, so lanes hold blocks *g, g+2, g+1, g+3*; instead of a permute,
+the final multiplier is `set64 (r^4, r^2, r^3, r)`.  The lanes are summed via
+`store64`, added as scalar limbs and carried.  `absorb_vec` dispatches when
+`n ≥ 8` blocks and AVX2 is present, consuming `4⌊n/4⌋` blocks; the scalar
+loop in `absorb_blocks` resumes there.  Public spec unchanged.
+
+### Proof notes
+
+All-lane predicates (`vbounded`, `vmul_post`, `vload`, `vsum`, `vbc`,
+`vinv`) are opaque; lemmas open them and argue per lane.  Code uses total raw
+intrinsics.  Pitfalls: `S64.zero` is a global and Custard rejects it inside
+the `avx2` target closure (use `S64.classify 0uL`, ghost side too);
+`U64.v 0x1000000uL == pow2 24` needs `assert_norm`; `SZ.mul g 16sz` yields
+`g * 16`, which does not match `16 * g`; the loop `decreases` needed
+explicit bounds asserts; implicit ghost arguments to `absorb_vec` must be
+passed explicitly.  The module checks in about four minutes.
+
+### Measured
+
+Xeon Gold 6140, `taskset`, ns/B, before (Part 54) → after:
+
+| Case | gcc | clang |
+|---|---|---|
+| poly1305, 256 KiB | 0.88 → 0.20 (4.4x) | 0.69 → 0.24 (2.9x) |
+| poly1305, 16 KiB | 0.88 → 0.18 | 0.69 → 0.19 |
+| poly1305, 1 KiB | 0.94 → 0.28 | 0.72 → 0.27 |
+| poly1305, 64 B | 1.76 → 1.73 | 1.25 → 1.31 (noise) |
+| chacha20-poly1305 enc, 256 KiB | 1.25 → 0.57 (2.2x) | 1.23 → 0.65 |
+| chacha20-poly1305 enc, 1 KiB | 1.50 → 0.85 | 1.46 → 0.84 |
+
+Threshold: at 16 blocks the vector path lost 128–255-byte messages; at 8 it
+wins from 128 B on both compilers (gcc 166 → 135 ns, clang 127 → 108 ns;
+512 B: 506 → 200, 387 → 179).
+
+Clang regression found and fixed: adding the dispatch made clang stop
+inlining `absorb_blocks` into `mac`, costing ~12 ns at 64 B (15%).  Making
+`absorb_blocks` `inline_for_extraction` restored it.
+
+`make test` passes, including new `test_poly1305_vec` (every length 0..2,100
+with four key/message kinds incl. maximal clamped *r* and all-ones data,
+against a bignum reference in the test).  `make clones` **unchanged** at 63.
+
+### Next
+
+AVX-512 (ChaCha20 sixteen lanes, Poly1305 eight); regenerate the HACL\*
+comparison table on the reference machine.

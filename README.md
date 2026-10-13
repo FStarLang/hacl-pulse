@@ -81,7 +81,7 @@ effort than following `master` and fixing what breaks.
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT, sampling and encoding modules |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT, sampling and encoding modules |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128- and 256-bit vector intrinsics |
 | `tests/` | C test harnesses |
@@ -145,8 +145,8 @@ microarchitecture matters the answer is a C intrinsic behind a narrow,
 axiomatized interface, verified against the same specification as the portable
 code and tested against an independent transcription of the standard: AES-NI,
 `AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
-Intel SHA extensions under SHA-256 and SHA-224, and AVX2 under ChaCha20
-(`lib/Hacl.Vec256.fst`).  Each is selected at run time by
+Intel SHA extensions under SHA-256 and SHA-224, and AVX2 under ChaCha20 and
+Poly1305 (`lib/Hacl.Vec256.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
 ## How a hash is put together
@@ -699,6 +699,38 @@ the short one is handled outside it, in a function of its own -- a Pulse `if`
 has to be the last statement of something for its two branches to be checked
 against one written-down postcondition, so the `if` is that function's body
 and the postcondition is itself an `if` on the length.
+
+**Four blocks at a time, on AVX2.**  `code/poly1305/Hacl.Poly1305.Vec256.fst`
+runs four accumulators side by side, one per sixty-four-bit lane, each a
+Horner chain in *r^4* over every fourth block; at the end lane *j* is
+multiplied by the power of *r* its blocks are still owed and the four lanes
+are added.  That this is the specification's one chain in *r* is
+`Spec.Poly1305.Vec` (`horner_init`, `horner_step`, `horner_final`), stated as
+congruences so that the lanes never need reducing.  The arithmetic is the
+scalar field multiplication widened to four lanes -- twenty-five `vpmuludq`s
+and the same two-way carry chain -- with one change: the multiplier is a
+power of *r* that has been through a carry, so its limbs are under 2^27
+rather than 2^26, and `mul_reduce_ok27` is the scalar lemma with that bit.
+Two loads and two `vpunpck{l,h}qdq` turn four blocks into their low and high
+words, but the unpacks work inside each 128-bit half, so the lanes hold blocks
+*0, 2, 1, 3*; rather than spend a permute per group, the final multiplier is
+*r^4, r^2, r^3, r* in that order.
+
+The proof is shaped by what the solver would not do.  The all-lane
+predicates (`vbounded`, `vmul_post`, `vload`, `vinv`) are opaque, the Pulse
+code passes them from lemma to lemma, and every lemma that opens one proves
+it one lane at a time over a total `l64 x i`; the code itself uses the raw
+intrinsics, whose refinements are quantified, and never asks the solver to
+instantiate them.  `absorb_blocks` calls `absorb_vec` first, which takes the
+longest multiple of four blocks when there are at least eight and the
+processor has AVX2, and the scalar loop carries on from there; its
+postcondition did not change, so ChaCha20-Poly1305 got the fast path too.
+`absorb_blocks` is now `inline_for_extraction`: with the dispatch in it
+clang stopped inlining it, and the one-block loop out of line made 64-byte
+MACs 15% slower.  On a Xeon Gold 6140, 256 KiB of Poly1305 went from 0.88 to
+0.20 ns/B under gcc (4.4x) and from 0.69 to 0.24 under clang, and
+ChaCha20-Poly1305 from 1.25 to 0.57; messages under 128 bytes do not reach
+the vector code.
 
 ### ChaCha20-Poly1305, three segments and one accumulator
 
@@ -1681,17 +1713,23 @@ on four thousand random inputs.  Perturbing one coefficient of the reference
 makes all 4097 cases fail, which is the check that the test is checking
 something.
 
-`lib/Hacl.Vec256.fst`, under ChaCha20, is the third entry and is kept the
-same way.  Its axioms are smaller -- lane-wise add, exclusive-or and
-rotate, a broadcast, two constants, and the six permutations of an 8 x 8 transpose, each
-stated as which input lane every output lane is -- and "lane" is not an
-axiom but a definition, the little-endian reading of the register's bytes.
-`tests/test_vec256.c` checks each against a scalar transcription on a
-thousand random inputs, every rotation distance and every load
-misalignment, and `tests/test_chacha20_vec.c` runs every message length
-from 0 to 2,100 bytes, at counters up to the last legal block, against an
-independent RFC 8439 block function.  Swapping one permute immediate in
-`c/Hacl_Vec256.h` fails both.
+`lib/Hacl.Vec256.fst`, under ChaCha20 and Poly1305, is the third entry and
+is kept the same way.  Its axioms are smaller -- lane-wise add, exclusive-or
+and rotate, a broadcast, two constants, and the six permutations of an 8 x 8
+transpose, each stated as which input lane every output lane is; and for
+Poly1305 sixty-four-bit add, `vpmuludq`, shifts, a 26-bit mask, a broadcast,
+a set and a store, each stated on natural numbers with the wrap-around
+written out -- and "lane" is not an axiom but a definition, the
+little-endian reading of the register's bytes (a sixty-four-bit lane is two
+thirty-two-bit ones, low first).  `tests/test_vec256.c` checks each against a
+scalar transcription on a thousand random inputs, every rotation and shift
+distance and every load misalignment; `tests/test_chacha20_vec.c` runs every
+message length from 0 to 2,100 bytes, at counters up to the last legal
+block, against an independent RFC 8439 block function, and
+`tests/test_poly1305_vec.c` does the same for Poly1305 against a plain
+bignum reference, with the largest clamped *r* and all-ones messages among
+the inputs.  Swapping one permute immediate in `c/Hacl_Vec256.h` fails both
+ChaCha20 tests.
 
 **The key schedule needed the same treatment, and was worth more than the
 cipher.**  It runs once per message rather than once per block, which is why
@@ -3255,11 +3293,13 @@ The honest ceiling is the bottom three rows.  ChaCha20 at 5.32x, Poly1305 at
 4.14x and ChaCha20-Poly1305 at 5.15x are not implementation defects; they are
 what thirty-two-byte-wide AVX2 lanes are worth on a stream cipher and a
 one-pass MAC, and no amount of work on scalar C will close them.  Closing
-those three needs a vector backend.  ChaCha20 now has one (see
-[ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)):
-on a Xeon Gold 6140 it is 4.7x faster than the row above and the AEAD 2.0x,
-which would put ChaCha20 near 1.1x of HACL\* best; the table has not been
-regenerated on the reference machine yet, and Poly1305 is still scalar.
+those three needs a vector backend, and all three now have one (see
+[ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)
+and [Poly1305, five limbs of twenty-six bits](#poly1305-five-limbs-of-twenty-six-bits)):
+on a Xeon Gold 6140 ChaCha20 is 4.7x faster than the row above, Poly1305
+4.4x and the AEAD 4.4x, which would put all three within about 1.15x of
+HACL\* best's AVX2 code; the table has not been regenerated on the reference
+machine yet.
 
 Two rows were recently somewhere else.  HMAC-SHA-256 was the worst in the
 table at 6.84x, because the SHA-EXT dispatch existed only in the one-shot
@@ -4874,14 +4914,13 @@ rough order of value:
     is the AVX2 counterpart of `Hacl.Vec128`, fifteen axioms each tested by
     `tests/test_vec256.c`, and `Hacl.Chacha20.Vec256` is an eight-lane
     vertical ChaCha20 proved lane by lane against the scalar specification
-    (4.7x on 256 KiB, see `bench/REPORT.md` Part 54).  What remains is
-    Poly1305: four 64-bit lanes of five 26-bit limbs, `vpmuludq` for the
-    products, and a proof that four interleaved Horner chains in *r^4*,
-    combined at the end by *r^4, r^3, r^2, r*, are the specification's one
-    chain in *r*.  The lane-wise field arithmetic should reuse
-    `Hacl.Poly1305.Field`'s limb lemmas the way the ChaCha20 rounds reused
-    the scalar quarter-round; the reordering lemma is new.  An AVX-512
-    ChaCha20 (sixteen lanes) is a smaller follow-up on the same pattern.
+    (4.7x on 256 KiB, see `bench/REPORT.md` Part 54).  **Poly1305 is done
+    too**: `Hacl.Poly1305.Vec256` runs four Horner chains in *r^4*, one per
+    64-bit lane, and `Spec.Poly1305.Vec` proves them the specification's one
+    chain in *r* (4.4x on 256 KiB, Part 55); `lib/Hacl.Vec256.fst` grew to
+    twenty-three axioms.  What remains is wider: AVX-512 ChaCha20 (sixteen
+    lanes) and Poly1305 (eight), both on the same pattern, and a
+    regeneration of the table on the reference machine.
 
 18. **One hash core, two block implementations.**  `hash_blocks_ni`,
     `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of
