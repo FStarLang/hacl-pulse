@@ -394,7 +394,7 @@ ensures exists* (vs': Seq.seq S8.t).
 
 #push-options "--z3rlimit 300"
 
-fn scalarmult (out k u: A.array S8.t)
+fn scalarmult51 (out k u: A.array S8.t)
               (#vout: erased (Seq.seq S8.t))
               (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
               (#pu: perm) (#vu: erased (Seq.lseq S8.t 32))
@@ -449,6 +449,26 @@ ensures exists* (vout': Seq.seq S8.t).
 }
 
 #pop-options
+
+(** The entry point: {!Hacl.Curve25519.Ladder64.scalarmult64} -- four
+    full words, [mulx] and [adc] -- when the machine has BMI2, the
+    radix-2{^51} code above otherwise.  Both have the same specification. *)
+fn scalarmult (out k u: A.array S8.t)
+              (#vout: erased (Seq.seq S8.t))
+              (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
+              (#pu: perm) (#vu: erased (Seq.lseq S8.t 32))
+requires A.pts_to out vout ** A.pts_to k #pk vk ** A.pts_to u #pu vu **
+  pure (Seq.length vout == 32)
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to out vout' ** A.pts_to k #pk vk ** A.pts_to u #pu vu **
+  pure (vout' == C.scalarmult vk vu)
+{
+  if (Hacl.Carry64.supported ()) {
+    Hacl.Curve25519.Ladder64.scalarmult64 out k u
+  } else {
+    scalarmult51 out k u
+  }
+}
 
 (** {2 The public API} *)
 
