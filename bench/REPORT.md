@@ -7903,3 +7903,72 @@ bottom rows are AES-128-GCM (2.04x gcc / 1.84x clang, against Vale) and MD5
 (1.02x gcc, 1.10x clang).  Under clang the curve rows are notably worse than
 under gcc (X25519 1.71x, secp256k1 sign 1.59x, Ed25519 sign 1.48x) — worth a
 look on this machine.
+
+## Part 57 — The clang regressions: a mismatched baseline, MD5, GCM, and X25519 in radix 2^64
+
+Part 56 left AES-128-GCM, MD5 and X25519 as the worst rows, with the clang
+column notably worse than gcc's.  There were four causes.
+
+**The clang baseline was gcc.**  `table.sh` compiled hacl-pulse with
+`$BENCH_CC` but linked the HACL\* checkout's own `libevercrypt.a`, which its
+Makefile builds with `cc`, so every clang row was clang against gcc.
+`table.sh` now builds HACL\* with `$BENCH_CC` into
+`$HACL_STAR/dist/build-$CC` and caches it there.
+
+**MD5 was not unrolled.**  The step function took the round number as a
+runtime value, so every step selected its boolean function, constant, shift
+and message index at run time and rotated by a register.  The block update
+now calls an `inline_for_extraction` step sixteen times per sixteen-step
+group, and everything folds to literals.  256 KiB: 592 → 412 us (gcc),
+722 → 399 us (clang).
+
+**GCM ran two passes.**  Encryption did counter mode over the whole message
+and then GHASH over the whole ciphertext.  `Hacl.AES.GCM.Stitch` encrypts
+eight counter blocks per iteration while hashing the eight ciphertext blocks
+written on the previous one, with the eight powers of the hash key loaded
+and Karatsuba-folded once per message.  256 KiB aes128-gcm-enc: 93.7 → 67.9 us
+(gcc), 84.6 → 68.5 us (clang); Vale is 45.6.  `tests/test_gcm_long.c` checks
+every length from 0 to 1300 for both key sizes against the unstitched
+decryption.
+
+**X25519 under clang: radix 2^64.**  clang compiled the radix-51 field
+at 54.6 us against gcc's 43.  Instead of chasing that, the library gained a
+second verified field: four 64-bit limbs, products by `mul_wide` rows,
+carries by a new trusted pair `Hacl.Carry64.addc`/`subb`
+(`c/Hacl_Carry64.h`, preferring `__builtin_addcll`), and fold by 38.
+`scalarmult` dispatches to it when cpuid reports BMI2.  Isolated bench
+(`taskset`, -O3), µs per scalar multiplication:
+
+| path | gcc 15.2 | clang 21.1 |
+|---|---|---|
+| radix 2^51 | 43 | 54.6 |
+| radix 2^64, `_addcarry_u64` | 48–50 | 39.6 |
+| radix 2^64, `__builtin_addcll` | 48.3 | 36–38 |
+| hand-written C prototype of the same algorithm | 38.6 | — |
+
+The gcc loss was examined at length and is diffuse.  The verified `fmul`
+matches the prototype's in isolation.  In the ladder there is about 4 us in
+`fmul` in context, 2 us in `fadd`/`fsub`, 2 us in inversion, where `fsqr_ip`
+is out of line and copies, and 2 us in the ladder's shape: four select-based
+conditional swaps per step where the prototype keeps a swap state and does
+two.  No gcc flag, inline or noinline placement, memory-output variant,
+removal of zero-initialization, or mask in place of multiply moved it by
+more than noise.  The 64-bit path ships on every BMI2 machine regardless, by
+decision.  Next candidates for gcc: an in-place squaring for inversion, a
+swap-state ladder, and an xor-based cswap.
+
+**Table** (`table.sh 3`, Xeon Gold 6140, HACL\* `504c298` built with the same
+compiler; canaries healthy):
+
+| Row (vs HACL\* best) | Part 56 gcc | gcc | Part 56 clang | clang |
+|---|---|---|---|---|
+| MD5 | 1.57x | 1.25x | 1.92x | 0.97x |
+| AES-128-GCM | 2.04x | 1.49x | 1.84x | 1.43x |
+| X25519 | 1.32x | 1.53x | 1.71x | 1.14x |
+
+The clang column now compares like with like, and that changes other rows.
+With HACL\* built by clang, its SHA-512 is a third faster than gcc's, so
+SHA-512 and HMAC-SHA-512 go to 1.27x; its P-256 is twice as fast (sign:
+63 us against 136), so the three P-256 rows are at 2.82x–2.91x.  This
+repository's P-256 is the same speed under both compilers.  P-256 under clang
+is the new largest gap.

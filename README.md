@@ -83,7 +83,7 @@ effort than following `master` and fixing what breaks.
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
 | `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT, sampling and encoding modules |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
-| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128- and 256-bit vector intrinsics |
+| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, and the 64-bit add-with-carry / subtract-with-borrow used by X25519 |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
 | `design/` | the inventory of HACL\* that this library is measured against |
@@ -885,6 +885,50 @@ vectors found it in minutes.  `tests/test_curve25519.c` now covers 5.2, 6.1
 in both directions, the iterated product at 1 and 1000 rounds, a
 non-canonical `u` with the high bit set, and the five small-order points --
 for which `ecdh` returns `false` and the shared secret is all zeros.
+
+### Curve25519 again, four limbs of sixty-four bits
+
+On a processor with BMI2, `Hacl.Curve25519.scalarmult` no longer runs the
+radix-2^51 code above.  It checks `Hacl.Carry64.supported ()` (a cpuid test
+for BMI2) and, if it is set, calls `Hacl.Curve25519.Ladder64.scalarmult64`,
+a second and separately verified implementation over **four limbs of sixty-four
+bits**; otherwise it calls the radix-51 path, now named `scalarmult51`.  Both
+are proved against the same `Spec.Curve25519`, so the dispatch needs no proof
+beyond the two postconditions agreeing.
+
+Full-width limbs need a carry flag, which portable C does not have.
+`Hacl.Carry64` adds exactly two trusted primitives, `addc` and `subb`, each
+stated as one equation over integers (`s + 2^64 c' == a + b + c`, and
+`s - 2^64 c' == a - b - c`, with every carry at most one).  `c/Hacl_Carry64.h`
+realizes them with `__builtin_addcll`/`__builtin_subcll` where the compiler
+has them, `_addcarry_u64`/`_subborrow_u64` otherwise, and `unsigned __int128`
+as a last resort; `tests/test_carry64.c` checks both against `__int128` on edge
+cases and a million random inputs.  Everything else -- the 4x4 schoolbook
+product as rows of `mul_wide` and carry chains, the fold of the high half by
+38, `fadd`/`fsub` with their wrap-around corrections, `freeze`, the addition
+chain for inversion and the ladder -- is Pulse, verified against
+`Spec.Curve25519.Field64`, which relates the four-word representation to the
+field.  The ladder and inversion carry `custard_c_closure_prologue` with
+`target("bmi2")`, so gcc and clang emit `mulx` for the whole call tree without
+the rest of the library being compiled for BMI2.
+
+Two proof-engineering notes.  The closure prologue refuses a closure that
+reaches a global variable, so the shared `S64.zero` became one local
+`let z0 = S64.classify 0uL` per function -- and writing `S64.classify 0uL`
+inline at each use instead made `freeze` time out, though the two are equal
+by definition.  And `ladder`'s implicit final query hung until the body ended
+with an explicit `assert` of its postcondition.
+
+The win depends on the compiler.  Under clang 21 a scalar multiplication goes
+from 54.6 us to 38 us; under gcc 15 it goes from 43 us to 48 us.  The gcc loss
+is not in any one place: `fmul` in isolation is as fast as a hand-written C
+prototype, and the deficit spreads over `fmul` in context, `fadd`/`fsub`,
+the out-of-line squarings in inversion, and the select-based ladder with four
+conditional swaps per step.  No flag or inlining change recovered it.  The
+64-bit path is used whenever BMI2 is present regardless, since it is the
+faster path under clang and HACL\*'s own fastest X25519 has the same shape;
+an in-place squaring for inversion and a swap-state ladder are the obvious
+next steps for gcc.
 
 ### Ed25519, on top of Curve25519's field
 
@@ -3254,45 +3298,64 @@ reference**.
 
 | primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| SHA3-256 | 256 KiB | 1.1 ms | 2.3 ms | **0.47x** | 2.3 ms | 0.47x |
-| SHAKE128 | 256 KiB | 870 us | 1.8 ms | **0.47x** | 1.8 ms | 0.47x |
-| SHA-512 | 256 KiB | 784 us | 1.3 ms | **0.60x** | 1.3 ms | 0.60x |
-| HMAC-SHA-512 | 256 KiB | 811 us | 1.3 ms | **0.62x** | 1.3 ms | 0.62x |
-| NaCl secretbox | 256 KiB | 565 us | 604 us | **0.93x** | 605 us | 0.93x |
-| Poly1305 | 256 KiB | 47 us | 49 us | **0.97x** | 180 us | 0.26x |
-| FFDHE-2048 | -- | 4.7 ms | 4.8 ms | **0.98x** | 4.8 ms | 0.98x |
-| RSA-PSS-2048 sign | -- | 4.8 ms | 4.8 ms | **0.99x** | 4.8 ms | 0.99x |
-| RSA-2048 modexp | -- | 4.7 ms | 4.7 ms | **1.01x** | 4.7 ms | 1.01x |
-| SHA-1 | 256 KiB | 1.6 ms | 1.6 ms | **1.02x** | 1.6 ms | 1.01x |
-| SHA-256 | 256 KiB | 1.2 ms | 1.2 ms | **1.02x** | 1.2 ms | 1.02x |
-| HMAC-SHA-256 | 256 KiB | 1.2 ms | 1.2 ms | **1.03x** | 1.2 ms | 1.02x |
-| ChaCha20-Poly1305 | 256 KiB | 150 us | 144 us | **1.04x** | 989 us | 0.15x |
-| ChaCha20 | 256 KiB | 100 us | 92 us | **1.09x** | 805 us | 0.12x |
-| Salsa20 | 256 KiB | 501 us | 424 us | **1.18x** | 424 us | 1.18x |
-| secp256k1 ECDSA sign | -- | 71 us | 58 us | **1.23x** | 58 us | 1.23x |
-| RSA-PSS-2048 verify | -- | 177 us | 139 us | **1.27x** | 140 us | 1.27x |
-| BLAKE2s | 256 KiB | 575 us | 448 us | **1.28x** | 544 us | 1.06x |
-| P-256 ECDSA verify | -- | 464 us | 361 us | **1.28x** | 362 us | 1.28x |
-| Ed25519 sign | -- | 71 us | 55 us | **1.29x** | 55 us | 1.29x |
-| BLAKE2b | 256 KiB | 390 us | 301 us | **1.30x** | 342 us | 1.14x |
-| X25519 | -- | 43 us | 33 us | **1.32x** | 38 us | 1.15x |
-| P-256 ECDH | -- | 175 us | 132 us | **1.33x** | 132 us | 1.33x |
-| P-256 ECDSA sign | -- | 193 us | 144 us | **1.34x** | 144 us | 1.34x |
-| MD5 | 256 KiB | 619 us | 395 us | **1.57x** | 395 us | 1.57x |
-| AES-128-GCM | 256 KiB | 99 us | 48 us | **2.04x** | 48 us | 2.04x |
+| SHA3-256 | 256 KiB | 1.0 ms | 2.2 ms | **0.47x** | 2.2 ms | 0.47x |
+| SHAKE128 | 256 KiB | 823 us | 1.7 ms | **0.47x** | 1.7 ms | 0.47x |
+| HMAC-SHA-512 | 256 KiB | 748 us | 1.2 ms | **0.60x** | 1.2 ms | 0.60x |
+| SHA-512 | 256 KiB | 769 us | 1.2 ms | **0.62x** | 1.2 ms | 0.62x |
+| NaCl secretbox | 256 KiB | 535 us | 575 us | **0.93x** | 574 us | 0.93x |
+| Poly1305 | 256 KiB | 45 us | 47 us | **0.96x** | 171 us | 0.26x |
+| RSA-PSS-2048 sign | -- | 4.5 ms | 4.6 ms | **0.98x** | 4.6 ms | 0.98x |
+| FFDHE-2048 | -- | 4.5 ms | 4.5 ms | **1.00x** | 4.5 ms | 1.00x |
+| RSA-2048 modexp | -- | 4.5 ms | 4.4 ms | **1.01x** | 4.4 ms | 1.01x |
+| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.01x** | 1.5 ms | 1.02x |
+| SHA-256 | 256 KiB | 1.2 ms | 1.1 ms | **1.02x** | 1.1 ms | 1.01x |
+| HMAC-SHA-256 | 256 KiB | 1.2 ms | 1.1 ms | **1.03x** | 1.1 ms | 1.02x |
+| ChaCha20-Poly1305 | 256 KiB | 141 us | 134 us | **1.06x** | 939 us | 0.15x |
+| ChaCha20 | 256 KiB | 93 us | 85 us | **1.09x** | 767 us | 0.12x |
+| Salsa20 | 256 KiB | 474 us | 402 us | **1.18x** | 404 us | 1.17x |
+| secp256k1 ECDSA sign | -- | 67 us | 55 us | **1.23x** | 55 us | 1.23x |
+| MD5 | 256 KiB | 472 us | 377 us | **1.25x** | 377 us | 1.25x |
+| RSA-PSS-2048 verify | -- | 168 us | 132 us | **1.27x** | 132 us | 1.27x |
+| BLAKE2s | 256 KiB | 544 us | 427 us | **1.27x** | 519 us | 1.05x |
+| P-256 ECDSA verify | -- | 440 us | 343 us | **1.28x** | 344 us | 1.28x |
+| BLAKE2b | 256 KiB | 370 us | 285 us | **1.30x** | 325 us | 1.14x |
+| Ed25519 sign | -- | 68 us | 52 us | **1.30x** | 52 us | 1.30x |
+| P-256 ECDH | -- | 166 us | 125 us | **1.32x** | 125 us | 1.32x |
+| P-256 ECDSA sign | -- | 183 us | 136 us | **1.35x** | 136 us | 1.35x |
+| AES-128-GCM | 256 KiB | 68 us | 46 us | **1.49x** | 46 us | 1.49x |
+| X25519 | -- | 48 us | 31 us | **1.53x** | 36 us | 1.34x |
 
 Against what HACL\* can actually do on this machine, all but two rows are
-within 1.35x, and nine are level or ahead: SHA-3 and SHAKE, where
+within 1.35x, and ten are level or ahead: SHA-3 and SHAKE, where
 HACL\* has no vector sponge; SHA-512 and HMAC-SHA-512, where it has none
-either; the modular exponentiations; NaCl secretbox; and Poly1305, which now
-matches HACL\*'s AVX2 Poly1305.  This processor has no SHA extensions, so
-SHA-1 and SHA-256 are scalar against scalar here and level.  Everything from
-Salsa20 down to MD5 sits between 1.18x and 1.57x, which is the cost of a
-portable scalar implementation meeting hand-tuned scalar code, and the BLAKE2
-rows are behind HACL\*'s vectorized BLAKE2 rather than its scalar one.
-AES-GCM at 2.04x is the new bottom row: its reference is Vale's assembly,
-which interleaves AES-NI and `PCLMULQDQ` across blocks in a way the intrinsic
-code here does not yet.
+either; the modular exponentiations; NaCl secretbox; Poly1305, which now
+matches HACL\*'s AVX2 Poly1305; and SHA-1.  This processor has no SHA
+extensions, so SHA-1 and SHA-256 are scalar against scalar here and level.
+Everything from ChaCha20 down to P-256 sits between 1.06x and 1.35x, which is
+the cost of a portable scalar implementation meeting hand-tuned scalar code,
+and the BLAKE2 rows are behind HACL\*'s vectorized BLAKE2 rather than its
+scalar one.  MD5, at 1.57x in the previous table, is at 1.25x since its
+sixty-four steps are unrolled so that every round constant, rotate and
+message index reaches C as a literal.  AES-GCM went from 2.04x to 1.49x when
+encryption began interleaving counter-mode AES-NI with the `PCLMULQDQ` GHASH
+of the previous eight blocks in a single loop, the way Vale does.
+
+X25519 is the bottom row under gcc, at 1.53x, and that is a deliberate
+trade.  On a processor with BMI2 it now runs a radix-2^64 field with
+add-with-carry chains (see
+[Curve25519 again, four limbs of sixty-four bits](#curve25519-again-four-limbs-of-sixty-four-bits)),
+which under clang takes it from 1.71x to 1.14x of HACL\*'s BMI2/ADX
+assembly -- and ahead of HACL\*'s portable C -- but under gcc is about five
+microseconds slower than the radix-51 code it replaced.
+
+Under clang 21, with HACL\* now also built by clang, the picture differs in
+three places.  MD5, ChaCha20, Salsa20 and the ChaCha20-Poly1305 rows are
+level or ahead.  SHA-512 and HMAC-SHA-512 are at 1.27x, because clang's
+HACL\* SHA-512 is a third faster than gcc's.  And the three P-256 rows are at
+2.8x-2.9x: clang-built HACL\* P-256 takes 63 us to sign against gcc-built
+HACL\*'s 136, while this repository's P-256 is the same speed under both, so
+the gap is clang finding something in HACL\*'s P-256 C that it does not find
+here.  That is the next thing to look at.
 
 The rows that were the honest ceiling are not any more.  ChaCha20,
 Poly1305 and ChaCha20-Poly1305 were at 5.31x, 4.13x and 5.13x in the previous
@@ -3301,7 +3364,7 @@ lanes are worth on a stream cipher and a one-pass MAC, and no amount of work
 on scalar C could close them.  All three now have a verified AVX2 backend
 (see [ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)
 and [Poly1305, five limbs of twenty-six bits](#poly1305-five-limbs-of-twenty-six-bits))
-and sit at 1.09x, 0.97x and 1.04x under gcc, and 1.10x, 1.00x and 1.07x under
+and sit at 1.09x, 0.96x and 1.06x under gcc, and 0.95x, 0.98x and 0.99x under
 clang.
 
 The remainder of this section was written against the EPYC 7662 table, which
