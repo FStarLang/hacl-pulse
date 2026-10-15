@@ -8238,3 +8238,37 @@ Every output is identical before and after.  `make test` passes.  `bench/bench.c
 no longer builds against the current `Hacl_Bignum_Montgomery_precomp`
 signature (this predates these changes), so these numbers come from the
 P-256-only harness rather than the main table's.
+
+## Part 65: scalar Montgomery multiply and addition-chain inversion
+
+After Part 64 the scalar inversion mod `n` (`qinv`, square-and-multiply on
+`Hacl.Impl.Mont4`) took 19-21 us, a quarter of a P-256 signature.
+`Hacl.Impl.Mont64` is a generic word-by-word Montgomery multiply (`mul8`
+product, four reduction steps of `q = t_k * mu`, one masked final
+subtraction); `Hacl.Impl.Mont4F.amulf` puts it behind `Mont4.amul`'s
+contract, so both curves' `qmul` change by one call: 42 ns to 24 (clang),
+63 to 33 (gcc).  `qinv` becomes a generated addition chain for `n - 2`: odd
+powers `x .. x^15`, blocks of ones for the top half, a width-4 sliding window
+below.  P-256: 253 squarings, 39 multiplications (binary: 255, 168).
+secp256k1: 253 and 42 (binary: 255, 195).  Squarings ping-pong between two
+buffers.  Each chain step is a call to one verified `qstep` (square `k`
+times, multiply by a table power) with `assert_norm` on the exponent; written
+inline, the same chain took 8.5 minutes to check, factored about 1.5.
+
+**Numbers** (core 6, `-O3 -march=native`, best of 5, HEAD = Part 64):
+
+| | gcc before | gcc after | clang before | clang after |
+|---|---|---|---|---|
+| P-256 `qinv` | 21.4 us | 9.8 us | 19.0 us | 7.4 us |
+| P-256 ECDSA sign | 87.1 us | 75.1 us | 68.4 us | 57.4 us |
+| P-256 ECDSA verify | 227.1 us | 212.9 us | 165.4 us | 154.3 us |
+| secp256k1 ECDSA sign | 112.2 us | 99.4 us | 84.8 us | 72.2 us |
+| secp256k1 ECDSA verify | 274.6 us | 260.3 us | 186.6 us | 174.2 us |
+
+ECDH (no scalar inversion) is unchanged and is the control.  `make test`
+passes.
+
+**Not kept.**  A dedicated P-256 `fsqr` (cross products computed once) is
+about 40% faster than `fmul` on itself but takes only 1-3% off whole
+operations.  fiat-crypto's `p256_64.h` Montgomery multiplier is slower than
+`Hacl.P256.Field64`'s: 28.6 ns against 17.5 (clang), 70 against 24.4 (gcc).

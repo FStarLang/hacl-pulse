@@ -1153,7 +1153,8 @@ with three small lemmas connecting `ev4` of four words to `Spec.Mont4`'s
 limbs, so `mev_mul`, `mev_add` and `mev_sub` carry over).  `fmul` went from
 34 ns to 25 under gcc and from 47 to 18 under clang, and every P-256
 operation got 35-50% faster (`bench/REPORT.md` Part 62).  The scalar field
-stays on `Hacl.Impl.Mont4`.  `mul8` and the two row functions below it lost
+stayed on `Hacl.Impl.Mont4` until it got a faster multiplier of its own
+(below).  `mul8` and the two row functions below it lost
 their `target("bmi2")` for this -- none uses BMI2, and inlined into X25519's
 `bmi2` field they compile exactly as before.
 
@@ -1228,6 +1229,34 @@ same left-to-right square-and-multiply with `Hacl.P256.Field`'s `fmul` and
 `fsqr`; it is about 10 us off every operation under clang and 3-5 us under
 gcc (Part 64).
 
+**The scalar field has a faster multiplier and an addition chain.**  Signing
+needs one inversion modulo the order, and at 19-21 us it was a quarter of
+a signature.  `Hacl.Impl.Mont64` is a four-limb Montgomery multiply for any
+odd modulus, still taking the modulus words and `mu` as data: X25519-64's
+`mul8` for the product, then four reduction steps that each take
+`q = t_k * mu mod 2^64`, add `q m` as four `mul_wide`s in two `adc` chains,
+and drop a word, then one borrow chain and a masked select.  Each step is
+stated as `2^64 * W_(k+1) == W_k + q m` with a bound that says nothing
+carries out of the top word, which is all the four-step argument needs.
+`Hacl.Impl.Mont4F` puts it behind `Hacl.Impl.Mont4.amul`'s contract (less the
+complement table, which the final subtraction no longer uses), so both
+curves' `qmul` changed by one call; it went from 42 ns to 24 under clang and
+from 63 to 33 under gcc.  `qinv` is then a fixed addition chain for `n - 2`
+rather than square-and-multiply: the odd powers `x .. x^15`, blocks of ones
+for the top half, and a four-bit sliding window for the rest, 253 squarings
+and 39 multiplications where the binary method did 255 and 168 (42 against
+195 on secp256k1).  The squarings alternate between two buffers, so none
+copies its input.  The chain is generated, each step stating its exponent
+and `assert_norm` checking the arithmetic; the steps are calls to one
+verified `qstep` -- square `k` times, multiply by a known power -- because
+the same chain written out as 180 inline statements took eight and a half
+minutes to check and this takes a minute and a half.  `qinv` went from 21 us
+to 10 under gcc and from 19 to 7.4 under clang, which is 11-16% off signing
+on both curves and 5-7% off verification (Part 65).  Two things tried on the
+base field were not kept: a dedicated squaring makes `fsqr` 40% faster but
+whole operations only 1-3%, and fiat-crypto's `p256_64.h` multiplier is
+slower than `Hacl.P256.Field64` under both compilers.
+
 **Verification is not constant time and need not be.**
 `point_mul_double_g u1 u2 Q` is two independent multiplications and one
 addition rather than Shamir's trick, because nothing in verification is
@@ -1269,7 +1298,9 @@ base field, which secp256k1 has since taken its own way.
 constants and the exponents, and `Hacl.K256.Scalar` is the P-256 scalar
 module with those tables underneath, adding not a line to the emitted C --
 the Montgomery layer takes its modulus as an argument, so the two curves
-share every scalar operation and differ only in the table they pass.  The
+share every scalar operation and differ only in the table they pass.  That
+includes the faster `Hacl.Impl.Mont64` multiplier; only the inversion chain,
+which is a function of the order, is each curve's own.  The
 base field went its own way: secp256k1's prime is `2^256 - 2^32 - 977`, which
 is close enough to a power of two that a bit above 2^256 folds back with a
 single multiply by `2^32 + 977`, so `Hacl.K256.Field52` carries five limbs of
@@ -3632,7 +3663,9 @@ to **222**.  Compiled-in generator tables and an inversion on that field
 (Parts 63 and 64) then took, in a second harness, ECDH as initiator from 97
 us to **65** under gcc and from 77 to **49** under clang, signing from 119 to
 **86** and 96 to **69**, and verification from 256 to **224** and 194 to
-**166**.  The table above predates all three.
+**166**.  A faster scalar multiplier and an addition-chain inversion (Part
+65) then took signing to **75** and **57** and verification to **213** and
+**154**.  The table above predates all four.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -4269,7 +4302,9 @@ OpenSSL's `nistz256` assembly rather than 5x--11x.  Since then the generator
 tables are compiled in and inversion runs on the specialised field (Parts 63
 and 64): in that part's harness ECDH (variable-base) went from 152 us to 148
 under gcc and from 118 to 105 under clang, signing from 119 to 86 and 96 to
-69, verification from 256 to 224 and 194 to 166.  What is left against
+69, verification from 256 to 224 and 194 to 166.  The scalar inversion of
+Part 65 then took signing to 75 and 57 and verification to 213 and 154.
+What is left against
 `nistz256` is its assembly field, its 150 KB of generator multiples and the
 double-scalar verification.
 
@@ -4871,7 +4906,10 @@ rough order of value:
    reduces with `mu == 1` and `p + 1 = 2^96 + 2^192 * 0xffffffff00000001`, so
    each of the four steps is two shifts and one multiplication, on top of
    X25519-64's `mul8`.  `fmul` went from 34 ns to 25 (gcc) and 47 to 18
-   (clang), and every P-256 operation 35-50% faster (Part 62).
+   (clang), and every P-256 operation 35-50% faster (Part 62).  The two
+   scalar fields followed with a generic word-by-word Montgomery multiply,
+   `Hacl.Impl.Mont64`, and an addition-chain inversion, 11-16% off signing
+   on both curves (Part 65).
 
 6. **The fixed-base window**, **done on all three curves**.
    `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
