@@ -173,6 +173,21 @@ ensures exists* vout'.
   drop_table kt;
 }
 
+(** What [expand_impl] asks of its lengths, for the two sixty-four bit
+    parameter sets, discharged outside the call's query: the sizes depend on
+    [bytes #S64.t], i.e. on [bits / 8] for the sixty-four bit word. *)
+let s64_sizes (_: unit)
+  : Lemma (bytes #S64.t == 8 /\ block_len #S64.t == 128 /\ pow2 61 <= max_input #S64.t)
+  = assert_norm (bits #S64.t == 64);
+    max_input_bound ()
+
+let expand_lengths_s64 (p: params S64.t) (vprk vinfo vout: Seq.seq S8.t)
+  : Lemma (requires Seq.length vprk < pow2 61 /\
+                    block_len #S64.t + hash_bytes p + Seq.length vinfo + 1 < pow2 61 /\
+                    Seq.length vout <= 255 * hash_bytes p)
+          (ensures prk_ok p vprk /\ info_ok p vinfo)
+  = s64_sizes ()
+
 (** HKDF-Extract with sha384.  [out] must have room for 48 bytes. *)
 (* The eighty-entry [k512] is enough bigger than the sixty-four-entry [k256]
    that relating the array to [params512_with]'s [k] field is best done
@@ -198,6 +213,7 @@ ensures exists* vout'.
   Hacl.HMAC.hmac_sha384 out salt salt_len ikm ikm_len;
 }
 
+#push-options "--fuel 0 --ifuel 0"
 (** HKDF-Expand with sha384.  [out] may be up to 255*48 = 12240 bytes. *)
 fn expand_sha384 (out: A.array S8.t) (out_len: SZ.t) (prk: A.array S8.t) (prk_len: SZ.t) (info: A.array S8.t) (info_len: SZ.t)
     (#vout: erased (Seq.seq S8.t)) (#pp: perm) (#vprk: erased (Seq.seq S8.t))
@@ -224,10 +240,12 @@ ensures exists* vout'.
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
   sha2_384_facts ();
+  expand_lengths_s64 sha2_384 vprk vinfo vout;
   expand_impl sha2_384 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_384) kt ivt out out_len prk prk_len info info_len;
   drop_table ivt;
   drop_table kt;
 }
+#pop-options
 
 (** HKDF-Extract with sha512.  [out] must have room for 64 bytes. *)
 fn extract_sha512 (out: A.array S8.t) (salt: A.array S8.t) (salt_len: SZ.t) (ikm: A.array S8.t) (ikm_len: SZ.t)
@@ -248,6 +266,7 @@ ensures exists* vout'.
   Hacl.HMAC.hmac_sha512 out salt salt_len ikm ikm_len;
 }
 
+#push-options "--fuel 0 --ifuel 0"
 (** HKDF-Expand with sha512.  [out] may be up to 255*64 = 16320 bytes. *)
 fn expand_sha512 (out: A.array S8.t) (out_len: SZ.t) (prk: A.array S8.t) (prk_len: SZ.t) (info: A.array S8.t) (info_len: SZ.t)
     (#vout: erased (Seq.seq S8.t)) (#pp: perm) (#vprk: erased (Seq.seq S8.t))
@@ -274,9 +293,11 @@ ensures exists* vout'.
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
   sha2_512_facts ();
+  expand_lengths_s64 sha2_512 vprk vinfo vout;
   expand_impl sha2_512 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_512) kt ivt out out_len prk prk_len info info_len;
   drop_table ivt;
   drop_table kt;
 }
+#pop-options
 
 #pop-options

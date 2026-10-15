@@ -46,7 +46,7 @@ module Loops = Hacl.Spec.Loops
 
 (** {2 The field} *)
 
-let prime : pos = pow2 255 - 19
+let prime : pos = assert_norm (pow2 255 - 19 > 0); pow2 255 - 19
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 60"
 
@@ -94,14 +94,18 @@ let rec fexp_add (x: elem) (a b: nat)
       fmul_assoc x (fexp x (a - 1)) (fexp x b)
     end
 
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 5"
+let mul_pred (a: int) (b: pos) : Lemma (a * b == a + a * (b - 1)) =
+  Math.distributivity_sub_right a b 1
+#pop-options
+
 let rec fexp_mul (x: elem) (a b: nat)
   : Lemma (ensures fexp x (a * b) == fexp (fexp x a) b) (decreases b)
   = if b = 0 then ()
     else begin
       fexp_mul x a (b - 1);
       fexp_add x a (a * (b - 1));
-      Math.distributivity_sub_right a b 1;
-      assert (a * b == a + a * (b - 1));
+      mul_pred a b;
       assert (fexp (fexp x a) b == fmul (fexp x a) (fexp (fexp x a) (b - 1)));
       fmul_comm (fexp x a) (fexp (fexp x a) (b - 1))
     end

@@ -620,6 +620,23 @@ let max_input_exponent (#t: Type0) {| w: word t |}
   : Lemma (8 * (2 * (bits #t / 8)) - 3 >= 0) [SMTPat (bits #t #w)]
   = ()
 
+(** What the sixty-four bit entry points need to hand [rsapss_sign] and
+    [rsapss_verify] their tables: the arrays' contents are the [k] and [iv]
+    fields of the parameter set.  Stated at top level so that relating the
+    erased fields of [params512_with] to the tables is not redone inside the
+    call's query. *)
+#push-options "--fuel 0 --ifuel 0"
+let sha2_384_tables (_: unit)
+  : Lemma (Pulse.Lib.GlobalArray.static_array_elems k512_arr == (reveal sha2_384.k <: Seq.seq S64.t) /\
+           Pulse.Lib.GlobalArray.static_array_elems iv384_arr == (reveal sha2_384.iv <: Seq.seq S64.t))
+  = sha2_384_facts ()
+
+let sha2_512_tables (_: unit)
+  : Lemma (Pulse.Lib.GlobalArray.static_array_elems k512_arr == (reveal sha2_512.k <: Seq.seq S64.t) /\
+           Pulse.Lib.GlobalArray.static_array_elems iv512_arr == (reveal sha2_512.iv <: Seq.seq S64.t))
+  = sha2_512_facts ()
+#pop-options
+
 (** RSASSA-PSS-SIGN with sha256. *)
 fn sign_sha256 (modBits: (m: U32.t { 1 < U32.v m }))
                (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
@@ -741,6 +758,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   sha2_384_facts ();
+  sha2_384_tables ();
   let r = rsapss_sign sha2_384 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
   drop_table ivt;
   drop_table kt;
@@ -780,6 +798,7 @@ ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   sha2_384_facts ();
+  sha2_384_tables ();
   let r = rsapss_verify sha2_384 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
   drop_table ivt;
   drop_table kt;
@@ -824,6 +843,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   sha2_512_facts ();
+  sha2_512_tables ();
   let r = rsapss_sign sha2_512 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
   drop_table ivt;
   drop_table kt;
@@ -863,6 +883,7 @@ ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   sha2_512_facts ();
+  sha2_512_tables ();
   let r = rsapss_verify sha2_512 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
   drop_table ivt;
   drop_table kt;

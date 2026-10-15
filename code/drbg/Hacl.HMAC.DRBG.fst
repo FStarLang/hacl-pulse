@@ -87,6 +87,16 @@ let data_bound64 (p: params S64.t) (data: Seq.seq S8.t)
     assert_norm (block_len #S64.t == 128);
     small (block_len #S64.t + hash_bytes p + 1 + Seq.length data)
 
+(** The same for [Ops.reseed], whose size bound is stated over the two
+    lengths rather than the length of their concatenation. *)
+let reseed_bound64 (p: params S64.t) (ve va: Seq.seq S8.t)
+  : Lemma (requires hash_bytes p <= 64 /\ Seq.length ve <= max_length /\
+                    Seq.length va <= max_additional_input_length)
+          (ensures data_ok p (Seq.append ve va) /\
+                   SZ.fits (block_len #S64.t + hash_bytes p + 1 + Seq.length ve + Seq.length va))
+  = assert_norm (max_additional_input_length <= max_length);
+    data_bound64 p (Seq.append ve va)
+
 (** Instantiate an HMAC_DRBG-sha2_256.  [k] and [v] must have room for 32 bytes
     and [ctr] for one word; all three are overwritten.  For the security the
     mechanism claims, [entropy] must hold at least [min_length] bytes from a
@@ -264,7 +274,7 @@ ensures exists* vkey' vval' vctr'.
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   sha2_384_facts ();
-  data_bound64 sha2_384 (Seq.append ve va);
+  reseed_bound64 sha2_384 ve va;
   reseed sha2_384 kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
@@ -376,7 +386,7 @@ ensures exists* vkey' vval' vctr'.
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   sha2_512_facts ();
-  data_bound64 sha2_512 (Seq.append ve va);
+  reseed_bound64 sha2_512 ve va;
   reseed sha2_512 kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;

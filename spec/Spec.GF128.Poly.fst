@@ -86,6 +86,16 @@ let bit_is_nth (a: block) (i: nat { i < 128 })
   : Lemma (bit a i == UInt.nth #8 (Seq.index a (i / 8)) (i % 8))
   = nth_div_mod #8 (Seq.index a (i / 8)) (i % 8)
 
+(** Bit [k] of byte [j] is bit [8j + k]. *)
+let bit_at (a: block) (j: nat { j < 16 }) (k: nat { k < 8 })
+  : Lemma (j * 8 + k < 128 /\ bit a (j * 8 + k) == UInt.nth #8 (Seq.index a j) k)
+  = Math.lemma_div_plus k j 8;
+    Math.lemma_mod_plus k j 8;
+    Math.small_div k 8;
+    Math.small_mod k 8;
+    assert ((j * 8 + k) / 8 == j /\ (j * 8 + k) % 8 == k);
+    bit_is_nth a (j * 8 + k)
+
 (** Two blocks with the same bits are the same block. *)
 let bits_inj (a b: block)
   : Lemma (requires forall (i: nat). i < 128 ==> bit a i == bit b i)
@@ -93,15 +103,8 @@ let bits_inj (a b: block)
   = let aux (j: nat { j < 16 }) : Lemma (Seq.index a j == Seq.index b j)
       = let f (k: nat { k < 8 }) : Lemma (UInt.nth #8 (Seq.index a j) k ==
                                           UInt.nth #8 (Seq.index b j) k)
-          = Math.lemma_mult_le_right 8 (j + 1) 16;
-            Math.multiple_division_lemma j 8;
-            Math.multiple_modulo_lemma j 8;
-            Math.lemma_div_plus k j 8;
-            Math.lemma_mod_plus k j 8;
-            Math.small_division_lemma_1 k 8;
-            Math.small_mod k 8;
-            bit_is_nth a (j * 8 + k);
-            bit_is_nth b (j * 8 + k)
+          = bit_at a j k;
+            bit_at b j k
         in
         FStar.Classical.forall_intro f;
         UInt.nth_lemma #8 (Seq.index a j) (Seq.index b j)
@@ -120,18 +123,39 @@ let gadd_bit (a b: block) (i: nat { i < 128 })
 
 let zero_bit (i: nat { i < 128 }) : Lemma (bit zero i == false) = ()
 
+(** A bit of the first byte, and a bit of a zero byte. *)
+let bit_lo (a: block) (i: nat { i < 8 })
+  : Lemma (bit a i == ((Seq.index a 0 / pow2 (7 - i)) % 2 = 1))
+  = Math.small_div i 8;
+    Math.small_mod i 8
+
+let bit_zero_byte (a: block) (i: nat { i < 128 })
+  : Lemma (requires Seq.index a (i / 8) == 0) (ensures bit a i == false)
+  = Math.small_division_lemma_1 0 (pow2 (7 - i % 8))
+
+let r_block_index (j: nat { j < 16 })
+  : Lemma (Seq.index r_block j == (if j = 0 then 0xe1 else 0))
+  = ()
+
 (** The reduction constant, [x^7 + x^2 + x + 1]. *)
 let r_bit (i: nat { i < 128 })
   : Lemma (bit r_block i == (i = 0 || i = 1 || i = 2 || i = 7))
-  = assert_norm (bit r_block 0 == true);
-    assert_norm (bit r_block 1 == true);
-    assert_norm (bit r_block 2 == true);
-    assert_norm (bit r_block 3 == false);
-    assert_norm (bit r_block 4 == false);
-    assert_norm (bit r_block 5 == false);
-    assert_norm (bit r_block 6 == false);
-    assert_norm (bit r_block 7 == true);
-    if i < 8 then () else Math.small_division_lemma_1 0 (pow2 (7 - i % 8))
+  = if i < 8 then begin
+      r_block_index 0;
+      bit_lo r_block i;
+      if i = 0 then assert_norm ((0xe1 / pow2 (7 - 0)) % 2 = 1)
+      else if i = 1 then assert_norm ((0xe1 / pow2 (7 - 1)) % 2 = 1)
+      else if i = 2 then assert_norm ((0xe1 / pow2 (7 - 2)) % 2 = 1)
+      else if i = 3 then assert_norm ((0xe1 / pow2 (7 - 3)) % 2 = 0)
+      else if i = 4 then assert_norm ((0xe1 / pow2 (7 - 4)) % 2 = 0)
+      else if i = 5 then assert_norm ((0xe1 / pow2 (7 - 5)) % 2 = 0)
+      else if i = 6 then assert_norm ((0xe1 / pow2 (7 - 6)) % 2 = 0)
+      else assert_norm ((0xe1 / pow2 (7 - 7)) % 2 = 1)
+    end
+    else begin
+      r_block_index (i / 8);
+      bit_zero_byte r_block i
+    end
 
 (** {2 The shift}
 
@@ -206,16 +230,20 @@ let xtimes (v: block) : block =
 let top_bit (v: block) : Lemma (bit v 127 == (Seq.index v (blocklen - 1) % 2 = 1))
   = assert_norm (pow2 0 == 1)
 
+let top_bit_case (v: block)
+  : Lemma (bit v 127 == not (Seq.index v (blocklen - 1) % 2 = 0))
+  = top_bit v;
+    Math.lemma_mod_lt (Seq.index v (blocklen - 1)) 2
+
 let xtimes_bit (v: block) (i: nat { i < 128 })
   : Lemma (bit (xtimes v) i ==
              ((i > 0 && bit v (i - 1)) <>
               (bit v 127 && (i = 0 || i = 1 || i = 2 || i = 7))))
-  = top_bit v;
+  = top_bit_case v;
     shift_bit v i;
     r_bit i;
     if Seq.index v (blocklen - 1) % 2 = 0 then ()
     else begin
-      Math.lemma_mod_lt (Seq.index v (blocklen - 1)) 2;
       assert (bit v 127 == true);
       assert (xtimes v == gadd (shift_right_1 v) r_block);
       gadd_bit (shift_right_1 v) r_block i
@@ -372,19 +400,27 @@ let pbits_len (a: block) : Lemma (Seq.length (pbits a) == 128) = ()
 
 let one_block : block = Seq.init blocklen (fun j -> (if j = 0 then 128 else 0) <: elem)
 
+let one_block_index (j: nat { j < 16 })
+  : Lemma (Seq.index one_block j == (if j = 0 then 128 else 0))
+  = ()
+
 let one_bit (i: nat { i < 128 }) : Lemma (bit one_block i == (i = 0))
-  = if i < 8
-    then begin
-      assert_norm (bit one_block 0 == true);
-      assert_norm (bit one_block 1 == false);
-      assert_norm (bit one_block 2 == false);
-      assert_norm (bit one_block 3 == false);
-      assert_norm (bit one_block 4 == false);
-      assert_norm (bit one_block 5 == false);
-      assert_norm (bit one_block 6 == false);
-      assert_norm (bit one_block 7 == false)
+  = if i < 8 then begin
+      one_block_index 0;
+      bit_lo one_block i;
+      if i = 0 then assert_norm ((128 / pow2 (7 - 0)) % 2 = 1)
+      else if i = 1 then assert_norm ((128 / pow2 (7 - 1)) % 2 = 0)
+      else if i = 2 then assert_norm ((128 / pow2 (7 - 2)) % 2 = 0)
+      else if i = 3 then assert_norm ((128 / pow2 (7 - 3)) % 2 = 0)
+      else if i = 4 then assert_norm ((128 / pow2 (7 - 4)) % 2 = 0)
+      else if i = 5 then assert_norm ((128 / pow2 (7 - 5)) % 2 = 0)
+      else if i = 6 then assert_norm ((128 / pow2 (7 - 6)) % 2 = 0)
+      else assert_norm ((128 / pow2 (7 - 7)) % 2 = 0)
     end
-    else Math.small_division_lemma_1 0 (pow2 (7 - i % 8))
+    else begin
+      one_block_index (i / 8);
+      bit_zero_byte one_block i
+    end
 
 let rec xpow (i: nat) : Tot block (decreases i) =
   if i = 0 then one_block else xtimes (xpow (i - 1))
@@ -702,9 +738,22 @@ let pterm2 (x y: block) (i: nat { i < 128 }) (k: int) : bool =
   pcoef x y k && bit (xpowi k) i
 
 (** [x^n] advanced [m] more times is [x^(n+m)]. *)
+let xpow_succ (i: pos) : Lemma (xpow i == xtimes (xpow (i - 1))) = ()
+
+let xt_zero (v: block) : Lemma (xt v 0 == v) = ()
+
+let xt_succ (v: block) (j: pos) : Lemma (xt v j == xtimes (xt v (j - 1))) = ()
+
+#push-options "--fuel 0 --ifuel 0"
 let rec xpow_add (n m: nat)
   : Lemma (ensures xpow (n + m) == xt (xpow n) m) (decreases m)
-  = if m = 0 then () else xpow_add n (m - 1)
+  = if m = 0 then xt_zero (xpow n)
+    else begin
+      xpow_add n (m - 1);
+      xpow_succ (n + m);
+      xt_succ (xpow n) m
+    end
+#pop-options
 
 (** [x^127] has only its top bit, so one more step is the reduction constant
     and nothing else: [x^128 == R]. *)

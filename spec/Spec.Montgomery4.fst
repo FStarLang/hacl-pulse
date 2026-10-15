@@ -317,6 +317,19 @@ let rec mrun_add (ms: Seq.seq nat) (mu: nat) (k: nat) (t: Seq.seq nat)
       pow_step k
     end
 
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 5"
+let mreduce_bound (r: pos) (m: pos) (t y v: int)
+  : Lemma (requires v == r * y /\ v <= t + (r - 1) * m /\ t < m * r)
+          (ensures y < 2 * m)
+  = Math.distributivity_sub_left r 1 m;
+    Math.swap_mul m r;
+    if y >= 2 * m then begin
+      Math.lemma_mult_le_left r (2 * m) y;
+      Math.paren_mul_right r 2 m;
+      Math.swap_mul r 2
+    end
+#pop-options
+
 let mreduce_lt (ms: Seq.seq nat) (mu: nat) (t: Seq.seq nat { Seq.length t == ncol }) (m: pos)
   : Lemma (requires mont_ok ms mu /\ eval ms == m /\
                     eval t < m * pow2 256)
@@ -330,7 +343,6 @@ let mreduce_lt (ms: Seq.seq nat) (mu: nat) (t: Seq.seq nat { Seq.length t == nco
     let y = eval (mreduce ms mu t) in
     assert (eval r == pow2 256 * y);
     mrun_add ms mu nl t;
-    Math.distributivity_sub_left (pow2 256) 1 m;
-    if y >= 2 * m then Math.lemma_mult_le_left (pow2 256) (2 * m) y
+    mreduce_bound (pow2 256) m (eval t) y (eval r)
 
 #pop-options

@@ -67,7 +67,7 @@ module G = Spec.GF128
 
 let taglen = 16
 
-let max_msg : pos = pow2 36 - 32
+let max_msg : pos = assert_norm (pow2 36 > 32); pow2 36 - 32
 let max_aad : pos = pow2 61 - 1
 
 let msg_ok (m: Seq.seq elem) : prop = Seq.length m <= max_msg
@@ -230,8 +230,8 @@ let pad_exact (s: Seq.seq elem)
     block whose first half is zero. *)
 let j0_fold (v: variant) (w: Seq.lseq elem (xkeylen v)) (iv: Seq.seq elem { iv_ok iv })
   : Lemma (requires Seq.length iv <> 12)
-          (ensures (let lb = Seq.append (u64be 0) (u64be (8 * Seq.length iv)) in
-                    assert_norm (8 * (pow2 61 - 1) < pow2 64);
+          (ensures (assert_norm (8 * (pow2 61 - 1) < pow2 64);
+                    let lb = Seq.append (u64be 0) (u64be (8 * Seq.length iv)) in
                     Seq.length lb == blocklen /\
                     j0 v w iv == G.ghash_upd (hkey v w)
                                    (G.ghash_upd (hkey v w) G.zero (pad iv)) lb))
