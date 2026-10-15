@@ -73,6 +73,18 @@ let bit_of (ve: Seq.seq U64.t) (i: nat { i < 256 }) (l: U64.t) (j: U32.t)
     UInt.logand_mask #64 (U64.v (U64.shift_right l j)) 1;
     ebit (pvals ve) i
 
+(** Index arithmetic of the loop body, at top level. *)
+let idx_of (bi: SZ.t)
+  : Lemma (SZ.v (SZ.div bi 64sz) == SZ.v bi / 64 /\
+           SZ.v (SZ.rem bi 64sz) == SZ.v bi % 64)
+  = ()
+
+(** The loop exits at [vi = 0], where the exponent prefix is all of [en]. *)
+let exp_final (en: nat) (vi: SZ.t)
+  : Lemma (requires not (SZ.v vi > 0))
+          (ensures en / pow2 (SZ.v vi) == en)
+  = assert_norm (pow2 0 == 1)
+
 (** The conditional multiply of the loop body, as its own function: a Pulse
     [if] whose branches disagree on the value of two slices is easier to
     join through a postcondition written by hand than one inferred. *)
@@ -151,6 +163,7 @@ ensures exists* (vo': Seq.seq S64.t)
   acopy t2 out;
   amul out t1 t2 ms nm mu d;
   mev_mul d (vals v) (vals v);
+  idx_of bi;
   let k = SZ.div bi 64sz;
   assert (pure (SZ.v k == SZ.v bi / 64));
   assert (pure (SZ.v k < nl));
@@ -242,7 +255,8 @@ ensures exists* (vo': Seq.seq S64.t).
     edigit (reveal en) (SZ.v vi);
     i := ni;
   };
-  assert_norm (pow2 0 == 1);
+  with vi v w1 w2. assert (pts_to i vi ** A.pts_to out v ** A.pts_to a1 w1 ** A.pts_to a2 w2);
+  exp_final (reveal en) vi;
   Mem.wipe a2 4sz;
   Mem.wipe a1 4sz;
   ()

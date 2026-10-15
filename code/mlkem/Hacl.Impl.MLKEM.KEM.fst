@@ -222,6 +222,8 @@ ensures exists* vss.
   Copy.copy_range z 0sz dkey (SZ.add (SZ.add k384 eklen) 32sz) 32sz;
   with vz. assert (A.pts_to z vz);
   slice_eq vdk (dk_pke_len p + ek_len p + 32) vz;
+  dk_len_eq p;
+  assert (pure (vz == Seq.slice vdk (dk_pke_len p + ek_len p + 32) (dk_len p)));
 
   (* decrypt, then re-derive the key stream and the randomness *)
   let mut m = [| (S8.zero <: S8.t); 32sz |];
@@ -277,6 +279,7 @@ ensures exists* vss.
   Hash.hash_j_impl jj jin (SZ.add 32sz ctlen);
   Mem.wipe jin (SZ.add 32sz ctlen);
   with vjj. assert (A.pts_to jj vjj);
+  assert (pure (vjj == hash_j (Seq.append (Seq.slice vdk (dk_pke_len p + ek_len p + 32) (dk_len p)) vc)));
 
   Sel.select_copy ss 0sz kk jj 32sz mask;
   with vss. assert (A.pts_to ss vss);

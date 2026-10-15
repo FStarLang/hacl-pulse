@@ -135,16 +135,32 @@ let mstep_eval (ms: Seq.seq nat) (mu: nat) (i: nat) (t: Seq.seq nat)
     Math.paren_mul_right (pow2 (rad * i)) u (eval ms)
 
 (** Limb [i] becomes zero and the limbs below it are untouched. *)
+let mstep_low (ms: Seq.seq nat) (mu: nat) (i: nat) (t: Seq.seq nat) (j: nat)
+  : Lemma (requires i + 1 < Seq.length t /\ j <= i)
+          (ensures vat (mstep ms mu i t) j ==
+                   (if j < i then Seq.index t j
+                    else (Seq.index t i + plo (mdigit mu i t * vat ms 0)) % base))
+  = let u = mdigit mu i t in
+    let e = srow (Seq.length t) u ms i nl in
+    let s = addw t e in
+    assert (Seq.index s j == Seq.index t j + vat e j);
+    assert (vat e j == (if j < i then 0 else plo (u * vat ms 0)));
+    let s1 = Seq.upd s i (vat s i % base) in
+    assert (Seq.length s == Seq.length t);
+    assert (mstep ms mu i t == Seq.upd s1 (i + 1) (vat s (i + 1) + vat s i / base));
+    assert (Seq.index s1 j == (if j < i then Seq.index s j else vat s i % base))
+
 let mstep_zero (ms: Seq.seq nat) (mu: nat) (i: nat) (t: Seq.seq nat)
   : Lemma (requires mont_ok ms mu /\ i + 1 < Seq.length t /\
                     (forall (j: nat). j < i ==> vat t j == 0))
           (ensures (forall (j: nat). j <= i ==> vat (mstep ms mu i t) j == 0))
   = let u = mdigit mu i t in
-    let e = srow (Seq.length t) u ms i nl in
-    let s = addw t e in
     mdigit_kills ms mu (vat t i);
-    assert (Seq.index s i == Seq.index t i + plo (u * Seq.index ms 0));
-    Math.lemma_mod_add_distr (Seq.index t i) (u * Seq.index ms 0) base
+    assert (vat ms 0 == Seq.index ms 0);
+    Math.lemma_mod_add_distr (Seq.index t i) (u * Seq.index ms 0) base;
+    introduce forall (j: nat). j <= i ==> vat (mstep ms mu i t) j == 0
+    with introduce _ ==> _
+    with (mstep_low ms mu i t j; if j < i then assert (vat t j == 0))
 
 (** {3 The bound}
 

@@ -107,6 +107,25 @@ let mod4_mod (b: nat) (n: pos)
     Math.lemma_mod_mul_distr_l n (b / n) 4;
     Math.lemma_mod_add_distr (b % n) (n * (b / n)) 4
 
+let rcidx_val (b: nat) (n: pos) (q: nat) (r: nat)
+  : Lemma (requires b / n == q /\ b % n == r)
+          (ensures rcidx b n == q + (if r = 0 then 0 else 1))
+  = ()
+
+let div_mod_shift (x q: nat) (n: pos)
+  : Lemma (requires x < n) (ensures (x + q * n) / n == q /\ (x + q * n) % n == x)
+  = Math.lemma_div_plus x q n;
+    Math.lemma_mod_plus x q n;
+    Math.small_div x n;
+    Math.small_mod x n
+
+let div_mod_shift_n (q: nat) (n: pos)
+  : Lemma ((n + q * n) / n == q + 1 /\ (n + q * n) % n == 0)
+  = Math.lemma_div_plus n q n;
+    Math.lemma_mod_plus n q n;
+    Math.cancel_mul_div 1 n;
+    Math.cancel_mul_mod 1 n
+
 let rcidx_step_other (b: nat) (n: pos)
   : Lemma (requires n <= b /\ b % n <> 0 /\ b % 4 == 0 /\ n % 4 == 0)
           (ensures rcidx (b + 4) n == rcidx b n)
@@ -115,14 +134,15 @@ let rcidx_step_other (b: nat) (n: pos)
     Math.lemma_div_mod b n;
     mod4_mod b n;
     mul4_gap r n;
-    Math.lemma_div_plus (r + 4) q n;
-    Math.lemma_mod_plus (r + 4) q n;
+    Math.swap_mul n q;
+    assert (b + 4 == (r + 4) + q * n);
+    rcidx_val b n q r;
     if r + 4 = n then begin
-      Math.lemma_div_plus 0 (q + 1) n;
-      Math.lemma_mod_plus 0 (q + 1) n
+      div_mod_shift_n q n;
+      rcidx_val (b + 4) n (q + 1) 0
     end else begin
-      Math.small_div (r + 4) n;
-      Math.small_mod (r + 4) n
+      div_mod_shift (r + 4) q n;
+      rcidx_val (b + 4) n q (r + 4)
     end
 
 (** Counting in bytes rather than in words: the word index [i] sits at byte
@@ -167,38 +187,176 @@ let ks_expand_key (v: variant) (key: Seq.lseq elem (keylen v)) (j: nat { j < key
     with a conditional because the caller is in a branch where the condition
     is already decided, and a smaller hypothesis is a smaller query. *)
 
+let xor_word_index (a b: word) (j: nat { j < 4 })
+  : Lemma (Seq.index (xor_word a b) j == Seq.index a j ^^ Seq.index b j) = ()
+
+let sub_word_index (a: word) (j: nat { j < 4 })
+  : Lemma (Seq.index (sub_word a) j == sbox (Seq.index a j)) = ()
+
+let rot_word_index (a: word) (j: nat { j < 4 })
+  : Lemma (Seq.index (rot_word a) j == Seq.index a ((j + 1) % 4)) = ()
+
+let rcon_word_index (r: pos) (j: nat { j < 4 })
+  : Lemma (Seq.index (rcon_word r) j == (if j = 0 then rcon r else 0)) = ()
+
+let succ_mod4 (j: nat { j < 4 })
+  : Lemma ((j + 1) % 4 == (if j = 3 then 0 else j + 1))
+  = if j = 3 then Math.cancel_mul_mod 1 4 else Math.small_mod (j + 1) 4
+
+let one_le_div (i: nat) (n: pos)
+  : Lemma (requires n <= i) (ensures 1 <= i / n)
+  = Math.lemma_div_le n i n; Math.cancel_mul_div 1 n
+
 #push-options "--fuel 1 --ifuel 1"
+let ks_word_mul (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat)
+  : Lemma (requires nk v <= i /\ i % nk v == 0 /\ 1 <= i / nk v)
+          (ensures ks_word v key i ==
+             xor_word (ks_word v key (i - nk v))
+               (xor_word (sub_word (rot_word (ks_word v key (i - 1)))) (rcon_word (i / nk v))))
+  = ()
+
+let ks_word_sub (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat)
+  : Lemma (requires nk v <= i /\ nk v > 6 /\ i % nk v == 4)
+          (ensures ks_word v key i ==
+             xor_word (ks_word v key (i - nk v)) (sub_word (ks_word v key (i - 1))))
+  = ()
+
+let ks_word_plain (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat)
+  : Lemma (requires nk v <= i /\ i % nk v <> 0 /\ ~(nk v > 6 /\ i % nk v == 4))
+          (ensures ks_word v key i ==
+             xor_word (ks_word v key (i - nk v)) (ks_word v key (i - 1)))
+  = ()
+#pop-options
+
 let ks_step_mul (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat) (j: nat { j < 4 })
   : Lemma (requires nk v <= i /\ i % nk v == 0)
           (ensures 1 <= i / nk v /\
             Seq.index (ks_word v key i) j ==
               Seq.index (ks_word v key (i - nk v)) j ^^
               (if j = 0 then sbox (Seq.index (ks_word v key (i - 1)) 1) ^^ rcon (i / nk v)
-               else sbox (Seq.index (ks_word v key (i - 1)) ((j + 1) % 4))))
-  = Math.lemma_div_mod i (nk v);
-    xor_zero (sbox (Seq.index (ks_word v key (i - 1)) ((j + 1) % 4)))
+               else sbox (Seq.index (ks_word v key (i - 1)) (if j = 3 then 0 else j + 1))))
+  = one_le_div i (nk v);
+    ks_word_mul v key i;
+    let prev = ks_word v key (i - 1) in
+    let rw = rot_word prev in
+    xor_word_index (ks_word v key (i - nk v))
+      (xor_word (sub_word rw) (rcon_word (i / nk v))) j;
+    xor_word_index (sub_word rw) (rcon_word (i / nk v)) j;
+    sub_word_index rw j;
+    rot_word_index prev j;
+    succ_mod4 j;
+    rcon_word_index (i / nk v) j;
+    xor_zero (sbox (Seq.index prev (if j = 3 then 0 else j + 1)))
 
 let ks_step_sub (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat) (j: nat { j < 4 })
   : Lemma (requires nk v <= i /\ nk v > 6 /\ i % nk v == 4)
           (ensures Seq.index (ks_word v key i) j ==
                    Seq.index (ks_word v key (i - nk v)) j ^^
                    sbox (Seq.index (ks_word v key (i - 1)) j))
-  = ()
+  = ks_word_sub v key i;
+    xor_word_index (ks_word v key (i - nk v)) (sub_word (ks_word v key (i - 1))) j;
+    sub_word_index (ks_word v key (i - 1)) j
 
 let ks_step_plain (v: variant) (key: Seq.lseq elem (keylen v)) (i: nat) (j: nat { j < 4 })
   : Lemma (requires nk v <= i /\ i % nk v <> 0 /\ ~(nk v > 6 /\ i % nk v == 4))
           (ensures Seq.index (ks_word v key i) j ==
                    Seq.index (ks_word v key (i - nk v)) j ^^
                    Seq.index (ks_word v key (i - 1)) j)
-  = ()
+  = ks_word_plain v key i;
+    xor_word_index (ks_word v key (i - nk v)) (ks_word v key (i - 1)) j
 
-#pop-options
+(** {2 One byte of a step}
+
+    [b] is the byte offset of the word being written.  Each lemma says that
+    if the bytes a step reads agree with [key_expansion], then the byte it
+    writes does too.  They speak of plain sequences of elements and mention
+    only the handful of indices involved, so the queries stay small. *)
+
+let byte_word (v: variant) (b: nat)
+  : Lemma (requires b % 4 == 0)
+          (ensures 4 * (b / 4) == b /\
+                   b % keylen v == 4 * ((b / 4) % nk v) /\
+                   b / keylen v == (b / 4) / nk v)
+  = Math.lemma_div_mod b 4;
+    word_to_byte (b / 4) (nk v)
+
+let ks_byte_mul (v: variant) (key: Seq.lseq elem (keylen v))
+                (s0 s1: Seq.seq elem) (b: nat) (k: nat { k < 4 })
+  : Lemma (requires
+      Seq.length s0 == xkeylen v /\ Seq.length s1 == xkeylen v /\
+      keylen v <= b /\ b + 4 <= xkeylen v /\ b % 4 == 0 /\ b % keylen v == 0 /\
+      Seq.index s0 (b - keylen v + k) == Seq.index (key_expansion v key) (b - keylen v + k) /\
+      Seq.index s0 (b - 4 + (if k = 3 then 0 else k + 1)) ==
+        Seq.index (key_expansion v key) (b - 4 + (if k = 3 then 0 else k + 1)) /\
+      Seq.index s1 (b + k) ==
+        Seq.index s0 (b - keylen v + k) ^^
+        (if k = 0 then sbox (Seq.index s0 (b - 3)) ^^ rcon0 (b / keylen v)
+         else sbox (Seq.index s0 (b - 4 + (if k = 3 then 0 else k + 1)))))
+    (ensures Seq.index s1 (b + k) == Seq.index (key_expansion v key) (b + k))
+  = let i = b / 4 in
+    byte_word v b;
+    rcidx_at_mul b (keylen v);
+    rcon0_pos (b / keylen v);
+    ks_expand_at v key (i - nk v) k;
+    ks_expand_at v key (i - 1) (if k = 3 then 0 else k + 1);
+    ks_expand_at v key i k;
+    ks_step_mul v key i k
+
+let ks_byte_sub (v: variant) (key: Seq.lseq elem (keylen v))
+                (s0 s1: Seq.seq elem) (b: nat) (k: nat { k < 4 })
+  : Lemma (requires
+      Seq.length s0 == xkeylen v /\ Seq.length s1 == xkeylen v /\
+      keylen v <= b /\ b + 4 <= xkeylen v /\ b % 4 == 0 /\
+      keylen v > 24 /\ b % keylen v == 16 /\
+      Seq.index s0 (b - keylen v + k) == Seq.index (key_expansion v key) (b - keylen v + k) /\
+      Seq.index s0 (b - 4 + k) == Seq.index (key_expansion v key) (b - 4 + k) /\
+      Seq.index s1 (b + k) ==
+        Seq.index s0 (b - keylen v + k) ^^ sbox (Seq.index s0 (b - 4 + k)))
+    (ensures Seq.index s1 (b + k) == Seq.index (key_expansion v key) (b + k))
+  = let i = b / 4 in
+    byte_word v b;
+    ks_expand_at v key (i - nk v) k;
+    ks_expand_at v key (i - 1) k;
+    ks_expand_at v key i k;
+    ks_step_sub v key i k
+
+let ks_byte_plain (v: variant) (key: Seq.lseq elem (keylen v))
+                  (s0 s1: Seq.seq elem) (b: nat) (k: nat { k < 4 })
+  : Lemma (requires
+      Seq.length s0 == xkeylen v /\ Seq.length s1 == xkeylen v /\
+      keylen v <= b /\ b + 4 <= xkeylen v /\ b % 4 == 0 /\
+      b % keylen v <> 0 /\ ~(keylen v > 24 /\ b % keylen v == 16) /\
+      Seq.index s0 (b - keylen v + k) == Seq.index (key_expansion v key) (b - keylen v + k) /\
+      Seq.index s0 (b - 4 + k) == Seq.index (key_expansion v key) (b - 4 + k) /\
+      Seq.index s1 (b + k) ==
+        Seq.index s0 (b - keylen v + k) ^^ Seq.index s0 (b - 4 + k))
+    (ensures Seq.index s1 (b + k) == Seq.index (key_expansion v key) (b + k))
+  = let i = b / 4 in
+    byte_word v b;
+    ks_expand_at v key (i - nk v) k;
+    ks_expand_at v key (i - 1) k;
+    ks_expand_at v key i k;
+    ks_step_plain v key i k
+
+(** Four new bytes on top of a prefix that agrees, through a middle
+    sequence, with the target. *)
+let prefix_extend (s m t: Seq.seq elem) (b: nat)
+  : Lemma (requires
+      b + 4 <= Seq.length s /\ b + 4 <= Seq.length m /\ b + 4 <= Seq.length t /\
+      (forall (j: nat). j < b ==> Seq.index m j == Seq.index t j) /\
+      (forall (j: nat). j < b ==> Seq.index s j == Seq.index m j) /\
+      Seq.index s b == Seq.index t b /\
+      Seq.index s (b + 1) == Seq.index t (b + 1) /\
+      Seq.index s (b + 2) == Seq.index t (b + 2) /\
+      Seq.index s (b + 3) == Seq.index t (b + 3))
+    (ensures forall (j: nat). j < b + 4 ==> Seq.index s j == Seq.index t j)
+  = ()
 
 (** {2 Joining a step to the prefix}
 
-    [b] is the byte offset of the word being written.  Each lemma says that a
-    slice which agreed with [key_expansion] below [b], and whose four new
-    bytes satisfy the equations of one step, agrees with it below [b + 4]. *)
+    Each lemma says that a slice which agreed with [key_expansion] below [b],
+    and whose four new bytes satisfy the equations of one step, agrees with
+    it below [b + 4]. *)
 
 let ks_join_mul (v: variant) (key: Seq.lseq elem (keylen v))
                 (vw0 vw1: Seq.seq S8.t) (b: nat)
@@ -218,20 +376,22 @@ let ks_join_mul (v: variant) (key: Seq.lseq elem (keylen v))
         Seq.index (vals vw0) (b - keylen v + 3) ^^ sbox (Seq.index (vals vw0) (b - 4)))
     (ensures forall (j: nat). j < b + 4 ==>
                Seq.index (vals vw1) j == Seq.index (key_expansion v key) j)
-  = let i = b / 4 in
-    Math.lemma_div_mod b 4;
-    assert (4 * i == b);
-    rcidx_at_mul b (keylen v);
-    rcon0_pos (b / keylen v);
-    word_to_byte i (nk v);
-    ks_expand_at v key (i - nk v) 0; ks_expand_at v key (i - nk v) 1;
-    ks_expand_at v key (i - nk v) 2; ks_expand_at v key (i - nk v) 3;
-    ks_expand_at v key (i - 1) 0; ks_expand_at v key (i - 1) 1;
-    ks_expand_at v key (i - 1) 2; ks_expand_at v key (i - 1) 3;
-    ks_expand_at v key i 0; ks_expand_at v key i 1;
-    ks_expand_at v key i 2; ks_expand_at v key i 3;
-    ks_step_mul v key i 0; ks_step_mul v key i 1;
-    ks_step_mul v key i 2; ks_step_mul v key i 3
+  = let s0 = vals vw0 in
+    let s1 = vals vw1 in
+    let ke = key_expansion v key in
+    assert (Seq.index s0 (b - keylen v) == Seq.index ke (b - keylen v));
+    assert (Seq.index s0 (b - keylen v + 1) == Seq.index ke (b - keylen v + 1));
+    assert (Seq.index s0 (b - keylen v + 2) == Seq.index ke (b - keylen v + 2));
+    assert (Seq.index s0 (b - keylen v + 3) == Seq.index ke (b - keylen v + 3));
+    assert (Seq.index s0 (b - 4) == Seq.index ke (b - 4));
+    assert (Seq.index s0 (b - 3) == Seq.index ke (b - 3));
+    assert (Seq.index s0 (b - 2) == Seq.index ke (b - 2));
+    assert (Seq.index s0 (b - 1) == Seq.index ke (b - 1));
+    ks_byte_mul v key s0 s1 b 0;
+    ks_byte_mul v key s0 s1 b 1;
+    ks_byte_mul v key s0 s1 b 2;
+    ks_byte_mul v key s0 s1 b 3;
+    prefix_extend s1 s0 ke b
 
 let ks_join_sub (v: variant) (key: Seq.lseq elem (keylen v))
                 (vw0 vw1: Seq.seq S8.t) (b: nat)
@@ -245,18 +405,16 @@ let ks_join_sub (v: variant) (key: Seq.lseq elem (keylen v))
          Seq.index (vals vw0) (b - keylen v + j) ^^ sbox (Seq.index (vals vw0) (b - 4 + j))))
     (ensures forall (j: nat). j < b + 4 ==>
                Seq.index (vals vw1) j == Seq.index (key_expansion v key) j)
-  = let i = b / 4 in
-    Math.lemma_div_mod b 4;
-    assert (4 * i == b);
-    word_to_byte i (nk v);
-    ks_expand_at v key (i - nk v) 0; ks_expand_at v key (i - nk v) 1;
-    ks_expand_at v key (i - nk v) 2; ks_expand_at v key (i - nk v) 3;
-    ks_expand_at v key (i - 1) 0; ks_expand_at v key (i - 1) 1;
-    ks_expand_at v key (i - 1) 2; ks_expand_at v key (i - 1) 3;
-    ks_expand_at v key i 0; ks_expand_at v key i 1;
-    ks_expand_at v key i 2; ks_expand_at v key i 3;
-    ks_step_sub v key i 0; ks_step_sub v key i 1;
-    ks_step_sub v key i 2; ks_step_sub v key i 3
+  = let s0 = vals vw0 in
+    let s1 = vals vw1 in
+    let ke = key_expansion v key in
+    let aux (k: nat { k < 4 }) : Lemma (Seq.index s1 (b + k) == Seq.index ke (b + k)) =
+      assert (Seq.index s0 (b - keylen v + k) == Seq.index ke (b - keylen v + k));
+      assert (Seq.index s0 (b - 4 + k) == Seq.index ke (b - 4 + k));
+      ks_byte_sub v key s0 s1 b k
+    in
+    aux 0; aux 1; aux 2; aux 3;
+    prefix_extend s1 s0 ke b
 
 let ks_join_plain (v: variant) (key: Seq.lseq elem (keylen v))
                   (vw0 vw1: Seq.seq S8.t) (b: nat)
@@ -270,18 +428,16 @@ let ks_join_plain (v: variant) (key: Seq.lseq elem (keylen v))
          Seq.index (vals vw0) (b - keylen v + j) ^^ Seq.index (vals vw0) (b - 4 + j)))
     (ensures forall (j: nat). j < b + 4 ==>
                Seq.index (vals vw1) j == Seq.index (key_expansion v key) j)
-  = let i = b / 4 in
-    Math.lemma_div_mod b 4;
-    assert (4 * i == b);
-    word_to_byte i (nk v);
-    ks_expand_at v key (i - nk v) 0; ks_expand_at v key (i - nk v) 1;
-    ks_expand_at v key (i - nk v) 2; ks_expand_at v key (i - nk v) 3;
-    ks_expand_at v key (i - 1) 0; ks_expand_at v key (i - 1) 1;
-    ks_expand_at v key (i - 1) 2; ks_expand_at v key (i - 1) 3;
-    ks_expand_at v key i 0; ks_expand_at v key i 1;
-    ks_expand_at v key i 2; ks_expand_at v key i 3;
-    ks_step_plain v key i 0; ks_step_plain v key i 1;
-    ks_step_plain v key i 2; ks_step_plain v key i 3
+  = let s0 = vals vw0 in
+    let s1 = vals vw1 in
+    let ke = key_expansion v key in
+    let aux (k: nat { k < 4 }) : Lemma (Seq.index s1 (b + k) == Seq.index ke (b + k)) =
+      assert (Seq.index s0 (b - keylen v + k) == Seq.index ke (b - keylen v + k));
+      assert (Seq.index s0 (b - 4 + k) == Seq.index ke (b - 4 + k));
+      ks_byte_plain v key s0 s1 b k
+    in
+    aux 0; aux 1; aux 2; aux 3;
+    prefix_extend s1 s0 ke b
 
 (** The whole expanded key, once the prefix property reaches the end. *)
 let ks_done (v: variant) (key: Seq.lseq elem (keylen v)) (vw: Seq.seq S8.t) (n: nat)
@@ -725,6 +881,19 @@ let round_term (mul: bool) (pv: Vec.t) (rc: S8.t)
     key, and the solver spends its budget on the frame instead of on the
     arithmetic. *)
 
+(** The four byte equations of a substitution step, gathered under the
+    quantifier [ks_join_sub] states them with. *)
+let sub_eqs_intro (s0 s1: Seq.seq elem) (b: nat) (kl: nat)
+  : Lemma (requires
+      kl + 4 <= b /\ b + 4 <= Seq.length s0 /\ b + 4 <= Seq.length s1 /\
+      Seq.index s1 b == Seq.index s0 (b - kl) ^^ sbox (Seq.index s0 (b - 4)) /\
+      Seq.index s1 (b + 1) == Seq.index s0 (b - kl + 1) ^^ sbox (Seq.index s0 (b - 3)) /\
+      Seq.index s1 (b + 2) == Seq.index s0 (b - kl + 2) ^^ sbox (Seq.index s0 (b - 2)) /\
+      Seq.index s1 (b + 3) == Seq.index s0 (b - kl + 3) ^^ sbox (Seq.index s0 (b - 1)))
+    (ensures forall (j: nat). j < 4 ==> Seq.index s1 (b + j) ==
+               Seq.index s0 (b - kl + j) ^^ sbox (Seq.index s0 (b - 4 + j)))
+  = ()
+
 #push-options "--z3rlimit 400"
 
 (** The first word of the round key: the one the round term touches. *)
@@ -781,6 +950,7 @@ let block_step (v: variant) (key: Seq.lseq elem (keylen v))
                (Seq.index t 2) (sbox (Seq.index (vals vw0) (b - 2))) (Seq.index r 2);
       xor_cong (Seq.index kv 3) (Seq.index (vals vw0) (b - keylen v + 3))
                (Seq.index t 3) (sbox (Seq.index (vals vw0) (b - 1))) (Seq.index r 3);
+      sub_eqs_intro (vals vw0) (vals vw1) b (keylen v);
       ks_join_sub v key vw0 vw1 b
     end
 

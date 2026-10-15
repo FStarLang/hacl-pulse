@@ -131,6 +131,14 @@ let eval_win2 (s: Seq.seq nat) (j: nat { j <= Seq.length s }) (off: nat) (w: nat
 
 (** The converse: a sequence whose limbs are the successive windows of [v]
     evaluates to [v]. *)
+let win_zero (v: nat) : Lemma (win v (rad * 0) rad == v % base)
+  = assert_norm (pow2 0 == 1)
+
+let eval_cons_w (s: Seq.seq nat)
+  : Lemma (requires Seq.length s > 0)
+          (ensures eval s == Seq.index s 0 + base * eval (Seq.slice s 1 (Seq.length s)))
+  = ()
+
 let rec eval_windows (v: nat) (s: Seq.seq nat)
   : Lemma (requires v < pow2 (rad * Seq.length s) /\
                     (forall (k: nat). k < Seq.length s ==>
@@ -155,7 +163,13 @@ let rec eval_windows (v: nat) (s: Seq.seq nat)
         Math.division_multiplication_lemma v base (pow2 (rad * k)) in
       Classical.forall_intro aux;
       eval_windows v' t;
-      Math.euclidean_division_definition v base
+      win_zero v;
+      assert (Seq.index s 0 == v % base);
+      eval_cons_w s;
+      Math.euclidean_division_definition v base;
+      introduce forall (k: nat). k < n ==> Seq.index s k < base
+      with introduce _ ==> _
+      with (if k > 0 then assert (Seq.index s k == Seq.index t (k - 1)))
     end
 
 #pop-options

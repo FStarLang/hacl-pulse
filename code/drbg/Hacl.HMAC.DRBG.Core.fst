@@ -121,7 +121,46 @@ ensures exists* vkey' vval'.
 
     One re-keying, and a second with the tag [0x01] when there is data. *)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+(** [upd] spelled out through [hm], stated once at top level so that the
+    Pulse VC of [update] only has to pick the right branch. *)
+let upd_hm (#t: Type0) {| w: word t |} (p: params t)
+           (vkey: Seq.seq S8.t) (vval: Seq.seq S8.t) (data: Seq.seq S8.t)
+  : Lemma (requires Seq.length vkey == hash_bytes p /\ Seq.length vval == hash_bytes p /\
+                    data_ok p data)
+          (ensures (let k1 = hm p vkey (tagged vval 0x00uy data) in
+                    let v1 = hm p k1 vval in
+                    let k2 = hm p k1 (tagged v1 0x01uy data) in
+                    let v2 = hm p k2 v1 in
+                    Seq.length k1 == hash_bytes p /\ Seq.length v1 == hash_bytes p /\
+                    (Seq.length data == 0 ==> upd p vkey vval data == (k1, v1)) /\
+                    (Seq.length data > 0 ==> upd p vkey vval data == (k2, v2))))
+  = outer_fits #t p;
+    let k1 = hmac p vkey (tagged vval 0x00uy data) in
+    hm_def p vkey (tagged vval 0x00uy data);
+    let v1 = hmac p k1 vval in
+    hm_def p k1 vval;
+    hm_def p k1 (tagged v1 0x01uy data);
+    let k2 = hmac p k1 (tagged v1 0x01uy data) in
+    hm_def p k2 v1
+
+(** [upd_hm], phrased on the very boolean that [update] branches on, so that
+    each branch closes by pure equational reasoning. *)
+let upd_branch (#t: Type0) {| w: word t |} (p: params t)
+               (vkey vval: Seq.seq S8.t) (a b c: Seq.seq S8.t) (n1 n2 n3: SZ.t)
+  : Lemma (requires Seq.length vkey == hash_bytes p /\ Seq.length vval == hash_bytes p /\
+                    data_ok p (dcat a b c) /\
+                    SZ.v n1 == Seq.length a /\ SZ.v n2 == Seq.length b /\ SZ.v n3 == Seq.length c)
+          (ensures (let data = dcat a b c in
+                    let k1 = hm p vkey (tagged vval 0x00uy data) in
+                    let v1 = hm p k1 vval in
+                    let k2 = hm p k1 (tagged v1 0x01uy data) in
+                    let v2 = hm p k2 v1 in
+                    Seq.length k1 == hash_bytes p /\ Seq.length v1 == hash_bytes p /\
+                    upd p vkey vval data ==
+                      (if (SZ.gt n1 0sz || SZ.gt n2 0sz || SZ.gt n3 0sz) then (k2, v2) else (k1, v1))))
+  = upd_hm p vkey vval (dcat a b c)
+
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
 fn update (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
           (kt: A.array t) (ivt: A.array t)
@@ -150,17 +189,10 @@ ensures exists* vkey' vval'.
   A.pts_to_len k; A.pts_to_len v;
   A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3;
   outer_fits #t p;
+  upd_branch p (reveal vkey) (reveal vval) (reveal vd1) (reveal vd2) (reveal vd3) n1 n2 n3;
   rekey p kt ivt k v d1 n1 d2 n2 d3 n3 0x00uy;
-  hm_def p (reveal vkey) (tagged (reveal vval) 0x00uy (dcat vd1 vd2 vd3));
-  with vk1. assert (A.pts_to k vk1);
-  with vv1. assert (A.pts_to v vv1);
-  hm_def p (reveal vk1) (reveal vval);
-  upd_def p (dcat vd1 vd2 vd3) ({ k = reveal vkey; v = reveal vval; ctr = 0 });
   if (SZ.gt n1 0sz || SZ.gt n2 0sz || SZ.gt n3 0sz) {
     rekey p kt ivt k v d1 n1 d2 n2 d3 n3 0x01uy;
-    hm_def p (reveal vk1) (tagged (reveal vv1) 0x01uy (dcat vd1 vd2 vd3));
-    with vk2. assert (A.pts_to k vk2);
-    hm_def p (reveal vk2) (reveal vv1);
     ()
   } else {
     ()

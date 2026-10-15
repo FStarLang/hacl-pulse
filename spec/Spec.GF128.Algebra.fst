@@ -226,6 +226,14 @@ let gmul_bsum (x y: block) : Lemma (gmul x y == bsum (afun x y) 128)
     Immediate from the shape above: the family [afun] depends on [x] only
     through its bits, and those exclusive-or. *)
 
+let afun_gadd_bit (a b c: block) (i: nat { i < 128 }) (k: int)
+  : Lemma (bit (afun (gadd a b) c k) i == (bit (afun a c k) i <> bit (afun b c k) i))
+  = pbits_get (gadd a b) k;
+    pbits_get a k;
+    pbits_get b k;
+    zero_bit i;
+    if 0 <= k && k < 128 then gadd_bit a b k
+
 let gmul_gadd_left (a b c: block)
   : Lemma (gmul (gadd a b) c == gadd (gmul a c) (gmul b c))
   = gmul_bsum (gadd a b) c;
@@ -245,6 +253,7 @@ let gmul_gadd_left (a b c: block)
         gadd_bit (bsum (afun a c) 128) (bsum (afun b c) 128) i;
         xsum_xor (fun k -> bit (afun a c k) i) (fun k -> bit (afun b c k) i)
                  0 128;
+        Classical.forall_intro (afun_gadd_bit a b c i);
         xsum_ext (fun k -> bit (afun (gadd a b) c k) i)
                  (fun k -> bit (afun a c k) i <> bit (afun b c k) i) 0 128
     in

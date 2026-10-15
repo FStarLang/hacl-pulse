@@ -101,6 +101,16 @@ ensures A.pts_to b #p vb **
   !acc
 }
 
+(** One step of [load_le_loop]'s invariant, stated over plain numbers. *)
+let load_le_inv_step (s: Seq.seq S8.t) (off n j: nat) (a r: int)
+  : Lemma (requires off + n <= Seq.length s /\ j < n /\
+                    a == le_nat (Seq.slice s (off + n - j) (off + n)) /\
+                    r == a * 256 + S8.v (Seq.index s (off + n - (j + 1))))
+          (ensures r == le_nat (Seq.slice s (off + n - (j + 1)) (off + n)))
+  = slice_suffix s off n (n - j);
+    slice_suffix s off n (n - j - 1);
+    le_nat_cons (Seq.slice s off (off + n)) (n - j - 1)
+
 fn load_le_loop (#t: Type0) {| w: word t |} (b: A.array S8.t) (off: SZ.t)
            (#p: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to b #p vb ** pure (SZ.v off + bytes #t <= Seq.length vb)
@@ -128,9 +138,8 @@ ensures A.pts_to b #p vb **
     let a = !acc;
     acc_fits_le a (Seq.slice vb (SZ.v off + SZ.v n - SZ.v vj) (SZ.v off + SZ.v n)) (SZ.v vj);
     load_step a byte;
-    slice_suffix vb (SZ.v off) (bytes #t) (SZ.v n - SZ.v vj);
-    slice_suffix vb (SZ.v off) (bytes #t) (SZ.v n - SZ.v vj - 1);
-    le_nat_cons (Seq.slice vb (SZ.v off) (SZ.v off + bytes #t)) (SZ.v n - SZ.v vj - 1);
+    load_le_inv_step vb (SZ.v off) (SZ.v n) (SZ.v vj) (v a)
+      (v (logor #t (shift_left a 8ul) (of_byte byte)));
     acc := logor #t (shift_left a 8ul) (of_byte byte);
     j := SZ.add vj 1sz;
   };
@@ -278,7 +287,9 @@ let be8_join (#t: Type0) {| w: word t |} (lo hi: t) (s: Seq.seq S8.t)
   = be_nat_bound (Seq.slice s 0 4);
     be_nat_bound (Seq.slice s 4 8);
     or_half #t lo hi 4 32ul;
-    be_nat_split s 4
+    be_nat_split s 4;
+    assert (be_nat s == be_nat (Seq.slice s 0 4) * pow2 32 + be_nat (Seq.slice s 4 8));
+    FStar.Math.Lemmas.swap_mul (be_nat (Seq.slice s 0 4)) (pow2 32)
 
 (** A window of four bytes inside a window of eight is a window of four. *)
 let halves (s: Seq.seq S8.t) (off: nat { off + 8 <= Seq.length s })
@@ -315,6 +326,70 @@ ensures A.pts_to b #p vb **
 
 
 
+(** The loop invariants of [store_be] and [store_le], kept opaque so that the
+    quantifiers in them stay out of the Pulse verification conditions; the
+    three lemmas after each are all the loops need to know about them. *)
+
+[@@"opaque_to_smt"]
+let store_be_inv (#t: Type0) {| w: word t |} (x c: t) (off n vj: nat)
+                 (vb vb': Seq.seq S8.t) : prop =
+  vj <= n /\ off + n <= Seq.length vb /\ Seq.length vb' == Seq.length vb /\
+  v c == v x / pow2 (8 * vj) /\
+  (forall (k: nat). k < vj ==>
+     S8.v (Seq.index vb' (off + n - 1 - k)) == (v x / pow2 (8 * k)) % 256) /\
+  (forall (k: nat). k < Seq.length vb ==>
+     k < off + n - vj \/ k >= off + n ==>
+     Seq.index vb' k == Seq.index vb k)
+
+let store_be_inv_init (#t: Type0) {| w: word t |} (x: t) (off n: nat) (vb: Seq.seq S8.t)
+  : Lemma (requires off + n <= Seq.length vb)
+          (ensures store_be_inv x x off n 0 vb vb)
+  = reveal_opaque (`%store_be_inv) (store_be_inv #t #w);
+    assert_norm (pow2 0 == 1)
+
+let store_be_inv_step (#t: Type0) {| w: word t |} (x c: t) (off n vj: nat)
+                      (vb vb': Seq.seq S8.t)
+  : Lemma (requires vj < n /\ store_be_inv x c off n vj vb vb')
+          (ensures off + n - (vj + 1) < Seq.length vb' /\
+                   store_be_inv x (shift_right #t c 8ul) off n (vj + 1) vb
+                     (Seq.upd vb' (off + n - (vj + 1)) (to_byte c)))
+  = reveal_opaque (`%store_be_inv) (store_be_inv #t #w);
+    store_step x c vj;
+    assert_norm (pow2 8 == 256)
+
+let store_be_inv_final (#t: Type0) {| w: word t |} (x c: t) (off n vj: nat)
+                       (vb vb': Seq.seq S8.t)
+  : Lemma (requires n * 8 == bits #t /\ n <= vj /\ store_be_inv x c off n vj vb vb')
+          (ensures Seq.length vb' == Seq.length vb /\
+                   off + bytes #t <= Seq.length vb' /\
+                   (forall (k: nat). k < bytes #t ==>
+                      S8.v (Seq.index vb' (off + k)) == (v x / pow2 (8 * (bytes #t - 1 - k))) % 256) /\
+                   (forall (k: nat). k < Seq.length vb ==> k < off \/ k >= off + bytes #t ==>
+                      Seq.index vb' k == Seq.index vb k))
+  = reveal_opaque (`%store_be_inv) (store_be_inv #t #w);
+    assert (vj == n /\ n == bytes #t);
+    introduce forall (k: nat). k < bytes #t ==>
+      S8.v (Seq.index vb' (off + k)) == (v x / pow2 (8 * (bytes #t - 1 - k))) % 256
+    with introduce _ ==> _
+    with (let k' : nat = n - 1 - k in
+          assert (k' < vj /\ off + n - 1 - k' == off + k);
+          assert (S8.v (Seq.index vb' (off + n - 1 - k')) == (v x / pow2 (8 * k')) % 256))
+
+ghost fn store_be_finish (#t: Type0) {| w: word t |} (b: A.array S8.t) (off: SZ.t) (x c: t)
+                         (n vj: nat) (#vb: erased (Seq.seq S8.t)) (#vb': erased (Seq.seq S8.t))
+requires A.pts_to b vb' ** pure (n * 8 == bits #t /\ n <= vj /\ store_be_inv x c (SZ.v off) n vj vb vb')
+ensures exists* vb'. A.pts_to b vb' **
+        pure (Seq.length vb' == Seq.length vb /\
+              SZ.v off + bytes #t <= Seq.length vb' /\
+              (forall (k: nat). k < bytes #t ==>
+                 S8.v (Seq.index vb' (SZ.v off + k)) == (v x / pow2 (8 * (bytes #t - 1 - k))) % 256) /\
+              (forall (k: nat). k < Seq.length vb ==> k < SZ.v off \/ k >= SZ.v off + bytes #t ==>
+                 Seq.index vb' k == Seq.index vb k))
+{
+  store_be_inv_final x c (SZ.v off) n vj vb vb';
+  assert pure (Seq.length vb' == Seq.length vb);
+}
+
 fn store_be (#t: Type0) {| w: word t |} (b: A.array S8.t) (off: SZ.t) (x: t)
             (#vb: erased (Seq.seq S8.t))
 requires A.pts_to b vb ** pure (SZ.v off + bytes #t <= Seq.length vb)
@@ -330,27 +405,26 @@ ensures exists* vb'. A.pts_to b vb' **
   let n = nbytes #t #w;
   let mut cur = x;
   let mut j = 0sz;
+  store_be_inv_init x (SZ.v off) (SZ.v n) vb;
   while (let vj = !j; SZ.lt vj n)
   invariant exists* (vj: SZ.t) (c: t) (vb': Seq.seq S8.t).
     pts_to j vj ** pts_to cur c ** A.pts_to b vb' **
     pure (SZ.v vj <= SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vb /\
           Seq.length vb' == Seq.length vb /\
-          v c == v x / pow2 (8 * SZ.v vj) /\
-          (forall (k: nat). k < SZ.v vj ==>
-             S8.v (Seq.index vb' (SZ.v off + SZ.v n - 1 - k)) == (v x / pow2 (8 * k)) % 256) /\
-          (forall (k: nat). k < Seq.length vb ==>
-             k < SZ.v off + SZ.v n - SZ.v vj \/ k >= SZ.v off + SZ.v n ==>
-             Seq.index vb' k == Seq.index vb k))
+          store_be_inv x c (SZ.v off) (SZ.v n) (SZ.v vj) vb vb')
   decreases (SZ.v n - SZ.v (!j))
   {
+    with vj0 c0 vb'. assert (pts_to j vj0 ** pts_to cur c0 ** A.pts_to b vb');
     let vj = !j;
     let c = !cur;
     let pos = SZ.sub (SZ.add off n) (SZ.add vj 1sz);
+    store_be_inv_step x c (SZ.v off) (SZ.v n) (SZ.v vj) vb vb';
     A.((b.(pos) <- to_byte c));
-    store_step x c (SZ.v vj);
     cur := shift_right #t c 8ul;
     j := SZ.add vj 1sz;
-  }
+  };
+  with vj c vb'. assert (pts_to j vj ** pts_to cur c ** A.pts_to b vb');
+  store_be_finish #t #w b off x c (SZ.v n) (SZ.v vj) #vb #vb';
 }
 
 (** {2 The same, little end first}
@@ -386,6 +460,44 @@ ensures A.pts_to b #p vb **
   }
 }
 
+[@@"opaque_to_smt"]
+let store_le_inv (#t: Type0) {| w: word t |} (x c: t) (off n vj: nat)
+                 (vb vb': Seq.seq S8.t) : prop =
+  vj <= n /\ off + n <= Seq.length vb /\ Seq.length vb' == Seq.length vb /\
+  v c == v x / pow2 (8 * vj) /\
+  (forall (k: nat). k < vj ==>
+     S8.v (Seq.index vb' (off + k)) == (v x / pow2 (8 * k)) % 256) /\
+  (forall (k: nat). k < Seq.length vb ==>
+     k < off \/ k >= off + vj ==>
+     Seq.index vb' k == Seq.index vb k)
+
+let store_le_inv_init (#t: Type0) {| w: word t |} (x: t) (off n: nat) (vb: Seq.seq S8.t)
+  : Lemma (requires off + n <= Seq.length vb)
+          (ensures store_le_inv x x off n 0 vb vb)
+  = reveal_opaque (`%store_le_inv) (store_le_inv #t #w);
+    assert_norm (pow2 0 == 1)
+
+let store_le_inv_step (#t: Type0) {| w: word t |} (x c: t) (off n vj: nat)
+                      (vb vb': Seq.seq S8.t)
+  : Lemma (requires vj < n /\ store_le_inv x c off n vj vb vb')
+          (ensures off + vj < Seq.length vb' /\
+                   store_le_inv x (shift_right #t c 8ul) off n (vj + 1) vb
+                     (Seq.upd vb' (off + vj) (to_byte c)))
+  = reveal_opaque (`%store_le_inv) (store_le_inv #t #w);
+    store_step x c vj;
+    assert_norm (pow2 8 == 256)
+
+let store_le_inv_final (#t: Type0) {| w: word t |} (x c: t) (off n vj: nat)
+                       (vb vb': Seq.seq S8.t)
+  : Lemma (requires n * 8 == bits #t /\ n <= vj /\ store_le_inv x c off n vj vb vb')
+          (ensures Seq.length vb' == Seq.length vb /\
+                   off + bytes #t <= Seq.length vb' /\
+                   (forall (k: nat). k < bytes #t ==>
+                      S8.v (Seq.index vb' (off + k)) == (v x / pow2 (8 * k)) % 256) /\
+                   (forall (k: nat). k < Seq.length vb ==> k < off \/ k >= off + bytes #t ==>
+                      Seq.index vb' k == Seq.index vb k))
+  = reveal_opaque (`%store_le_inv) (store_le_inv #t #w)
+
 fn store_le (#t: Type0) {| w: word t |} (b: A.array S8.t) (off: SZ.t) (x: t)
             (#vb: erased (Seq.seq S8.t))
 requires A.pts_to b vb ** pure (SZ.v off + bytes #t <= Seq.length vb)
@@ -401,26 +513,26 @@ ensures exists* vb'. A.pts_to b vb' **
   let n = nbytes #t #w;
   let mut cur = x;
   let mut j = 0sz;
+  store_le_inv_init x (SZ.v off) (SZ.v n) vb;
   while (let vj = !j; SZ.lt vj n)
   invariant exists* (vj: SZ.t) (c: t) (vb': Seq.seq S8.t).
     pts_to j vj ** pts_to cur c ** A.pts_to b vb' **
     pure (SZ.v vj <= SZ.v n /\ SZ.v off + SZ.v n <= Seq.length vb /\
           Seq.length vb' == Seq.length vb /\
-          v c == v x / pow2 (8 * SZ.v vj) /\
-          (forall (k: nat). k < SZ.v vj ==>
-             S8.v (Seq.index vb' (SZ.v off + k)) == (v x / pow2 (8 * k)) % 256) /\
-          (forall (k: nat). k < Seq.length vb ==>
-             k < SZ.v off \/ k >= SZ.v off + SZ.v vj ==>
-             Seq.index vb' k == Seq.index vb k))
+          store_le_inv x c (SZ.v off) (SZ.v n) (SZ.v vj) vb vb')
   decreases (SZ.v n - SZ.v (!j))
   {
+    with vj0 c0 vb'. assert (pts_to j vj0 ** pts_to cur c0 ** A.pts_to b vb');
     let vj = !j;
     let c = !cur;
+    store_le_inv_step x c (SZ.v off) (SZ.v n) (SZ.v vj) vb vb';
     A.((b.(SZ.add off vj) <- to_byte c));
-    store_step x c (SZ.v vj);
     cur := shift_right #t c 8ul;
     j := SZ.add vj 1sz;
-  }
+  };
+  with vj c vb'. assert (pts_to j vj ** pts_to cur c ** A.pts_to b vb');
+  store_le_inv_final x c (SZ.v off) (SZ.v n) (SZ.v vj) vb vb';
+  ()
 }
 
 (** {2 A whole array of words}

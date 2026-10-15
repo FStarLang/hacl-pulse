@@ -62,7 +62,24 @@ let pow2_small () : Lemma (pow2 1 == 2 /\ pow2 2 == 4 /\ pow2 3 == 8 /\ pow2 4 =
   assert_norm (pow2 5 == 32); assert_norm (pow2 6 == 64);
   assert_norm (pow2 7 == 128); assert_norm (pow2 8 == 256)
 
-#push-options "--z3rlimit 300 --fuel 1 --ifuel 0"
+(* The shift-and-add steps of [pack_byte], one at a time and in a small
+   context: a bit shifted left by less than eight, and a sum below a byte,
+   do not wrap. *)
+let shl_bit (b: S16.t) (s: U32.t { U32.v s < 8 })
+  : Lemma (requires S16.v b < 2)
+          (ensures S16.v (S16.shift_left b s) == S16.v b * pow2 (U32.v s))
+  = Math.pow2_lt_compat 16 (U32.v s);
+    if S16.v b = 0 then Math.small_mod 0 (pow2 16)
+    else Math.small_mod (pow2 (U32.v s)) (pow2 16)
+
+let add_small (x y: S16.t)
+  : Lemma (requires S16.v x + S16.v y < 256)
+          (ensures S16.v (S16.add_mod x y) == S16.v x + S16.v y)
+  = Math.pow2_lt_compat 16 8;
+    pow2_small ();
+    Math.small_mod (S16.v x + S16.v y) (pow2 16)
+
+#push-options "--z3rlimit 30 --fuel 1 --ifuel 0"
 
 (** Bit [pos] of the packed stream: bit [d - 1 - pos mod d] of entry
     [pos / d], counting from the least significant. *)
@@ -111,20 +128,29 @@ ensures A.pts_to m #p vm ** pure (S8.v b == F.byte_val (SZ.v d) vm (SZ.v i))
   let b5 = pack_bit m d len (SZ.add base 5sz);
   let b6 = pack_bit m d len (SZ.add base 6sz);
   let b7 = pack_bit m d len (SZ.add base 7sz);
-  let a1 = S16.add_mod (S16.shift_left b0 7ul) (S16.shift_left b1 6ul);
   assert (pure (S16.v b0 < 2 /\ S16.v b1 < 2 /\ S16.v b2 < 2 /\ S16.v b3 < 2 /\
                 S16.v b4 < 2 /\ S16.v b5 < 2 /\ S16.v b6 < 2 /\ S16.v b7 < 2));
+  shl_bit b0 7ul; shl_bit b1 6ul; shl_bit b2 5ul; shl_bit b3 4ul;
+  shl_bit b4 3ul; shl_bit b5 2ul; shl_bit b6 1ul;
+  add_small (S16.shift_left b0 7ul) (S16.shift_left b1 6ul);
+  let a1 = S16.add_mod (S16.shift_left b0 7ul) (S16.shift_left b1 6ul);
   assert (pure (S16.v a1 == 128 * S16.v b0 + 64 * S16.v b1 /\ S16.v a1 <= 192));
+  add_small a1 (S16.shift_left b2 5ul);
   let a2 = S16.add_mod a1 (S16.shift_left b2 5ul);
   assert (pure (S16.v a2 == S16.v a1 + 32 * S16.v b2 /\ S16.v a2 <= 224));
+  add_small a2 (S16.shift_left b3 4ul);
   let a3 = S16.add_mod a2 (S16.shift_left b3 4ul);
   assert (pure (S16.v a3 == S16.v a2 + 16 * S16.v b3 /\ S16.v a3 <= 240));
+  add_small a3 (S16.shift_left b4 3ul);
   let a4 = S16.add_mod a3 (S16.shift_left b4 3ul);
   assert (pure (S16.v a4 == S16.v a3 + 8 * S16.v b4 /\ S16.v a4 <= 248));
+  add_small a4 (S16.shift_left b5 2ul);
   let a5 = S16.add_mod a4 (S16.shift_left b5 2ul);
   assert (pure (S16.v a5 == S16.v a4 + 4 * S16.v b5 /\ S16.v a5 <= 252));
+  add_small a5 (S16.shift_left b6 1ul);
   let a6 = S16.add_mod a5 (S16.shift_left b6 1ul);
   assert (pure (S16.v a6 == S16.v a5 + 2 * S16.v b6 /\ S16.v a6 <= 254));
+  add_small a6 b7;
   let a7 = S16.add_mod a6 b7;
   assert (pure (S16.v a7 == S16.v a6 + S16.v b7 /\ S16.v a7 < 256));
   let out = S16.lo a7;

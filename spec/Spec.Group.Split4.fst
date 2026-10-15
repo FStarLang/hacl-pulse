@@ -74,7 +74,13 @@ let part_step (k: nat) (j: nat) (i: nat { i < 16 })
     assert (pow2 (64 - 4 * i) == 16 * pow2 m);
     Math.modulo_division_lemma a 16 (pow2 m);
     Math.modulo_modulo_lemma a 16 (pow2 m);
-    Math.euclidean_division_definition (a % pow2 (64 - 4 * i)) 16
+    let r = a % pow2 (64 - 4 * i) in
+    assert (part k j i == r);
+    assert (part k j (i + 1) == (a / 16) % pow2 m);
+    assert (dig k j i == a % 16);
+    assert (r / 16 == (a / 16) % pow2 m);
+    assert (r % 16 == a % 16);
+    Math.euclidean_division_definition r 16
 
 (** Expanding one of the four terms.  Spelt out because the goal below is
     a sum of four products of a variable by a power of two, and left to
@@ -84,12 +90,22 @@ let term (q d: nat) (w: pos)
   = Math.distributivity_add_left (16 * q) d w;
     Math.paren_mul_right 16 q w
 
+let regroup (p0 p1 p2 p3 q0 q1 q2 q3 d0 d1 d2 d3: int)
+  : Lemma (requires p0 == 16 * q0 + d0 /\ p1 == 16 * q1 + d1 /\
+                    p2 == 16 * q2 + d2 /\ p3 == 16 * q3 + d3)
+          (ensures p0 + p1 + p2 + p3 == 16 * (q0 + q1 + q2 + q3) + (d0 + d1 + d2 + d3))
+  = ()
+
 let hi_step (k: nat) (i: nat { i < 16 })
   : Lemma (hi k i == 16 * hi k (i + 1) + digs k i)
   = part_step k 0 i; part_step k 1 i; part_step k 2 i; part_step k 3 i;
     term (part k 1 (i + 1)) (dig k 1 i) (pow2 64);
     term (part k 2 (i + 1)) (dig k 2 i) (pow2 128);
-    term (part k 3 (i + 1)) (dig k 3 i) (pow2 192)
+    term (part k 3 (i + 1)) (dig k 3 i) (pow2 192);
+    regroup (part k 0 i) (part k 1 i * pow2 64) (part k 2 i * pow2 128) (part k 3 i * pow2 192)
+            (part k 0 (i + 1)) (part k 1 (i + 1) * pow2 64) (part k 2 (i + 1) * pow2 128)
+            (part k 3 (i + 1) * pow2 192)
+            (dig k 0 i) (dig k 1 i * pow2 64) (dig k 2 i * pow2 128) (dig k 3 i * pow2 192)
 
 (** And at the bottom it is the scalar itself. *)
 let split64 (k: nat) (j: nat)

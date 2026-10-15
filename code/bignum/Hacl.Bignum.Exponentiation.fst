@@ -129,6 +129,17 @@ let exp_start (aMv acc1 anum rr nN mu m0: nat) (k: nat)
     mont_cancel acc1 (rr % nN) nN mu m0 k;
     pw_zero anum
 
+(** Doubling and doubling-plus-one the exponent, in a small context. *)
+let pw_sq (a e: nat) : Lemma (pw a (e + e) == pw a e * pw a e)
+  = pw_add a e e
+
+let pw_one0 (a: nat) : Lemma (pw a 1 == a) = assert_norm (pw a 1 == a * 1)
+
+let pw_sq1 (a e: nat) : Lemma (pw a (e + e + 1) == pw a e * pw a e * a)
+  = pw_add a (e + e) 1;
+    pw_one0 a;
+    pw_sq a e
+
 #push-options "--z3rlimit 200"
 
 (** The squaring half of a rung. *)
@@ -141,7 +152,7 @@ let exp_sq_step (acc0 sq anum e rr nN mu m0: nat) (k: nat)
     exp_mul sq acc0 acc0 pe pe rr nN;
     mont_cancel sq ((pe * pe * rr) % nN) nN mu m0 k;
     assert (sq == (pe * pe * rr) % nN);
-    pw_step anum e 0;
+    pw_sq anum e;
     assert (pw anum (e + e) == pe * pe)
 
 (** The multiplying half of a rung. *)
@@ -152,13 +163,13 @@ let exp_mul_step (sq pr aMv anum e rr nN mu m0: nat) (k: nat)
                     pr < nN /\ (pr * rr) % nN == (sq * aMv) % nN)
           (ensures pr == (pw anum (e + e + 1) * rr) % nN)
   = let pe = pw anum e in
-    pw_step anum e 0;
+    pw_sq anum e;
     assert (pw anum (e + e) == pe * pe);
     assert (sq == (pe * pe * rr) % nN);
     exp_mul pr sq aMv (pe * pe) anum rr nN;
     mont_cancel pr ((pe * pe * anum * rr) % nN) nN mu m0 k;
     assert (pr == (pe * pe * anum * rr) % nN);
-    pw_step anum e 1;
+    pw_sq1 anum e;
     assert (pw anum (e + e + 1) == pe * pe * anum)
 
 #pop-options
@@ -272,10 +283,18 @@ let entry_def (vtbl: Seq.seq S64.t) (nn d: nat)
 
 (** [tbl_ok vtbl nn anum rr nN upto] is "the first [upto] entries hold the
     first [upto] powers of [anum], in Montgomery form and reduced". *)
+[@@"opaque_to_smt"]
 let tbl_ok (vtbl: Seq.seq S64.t) (nn anum rr: nat) (nN: pos) (upto: nat) : prop =
   forall (d: nat). d < upto ==>
     (num (entry vtbl nn d) == (pw anum d * rr) % nN /\
      num (entry vtbl nn d) < nN)
+
+(** An empty table is a good one.  [tbl_ok] is opaque so that the loops
+    below never see its quantifier; the lemmas here are the only places it
+    is unfolded. *)
+let tbl_ok_zero (vtbl: Seq.seq S64.t) (nn anum rr: nat) (nN: pos)
+  : Lemma (tbl_ok vtbl nn anum rr nN 0)
+  = reveal_opaque (`%tbl_ok) (tbl_ok vtbl nn anum rr nN 0)
 
 (** Reading one entry back out.  Spelled as a lemma so that the caller's
     query never has to instantiate the quantifier itself. *)
@@ -283,7 +302,7 @@ let tbl_get (vtbl: Seq.seq S64.t) (nn anum rr: nat) (nN: pos) (d: nat)
   : Lemma (requires tbl_ok vtbl nn anum rr nN 16 /\ d < 16)
           (ensures num (entry vtbl nn d) == (pw anum d * rr) % nN /\
                    num (entry vtbl nn d) < nN)
-  = ()
+  = reveal_opaque (`%tbl_ok) (tbl_ok vtbl nn anum rr nN 16)
 
 #push-options "--ifuel 1 --z3rlimit 100"
 
@@ -346,7 +365,7 @@ let tbl_below (v v': Seq.seq S64.t) (nn anum rr: nat) (nN: pos) (e dd: nat)
                     entry v' nn dd == entry v nn dd)
           (ensures num (entry v' nn dd) == (pw anum dd * rr) % nN /\
                    num (entry v' nn dd) < nN)
-  = ()
+  = reveal_opaque (`%tbl_ok) (tbl_ok v nn anum rr nN e)
 
 let tbl_at (v': Seq.seq S64.t) (src: Seq.seq S64.t) (nn anum rr: nat)
            (nN: pos) (e dd: nat)
@@ -355,6 +374,10 @@ let tbl_at (v': Seq.seq S64.t) (src: Seq.seq S64.t) (nn anum rr: nat)
           (ensures num (entry v' nn dd) == (pw anum dd * rr) % nN /\
                    num (entry v' nn dd) < nN)
   = pw_cong anum dd e
+
+(** The last index below [e + 1] that is not below [e] is [e]; stated on
+    its own so it is never proved in the presence of the table quantifiers. *)
+let lt_succ (dd e: nat) : Lemma (requires dd < e + 1 /\ ~(dd < e)) (ensures dd == e) = ()
 
 (** And what that does to the invariant. *)
 let tbl_extend (v v' src: Seq.seq S64.t) (nn anum rr: nat) (nN: pos) (e: nat)
@@ -367,12 +390,13 @@ let tbl_extend (v v' src: Seq.seq S64.t) (nn anum rr: nat) (nN: pos) (e: nat)
                        entry v' nn dd == entry v nn dd) /\
                     entry v' nn e == src)
           (ensures tbl_ok v' nn anum rr nN (e + 1))
-  = introduce forall (dd: nat). dd < e + 1 ==>
+  = reveal_opaque (`%tbl_ok) (tbl_ok v' nn anum rr nN (e + 1));
+    introduce forall (dd: nat). dd < e + 1 ==>
       (num (entry v' nn dd) == (pw anum dd * rr) % nN /\
        num (entry v' nn dd) < nN)
     with introduce _ ==> _
     with (if dd < e then tbl_below v v' nn anum rr nN e dd
-          else begin assert (dd == e); tbl_at v' src nn anum rr nN e dd end)
+          else begin lt_succ dd e; tbl_at v' src nn anum rr nN e dd end)
 #pop-options
 
 (** Where entry [vd] of the table starts, and that it is addressable. *)
@@ -650,6 +674,8 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
   A.pts_to_len bb;
   modulus_low vn;
   let j = SZ.sub i 4sz;
+  step4 (SZ.v i);
+  assert (pure (SZ.v j == SZ.v i - 4 /\ SZ.v j % 4 == 0));
   pow2_pos (SZ.v j);
   div_nonneg (num vbb) (SZ.v j);
   let dig = get_digit bb j;
@@ -744,6 +770,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   table_store tbl acc nn 0sz;
   with vtb0. assert (A.pts_to tbl vtb0);
   tbl_shape vtbl vtb0 vacc1 (SZ.v nn) 0;
+  tbl_ok_zero vtbl (SZ.v nn) (num va) (wt (SZ.v nn)) (num vn);
   tbl_extend vtbl vtb0 vacc1 (SZ.v nn) (num va) (wt (SZ.v nn)) (num vn) 0;
   table_store tbl aM nn nn;
   with vtb1. assert (A.pts_to tbl vtb1);
@@ -847,6 +874,43 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
     throw it away.  This is the same ladder with the multiply under a
     branch, which is why the module that provides the branch is named for
     what it gives up. *)
+
+(** The arithmetic of one rung of the variable-time ladder, stated at top
+    level so that none of it is proved in the loop body's context: the
+    squaring, and then the two ways the bit at [j] can go. *)
+(** Stepping the variable-time counter down by one. *)
+let sz_sub1 (x: SZ.t)
+  : Lemma (requires SZ.v x >= 1) (ensures SZ.v (SZ.sub x 1sz) + 1 == SZ.v x)
+  = ()
+
+let vt_sq (acc0 sq anum bn rr nN mu m0 vi j: nat) (k: nat)
+  : Lemma (requires 0 < nN /\ (mu * m0 + 1) % base == 0 /\ nN % base == m0 /\
+                    rr == wt k /\ vi == j + 1 /\
+                    acc0 == (pw anum (bn / pow2 vi) * rr) % nN /\
+                    sq < nN /\ (sq * rr) % nN == (acc0 * acc0) % nN)
+          (ensures sq == (pw anum (bn / pow2 vi + bn / pow2 vi) * rr) % nN /\
+                   bn / pow2 j == bn / pow2 vi + bn / pow2 vi + bn / pow2 j % 2)
+  = exp_sq_step acc0 sq anum (bn / pow2 vi) rr nN mu m0 k;
+    bit_split bn j
+
+let vt_bit0 (sq anum bn rr: nat) (nN: pos) (vi j: nat)
+  : Lemma (requires sq == (pw anum (bn / pow2 vi + bn / pow2 vi) * rr) % nN /\
+                    bn / pow2 j == bn / pow2 vi + bn / pow2 vi + bn / pow2 j % 2 /\
+                    bn / pow2 j % 2 == 0)
+          (ensures sq == (pw anum (bn / pow2 j) * rr) % nN)
+  = pw_cong anum (bn / pow2 vi + bn / pow2 vi) (bn / pow2 j)
+
+let vt_bit1 (sq pr aMv anum bn rr nN mu m0 vi j: nat) (k: nat)
+  : Lemma (requires 0 < nN /\ (mu * m0 + 1) % base == 0 /\ nN % base == m0 /\
+                    rr == wt k /\
+                    sq == (pw anum (bn / pow2 vi + bn / pow2 vi) * rr) % nN /\
+                    aMv == (anum * rr) % nN /\
+                    pr < nN /\ (pr * rr) % nN == (sq * aMv) % nN /\
+                    bn / pow2 j == bn / pow2 vi + bn / pow2 vi + bn / pow2 j % 2 /\
+                    bn / pow2 j % 2 == 1)
+          (ensures pr == (pw anum (bn / pow2 j) * rr) % nN)
+  = exp_mul_step sq pr aMv anum (bn / pow2 vi) rr nN mu m0 k;
+    pw_cong anum (bn / pow2 vi + bn / pow2 vi + 1) (bn / pow2 j)
 
 #push-options "--z3rlimit 200 --z3refresh"
 
@@ -1013,25 +1077,21 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   {
     let vi = !i;
     let j = SZ.sub vi 1sz;
-    assert (pure (SZ.v j + 1 == SZ.v vi));
+    sz_sub1 vi;
     with vacc0. assert (A.pts_to acc vacc0);
     with vaMc. assert (A.pts_to aM vaMc);
     mont_sqr res acc wide nmod nn mu;
     with vsq. assert (A.pts_to res vsq);
-    exp_sq_step (num vacc0) (num vsq) (num va) (num vbb / pow2 (SZ.v vi))
-                (wt (SZ.v nn)) (num vn) (S64.v mu) (S64.v (Seq.index vn 0))
-                (SZ.v nn);
-    bit_split (num vbb) (SZ.v j);
+    vt_sq (num vacc0) (num vsq) (num va) (num vbb) (wt (SZ.v nn)) (num vn)
+          (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v vi) (SZ.v j) (SZ.v nn);
     copy acc res nn;
+    digit_in_range (SZ.v j) (Seq.length vbb);
     let msk = get_bit bb j;
     let bit = Declassify.u64 msk;
     if (U64.eq bit 0uL) {
       assert (pure (num vbb / pow2 (SZ.v j) % 2 == 0));
-      assert (pure (num vbb / pow2 (SZ.v j + 1) == num vbb / pow2 (SZ.v vi)));
-      assert (pure (num vbb / pow2 (SZ.v j) ==
-        num vbb / pow2 (SZ.v j + 1) + num vbb / pow2 (SZ.v j + 1)));
-      assert (pure (num vbb / pow2 (SZ.v j) ==
-        num vbb / pow2 (SZ.v vi) + num vbb / pow2 (SZ.v vi)));
+      vt_bit0 (num vsq) (num va) (num vbb) (wt (SZ.v nn)) (num vn)
+              (SZ.v vi) (SZ.v j);
       with vaccz. assert (A.pts_to acc vaccz);
       assert (pure (num vaccz ==
         (pw (num va) (num vbb / pow2 (SZ.v j)) * wt (SZ.v nn)) % num vn));
@@ -1040,15 +1100,10 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
       assert (pure (num vbb / pow2 (SZ.v j) % 2 == 1));
       mont_mul t acc aM wide nmod nn mu;
       with vpr. assert (A.pts_to t vpr);
-      exp_mul_step (num vsq) (num vpr) (num vaMc) (num va)
-                   (num vbb / pow2 (SZ.v vi)) (wt (SZ.v nn)) (num vn)
-                   (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
+      vt_bit1 (num vsq) (num vpr) (num vaMc) (num va) (num vbb)
+              (wt (SZ.v nn)) (num vn) (S64.v mu) (S64.v (Seq.index vn 0))
+              (SZ.v vi) (SZ.v j) (SZ.v nn);
       copy acc t nn;
-      assert (pure (num vbb / pow2 (SZ.v j + 1) == num vbb / pow2 (SZ.v vi)));
-      assert (pure (num vbb / pow2 (SZ.v j) ==
-        num vbb / pow2 (SZ.v j + 1) + num vbb / pow2 (SZ.v j + 1) + 1));
-      assert (pure (num vbb / pow2 (SZ.v j) ==
-        num vbb / pow2 (SZ.v vi) + num vbb / pow2 (SZ.v vi) + 1));
       with vaccn. assert (A.pts_to acc vaccn);
       assert (pure (num vaccn ==
         (pw (num va) (num vbb / pow2 (SZ.v j)) * wt (SZ.v nn)) % num vn));

@@ -70,6 +70,7 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
+  sha2_224_facts ();
   let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
@@ -111,6 +112,7 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
+  sha2_256_facts ();
   let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
@@ -157,6 +159,7 @@ ensures exists* vout'.
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
+  sha2_384_facts ();
   hmac_impl sha2_384 kt ivt out key key_len msg msg_len;
   drop_table ivt;
   drop_table kt;
@@ -184,6 +187,7 @@ ensures exists* vout'.
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
+  sha2_512_facts ();
   hmac_impl sha2_512 kt ivt out key key_len msg msg_len;
   drop_table ivt;
   drop_table kt;

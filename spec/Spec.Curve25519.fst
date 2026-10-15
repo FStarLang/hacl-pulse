@@ -101,6 +101,8 @@ let rec fexp_mul (x: elem) (a b: nat)
       fexp_mul x a (b - 1);
       fexp_add x a (a * (b - 1));
       Math.distributivity_sub_right a b 1;
+      assert (a * b == a + a * (b - 1));
+      assert (fexp (fexp x a) b == fmul (fexp x a) (fexp (fexp x a) (b - 1)));
       fmul_comm (fexp x a) (fexp (fexp x a) (b - 1))
     end
 

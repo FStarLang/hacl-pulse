@@ -293,6 +293,14 @@ let mul_succ (a b: nat) : Lemma (a * b + b == (a + 1) * b)
 
 let mul_one (a: nat) : Lemma (a * 1 == a) = ()
 
+let mul_nat (a b: nat) : Lemma (a * b >= 0) = Math.nat_times_nat_is_nat a b
+
+(** The same for every multiple of a fixed [n], for the loop invariant of
+    {!build_table}, whose [d n] is a [nat] for a [d] not yet in scope. *)
+let mul_nat_all (n: nat)
+  : Lemma (forall (a: nat). {:pattern (a * n)} a * n >= 0)
+  = introduce forall (a: nat). a * n >= 0 with mul_nat a n
+
 let dbl_ok (ox oy oz ot wx wy wz wt: Seq.seq S64.t) (p: E.ext_point) (e: nat)
   : Lemma (requires oc p /\ rep ox oy oz ot e p /\
                     pt wx wy wz wt == E.point_double (pt ox oy oz ot))
@@ -535,6 +543,7 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   mul_zero (reveal n);
   rep_cong c0x c0y c0z c0t 0 (0 * reveal n) (reveal p);
 
+  mul_nat_all (reveal n);
   let mut d = 0sz;
   while (let vd = !d; SZ.lt vd 16sz)
   invariant exists* (vd: SZ.t)
@@ -581,6 +590,7 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
     with wnx wny wnz wnt.
       assert (A.pts_to nx wnx ** A.pts_to ny wny **
               A.pts_to nz wnz ** A.pts_to nt wnt);
+    mul_nat (SZ.v vd) (reveal n);
     add_ok wcx wcy wcz wct vqx vqy vqz vqt wnx wny wnz wnt
            (reveal p) (SZ.v vd * reveal n) (reveal n);
     mul_succ (SZ.v vd) (reveal n);
@@ -751,6 +761,8 @@ ensures exists* (wx wy wz wt wux wuy wuz wut wsx wsy wsz wst: Seq.seq S64.t).
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz; A.pts_to_len tt;
   pok_elim vox voy voz vot;
   entry_fits (reveal d);
+  mul_nat (reveal d) 5;
+  mul_nat (reveal d) (reveal n);
   table_select sx tx 5sz dig d;
   table_select sy ty 5sz dig d;
   table_select sz tz 5sz dig d;

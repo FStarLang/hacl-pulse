@@ -373,51 +373,121 @@ ensures exists* (vo': Seq.seq S64.t).
 
 (** {2 Bytes out} *)
 
-#push-options "--fuel 0 --ifuel 1 --z3rlimit 200"
+(** Byte [j] of [x], little-endian.  Opaque, so that selecting one of
+    eight such facts by case analysis never involves the arithmetic
+    solver in the quotients. *)
+[@@"opaque_to_smt"]
+let byte_of (x: nat) (j: nat) : GTot nat = (x / pow2 (8 * j)) % 256
 
+(** The eight bytes of limb [k], as the loop invariant of {!store_le}
+    states them.  Opaque, so that the loop body's context does not carry
+    them around under a quantifier. *)
+[@@"opaque_to_smt"]
+let limb_bytes (s: Seq.seq nat) (v: Seq.seq S8.t) (k: nat) : prop =
+  k < nl /\ Seq.length s == nl /\ Seq.length v == 32 /\
+  bat v (8 * k) == byte_of (Seq.index s k) 0 /\
+  bat v (8 * k + 1) == byte_of (Seq.index s k) 1 /\
+  bat v (8 * k + 2) == byte_of (Seq.index s k) 2 /\
+  bat v (8 * k + 3) == byte_of (Seq.index s k) 3 /\
+  bat v (8 * k + 4) == byte_of (Seq.index s k) 4 /\
+  bat v (8 * k + 5) == byte_of (Seq.index s k) 5 /\
+  bat v (8 * k + 6) == byte_of (Seq.index s k) 6 /\
+  bat v (8 * k + 7) == byte_of (Seq.index s k) 7
 
-(** The eight literal shifts the store loop performs, as the quantified
-    form {!Spec.Ed25519.Scalar.store_le_ok} asks for. *)
-let store_le_byte (s: Seq.seq nat) (b: Seq.seq S8.t)
-                  (k: nat { k < nl }) (m: nat { m < 8 })
-  : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
-                    bat b (8 * k) == Seq.index s k % 256 /\
-                    bat b (8 * k + 1) == (Seq.index s k / pow2 8) % 256 /\
-                    bat b (8 * k + 2) == (Seq.index s k / pow2 16) % 256 /\
-                    bat b (8 * k + 3) == (Seq.index s k / pow2 24) % 256 /\
-                    bat b (8 * k + 4) == (Seq.index s k / pow2 32) % 256 /\
-                    bat b (8 * k + 5) == (Seq.index s k / pow2 40) % 256 /\
-                    bat b (8 * k + 6) == (Seq.index s k / pow2 48) % 256 /\
-                    bat b (8 * k + 7) == (Seq.index s k / pow2 56) % 256)
-          (ensures bat b (8 * k + m) == (Seq.index s k / pow2 (8 * m)) % 256)
-  = if m = 0 then (assert_norm (pow2 0 == 1);
-                   assert (8 * m == 0);
-                   assert (Seq.index s k / 1 == Seq.index s k))
-    else if m = 1 then assert (8 * m == 8)
-    else if m = 2 then assert (8 * m == 16)
-    else if m = 3 then assert (8 * m == 24)
-    else if m = 4 then assert (8 * m == 32)
-    else if m = 5 then assert (8 * m == 40)
-    else if m = 6 then assert (8 * m == 48)
-    else assert (8 * m == 56)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
 
+(** One of the eight bytes of a limb. *)
+let store_le_byte (s: Seq.seq nat) (b: Seq.seq S8.t) (k: nat) (m: nat { m < 8 })
+  : Lemma (requires k < nl /\ Seq.length s == nl /\ limb_bytes s b k)
+          (ensures bat b (8 * k + m) == byte_of (Seq.index s k) m)
+  = reveal_opaque (`%limb_bytes) (limb_bytes s b k);
+    if m = 0 then ()
+    else if m = 1 then ()
+    else if m = 2 then ()
+    else if m = 3 then ()
+    else if m = 4 then ()
+    else if m = 5 then ()
+    else if m = 6 then ()
+    else assert (m == 7)
+
+(** A limb whose bytes all lie below [8 n] is unaffected by writes at
+    [8 n] and above. *)
+let limb_bytes_frame (s: Seq.seq nat) (v v': Seq.seq S8.t) (n: nat) (k: nat)
+  : Lemma (requires k < n /\ n <= nl /\ Seq.length v == 32 /\ Seq.length v' == 32 /\ limb_bytes s v k /\
+                    (forall (i: nat). i < 8 * n ==> Seq.index v' i == Seq.index v i))
+          (ensures limb_bytes s v' k)
+  = reveal_opaque (`%limb_bytes) (limb_bytes s v k);
+    reveal_opaque (`%limb_bytes) (limb_bytes s v' k);
+    assert (8 * k + 7 < 8 * n);
+    assert (bat v' (8 * k) == bat v (8 * k));
+    assert (bat v' (8 * k + 1) == bat v (8 * k + 1));
+    assert (bat v' (8 * k + 2) == bat v (8 * k + 2));
+    assert (bat v' (8 * k + 3) == bat v (8 * k + 3));
+    assert (bat v' (8 * k + 4) == bat v (8 * k + 4));
+    assert (bat v' (8 * k + 5) == bat v (8 * k + 5));
+    assert (bat v' (8 * k + 6) == bat v (8 * k + 6));
+    assert (bat v' (8 * k + 7) == bat v (8 * k + 7))
+
+(** One more limb's worth of bytes in the loop invariant of {!store_le}. *)
+let store_le_step (s: Seq.seq nat) (v v': Seq.seq S8.t) (n: nat)
+  : Lemma (requires n < nl /\ Seq.length v == 32 /\ Seq.length v' == 32 /\
+                    (forall (k: nat). k < n ==> limb_bytes s v k) /\
+                    (forall (i: nat). i < 8 * n ==> Seq.index v' i == Seq.index v i) /\
+                    limb_bytes s v' n)
+          (ensures (forall (k: nat). k < n + 1 ==> limb_bytes s v' k))
+  = let aux (k: nat) : Lemma (k < n + 1 ==> limb_bytes s v' k) =
+      if k < n then limb_bytes_frame s v v' n k else () in
+    Classical.forall_intro aux
+
+(** Byte [j] of [x] is what shifting right by [8 j] and truncating to a
+    byte gives. *)
+let byte_of_shift (x: nat) (j: nat) (e: nat)
+  : Lemma (requires e == 8 * j) (ensures byte_of x j == x / pow2 e % pow2 8)
+  = reveal_opaque (`%byte_of) (byte_of x j);
+    assert_norm (pow2 8 == 256)
+
+(** The bytes the body of {!store_le} has just written are limb [n]. *)
+let store_le_new (s: Seq.seq nat) (v': Seq.seq S8.t) (n: nat) (x: nat)
+  : Lemma (requires n < nl /\ Seq.length s == nl /\ Seq.length v' == 32 /\
+                    x == Seq.index s n /\
+                    S8.v (Seq.index v' (8 * n)) == x % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 1)) == x / pow2 8 % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 2)) == x / pow2 16 % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 3)) == x / pow2 24 % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 4)) == x / pow2 32 % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 5)) == x / pow2 40 % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 6)) == x / pow2 48 % pow2 8 /\
+                    S8.v (Seq.index v' (8 * n + 7)) == x / pow2 56 % pow2 8)
+          (ensures limb_bytes s v' n)
+  = reveal_opaque (`%limb_bytes) (limb_bytes s v' n);
+    assert_norm (pow2 0 == 1);
+    byte_of_shift x 0 0;
+    byte_of_shift x 1 8;
+    byte_of_shift x 2 16;
+    byte_of_shift x 3 24;
+    byte_of_shift x 4 32;
+    byte_of_shift x 5 40;
+    byte_of_shift x 6 48;
+    byte_of_shift x 7 56
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+
+(** The finished loop, in the quantified form
+    {!Spec.Ed25519.Scalar.store_le_ok} asks for. *)
 let store_le_bridge (s: Seq.seq nat) (b: Seq.seq S8.t)
   : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
-                    (forall (k: nat). k < nl ==>
-                       bat b (8 * k) == Seq.index s k % 256 /\
-                       bat b (8 * k + 1) == (Seq.index s k / pow2 8) % 256 /\
-                       bat b (8 * k + 2) == (Seq.index s k / pow2 16) % 256 /\
-                       bat b (8 * k + 3) == (Seq.index s k / pow2 24) % 256 /\
-                       bat b (8 * k + 4) == (Seq.index s k / pow2 32) % 256 /\
-                       bat b (8 * k + 5) == (Seq.index s k / pow2 40) % 256 /\
-                       bat b (8 * k + 6) == (Seq.index s k / pow2 48) % 256 /\
-                       bat b (8 * k + 7) == (Seq.index s k / pow2 56) % 256))
+                    (forall (k: nat). k < nl ==> limb_bytes s b k))
           (ensures (forall (k: nat) (m: nat). k < nl /\ m < 8 ==>
                       bat b (8 * k + m) == (Seq.index s k / pow2 (8 * m)) % 256))
   = introduce forall (k: nat) (m: nat). (k < nl /\ m < 8) ==>
       bat b (8 * k + m) == (Seq.index s k / pow2 (8 * m)) % 256
     with introduce _ ==> _
-    with store_le_byte s b k m
+    with begin
+      store_le_byte s b k m;
+      reveal_opaque (`%byte_of) (byte_of (Seq.index s k) m)
+    end
 
 #pop-options
 
@@ -440,17 +510,10 @@ ensures exists* (vb': Seq.seq S8.t).
   invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
     pts_to i vi ** A.pts_to b v ** A.pts_to a #pa va **
     pure (SZ.v vi <= 4 /\ Seq.length v == 32 /\
-          (forall (k: nat). k < SZ.v vi ==>
-             S8.v (Seq.index v (8 * k)) == Seq.index (vals va) k % 256 /\
-             S8.v (Seq.index v (8 * k + 1)) == Seq.index (vals va) k / pow2 8 % 256 /\
-             S8.v (Seq.index v (8 * k + 2)) == Seq.index (vals va) k / pow2 16 % 256 /\
-             S8.v (Seq.index v (8 * k + 3)) == Seq.index (vals va) k / pow2 24 % 256 /\
-             S8.v (Seq.index v (8 * k + 4)) == Seq.index (vals va) k / pow2 32 % 256 /\
-             S8.v (Seq.index v (8 * k + 5)) == Seq.index (vals va) k / pow2 40 % 256 /\
-             S8.v (Seq.index v (8 * k + 6)) == Seq.index (vals va) k / pow2 48 % 256 /\
-             S8.v (Seq.index v (8 * k + 7)) == Seq.index (vals va) k / pow2 56 % 256))
+          (forall (k: nat). k < SZ.v vi ==> limb_bytes (vals va) v k))
   decreases (4 - SZ.v (!i))
   {
+    with v0. assert (A.pts_to b v0);
     let vi = !i;
     let x = A.(a.(vi));
     let pos = SZ.mul 8sz vi;
@@ -462,6 +525,11 @@ ensures exists* (vb': Seq.seq S8.t).
     A.((b.(SZ.add pos 5sz) <- Cast.u64_to_u8 (S64.shift_right x 40ul)));
     A.((b.(SZ.add pos 6sz) <- Cast.u64_to_u8 (S64.shift_right x 48ul)));
     A.((b.(SZ.add pos 7sz) <- Cast.u64_to_u8 (S64.shift_right x 56ul)));
+    with v1. assert (A.pts_to b v1);
+    assert (pure (SZ.v pos == 8 * SZ.v vi));
+    assert (pure (forall (j: nat). j < 8 * SZ.v vi ==> Seq.index v1 j == Seq.index v0 j));
+    store_le_new (vals va) v1 (SZ.v vi) (S64.v x);
+    store_le_step (vals va) v0 v1 (SZ.v vi);
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to b v);

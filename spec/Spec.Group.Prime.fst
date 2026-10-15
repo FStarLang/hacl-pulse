@@ -63,10 +63,15 @@ let rec pow_mod (a: nat) (n: nat) (m: pos) : Tot nat (decreases n) =
     let h2 = (h * h) % m in
     if n % 2 = 0 then h2 else (h2 * a) % m
 
+let half_split (n: nat) : Lemma (n == n / 2 + n / 2 + n % 2 /\ (n % 2 == 0 \/ n % 2 == 1)) =
+  M.euclidean_division_definition n 2;
+  M.lemma_mod_lt n 2
+
 let rec pow_mod_lemma (a: nat) (n: nat) (m: pos)
   : Lemma (ensures pow_mod a n m == F.pow a n % m) (decreases n)
   = if n = 0 then () else begin
       let k = n / 2 in
+      half_split n;
       pow_mod_lemma a k m;
       let h = pow_mod a k m in
       let pk = F.pow a k in

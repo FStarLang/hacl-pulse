@@ -92,6 +92,23 @@ let rec counter_block_add (b: block) (i j: nat)
   = if j = 0 then () else counter_block_add b i (j - 1)
 #pop-options
 
+(** Byte [k] of the [t]-th block of a four-block step is keystream byte
+    [k]: the counter of that block is [bi + t], counted from [b]. *)
+let ctr4_byte (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+              (n: nat) (j: nat) (bi: nat) (t: nat) (k: nat)
+  : Lemma (requires j == 16 * bi /\ j + 16 * t <= k /\ k < j + 16 * t + 16 /\ k < n)
+          (ensures ctr_keystream v w b n k ==
+                   Seq.index (cipher v w (counter_block (counter_block b bi) t))
+                             (k - j - 16 * t))
+  = counter_block_add b bi t;
+    Math.distributivity_add_right 16 bi t;
+    let j' = j + 16 * t in
+    let u = k - j' in
+    assert (j' == 16 * (bi + t));
+    assert (j' + u == k);
+    assert (k - j - 16 * t == u);
+    ks_index v w b n j' (bi + t) u
+
 (** One step of the four-block loop, on the pure side.
 
     [m] is the message as the invariant has it after [j] bytes, [m'] is what
@@ -100,7 +117,7 @@ let rec counter_block_add (b: block) (i j: nat)
     bytes further on.  It is a lemma rather than a run of assertions inside
     the loop because the case analysis is over a single byte index and does
     not want the rest of the separation-logic context anywhere near it. *)
-#push-options "--z3rlimit 400"
+#push-options "--z3rlimit 20"
 let ctr4_step (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
               (m0 m m': Seq.seq elem) (n: nat) (j: nat) (bi: nat) (c: block)
   : Lemma (requires
@@ -125,11 +142,12 @@ let ctr4_step (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
        Seq.index m' k ==
          (if k < j + 64 then Seq.index m0 k ^^ ctr_keystream v w b n k
           else Seq.index m0 k))
-  = let one (t: nat { t < 4 }) (k: nat { j + 16 * t <= k /\ k < j + 16 * t + 16 })
-      : Lemma (Seq.index m' k == Seq.index m0 k ^^ ctr_keystream v w b n k)
-      = counter_block_add b bi t;
-        Math.distributivity_add_right 16 bi t;
-        ks_index v w b n (j + 16 * t) (bi + t) (k - j - 16 * t)
+  = let one (t: nat { t < 4 }) (k: nat { j + 16 * t <= k /\ k < j + 16 * t + 16 /\ k < n })
+      : Lemma (requires Seq.index m k == Seq.index m0 k /\
+                        Seq.index m' k == Seq.index m k ^^
+                          Seq.index (cipher v w (counter_block c t)) (k - j - 16 * t))
+              (ensures Seq.index m' k == Seq.index m0 k ^^ ctr_keystream v w b n k)
+      = ctr4_byte v w b n j bi t k
     in
     let aux (k: nat { k < n })
       : Lemma (Seq.index m' k ==
@@ -153,13 +171,142 @@ let ctr_done (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
   = Seq.lemma_eq_intro m' (ctr_encrypt v w b m)
 
 
+(** {2 The loop invariant, kept away from the solver}
+
+    Every loop of [ctr_encrypt_impl] says the same thing: the first [j]
+    bytes of the message have been encrypted and the rest are untouched.
+    As a bare quantifier in a Pulse invariant it sits in the context of
+    every query of a long function; behind an opaque name it is only
+    opened by the lemmas below, each of which does one step of the
+    argument. *)
+[@@"opaque_to_smt"]
+let ctr_inv (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+            (m0 m: Seq.seq elem) (n: nat) (j: nat) : prop =
+  Seq.length m0 == n /\ Seq.length m == n /\
+  (forall (k: nat). k < n ==>
+     Seq.index m k ==
+       (if k < j then Seq.index m0 k ^^ ctr_keystream v w b n k
+        else Seq.index m0 k))
+
+let ctr_inv_init (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                 (m0: Seq.seq elem) (n: nat)
+  : Lemma (requires Seq.length m0 == n)
+          (ensures ctr_inv v w b m0 m0 n 0)
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m0 n 0)
+
+(** Moving the boundary without touching the message: either it does not
+    move, or it moves between two points both past the end. *)
+let ctr_inv_ext (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                (m0 m: Seq.seq elem) (n: nat) (j j': nat)
+  : Lemma (requires ctr_inv v w b m0 m n j /\ (j == j' \/ (n <= j /\ n <= j')))
+          (ensures ctr_inv v w b m0 m n j')
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n j);
+    reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n j')
+
+let ctr_inv_len (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                (m0 m: Seq.seq elem) (n: nat) (j: nat)
+  : Lemma (requires ctr_inv v w b m0 m n j)
+          (ensures Seq.length m0 == n /\ Seq.length m == n)
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n j)
+
+let ctr4_step_inv (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                  (m0 m m': Seq.seq elem) (n: nat) (j: nat) (bi: nat) (c: block)
+  : Lemma (requires
+      j == 16 * bi /\ j + 64 <= n /\ ctr_inv v w b m0 m n j /\
+      Seq.length m == n /\ Seq.length m' == n /\ c == counter_block b bi /\
+      (forall (k: nat). k < n ==>
+         Seq.index m' k ==
+           (if j <= k && k < j + 16
+            then Seq.index m k ^^ Seq.index (cipher v w (counter_block c 0)) (k - j)
+            else if j + 16 <= k && k < j + 32
+            then Seq.index m k ^^ Seq.index (cipher v w (counter_block c 1)) (k - j - 16)
+            else if j + 32 <= k && k < j + 48
+            then Seq.index m k ^^ Seq.index (cipher v w (counter_block c 2)) (k - j - 32)
+            else if j + 48 <= k && k < j + 64
+            then Seq.index m k ^^ Seq.index (cipher v w (counter_block c 3)) (k - j - 48)
+            else Seq.index m k)))
+    (ensures ctr_inv v w b m0 m' n (j + 64))
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n j);
+    reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m' n (j + 64));
+    ctr4_step v w b m0 m m' n j bi c
+
+let ctr1_step_inv (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                  (m0 m m': Seq.seq elem) (n: nat) (j: nat) (bi: nat) (c: block)
+  : Lemma (requires
+      j == 16 * bi /\ j + 16 <= n /\ ctr_inv v w b m0 m n j /\
+      Seq.length m == n /\ Seq.length m' == n /\ c == counter_block b bi /\
+      (forall (k: nat). k < n ==>
+         Seq.index m' k ==
+           (if j <= k && k < j + 16
+            then Seq.index m k ^^ Seq.index (cipher v w c) (k - j)
+            else Seq.index m k)))
+    (ensures ctr_inv v w b m0 m' n (j + 16))
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n j);
+    reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m' n (j + 16));
+    let aux (k: nat { k < n })
+      : Lemma (Seq.index m' k ==
+               (if k < j + 16 then Seq.index m0 k ^^ ctr_keystream v w b n k
+                else Seq.index m0 k))
+      = if j <= k && k < j + 16 then ks_index v w b n j bi (k - j) else ()
+    in
+    FStar.Classical.forall_intro aux
+
+(** One byte of the partial-block loop, pointwise. *)
+let ctr_byte_at (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                (m0 m: Seq.seq elem) (n: nat) (j: nat) (bi: nat) (t: nat)
+                (x: elem) (k: nat)
+  : Lemma (requires
+      j == 16 * bi /\ t < 16 /\ j + t < n /\ k < n /\
+      Seq.length m == n /\ Seq.length m0 == n /\
+      x == Seq.index m (j + t) ^^ Seq.index (cipher v w (counter_block b bi)) t /\
+      Seq.index m (j + t) == Seq.index m0 (j + t) /\
+      Seq.index m k ==
+        (if k < j + t then Seq.index m0 k ^^ ctr_keystream v w b n k
+         else Seq.index m0 k))
+    (ensures Seq.index (Seq.upd m (j + t) x) k ==
+               (if k < j + t + 1 then Seq.index m0 k ^^ ctr_keystream v w b n k
+                else Seq.index m0 k))
+  = if k = j + t
+    then begin
+      Seq.lemma_index_upd1 m (j + t) x;
+      ks_index v w b n j bi t
+    end
+    else Seq.lemma_index_upd2 m (j + t) x k
+
+let ctr_byte_step_inv (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                      (m0 m m': Seq.seq elem) (n: nat) (j: nat) (bi: nat) (t: nat)
+                      (x: elem)
+  : Lemma (requires
+      j == 16 * bi /\ t < 16 /\ j + t < n /\ Seq.length m == n /\
+      ctr_inv v w b m0 m n (j + t) /\
+      m' == Seq.upd m (j + t) x /\
+      x == Seq.index m (j + t) ^^ Seq.index (cipher v w (counter_block b bi)) t)
+    (ensures ctr_inv v w b m0 m' n (j + t + 1))
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n (j + t));
+    reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m' n (j + t + 1));
+    let aux (k: nat { k < n })
+      : Lemma (Seq.index m' k ==
+               (if k < j + t + 1 then Seq.index m0 k ^^ ctr_keystream v w b n k
+                else Seq.index m0 k))
+      = ctr_byte_at v w b m0 m n j bi t x k
+    in
+    FStar.Classical.forall_intro aux
+
+let ctr_inv_done (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                 (m0 m: Seq.seq elem) (n: nat) (j: nat)
+  : Lemma (requires ctr_inv v w b m0 m n j /\ n <= j)
+          (ensures m == ctr_encrypt v w b m0)
+  = reveal_opaque (`%ctr_inv) (ctr_inv v w b m0 m n j);
+    ctr_done v w b m0 m n
+
+
 (** {2 Counter mode}
 
     [ctr] holds the initial counter block and is advanced as the loop runs;
     its final value is left unspecified, since every caller either discards
     it or, in GCM's case, has already saved what it needs. *)
 
-#push-options "--z3rlimit 400"
+#push-options "--z3rlimit 20"
 
 fn ctr_encrypt_impl ([@@@FStar.Attributes.monomorphize] p: params)
                     (msg: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (ctr: A.array S8.t)
@@ -196,6 +343,7 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
   assert (pure (SZ.v lim <= SZ.v n /\
                 (forall (x: nat). x < SZ.v lim ==> x + 64 <= SZ.v n)));
 
+  ctr_inv_init p.pv (vals vw) (vals vc0) (vals vm0) (SZ.v n);
   let mut j = 0sz;
   let mut bi = 0sz;
   (* Four blocks at a time.  This is the loop that does nearly all of the
@@ -214,12 +362,7 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
           Seq.length vm == Seq.length vm0 /\ Seq.length vm0 == SZ.v n /\
           SZ.fits (SZ.v n + blocklen) /\ SZ.v vj <= SZ.v n /\
           vals vc == counter_block (vals vc0) (SZ.v vbi) /\
-          (forall (k: nat). k < SZ.v n ==>
-             Seq.index (vals vm) k ==
-               (if k < SZ.v vj
-                then Seq.index (vals vm0) k ^^
-                     ctr_keystream p.pv (vals vw) (vals vc0) (SZ.v n) k
-                else Seq.index (vals vm0) k)))
+          ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj))
   decreases (SZ.v n - SZ.v (!j))
   {
     let vj = !j;
@@ -229,8 +372,9 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
     with vm. assert A.pts_to msg vm;
     ctr_block4_impl p msg vj w ctr ka;
     with vm2. assert A.pts_to msg vm2;
-    ctr4_step p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (vals vm2)
-              (SZ.v n) (SZ.v vj) (SZ.v vbi) (vals vc);
+    ctr_inv_len p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj);
+    ctr4_step_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (vals vm2)
+                  (SZ.v n) (SZ.v vj) (SZ.v vbi) (vals vc);
     counter_block_add (vals vc0) (SZ.v vbi) 4;
     j := SZ.add vj 64sz;
     bi := SZ.add vbi 4sz;
@@ -250,20 +394,19 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
           Seq.length vm == Seq.length vm0 /\ Seq.length vm0 == SZ.v n /\
           SZ.fits (SZ.v n + blocklen) /\ SZ.v vj <= SZ.v n /\
           vals vc == counter_block (vals vc0) (SZ.v vbi) /\
-          (forall (k: nat). k < SZ.v n ==>
-             Seq.index (vals vm) k ==
-               (if k < SZ.v vj
-                then Seq.index (vals vm0) k ^^
-                     ctr_keystream p.pv (vals vw) (vals vc0) (SZ.v n) k
-                else Seq.index (vals vm0) k)))
+          ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj))
   decreases (SZ.v n - SZ.v (!j))
   {
     let vj = !j;
     let vbi = !bi;
     SZ.fits_lte (SZ.v vj + blocklen) (SZ.v n + blocklen);
     with vc. assert A.pts_to ctr vc;
+    with vm. assert A.pts_to msg vm;
+    ctr_inv_len p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj);
     ctr_block_impl p msg vj w ctr ka;
-    ks_index_all p.pv (vals vw) (vals vc0) (SZ.v n) (SZ.v vj) (SZ.v vbi);
+    with vm2. assert A.pts_to msg vm2;
+    ctr1_step_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (vals vm2)
+                  (SZ.v n) (SZ.v vj) (SZ.v vbi) (vals vc);
     counter_block_step (vals vc0) (SZ.v vbi);
     inc32_impl ctr;
     j := SZ.add vj 16sz;
@@ -283,12 +426,7 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
           Seq.length vm == Seq.length vm0 /\ Seq.length vm0 == SZ.v n /\
           SZ.fits (SZ.v n + blocklen) /\ SZ.v vj <= SZ.v n + blocklen /\
           vals vc == counter_block (vals vc0) (SZ.v vbi) /\
-          (forall (k: nat). k < SZ.v n ==>
-             Seq.index (vals vm) k ==
-               (if k < SZ.v vj
-                then Seq.index (vals vm0) k ^^
-                     ctr_keystream p.pv (vals vw) (vals vc0) (SZ.v n) k
-                else Seq.index (vals vm0) k)))
+          ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj))
   decreases (SZ.v n + blocklen - SZ.v (!j))
   {
     let vj = !j;
@@ -298,6 +436,9 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
     with vk. assert A.pts_to ka vk;
 
     let rem = SZ.sub n vj;
+    with vm. assert A.pts_to msg vm;
+    ctr_inv_ext p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n)
+                (SZ.v vj) (SZ.v vj + 0);
     let mut t = 0sz;
     while (let vt = !t; SZ.lt vt 16sz && SZ.lt vt rem)
     invariant exists* (vt: SZ.t) (vm: Seq.seq S8.t).
@@ -308,12 +449,8 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
             Seq.length vw == xkeylen p.pv /\ Seq.length vc0 == blocklen /\
             Seq.length vm == Seq.length vm0 /\ Seq.length vm0 == SZ.v n /\
             vals vk == cipher p.pv (vals vw) (counter_block (vals vc0) (SZ.v vbi)) /\
-            (forall (k: nat). k < SZ.v n ==>
-               Seq.index (vals vm) k ==
-                 (if k < SZ.v vj + SZ.v vt
-                  then Seq.index (vals vm0) k ^^
-                       ctr_keystream p.pv (vals vw) (vals vc0) (SZ.v n) k
-                  else Seq.index (vals vm0) k)))
+            ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n)
+                    (SZ.v vj + SZ.v vt))
     decreases (blocklen - SZ.v (!t))
     {
       let vt = !t;
@@ -323,20 +460,25 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
       let b = A.(ka.(vt));
       let y = bxor a b;
       with vm. assert A.pts_to msg vm;
-      ks_index p.pv (vals vw) (vals vc0) (SZ.v n) (SZ.v vj) (SZ.v vbi) (SZ.v vt);
       vals_upd vm (SZ.v idx) y;
+      ctr_byte_step_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm)
+                        (vals (Seq.upd vm (SZ.v idx) y))
+                        (SZ.v n) (SZ.v vj) (SZ.v vbi) (SZ.v vt) (S8.v y);
       A.((msg.(idx) <- y));
       t := SZ.add vt 1sz;
     };
 
+    with vt vm. assert pts_to t vt ** A.pts_to msg vm;
+    ctr_inv_ext p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n)
+                (SZ.v vj + SZ.v vt) (SZ.v vj + 16);
     with vc. assert A.pts_to ctr vc;
     counter_block_step (vals vc0) (SZ.v vbi);
     inc32_impl ctr;
     j := SZ.add vj 16sz;
     bi := SZ.add vbi 1sz;
   };
-  with vm. assert A.pts_to msg vm;
-  ctr_done p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n);
+  with vj vm. assert pts_to j vj ** A.pts_to msg vm;
+  ctr_inv_done p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj);
   Mem.wipe ka 16sz;
   ()
 }

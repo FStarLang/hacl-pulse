@@ -92,6 +92,13 @@ let no_borrow (pN e c w: int)
 (** The declassified comparison mask is a [bool] with the obvious meaning. *)
 let mask_ones () : Lemma (pow2 64 - 1 == 18446744073709551615) = assert_norm (pow2 64 - 1 == 18446744073709551615)
 
+(** What {!mont_mu} promises, recalled as a lemma so that each group's entry
+    point need not dig it out of the refinement on [mu]'s type. *)
+let mu_spec (m0: S64.t { S64.v m0 % 2 == 1 }) (mu: S64.t)
+  : Lemma (requires mu == mont_mu m0)
+          (ensures (S64.v mu * S64.v m0 + 1) % base == 0)
+  = ()
+
 
 (** {2 The two operations, over any group}
 
@@ -346,6 +353,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 32sz |];
@@ -400,6 +408,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 32sz |];
@@ -460,6 +469,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 48sz |];
@@ -514,6 +524,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 48sz |];
@@ -574,6 +585,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 64sz |];
@@ -628,6 +640,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 64sz |];
@@ -688,6 +701,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 96sz |];
@@ -742,6 +756,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 96sz |];
@@ -802,6 +817,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 128sz |];
@@ -856,6 +872,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len p;
   let m0 = A.(p.(0sz));
   let mu = mont_mu m0;
+  mu_spec m0 mu;
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 128sz |];

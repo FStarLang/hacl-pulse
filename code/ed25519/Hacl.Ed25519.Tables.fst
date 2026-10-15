@@ -191,6 +191,12 @@ let const_ok (s: Seq.seq nat) (x: nat)
     assert_norm (F.base <= F.lim);
     Math.small_mod x C.prime
 
+(** A limb index is one of five, as a fact on its own: the case splits
+    below then need no arithmetic on [F.nl]. *)
+let below5 (k: nat { k < F.nl })
+  : Lemma (k == 0 \/ k == 1 \/ k == 2 \/ k == 3 \/ k == 4)
+  = assert_norm (F.nl == 5)
+
 
 (** [Spec.Ed25519.d]. *)
 let d_list : list S64.t = [
@@ -239,7 +245,7 @@ let d_at_4 (_: unit)
 
 let d_at (k: nat { k < F.nl })
   : Lemma (Seq.index (vals d_seq) k == Seq.index (F.limbs_of Spec.Ed25519.d) k)
-  = assert_norm (F.nl == 5);
+  = below5 k;
     if k = 0 then d_at_0 ()
     else if k = 1 then d_at_1 ()
     else if k = 2 then d_at_2 ()
@@ -305,7 +311,7 @@ let d2_at_4 (_: unit)
 
 let d2_at (k: nat { k < F.nl })
   : Lemma (Seq.index (vals d2_seq) k == Seq.index (F.limbs_of Spec.Ed25519.d2) k)
-  = assert_norm (F.nl == 5);
+  = below5 k;
     if k = 0 then d2_at_0 ()
     else if k = 1 then d2_at_1 ()
     else if k = 2 then d2_at_2 ()
@@ -371,7 +377,7 @@ let sqrtm1_at_4 (_: unit)
 
 let sqrtm1_at (k: nat { k < F.nl })
   : Lemma (Seq.index (vals sqrtm1_seq) k == Seq.index (F.limbs_of Spec.Ed25519.sqrt_m1) k)
-  = assert_norm (F.nl == 5);
+  = below5 k;
     if k = 0 then sqrtm1_at_0 ()
     else if k = 1 then sqrtm1_at_1 ()
     else if k = 2 then sqrtm1_at_2 ()
@@ -437,7 +443,7 @@ let gx_at_4 (_: unit)
 
 let gx_at (k: nat { k < F.nl })
   : Lemma (Seq.index (vals gx_seq) k == Seq.index (F.limbs_of Spec.Ed25519.g_x) k)
-  = assert_norm (F.nl == 5);
+  = below5 k;
     if k = 0 then gx_at_0 ()
     else if k = 1 then gx_at_1 ()
     else if k = 2 then gx_at_2 ()
@@ -503,7 +509,7 @@ let gy_at_4 (_: unit)
 
 let gy_at (k: nat { k < F.nl })
   : Lemma (Seq.index (vals gy_seq) k == Seq.index (F.limbs_of Spec.Ed25519.g_y) k)
-  = assert_norm (F.nl == 5);
+  = below5 k;
     if k = 0 then gy_at_0 ()
     else if k = 1 then gy_at_1 ()
     else if k = 2 then gy_at_2 ()

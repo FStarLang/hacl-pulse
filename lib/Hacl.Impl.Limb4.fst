@@ -340,6 +340,12 @@ let acc_ble (a b acc: Seq.seq nat) (i j: nat)
     Math.lemma_mult_le_right (2 * (base - 1)) (i + 1) nl;
     ble_mono acc (i * (2 * (base - 1)) + 2 * (base - 1)) (nl * (2 * (base - 1)))
 
+let part_step4 (a b v: Seq.seq nat) (i j: nat)
+  : Lemma (requires j <= 4 /\ ~(j < 4) /\ v == addw (part a b i) (rowj a b i j))
+          (ensures v == part a b (i + 1) /\ Seq.length v == nw)
+  = part_step a b i;
+    part_len a b (i + 1)
+
 #push-options "--z3rlimit 400"
 
 fn mul_columns (t: A.array S128.t) (a b: A.array S64.t)
@@ -422,8 +428,10 @@ ensures exists* (vt': Seq.seq S128.t).
                      (SZ.v vi) (SZ.v vj);
       j := SZ.add vj 1sz;
     };
-    part_step (vals va) (vals vb) (SZ.v vi);
+    with vj v. assert (pts_to j vj ** A.pts_to t v);
+    part_step4 (vals va) (vals vb) (vals128 v) (SZ.v vi) (SZ.v vj);
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   part_ble (vals va) (vals vb) nl;
   ()

@@ -173,6 +173,14 @@ let rep_elim (a: K.proj_point) (n: nat) (p: K.proj_point)
     did not touch, and none of it needs to see the curve; the value of an
     entry is carried by the opaque {!rep}, so none of it does. *)
 
+(** [d * n] is a [nat]: needed to typecheck [ent] and the spec of
+    {!tok_get}, which Z3 no longer finds quickly by itself.  It is only
+    in scope up to {!tok_get}: as a pattern on every product it would
+    otherwise disturb the queries of the code below. *)
+let ent_mul_nat (d n: nat)
+  : Lemma (d * n >= 0) [SMTPat (d * n)]
+  = FStar.Math.Lemmas.nat_times_nat_is_nat d n
+
 let ent (tx ty tz: Seq.seq S64.t) (p: K.proj_point) (n d: nat) : prop =
   pt_ok (entry tx d) (entry ty d) (entry tz d) /\
   rep (pt (entry tx d) (entry ty d) (entry tz d)) (d * n) p
@@ -202,6 +210,21 @@ let tok_get (tx ty tz: Seq.seq S64.t) (p: K.proj_point) (n d: nat)
                    rep (pt (entry tx d) (entry ty d) (entry tz d)) (d * n) p)
   = ()
 
+(** End of the scope of {!ent_mul_nat} (here, and again after the
+    enclosing [#pop-options] below). *)
+#set-options "--using_facts_from '* -Hacl.K256.PointWin.ent_mul_nat'"
+
+let tok_ent (tx ty tz: Seq.seq S64.t) (p: K.proj_point) (n e d: nat)
+  : Lemma (requires tok tx ty tz p n e /\ d < e)
+          (ensures ent tx ty tz p n d)
+  = ()
+
+(** Kept apart so that this linear step is not tried in the context of
+    {!tok_extend}, whose (nonlinear) hypotheses slow the solver down. *)
+let last_index (dd e: nat)
+  : Lemma (requires dd < e + 1 /\ ~(dd < e)) (ensures dd == e)
+  = ()
+
 #push-options "--ifuel 1 --z3rlimit 100"
 let tok_extend (tx ty tz tx' ty' tz': Seq.seq S64.t) (p: K.proj_point)
                (n e: nat)
@@ -213,7 +236,13 @@ let tok_extend (tx ty tz tx' ty' tz': Seq.seq S64.t) (p: K.proj_point)
           (ensures tok tx' ty' tz' p n (e + 1))
   = introduce forall (dd: nat). dd < e + 1 ==> ent tx' ty' tz' p n dd
     with introduce _ ==> _
-    with (if dd < e then ent_eq tx ty tz tx' ty' tz' p n dd else ())
+    with (if dd < e then begin
+            tok_ent tx ty tz p n e dd;
+            assert (entry tx' dd == entry tx dd /\
+                    entry ty' dd == entry ty dd /\
+                    entry tz' dd == entry tz dd);
+            ent_eq tx ty tz tx' ty' tz' p n dd
+          end else last_index dd e)
 #pop-options
 
 (** Where entry [d] starts, and that it is addressable. *)
@@ -225,6 +254,7 @@ let store_off (d: nat)
     SZ.fits_lte (d * 5 + 5) 80
 
 #pop-options
+#set-options "--using_facts_from '* -Hacl.K256.PointWin.ent_mul_nat'"
 
 (** {2 The spec-side steps}
 
@@ -320,6 +350,11 @@ let pow2_cong (x y: nat) : Lemma (requires x == y) (ensures pow2 x == pow2 y) = 
 
 let step4 (x: nat) : Lemma (requires x > 0 /\ x % 4 == 0)
                            (ensures 4 <= x /\ (x - 4) % 4 == 0) = ()
+
+let sz_down4 (x y: SZ.t)
+  : Lemma (requires 4 <= SZ.v x /\ y == SZ.sub x 4sz)
+          (ensures SZ.v y < SZ.v x /\ SZ.v y << SZ.v x)
+  = ()
 
 let sz_zero (x: SZ.t) : Lemma (requires SZ.gt x 0sz == false)
                               (ensures SZ.v x == 0) = ()
@@ -598,6 +633,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz;
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz;
   entry_fits (reveal d);
+  mul_nat (reveal d) 5;
   table_select sx tx 5sz dig d;
   table_select sy ty 5sz dig d;
   table_select sz tz 5sz dig d;
@@ -606,6 +642,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   with wsx wsy wsz. assert (A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz);
   point_add ux uy uz ox oy oz sx sy sz;
   with u1x u1y u1z. assert (A.pts_to ux u1x ** A.pts_to uy u1y ** A.pts_to uz u1z);
+  mul_nat (reveal d) (reveal n);
   add_ok (pt vox voy voz) (pt wsx wsy wsz) (pt u1x u1y u1z) (reveal p)
          (reveal e) (reveal d * reveal n);
   fcopy ox ux; fcopy oy uy; fcopy oz uz;
@@ -713,10 +750,14 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
     let vj = !j;
     step4 (SZ.v vj);
     let j2 = SZ.sub vj 4sz;
+    sz_down4 vj j2;
     pow2_pos (SZ.v j2);
     div_nonneg (kv vk) (SZ.v j2);
     let dig = adigit ks j2;
     mul_nat (kv vk / pow2 (SZ.v j2) % 16) 1;
+    pow2_pos (SZ.v vj);
+    div_nonneg (kv vk) (SZ.v vj);
+    mul_nat 16 (kv vk / pow2 (SZ.v vj));
     win_dbl4 ox oy oz ux uy uz (hide (pt vqx vqy vqz))
              (hide (kv vk / pow2 (SZ.v vj)));
     win_add ox oy oz ux uy uz sx sy sz tx ty tz dig

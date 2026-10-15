@@ -78,7 +78,11 @@ let nlast_of (#t: Type0) {| word t |} (len: nat) : nat =
 
 (** How many bytes the buffer holds: between one and [block_len], and zero
     only for an empty stream. *)
-let brem_of (#t: Type0) {| word t |} (len: nat) : nat =
+let brem_of (#t: Type0) {| word t |} (len: nat) : r: nat { r <= block_len #t } =
+  if len > 0 then begin
+    Math.lemma_div_mod (len - 1) (block_len #t);
+    Math.lemma_mod_lt (len - 1) (block_len #t)
+  end;
   len - nlast_of #t len * block_len #t
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 60"

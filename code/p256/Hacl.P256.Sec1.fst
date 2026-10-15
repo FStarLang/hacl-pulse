@@ -185,6 +185,38 @@ ensures exists* (wyb: Seq.seq S8.t) (wnf: Seq.seq S64.t).
 let c2r (vp: Seq.seq S8.t) : GTot (option (Seq.lseq S8.t 64)) =
   if Seq.length vp = 33 then P.compressed_to_raw vp else None
 
+(** The successful path of [compressed_to_raw], stated in a small context
+    so the solver does not have to unfold the specification inside the
+    Pulse body. *)
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
+let parity_sel (y h: int) (odd: bool)
+  : Lemma (requires (h == 2 \/ h == 3) /\ odd == (h = 3))
+          (ensures (y % 2 = h - 2) == ((y % 2 = 1) = odd))
+  = ()
+
+let c2r_some (vp: Seq.seq S8.t) (x y: P.felem) (odd: bool)
+  : Lemma
+    (requires Seq.length vp == 33 /\
+              (S8.v (Seq.index vp 0) == 2 \/ S8.v (Seq.index vp 0) == 3) /\
+              odd == (S8.v (Seq.index vp 0) = 3) /\
+              be_nat (Seq.slice vp 1 33) == x /\
+              P.fsqrt (rhs_of x) == Some y)
+    (ensures Some? (c2r vp) /\
+             Some?.v (c2r vp) ==
+               Seq.append (Seq.slice vp 1 33)
+                 (nat_to_be 32 (if (y % 2 = 1) = odd then y else P.fneg y)))
+  = let xs = Seq.slice vp 1 33 in
+    assert (P.load_felem xs == Some x);
+    assert (rhs_of x == P.fadd (P.fsub (P.fmul (P.fmul x x) x) (P.fmul three_f x)) P.b_coeff);
+    assert (three_f == 3);
+    let h = S8.v (Seq.index vp 0) in
+    let y' : P.felem = if y % 2 = h - 2 then y else P.fneg y in
+    parity_sel y h odd;
+    assert (y' == (if (y % 2 = 1) = odd then y else P.fneg y));
+    assert (P.compressed_to_raw vp == Some (Seq.append xs (P.store_felem y')));
+    assert (c2r vp == P.compressed_to_raw vp)
+#pop-options
+
 fn compressed_to_raw (out pk: A.array S8.t)
                      (#vo: erased (Seq.seq S8.t))
                      (#pp: perm) (#vp: erased (Seq.seq S8.t))
@@ -215,10 +247,13 @@ ensures exists* (wo: Seq.seq S8.t).
     A.pts_to_len n0;
     assert (pure (Seq.equal vxb (Seq.slice vp 1 33)));
     let okx = fload m0 n0;
+    with v0. assert (A.pts_to m0 v0);
     if okx {
       curve_rhs m1 m0;
       let oks = fsqrt m2 m1;
+      with v2. assert (A.pts_to m2 v2);
       if oks {
+        c2r_some vp (fev v0) (fev v2) (h = 3uy);
         store_y n1 m2 m3 (h = 3uy);
         with wyb. assert (A.pts_to n1 wyb);
         A.pts_to_len n1;

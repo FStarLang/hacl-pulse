@@ -144,6 +144,27 @@ ensures A.pts_to wsb (ws p (words_from_be block_words (block_at #t vb (SZ.v off)
     in a slice rather than in eight local variables is what lets the round be a
     loop at all; a C compiler keeps them in registers regardless. *)
 
+(** The final step of [update_block_impl]: adding the saved registers into the
+    shuffled state is [update_block]. *)
+let update_block_final (#t: Type0) {| w: word t |} (p: params t)
+      (block: Seq.lseq S8.t (block_len #t)) (vst0 vsh: Seq.lseq t 8)
+      (a0 b0 c0 d0 e0 f0 g0 h0 a1 b1 c1 d1 e1 f1 g1 h1: t)
+  : Lemma (requires vsh == repeati_g (rounds p) (shuffle_core p (ws p (words_from_be block_words block))) vst0 /\
+                    a0 == Seq.index vst0 0 /\ b0 == Seq.index vst0 1 /\ c0 == Seq.index vst0 2 /\
+                    d0 == Seq.index vst0 3 /\ e0 == Seq.index vst0 4 /\ f0 == Seq.index vst0 5 /\
+                    g0 == Seq.index vst0 6 /\ h0 == Seq.index vst0 7 /\
+                    a1 == Seq.index vsh 0 /\ b1 == Seq.index vsh 1 /\ c1 == Seq.index vsh 2 /\
+                    d1 == Seq.index vsh 3 /\ e1 == Seq.index vsh 4 /\ f1 == Seq.index vsh 5 /\
+                    g1 == Seq.index vsh 6 /\ h1 == Seq.index vsh 7)
+          (ensures update_block p block vst0 ==
+                   Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd (Seq.upd vsh
+                     0 (add_mod #t a0 a1)) 1 (add_mod #t b0 b1)) 2 (add_mod #t c0 c1))
+                     3 (add_mod #t d0 d1)) 4 (add_mod #t e0 e1)) 5 (add_mod #t f0 f1))
+                     6 (add_mod #t g0 g1)) 7 (add_mod #t h0 h1))
+  = set8_irrelevant #t vsh vst0
+      (add_mod #t a0 a1) (add_mod #t b0 b1) (add_mod #t c0 c1) (add_mod #t d0 d1)
+      (add_mod #t e0 e1) (add_mod #t f0 f1) (add_mod #t g0 g1) (add_mod #t h0 h1)
+
 fn update_block_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (kt: A.array t) (wsb: A.array t) (st: A.array t) (block: A.array S8.t) (off: SZ.t)
              (#pk: perm) (#vk: erased (Seq.seq t))
@@ -207,10 +228,10 @@ ensures exists* vw.
   let f1 = A.(st.(5sz));
   let g1 = A.(st.(6sz));
   let h1 = A.(st.(7sz));
-  with vsh. assert (A.pts_to st vsh);
-  set8_irrelevant #t vsh vst0
-    (add_mod #t a0 a1) (add_mod #t b0 b1) (add_mod #t c0 c1) (add_mod #t d0 d1)
-    (add_mod #t e0 e1) (add_mod #t f0 f1) (add_mod #t g0 g1) (add_mod #t h0 h1);
+  with vi vsh. assert (pts_to i vi ** A.pts_to st vsh);
+  assert (pure (SZ.v vi == rounds p));
+  update_block_final #t p (block_at #t vb (SZ.v off)) vst0 vsh
+    a0 b0 c0 d0 e0 f0 g0 h0 a1 b1 c1 d1 e1 f1 g1 h1;
   A.((st.(0sz) <- add_mod #t a0 a1));
   A.((st.(1sz) <- add_mod #t b0 b1));
   A.((st.(2sz) <- add_mod #t c0 c1));
@@ -233,7 +254,55 @@ ensures exists* vw.
     of length cannot be addressed, and the higher bytes of the length field are
     left at the zero the buffer was allocated with. *)
 
-#push-options "--z3rlimit 300 --fuel 0 --ifuel 0"
+(** The loop invariant of [write_len_be], kept opaque so that its quantifiers
+    stay out of the Pulse verification conditions. *)
+[@@"opaque_to_smt"]
+let write_len_be_inv (off len vd: nat) (vb vb': Seq.seq S8.t) : prop =
+  vd <= 8 /\ off + 8 <= Seq.length vb /\ Seq.length vb' == Seq.length vb /\
+  (forall (j: nat). j < vd ==>
+     Seq.index vb' (off + 7 - j) ==
+       S8.classify (U8.uint_to_t ((8 * len / pow2 (8 * j)) % 256))) /\
+  (forall (k: nat). k < Seq.length vb ==>
+     k < off + 8 - vd \/ k >= off + 8 ==>
+     Seq.index vb' k == Seq.index vb k)
+
+let write_len_be_inv_init (off len: nat) (vb: Seq.seq S8.t)
+  : Lemma (requires off + 8 <= Seq.length vb)
+          (ensures write_len_be_inv off len 0 vb vb)
+  = reveal_opaque (`%write_len_be_inv) write_len_be_inv
+
+(** The byte the loop writes at step [vd]. *)
+let write_len_be_byte (len: SZ.t) (bits8: U64.t) (vd: nat) (vsh: U32.t)
+  : Lemma (requires 8 * SZ.v len < pow2 64 /\ vd < 8 /\ U32.v vsh == 8 * vd /\
+                    bits8 == U64.mul 8uL (SZ.sizet_to_uint64 len))
+          (ensures Cast.uint64_to_uint8 (U64.shift_right bits8 vsh) ==
+                   U8.uint_to_t ((8 * SZ.v len / pow2 (8 * vd)) % 256))
+  = let c = Cast.uint64_to_uint8 (U64.shift_right bits8 vsh) in
+    assert (U64.v bits8 == 8 * SZ.v len);
+    assert (U64.v (U64.shift_right bits8 vsh) == 8 * SZ.v len / pow2 (8 * vd));
+    assert_norm (pow2 8 == 256);
+    assert (U8.v c == (8 * SZ.v len / pow2 (8 * vd)) % 256);
+    U8.uv_inv c
+
+let write_len_be_inv_step (off len vd: nat) (vb vb': Seq.seq S8.t) (bs: S8.t)
+  : Lemma (requires vd < 8 /\ write_len_be_inv off len vd vb vb' /\
+                    bs == S8.classify (U8.uint_to_t ((8 * len / pow2 (8 * vd)) % 256)))
+          (ensures off + 7 - vd < Seq.length vb' /\
+                   write_len_be_inv off len (vd + 1) vb (Seq.upd vb' (off + 7 - vd) bs))
+  = reveal_opaque (`%write_len_be_inv) write_len_be_inv
+
+let write_len_be_inv_final (off len: nat) (vb vb': Seq.seq S8.t)
+  : Lemma (requires write_len_be_inv off len 8 vb vb')
+          (ensures Seq.length vb' == Seq.length vb /\ off + 8 <= Seq.length vb' /\
+                   (forall (j: nat). {:pattern (Seq.index vb' (off + 7 - j))} j < 8 ==>
+                      Seq.index vb' (off + 7 - j) ==
+                        S8.classify (U8.uint_to_t ((8 * len / pow2 (8 * j)) % 256))) /\
+                   (forall (k: nat). {:pattern (Seq.index vb' k)}
+                      k < Seq.length vb ==> k < off \/ k >= off + 8 ==>
+                      Seq.index vb' k == Seq.index vb k))
+  = reveal_opaque (`%write_len_be_inv) write_len_be_inv
+
+#push-options "--z3rlimit 20 --fuel 0 --ifuel 0"
 
 fn write_len_be (b: A.array S8.t) (off: SZ.t) (len: SZ.t)
                 (#vb: erased (Seq.seq S8.t))
@@ -248,29 +317,32 @@ ensures exists* vb'. A.pts_to b vb' **
 {
   A.pts_to_len b;
   let bits8 = U64.mul 8uL (SZ.sizet_to_uint64 len);
+  write_len_be_inv_init (SZ.v off) (SZ.v len) vb;
   let mut d = 0sz;
   let mut sh = 0ul;
   while (let vd = !d; SZ.lt vd 8sz)
   invariant exists* (vd: SZ.t) (vsh: U32.t) (vb': Seq.seq S8.t).
     pts_to d vd ** pts_to sh vsh ** A.pts_to b vb' **
-    pure (SZ.v vd <= 8 /\ U32.v vsh == 8 * SZ.v vd /\ Seq.length vb' == Seq.length vb /\
-          (forall (j: nat). j < SZ.v vd ==>
-             Seq.index vb' (SZ.v off + 7 - j) ==
-               S8.classify (U8.uint_to_t ((8 * SZ.v len / pow2 (8 * j)) % 256))) /\
-          (forall (k: nat). k < Seq.length vb ==>
-             k < SZ.v off + 8 - SZ.v vd \/ k >= SZ.v off + 8 ==>
-             Seq.index vb' k == Seq.index vb k))
+    pure (SZ.v vd <= 8 /\ U32.v vsh == 8 * SZ.v vd /\
+          write_len_be_inv (SZ.v off) (SZ.v len) (SZ.v vd) vb vb')
   decreases (8 - SZ.v (!d))
   {
     let vd = !d;
     let vsh = !sh;
+    with vb'. assert (A.pts_to b vb');
+    write_len_be_byte len bits8 (SZ.v vd) vsh;
     let c = Cast.uint64_to_uint8 (U64.shift_right bits8 vsh);
     let bs = S8.classify c;
+    write_len_be_inv_step (SZ.v off) (SZ.v len) (SZ.v vd) vb vb' bs;
     A.((b.(SZ.add off (SZ.sub 7sz vd)) <- bs));
     Math.distributivity_add_right 8 (SZ.v vd) 1;
     d := SZ.add vd 1sz;
     sh := U32.add vsh 8ul;
   };
+  with vd vb'. assert (pts_to d vd ** A.pts_to b vb');
+  assert (pure (SZ.v vd == 8));
+  write_len_be_inv_final (SZ.v off) (SZ.v len) vb vb';
+  ()
 }
 
 #pop-options
@@ -333,6 +405,52 @@ ensures exists* vt.
     and SHA-384 stop in the middle of a word, which is why the truncation is a
     byte copy rather than a shorter loop. *)
 
+(** The machine width in bytes is [bytes]. *)
+let nbytes_v (#t: Type0) {| w: word t |} : Lemma (SZ.v (nbytes #t #w) == bytes #t) = ()
+
+(** The offset of word [j], computed by [SZ.mul]. *)
+let digest_off (#t: Type0) {| w: word t |} (j: SZ.t)
+  : Lemma (requires SZ.v j < 8)
+          (ensures SZ.fits (SZ.v j * SZ.v (nbytes #t #w)) /\
+                   SZ.v (SZ.mul j (nbytes #t #w)) == SZ.v j * bytes #t)
+  = nbytes_v #t #w;
+    Math.lemma_mult_le_right (bytes #t) (SZ.v j) 8
+
+(** The invariant of [write_digest]'s first loop, kept opaque so that its
+    quantifier stays out of the Pulse verification conditions. *)
+[@@"opaque_to_smt"]
+let digest_inv (#t: Type0) {| w: word t |} (vst: Seq.lseq t 8) (vj: nat) (vd: Seq.seq S8.t) : prop =
+  vj <= 8 /\ Seq.length vd == 8 * bytes #t /\
+  (forall (i: nat). i < vj * bytes #t ==> Seq.index vd i == Seq.index (words_to_be 8 vst) i)
+
+let digest_inv_init (#t: Type0) {| w: word t |} (vst: Seq.lseq t 8) (vd: Seq.seq S8.t)
+  : Lemma (requires Seq.length vd == 8 * bytes #t) (ensures digest_inv vst 0 vd)
+  = reveal_opaque (`%digest_inv) (digest_inv #t #w)
+
+let digest_inv_len (#t: Type0) {| w: word t |} (vst: Seq.lseq t 8) (vj: nat) (vd: Seq.seq S8.t)
+  : Lemma (requires digest_inv vst vj vd) (ensures Seq.length vd == 8 * bytes #t)
+  = reveal_opaque (`%digest_inv) (digest_inv #t #w)
+
+let digest_inv_step (#t: Type0) {| w: word t |} (vst: Seq.lseq t 8) (vj o: nat) (x: t)
+                    (vd0 vd: Seq.seq S8.t)
+  : Lemma (requires vj < 8 /\ digest_inv vst vj vd0 /\ o == vj * bytes #t /\
+                    x == Seq.index vst vj /\
+                    Seq.length vd == Seq.length vd0 /\ o + bytes #t <= Seq.length vd /\
+                    (forall (k: nat). k < bytes #t ==>
+                       S8.v (Seq.index vd (o + k)) == (v x / pow2 (8 * (bytes #t - 1 - k))) % 256) /\
+                    (forall (k: nat). k < Seq.length vd0 ==> k < o \/ k >= o + bytes #t ==>
+                       Seq.index vd k == Seq.index vd0 k))
+          (ensures digest_inv vst (vj + 1) vd)
+  = reveal_opaque (`%digest_inv) (digest_inv #t #w);
+    assert (forall (i: nat). i < o ==> Seq.index vd i == Seq.index vd0 i);
+    digest_step #t 8 vst vj o vd;
+    Math.distributivity_add_left vj 1 (bytes #t)
+
+let digest_inv_final (#t: Type0) {| w: word t |} (vst: Seq.lseq t 8) (vd: Seq.seq S8.t)
+  : Lemma (requires digest_inv vst 8 vd) (ensures vd == words_to_be 8 vst)
+  = reveal_opaque (`%digest_inv) (digest_inv #t #w);
+    Seq.lemma_eq_intro vd (words_to_be 8 vst)
+
 fn write_digest (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                 (out: A.array S8.t) (st: A.array t)
                 (#vout: erased (Seq.seq S8.t)) (#pst: perm) (#vst: erased (Seq.lseq t 8))
@@ -350,27 +468,31 @@ ensures A.pts_to out (finish p vst) ** A.pts_to st #pst vst
   A.pts_to_len darr;
   A.pts_to_len darr;
 
+  nbytes_v #t #w;
+  with vd0. assert (A.pts_to darr vd0);
+  digest_inv_init #t #w vst vd0;
   let mut j = 0sz;
   while (let vj = !j; SZ.lt vj 8sz)
   invariant exists* (vj: SZ.t) (vd: Seq.seq S8.t).
     pts_to j vj ** A.pts_to darr vd ** A.pts_to st #pst vst **
-    pure (SZ.v vj <= 8 /\ Seq.length vd == 8 * bytes #t /\
-          (forall (i: nat). i < SZ.v vj * bytes #t ==>
-             Seq.index vd i == Seq.index (words_to_be 8 vst) i))
+    pure (SZ.v vj <= 8 /\ digest_inv #t #w vst (SZ.v vj) vd)
   decreases (8 - SZ.v (!j))
   {
     let vj = !j;
     Math.lemma_mult_le_right (bytes #t) (SZ.v vj + 1) 8;
     Math.distributivity_add_left (SZ.v vj) 1 (bytes #t);
     let x = A.(st.(vj));
+    digest_off #t #w vj;
+    with vd0. assert (A.pts_to darr vd0);
+    digest_inv_len #t #w vst (SZ.v vj) vd0;
     store_be #t darr (SZ.mul vj nb) x;
     with vd. assert (A.pts_to darr vd);
-    digest_step #t 8 vst (SZ.v vj) (SZ.v (SZ.mul vj nb)) vd;
+    digest_inv_step #t #w vst (SZ.v vj) (SZ.v (SZ.mul vj nb)) x vd0 vd;
     j := SZ.add vj 1sz;
   };
-  with vd. assert (A.pts_to darr vd);
-  Seq.lemma_eq_intro vd (words_to_be 8 vst);
-  Seq.lemma_eq_elim vd (words_to_be 8 vst);
+  with vj vd. assert (pts_to j vj ** A.pts_to darr vd);
+  assert (pure (SZ.v vj == 8));
+  digest_inv_final #t #w vst vd;
 
   let hb = p.nhash_bytes;
   let mut i = 0sz;
@@ -408,6 +530,22 @@ ensures A.pts_to out (finish p vst) ** A.pts_to st #pst vst
 
 (** The padding blocks and the digest.  Separated from [hash_impl] only so that
     each proof obligation sees a small context. *)
+
+(** The offset of the [vj]-th padding block stays well inside [SizeT]. *)
+let tail_block_off (#t: Type0) {| w: word t |} (vj ntb ntail: nat)
+  : Lemma (requires vj < ntb /\ ntb * block_len #t <= ntail /\ ntail <= 2 * block_len #t)
+          (ensures 0 <= vj * block_len #t /\ vj * block_len #t + block_len #t <= ntail /\
+                   vj * block_len #t <= 512)
+  = Math.lemma_mult_le_right (block_len #t) (vj + 1) ntb;
+    Math.distributivity_add_left vj 1 (block_len #t);
+    Math.nat_times_nat_is_nat vj (block_len #t)
+
+(** The padding is a whole number of blocks: one or two. *)
+let tail_blocks (#t: Type0) {| w: word t |} (ntail: nat)
+  : Lemma (requires ntail == block_len #t \/ ntail == 2 * block_len #t)
+          (ensures (ntail / block_len #t) * block_len #t == ntail)
+  = if ntail = block_len #t then Math.multiple_division_lemma 1 (block_len #t)
+    else Math.multiple_division_lemma 2 (block_len #t)
 
 fn tail_and_finish (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                    (kt: A.array t) (wsb: A.array t) (st: A.array t)
@@ -478,6 +616,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
   decreases (SZ.v ntb - SZ.v (!j))
   {
     let vj = !j;
+    tail_block_off #t #w (SZ.v vj) (SZ.v ntb) (SZ.v ntail);
     Math.lemma_mult_le_right (block_len #t) (SZ.v vj) (SZ.v ntb);
     small_fits (SZ.v vj * block_len #t);
     Math.lemma_mult_le_right (block_len #t) (SZ.v vj + 1) (SZ.v ntb);
@@ -497,6 +636,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
   Math.multiple_modulo_lemma 1 (block_len #t);
   Math.multiple_modulo_lemma 2 (block_len #t);
   Math.euclidean_division_definition (SZ.v ntail) (block_len #t);
+  tail_blocks #t #w (SZ.v ntail);
   assert (pure (SZ.v ntb * block_len #t == SZ.v ntail));
   Math.distributivity_add_left (SZ.v nblocks) (SZ.v ntb) (block_len #t);
   Math.multiple_division_lemma (SZ.v nblocks + SZ.v ntb) (block_len #t);
@@ -516,6 +656,30 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
 
 (** The full blocks of the message, in place.  Split out of [hash_impl] so
     that the loop's proof obligation sees only the loop. *)
+
+(** One step of [hash_blocks]: the [vi2]-th whole block of [vin] is the
+    [nprev + vi2]-th block of the padded message. *)
+let hash_blocks_step (#t: Type0) {| w: word t |} (p: params t) (pre vin: Seq.seq S8.t)
+                     (nprev vi2 nfull: nat) (h: Seq.lseq t 8)
+  : Lemma (requires Seq.length pre == nprev * block_len #t /\
+                    Seq.length pre + Seq.length vin < max_input #t /\
+                    nfull == Seq.length vin / block_len #t /\ vi2 < nfull)
+          (ensures 0 <= vi2 * block_len #t /\
+                   vi2 * block_len #t + block_len #t <= Seq.length vin /\
+                   update_step p (padded #t (Seq.append pre vin)) (nprev + vi2) h ==
+                   update_block p (block_at #t vin (vi2 * block_len #t)) h)
+  = let bl = block_len #t in
+    let m = Seq.append pre vin in
+    Seq.lemma_len_append pre vin;
+    padded_shape #t m;
+    Math.nat_times_nat_is_nat vi2 bl;
+    Math.lemma_mult_le_right bl (vi2 + 1) nfull;
+    Math.lemma_div_mod (Seq.length vin) bl;
+    Math.distributivity_add_left vi2 1 bl;
+    padded_index_block_shift #t pre vin (vi2 * bl);
+    Math.distributivity_add_left nprev vi2 bl;
+    Math.distributivity_add_left (nprev + vi2) 1 bl;
+    assert ((nprev + vi2 + 1) * bl <= Seq.length (padded #t m))
 
 fn hash_blocks (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: A.array t) (wsb: A.array t) (st: A.array t) (input: A.array S8.t)
@@ -551,21 +715,15 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
   decreases (SZ.v nfull - SZ.v (!i))
   {
     let vi2 = !i;
-    Math.lemma_mult_le_right (block_len #t) (SZ.v vi2 + 1) (SZ.v nfull);
-    Math.lemma_mult_le_right (block_len #t) (SZ.v nfull) (Seq.length vin / block_len #t);
-    padded_index_block_shift #t (reveal pre) (reveal vin) (SZ.v vi2 * block_len #t);
-    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2) (block_len #t);
-    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2 + 1) (block_len #t);
+    with vst. assert (A.pts_to st vst);
+    hash_blocks_step #t #w p (reveal pre) (reveal vin) (SZ.v nprev) (SZ.v vi2) (SZ.v nfull) vst;
     unfold_repeati_g (SZ.v nprev + SZ.v vi2)
       (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv);
-    assert (pure (block_at #t (padded #t (Seq.append pre vin))
-                    ((SZ.v nprev + SZ.v vi2) * block_len #t) ==
-                  block_at #t vin (SZ.v vi2 * block_len #t)));
-    assert (pure ((SZ.v nprev + SZ.v vi2 + 1) * block_len #t <=
-                  Seq.length (padded #t (Seq.append pre vin))));
     update_block_impl p kt wsb st input (SZ.mul vi2 bl);
     i := SZ.add vi2 1sz;
   };
+  with vi2. assert (pts_to i vi2);
+  assert (pure (SZ.v vi2 == SZ.v nfull));
 }
 
 #pop-options
@@ -702,6 +860,19 @@ ensures exists* vout'.
     why [hash_blocks] and [tail_and_finish] are stated for a ghost
     block-aligned prefix rather than for this special case. *)
 
+(** The block counts of [hash_prefixed], one block of prefix ahead of [lin]
+    bytes of message. *)
+let prefixed_arith (bl lin: nat)
+  : Lemma (requires bl > 0)
+          (ensures (bl + lin) % bl == lin % bl /\
+                   (bl + lin) - lin % bl == (1 + lin / bl) * bl /\
+                   1 + lin / bl <= bl + lin /\ bl == 1 * bl)
+  = Math.lemma_mod_plus lin 1 bl;
+    Math.euclidean_division_definition lin bl;
+    Math.distributivity_add_left 1 (lin / bl) bl;
+    Math.multiply_fractions lin bl;
+    Math.lemma_mult_le_left (lin / bl) 1 bl
+
 fn hash_prefixed (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                  (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
                  (blk: A.array S8.t) (input: A.array S8.t) (lin: SZ.t)
@@ -770,13 +941,9 @@ ensures exists* vout'.
   repeati_g_zero (update_step p (padded #t (Seq.append vb vin))) (reveal p.iv);
   unfold_repeati_g 0 (update_step p (padded #t (Seq.append vb vin))) (reveal p.iv);
 
-  Math.lemma_mod_plus (SZ.v lin) 1 (block_len #t);
+  prefixed_arith (block_len #t) (SZ.v lin);
   assert (pure (SZ.v rem == SZ.v len % block_len #t));
-  Math.euclidean_division_definition (SZ.v lin) (block_len #t);
-  Math.distributivity_add_left 1 (SZ.v nfull) (block_len #t);
   assert (pure (SZ.v len - SZ.v rem == (1 + SZ.v nfull) * block_len #t));
-  Math.multiply_fractions (SZ.v lin) (block_len #t);
-  Math.lemma_mult_le_left (SZ.v nfull) 1 (block_len #t);
   SZ.fits_lte (1 + SZ.v nfull) (block_len #t + SZ.v lin);
 
   hash_blocks p kt wsarr starr input bl 1sz nfull vb;

@@ -192,6 +192,11 @@ let step2_ble (s: Seq.seq nat)
     Math.swap_mul prime (Seq.index r (nl - 1) / hib);
     Math.lemma_mod_plus (eval (top48 r)) (Seq.index r (nl - 1) / hib) prime
 
+let four_digits (q: Seq.seq nat)
+  : Lemma (requires vat q 0 < base /\ vat q 1 < base /\ vat q 2 < base /\ vat q 3 < base)
+          (ensures forall (i: nat). i < nl - 1 ==> vat q i < base)
+  = assert_norm (nl == 5)
+
 (** After the second chain: four proper digits and a top limb that is at
     most [2^48].  It can be [2^48] exactly -- the fold leaves a little
     more than [2^256] behind -- which is what the conditional subtraction
@@ -210,7 +215,10 @@ let step3_ble (s: Seq.seq nat)
     Math.lemma_div_le (vat r 0) (base - 1 + 32 * cf1) base;
     div_le_of_lt (base - 1 + 32 * cf1) base 1;
     carry_run_len r (nl - 1);
-    carry_run_ok r (nl - 1)
+    carry_run_ok r (nl - 1);
+    let q = step3 s in
+    assert (vat q 0 < base /\ vat q 1 < base /\ vat q 2 < base /\ vat q 3 < base);
+    four_digits q
 
 #pop-options
 

@@ -58,6 +58,29 @@ let max_input_bound (_: unit)
     assert_norm (bits #S64.t == 64);
     Math.pow2_le_compat 125 61
 
+(** What [NI.hash_impl_ni] asks of the two thirty-two bit parameter sets,
+    stated once at top level so that the call sites need not unfold
+    [params256_with] inside a query that also carries a heap. *)
+#push-options "--fuel 0 --ifuel 0"
+let sha2_224_facts (_: unit)
+  : Lemma (is_sha256 sha2_224 /\ sha2_224.k == k256 /\ sha2_224.iv == iv224 /\
+           SZ.v sha2_224.nhash_bytes == 28)
+  = ()
+
+let sha2_256_facts (_: unit)
+  : Lemma (is_sha256 sha2_256 /\ sha2_256.k == k256 /\ sha2_256.iv == iv256 /\
+           SZ.v sha2_256.nhash_bytes == 32)
+  = ()
+
+let sha2_384_facts (_: unit)
+  : Lemma (sha2_384.k == k512 /\ sha2_384.iv == iv384 /\ SZ.v sha2_384.nhash_bytes == 48)
+  = ()
+
+let sha2_512_facts (_: unit)
+  : Lemma (sha2_512.k == k512 /\ sha2_512.iv == iv512 /\ SZ.v sha2_512.nhash_bytes == 64)
+  = ()
+#pop-options
+
 (** {2 The four algorithms}
 
     Each takes the digest buffer first, as HACL* does, then the message and
@@ -79,6 +102,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
+  sha2_224_facts ();
   let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
@@ -110,6 +134,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
+  sha2_256_facts ();
   let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
@@ -128,9 +153,10 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
 }
 
 (* The eighty-entry [k512] is enough bigger than the sixty-four-entry [k256]
-   that relating the array to [params512_with]'s [k] field no longer fits in
-   the default budget. *)
-#push-options "--z3rlimit 40"
+   that relating the array to [params512_with]'s [k] field is best done
+   outside the call's query ([sha2_384_facts], [sha2_512_facts]); a little
+   headroom over the default budget is kept for the call itself. *)
+#push-options "--z3rlimit 10"
 
 (** SHA-384. *)
 fn sha384 (out: A.array S8.t) (input: A.array S8.t) (input_len: SZ.t)
@@ -146,6 +172,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
+  sha2_384_facts ();
   hash_impl sha2_384 kt ivt out input input_len;
   drop_table kt;
   drop_table ivt;
@@ -165,6 +192,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
+  sha2_512_facts ();
   hash_impl sha2_512 kt ivt out input input_len;
   drop_table kt;
   drop_table ivt;

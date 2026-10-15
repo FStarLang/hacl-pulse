@@ -128,6 +128,39 @@ let rows_extend_t (r: nat) (m: Seq.lseq S16.t (r * nbar)) (i: nat { i < r })
                       Seq.index m (i' * nbar + j') == f i' j'))
   = ()
 
+(** Every flat position of row [i] is in bounds, for all columns at once. *)
+let row_bound (r: nat) (i: nat { i < r })
+  : Lemma (forall (j': nat). j' < nbar ==> i * nbar + j' < r * nbar)
+  = Math.lemma_mult_le_right nbar (i + 1) r;
+    Math.distributivity_add_left i 1 nbar
+
+(** The same, for every row below [r]. *)
+let rows_bound (r: nat)
+  : Lemma (forall (i': nat) (j': nat). i' < r /\ j' < nbar ==> i' * nbar + j' < r * nbar)
+  = let aux (i': nat) (j': nat)
+      : Lemma (i' < r /\ j' < nbar ==> i' * nbar + j' < r * nbar)
+      = if i' < r && j' < nbar then M.index_bound r nbar i' j'
+    in
+    FStar.Classical.forall_intro_2 aux
+
+(** Row-major position [(i, j)] of an [r] by [c] matrix, and the partial
+    product [i * c] it is computed from, are in bounds and fit in a
+    [size_t]. *)
+let flat_ok (r c: nat) (i: nat { i < r }) (j: nat { j < c })
+  : Lemma (requires SZ.fits (r * c))
+          (ensures i * c + j < r * c /\ SZ.fits (i * c) /\ SZ.fits (i * c + j))
+  = M.index_bound r c i j;
+    SZ.fits_lte (i * c) (r * c);
+    SZ.fits_lte (i * c + j) (r * c)
+
+(** The two bytes of entry [l] of a row are in bounds, and their
+    positions fit in a [size_t]. *)
+let pair_ok (r: nat) (l: nat { l < r })
+  : Lemma (requires SZ.fits (2 * r))
+          (ensures 2 * l + 1 < 2 * r /\ SZ.fits (2 * l) /\ SZ.fits (2 * l + 1))
+  = SZ.fits_lte (2 * l) (2 * r);
+    SZ.fits_lte (2 * l + 1) (2 * r)
+
 (** The eighteen bytes A's expansion is applied to: the row index, little
     endian, then the seed. *)
 let msg_eq (i: nat { i < pow2 16 }) (seed: Seq.lseq S8.t 16) (m: Seq.lseq S8.t 18)
@@ -203,6 +236,7 @@ ensures exists* vmsg vrow vout.
   decreases (n p - SZ.v (!l))
   {
     let vl = !l;
+    pair_ok (n p) (SZ.v vl);
     let j = SZ.mul 2sz vl;
     let lo = A.(row.(j));
     let hi = A.(row.(SZ.add j 1sz));
@@ -229,6 +263,8 @@ ensures exists* vb.
   A.pts_to_len st;
   A.pts_to_len b;
   fits_small (2 * n p);
+  fits_small (nbar * n p);
+  fits_small (n p * nbar);
   let two_n = SZ.mul 2sz p.nn;
   let mut msg = [| (S8.zero <: S8.t); 18sz |];
   Mem.track msg;
@@ -253,6 +289,8 @@ ensures exists* vb.
     gen_row p seed vi msg rowb rowa;
     with vm1 vr1 vrowa.
       assert (A.pts_to msg vm1 ** A.pts_to rowb vr1 ** A.pts_to rowa vrowa);
+    row_bound (n p) (SZ.v vi);
+    rows_bound (n p);
     let mut j = 0sz;
     while (let vj = !j; SZ.lt vj 8sz)
     invariant exists* (vj: SZ.t) (vmsg: Seq.seq S8.t) (vrowb: Seq.seq S8.t)
@@ -287,6 +325,7 @@ ensures exists* vb.
         Loops.unfold_repeati (SZ.v vl)
           (M.dot_t_step (n p) (n p) nbar (F.gen_matrix p vseed) vst (SZ.v vi) (SZ.v vj)) S16.zero;
         M.index_bound nbar (n p) (SZ.v vj) (SZ.v vl);
+        flat_ok nbar (n p) (SZ.v vj) (SZ.v vl);
         let s = A.(st.(SZ.add (SZ.mul vj p.nn) vl));
         let r = A.(rowa.(vl));
         acc := S16.add_mod vacc (S16.mul_mod r s);
@@ -294,6 +333,7 @@ ensures exists* vb.
       };
       let res = !acc;
       M.index_bound (n p) nbar (SZ.v vi) (SZ.v vj);
+      flat_ok (n p) nbar (SZ.v vi) (SZ.v vj);
       A.((b.(SZ.add (SZ.mul vi 8sz) vj) <- res));
       j := SZ.add vj 1sz;
     };
@@ -306,6 +346,7 @@ ensures exists* vb.
   Mem.wipe rowb two_n;
   Mem.wipe msg 18sz;
   with vb. assert (A.pts_to b vb);
+  rows_bound (n p);
   assert (pure (forall (i': nat) (j': nat). i' < n p /\ j' < nbar ==>
                   Seq.index vb (i' * nbar + j') ==
                     M.dot_t (n p) (n p) nbar (F.gen_matrix p vseed) vst i' j'));
@@ -393,6 +434,7 @@ ensures exists* vb.
     {
       let vi = !i;
       M.index_bound nbar (n p) (SZ.v vi) (SZ.v vk);
+      flat_ok nbar (n p) (SZ.v vi) (SZ.v vk);
       let s = A.(sp.(SZ.add (SZ.mul vi p.nn) vk));
       let base = SZ.mul vi p.nn;
       let mut j = 0sz;
@@ -426,6 +468,7 @@ ensures exists* vb.
         Loops.unfold_repeati (SZ.v vk)
           (M.dot_step nbar (n p) (n p) vsp (F.gen_matrix p vseed) (SZ.v vi) (SZ.v vj)) S16.zero;
         M.index_bound nbar (n p) (SZ.v vi) (SZ.v vj);
+        flat_ok nbar (n p) (SZ.v vi) (SZ.v vj);
         let old = A.(b.(SZ.add base vj));
         let r = A.(rowa.(vj));
         upd_other nbar (n p) vb (SZ.v vi) (SZ.v vj) (S16.add_mod old (S16.mul_mod s r));

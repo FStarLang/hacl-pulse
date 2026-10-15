@@ -77,6 +77,24 @@ let rotate_left x s = rotate x (U32.sub 8ul s)
    width the widening is free, since the compiler has to materialise a 32-bit
    register for the arithmetic anyway. *)
 
+(* The sign bit of [d - 1], for an 8-bit [d] widened to 64 bits. *)
+private
+let is_zero_bit_lemma (d: U8.t)
+  : Lemma (U8.v (Cast.uint64_to_uint8
+                  (U64.shift_right (U64.sub_mod (Cast.uint8_to_uint64 d) 1UL) 63ul))
+           == (if U8.v d = 0 then 1 else 0))
+  = let e = U64.sub_mod (Cast.uint8_to_uint64 d) 1UL in
+    let m = U64.shift_right e 63ul in
+    UInt.shift_right_value_lemma #64 (U64.v e) 63;
+    if U8.v d = 0 then begin
+      assert_norm ((0 - 1) % pow2 64 == pow2 64 - 1);
+      assert_norm ((pow2 64 - 1) / pow2 63 == 1)
+    end else begin
+      Math.small_mod (U8.v d - 1) (pow2 64);
+      Math.small_div (U8.v d - 1) (pow2 63)
+    end;
+    Math.small_mod (U64.v m) (pow2 8)
+
 let eq_mask x y =
   let d = U8.logxor x y in
   UInt.logxor_self #8 (v x);
@@ -84,7 +102,7 @@ let eq_mask x y =
   (* [d] is zero exactly when [x] and [y] agree. *)
   let d64 = Cast.uint8_to_uint64 d in
   let m = U64.shift_right (U64.sub_mod d64 1UL) 63ul in
-  UInt.shift_right_value_lemma #64 (U64.v (U64.sub_mod d64 1UL)) 63;
+  is_zero_bit_lemma d;
   U8.sub_mod 0uy (Cast.uint64_to_uint8 m)
 
 (* [borrow x y] is 1 when [x < y] and 0 otherwise. *)

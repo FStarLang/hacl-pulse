@@ -68,6 +68,25 @@ let small (n: nat { n <= 128 + 64 + 1 + 3 * max_length })
     SZ.fits_u32_implies_fits n;
     assert_norm (128 + 64 + 1 + 3 * max_length < pow2 61)
 
+(** The bound [Ops.instantiate] asks of the seed material, one lemma per
+    word type, stated at top level so that the call sites need not unfold [data_ok] and
+    [max_input] inside a query that also carries a heap. *)
+let data_bound32 (p: params S32.t) (data: Seq.seq S8.t)
+  : Lemma (requires hash_bytes p <= 64 /\ Seq.length data <= 3 * max_length)
+          (ensures data_ok p data /\
+                   SZ.fits (block_len #S32.t + hash_bytes p + 1 + Seq.length data))
+  = bounds ();
+    assert_norm (block_len #S32.t == 64);
+    small (block_len #S32.t + hash_bytes p + 1 + Seq.length data)
+
+let data_bound64 (p: params S64.t) (data: Seq.seq S8.t)
+  : Lemma (requires hash_bytes p <= 64 /\ Seq.length data <= 3 * max_length)
+          (ensures data_ok p data /\
+                   SZ.fits (block_len #S64.t + hash_bytes p + 1 + Seq.length data))
+  = bounds ();
+    assert_norm (block_len #S64.t == 128);
+    small (block_len #S64.t + hash_bytes p + 1 + Seq.length data)
+
 (** Instantiate an HMAC_DRBG-sha2_256.  [k] and [v] must have room for 32 bytes
     and [ctr] for one word; all three are overwritten.  For the security the
     mechanism claims, [entropy] must hold at least [min_length] bytes from a
@@ -100,6 +119,8 @@ ensures exists* vkey' vval' vctr'.
   small (64 + 32 + 1 + Seq.length ve + Seq.length vn + Seq.length vp);
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
+  sha2_256_facts ();
+  data_bound32 sha2_256 (seed_material ve vn vp);
   instantiate sha2_256 kt ivt k v ctr entropy elen nonce nlen personal plen;
   drop_table ivt;
   drop_table kt;
@@ -130,6 +151,8 @@ ensures exists* vkey' vval' vctr'.
   small (64 + 32 + 1 + Seq.length ve + Seq.length va);
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
+  sha2_256_facts ();
+  data_bound32 sha2_256 (Seq.append ve va);
   reseed sha2_256 kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
@@ -168,6 +191,8 @@ ensures exists* vkey' vval' vctr' vout'.
   small (64 + 32 + 1 + Seq.length va);
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
+  sha2_256_facts ();
+  data_bound32 sha2_256 va;
   let r = generate sha2_256 kt ivt k v ctr out olen additional alen;
   drop_table ivt;
   drop_table kt;
@@ -206,6 +231,8 @@ ensures exists* vkey' vval' vctr'.
   small (128 + 48 + 1 + Seq.length ve + Seq.length vn + Seq.length vp);
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
+  sha2_384_facts ();
+  data_bound64 sha2_384 (seed_material ve vn vp);
   instantiate sha2_384 kt ivt k v ctr entropy elen nonce nlen personal plen;
   drop_table ivt;
   drop_table kt;
@@ -236,6 +263,8 @@ ensures exists* vkey' vval' vctr'.
   small (128 + 48 + 1 + Seq.length ve + Seq.length va);
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
+  sha2_384_facts ();
+  data_bound64 sha2_384 (Seq.append ve va);
   reseed sha2_384 kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
@@ -274,6 +303,8 @@ ensures exists* vkey' vval' vctr' vout'.
   small (128 + 48 + 1 + Seq.length va);
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
+  sha2_384_facts ();
+  data_bound64 sha2_384 va;
   let r = generate sha2_384 kt ivt k v ctr out olen additional alen;
   drop_table ivt;
   drop_table kt;
@@ -312,6 +343,8 @@ ensures exists* vkey' vval' vctr'.
   small (128 + 64 + 1 + Seq.length ve + Seq.length vn + Seq.length vp);
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
+  sha2_512_facts ();
+  data_bound64 sha2_512 (seed_material ve vn vp);
   instantiate sha2_512 kt ivt k v ctr entropy elen nonce nlen personal plen;
   drop_table ivt;
   drop_table kt;
@@ -342,6 +375,8 @@ ensures exists* vkey' vval' vctr'.
   small (128 + 64 + 1 + Seq.length ve + Seq.length va);
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
+  sha2_512_facts ();
+  data_bound64 sha2_512 (Seq.append ve va);
   reseed sha2_512 kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
@@ -380,6 +415,8 @@ ensures exists* vkey' vval' vctr' vout'.
   small (128 + 64 + 1 + Seq.length va);
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
+  sha2_512_facts ();
+  data_bound64 sha2_512 va;
   let r = generate sha2_512 kt ivt k v ctr out olen additional alen;
   drop_table ivt;
   drop_table kt;

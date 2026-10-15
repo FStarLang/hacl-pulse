@@ -125,6 +125,20 @@ let set_top_bytes (v: nat) (b: nat { b < 2 }) (o: Seq.seq S8.t)
     Classical.forall_intro aux;
     Seq.lemma_eq_intro o (nat_to_le 32 (v + b * pow2 255))
 
+(** [set_top_bytes] for a single-byte update of [nat_to_le 32 v]. *)
+let set_top_bytes_upd (v: nat) (b: nat { b < 2 }) (o: Seq.seq S8.t) (w: S8.t)
+  : Lemma (requires v < pow2 255 /\ Seq.length o == 32 /\
+                    o == Seq.upd (nat_to_le 32 v) 31 w /\
+                    S8.v w == S8.v (Seq.index (nat_to_le 32 v) 31) + b * 128)
+          (ensures o == nat_to_le 32 (v + b * pow2 255))
+  = introduce forall (i: nat). i < 32 ==>
+                       S8.v (Seq.index o i) ==
+                         (if i = 31 then S8.v (Seq.index (nat_to_le 32 v) 31) + b * 128
+                                    else S8.v (Seq.index (nat_to_le 32 v) i))
+    with introduce _ ==> _
+    with (if i = 31 then () else Seq.lemma_index_upd2 (nat_to_le 32 v) 31 w i);
+    set_top_bytes v b o
+
 (** Two reduced elements with the same value have the same limbs. *)
 let frozen_unique (a b: Seq.seq nat)
   : Lemma (requires Seq.length a == nl /\ Seq.length b == nl /\
@@ -356,18 +370,20 @@ ensures exists* (vout': Seq.seq S8.t).
   assert_norm (pow2 7 == 128);
   Math.small_mod (S64.v bit * 128) (pow2 64);
   let sh = S64.shift_left bit 7ul;
+  assert (pure (S64.v sh == S64.v bit * 128));
   let sb = Cast.u64_to_u8 sh;
+  assert_norm (pow2 8 == 256);
+  Math.small_mod (S64.v bit * 128) 256;
+  assert (pure (S8.v sb == S64.v bit * 128));
   assert_norm (128 + 128 == 256);
   Math.small_mod (S8.v b31 + S8.v sb) 256;
   let w = S8.add_mod b31 sb;
+  assert (pure (S8.v w == S8.v b31 + S8.v sb));
   A.((out.(31sz) <- w));
   with vo'. assert (A.pts_to out vo');
-  assert (pure (forall (i: nat). i < 32 ==>
-                  S8.v (Seq.index vo' i) ==
-                    (if i = 31 then S8.v (Seq.index (nat_to_le 32 (eval (vals uy))) 31) +
-                                    (eval (vals ux) % 2) * 128
-                               else S8.v (Seq.index (nat_to_le 32 (eval (vals uy))) i))));
-  set_top_bytes (eval (vals uy)) (eval (vals ux) % 2) vo';
+  assert (pure (S8.v w == S8.v (Seq.index (nat_to_le 32 (eval (vals uy))) 31) +
+                          (eval (vals ux) % 2) * 128));
+  set_top_bytes_upd (eval (vals uy)) (eval (vals ux) % 2) vo' w;
   assert_norm (pow2 255 + pow2 255 == pow2 256);
   Mem.wipe a5 9sz;
   Mem.wipe a4 5sz;

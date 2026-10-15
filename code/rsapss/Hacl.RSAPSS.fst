@@ -611,6 +611,15 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
     in the encoding: [emLen >= hLen + sLen + 2], where [emLen] is
     [ceil((modBits-1)/8)]. *)
 
+(** The exponent in [max_input], in the very shape it takes in the
+    refinements of the entry points' implicit arguments.  Those refinements
+    are re-checked, in the context of the whole precondition, when the body
+    first uses them, and there Z3 5.1 does not find this fact unaided; given
+    as a pattern on [bits], it closes that check by matching alone. *)
+let max_input_exponent (#t: Type0) {| w: word t |}
+  : Lemma (8 * (2 * (bits #t / 8)) - 3 >= 0) [SMTPat (bits #t #w)]
+  = ()
+
 (** RSASSA-PSS-SIGN with sha256. *)
 fn sign_sha256 (modBits: (m: U32.t { 1 < U32.v m }))
                (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
@@ -648,6 +657,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   assert_norm (8 + 64 + pow2 32 < pow2 61);
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
+  sha2_256_facts ();
   let r = rsapss_sign sha2_256 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
   drop_table ivt;
   drop_table kt;
@@ -686,6 +696,7 @@ ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
   assert_norm (8 + 64 + pow2 32 < pow2 61);
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
+  sha2_256_facts ();
   let r = rsapss_verify sha2_256 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
   drop_table ivt;
   drop_table kt;
@@ -729,6 +740,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   assert_norm (8 + 64 + pow2 32 < pow2 61);
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
+  sha2_384_facts ();
   let r = rsapss_sign sha2_384 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
   drop_table ivt;
   drop_table kt;
@@ -767,6 +779,7 @@ ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
   assert_norm (8 + 64 + pow2 32 < pow2 61);
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
+  sha2_384_facts ();
   let r = rsapss_verify sha2_384 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
   drop_table ivt;
   drop_table kt;
@@ -810,6 +823,7 @@ ensures exists* (vsg': Seq.seq S8.t).
   assert_norm (8 + 64 + pow2 32 < pow2 61);
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
+  sha2_512_facts ();
   let r = rsapss_sign sha2_512 kt ivt modBits nb dLen db sLen salt mLen msg sgnt;
   drop_table ivt;
   drop_table kt;
@@ -848,6 +862,7 @@ ensures A.pts_to nb #pnb vnb ** A.pts_to eb #peb veb **
   assert_norm (8 + 64 + pow2 32 < pow2 61);
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
+  sha2_512_facts ();
   let r = rsapss_verify sha2_512 kt ivt modBits nb eLen eb sLen sgnt mLen msg;
   drop_table ivt;
   drop_table kt;

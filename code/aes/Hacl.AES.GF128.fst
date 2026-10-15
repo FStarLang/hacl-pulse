@@ -322,7 +322,70 @@ let or_low (c r: elem)
   = assert_norm (pow2 1 == 2);
     UInt.logor_disjoint #8 r c 1
 
-#push-options "--z3rlimit 1500"
+(** The [xdiv_impl] loop invariant, kept opaque so that the loop's
+    verification conditions do not carry the quantifier around: bytes below
+    [i] are the left-shifted bytes, the rest are untouched. *)
+[@@"opaque_to_smt"]
+let shl_inv (v0 vv: Seq.seq S8.t) (i: nat) : prop =
+  Seq.length v0 == blocklen /\ Seq.length vv == blocklen /\
+  (forall (j: nat). j < blocklen ==>
+     Seq.index (vals vv) j ==
+       (if j < i then Poly.shl_byte (vals v0) j
+        else Seq.index (vals v0) j))
+
+let shl_inv_init (v0: Seq.seq S8.t)
+  : Lemma (requires Seq.length v0 == blocklen)
+          (ensures shl_inv v0 v0 0)
+  = reveal_opaque (`%shl_inv) (shl_inv v0 v0 0)
+
+(** One step of the [xdiv_impl] loop: byte [i] becomes the left-shifted
+    byte, the rest is as before. *)
+let shl_inv_step (v0 vv: Seq.seq S8.t) (i: nat) (r: S8.t)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length vv == blocklen /\
+             i < blocklen - 1 /\ shl_inv v0 vv i /\
+             S8.v r == UInt.logor #8
+               ((S8.v (Seq.index vv i) * pow2 1) % pow2 8)
+               (S8.v (Seq.index vv (i + 1)) / pow2 7))
+          (ensures Seq.length (Seq.upd vv i r) == blocklen /\
+                   shl_inv v0 (Seq.upd vv i r) (i + 1))
+  = reveal_opaque (`%shl_inv) (shl_inv v0 vv i);
+    reveal_opaque (`%shl_inv) (shl_inv v0 (Seq.upd vv i r) (i + 1));
+    let cur = S8.v (Seq.index vv i) in
+    let nxt = S8.v (Seq.index vv (i + 1)) in
+    assert (cur == Seq.index (vals v0) i);
+    assert (nxt == Seq.index (vals v0) (i + 1));
+    assert_norm (pow2 1 == 2);
+    assert_norm (pow2 7 == 128);
+    assert_norm (pow2 8 == 256);
+    Math.pow2_multiplication_modulo_lemma_2 cur 8 1;
+    let rest : elem = (cur * pow2 1) % pow2 8 in
+    assert (rest == (cur % 128) * 2);
+    Math.lemma_div_lt nxt 8 7;
+    Math.small_mod (nxt / 128) 2;
+    let carry : elem = nxt / pow2 7 in
+    or_low carry rest;
+    assert (S8.v r == Poly.shl_byte (vals v0) i);
+    vals_upd vv i r
+
+(** The last byte has no successor: its carry is zero. *)
+let shl_inv_last (v0 vw: Seq.seq S8.t) (r: S8.t)
+  : Lemma (requires Seq.length v0 == blocklen /\ Seq.length vw == blocklen /\
+             shl_inv v0 vw (blocklen - 1) /\
+             S8.v r == (S8.v (Seq.index vw (blocklen - 1)) * pow2 1) % pow2 8)
+          (ensures Seq.length (Seq.upd vw (blocklen - 1) r) == blocklen /\
+                   vals (Seq.upd vw (blocklen - 1) r) == Poly.shift_left_1 (vals v0))
+  = reveal_opaque (`%shl_inv) (shl_inv v0 vw (blocklen - 1));
+    let cur = S8.v (Seq.index vw (blocklen - 1)) in
+    assert (cur == Seq.index (vals v0) (blocklen - 1));
+    assert_norm (pow2 1 == 2);
+    assert_norm (pow2 7 == 128);
+    assert_norm (pow2 8 == 256);
+    Math.pow2_multiplication_modulo_lemma_2 cur 8 1;
+    assert (S8.v r == Poly.shl_byte (vals v0) (blocklen - 1));
+    vals_upd vw (blocklen - 1) r;
+    shl_eq v0 (Seq.upd vw (blocklen - 1) r) blocklen
+
+#push-options "--z3rlimit 20"
 fn xdiv_impl (v: A.array S8.t) (#v0: erased (Seq.seq S8.t))
 requires A.pts_to v v0 ** pure (Seq.length v0 == blocklen)
 ensures exists* (v1: Seq.seq S8.t). A.pts_to v v1 ** pure (
@@ -338,16 +401,13 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to v v1 ** pure (
   Math.small_mod (S8.v first / 128) 2;
   let rmask = S8.eq_mask msb one;
 
+  shl_inv_init v0;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 15sz)
   invariant exists* (vi: SZ.t) (vv: Seq.seq S8.t).
     pts_to i vi ** A.pts_to v vv **
     pure (SZ.v vi <= blocklen - 1 /\ Seq.length vv == blocklen /\
-          Seq.length v0 == blocklen /\
-          (forall (j: nat). j < blocklen ==>
-             Seq.index (vals vv) j ==
-               (if j < SZ.v vi then Poly.shl_byte (vals v0) j
-                else Seq.index (vals v0) j)))
+          Seq.length v0 == blocklen /\ shl_inv v0 vv (SZ.v vi))
   decreases (blocklen - 1 - SZ.v (!i))
   {
     let vi = !i;
@@ -360,6 +420,7 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to v v1 ** pure (
     or_low (S8.v carry) (S8.v rest);
     let r = S8.logor rest carry;
     vals_upd vv (SZ.v vi) r;
+    shl_inv_step v0 vv (SZ.v vi) r;
     A.((v.(vi) <- r));
     i := SZ.add vi 1sz;
   };
@@ -368,9 +429,9 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to v v1 ** pure (
   with vw. assert A.pts_to v vw;
   or_low 0 (S8.v lrest);
   vals_upd vw 15 lrest;
+  shl_inv_last v0 vw lrest;
   A.((v.(15sz) <- lrest));
   with vs. assert A.pts_to v vs;
-  shl_eq v0 vs blocklen;
 
   let b0 = A.(v.(0sz));
   let c2 = S8.classify 0xc2uy;

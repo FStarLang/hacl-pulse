@@ -67,7 +67,40 @@ let prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
                    block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < pow2 61 /\
                    block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < max_input #t)
   = FStar.Math.Lemmas.pow2_le_compat (8 * len_len #t - 3) 61;
-    assert_norm (256 + 128 + 41 + pow2 32 + 1 < pow2 61)
+    assert_norm (256 + 128 + 41 + pow2 32 + 1 < pow2 61);
+    assert_norm (256 + 128 + pow2 32 + 64 < pow2 61)
+
+(** The HMAC key (the salt) is at most 64 bytes, well under the hash's
+    input-length bound. *)
+let salt_bound (#t: Type0) {| word t |} (n: nat)
+  : Lemma (requires n <= 64)
+          (ensures n < pow2 61 /\ n < pow2 (8 * len_len #t - 3))
+  = FStar.Math.Lemmas.pow2_le_compat (8 * len_len #t - 3) 61;
+    assert_norm (64 < pow2 61)
+
+(** Two pointwise byte equalities give the length-prefix clause of
+    [cat5_pointwise]. *)
+let two_pointwise (m a: Seq.seq S8.t)
+  : Lemma (requires Seq.length a == 2 /\ Seq.length m >= 2 /\
+                    Seq.index m 0 == Seq.index a 0 /\ Seq.index m 1 == Seq.index a 1)
+          (ensures forall (k: nat). k < Seq.length a ==> Seq.index m k == Seq.index a k)
+  = ()
+
+(** The two bytes the code writes for [I2OSP(L, 2)] are [two_bytes L]. *)
+let two_bytes_hi_lo (n: nat { n < 65536 }) (l32: U32.t)
+  : Lemma (requires U32.v l32 == n % pow2 32)
+          (ensures Seq.index (two_bytes n) 0 ==
+                     S8.classify (Cast.uint32_to_uint8 (U32.div l32 256ul)) /\
+                   Seq.index (two_bytes n) 1 == S8.classify (Cast.uint32_to_uint8 l32))
+  = assert_norm (65536 < pow2 32);
+    FStar.Math.Lemmas.small_mod n (pow2 32);
+    B.nat_to_be_index 2 n 0;
+    B.nat_to_be_index 2 n 1;
+    assert_norm (pow2 8 == 256);
+    assert_norm (pow2 0 == 1);
+    S8.v_extensional (Seq.index (two_bytes n) 0)
+                     (S8.classify (Cast.uint32_to_uint8 (U32.div l32 256ul)));
+    S8.v_extensional (Seq.index (two_bytes n) 1) (S8.classify (Cast.uint32_to_uint8 l32))
 
 (** [hmac_cat] hashes its pieces right-nested; [extract_input] is stated
     left-nested. *)
@@ -199,9 +232,18 @@ ensures exists* vout'.
   let lo = Cast.uint32_to_uint8 l32;
   A.((buf.(0sz) <- S8.classify hi));
   A.((buf.(1sz) <- S8.classify lo));
+  with v0. assert (A.pts_to buf v0);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v0 0 == S8.classify hi /\ Seq.index v0 1 == S8.classify lo));
 
   copy_at buf 2sz vtab 7sz;
+  with v1. assert (A.pts_to buf v1);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v1 0 == Seq.index v0 0 /\ Seq.index v1 1 == Seq.index v0 1));
   copy_at buf 9sz sid sid_len;
+  with v2. assert (A.pts_to buf v2);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v2 0 == Seq.index v1 0 /\ Seq.index v2 1 == Seq.index v1 1));
   copy_at buf n2 lbl lbl_len;
 
   with vbuf. assert (A.pts_to buf vbuf);

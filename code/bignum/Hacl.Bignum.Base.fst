@@ -122,6 +122,11 @@ let num_upd (v: Seq.seq S64.t) (k: nat { k < Seq.length v }) (x: S64.t)
   = vals_upd v k x;
     eval_upd (vals v) k (S64.v x)
 
+private
+let add_cancel (a b c d w: int)
+  : Lemma (requires a == c + w /\ b == d + w) (ensures a + d == b + c)
+  = ()
+
 (** Two arrays that agree above limb [k] denote numbers differing by exactly
     what their prefixes differ by.  Stated additively so both sides stay
     natural numbers. *)
@@ -136,8 +141,15 @@ let num_above (u v: Seq.seq S64.t) (k: nat { k <= Seq.length u })
     eval_split (vals v) k;
     eval_split (vals u) k;
     Seq.lemma_eq_intro (Seq.slice v k n) (Seq.slice u k n);
+    Seq.lemma_eq_elim (Seq.slice v k n) (Seq.slice u k n);
     vals_slice v k n;
-    vals_slice u k n
+    vals_slice u k n;
+    let hi = eval (Seq.slice (vals u) k n) in
+    assert (eval (Seq.slice (vals v) k n) == hi);
+    let w = wt k * hi in
+    assert (num v == pre v k + w);
+    assert (num u == pre u k + w);
+    add_cancel (num v) (num u) (pre v k) (pre u k) w
 
 (** Zeroes above limb [k] contribute nothing, so the number is its own
     prefix.  The dual of {!pre_zeros}. *)
@@ -1185,9 +1197,85 @@ let dg_subst (v vd va: Seq.seq S64.t) (x y: nat) (c: int)
                    pre v (y + y) + c * wt (y + y) == pre vd (y + y) + diag va y)
   = ()
 
+(** After the triangle loop: twice the triangle is below [2^(128 n)]. *)
+let tri_bound (v1 va: Seq.seq S64.t) (n: nat)
+  : Lemma (requires Seq.length va == n /\ Seq.length v1 == n + n /\
+                    pre va n * pre va n == 2 * pre v1 (n + n) + diag va n)
+          (ensures num v1 + num v1 < wt (n + n))
+  = pre_full va;
+    pre_full v1;
+    pre_bnd va n;
+    wt_add n n;
+    Math.lemma_mult_lt_sqr (num va) (num va) (wt n)
+
+(** One whole step of the diagonal loop, as a lemma about sequences, for
+    the same reason as {!tri_close}. *)
+let dg_close_eq (v w2 vd va: Seq.seq S64.t) (k: nat) (ak x0 x1 r0 r1 h0 vc co: S64.t)
+  : Lemma (requires
+             k < Seq.length va /\ k + k + 2 <= Seq.length v /\
+             Seq.length v == Seq.length vd /\
+             S64.v ak == S64.v (Seq.index va k) /\
+             x0 == Seq.index vd (k + k) /\ x1 == Seq.index vd (k + k + 1) /\
+             w2 == Seq.upd (Seq.upd v (k + k) r0) (k + k + 1) r1 /\
+             pre v (k + k) + S64.v vc * wt (k + k) == pre vd (k + k) + diag va k /\
+             S64.v r0 + base * S64.v h0 == S64.v ak * S64.v ak + S64.v x0 + S64.v vc /\
+             S64.v r1 + base * S64.v co == S64.v x1 + S64.v h0)
+          (ensures pre w2 ((k + 1) + (k + 1)) + S64.v co * wt ((k + 1) + (k + 1)) ==
+                   pre vd ((k + 1) + (k + 1)) + diag va (k + 1))
+  = let p0 = k + k in
+    let w1 = Seq.upd v p0 r0 in
+    pre_upd v p0 r0 p0;
+    pre_upd w1 (p0 + 1) r1 (p0 + 1);
+    pre_snoc w1 p0;
+    pre_snoc w2 (p0 + 1);
+    pre_snoc vd p0;
+    pre_snoc vd (p0 + 1);
+    diag_snoc va k;
+    diag_step (pre v p0) (pre vd p0) (diag va k)
+              (S64.v x0) (S64.v x1) (S64.v r0) (S64.v r1)
+              (S64.v ak * S64.v ak) (S64.v vc) (S64.v co) (S64.v h0) p0;
+    assert ((k + 1) + (k + 1) == p0 + 2);
+    assert (2 * k == p0)
+
+(** The frame half of a diagonal step, kept apart from the arithmetic: the
+    limbs above the two just written still agree with [vd]. *)
+let dg_frame (v w2 vd: Seq.seq S64.t) (p: nat) (r0 r1: S64.t)
+  : Lemma (requires
+             p + 2 <= Seq.length v /\ Seq.length v == Seq.length vd /\
+             (forall (j: nat). p <= j /\ j < Seq.length v ==>
+                Seq.index v j == Seq.index vd j) /\
+             w2 == Seq.upd (Seq.upd v p r0) (p + 1) r1)
+          (ensures Seq.index v p == Seq.index vd p /\
+                   Seq.index v (p + 1) == Seq.index vd (p + 1) /\
+                   Seq.length w2 == Seq.length vd /\
+                   (forall (j: nat). p + 2 <= j /\ j < Seq.length w2 ==>
+                      Seq.index w2 j == Seq.index vd j))
+  = let w1 = Seq.upd v p r0 in
+    introduce forall (j: nat). p + 2 <= j /\ j < Seq.length w2 ==>
+                      Seq.index w2 j == Seq.index vd j
+    with introduce _ ==> _
+    with (Seq.lemma_index_upd2 w1 (p + 1) r1 j;
+          Seq.lemma_index_upd2 v p r0 j)
+
 let no_carry (x c w y: nat)
   : Lemma (requires x + c * w == y /\ y < w /\ c <= 1) (ensures c == 0 /\ x == y)
   = ()
+
+(** The end of [sqr]: the diagonal pass added exactly the diagonal to
+    twice the triangle, which is the square. *)
+let sqr_final (vf vd v1 va: Seq.seq S64.t) (n: nat) (c: nat)
+  : Lemma (requires Seq.length vf == n + n /\ Seq.length vd == n + n /\
+                    Seq.length v1 == n + n /\ Seq.length va == n /\
+                    pre vf (n + n) + c * wt (n + n) == pre vd (n + n) + diag va n /\
+                    num vd == num v1 + num v1 /\
+                    pre va n * pre va n == 2 * pre v1 (n + n) + diag va n /\
+                    num va * num va < wt (n + n) /\ c <= 1)
+          (ensures c == 0 /\ num vf == num va * num va)
+  = pre_full vf;
+    pre_full vd;
+    pre_full v1;
+    pre_full va;
+    no_carry (num vf) c (wt (n + n)) (num va * num va)
 
 #pop-options
 
@@ -1244,6 +1332,7 @@ ensures exists* (v: Seq.seq S64.t).
   pre_bnd va (SZ.v n);
   wt_add (SZ.v n) (SZ.v n);
   Math.lemma_mult_lt_sqr (num va) (num va) (wt (SZ.v n));
+  tri_bound v1 va (SZ.v n);
   let c0 = double res (SZ.add n n);
   with vd. assert (A.pts_to res vd);
   pre_full vd;
@@ -1286,17 +1375,8 @@ ensures exists* (v: Seq.seq S64.t).
     with w1. assert (A.pts_to res w1);
     A.((res.(p1) <- r1));
     with w2. assert (A.pts_to res w2);
-    pre_upd v (SZ.v p0) r0 (SZ.v p0);
-    pre_upd w1 (SZ.v p1) r1 (SZ.v p1);
-    pre_snoc w1 (SZ.v p0);
-    pre_snoc w2 (SZ.v p1);
-    pre_snoc v (SZ.v p0);
-    pre_snoc vd (SZ.v p0);
-    pre_snoc vd (SZ.v p1);
-    diag_snoc va (SZ.v vk);
-    diag_step (pre v (SZ.v p0)) (pre vd (SZ.v p0)) (diag va (SZ.v vk))
-              (S64.v x0) (S64.v x1) (S64.v r0) (S64.v r1)
-              (S64.v ak * S64.v ak) (S64.v vc) (S64.v co) (S64.v h0) (SZ.v p0);
+    dg_frame v w2 vd (SZ.v vk + SZ.v vk) r0 r1;
+    dg_close_eq v w2 vd va (SZ.v vk) ak x0 x1 r0 r1 h0 vc co;
     cc := co;
     let vk1 = SZ.add vk 1sz;
     dg_subst w2 vd va (SZ.v vk + 1) (SZ.v vk1) (S64.v co);
@@ -1306,9 +1386,7 @@ ensures exists* (v: Seq.seq S64.t).
   let cf = !cc;
   let vke = !i2;
   dg_subst vf vd va (SZ.v vke) (SZ.v n) (S64.v cf);
-  pre_full vf;
-  pre_full vd;
-  no_carry (num vf) (S64.v cf) (wt (SZ.v n + SZ.v n)) (num va * num va);
+  sqr_final vf vd v1 va (SZ.v n) (S64.v cf);
   ()
 }
 
