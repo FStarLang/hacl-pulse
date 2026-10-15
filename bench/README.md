@@ -109,10 +109,49 @@ Output is one CSV per contender per offset per round, named
 | `gapbest.py DIR` | rank every benchmark by hacl-pulse / HACL\*-best. **This is the ranking that chooses what to work on next.** |
 | `mktable.py DIR` | regenerate the markdown performance table in the top-level `README.md`, so those numbers are never typed by hand |
 | `mkkem.py DIR` | the same for the ML-KEM table, which is absolute rather than relative because HACL\* has no ML-KEM to compare against |
+| `mkothers.py DIR` | the other-libraries table, from an `others.sh` run |
 
 `CFG` is a configuration string recorded alongside the numbers; `cfg.c` prints
 EverCrypt's view of the CPU (`shaext`, `avx2`, `aesni`, `adx`, …) so that a
 result can be attributed to the right dispatch decision later.
+
+## Other libraries
+
+`others.sh [rounds]` produces the second table in the top-level README:
+hacl-pulse against libraries other than HACL\*.  It is a separate harness
+because the contenders differ in what they offer and in how they are called,
+so it has its own driver, `others/others.c`, compiled once per library against
+an ops header that defines only the rows that library has:
+
+| Tag | Header | Library, as pinned in `others.sh` |
+| --- | --- | --- |
+| `pulse-gcc`, `pulse-clang` | `ops_pulse.h` | this repository's `dist/Hacl.c`, built by each compiler |
+| `openssl` | `ops_openssl.h` | the system `libcrypto` (3.5 here), through EVP with everything pre-fetched |
+| `awslc` | `ops_awslc.h` | AWS-LC, Release build, through its BoringSSL-style direct APIs |
+| `libsodium` | `ops_sodium.h` | libsodium's stable branch, at its default `-O3` |
+| `libjade` | `ops_jade.h` | the libjade 2023.05-2 release's pre-generated Jasmin assembly, best variant per row |
+| `firedancer` | `ops_firedancer.h` | Firedancer's `ballet`, `MACHINE=native`, clang (its makefile rejects gcc 15.2) |
+| `dalek` | `ops_dalek.h` | ed25519-dalek 2 / x25519-dalek 2 through the FFI crate in `others/dalek`, LTO, `target-cpu=native` |
+
+Every binary also links hacl-pulse, which generates all keys, messages and
+nonces and acts as the oracle: before a row is timed the library's output is
+compared with hacl-pulse's (byte for byte where the operation is
+deterministic, by cross-verification where it is not), and the binary exits
+non-zero on a mismatch.  A row therefore cannot be measuring a different
+operation, a different key size or a different output length from its label.
+
+```sh
+cd bench
+BENCH_CPU=2 BENCH_OUT=/tmp/bo ./others.sh 3
+python3 mkothers.py /tmp/bo
+```
+
+The first run fetches and builds each library at its pinned revision into
+`$OTHERS` (default `/tmp/others`, about 1 GB, mostly the AWS-LC and Firedancer trees) and needs
+cmake, ninja, Go (AWS-LC), autotools, clang and a Rust toolchain; later runs
+reuse it.  Three rounds take about forty minutes.  The rows, and why some
+cells are empty, are discussed under *Against other libraries* in the
+top-level README.
 
 ## The probe tools
 

@@ -7972,3 +7972,52 @@ SHA-512 and HMAC-SHA-512 go to 1.27x; its P-256 is twice as fast (sign:
 63 us against 136), so the three P-256 rows are at 2.82x–2.91x.  This
 repository's P-256 is the same speed under both compilers.  P-256 under clang
 is the new largest gap.
+
+## Part 58 — Against other libraries
+
+Every comparison up to Part 57 was against HACL\*.  `bench/others.sh` adds
+OpenSSL 3.5.5 (system), AWS-LC `ffca127`, libsodium 1.0.22, libjade
+2023.05-2, Firedancer `ballet` `849c582` and the dalek crates (curve25519 4.1.3,
+ed25519 2.2, x25519 2.0.1), each pinned and built once into `/tmp/others`.
+
+**Harness.**  `others/others.c` is a single driver compiled once per library
+against an `ops_*.h` header that defines a `BO_<row>` macro and a `bo_*`
+function for each row that library has.  Each binary also links hacl-pulse,
+which generates the inputs and is the oracle.  Before timing a row the driver
+compares the library's output with hacl-pulse's and exits on a mismatch.  The
+comparison is byte for byte for hashes, MACs, ciphers, AEADs, X25519,
+Ed25519, ECDH, RSA-PSS with a zero-length salt, and FFDHE.  ECDSA signatures
+are cross-verified, and ML-KEM is checked by decapsulating across libraries.
+Two details needed handling:
+
+- libjade's secretbox uses the NaCl zero-padding convention.  It is given a
+  pre-padded copy of the message, and its output is compared at offset 16.
+- Firedancer's P-256 takes compressed keys and, by default, rejects high-s
+  signatures, so it uses `fd_secp256r1_verify_allow_high_s`.
+
+Runs are palindromic over the eight binaries (hacl-pulse with gcc and with
+clang, plus six others), pinned to one core, for three rounds.
+`mkothers.py` drops runs whose canary is more than 2% above the best one
+and reduces the rest by minimum.
+
+**Result** (Xeon Gold 6140, 256 KiB bulk; ratio = better hacl-pulse build
+over the fastest other):
+
+- hacl-pulse is faster only on secp256k1 signing (0.27x).  That row only
+  reflects generic EC code in OpenSSL and AWS-LC; libsecp256k1 was not
+  measured.
+- Within 1.6x: BLAKE2s 1.03x, Poly1305 1.21x, MD5 1.23x, AES-GCM
+  1.31x/1.43x, BLAKE2b 1.45x, ChaCha20-Poly1305 1.46x, X25519 1.53x, and
+  SHA-3/SHAKE 1.56–1.58x.  libjade leads Keccak, s2n-bignum leads X25519,
+  and OpenSSL leads Poly1305 and GCM.
+- 2–4x: ChaCha20 2.02x, SHA-2/HMAC 2.03–2.14x, RSA sign and FFDHE 2.35x,
+  Ed25519 3.3–3.9x, SHA-1 3.89x.  The SHA rows reflect AVX2 message
+  schedules that hacl-pulse lacks.  ChaCha20 does not: libsodium's kernel is
+  the same eight-block AVX2 algorithm as ours, so this 2x is unexplained and
+  is the first thing to investigate.
+- 5x and more: ML-KEM 5–6.4x, against AWS-LC's mlkem-native AVX2.  P-256
+  is 5.4–10.7x against `nistz256` assembly and tables, RSA verify 9.5x, and
+  Salsa20 10x (no vector backend), which also drives secretbox to 3.9x.
+
+The table and discussion are in the top-level README under *Against other
+libraries*.
