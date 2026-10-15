@@ -145,8 +145,9 @@ microarchitecture matters the answer is a C intrinsic behind a narrow,
 axiomatized interface, verified against the same specification as the portable
 code and tested against an independent transcription of the standard: AES-NI,
 `AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
-Intel SHA extensions under SHA-256 and SHA-224, and AVX2 under ChaCha20 and
-Poly1305 (`lib/Hacl.Vec256.fst`).  Each is selected at run time by
+Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20 and
+Poly1305 (`lib/Hacl.Vec256.fst`), and AVX-512F under ChaCha20
+(`lib/Hacl.Vec512.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
 ## How a hash is put together
@@ -617,9 +618,21 @@ came from.  The byte-level lemma under the exclusive-or is that a register's
 bytes are its eight lanes written little-endian, which is a definition, not an
 axiom.
 
+**Sixteen blocks at a time, on AVX-512F.**  `code/chacha/Hacl.Chacha20.Vec512.fst`
+is the same construction with sixteen lanes.  The rounds and their proof are
+the eight-lane ones with the bounds changed; what AVX-512 adds is `vprold`,
+so each of the four rotations in a quarter-round is one instruction, and
+thirty-two registers, so the state does not spill.  The way out is
+different and simpler: a 16 x 16 transpose (two rounds of unpacks within each
+128-bit group, then two rounds of `vshufi32x4` moving whole groups) leaves
+block *j* whole in register *j*, which is one load, exclusive-or and store of
+sixty-four bytes.  Its proof is split the same way, a predicate for each step
+and a lemma composing them.
+
 `Hacl.Chacha20.encrypt` calls `encrypt_vec` first, which takes whole 512-byte
-chunks when the message has one and the processor has AVX2, and says how many
-bytes it wrote; the scalar loop then starts there, at block counter
+chunks when the message has one and the processor has AVX2 -- after
+`Hacl.Chacha20.Vec512` has taken whole 1024-byte chunks, if the processor
+has AVX-512F -- and says how many bytes it wrote; the scalar loop then starts there, at block counter
 `ctr + n / 64`.  The postcondition of the whole function did not change, so
 ChaCha20-Poly1305 and HPKE got the fast path without a line of their own.  On a Xeon Gold 6140 this took 256 KiB of ChaCha20 from 1.66 to
 0.35 ns/B (4.7x) and ChaCha20-Poly1305 from 2.54 to 1.25 ns/B, under gcc and
@@ -1773,7 +1786,12 @@ block, against an independent RFC 8439 block function, and
 `tests/test_poly1305_vec.c` does the same for Poly1305 against a plain
 bignum reference, with the largest clamped *r* and all-ones messages among
 the inputs.  Swapping one permute immediate in `c/Hacl_Vec256.h` fails both
-ChaCha20 tests.
+ChaCha20 tests.  `lib/Hacl.Vec512.fst` is the fourth, with seventeen axioms
+(lane-wise add, exclusive-or and `vprold`, a broadcast, two constants, the
+four unpacks and four `vshufi32x4` group selections), each checked by
+`tests/test_vec512.c` in the same way, the rotate also at a distance the
+compiler cannot see; the same two ChaCha20 tests exercise it, since every
+length from 1,024 bytes on goes through it on an AVX-512 machine.
 
 **The key schedule needed the same treatment, and was worth more than the
 cipher.**  It runs once per message rather than once per block, which is why
@@ -4163,8 +4181,14 @@ Verification does not by itself put a library at the back of a row:
 libjade and the s2n-bignum routines in AWS-LC and Firedancer are verified
 too, and they lead or nearly lead theirs.  The gaps are mostly backends that have
 not been written yet, and this table, rather than the HACL\* one, is the
-better guide to which matter most: P-256, ML-KEM, Salsa20, the AVX2
-SHA-2 message schedule, and an AVX-512 ChaCha20 kernel.
+better guide to which matter most: P-256, ML-KEM, Salsa20 and the AVX2
+SHA-2 message schedule.
+
+*Since this table was measured*, hacl-pulse has an AVX-512F ChaCha20
+(`Hacl.Chacha20.Vec512`, `bench/REPORT.md` Part 60).  On the same machine
+and core it takes 256 KiB from 102 us to 54 us under gcc and 49 us under
+clang, level with libsodium's 47--49 us; the ChaCha20 row above predates
+it, and so does ChaCha20-Poly1305, which keeps its AVX2 Poly1305.
 
 ## Proof engineering notes
 
@@ -5113,8 +5137,10 @@ rough order of value:
     too**: `Hacl.Poly1305.Vec256` runs four Horner chains in *r^4*, one per
     64-bit lane, and `Spec.Poly1305.Vec` proves them the specification's one
     chain in *r* (4.4x on 256 KiB, Part 55); `lib/Hacl.Vec256.fst` grew to
-    twenty-three axioms.  What remains is wider: AVX-512 ChaCha20 (sixteen
-    lanes) and Poly1305 (eight), both on the same pattern.
+    twenty-three axioms.  **AVX-512 ChaCha20 is done** as well:
+    `lib/Hacl.Vec512.fst` (seventeen axioms, `tests/test_vec512.c`) and the
+    sixteen-lane `Hacl.Chacha20.Vec512`, another 1.9x on 256 KiB (Part 60).
+    What remains is AVX-512 Poly1305 (eight lanes), on the same pattern.
 
 18. **One hash core, two block implementations.**  `hash_blocks_ni`,
     `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of

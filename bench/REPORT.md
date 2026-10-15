@@ -8047,3 +8047,44 @@ Closing the gap needs an AVX-512 backend: a trusted `Hacl.Vec512` with 16
 lanes and native rotate, behind `__builtin_cpu_supports("avx512f")`.
 libsodium's Salsa20 also has an AVX-512 kernel (`salsa20_xmm6int-avx512.c`),
 which is why it leads libjade's AVX2 Salsa20 by 2x.
+
+## Part 60 — AVX-512 ChaCha20
+
+**Where it pointed.**  Part 59 showed the ChaCha20 gap to libsodium and
+OpenSSL was AVX-512 against AVX2, not code quality.
+
+**Implementation.**  `lib/Hacl.Vec512.fst` and `c/Hacl_Vec512.h` give
+seventeen trusted axioms for AVX-512F: load and store, zero, broadcast,
+iota, lane-wise add, exclusive-or and `vprold`, four unpacks and four
+`vshufi32x4` group selections.  `tests/test_vec512.c` checks each against a
+scalar transcription, including the rotate at every distance both as a
+literal and through a variable.  `code/chacha/Hacl.Chacha20.Vec512.fst` is
+the eight-lane kernel at sixteen lanes; the rounds, `init_vec` and
+`core_vec` carried over with only the lane bounds changed.  The new part is
+the 16 x 16 transpose, proved as two steps with one predicate each (`qa_ok`,
+`qb_ok`) and a composition lemma.  `Hacl.Chacha20.Vec256.encrypt_vec` now
+runs `encrypt_blocks16` over whole 1024-byte chunks when
+`__builtin_cpu_supports("avx512f")`, then `encrypt_blocks8` from that
+offset (it gained a start argument and a prefix precondition), then the
+scalar loop.
+
+**Proof notes.**  The frame facts of the transpose steps were first written
+with `i / 4 <> q` and `i % 4 <> m`; the collection lemmas timed out on
+them.  Rewritten linearly (`i < 4q \/ 4q + 4 <= i`, and `4g + k` with
+`k <> m`) they go through with empty bodies.  A conditional `let n1 = if
+... { encrypt_blocks16 ... } else { 0sz }` could not join the two branches'
+`out` contents; moving it into a small `fn` with its own postcondition
+fixed that.
+
+**Measured** (Xeon Gold 6140, core 6, best of 7):
+
+| size | before (gcc) | after (gcc) | after (clang) |
+|---|---|---|---|
+| 1 KiB | 0.415 ns/B | 0.225 ns/B | 0.201 ns/B |
+| 16 KiB | 0.390 ns/B | 0.204 ns/B | 0.189 ns/B |
+| 256 KiB | 102.2 us | 54.4 us | 48.9 us |
+
+That is level with libsodium's AVX-512 kernel (47–49 us) and ahead of
+OpenSSL (57–61 us).  `tests/test_chacha20_vec.c` covers every length from 0
+to 2,100 bytes at counters up to the last legal block, so the
+AVX-512 → AVX2 → scalar hand-offs are all exercised.
