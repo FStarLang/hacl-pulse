@@ -96,6 +96,14 @@ let rotl_u32 (x: S64.t) (k: U32.t { U32.v k < 64 }) : (y: S64.t { y == rotl x (U
     are ordinary local variables; the twenty-five lanes are read before any is
     written, so the whole step reads the state once and writes it once. *)
 
+(** [theta_d] from the two neighbouring column parities, with the column
+    indices already reduced mod 5 (proof-only helper). *)
+let theta_d_from (s: state) (x: nat { x < 5 }) (xm xp: nat) (cm cp: S64.t)
+  : Lemma (requires xm == (x + 4) % 5 /\ xp == (x + 1) % 5 /\
+                    cm == theta_c s xm /\ cp == theta_c s xp)
+          (ensures S64.logxor cm (rotl cp 1) == theta_d s x)
+  = ()
+
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
 (** One lane of theta.  [a] is the lane's old value and [d] is the value its
@@ -164,14 +172,19 @@ ensures exists* (vst: Seq.seq S64.t).
   theta_c_eq (reveal vst0) 3;
   theta_c_eq (reveal vst0) 4;
   let d0 = S64.logxor c4 (rotl_u32 c1 1ul);
+  theta_d_from (reveal vst0) 0 4 1 c4 c1;
   assert (pure (d0 == theta_d (reveal vst0) 0));
   let d1 = S64.logxor c0 (rotl_u32 c2 1ul);
+  theta_d_from (reveal vst0) 1 0 2 c0 c2;
   assert (pure (d1 == theta_d (reveal vst0) 1));
   let d2 = S64.logxor c1 (rotl_u32 c3 1ul);
+  theta_d_from (reveal vst0) 2 1 3 c1 c3;
   assert (pure (d2 == theta_d (reveal vst0) 2));
   let d3 = S64.logxor c2 (rotl_u32 c4 1ul);
+  theta_d_from (reveal vst0) 3 2 4 c2 c4;
   assert (pure (d3 == theta_d (reveal vst0) 3));
   let d4 = S64.logxor c3 (rotl_u32 c0 1ul);
+  theta_d_from (reveal vst0) 4 3 0 c3 c0;
   assert (pure (d4 == theta_d (reveal vst0) 4));
   theta_lane st vst0 0sz s00 d0;
   theta_lane st vst0 1sz s01 d1;

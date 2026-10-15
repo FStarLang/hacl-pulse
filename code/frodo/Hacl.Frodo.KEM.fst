@@ -99,6 +99,104 @@ let append4_eq (a b c d res: Seq.seq S8.t)
     Seq.lemma_eq_intro res (Seq.append a (Seq.append b (Seq.append c d)))
 #pop-options
 
+(** Two [Copy.copy_at]s, back to back, of [a] and then [b] into a buffer
+    of exactly their combined length.  Stated over the copy postconditions
+    verbatim so that the caller only has to hand the intermediate states
+    over; the pointwise reasoning then happens here, in a small context,
+    rather than in the large one of the Pulse function. *)
+let copy2_eq (a b vd0 vd1 vd2: Seq.seq S8.t) (b0 n1 b1 n2: nat)
+  : Lemma (requires b0 == 0 /\ n1 == Seq.length a /\ b1 == n1 /\ n2 == Seq.length b /\
+                    Seq.length vd0 == n1 + n2 /\
+                    Seq.length vd1 == Seq.length vd0 /\ Seq.length vd2 == Seq.length vd1 /\
+                    (forall (k: nat). k < n1 ==> Seq.index vd1 (b0 + k) == Seq.index a k) /\
+                    (forall (k: nat). k < n2 ==> Seq.index vd2 (b1 + k) == Seq.index b k) /\
+                    (forall (k: nat). k < Seq.length vd1 /\ (k < b1 \/ b1 + n2 <= k) ==>
+                       Seq.index vd2 k == Seq.index vd1 k))
+          (ensures vd2 == Seq.append a b)
+  = let aux (k: nat{k < Seq.length a})
+      : Lemma (Seq.index vd2 k == Seq.index a k)
+      = assert (Seq.index vd1 (b0 + k) == Seq.index a k)
+    in
+    Classical.forall_intro aux;
+    append2_eq a b vd2
+
+(** As {!copy2_eq}, but the second piece comes from a [copy_range] out of
+    [src] at offset [s1]. *)
+let copy2r_eq (src a b vd0 vd1 vd2: Seq.seq S8.t) (b0 n1 b1 s1 n2: nat)
+  : Lemma (requires b0 == 0 /\ n1 == Seq.length a /\ b1 == n1 /\ n2 == Seq.length b /\
+                    s1 + n2 <= Seq.length src /\ b == Seq.slice src s1 (s1 + n2) /\
+                    Seq.length vd0 == n1 + n2 /\
+                    Seq.length vd1 == Seq.length vd0 /\ Seq.length vd2 == Seq.length vd1 /\
+                    (forall (k: nat). k < n1 ==> Seq.index vd1 (b0 + k) == Seq.index a k) /\
+                    (forall (k: nat). k < n2 ==>
+                       Seq.index vd2 (b1 + k) == Seq.index src (s1 + k)) /\
+                    (forall (k: nat). k < Seq.length vd1 /\ (k < b1 \/ b1 + n2 <= k) ==>
+                       Seq.index vd2 k == Seq.index vd1 k))
+          (ensures vd2 == Seq.append a b)
+  = let aux (k: nat{k < Seq.length a})
+      : Lemma (Seq.index vd2 k == Seq.index a k)
+      = assert (Seq.index vd1 (b0 + k) == Seq.index a k)
+    in
+    let aux2 (k: nat{k < Seq.length b})
+      : Lemma (Seq.index vd2 (Seq.length a + k) == Seq.index b k)
+      = assert (Seq.index vd2 (b1 + k) == Seq.index src (s1 + k))
+    in
+    Classical.forall_intro aux;
+    Classical.forall_intro aux2;
+    append2_eq a b vd2
+
+(** The same for the secret key: a [copy_range] from offset [s0] of [src]
+    and then three [copy_at]s. *)
+#push-options "--z3rlimit 40"
+let copy4_eq (src a b c d vd0 vd1 vd2 vd3 vd4: Seq.seq S8.t)
+             (b0 s0 n1 b1 n2 b2 n3 b3 n4: nat)
+  : Lemma (requires b0 == 0 /\ s0 == 0 /\ n1 == Seq.length a /\ n1 <= Seq.length src /\
+                    a == Seq.slice src 0 n1 /\
+                    b1 == n1 /\ n2 == Seq.length b /\
+                    b2 == n1 + n2 /\ n3 == Seq.length c /\
+                    b3 == n1 + n2 + n3 /\ n4 == Seq.length d /\
+                    Seq.length vd0 == n1 + n2 + n3 + n4 /\
+                    Seq.length vd1 == Seq.length vd0 /\ Seq.length vd2 == Seq.length vd1 /\
+                    Seq.length vd3 == Seq.length vd2 /\ Seq.length vd4 == Seq.length vd3 /\
+                    (forall (k: nat). k < n1 ==>
+                       Seq.index vd1 (b0 + k) == Seq.index src (s0 + k)) /\
+                    (forall (k: nat). k < n2 ==> Seq.index vd2 (b1 + k) == Seq.index b k) /\
+                    (forall (k: nat). k < Seq.length vd1 /\ (k < b1 \/ b1 + n2 <= k) ==>
+                       Seq.index vd2 k == Seq.index vd1 k) /\
+                    (forall (k: nat). k < n3 ==> Seq.index vd3 (b2 + k) == Seq.index c k) /\
+                    (forall (k: nat). k < Seq.length vd2 /\ (k < b2 \/ b2 + n3 <= k) ==>
+                       Seq.index vd3 k == Seq.index vd2 k) /\
+                    (forall (k: nat). k < n4 ==> Seq.index vd4 (b3 + k) == Seq.index d k) /\
+                    (forall (k: nat). k < Seq.length vd3 /\ (k < b3 \/ b3 + n4 <= k) ==>
+                       Seq.index vd4 k == Seq.index vd3 k))
+          (ensures vd4 == Seq.append a (Seq.append b (Seq.append c d)))
+  = let aux1 (k: nat{k < Seq.length a})
+      : Lemma (Seq.index vd4 k == Seq.index a k)
+      = assert (Seq.index vd1 (b0 + k) == Seq.index src (s0 + k));
+        assert (Seq.index vd2 k == Seq.index vd1 k);
+        assert (Seq.index vd3 k == Seq.index vd2 k)
+    in
+    let aux2 (k: nat{k < Seq.length b})
+      : Lemma (Seq.index vd4 (Seq.length a + k) == Seq.index b k)
+      = assert (Seq.index vd2 (b1 + k) == Seq.index b k);
+        assert (Seq.index vd3 (b1 + k) == Seq.index vd2 (b1 + k))
+    in
+    let aux3 (k: nat{k < Seq.length c})
+      : Lemma (Seq.index vd4 (Seq.length a + Seq.length b + k) == Seq.index c k)
+      = assert (Seq.index vd3 (b2 + k) == Seq.index c k)
+    in
+    let aux4 (k: nat{k < Seq.length d})
+      : Lemma (Seq.index vd4 (Seq.length a + Seq.length b + Seq.length c + k) ==
+                 Seq.index d k)
+      = assert (Seq.index vd4 (b3 + k) == Seq.index d k)
+    in
+    Classical.forall_intro aux1;
+    Classical.forall_intro aux2;
+    Classical.forall_intro aux3;
+    Classical.forall_intro aux4;
+    append4_eq a b c d vd4
+#pop-options
+
 (** A one-byte domain separator in front of a seed. *)
 let cons_eq (x: S8.t) (s res: Seq.seq S8.t)
   : Lemma (requires Seq.length res == 1 + Seq.length s /\ Seq.index res 0 == x /\
@@ -185,6 +283,14 @@ ensures exists* vpk vsk.
                 SZ.v pmb == publicmatrixbytes p /\
                 SZ.v pkb == crypto_publickeybytes p /\
                 SZ.fits (2 * SZ.v ents)));
+  (* [pack]'s length arithmetic, up front while the context is small. *)
+  assert (pure (SZ.v ents % 8 == 0 /\ SZ.v ents / 8 == SZ.v nn));
+  assert (pure (SZ.v d * (SZ.v ents / 8) == SZ.v pmb));
+  assert (pure (SZ.v d <= 16 /\ SZ.v ents <= 8 * 1344));
+  Math.lemma_mult_le_right (SZ.v ents) (SZ.v d) 16;
+  Math.lemma_mult_le_left 16 (SZ.v ents) (8 * 1344);
+  assert_norm (16 * (8 * 1344) < pow2 32);
+  assert (pure (SZ.v d * SZ.v ents < pow2 32));
 
   let mut z = [| (S8.zero <: S8.t); 16sz |];
   Copy.copy_range z 0sz coins (SZ.mul 2sz cb) 16sz;
@@ -235,10 +341,13 @@ ensures exists* vpk vsk.
 
   let mut pb = [| (S8.zero <: S8.t); pmb |];
   Pack.pack pb b d ents;
+  with vpb. assert (A.pts_to pb vpb);
+  assert (pure (vpb == F.pack_n p vb));
   Copy.copy_at pk 0sz sa 16sz;
+  with vpk1. assert (A.pts_to pk vpk1);
   Copy.copy_at pk 16sz pb pmb;
   with vpk. assert (A.pts_to pk vpk);
-  append2_eq vsa (F.pack_n p vb) vpk;
+  copy2_eq vsa vpb vpk0 vpk1 vpk (SZ.v 0sz) (SZ.v 16sz) (SZ.v 16sz) (SZ.v pmb);
   assert (pure (vpk == Seq.append vsa (F.pack_n p vb)));
 
   let mut stb = [| (S8.zero <: S8.t); smb |];
@@ -250,12 +359,18 @@ ensures exists* vpk vsk.
   assert (pure (vstb == M.to_bytes nbar (n p) vst));
   assert (pure (vpkh == shake p vpk (crypto_bytes p)));
   Copy.copy_range sk 0sz coins 0sz cb;
+  with vsk1. assert (A.pts_to sk vsk1);
   Copy.copy_at sk cb pk pkb;
+  with vsk2. assert (A.pts_to sk vsk2);
   Copy.copy_at sk (SZ.add cb pkb) stb smb;
+  with vsk3. assert (A.pts_to sk vsk3);
   Copy.copy_at sk (SZ.add (SZ.add cb pkb) smb) pkh cb;
   with vsk. assert (A.pts_to sk vsk);
-  slice_eq vcoins 0 (Seq.slice vcoins 0 (crypto_bytes p));
-  append4_eq (Seq.slice vcoins 0 (crypto_bytes p)) vpk vstb vpkh vsk;
+  copy4_eq vcoins (Seq.slice vcoins 0 (crypto_bytes p)) vpk vstb vpkh
+           vsk0 vsk1 vsk2 vsk3 vsk
+           (SZ.v 0sz) (SZ.v 0sz) (SZ.v cb) (SZ.v cb) (SZ.v pkb)
+           (SZ.v (SZ.add cb pkb)) (SZ.v smb)
+           (SZ.v (SZ.add (SZ.add cb pkb) smb)) (SZ.v cb);
   assert (pure (vsk == Seq.append (Seq.slice vcoins 0 (crypto_bytes p))
                          (Seq.append vpk (Seq.append vstb vpkh))));
   keypair_eq p vcoins vpk vsk;
@@ -354,6 +469,13 @@ ensures exists* vct vbp vv.
                 SZ.v c2 == ct2bytes p /\
                 SZ.v rlen == 2 * secretmatrixbytes p + 2 * (nbar * nbar) /\
                 SZ.v rlen < pow2 32));
+  (* Facts about the small matrices, stated here while the context is still
+     small: later on, with the copies' quantified postconditions around, the
+     solver struggles to reach the (nonlinear) arithmetic behind them. *)
+  assert_norm (nbar * nbar == 64);
+  assert (pure (SZ.v d <= 16));
+  Math.lemma_mult_le_right 64 (SZ.v d) 16;
+  assert (pure (SZ.v d * 64 < pow2 32 /\ SZ.v d * (64 / 8) == SZ.v c2));
 
   let mut sa = [| (S8.zero <: S8.t); 16sz |];
   Copy.copy_range sa 0sz pk 0sz 16sz;
@@ -454,10 +576,14 @@ ensures exists* vct vbp vv.
   Pack.pack c2b v d 64sz;
   A.pts_to_len c1b;
   A.pts_to_len c2b;
+  with vc1. assert (A.pts_to c1b vc1);
+  with vc2. assert (A.pts_to c2b vc2);
+  assert (pure (vc1 == F.pack_n p vbpu /\ vc2 == F.pack_8 p vvu));
   Copy.copy_at ct 0sz c1b pmb;
+  with vct1. assert (A.pts_to ct vct1);
   Copy.copy_at ct pmb c2b c2;
   with vct. assert (A.pts_to ct vct);
-  append2_eq (F.pack_n p vbpu) (F.pack_8 p vvu) vct;
+  copy2_eq vc1 vc2 vct0 vct1 vct (SZ.v 0sz) (SZ.v pmb) (SZ.v pmb) (SZ.v c2);
   assert (pure (vct == Seq.append (F.pack_n p vbpu) (F.pack_8 p vvu)));
 
   Mat.mod_pow2 bp ents p.logq #nbar #(n p);
@@ -524,10 +650,12 @@ ensures exists* vct vss.
 
   let mut hm = [| (S8.zero <: S8.t); SZ.add cb mub |];
   A.pts_to_len hm;
+  with vhm0. assert (A.pts_to hm vhm0);
   Copy.copy_at hm 0sz pkh cb;
+  with vhm1. assert (A.pts_to hm vhm1);
   Copy.copy_at hm cb mu mub;
   with vhm. assert (A.pts_to hm vhm);
-  append2_eq vpkh vmu vhm;
+  copy2_eq vpkh vmu vhm0 vhm1 vhm (SZ.v 0sz) (SZ.v cb) (SZ.v cb) (SZ.v mub);
 
   let mut sek = [| (S8.zero <: S8.t); two_cb |];
   shake_p p sek two_cb hm (SZ.add cb mub);
@@ -548,14 +676,15 @@ ensures exists* vct vss.
 
   let mut kb = [| (S8.zero <: S8.t); kbl |];
   A.pts_to_len kb;
+  with vkb0. assert (A.pts_to kb vkb0);
   Copy.copy_at kb 0sz ct ctb;
   A.pts_to_len kb;
   A.pts_to_len sek;
+  with vkb1. assert (A.pts_to kb vkb1);
   Copy.copy_range kb ctb sek cb cb;
   with vkb. assert (A.pts_to kb vkb);
-  slice_eq vsek (crypto_bytes p)
-           (Seq.slice vsek (crypto_bytes p) (2 * crypto_bytes p));
-  append2_eq vct (Seq.slice vsek (crypto_bytes p) (2 * crypto_bytes p)) vkb;
+  copy2r_eq vsek vct (Seq.slice vsek (crypto_bytes p) (2 * crypto_bytes p))
+            vkb0 vkb1 vkb (SZ.v 0sz) (SZ.v ctb) (SZ.v ctb) (SZ.v cb) (SZ.v cb);
   shake_p p ss cb kb kbl;
   with vss. assert (A.pts_to ss vss);
   assert (pure (vct == fst (F.enc p vmu vpk) /\ vss == snd (F.enc p vmu vpk)));
@@ -745,6 +874,30 @@ let kb_eq (ok: bool) (mask: S8.t) (ctv x y res: Seq.seq S8.t)
     if ok then Seq.lemma_eq_intro res (Seq.append ctv x)
     else Seq.lemma_eq_intro res (Seq.append ctv y)
 
+(** {!kb_eq}, from the postconditions of the [copy_at] and the
+    [select_copy] that build [res] out of [vd0]. *)
+let kb2_eq (ok: bool) (mask: S8.t) (ctv x y vd0 vd1 res: Seq.seq S8.t) (b0 n1 b1 n2: nat)
+  : Lemma
+      (requires (S8.v mask == 0 \/ S8.v mask == pow2 8 - 1) /\
+                (S8.v mask == pow2 8 - 1 <==> ok) /\
+                b0 == 0 /\ n1 == Seq.length ctv /\ b1 == n1 /\
+                n2 == Seq.length x /\ Seq.length x == Seq.length y /\
+                Seq.length vd0 == n1 + n2 /\
+                Seq.length vd1 == Seq.length vd0 /\ Seq.length res == Seq.length vd1 /\
+                (forall (k: nat). k < n1 ==> Seq.index vd1 (b0 + k) == Seq.index ctv k) /\
+                (forall (k: nat). k < n2 ==>
+                   Seq.index res (b1 + k) ==
+                     (if S8.v mask = 0 then Seq.index y k else Seq.index x k)) /\
+                (forall (k: nat). k < Seq.length vd1 /\ (k < b1 \/ b1 + n2 <= k) ==>
+                   Seq.index res k == Seq.index vd1 k))
+      (ensures res == Seq.append ctv (if ok then x else y))
+  = let aux (k: nat{k < Seq.length ctv})
+      : Lemma (Seq.index res k == Seq.index ctv k)
+      = assert (Seq.index vd1 (b0 + k) == Seq.index ctv k)
+    in
+    Classical.forall_intro aux;
+    kb_eq ok mask ctv x y res
+
 (** Decapsulation, spelled out; the same idiom as [enc_ct_eq]. *)
 let dec_eq (p: params)
            (vct: Seq.lseq S8.t (crypto_ciphertextbytes p))
@@ -922,10 +1075,12 @@ ensures exists* vss.
   (* Re-derive the encapsulation randomness from mu and re-encrypt. *)
   let mut hm = [| (S8.zero <: S8.t); hml |];
   A.pts_to_len hm;
+  with vhm0. assert (A.pts_to hm vhm0);
   Copy.copy_at hm 0sz pkh cb;
+  with vhm1. assert (A.pts_to hm vhm1);
   Copy.copy_at hm cb mu mub;
   with vhm. assert (A.pts_to hm vhm);
-  append2_eq vpkh vmu vhm;
+  copy2_eq vpkh vmu vhm0 vhm1 vhm (SZ.v 0sz) (SZ.v cb) (SZ.v cb) (SZ.v mub);
 
   let mut sek = [| (S8.zero <: S8.t); two_cb |];
   A.pts_to_len sek;
@@ -963,8 +1118,10 @@ ensures exists* vss.
 
   let mut kb = [| (S8.zero <: S8.t); kbl |];
   A.pts_to_len kb;
+  with vkb0. assert (A.pts_to kb vkb0);
   Copy.copy_at kb 0sz ct ctb;
   A.pts_to_len kb;
+  with vkb1. assert (A.pts_to kb vkb1);
   let mut sk2 = [| (S8.zero <: S8.t); cb |];
   A.pts_to_len sk2;
   Copy.copy_range sk2 0sz sek cb cb;
@@ -972,7 +1129,8 @@ ensures exists* vss.
   slice_eq vsek (crypto_bytes p) vk2;
   select_copy kb ctb sk2 sv cb mask;
   with vkb. assert (A.pts_to kb vkb);
-  kb_eq (okb p vbpr vbp2 vcr vv2) mask vct vk2 vs vkb;
+  kb2_eq (okb p vbpr vbp2 vcr vv2) mask vct vk2 vs vkb0 vkb1 vkb
+         (SZ.v 0sz) (SZ.v ctb) (SZ.v ctb) (SZ.v cb);
   assert (pure (vkb == Seq.append vct
                   (if okb p vbpr vbp2 vcr vv2 then vk2 else vs)));
   shake_p p ss cb kb kbl;

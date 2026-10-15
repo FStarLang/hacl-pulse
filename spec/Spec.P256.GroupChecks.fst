@@ -34,6 +34,18 @@ let cof2 : list (nat & list nat) = [(5789604460517812438134872347470378676504307
 
 let cof3 : list (nat & list nat) = [(57896044605178124381348723474703786765043071707645157097766815654433548926971, [1; 0; 2; 1]); (115792089210356248762697446949407573530086143415290314195533631308867097853891, [1; 0; 0; 1]); (2, [0; 2; 0; 1]); (57896044605178124381348723474703786765043071707645157097766815654433548927007, [0; 1; 1; 0]); (57896044605178124381348723474703786765043071707645157097766815654433548926976, [0; 1; 0; 2]); (18457504912750444063202355976835579243142949081727156172430344083128260874805, [0; 1; 0; 0]); (115792089210356248762697446949407573530086143415290314195533631308867097853933, [0; 0; 1; 1]); (44298011790601065751685654344405390183543077796145174813832825799507826099532, [0; 0; 0; 1])]
 
+(** A linear combination of zeros is zero. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 10"
+let lin_zero (c: ctx) (k1 k2 k3 x y z: sv c)
+  : Lemma (requires ok c /\ c.m == m0 /\ c.o == o)
+          (ensures vl x == 0 /\ vl y == 0 /\ vl z == 0 ==>
+                   vl (sadd (sadd (smul k1 x) (smul k2 y)) (smul k3 z)) == 0)
+  = m0_lem ();
+    let mz (a: elem m0) : Lemma (P.fmul a 0 == 0) = () in
+    mz (vl k1); mz (vl k2); mz (vl k3);
+    assert_norm (P.fadd 0 0 == 0)
+#pop-options
+
 (** Completeness: if the sum of two affine points is the zero triple then [G = 0], where [G = D^6 f(A / D^2)]. *)
 let k2_chk (o': fops m0) (env: list (elem m0)) : bool =
   let c0 = base m0 fl o' 4 env in
@@ -97,6 +109,16 @@ let k2 (x1 y1 x2 y2: P.felem)
     eqn_val c (a, (svar c 1), e);
     assert (Nil? (fst (ssub (g) (sadd (sadd (smul (spoly cof1) rx) (smul (spoly cof2) ry)) (smul (spoly cof3) rz)))));
     sv_eq (g) (sadd (sadd (smul (spoly cof1) rx) (smul (spoly cof2) ry)) (smul (spoly cof3) rz));
+    let dd = P.fsub x1 x2 in
+    let ssa = P.fadd y1 y2 in
+    assert (tof (vl d) == dd);
+    assert (tof (vl e) == P.fmul dd dd);
+    assert (tof (vl sa) == ssa);
+    assert (tof (vl a) == P.fsub (P.fmul ssa ssa) (P.fmul (P.fadd x1 x2) (P.fmul dd dd)));
+    assert (tof3 (a, (svar c 1), e) == (P.fsub (P.fmul ssa ssa) (P.fmul (P.fadd x1 x2) (P.fmul dd dd)), y1, P.fmul dd dd));
+    assert (tof (vl g) == eqn_r (P.fsub (P.fmul ssa ssa) (P.fmul (P.fadd x1 x2) (P.fmul dd dd)), y1, P.fmul dd dd));
+    assert (tof3 (rx, ry, rz) == P.point_add (x1, y1, P.fone) (x2, y2, P.fone));
+    lin_zero c (spoly cof1) (spoly cof2) (spoly cof3) rx ry rz;
     ()
 #pop-options
 

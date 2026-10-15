@@ -90,6 +90,17 @@ let blocks_step (msg: Seq.seq S8.t) (r: nat) (i: nat) (x z acc: nat)
     step_cong x (Spec.blocks_acc msg 0 i r acc)
               (Spec.block_val (Seq.slice msg (16 * i) (16 * i + 16))) r
 
+(** The arithmetic glue between one iteration's [fadd]/[fmul] and
+    [blocks_step]'s hypothesis, kept out of the separation-logic query. *)
+let blocks_step_pre (msg: Seq.seq S8.t) (i off: nat) (x b x1 z rr: nat)
+  : Lemma (requires off == i * 16 /\ 16 * i + 16 <= Seq.length msg /\
+                    b == Spec.block_val (Seq.slice msg off (off + 16)) /\
+                    x1 == x + b /\ z % prime == (x1 * rr) % prime)
+          (ensures z % prime ==
+                     ((x + Spec.block_val (Seq.slice msg (16 * i) (16 * i + 16)))
+                      * rr) % prime)
+  = Math.swap_mul i 16
+
 (** And the plain MAC's short last block, if any: the full blocks and the
     tail together are the whole message. *)
 let last_block (msg: Seq.seq S8.t) (i: nat)
@@ -176,9 +187,13 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
     let off = SZ.mul vi 16sz;
     load_full e msg off;
     with vh0. assert (A.pts_to h vh0);
+    with ve0. assert (A.pts_to e ve0);
     fadd h e;
+    with vh1. assert (A.pts_to h vh1);
     fmul h r d;
     with vh2. assert (A.pts_to h vh2);
+    blocks_step_pre vmsg (SZ.v vi) (SZ.v off) (feval vh0) (feval ve0) (feval vh1)
+                    (feval vh2) (feval vr);
     blocks_step vmsg (feval vr) (SZ.v vi) (feval vh0) (feval vh2) (reveal acc);
     i := SZ.add vi 1sz;
   }
@@ -224,7 +239,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
     fadd h e;
     fmul h r d;
   } else {
-    ()
+    assert (pure (SZ.v blen == 0));
   }
 }
 

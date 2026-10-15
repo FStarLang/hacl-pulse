@@ -76,7 +76,55 @@ let byte_at_digits (a b c d: elem)
     Math.division_multiplication_lemma x 65536 256;
     Math.small_mod a 256
 
-#push-options "--z3rlimit 400"
+(** The carry chain on the four digits alone: the bytes of the incremented
+    number, wrapping at [2^32], are the four [r]s.  One case per length of
+    the run of all-ones bytes at the bottom. *)
+let inc32_digits (x12 x13 x14 x15 r12 r13 r14 r15: elem)
+  : Lemma (requires
+      (let c15 = (if x15 = 255 then 1 else 0) in
+       let c14 = (if x14 = 255 then c15 else 0) in
+       let c13 = (if x13 = 255 then c14 else 0) in
+       r15 == (x15 + 1) % 256 /\ r14 == (x14 + c15) % 256 /\
+       r13 == (x13 + c14) % 256 /\ r12 == (x12 + c13) % 256))
+    (ensures
+      (let m = (x12 * 16777216 + x13 * 65536 + x14 * 256 + x15 + 1) % 4294967296 in
+       byte_at m 0 == r15 /\ byte_at m 8 == r14 /\
+       byte_at m 16 == r13 /\ byte_at m 24 == r12))
+  = let s = x12 * 16777216 + x13 * 65536 + x14 * 256 + x15 + 1 in
+    if x15 < 255 then begin
+      Math.small_mod (x15 + 1) 256; Math.small_mod x14 256;
+      Math.small_mod x13 256; Math.small_mod x12 256;
+      byte_at_digits x12 x13 x14 (x15 + 1);
+      Math.small_mod s 4294967296
+    end else if x14 < 255 then begin
+      Math.cancel_mul_mod 1 256; Math.small_mod (x14 + 1) 256;
+      Math.small_mod x13 256; Math.small_mod x12 256;
+      assert (s == x12 * 16777216 + x13 * 65536 + (x14 + 1) * 256 + 0);
+      byte_at_digits x12 x13 (x14 + 1) 0;
+      Math.small_mod s 4294967296
+    end else if x13 < 255 then begin
+      Math.cancel_mul_mod 1 256; Math.small_mod (x13 + 1) 256;
+      Math.small_mod x12 256;
+      assert (s == x12 * 16777216 + (x13 + 1) * 65536 + 0 * 256 + 0);
+      byte_at_digits x12 (x13 + 1) 0 0;
+      Math.small_mod s 4294967296
+    end else if x12 < 255 then begin
+      Math.cancel_mul_mod 1 256; Math.small_mod (x12 + 1) 256;
+      assert (s == (x12 + 1) * 16777216 + 0 * 65536 + 0 * 256 + 0);
+      byte_at_digits (x12 + 1) 0 0 0;
+      Math.small_mod s 4294967296
+    end else begin
+      Math.cancel_mul_mod 1 256;
+      assert (s == 4294967296);
+      Math.cancel_mul_mod 1 4294967296;
+      byte_at_digits 0 0 0 0
+    end
+
+let inc32_index (b: block) (j: nat { j < 16 })
+  : Lemma (Seq.index (inc32 b) j ==
+           (if j < 12 then Seq.index b j
+            else byte_at ((be32 b + 1) % pow2 32) (8 * (15 - j))))
+  = ()
 
 (** The carry chain is the increment.  [c15] is the carry out of the last
     byte, [c14] out of the last two, and so on: each is the previous carry
@@ -97,27 +145,12 @@ let inc32_bytes (b: block) (r12 r13 r14 r15: elem)
   = assert_norm (pow2 32 == 4294967296);
     let x12 = Seq.index b 12 in let x13 = Seq.index b 13 in
     let x14 = Seq.index b 14 in let x15 = Seq.index b 15 in
-    byte_at_digits x12 x13 x14 x15;
-    let n = be32 b in
-    assert (n == x12 * 16777216 + x13 * 65536 + x14 * 256 + x15);
-    if x15 < 255 then begin
-      byte_at_digits x12 x13 x14 (x15 + 1);
-      Math.small_mod (n + 1) 4294967296
-    end else if x14 < 255 then begin
-      byte_at_digits x12 x13 (x14 + 1) 0;
-      Math.small_mod (n + 1) 4294967296
-    end else if x13 < 255 then begin
-      byte_at_digits x12 (x13 + 1) 0 0;
-      Math.small_mod (n + 1) 4294967296
-    end else if x12 < 255 then begin
-      byte_at_digits (x12 + 1) 0 0 0;
-      Math.small_mod (n + 1) 4294967296
-    end else begin
-      byte_at_digits 0 0 0 0;
-      Math.lemma_mod_plus 0 1 4294967296
-    end
+    assert (be32 b == x12 * 16777216 + x13 * 65536 + x14 * 256 + x15);
+    inc32_digits x12 x13 x14 x15 r12 r13 r14 r15;
+    inc32_index b 12; inc32_index b 13; inc32_index b 14; inc32_index b 15;
+    introduce forall (j: nat). j < 12 ==> Seq.index (inc32 b) j == Seq.index b j
+    with introduce _ ==> _ with inc32_index b j
 
-#pop-options
 
 (** {2 The increment} *)
 
@@ -267,6 +300,40 @@ let lane_rest (c: block) (i: nat { 1 <= i /\ i < 4 }) (k: nat { k < 4 })
 (** The twelve bytes above the counter.  Byte [j] of the reversal is byte
     [15 - j] of [r], which for [j < 12] sits in one of the three lanes the
     add did not touch, and the same byte of the reversal of [c]. *)
+(** [byte_of_lane] with the byte named by its lane and its place in the
+    lane, so that no division is left for the solver. *)
+let byte_of_lane_ik (b: block) (i: nat { i < 4 }) (k: nat { k < 4 })
+  : Lemma (Seq.index b (4 * i + k) == (lane_of b i / pow2 (8 * k)) % 256)
+  = byte_of_lane b (4 * i + k);
+    Math.lemma_div_plus k i 4; Math.small_div k 4;
+    Math.lemma_mod_plus k i 4; Math.small_mod k 4
+
+(** One of the three upper lanes, named by a variable, agrees.  This is
+    congruence alone; [lane_of]'s definition is hidden so the solver does
+    not go looking inside it. *)
+#push-options "--using_facts_from '* -Hacl.AES.Counter.lane_of'"
+let lane_upper_eq (r c: block) (i: nat { 1 <= i /\ i < 4 })
+  : Lemma (requires
+      lane_of r 1 == lane_of c 1 /\ lane_of r 2 == lane_of c 2 /\
+      lane_of r 3 == lane_of c 3)
+    (ensures lane_of r i == lane_of c i)
+  = if i = 1 then () else if i = 2 then () else ()
+#pop-options
+
+let inc32_lanes_low_ik (c r: block) (i: nat { 1 <= i /\ i < 4 }) (k: nat { k < 4 })
+  : Lemma (requires
+      lane_of r 1 == lane_of (CL.bswap c) 1 /\
+      lane_of r 2 == lane_of (CL.bswap c) 2 /\
+      lane_of r 3 == lane_of (CL.bswap c) 3)
+    (ensures Seq.index (CL.bswap r) (15 - (4 * i + k)) ==
+             Seq.index c (15 - (4 * i + k)))
+  = let j = 15 - (4 * i + k) in
+    assert (Seq.index (CL.bswap r) j == Seq.index r (4 * i + k));
+    byte_of_lane_ik r i k;
+    byte_of_lane_ik (CL.bswap c) i k;
+    lane_upper_eq r (CL.bswap c) i;
+    lane_rest c i k
+
 let inc32_lanes_low (c r: block) (j: nat { j < 12 })
   : Lemma (requires
       lane_of r 1 == lane_of (CL.bswap c) 1 /\
@@ -276,9 +343,10 @@ let inc32_lanes_low (c r: block) (j: nat { j < 12 })
   = let i = (15 - j) / 4 in
     let k = (15 - j) % 4 in
     Math.lemma_div_mod (15 - j) 4;
-    byte_of_lane r (15 - j);
-    byte_of_lane (CL.bswap c) (15 - j);
-    lane_rest c i k
+    Math.lemma_div_le 4 (15 - j) 4;
+    Math.lemma_div_le (15 - j) 15 4;
+    assert_norm (4 / 4 == 1); assert_norm (15 / 4 == 3);
+    inc32_lanes_low_ik c r i k
 
 (** And the four below it, which are the new counter most significant
     first: byte [j] of the reversal is byte [15 - j] of lane zero. *)
@@ -301,12 +369,11 @@ let inc32_lanes (c r: block)
       lane_of r 3 == lane_of (CL.bswap c) 3)
     (ensures CL.bswap r == inc32 c)
   = lane_zero_be32 c;
-    inc32_lanes_low c r 0; inc32_lanes_low c r 1; inc32_lanes_low c r 2;
-    inc32_lanes_low c r 3; inc32_lanes_low c r 4; inc32_lanes_low c r 5;
-    inc32_lanes_low c r 6; inc32_lanes_low c r 7; inc32_lanes_low c r 8;
-    inc32_lanes_low c r 9; inc32_lanes_low c r 10; inc32_lanes_low c r 11;
-    inc32_lanes_high c r 12; inc32_lanes_high c r 13;
-    inc32_lanes_high c r 14; inc32_lanes_high c r 15;
+    introduce forall (j: nat { j < 16 }). Seq.index (CL.bswap r) j == Seq.index (inc32 c) j
+    with begin
+      inc32_index c j;
+      if j < 12 then inc32_lanes_low c r j else inc32_lanes_high c r j
+    end;
     Seq.lemma_eq_intro (CL.bswap r) (inc32 c)
 
 #pop-options

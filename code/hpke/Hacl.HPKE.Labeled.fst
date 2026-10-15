@@ -61,7 +61,40 @@ let prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
                    block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < pow2 61 /\
                    block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < max_input #t)
   = FStar.Math.Lemmas.pow2_le_compat (8 * len_len #t - 3) 61;
-    assert_norm (256 + 128 + 41 + pow2 32 + 1 < pow2 61)
+    assert_norm (256 + 128 + 41 + pow2 32 + 1 < pow2 61);
+    assert_norm (256 + 128 + pow2 32 + 64 < pow2 61)
+
+(** The HMAC key (the salt) is at most 64 bytes, well under the hash's
+    input-length bound. *)
+let salt_bound (#t: Type0) {| word t |} (n: nat)
+  : Lemma (requires n <= 64)
+          (ensures n < pow2 61 /\ n < pow2 (8 * len_len #t - 3))
+  = FStar.Math.Lemmas.pow2_le_compat (8 * len_len #t - 3) 61;
+    assert_norm (64 < pow2 61)
+
+(** Two pointwise byte equalities give the length-prefix clause of
+    [cat5_pointwise]. *)
+let two_pointwise (m a: Seq.seq S8.t)
+  : Lemma (requires Seq.length a == 2 /\ Seq.length m >= 2 /\
+                    Seq.index m 0 == Seq.index a 0 /\ Seq.index m 1 == Seq.index a 1)
+          (ensures forall (k: nat). k < Seq.length a ==> Seq.index m k == Seq.index a k)
+  = ()
+
+(** The two bytes the code writes for [I2OSP(L, 2)] are [two_bytes L]. *)
+let two_bytes_hi_lo (n: nat { n < 65536 }) (l32: U32.t)
+  : Lemma (requires U32.v l32 == n % pow2 32)
+          (ensures Seq.index (two_bytes n) 0 ==
+                     S8.classify (Cast.uint32_to_uint8 (U32.div l32 256ul)) /\
+                   Seq.index (two_bytes n) 1 == S8.classify (Cast.uint32_to_uint8 l32))
+  = assert_norm (65536 < pow2 32);
+    FStar.Math.Lemmas.small_mod n (pow2 32);
+    B.nat_to_be_index 2 n 0;
+    B.nat_to_be_index 2 n 1;
+    assert_norm (pow2 8 == 256);
+    assert_norm (pow2 0 == 1);
+    S8.v_extensional (Seq.index (two_bytes n) 0)
+                     (S8.classify (Cast.uint32_to_uint8 (U32.div l32 256ul)));
+    S8.v_extensional (Seq.index (two_bytes n) 1) (S8.classify (Cast.uint32_to_uint8 l32))
 
 (** {2 LabeledExtract} *)
 
@@ -130,6 +163,7 @@ ensures exists* vout'.
   with vbuf. assert (A.pts_to buf vbuf);
   cat4_pointwise vbuf version vsid vlabel vikm;
   assert (pure (reveal vbuf == extract_input vsid vlabel vikm));
+  salt_bound #t (Seq.length vsalt);
 
   hmac_impl p kt ivt out salt salt_len buf tlen;
   drop_table vtab;
@@ -206,19 +240,35 @@ ensures exists* vout'.
   let lo = Cast.uint32_to_uint8 l32;
   A.((buf.(0sz) <- S8.classify hi));
   A.((buf.(1sz) <- S8.classify lo));
+  with v0. assert (A.pts_to buf v0);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v0 0 == S8.classify hi /\ Seq.index v0 1 == S8.classify lo));
 
   copy_at buf 2sz vtab 7sz;
+  with v1. assert (A.pts_to buf v1);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v1 0 == Seq.index v0 0 /\ Seq.index v1 1 == Seq.index v0 1));
   copy_at buf 9sz sid sid_len;
+  with v2. assert (A.pts_to buf v2);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v2 0 == Seq.index v1 0 /\ Seq.index v2 1 == Seq.index v1 1));
   copy_at buf n2 lbl lbl_len;
+  with v3. assert (A.pts_to buf v3);
+  A.pts_to_len buf;
+  assert (pure (Seq.index v3 0 == Seq.index v2 0 /\ Seq.index v3 1 == Seq.index v2 1));
   copy_at buf n3 info info_len;
 
   with vbuf. assert (A.pts_to buf vbuf);
-  B.nat_to_be_index 2 (SZ.v out_len) 0;
-  B.nat_to_be_index 2 (SZ.v out_len) 1;
+  A.pts_to_len buf;
+  assert (pure (Seq.index vbuf 0 == Seq.index v3 0 /\ Seq.index vbuf 1 == Seq.index v3 1));
+  assert (pure (Seq.length vbuf == 2 + 7 + Seq.length vsid + Seq.length vlabel + Seq.length vinfo));
+  two_bytes_hi_lo (SZ.v out_len) l32;
   assert (pure (Seq.index vbuf 0 == Seq.index (two_bytes (SZ.v out_len)) 0));
   assert (pure (Seq.index vbuf 1 == Seq.index (two_bytes (SZ.v out_len)) 1));
+  two_pointwise vbuf (two_bytes (SZ.v out_len));
   cat5_pointwise vbuf (two_bytes (SZ.v out_len)) version vsid vlabel vinfo;
   assert (pure (reveal vbuf == expand_input (SZ.v out_len) vsid vlabel vinfo));
+  salt_bound #t (Seq.length vprk);
 
   expand_impl p kt ivt out out_len prk prk_len buf tlen;
   drop_table vtab;

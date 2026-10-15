@@ -186,6 +186,34 @@ ensures exists* vout'.
   hash_impl p kt ivt out mp mpLen;
 }
 
+(** [DB] as the encoder writes it: zeroes, then the [0x01] byte, then the
+    salt copied behind it.  Pure sequence reasoning, kept out of the Pulse VC. *)
+let db_written (#t: Type0) {| word t |} (p: params t)
+               (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
+               (salt: Seq.lseq S8.t sLen)
+               (a: Seq.seq S8.t) (c: Seq.seq S8.t)
+  : Lemma (requires
+      (let dbLen = em_len emBits - (hash_bytes p) - 1 in
+       let padLen = dbLen - sLen - 1 in
+       Seq.length a == Seq.length c /\ dbLen <= Seq.length a /\
+       (forall (k: nat). k < padLen ==> Seq.index a k == S8.zero) /\
+       Seq.index a padLen == S8.classify 1uy /\
+       (forall (k: nat). k < sLen ==> Seq.index c (dbLen - sLen + k) == Seq.index salt k) /\
+       (forall (k: nat). k < Seq.length a /\ (k < dbLen - sLen \/ dbLen <= k) ==>
+          Seq.index c k == Seq.index a k)))
+    (ensures
+      (let dbLen = em_len emBits - (hash_bytes p) - 1 in
+       forall (k: nat). k < dbLen ==> Seq.index c k == Seq.index (pss_db p sLen emBits salt) k))
+  = let dbLen = em_len emBits - (hash_bytes p) - 1 in
+    let aux (k: nat { k < dbLen })
+      : Lemma (Seq.index c k == Seq.index (pss_db p sLen emBits salt) k)
+      = pss_db_index p sLen emBits salt k;
+        if k < dbLen - sLen then ()
+        else assert (Seq.index c (dbLen - sLen + (k - (dbLen - sLen))) ==
+                     Seq.index salt (k - (dbLen - sLen)))
+    in
+    FStar.Classical.forall_intro aux
+
 (** [em] receives [EMSA-PSS-ENCODE(msg, emBits)] with the given salt.
 
     [emLen] is passed as well as [emBits] because the caller has both -- it
@@ -254,8 +282,11 @@ ensures exists* vem'.
   let padLen = SZ.sub (SZ.sub dbLen sLen) 1sz;
   fill_range em 0sz padLen z8;
   A.((em.(padLen) <- S8.classify 1uy));
+  with vemA. assert (A.pts_to em vemA);
   copy_at em (SZ.sub dbLen sLen) salt sLen;
   with vem2. assert (A.pts_to em vem2);
+  assert (pure (z8 == S8.zero));
+  db_written p (Seq.length vsalt) (U32.v emBits) (reveal vsalt) vemA vem2;
 
   (* Mask it. *)
   xor_range em dbLen mask;

@@ -106,26 +106,38 @@ let limbs_n_index (x: nat) (n: pos) (i: nat { i < n - 1 })
   = Math.pow2_plus rad (rad * i);
     Math.division_multiplication_lemma x base (pow2 (rad * i))
 
-#push-options "--z3rlimit 400"
+(** The arithmetic step of [limbs_n_eval]: peeling the bottom limb off a
+    remainder by a power of two. *)
+let limbs_n_mod_step (x: nat) (k: nat)
+  : Lemma (x % pow2 (rad + k) == x % base + base * ((x / base) % pow2 k))
+  = Math.pow2_plus rad k;
+    Math.modulo_division_lemma x base (pow2 k);
+    Math.euclidean_division_definition (x % (base * pow2 k)) base;
+    Math.pow2_modulo_modulo_lemma_1 x rad (rad + k)
+
+let limbs_n_zero (x: nat) (n: pos)
+  : Lemma (Seq.index (limbs_n x n) 0 == x % base)
+  = assert_norm (pow2 (rad * 0) == 1)
+
 let rec limbs_n_eval (x: nat) (n: nat)
   : Lemma (ensures Seq.length (limbs_n x n) == n /\ bnd (limbs_n x n) base /\
                    eval (limbs_n x n) == x % pow2 (rad * n))
           (decreases n)
-  = if n = 0 then ()
+  = if n = 0 then assert_norm (pow2 (rad * 0) == 1)
     else begin
+      let l = limbs_n x n in
+      let l' = limbs_n (x / base) (n - 1) in
       limbs_n_eval (x / base) (n - 1);
-      let t = Seq.slice (limbs_n x n) 1 n in
+      let t = Seq.slice l 1 n in
       Classical.forall_intro (limbs_n_index x n);
-      Seq.lemma_eq_intro t (limbs_n (x / base) (n - 1));
+      Seq.lemma_eq_intro t l';
+      assert (eval l == Seq.index l 0 + base * eval t);
+      limbs_n_zero x n;
       Math.distributivity_add_right rad 1 (n - 1);
       assert (rad * n == rad + rad * (n - 1));
-      Math.pow2_plus rad (rad * (n - 1));
-      assert (pow2 (rad * n) == base * pow2 (rad * (n - 1)));
-      Math.modulo_division_lemma x base (pow2 (rad * (n - 1)));
-      Math.euclidean_division_definition (x % pow2 (rad * n)) base;
-      Math.pow2_modulo_modulo_lemma_1 x rad (rad * n)
+      limbs_n_mod_step x (rad * (n - 1));
+      assert (eval l == x % pow2 (rad * n))
     end
-#pop-options
 
 let limbs (x: nat) : Seq.seq nat = limbs_n x nl
 
@@ -207,6 +219,16 @@ let csub_arith (r m ea el co top: nat)
                     if x < m then x else x - m))
   = ()
 
+(** [csub_arith] with the radix products still in place, so that callers
+    hand over the facts exactly as the carry lemmas state them. *)
+let csub_arith_mul (r m ea el ev co top: nat)
+  : Lemma (requires 1 < m /\ m < r /\ ea < r /\ el < r /\ co <= 1 /\ top <= 1 /\
+                    ev == ea + (r - m) /\ ev == el + r * co /\ ea + r * top < 2 * m)
+          (ensures (if top + co >= 1 then el else ea) ==
+                   (let x = ea + r * top in if x < m then x else x - m))
+  = mul_flag r co; mul_flag r top;
+    csub_arith r m ea el co top
+
 let mcorr_arith (r m el eu co: nat)
   : Lemma (requires 1 < m /\ m < r /\ el >= r - m /\ el < r /\ eu < r /\
                     co <= 1 /\ el + m == eu + (if co = 1 then r else 0))
@@ -233,9 +255,7 @@ let csub_ok (d: modulus) (lo: Seq.seq nat) (top: nat)
     eval_addw lo d.nm;
     ebnd lo;
     ebnd (carry_low a);
-    mul_flag (pow2 256) top;
-    mul_flag (pow2 256) (carry_out a);
-    csub_arith (pow2 256) d.m (eval lo) (eval (carry_low a)) (carry_out a) top
+    csub_arith_mul (pow2 256) d.m (eval lo) (eval (carry_low a)) (eval a) (carry_out a) top
 
 (** {2 Padding a product out to the reduction's width} *)
 
@@ -261,6 +281,11 @@ let normalize (s: Seq.seq nat { Seq.length s == nl + 1 })
   = carry_run_len s nl;
     carry_run s nl
 
+(** The top limb of a five-limb sequence, as a number. *)
+let eval_last (r: Seq.seq nat { Seq.length r == nl + 1 })
+  : Lemma (eval (Seq.slice r nl (nl + 1)) == vat r nl)
+  = eval_empty (Seq.slice (Seq.slice r nl (nl + 1)) 1 1)
+
 let normalize_ok (s: Seq.seq nat { Seq.length s == nl + 1 }) (c: nat)
   : Lemma (requires ble s c /\ c <= pow2 72 /\ eval s < pow2 257)
           (ensures eval (normalize s) == eval s /\
@@ -273,6 +298,8 @@ let normalize_ok (s: Seq.seq nat { Seq.length s == nl + 1 }) (c: nat)
     carry_run_chained s c (pow2 9) nl;
     eval_split r nl;
     assert_norm (rad * nl == 256);
+    eval_last r;
+    assert (eval r == eval (Seq.slice r 0 nl) + pow2 256 * vat r nl);
     assert_norm (pow2 257 == pow2 256 * 2);
     if vat r nl >= 2 then Math.lemma_mult_le_left (pow2 256) 2 (vat r nl)
 
@@ -388,7 +415,16 @@ let redc_ok (d: modulus) (t: Seq.seq nat { Seq.length t == ncol })
     normalize_ok y (cmax + nl * pow2 66);
     let r = normalize y in
     eval_split r nl;
-    assert_norm (rad * nl == 256)
+    assert_norm (rad * nl == 256);
+    eval_last r;
+    assert (eval r == eval (Seq.slice r 0 nl) + pow2 256 * vat r nl);
+    assert (pow2 256 * eval r % d.m == eval t % d.m)
+
+(** The product of two residues is below [m R]. *)
+let prod_lt (m: pos) (r x y: nat)
+  : Lemma (requires x < m /\ y < m /\ m < r) (ensures x * y < m * r)
+  = Math.lemma_mult_le_right y x m;
+    Math.lemma_mult_lt_left m y r
 
 let mmul_ok (d: modulus) (a b: Seq.seq nat)
   : Lemma (requires modulus_ok d /\ res d a /\ res d b)
@@ -396,8 +432,7 @@ let mmul_ok (d: modulus) (a b: Seq.seq nat)
                    pow2 256 * eval (mmul d a b) % d.m == eval a * eval b % d.m)
   = let t = prod a b in
     prod_ok a b;
-    Math.lemma_mult_le_right (eval b) (eval a) (d.m - 1);
-    Math.lemma_mult_le_left d.m (eval b) (pow2 256);
+    prod_lt d.m (pow2 256) (eval a) (eval b);
     redc_ok d t;
     let r = redc d t in
     let lo = Seq.slice r 0 nl in
@@ -408,6 +443,36 @@ let mmul_ok (d: modulus) (a b: Seq.seq nat)
     else (Math.lemma_mod_sub x d.m 1;
           Math.lemma_mod_mul_distr_r (pow2 256) x d.m;
           Math.lemma_mod_mul_distr_r (pow2 256) (x - d.m) d.m)
+
+(** Cancelling [R] with its inverse witness: stated over plain naturals so
+    that the arithmetic never meets the bundle. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+let mul_cancel_r (m: pos) (r ri z x y: nat)
+  : Lemma (requires r * ri % m == 1 /\ z < m /\ r * z % m == x * r * (y * r) % m)
+          (ensures z == x * y * r % m)
+  = calc (==) {
+      z;
+      == { Math.small_mod z m }
+      z % m;
+      == { Math.lemma_mod_mul_distr_l (r * ri) z m }
+      (r * ri) * z % m;
+      == { Math.paren_mul_right r ri z; Math.swap_mul ri z;
+           Math.paren_mul_right r z ri }
+      (r * z) * ri % m;
+      == { Math.lemma_mod_mul_distr_l (r * z) ri m;
+           Math.lemma_mod_mul_distr_l (x * r * (y * r)) ri m }
+      (x * r * (y * r)) * ri % m;
+      == { Math.paren_mul_right (x * r) (y * r) ri;
+           Math.paren_mul_right y r ri;
+           Math.paren_mul_right (x * r) y (r * ri) }
+      (x * r * y) * (r * ri) % m;
+      == { Math.lemma_mod_mul_distr_r (x * r * y) (r * ri) m }
+      (x * r * y) % m;
+      == { Math.paren_mul_right x r y; Math.swap_mul r y;
+           Math.paren_mul_right x y r }
+      x * y * r % m;
+    }
+#pop-options
 
 (** The reason for all of it: [mmul] is multiplication of residues once the
     factor [R] is accounted for.  Cancelling the [R] is where [ri] earns its
@@ -424,23 +489,7 @@ let mmul_form (d: modulus) (x y: nat) (a b: Seq.seq nat)
     Math.lemma_mod_mul_distr_r (x * r) (y * r) d.m;
     assert (r * z % d.m == x * r * (y * r) % d.m);
     (* multiply both sides by [ri] and use [R ri = 1]. *)
-    Math.lemma_mod_mul_distr_l (r * z) d.ri d.m;
-    Math.lemma_mod_mul_distr_l (x * r * (y * r)) d.ri d.m;
-    assert (r * z * d.ri % d.m == x * r * (y * r) * d.ri % d.m);
-    Math.paren_mul_right r z d.ri;
-    Math.swap_mul z d.ri;
-    Math.paren_mul_right r d.ri z;
-    Math.lemma_mod_mul_distr_l (r * d.ri) z d.m;
-    Math.small_mod z d.m;
-    assert (r * z * d.ri % d.m == z);
-    Math.paren_mul_right (x * r) (y * r) d.ri;
-    Math.paren_mul_right y r d.ri;
-    Math.lemma_mod_mul_distr_r (x * r * y) (r * d.ri) d.m;
-    Math.small_mod (x * r * y % d.m) d.m;
-    assert (z == x * r * y % d.m);
-    Math.paren_mul_right x r y;
-    Math.swap_mul r y;
-    Math.paren_mul_right x y r;
+    mul_cancel_r d.m r d.ri z x y;
     Math.lemma_mod_mul_distr_l (x * y) r d.m
 
 (** {2 Addition and subtraction}
@@ -450,6 +499,12 @@ let mmul_form (d: modulus) (x y: nat) (a b: Seq.seq nat)
 
 let madd (d: modulus) (a b: Seq.seq nat) : Seq.seq nat =
   csub d (carry_low (addw a b)) (carry_out (addw a b))
+
+(** One conditional subtraction is a reduction for anything below [2 m]. *)
+let sub_once_mod (m: pos) (x: nat)
+  : Lemma (requires x < 2 * m) (ensures (if x < m then x else x - m) == x % m)
+  = if x < m then Math.small_mod x m
+    else Math.lemma_mod_sub x m 1
 
 let madd_ok (d: modulus) (a b: Seq.seq nat)
   : Lemma (requires modulus_ok d /\ res d a /\ res d b)
@@ -463,9 +518,9 @@ let madd_ok (d: modulus) (a b: Seq.seq nat)
     carry_split_ok t;
     eval_addw a b;
     carry_low_len t;
+    assert (eval (carry_low t) + pow2 256 * carry_out t == eval a + eval b);
     csub_ok d (carry_low t) (carry_out t);
-    if eval a + eval b < d.m then Math.small_mod (eval a + eval b) d.m
-    else Math.lemma_mod_sub (eval a + eval b) d.m 1
+    sub_once_mod d.m (eval a + eval b)
 
 (** The complement, so that a subtraction is an addition.  [compl s] holds
     [2^32 - 1 - s_i] in each limb, so [compl s + s] is all ones. *)
@@ -509,6 +564,13 @@ let msub (d: modulus) (a b: Seq.seq nat) : Seq.seq nat =
 
 (** The shape of the sum before the correction: a proper low half and a
     carry that is one exactly when [a >= b]. *)
+(** The bookkeeping of [msub_pre], over a symbolic radix. *)
+let negw_arith (r ea eb en el ev co: nat)
+  : Lemma (requires ev == el + r * co /\ ev == ea + en /\ en == r - eb /\ co <= 2 /\
+                    ea < r /\ eb <= r)
+          (ensures co <= 1 /\ el + (if co = 1 then r else 0) == ea + r - eb)
+  = if co = 2 then assert (r * co == r + r) else mul_flag r co
+
 let msub_pre (d: modulus) (a b: Seq.seq nat)
   : Lemma (requires modulus_ok d /\ res d a /\ res d b)
           (ensures (let t = addw a (negw b) in
@@ -527,7 +589,9 @@ let msub_pre (d: modulus) (a b: Seq.seq nat)
     eval_addw a (negw b);
     carry_low_len t;
     ebnd (carry_low t);
-    mul_flag (pow2 256) (carry_out t)
+    ebnd a;
+    negw_arith (pow2 256) (eval a) (eval b) (eval (negw b)) (eval (carry_low t))
+               (eval t) (carry_out t)
 
 (** When the subtraction went negative the low half sits just under
     [2^256]; adding the modulus overflows by exactly one, and dropping that
@@ -550,6 +614,21 @@ let mcorr (d: modulus) (lo: Seq.seq nat)
     mul_flag (pow2 256) (carry_out u);
     mcorr_arith (pow2 256) d.m (eval lo) (eval (carry_low u)) (carry_out u)
 
+(** The arithmetic of [msub_ok], over a symbolic radix. *)
+let msub_arith (r m ea eb el co: nat)
+  : Lemma (requires 1 < m /\ m < r /\ ea < m /\ eb < m /\ el < r /\ co <= 1 /\
+                    el + (if co = 1 then r else 0) == ea + r - eb)
+          (ensures (co = 1 ==> el < m /\ el == (ea + m - eb) % m) /\
+                   (co = 0 ==> el >= r - m /\ el + m - r == (ea + m - eb) % m))
+  = sub_once_mod m (ea + m - eb)
+
+(** The corrected branch of [msub_ok]. *)
+let msub_last (r m ea eb el eu co: nat)
+  : Lemma (requires 1 < m /\ m < r /\ ea < m /\ eb < m /\ el < r /\ co <= 1 /\ co <> 1 /\
+                    el + (if co = 1 then r else 0) == ea + r - eb /\ eu == el + m - r)
+          (ensures eu == (ea + m - eb) % m)
+  = msub_arith r m ea eb el co
+
 let msub_ok (d: modulus) (a b: Seq.seq nat)
   : Lemma (requires modulus_ok d /\ res d a /\ res d b)
           (ensures res d (msub d a b) /\
@@ -559,12 +638,13 @@ let msub_ok (d: modulus) (a b: Seq.seq nat)
     carry_low_len t;
     let lo = carry_low t in
     ebnd lo;
-    if carry_out t = 1 then begin
-      Math.lemma_mod_sub (eval a + d.m - eval b) d.m 1;
-      Math.small_mod (eval a - eval b) d.m
-    end else begin
+    msub_arith (pow2 256) d.m (eval a) (eval b) (eval lo) (carry_out t);
+    if carry_out t = 1 then assert (msub d a b == lo)
+    else begin
       mcorr d lo;
-      Math.small_mod (eval a + d.m - eval b) d.m
+      let u = carry_low (addw lo d.ms) in
+      assert (msub d a b == u);
+      msub_last (pow2 256) d.m (eval a) (eval b) (eval lo) (eval u) (carry_out t)
     end
 
 (** Negation, which is a subtraction from zero except that zero must stay
@@ -635,6 +715,25 @@ let be_oct_ok (b: Seq.seq S8.t) (n: pos) (k: nat { k < n })
     Seq.lemma_eq_intro (Seq.slice w 0 8) w
 #pop-options
 
+(** Dropping the last limb's bytes shifts every other limb down by one. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+let be_oct_shift (b: Seq.seq S8.t) (n: pos { n >= 2 }) (k: nat { k < n - 1 })
+  : Lemma (requires Seq.length b == 8 * n)
+          (ensures be_oct (Seq.slice b 0 (8 * n - 8)) (n - 1) k == be_oct b n (k + 1))
+  = let b' = Seq.slice b 0 (8 * n - 8) in
+    let o = 8 * (n - 1 - (k + 1)) in
+    assert (o == 8 * ((n - 1) - 1 - k));
+    assert (o + 7 < 8 * n - 8);
+    assert (bat b' o == bat b o);
+    assert (bat b' (o + 1) == bat b (o + 1));
+    assert (bat b' (o + 2) == bat b (o + 2));
+    assert (bat b' (o + 3) == bat b (o + 3));
+    assert (bat b' (o + 4) == bat b (o + 4));
+    assert (bat b' (o + 5) == bat b (o + 5));
+    assert (bat b' (o + 6) == bat b (o + 6));
+    assert (bat b' (o + 7) == bat b (o + 7))
+#pop-options
+
 (** The limb-wise reading of a byte string is its big-endian value.  The
     recursion drops the *last* eight bytes, which are the least significant
     limb, so the induction is on [Seq.slice s 1 n] exactly as in the
@@ -659,15 +758,7 @@ let rec eval_bytes_be (b: Seq.seq S8.t) (s: Seq.seq nat)
       assert (eval (Seq.slice s 0 1) == Seq.index s 0);
       assert_norm (pow2 (rad * 1) == base);
       let aux (k: nat { k < n - 1 }) : Lemma (Seq.index s' k == be_oct b' (n - 1) k) =
-        assert (8 * (n - 1 - (k + 1)) == 8 * ((n - 1) - 1 - k));
-        assert (bat b' (8 * ((n - 1) - 1 - k)) == bat b (8 * (n - 1 - (k + 1))));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 1) == bat b (8 * (n - 1 - (k + 1)) + 1));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 2) == bat b (8 * (n - 1 - (k + 1)) + 2));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 3) == bat b (8 * (n - 1 - (k + 1)) + 3));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 4) == bat b (8 * (n - 1 - (k + 1)) + 4));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 5) == bat b (8 * (n - 1 - (k + 1)) + 5));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 6) == bat b (8 * (n - 1 - (k + 1)) + 6));
-        assert (bat b' (8 * ((n - 1) - 1 - k) + 7) == bat b (8 * (n - 1 - (k + 1)) + 7)) in
+        be_oct_shift b n k in
       Classical.forall_intro aux;
       eval_bytes_be b' s'
     end

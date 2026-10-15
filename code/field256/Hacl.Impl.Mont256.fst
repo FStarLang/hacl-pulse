@@ -220,6 +220,14 @@ ensures exists* (vo': Seq.seq S64.t).
     in the value.  The mask is folded rather than branched on, and only the
     final answer -- which is public in every caller -- is declassified. *)
 
+(** A full-or-empty 64-bit mask stays full-or-empty when cut to a byte. *)
+let mask8 (m: S64.t) (m8: Hacl.Secret.UInt8.t)
+  : Lemma (requires (S64.v m == 0 \/ S64.v m == pow2 64 - 1) /\
+                    Hacl.Secret.UInt8.v m8 == S64.v m % pow2 8)
+          (ensures Hacl.Secret.UInt8.v m8 == 0 \/ Hacl.Secret.UInt8.v m8 == pow2 8 - 1)
+  = assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+    assert_norm (0 % pow2 8 == 0)
+
 #push-options "--z3rlimit 200"
 
 fn aeq (a b: A.array S64.t)
@@ -258,6 +266,7 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   let mm = !m;
   assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
   let m8 = Cast.u64_to_u8 mm;
+  mask8 mm m8;
   let r = Declassify.bool_of_mask m8;
   Classical.move_requires (Seq.lemma_eq_intro (vals va)) (vals vb);
   Classical.move_requires (res_uniq (vals va)) (vals vb);
@@ -272,6 +281,16 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
     secp256k1's low-S rule needs an ordering.  The subtraction [msub]
     already performs computes one: its carry out is one exactly when the
     difference did not go negative. *)
+
+(** The answer of [ageq], read off the byte mask built from the borrow. *)
+let ageq_flag (ea eb el co mv m8v: nat) (lo: bool)
+  : Lemma (requires el < pow2 256 /\ co <= 1 /\
+                    el + (if co = 1 then pow2 256 else 0) == ea + pow2 256 - eb /\
+                    (co == 0 ==> mv == pow2 64 - 1) /\ (co =!= 0 ==> mv == 0) /\
+                    m8v == mv % pow2 8 /\ (lo <==> m8v == pow2 8 - 1))
+          (ensures not lo == (ea >= eb))
+  = assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
+    assert_norm (0 % pow2 8 == 0)
 
 fn ageq (a b: A.array S64.t) (d: erased modulus)
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -291,7 +310,11 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
   let m = S64.eq_mask co S64.zero;
   let m8 = Cast.u64_to_u8 m;
+  mask8 m m8;
   let lo = Declassify.bool_of_mask m8;
+  ageq_flag (eval (vals va)) (eval (vals vb))
+    (eval (carry_low (addw (vals va) (negw (vals vb))))) (S64.v co) (S64.v m)
+    (Hacl.Secret.UInt8.v m8) lo;
   not lo
 }
 

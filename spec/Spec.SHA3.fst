@@ -309,6 +309,8 @@ let chi_index (s: state) (i: nat { i < 25 })
                          (Seq.index s (idx ((i % 5 + 2) % 5) (i / 5)))))
   = reveal_opaque (`%chi) chi;
     Math.lemma_div_lt_nat i 5 1;
+    Math.euclidean_division_definition i 5;
+    assert (idx (i % 5) (i / 5) == i);
     Seq.init_index_ 25 (fun j ->
       let x = j % 5 in
       let y = j / 5 in

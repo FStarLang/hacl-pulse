@@ -107,6 +107,16 @@ let inf_shape_of (p: proj_point)
   = let (x, y, z) = p in
     if z = 0 then begin
       prime_lem ();
+      let c = fmul (fmul x x) x in
+      let zz = fmul z z in
+      assert (zz == 0);
+      assert (fmul (fmul y y) z == 0);
+      assert (fmul (fmul (fadd fone (fadd fone fone)) x) zz == 0);
+      assert (fmul zz z == 0);
+      assert (fmul b_coeff (fmul zz z) == 0);
+      M.small_mod c prime;
+      assert (fsub c 0 == c);
+      assert (fadd c 0 == c);
       assert (fmul (fmul x x) x == 0);
       F.no_zero_div (fmul x x) x;
       F.no_zero_div x x

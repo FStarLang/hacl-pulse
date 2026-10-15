@@ -97,6 +97,13 @@ let ec_val_ok (p: params) (x: nat) (k: nat)
     Math.pow2_le_compat 64 16;
     Math.small_mod (F.ec_val p x k) (pow2 64)
 
+(** A small [SizeT] narrows to [UInt32] exactly; stated here so that the
+    [% pow2 32] in [sizet_to_uint32]'s spec never reaches the big query. *)
+let sz_to_u32_small (x: SZ.t { SZ.v x <= nbar })
+  : Lemma (U32.v (SZ.sizet_to_uint32 x) == SZ.v x)
+  = assert_norm (pow2 32 == 4294967296);
+    Math.small_mod (SZ.v x) (pow2 32)
+
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 (** [mu[base .. base + nb)] as a little-endian integer, read from the top
@@ -187,6 +194,7 @@ ensures exists* v. A.pts_to m v ** A.pts_to mu #pm vmu **
       let vk = !k;
       sh_ok p (SZ.v vk);
       let vk32 = SZ.sizet_to_uint32 vk;
+      sz_to_u32_small vk;
       assert (pure (U32.v vk32 == SZ.v vk));
       let sh = U32.mul p.bits vk32;
       S64.logand_mask_low (S64.shift_right x sh) p.bits;

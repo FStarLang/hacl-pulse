@@ -206,6 +206,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
   assert_norm (pow2 7 == 128);
   SZ.fits_u32_implies_fits (SZ.v len + SZ.v len);
   let dbl = SZ.add len len;
+  Math.pow2_double_sum (reveal e);
+  assert (pure (SZ.v dbl == pow2 (reveal e + 1)));
   let mut i = 0sz;
   let mut b = 0sz;
   let mut c = 0sz;
@@ -294,6 +296,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
   SZ.fits_u32_implies_fits (SZ.v len + SZ.v len);
   SZ.fits_u32_implies_fits (SZ.v half + SZ.v half);
   let dbl = SZ.add len len;
+  Math.pow2_double_sum (reveal e);
+  assert (pure (SZ.v dbl == pow2 (reveal e + 1)));
   let top = SZ.sub (SZ.add half half) 1sz;
   let mut i = 0sz;
   let mut b = 0sz;
@@ -455,6 +459,26 @@ let extend_by_two (v: Seq.seq zqt) (res: poly) (i: nat { 2 * i + 2 <= n })
                      S16.v (Seq.index v k) == Seq.index res k)
   = ()
 
+(* The two coefficients of the [i]th base-case product, at concrete indices. *)
+let multiply_ntts_pair (f g: poly) (i: nat { i < 128 })
+  : Lemma (Seq.index (multiply_ntts f g) (2 * i) ==
+             add (mul (Seq.index f (2 * i)) (Seq.index g (2 * i)))
+                 (mul (mul (Seq.index f (2 * i + 1)) (Seq.index g (2 * i + 1)))
+                      (gammas i)) /\
+           Seq.index (multiply_ntts f g) (2 * i + 1) ==
+             add (mul (Seq.index f (2 * i)) (Seq.index g (2 * i + 1)))
+                 (mul (Seq.index f (2 * i + 1)) (Seq.index g (2 * i))))
+  = multiply_ntts_index f g (2 * i);
+    multiply_ntts_index f g (2 * i + 1);
+    Math.cancel_mul_div i 2;
+    Math.lemma_div_plus 1 i 2;
+    Math.lemma_mod_plus 1 i 2;
+    Math.lemma_mod_plus 0 i 2;
+    assert ((2 * i) / 2 == i /\ (2 * i) % 2 == 0);
+    assert ((2 * i + 1) / 2 == i /\ (2 * i + 1) % 2 == 1)
+
+let pair_bound (i: nat { i < 128 }) : Lemma (2 * i + 2 <= n) = ()
+
 (** One of the 128 quadratic products, as a function of its own for the
     same reason the butterflies are. *)
 #push-options "--z3rlimit 600"
@@ -498,6 +522,11 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   Math.lemma_div_plus 1 (SZ.v i) 2;
   Math.lemma_mod_plus 1 (SZ.v i) 2;
   assert (pure (S16.v g == gammas (SZ.v i)));
+  multiply_ntts_pair (as_poly va) (as_poly vb) (SZ.v i);
+  as_poly_index va (SZ.v j);
+  as_poly_index va (SZ.v j1);
+  as_poly_index vb (SZ.v j);
+  as_poly_index vb (SZ.v j1);
   let c0 = zq_add (zq_mul a0 b0) (zq_mul (zq_mul a1 b1) g);
   let c1 = zq_add (zq_mul a0 b1) (zq_mul a1 b0);
   assert (pure (S16.v c0 ==
@@ -560,6 +589,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   decreases (128 - SZ.v (!i))
   {
     let vi = !i;
+    assert (pure (SZ.v vi < 128));
+    pair_bound (SZ.v vi);
     base_mul dst a b zt vi;
     HSZ.fits32 ();
     assert_norm (128 < pow2 32);

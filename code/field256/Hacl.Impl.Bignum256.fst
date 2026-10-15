@@ -191,6 +191,12 @@ ensures exists* (vt': Seq.seq S128.t).
     reaches at most [2^69] and stays inside a wide word with room to
     spare. *)
 
+(** The exit of the loop in [mreduce_op]: the counter is [nl]. *)
+let mreduce_fin (v t ms: Seq.seq nat) (mu: nat) (c: nat) (k: nat)
+  : Lemma (requires k == nl /\ v == mrun ms mu k t /\ ble v (c + k * pow2 65))
+          (ensures v == mrun ms mu nl t /\ ble v (c + nl * pow2 65))
+  = ()
+
 #push-options "--z3rlimit 400"
 
 [@@ FStar.Attributes.CInline]
@@ -228,10 +234,38 @@ ensures exists* (vt': Seq.seq S128.t).
     Math.distributivity_add_left (SZ.v vk) 1 (pow2 65);
     k := SZ.add vk 1sz;
   };
+  with vk v. assert (pts_to k vk ** A.pts_to t v);
+  mreduce_fin (vals128 v) (vals128 vt) (vals vms) (S64.v mu) c (SZ.v vk);
   ()
 }
 
 #pop-options
+
+(** {2 Loop steps}
+
+    Each limb-wise loop below grows a prefix on which the buffer agrees with
+    its target by one limb per pass.  Stating the pass once, at top level,
+    keeps the quantifier out of the loop's own query. *)
+
+let sum_step (v: Seq.seq S64.t) (x y: Seq.seq nat) (k: nat) (z: S64.t)
+  : Lemma (requires Seq.length v == nl /\ k < nl /\
+                    k < Seq.length x /\ k < Seq.length y /\
+                    S64.v z == Seq.index x k + Seq.index y k /\
+                    (forall (j: nat). j < k ==>
+                       Seq.index (vals v) j == Seq.index x j + Seq.index y j))
+          (ensures Seq.length (Seq.upd v k z) == nl /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals (Seq.upd v k z)) j == Seq.index x j + Seq.index y j))
+  = vals_upd v k z
+
+let copy128_step (v: Seq.seq S128.t) (n: nat) (w: Seq.seq nat) (o k: nat) (z: S128.t)
+  : Lemma (requires Seq.length v == n /\ k < n /\ o + k < Seq.length w /\
+                    S128.v z == Seq.index w (o + k) /\
+                    (forall (j: nat). j < k ==> Seq.index (vals128 v) j == Seq.index w (o + j)))
+          (ensures Seq.length (Seq.upd v k z) == n /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals128 (Seq.upd v k z)) j == Seq.index w (o + j)))
+  = vals128_upd v k z
 
 (** {2 The conditional subtraction}
 
@@ -275,7 +309,9 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S64.t).
     let y = A.(nm.(vi));
     A.((s.(vi) <- addw x y));
     vals_upd v (SZ.v vi) (addw x y);
+    sum_step v (vals va) (vals vnm) (SZ.v vi) (addw x y);
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to s v);
   addw_len (vals va) (vals vnm);
@@ -343,7 +379,9 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
     let y = A.(b.(vi));
     A.((out.(vi) <- addw x y));
     vals_upd v (SZ.v vi) (addw x y);
+    sum_step v (vals va) (vals vb) (SZ.v vi) (addw x y);
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to out v);
   addw_len (vals va) (vals vb);
@@ -421,7 +459,9 @@ ensures exists* (vo': Seq.seq S64.t).
     let nv = addw x (subw top y);
     A.((out.(vi) <- nv));
     vals_upd v (SZ.v vi) nv;
+    sum_step v (vals va) (compl (vals vb)) (SZ.v vi) nv;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to out v);
   addw_len (vals va) (compl (vals vb));
@@ -484,7 +524,9 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
     let y = A.(ms.(vj));
     A.((s.(vj) <- addw x y));
     vals_upd v (SZ.v vj) (addw x y);
+    sum_step v (vals vo) (vals vms) (SZ.v vj) (addw x y);
     j := SZ.add vj 1sz;
+    assert pure (SZ.v (SZ.add vj 1sz) == SZ.v vj + 1);
   };
   with w. assert (A.pts_to s w);
   addw_len (vals vo) (vals vms);
@@ -498,6 +540,24 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
 }
 
 #pop-options
+
+(** What the mask built from a carry says, as a proposition. *)
+let mask_flag (co m: S64.t)
+  : Lemma (requires m == S64.eq_mask co S64.zero)
+          (ensures (S64.v m == 0) == (S64.v co =!= 0) /\
+                   (S64.v m = 0 <==> S64.v co <> 0) /\
+                   (S64.v m == 0 \/ S64.v m == pow2 64 - 1))
+  = assert_norm (pow2 64 - 1 =!= 0);
+    FStar.PropositionalExtensionality.apply (S64.v m == 0) (S64.v co =!= 0)
+
+(** The two branches of [msub_op] are the two branches of [msub]. *)
+let msub_shape (d: modulus) (a b lo r ms: Seq.seq nat) (co m: nat)
+  : Lemma (requires lo == carry_low (addw a (negw b)) /\
+                    co == carry_out (addw a (negw b)) /\ co <= 1 /\
+                    ms == d.ms /\ (m = 0 <==> co <> 0) /\
+                    r == (if m = 0 then lo else carry_low (addw lo ms)))
+          (ensures r == msub d a b)
+  = ()
 
 #push-options "--z3rlimit 1200"
 
@@ -526,12 +586,14 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S64.t).
   with lo. assert (A.pts_to out lo);
   assert (pure (S64.v co <= 1));
   let m = S64.eq_mask co S64.zero;
+  mask_flag co m;
   assert (pure ((S64.v m == 0) == (S64.v co =!= 0)));
   addm_op out s ms m;
   with vo'. assert (A.pts_to out vo');
   assert (pure (vals vo' == (if S64.v m = 0 then vals lo
                              else carry_low (addw (vals lo) (vals vms)))));
   msub_ok d (vals va) (vals vb);
+  msub_shape d (vals va) (vals vb) (vals lo) (vals vo') (vals vms) (S64.v co) (S64.v m);
   assert (pure (vals vo' == msub d (vals va) (vals vb)));
 }
 
@@ -581,7 +643,9 @@ ensures exists* (vt': Seq.seq S128.t) (vp': Seq.seq S128.t).
     let x = A.(p.(vk));
     A.((t.(vk) <- x));
     vals128_upd v (SZ.v vk) x;
+    copy128_step v ncol (vals128 vp1) 0 (SZ.v vk) x;
     k := SZ.add vk 1sz;
+    assert pure (SZ.v (SZ.add vk 1sz) == SZ.v vk + 1);
   };
   with v. assert (A.pts_to t v);
   A.((t.(15sz) <- z));
@@ -604,6 +668,17 @@ let redcn (d: modulus) (t: Seq.seq nat) : (r: Seq.seq nat { Seq.length r == nl +
 (** A proper limb of the normalised reduction fits back in a word.  Stated
     on its own because the bound arrives as a [bnd] on a slice and the
     narrowing needs it on an index. *)
+(** One pass of the narrowing loop in [redc_op]: the prefix agreement
+    grows by the limb just written. *)
+let narrow_step (v: Seq.seq S64.t) (w: Seq.seq S128.t) (k: nat) (y: S64.t)
+  : Lemma (requires Seq.length v == nl /\ k < nl /\ k < Seq.length w /\
+                    S64.v y == S128.v (Seq.index w k) /\
+                    (forall (j: nat). j < k ==> Seq.index (vals v) j == Seq.index (vals128 w) j))
+          (ensures Seq.length (Seq.upd v k y) == nl /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals (Seq.upd v k y)) j == Seq.index (vals128 w) j))
+  = vals_upd v k y
+
 let narrow_ok (s: Seq.seq nat) (k: nat)
   : Lemma (requires Seq.length s == nl + 1 /\ bnd (Seq.slice s 0 nl) base /\ k < nl)
           (ensures Seq.index s k < base)
@@ -661,7 +736,9 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S128.t) (vr': Seq.seq S128.t)
     let x = A.(t.(SZ.add 8sz vi));
     A.((r.(vi) <- x));
     vals128_upd v (SZ.v vi) x;
+    copy128_step v (nl + 1) (vals128 u) 8 (SZ.v vi) x;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with w. assert (A.pts_to r w);
   assert (pure (vals128 w `Seq.equal` mreduce d.ms d.mu (vals128 vt)));
@@ -691,7 +768,9 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S128.t) (vr': Seq.seq S128.t)
     let y = narrow128 x;
     A.((out.(vk) <- y));
     vals_upd v (SZ.v vk) y;
+    narrow_step v w2 (SZ.v vk) y;
     k := SZ.add vk 1sz;
+    assert pure (SZ.v (SZ.add vk 1sz) == SZ.v vk + 1);
   };
   with vo2. assert (A.pts_to out vo2);
   assert (pure (vals vo2 `Seq.equal` Seq.slice (redcn d (vals128 vt)) 0 nl));
@@ -754,6 +833,71 @@ ensures exists* (vo': Seq.seq S64.t) (vp': Seq.seq S128.t)
     mirroring is the only difference from Curve25519's little-endian
     quadruple. *)
 
+(** The byte offset of limb [vi], computed in [SZ.t], is linear in [vi]. *)
+let quad_pos (vi: SZ.t)
+  : Lemma (requires SZ.v vi < 8)
+          (ensures SZ.v 4sz * SZ.v (SZ.sub 7sz vi) == 4 * (7 - SZ.v vi) /\
+                   SZ.fits (SZ.v 4sz * SZ.v (SZ.sub 7sz vi)))
+  = assert_norm (pow2 16 == 65536);
+    SZ.fits_at_least_16 (4 * (7 - SZ.v vi))
+
+(** A byte scaled by a word constant is a linear term in the byte. *)
+let byte_mul (k: FStar.UInt64.t) (c: nat) (x: S8.t)
+  : Lemma (requires FStar.UInt64.v k == c)
+          (ensures FStar.UInt64.v k * S64.v (Cast.u8_to_u64 x) == c * S8.v x /\
+                   S64.v (Cast.u8_to_u64 x) == S8.v x /\ S8.v x < 256)
+  = assert_norm (pow2 8 == 256)
+
+(** One pass of the loop in [load_be]: the four bytes read are limb [k]'s
+    big-endian bytes, and the word built from them is that limb. *)
+let bat_at (vb: Seq.seq S8.t) (o: nat) (x: S8.t)
+  : Lemma (requires Seq.length vb == 32 /\ o < 32 /\ x == Seq.index vb o)
+          (ensures bat vb o == S8.v x)
+  = ()
+
+#push-options "--z3rlimit 40"
+let load_word (vb: Seq.seq S8.t) (k: nat)
+              (b0 b1 b2 b3: S8.t) (w: S64.t)
+  : Lemma (requires Seq.length vb == 32 /\ k < nl /\
+                    b0 == Seq.index vb (4 * (7 - k) + 0) /\
+                    b1 == Seq.index vb (4 * (7 - k) + 1) /\
+                    b2 == Seq.index vb (4 * (7 - k) + 2) /\
+                    b3 == Seq.index vb (4 * (7 - k) + 3) /\
+                    S64.v w ==
+                    16777216 * S8.v b0 +
+                    65536 * S8.v b1 +
+                    256 * S8.v b2 +
+                    S8.v b3)
+          (ensures S64.v w == be_quad vb nl k)
+  = let o = 4 * (7 - k) in
+    assert (4 * (nl - 1 - k) == o);
+    assert (o + 3 < 32);
+    bat_at vb (o + 0) b0;
+    bat_at vb (o + 1) b1;
+    bat_at vb (o + 2) b2;
+    bat_at vb (o + 3) b3;
+    assert (S64.v w == be_quad vb nl k)
+
+let load_step (v: Seq.seq S64.t) (vb: Seq.seq S8.t) (k: nat)
+              (b0 b1 b2 b3: S8.t) (w: S64.t)
+  : Lemma (requires Seq.length v == nl /\ Seq.length vb == 32 /\ k < nl /\
+                    b0 == Seq.index vb (4 * (7 - k) + 0) /\
+                    b1 == Seq.index vb (4 * (7 - k) + 1) /\
+                    b2 == Seq.index vb (4 * (7 - k) + 2) /\
+                    b3 == Seq.index vb (4 * (7 - k) + 3) /\
+                    S64.v w ==
+                    16777216 * S8.v b0 +
+                    65536 * S8.v b1 +
+                    256 * S8.v b2 +
+                    S8.v b3 /\
+                    (forall (j: nat). j < k ==> Seq.index (vals v) j == be_quad vb nl j))
+          (ensures Seq.length (Seq.upd v k w) == nl /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals (Seq.upd v k w)) j == be_quad vb nl j))
+  = load_word vb k b0 b1 b2 b3 w;
+    vals_upd v k w
+#pop-options
+
 #push-options "--z3rlimit 300"
 
 [@@ FStar.Attributes.CInline]
@@ -777,12 +921,19 @@ ensures exists* (va': Seq.seq S64.t).
              Seq.index (vals v) k == be_quad vb nl k))
   decreases (8 - SZ.v (!i))
   {
+    with v. assert (A.pts_to a v);
     let vi = !i;
+    quad_pos vi;
     let pos = SZ.mul 4sz (SZ.sub 7sz vi);
     let b0 = A.(b.(pos));
     let b1 = A.(b.(SZ.add pos 1sz));
     let b2 = A.(b.(SZ.add pos 2sz));
     let b3 = A.(b.(SZ.add pos 3sz));
+    byte_mul 16777216uL 16777216 b0;
+    byte_mul 65536uL 65536 b1;
+    byte_mul 256uL 256 b2;
+    byte_mul 1uL 1 b3;
+    assert_norm (pow2 64 == 18446744073709551616);
     assert_norm (16777216 * (pow2 8 - 1) < pow2 64);
     assert_norm (65536 * (pow2 8 - 1) < pow2 64);
     assert_norm (256 * (pow2 8 - 1) < pow2 64);
@@ -792,7 +943,9 @@ ensures exists* (va': Seq.seq S64.t).
                        (mulk 65536uL (Cast.u8_to_u64 b1)))
                  (addw (mulk 256uL (Cast.u8_to_u64 b2)) (Cast.u8_to_u64 b3));
     A.((a.(vi) <- w));
+    load_step v vb (SZ.v vi) b0 b1 b2 b3 w;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to a v);
   assert (pure (forall (k: nat). k < nl ==> Seq.index (vals v) k == be_quad vb nl k));
@@ -826,6 +979,7 @@ ensures exists* (vb': Seq.seq S8.t).
   {
     let vi = !i;
     let x = A.(a.(vi));
+    quad_pos vi;
     let pos = SZ.mul 4sz (SZ.sub 7sz vi);
     assert_norm (pow2 24 == 16777216);
     assert_norm (pow2 16 == 65536);

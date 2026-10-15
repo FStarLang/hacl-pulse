@@ -240,6 +240,8 @@ let j0_fold (v: variant) (w: Seq.lseq elem (xkeylen v)) (iv: Seq.seq elem { iv_o
     let lb = Seq.append (u64be 0) (u64be (8 * Seq.length iv)) in
     Seq.lemma_len_append (u64be 0) (u64be (8 * Seq.length iv));
     Seq.lemma_len_append (pad iv) lb;
+    assert (Seq.length lb == 16);
+    assert_norm (16 % G.blocklen == 0);
     ghash_input_mod (Seq.length (pad iv)) blocklen;
     G.ghash_is_upd h (Seq.append (pad iv) lb);
     G.ghash_upd_append h G.zero (pad iv) lb

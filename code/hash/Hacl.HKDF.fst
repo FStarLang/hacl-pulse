@@ -87,6 +87,7 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
+  sha2_224_facts ();
   let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
@@ -151,6 +152,7 @@ ensures exists* vout'.
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
+  sha2_256_facts ();
   let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
@@ -173,9 +175,10 @@ ensures exists* vout'.
 
 (** HKDF-Extract with sha384.  [out] must have room for 48 bytes. *)
 (* The eighty-entry [k512] is enough bigger than the sixty-four-entry [k256]
-   that relating the array to [params512_with]'s [k] field no longer fits in
-   the default budget. *)
-#push-options "--z3rlimit 40"
+   that relating the array to [params512_with]'s [k] field is best done
+   outside the call's query ([sha2_384_facts], [sha2_512_facts]); a little
+   headroom over the default budget is kept for the call itself. *)
+#push-options "--z3rlimit 10"
 
 fn extract_sha384 (out: A.array S8.t) (salt: A.array S8.t) (salt_len: SZ.t) (ikm: A.array S8.t) (ikm_len: SZ.t)
     (#vout: erased (Seq.seq S8.t)) (#ps: perm) (#vsalt: erased (Seq.seq S8.t))
@@ -220,6 +223,7 @@ ensures exists* vout'.
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
+  sha2_384_facts ();
   expand_impl sha2_384 kt ivt out out_len prk prk_len info info_len;
   drop_table ivt;
   drop_table kt;
@@ -269,6 +273,7 @@ ensures exists* vout'.
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
+  sha2_512_facts ();
   expand_impl sha2_512 kt ivt out out_len prk prk_len info info_len;
   drop_table ivt;
   drop_table kt;

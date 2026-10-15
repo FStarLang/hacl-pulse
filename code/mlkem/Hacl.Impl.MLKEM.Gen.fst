@@ -47,6 +47,11 @@ module Math = FStar.Math.Lemmas
 module Sub = Hacl.Impl.Sub
 module HSZ = Hacl.SizeT
 
+(** [SZ.rem] is specified via [SZ.mod_spec]; relate it to [%] explicitly. *)
+let mod_spec_eq (a: SZ.t) (b: SZ.t { SZ.v b <> 0 })
+  : Lemma (SZ.mod_spec (SZ.v a) (SZ.v b) == SZ.v a % SZ.v b)
+  = Math.euclidean_division_definition (SZ.v a) (SZ.v b)
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** Algorithm 13 line 3 and Algorithm 14 line 4: the [k x k] matrix, row
@@ -97,6 +102,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #p vr **
     let hi = SZ.add lo 256sz;
     let ci = SZ.div vc k;
     let cj = SZ.rem vc k;
+    mod_spec_eq vc k;
+    assert (pure (SZ.v ci == SZ.v vc / SZ.v k /\ SZ.v cj == SZ.v vc % SZ.v k));
     div_lt (SZ.v vc) (SZ.v k) (SZ.v k);
     let bi = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 ci);
     let bj = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 cj);
@@ -167,6 +174,12 @@ ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
     let hi = SZ.add lo 256sz;
     let bi = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 vi);
     let byte = U8.add start bi;
+    Math.small_mod (SZ.v vi) 256;
+    Math.small_mod (SZ.v vi) 4294967296;
+    assert (pure (U8.v bi == SZ.v vi));
+    assert (pure (U8.v byte == U8.v start + SZ.v vi));
+    U8.uv_inv byte;
+    assert (pure (byte == U8.uint_to_t (U8.v start + SZ.v vi)));
     with w0. assert (A.pts_to dst w0);
     let blk = Sub.sub dst lo hi;
     sample_poly_cbd_impl blk s byte eta;

@@ -73,7 +73,12 @@ let mone_ok (_: unit)
 
 let mform_zero (d: modulus)
   : Lemma (requires modulus_ok d) (ensures mform d (MA.zero #d.m) mzero)
-  = mzero_ok ()
+  = mzero_ok ();
+    assert (MA.zero #d.m == 0);
+    assert (0 * pow2 256 == 0);
+    Math.small_mod 0 d.m;
+    assert (res d mzero);
+    assert (eval mzero == MA.zero #d.m * pow2 256 % d.m)
 
 let mform_one (d: modulus)
   : Lemma (requires modulus_ok d) (ensures mform d (MA.one #d.m) d.r1)
@@ -131,25 +136,35 @@ let mform_add (d: modulus) (x y: MA.elem d.m) (a b: Seq.seq nat)
     Math.distributivity_add_left x y r;
     Math.lemma_mod_mul_distr_l (x + y) r d.m
 
+(** The arithmetic of [mform_sub], over symbolic numbers. *)
+let msub_lhs (m: pos) (xr yr aa bb: int)
+  : Lemma (requires aa == xr % m /\ bb == yr % m)
+          (ensures (aa + m - bb) % m == (xr - yr) % m)
+  = Math.lemma_mod_plus (aa - bb) 1 m;
+    assert (aa + m - bb == (aa - bb) + 1 * m);
+    Math.lemma_mod_plus_distr_l xr (- bb) m;
+    Math.lemma_mod_sub_distr xr yr m
+
+let msub_rhs (m: pos) (x y: nat) (r: int)
+  : Lemma (requires y < m)
+          (ensures (x + m - y) % m * r % m == (x * r - y * r) % m)
+  = Math.lemma_mod_mul_distr_l (x + m - y) r m;
+    Math.distributivity_sub_left (x + m) y r;
+    Math.distributivity_add_left x m r;
+    Math.swap_mul m r;
+    assert ((x + m - y) * r == (x * r - y * r) + r * m);
+    Math.lemma_mod_plus (x * r - y * r) r m
+
 let mform_sub (d: modulus) (x y: MA.elem d.m) (a b: Seq.seq nat)
   : Lemma (requires modulus_ok d /\ mform d x a /\ mform d y b)
           (ensures mform d (MA.sub x y) (msub d a b))
   = msub_ok d a b;
     let r = pow2 256 in
-    let aa = eval a in
-    let bb = eval b in
     (* The value [msub] computes is [x R - y R] modulo [m]. *)
-    Math.lemma_mod_plus (aa - bb) 1 d.m;
-    Math.lemma_mod_plus_distr_l (x * r) (- bb) d.m;
-    Math.lemma_mod_sub_distr (x * r) (y * r) d.m;
-    assert ((aa + d.m - bb) % d.m == (x * r - y * r) % d.m);
+    msub_lhs d.m (x * r) (y * r) (eval a) (eval b);
     (* So is the Montgomery form of [x - y]. *)
-    Math.lemma_mod_mul_distr_l (x + d.m - y) r d.m;
-    Math.distributivity_sub_left (x + d.m) y r;
-    Math.distributivity_add_left x d.m r;
-    Math.swap_mul d.m r;
-    Math.lemma_mod_plus (x * r - y * r) r d.m;
-    assert (MA.sub x y * r % d.m == (x * r - y * r) % d.m)
+    msub_rhs d.m x y r;
+    assert (MA.sub x y == (x + d.m - y) % d.m)
 
 let mform_neg (d: modulus) (x: MA.elem d.m) (a: Seq.seq nat)
   : Lemma (requires modulus_ok d /\ mform d x a)

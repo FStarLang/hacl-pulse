@@ -875,6 +875,14 @@ let step1_bounds (vi n: nat)
   = Math.lemma_mod_sub_distr n vi blocklen;
     if n - vi < blocklen then Math.small_mod (n - vi) blocklen
 
+(** The next index of the one-block loop is again block-aligned. *)
+let step1_next (vi: nat)
+  : Lemma (requires vi % blocklen == 0)
+          (ensures (vi + blocklen) % blocklen == 0 /\
+                   (vi + blocklen) / blocklen == vi / blocklen + 1)
+  = Math.lemma_mod_plus vi 1 blocklen;
+    Math.division_addition_lemma vi blocklen 1
+
 (** Index arithmetic for the four-way loop, kept out of the Pulse context
     where it would have to be found among a hundred other hypotheses. *)
 let step4_bounds (vi lim n: nat)
@@ -924,6 +932,12 @@ let step8_bounds (vi lim n: nat)
     Math.multiple_modulo_lemma (8 * (vi / 128)) 16;
     Math.multiple_modulo_lemma (2 * (vi / 128)) 64;
     Math.multiple_modulo_lemma (vi / 128 + 1) 128
+
+(** The loop measure strictly decreases, stated outside the Pulse context. *)
+let step_measure (vi vi' n: nat)
+  : Lemma (requires vi < vi' /\ vi' <= n)
+          (ensures (n - vi') << (n - vi))
+  = ()
 
 (** The eight-way limit, and the fact that it does not overshoot the
     four-way one: what the eight-way pass leaves behind is at most one
@@ -1060,6 +1074,7 @@ ensures A.pts_to d #pd vd ** pure (
                 (Poly.xtimes (Vec.bv y4))
                 (vals vd) (SZ.v n) (SZ.v vi);
     av := res;
+    step_measure (SZ.v vi) (SZ.v vi4) (SZ.v n);
     i := vi4;
   };
 
@@ -1180,6 +1195,7 @@ ensures A.pts_to d #pd vd ** pure (
                 (Poly.xtimes (Vec.bv y8))
                 (vals vd) (SZ.v n) (SZ.v vi);
     av := res;
+    step_measure (SZ.v vi) (SZ.v vi8) (SZ.v n);
     i := vi8;
   };
 
@@ -1356,6 +1372,8 @@ ensures exists* (va1: Seq.seq S8.t).
     ghash_step (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vd) (SZ.v n) (SZ.v vi);
     Math.division_addition_lemma (SZ.v vi) blocklen 1;
     av := r;
+    step1_next (SZ.v vi);
+    step_measure (SZ.v vi) (SZ.v vi2) (SZ.v n);
     i := vi2;
   };
 

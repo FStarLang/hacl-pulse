@@ -105,7 +105,28 @@ ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
     [base].  Every one of them is compressed unflagged, at the counter
     "bytes absorbed including this block". *)
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+(** One iteration of [absorb_blocks], stated over pure values: compressing
+    the [j]th block of the run, read out of [vin], at the counter of the
+    blocks absorbed so far, is one more step of the fold over [s]. *)
+#push-options "--z3rlimit 20 --fuel 0 --ifuel 0"
+let absorb_step (#t: Type0) {| word t |} (p: params t) (h0: Seq.lseq t 8)
+                (vin s: Seq.seq S8.t) (base n0 j nblk: nat)
+  : Lemma (requires j < nblk /\
+                    base + nblk * block_len #t <= Seq.length vin /\
+                    (n0 + nblk) * block_len #t <= Seq.length s /\
+                    (forall (k: nat). k < nblk * block_len #t ==>
+                       Seq.index vin (base + k) ==
+                         Seq.index s (n0 * block_len #t + k)))
+          (ensures compress p (sabsorb p h0 s (n0 + j))
+                     (words_from_le block_words (pad_block #t vin (base + j * block_len #t)))
+                     (n0 * block_len #t + (j + 1) * block_len #t) false
+                   == sabsorb p h0 s (n0 + j + 1))
+  = pad_block_run #t vin s base n0 j nblk;
+    unfold_repeati_g (n0 + j) (sstep p s) h0;
+    Math.distributivity_add_left n0 (j + 1) (block_len #t)
+#pop-options
+
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
 fn absorb_blocks (#t: Type0) {| w: word t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -178,13 +199,14 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
     SZ.fits_lte ((SZ.v n0 + SZ.v vj + 1) * block_len #t) (Seq.length s);
 
     let off = SZ.add base (SZ.mul vj bl);
-    pad_block_run #t (reveal vin) (reveal s)
-                  (SZ.v base) (SZ.v n0) (SZ.v vj) (SZ.v nblk);
-    unfold_repeati_g (SZ.v n0 + SZ.v vj) (sstep p (reveal s)) (reveal h0);
+    assert (pure (SZ.v off == SZ.v base + SZ.v vj * block_len #t));
+    absorb_step p (reveal h0) (reveal vin) (reveal s)
+                (SZ.v base) (SZ.v n0) (SZ.v vj) (SZ.v nblk);
 
     read_block #t blk input inlen off;
     load_block #t mw blk;
     let ctr = SZ.add ctr0 (SZ.mul (SZ.add vj 1sz) bl);
+    assert (pure (SZ.v ctr == SZ.v n0 * block_len #t + (SZ.v vj + 1) * block_len #t));
     compress_impl p acc mw ivs ctr false;
 
     j := SZ.add vj 1sz;
@@ -341,6 +363,11 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
   let nblk = SZ.div (SZ.sub rest 1sz) bl;
   let tl = SZ.sub rest (SZ.mul nblk bl);
   update_split #t (SZ.v nlast) (SZ.v blen) (SZ.v dlen);
+  assert (pure (SZ.v fill == block_len #t - SZ.v blen));
+  assert (pure (SZ.v rest == SZ.v dlen - SZ.v fill));
+  assert (pure (SZ.v nblk == (SZ.v rest - 1) / block_len #t));
+  assert (pure (SZ.v tl == SZ.v rest - SZ.v nblk * block_len #t));
+  assert (pure (SZ.v tl <= SZ.v dlen /\ SZ.v dlen - SZ.v tl == SZ.v fill + SZ.v nblk * block_len #t));
   Math.distributivity_add_left (SZ.v nlast + 1) (SZ.v nblk) (block_len #t);
   tail_agrees (block_len #t) (reveal s) (reveal vdata)
               (SZ.v nlast + 1) (SZ.v fill) (SZ.v nblk * block_len #t);
@@ -405,6 +432,10 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
   stream_append #t (reveal key) (reveal seen) (reveal vdata);
   Seq.lemma_len_append (reveal s) (reveal vdata);
   brem_bounds #t (Seq.length s);
+  assert (pure (SZ.v tlen == Seq.length s));
+  assert (pure (SZ.v nlast == nlast_of #t (Seq.length s)));
+  assert (pure (SZ.v blen == brem_of #t (Seq.length s)));
+  assert (pure (SZ.v blen <= block_len #t));
   brem_bounds #t (Seq.length s1);
 
   if SZ.gt (SZ.add blen dlen) bl
@@ -450,7 +481,7 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
     the state already holds.  The accumulator is copied first, so the state is
     left usable. *)
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 1"
+#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
 fn digest_impl (#t: Type0) {| w: word t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -492,6 +523,10 @@ ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
   let blen = SZ.sub tlen (SZ.mul nlast bl);
   let s = G.hide (stream #t (reveal key) (reveal seen));
   brem_bounds #t (Seq.length s);
+  assert (pure (SZ.v tlen == Seq.length s));
+  assert (pure (SZ.v nlast == nlast_of #t (Seq.length s)));
+  assert (pure (SZ.v blen == brem_of #t (Seq.length s)));
+  assert (pure (SZ.v blen <= block_len #t));
 
   let z0: t = zero #t #w;
   let mut starr = [| z0; 8sz |];

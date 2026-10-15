@@ -75,6 +75,12 @@ let e1_ok (_: unit)
   : Lemma (on_curve e1 /\ peq e1 (SM.smul (1 * n) g))
   = Base.q2_ok ()
 
+(** The same, with the multiple written [n] as the chain below uses it. *)
+let e1_ok_n (_: unit)
+  : Lemma (on_curve e1 /\ peq e1 (SM.smul n g))
+  = e1_ok ();
+    assert (1 * n == n)
+
 (** {2 The chain} *)
 
 [@@"opaque_to_smt"]
@@ -93,8 +99,8 @@ let e2_ok (_: unit)
   : Lemma (on_curve e2 /\ peq e2 (SM.smul (2 * n) g))
   = assert_norm (on_curve e2);
     assert_norm (peq e2 (point_add e1 e1));
-    e1_ok ();
-    e1_ok ();
+    e1_ok_n ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (1 * n) n g e1 e1;
     step 1;
@@ -118,7 +124,7 @@ let e3_ok (_: unit)
   = assert_norm (on_curve e3);
     assert_norm (peq e3 (point_add e2 e1));
     e2_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (2 * n) n g e2 e1;
     step 2;
@@ -142,7 +148,7 @@ let e4_ok (_: unit)
   = assert_norm (on_curve e4);
     assert_norm (peq e4 (point_add e3 e1));
     e3_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (3 * n) n g e3 e1;
     step 3;
@@ -166,7 +172,7 @@ let e5_ok (_: unit)
   = assert_norm (on_curve e5);
     assert_norm (peq e5 (point_add e4 e1));
     e4_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (4 * n) n g e4 e1;
     step 4;
@@ -190,7 +196,7 @@ let e6_ok (_: unit)
   = assert_norm (on_curve e6);
     assert_norm (peq e6 (point_add e5 e1));
     e5_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (5 * n) n g e5 e1;
     step 5;
@@ -214,7 +220,7 @@ let e7_ok (_: unit)
   = assert_norm (on_curve e7);
     assert_norm (peq e7 (point_add e6 e1));
     e6_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (6 * n) n g e6 e1;
     step 6;
@@ -238,7 +244,7 @@ let e8_ok (_: unit)
   = assert_norm (on_curve e8);
     assert_norm (peq e8 (point_add e7 e1));
     e7_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (7 * n) n g e7 e1;
     step 7;
@@ -262,7 +268,7 @@ let e9_ok (_: unit)
   = assert_norm (on_curve e9);
     assert_norm (peq e9 (point_add e8 e1));
     e8_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (8 * n) n g e8 e1;
     step 8;
@@ -286,7 +292,7 @@ let e10_ok (_: unit)
   = assert_norm (on_curve e10);
     assert_norm (peq e10 (point_add e9 e1));
     e9_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (9 * n) n g e9 e1;
     step 9;
@@ -310,7 +316,7 @@ let e11_ok (_: unit)
   = assert_norm (on_curve e11);
     assert_norm (peq e11 (point_add e10 e1));
     e10_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (10 * n) n g e10 e1;
     step 10;
@@ -334,7 +340,7 @@ let e12_ok (_: unit)
   = assert_norm (on_curve e12);
     assert_norm (peq e12 (point_add e11 e1));
     e11_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (11 * n) n g e11 e1;
     step 11;
@@ -358,7 +364,7 @@ let e13_ok (_: unit)
   = assert_norm (on_curve e13);
     assert_norm (peq e13 (point_add e12 e1));
     e12_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (12 * n) n g e12 e1;
     step 12;
@@ -382,7 +388,7 @@ let e14_ok (_: unit)
   = assert_norm (on_curve e14);
     assert_norm (peq e14 (point_add e13 e1));
     e13_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (13 * n) n g e13 e1;
     step 13;
@@ -406,7 +412,7 @@ let e15_ok (_: unit)
   = assert_norm (on_curve e15);
     assert_norm (peq e15 (point_add e14 e1));
     e14_ok ();
-    e1_ok ();
+    e1_ok_n ();
     g_on_curve ();
     SM.smul_add_congr (14 * n) n g e14 e1;
     step 14;

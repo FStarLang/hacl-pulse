@@ -253,6 +253,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
   {
     let vi = !i;
     Math.lemma_mult_le_right n (SZ.v vi + 1) (SZ.v k);
+    Math.distributivity_add_left (SZ.v vi) 1 n;
+    Math.lemma_mult_le_right n (SZ.v k) 4;
+    assert (pure (SZ.v vi * n + n < pow2 32));
     SZ.fits_u32_implies_fits (SZ.v vi * n + n);
     SZ.fits_u32_implies_fits (SZ.v vi + 1);
     let lo = SZ.mul vi 256sz;

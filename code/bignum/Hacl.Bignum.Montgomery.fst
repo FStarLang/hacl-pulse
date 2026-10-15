@@ -94,8 +94,11 @@ let narrow (a b: int) (k: nat { k <= 64 })
   : Lemma (requires a % pow2 64 == b % pow2 64)
           (ensures a % pow2 k == b % pow2 k)
   = Math.pow2_plus k (64 - k);
+    assert (pow2 k * pow2 (64 - k) == pow2 64);
     Math.modulo_modulo_lemma a (pow2 k) (pow2 (64 - k));
-    Math.modulo_modulo_lemma b (pow2 k) (pow2 (64 - k))
+    Math.modulo_modulo_lemma b (pow2 k) (pow2 (64 - k));
+    assert (a % pow2 k == (a % pow2 64) % pow2 k);
+    assert (b % pow2 k == (b % pow2 64) % pow2 k)
 
 let inv_step_ok (mv xv: nat) (m: pos) (r: nat)
   : Lemma (requires 2 * m <= 64 /\ (mv * xv) % pow2 m == 1 /\
@@ -450,6 +453,12 @@ let mont_split (vv v1 nc nN wnn: nat)
     is the whole modulus, and saying so is a merge of [pre vn (SZ.v nn)]
     with [num vn] that the solver will not make on its own inside the
     reduction loop. *)
+(** The bottom limb of the modulus is the modulus modulo the radix; stated
+    as a lemma so the reduction loop can recall it without re-deriving it. *)
+let red_low (v: Seq.seq S64.t { 0 < Seq.length v })
+  : Lemma (num v % base == S64.v (Seq.index v 0))
+  = wt_zero (); wt_succ 0; pre_zero v; pre_snoc v 0; pre_mod v 1
+
 let pre_len (v: Seq.seq S64.t) (k: nat)
   : Lemma (requires k == Seq.length v) (ensures pre v k == num v)
   = pre_full v
@@ -515,6 +524,7 @@ ensures exists* (v: Seq.seq S64.t) (v2: Seq.seq S64.t).
     A.((c.(pos) <- lot));
     num_upd v1 (SZ.v pos) lot;
     with v2. assert (A.pts_to c v2);
+    red_low vn;
     red_column (num v2) (num v1) (num varr) (S64.v ov2) (S64.v vov) (S64.v cr)
                (S64.v old) (S64.v lot) (S64.v qi) (num vn) (S64.v ci) (S64.v mu)
                (S64.v (Seq.index vn 0)) (num vc) (SZ.v vi) (SZ.v nn);
@@ -949,6 +959,55 @@ let div_one (n: nat) (q: pos)
   = Math.small_div (n - q) q;
     Math.lemma_div_plus (n - q) 1 q
 
+(** The exponent {!precomp} has reached at rung [p]: the bits of [mm]
+    above [p].  Kept opaque so that the division by a variable never
+    reaches the solver inside the ladder's body, where the nonlinear
+    arithmetic engine diverges on it; the facts the loop needs are the
+    lemmas below. *)
+[@@"opaque_to_smt"]
+let ex (mm: nat) (p: pos) : nat = mm / p
+
+(** The descent starts with exponent one. *)
+let ex_one (mm: nat) (p: pos)
+  : Lemma (requires p <= mm /\ mm < p + p) (ensures ex mm p == 1)
+  = reveal_opaque (`%ex) (ex mm p);
+    div_one mm p
+
+(** The bit a rung adds is the bottom bit of the next exponent. *)
+let ex_bit (mm: nat) (q: pos) (dq d: nat)
+  : Lemma (requires dq == mm / q /\ d == dq % 2) (ensures d == ex mm q % 2)
+  = reveal_opaque (`%ex) (ex mm q)
+
+(** One rung of {!precomp}'s descent, at the level of the exponent: the
+    exponent a rung reaches with bit [d] is the next [ex mm q]. *)
+let ladder_exp (mm: nat) (vp q: pos) (d: nat)
+  : Lemma (requires q + q == vp /\ d == ex mm q % 2)
+          (ensures pw 2 (2 * ex mm vp + d) == pw 2 (ex mm q))
+  = reveal_opaque (`%ex) (ex mm q);
+    reveal_opaque (`%ex) (ex mm vp);
+    half_split mm q;
+    pw_ext 2 (2 * ex mm vp + d) (ex mm q)
+
+(** Doubling a power of two raises its exponent by one. *)
+let dbl_pow2 (vp b: nat)
+  : Lemma (requires vp == pow2 b) (ensures pow2 (b + 1) == vp + vp)
+  = Math.pow2_double_sum b
+
+(** Halving a power of two above one lowers its exponent by one. *)
+let halve_pow2 (vp b: nat)
+  : Lemma (requires vp == pow2 b /\ 1 < vp)
+          (ensures 1 <= b /\ vp / 2 + vp / 2 == vp /\ vp / 2 == pow2 (b - 1))
+  = pow2_one b;
+    Math.pow2_double_sum (b - 1)
+
+(** Where {!precomp}'s descent ends: at [p == 1] the exponent is [mm], and
+    [2 ^ mm] is [R]. *)
+let precomp_final (mm: nat) (vp: pos) (nn: nat)
+  : Lemma (requires vp == 1 /\ mm == rad * nn)
+          (ensures pw 2 (ex mm vp) * wt nn == wt nn * wt nn)
+  = reveal_opaque (`%ex) (ex mm vp);
+    pw_pow2 mm
+
 #push-options "--z3rlimit 300"
 
 (** [top_limb nmod nn] is the index of the topmost nonzero limb of the
@@ -988,6 +1047,17 @@ ensures A.pts_to nmod #pn vn **
   };
   !k
 }
+
+(** Where {!seed}'s doubling loop ends: [rad * nn + 1] doublings in all,
+    which is [pw 2 1 * wt nn]. *)
+let seed_final (k nn vi: nat)
+  : Lemma (requires k <= nn /\ vi == rad * (nn - k) + 1)
+          (ensures pow2 (rad * k + vi) == pw 2 1 * wt nn)
+  = pw_one 2;
+    Math.distributivity_sub_right rad nn k;
+    assert (rad * k + vi == 1 + rad * nn);
+    Math.pow2_plus 1 (rad * nn);
+    assert_norm (pow2 1 == 2)
 
 (** [seed res nmod nn] is [2 ^ (rad * nn + 1) mod nmod], written as the
     Montgomery representative of [2 ^ 1]: the rung the ladder starts from.
@@ -1036,6 +1106,8 @@ ensures exists* (v: Seq.seq S64.t).
   };
   pw_one 2;
   Math.pow2_plus 1 (rad * SZ.v nn);
+  with vif. assert (pts_to i vif);
+  seed_final (SZ.v k) (SZ.v nn) (SZ.v vif);
   ()
 }
 (* A fresh solver context: the Montgomery multiplications above leave the
@@ -1130,6 +1202,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
     The exponent reached after a rung is always [mm / p], for [mm == rad *
     nn] and a [p] that starts at the highest power of two below [mm] and
     halves: one at the start, and [mm] at the end. *)
+#push-options "--z3refresh"
 fn precomp (res: A.array S64.t) (t1: A.array S64.t) (t2: A.array S64.t)
            (wide: A.array S64.t) (nmod: A.array S64.t) (nn: SZ.t) (mu: S64.t)
            (#vres #vt1 #vt2 #vwide: erased (Seq.seq S64.t)) (#pn: perm)
@@ -1170,8 +1243,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
   {
     let vp = !p;
     let vb = !b;
-    assert_norm (pow2 1 == 2);
-    Math.pow2_plus 1 (SZ.v vb);
+    dbl_pow2 (SZ.v vp) (SZ.v vb);
     pow2_ge (SZ.v vb + 1);
     SZ.fits_lte (2 * (2 * SZ.v vp)) (2 * rad * SZ.v nn);
     SZ.fits_lte (SZ.v vb + 2) (2 * rad * SZ.v nn);
@@ -1179,7 +1251,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
     b := SZ.add vb 1sz;
   };
   with vp0. assert (pts_to p vp0);
-  div_one (SZ.v mm) (SZ.v vp0);
+  ex_one (SZ.v mm) (SZ.v vp0);
 
   while (let vp = !p; SZ.gt vp 1sz)
   invariant exists* (vp: SZ.t) (vb: SZ.t) (v v1 v2 v3: Seq.seq S64.t).
@@ -1189,25 +1261,25 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
           Seq.length v == SZ.v nn /\ Seq.length v1 == SZ.v nn /\
           Seq.length v2 == SZ.v nn /\ Seq.length v3 == SZ.v nn + SZ.v nn /\
           num v < num vn /\
-          num v == (pw 2 (SZ.v mm / SZ.v vp) * wt (SZ.v nn)) % num vn)
+          num v == (pw 2 (ex (SZ.v mm) (SZ.v vp)) * wt (SZ.v nn)) % num vn)
   decreases (SZ.v (!p))
   {
     let vp = !p;
     let vb = !b;
-    assert_norm (pow2 1 == 2);
-    pow2_one (SZ.v vb);
-    Math.pow2_plus 1 (SZ.v vb - 1);
+    halve_pow2 (SZ.v vp) (SZ.v vb);
     let q = SZ.div vp 2sz;
-    assert (pure (SZ.v q + SZ.v q == SZ.v vp));
-    half_split (SZ.v mm) (SZ.v q);
     let d = SZ.rem (SZ.div mm q) 2sz;
-    ladder_step res t1 t2 wide nmod nn mu (hide (SZ.v mm / SZ.v vp)) d;
+    ex_bit (SZ.v mm) (SZ.v q) (SZ.v (SZ.div mm q)) (SZ.v d);
+    ladder_step res t1 t2 wide nmod nn mu (hide (ex (SZ.v mm) (SZ.v vp))) d;
+    ladder_exp (SZ.v mm) (SZ.v vp) (SZ.v q) (SZ.v d);
     p := q;
     b := SZ.sub vb 1sz;
   };
-  pw_pow2 (SZ.v mm);
+  with vpf. assert (pts_to p vpf);
+  precomp_final (SZ.v mm) (SZ.v vpf) (SZ.v nn);
   ()
 }
+#pop-options
 #pop-options
 
 (** {2 Plain remainder}

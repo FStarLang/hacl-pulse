@@ -74,6 +74,27 @@ module Loops = Hacl.Spec.Loops
     vanish.  The inner loop adds one product at a time, and each product is
     the two halves {!Spec.Bignum4.srow} places. *)
 
+(** One pass of the inner loop of [mstep_op]: the two column writes are
+    exactly the next product of the row. *)
+let mstep_inner_step (vt v: Seq.seq S128.t) (u msj: S64.t) (ms: Seq.seq S64.t)
+                     (i j: nat) (p nv nv1: S128.t)
+  : Lemma (requires i + j + 1 < Seq.length vt /\ Seq.length v == Seq.length vt /\
+                    j < Seq.length ms /\ msj == Seq.index ms j /\
+                    vals128 v == addw (vals128 vt) (srow (Seq.length vt) (S64.v u) (vals ms) i j) /\
+                    S128.v p == S64.v u * S64.v msj /\
+                    S128.v nv == S128.v (Seq.index v (i + j)) + S128.v p % base /\
+                    S128.v nv1 == S128.v (Seq.index (Seq.upd v (i + j) nv) (i + j + 1)) +
+                                  S128.v p / base)
+          (ensures (let v2 = Seq.upd (Seq.upd v (i + j) nv) (i + j + 1) nv1 in
+                    Seq.length v2 == Seq.length vt /\
+                    vals128 v2 == addw (vals128 vt) (srow (Seq.length vt) (S64.v u) (vals ms) i (j + 1))))
+  = let n = Seq.length vt in
+    let v1 = Seq.upd v (i + j) nv in
+    assert (vat (vals ms) j == S64.v msj);
+    vals128_upd v (i + j) nv;
+    vals128_upd v1 (i + j + 1) nv1;
+    addw_srow_step (vals128 vt) n (S64.v u) (vals ms) i j
+
 #push-options "--z3rlimit 400"
 
 [@@ FStar.Attributes.CInline]
@@ -128,8 +149,9 @@ ensures exists* (vt': Seq.seq S128.t).
     let nv1 = addd cur1 ph;
     A.((t.(pos1) <- nv1));
     vals128_upd v1 (SZ.v i + SZ.v vj + 1) nv1;
-    addw_srow_step (vals128 vt) (Seq.length vt) (S64.v u) (vals vms) (SZ.v i) (SZ.v vj);
+    mstep_inner_step vt v u msj vms (SZ.v i) (SZ.v vj) p nv nv1;
     j := SZ.add vj 1sz;
+    assert pure (SZ.v (SZ.add vj 1sz) == SZ.v vj + 1);
   };
   with v. assert (A.pts_to t v);
   addw_srow_ble (vals128 vt) (vals vms) (Seq.length vt) (S64.v u) (SZ.v i) nl c;
@@ -171,6 +193,47 @@ ensures exists* (vt': Seq.seq S128.t).
     reaches at most [2^69] and stays inside a wide word with room to
     spare. *)
 
+(** The exit of the loop in [mreduce_op]: the counter is [nl]. *)
+let mreduce_fin (v t ms: Seq.seq nat) (mu: nat) (c: nat) (k: nat)
+  : Lemma (requires k == nl /\ v == mrun ms mu k t /\ ble v (c + k * pow2 66))
+          (ensures v == mrun ms mu nl t /\ ble v (c + nl * pow2 66))
+  = ()
+
+(** {2 Loop steps}
+
+    Each limb-wise loop below grows a prefix on which the buffer agrees with
+    its target by one limb per pass.  Stating the pass once, at top level,
+    keeps the quantifier out of the loop's own query. *)
+
+let sum128_step (v: Seq.seq S128.t) (x y: Seq.seq nat) (k: nat) (z: S128.t)
+  : Lemma (requires Seq.length v == nl /\ k < nl /\
+                    k < Seq.length x /\ k < Seq.length y /\
+                    S128.v z == Seq.index x k + Seq.index y k /\
+                    (forall (j: nat). j < k ==>
+                       Seq.index (vals128 v) j == Seq.index x j + Seq.index y j))
+          (ensures Seq.length (Seq.upd v k z) == nl /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals128 (Seq.upd v k z)) j == Seq.index x j + Seq.index y j))
+  = vals128_upd v k z
+
+let copy128_step (v: Seq.seq S128.t) (n: nat) (w: Seq.seq nat) (o k: nat) (z: S128.t)
+  : Lemma (requires Seq.length v == n /\ k < n /\ o + k < Seq.length w /\
+                    S128.v z == Seq.index w (o + k) /\
+                    (forall (j: nat). j < k ==> Seq.index (vals128 v) j == Seq.index w (o + j)))
+          (ensures Seq.length (Seq.upd v k z) == n /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals128 (Seq.upd v k z)) j == Seq.index w (o + j)))
+  = vals128_upd v k z
+
+let narrow_step (v: Seq.seq S64.t) (w: Seq.seq S128.t) (k: nat) (y: S64.t)
+  : Lemma (requires Seq.length v == nl /\ k < nl /\ k < Seq.length w /\
+                    S64.v y == S128.v (Seq.index w k) /\
+                    (forall (j: nat). j < k ==> Seq.index (vals v) j == Seq.index (vals128 w) j))
+          (ensures Seq.length (Seq.upd v k y) == nl /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals (Seq.upd v k y)) j == Seq.index (vals128 w) j))
+  = vals_upd v k y
+
 #push-options "--z3rlimit 400"
 
 [@@ FStar.Attributes.CInline]
@@ -208,6 +271,8 @@ ensures exists* (vt': Seq.seq S128.t).
     Math.distributivity_add_left (SZ.v vk) 1 (pow2 66);
     k := SZ.add vk 1sz;
   };
+  with vk v. assert (pts_to k vk ** A.pts_to t v);
+  mreduce_fin (vals128 v) (vals128 vt) (vals vms) (S64.v mu) c (SZ.v vk);
   ()
 }
 
@@ -249,7 +314,9 @@ ensures exists* (vo': Seq.seq S64.t).
     let y = narrow128 x;
     A.((out.(vi) <- y));
     vals_upd v (SZ.v vi) y;
+    narrow_step v vb (SZ.v vi) y;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to out v);
   assert (pure (vals v `Seq.equal` vals128 vb));
@@ -303,7 +370,9 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S128.t).
     let z = addd (widen x) (widen y);
     A.((s.(vi) <- z));
     vals128_upd v (SZ.v vi) z;
+    sum128_step v (vals va) (vals vnm) (SZ.v vi) z;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to s v);
   addw_len (vals va) (vals vnm);
@@ -382,7 +451,9 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S128.t).
     let z = addd (widen x) (widen y);
     A.((s.(vi) <- z));
     vals128_upd v (SZ.v vi) z;
+    sum128_step v (vals va) (vals vb) (SZ.v vi) z;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to s v);
   addw_len (vals va) (vals vb);
@@ -475,7 +546,9 @@ ensures exists* (vw': Seq.seq S128.t).
     let nv = addd (widen x) (widen (subw top y));
     A.((w.(vi) <- nv));
     vals128_upd v (SZ.v vi) nv;
+    sum128_step v (vals va) (compl (vals vb)) (SZ.v vi) nv;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to w v);
   addw_len (vals va) (compl (vals vb));
@@ -551,7 +624,9 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S128.t).
     let z = addd (widen x) (widen y);
     A.((s.(vj) <- z));
     vals128_upd v (SZ.v vj) z;
+    sum128_step v (vals vo) (vals vms) (SZ.v vj) z;
     j := SZ.add vj 1sz;
+    assert pure (SZ.v (SZ.add vj 1sz) == SZ.v vj + 1);
   };
   with w. assert (A.pts_to s w);
   addw_len (vals vo) (vals vms);
@@ -567,6 +642,24 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S128.t).
 }
 
 #pop-options
+
+(** What the mask built from a carry says, as a proposition. *)
+let mask_flag (co m: S64.t)
+  : Lemma (requires m == S64.eq_mask co S64.zero)
+          (ensures (S64.v m == 0) == (S64.v co =!= 0) /\
+                   (S64.v m = 0 <==> S64.v co <> 0) /\
+                   (S64.v m == 0 \/ S64.v m == pow2 64 - 1))
+  = assert_norm (pow2 64 - 1 =!= 0);
+    FStar.PropositionalExtensionality.apply (S64.v m == 0) (S64.v co =!= 0)
+
+(** The two branches of [msub_op] are the two branches of [msub]. *)
+let msub_shape (d: modulus) (a b lo r ms: Seq.seq nat) (co m: nat)
+  : Lemma (requires lo == carry_low (addw a (negw b)) /\
+                    co == carry_out (addw a (negw b)) /\ co <= 1 /\
+                    ms == d.ms /\ (m = 0 <==> co <> 0) /\
+                    r == (if m = 0 then lo else carry_low (addw lo ms)))
+          (ensures r == msub d a b)
+  = ()
 
 #push-options "--z3rlimit 1200"
 
@@ -594,6 +687,7 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S128.t).
   let co = negsub_op s a b;
   assert_norm (pow2 64 - 1 =!= 0);
   let m = S64.eq_mask co S64.zero;
+  mask_flag co m;
   assert (pure ((S64.v m == 0) == (S64.v co =!= 0)));
   msub_pre d (vals va) (vals vb);
   narrow_copy out s;
@@ -604,6 +698,7 @@ ensures exists* (vo': Seq.seq S64.t) (vs': Seq.seq S128.t).
   assert (pure (vals vo' == (if S64.v m = 0 then vals lo
                              else carry_low (addw (vals lo) (vals vms)))));
   msub_ok d (vals va) (vals vb);
+  msub_shape d (vals va) (vals vb) (vals lo) (vals vo') (vals vms) (S64.v co) (S64.v m);
   assert (pure (vals vo' == msub d (vals va) (vals vb)));
 }
 
@@ -652,7 +747,9 @@ ensures exists* (vt': Seq.seq S128.t) (vp': Seq.seq S128.t).
     let x = A.(p.(vk));
     A.((t.(vk) <- x));
     vals128_upd v (SZ.v vk) x;
+    copy128_step v ncol (vals128 vp1) 0 (SZ.v vk) x;
     k := SZ.add vk 1sz;
+    assert pure (SZ.v (SZ.add vk 1sz) == SZ.v vk + 1);
   };
   with v. assert (A.pts_to t v);
   A.((t.(8sz) <- z));
@@ -729,7 +826,9 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S128.t) (vr': Seq.seq S128.t)
     let x = A.(t.(SZ.add 4sz vi));
     A.((r.(vi) <- x));
     vals128_upd v (SZ.v vi) x;
+    copy128_step v (nl + 1) (vals128 u) 4 (SZ.v vi) x;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with w. assert (A.pts_to r w);
   assert (pure (vals128 w `Seq.equal` mreduce d.ms d.mu (vals128 vt)));
@@ -759,7 +858,9 @@ ensures exists* (vo': Seq.seq S64.t) (vt': Seq.seq S128.t) (vr': Seq.seq S128.t)
     let y = narrow128 x;
     A.((out.(vk) <- y));
     vals_upd v (SZ.v vk) y;
+    narrow_step v w2 (SZ.v vk) y;
     k := SZ.add vk 1sz;
+    assert pure (SZ.v (SZ.add vk 1sz) == SZ.v vk + 1);
   };
   with vo2. assert (A.pts_to out vo2);
   assert (pure (vals vo2 `Seq.equal` Seq.slice (redcn d (vals128 vt)) 0 nl));
@@ -874,6 +975,91 @@ let store_be_bridge (s: Seq.seq nat) (b: Seq.seq S8.t)
 
 #pop-options
 
+(** The byte offset of limb [vi], computed in [SZ.t], is linear in [vi]. *)
+let oct_pos (vi: SZ.t)
+  : Lemma (requires SZ.v vi < 4)
+          (ensures SZ.v 8sz * SZ.v (SZ.sub 3sz vi) == 8 * (3 - SZ.v vi) /\
+                   SZ.fits (SZ.v 8sz * SZ.v (SZ.sub 3sz vi)))
+  = assert_norm (pow2 16 == 65536);
+    SZ.fits_at_least_16 (8 * (3 - SZ.v vi))
+
+(** A byte scaled by a word constant is a linear term in the byte. *)
+let byte_mul (k: FStar.UInt64.t) (c: nat) (x: S8.t)
+  : Lemma (requires FStar.UInt64.v k == c)
+          (ensures FStar.UInt64.v k * S64.v (Cast.u8_to_u64 x) == c * S8.v x /\
+                   S64.v (Cast.u8_to_u64 x) == S8.v x /\ S8.v x < 256)
+  = assert_norm (pow2 8 == 256)
+
+(** One pass of the loop in [load_be]: the eight bytes read are limb [k]'s
+    big-endian bytes, and the word built from them is that limb. *)
+let bat_at (vb: Seq.seq S8.t) (o: nat) (x: S8.t)
+  : Lemma (requires Seq.length vb == 32 /\ o < 32 /\ x == Seq.index vb o)
+          (ensures bat vb o == S8.v x)
+  = ()
+
+#push-options "--z3rlimit 40"
+let load_word (vb: Seq.seq S8.t) (k: nat)
+              (b0 b1 b2 b3 b4 b5 b6 b7: S8.t) (w: S64.t)
+  : Lemma (requires Seq.length vb == 32 /\ k < nl /\
+                    b0 == Seq.index vb (8 * (3 - k) + 0) /\
+                    b1 == Seq.index vb (8 * (3 - k) + 1) /\
+                    b2 == Seq.index vb (8 * (3 - k) + 2) /\
+                    b3 == Seq.index vb (8 * (3 - k) + 3) /\
+                    b4 == Seq.index vb (8 * (3 - k) + 4) /\
+                    b5 == Seq.index vb (8 * (3 - k) + 5) /\
+                    b6 == Seq.index vb (8 * (3 - k) + 6) /\
+                    b7 == Seq.index vb (8 * (3 - k) + 7) /\
+                    S64.v w ==
+                    72057594037927936 * S8.v b0 +
+                    281474976710656 * S8.v b1 +
+                    1099511627776 * S8.v b2 +
+                    4294967296 * S8.v b3 +
+                    16777216 * S8.v b4 +
+                    65536 * S8.v b5 +
+                    256 * S8.v b6 +
+                    S8.v b7)
+          (ensures S64.v w == be_oct vb nl k)
+  = let o = 8 * (3 - k) in
+    assert (8 * (nl - 1 - k) == o);
+    assert (o + 7 < 32);
+    bat_at vb (o + 0) b0;
+    bat_at vb (o + 1) b1;
+    bat_at vb (o + 2) b2;
+    bat_at vb (o + 3) b3;
+    bat_at vb (o + 4) b4;
+    bat_at vb (o + 5) b5;
+    bat_at vb (o + 6) b6;
+    bat_at vb (o + 7) b7;
+    assert (S64.v w == be_oct vb nl k)
+
+let load_step (v: Seq.seq S64.t) (vb: Seq.seq S8.t) (k: nat)
+              (b0 b1 b2 b3 b4 b5 b6 b7: S8.t) (w: S64.t)
+  : Lemma (requires Seq.length v == nl /\ Seq.length vb == 32 /\ k < nl /\
+                    b0 == Seq.index vb (8 * (3 - k) + 0) /\
+                    b1 == Seq.index vb (8 * (3 - k) + 1) /\
+                    b2 == Seq.index vb (8 * (3 - k) + 2) /\
+                    b3 == Seq.index vb (8 * (3 - k) + 3) /\
+                    b4 == Seq.index vb (8 * (3 - k) + 4) /\
+                    b5 == Seq.index vb (8 * (3 - k) + 5) /\
+                    b6 == Seq.index vb (8 * (3 - k) + 6) /\
+                    b7 == Seq.index vb (8 * (3 - k) + 7) /\
+                    S64.v w ==
+                    72057594037927936 * S8.v b0 +
+                    281474976710656 * S8.v b1 +
+                    1099511627776 * S8.v b2 +
+                    4294967296 * S8.v b3 +
+                    16777216 * S8.v b4 +
+                    65536 * S8.v b5 +
+                    256 * S8.v b6 +
+                    S8.v b7 /\
+                    (forall (j: nat). j < k ==> Seq.index (vals v) j == be_oct vb nl j))
+          (ensures Seq.length (Seq.upd v k w) == nl /\
+                   (forall (j: nat). j < k + 1 ==>
+                      Seq.index (vals (Seq.upd v k w)) j == be_oct vb nl j))
+  = load_word vb k b0 b1 b2 b3 b4 b5 b6 b7 w;
+    vals_upd v k w
+#pop-options
+
 #push-options "--z3rlimit 400"
 
 [@@ FStar.Attributes.CInline]
@@ -901,7 +1087,9 @@ ensures exists* (va': Seq.seq S64.t).
              Seq.index (vals v) k == be_oct vb nl k))
   decreases (4 - SZ.v (!i))
   {
+    with v. assert (A.pts_to a v);
     let vi = !i;
+    oct_pos vi;
     let pos = SZ.mul 8sz (SZ.sub 3sz vi);
     let b0 = A.(b.(pos));
     let b1 = A.(b.(SZ.add pos 1sz));
@@ -911,6 +1099,15 @@ ensures exists* (va': Seq.seq S64.t).
     let b5 = A.(b.(SZ.add pos 5sz));
     let b6 = A.(b.(SZ.add pos 6sz));
     let b7 = A.(b.(SZ.add pos 7sz));
+    assert_norm (pow2 64 == 18446744073709551616);
+    byte_mul 72057594037927936uL 72057594037927936 b0;
+    byte_mul 281474976710656uL 281474976710656 b1;
+    byte_mul 1099511627776uL 1099511627776 b2;
+    byte_mul 4294967296uL 4294967296 b3;
+    byte_mul 16777216uL 16777216 b4;
+    byte_mul 65536uL 65536 b5;
+    byte_mul 256uL 256 b6;
+    byte_mul 1uL 1 b7;
     let w = addw (addw (addw (mulk 72057594037927936uL (Cast.u8_to_u64 b0))
                              (mulk 281474976710656uL (Cast.u8_to_u64 b1)))
                        (addw (mulk 1099511627776uL (Cast.u8_to_u64 b2))
@@ -920,7 +1117,9 @@ ensures exists* (va': Seq.seq S64.t).
                        (addw (mulk 256uL (Cast.u8_to_u64 b6))
                              (Cast.u8_to_u64 b7)));
     A.((a.(vi) <- w));
+    load_step v vb (SZ.v vi) b0 b1 b2 b3 b4 b5 b6 b7 w;
     i := SZ.add vi 1sz;
+    assert pure (SZ.v (SZ.add vi 1sz) == SZ.v vi + 1);
   };
   with v. assert (A.pts_to a v);
   assert (pure (forall (k: nat). k < nl ==> Seq.index (vals v) k == be_oct vb nl k));
@@ -932,6 +1131,14 @@ ensures exists* (va': Seq.seq S64.t).
 }
 
 #pop-options
+
+(** Extending a bounded universal by one point.  Applied to the literal
+    row of {!store_be_extend}, the instance is syntactically the hypothesis,
+    so the solver never matches the eight-conjunct rows against each other. *)
+let forall_extend (n: nat) (p: (k: nat { k < n + 1 }) -> prop)
+  : Lemma (requires (forall (k: nat). k < n ==> p k) /\ p n)
+          (ensures forall (k: nat). k < n + 1 ==> p k)
+  = ()
 
 #push-options "--z3rlimit 600"
 
@@ -967,7 +1174,15 @@ let store_be_extend (v: Seq.seq S8.t) (s: Seq.seq nat) (n: nat { n < nl })
                        S8.v (Seq.index v (8 * (nl - 1 - k) + 5)) == Seq.index s k / pow2 16 % 256 /\
                        S8.v (Seq.index v (8 * (nl - 1 - k) + 6)) == Seq.index s k / pow2 8 % 256 /\
                        S8.v (Seq.index v (8 * (nl - 1 - k) + 7)) == Seq.index s k / pow2 0 % 256))
-  = ()
+  = forall_extend n (fun (k: nat { k < n + 1 }) ->
+                       S8.v (Seq.index v (8 * (nl - 1 - k))) == Seq.index s k / pow2 56 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 1)) == Seq.index s k / pow2 48 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 2)) == Seq.index s k / pow2 40 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 3)) == Seq.index s k / pow2 32 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 4)) == Seq.index s k / pow2 24 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 5)) == Seq.index s k / pow2 16 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 6)) == Seq.index s k / pow2 8 % 256 /\
+                       S8.v (Seq.index v (8 * (nl - 1 - k) + 7)) == Seq.index s k / pow2 0 % 256)
 
 fn store_be (b: A.array S8.t) (a: A.array S64.t)
             (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -998,6 +1213,7 @@ ensures exists* (vb': Seq.seq S8.t).
   {
     let vi = !i;
     let x = A.(a.(vi));
+    oct_pos vi;
     let pos = SZ.mul 8sz (SZ.sub 3sz vi);
     A.((b.(pos) <- Cast.u64_to_u8 (S64.shift_right x 56ul)));
     A.((b.(SZ.add pos 1sz) <- Cast.u64_to_u8 (S64.shift_right x 48ul)));

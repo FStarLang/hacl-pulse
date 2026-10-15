@@ -207,10 +207,16 @@ let rec row_head_bound (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar })
   = if k = 0 then ()
     else begin
       row_head_bound p m i (k - 1);
-      Math.lemma_mult_le_right (pow2 (bits p * (k - 1)))
-        (dc p (M.get nbar nbar m i (k - 1))) (pow2 (bits p) - 1);
-      Math.distributivity_sub_left (pow2 (bits p)) 1 (pow2 (bits p * (k - 1)));
-      Math.pow2_plus (bits p) (bits p * (k - 1))
+      let b = bits p in
+      let pk = pow2 (b * (k - 1)) in
+      let d = dc p (M.get nbar nbar m i (k - 1)) in
+      assert (row_head p m i k == row_head p m i (k - 1) + d * pk);
+      Math.lemma_mult_le_right pk d (pow2 b - 1);
+      Math.distributivity_sub_left (pow2 b) 1 pk;
+      Math.pow2_plus b (b * (k - 1));
+      Math.distributivity_add_right b 1 (k - 1);
+      assert (b + b * (k - 1) == b * k);
+      assert (pow2 b * pk == pow2 (b * k))
     end
 
 let row_val (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) : GTot nat =

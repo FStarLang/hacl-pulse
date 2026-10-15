@@ -213,7 +213,13 @@ let xtimes_bit (v: block) (i: nat { i < 128 })
   = top_bit v;
     shift_bit v i;
     r_bit i;
-    if Seq.index v (blocklen - 1) % 2 = 0 then () else gadd_bit (shift_right_1 v) r_block i
+    if Seq.index v (blocklen - 1) % 2 = 0 then ()
+    else begin
+      Math.lemma_mod_lt (Seq.index v (blocklen - 1)) 2;
+      assert (bit v 127 == true);
+      assert (xtimes v == gadd (shift_right_1 v) r_block);
+      gadd_bit (shift_right_1 v) r_block i
+    end
 
 (** {2 Dividing by [x]}
 
@@ -877,9 +883,12 @@ let mul_r_zero (a: block) (k: nat { k < 128 })
   = let f : int -> bool =
       fun i -> pget (pbits a) i && pget (pbits r_block) (128 + k - i) in
     let aux (i: int) : Lemma (0 <= i /\ i < 128 ==> f i == false)
-      = if 0 <= i && i < 128 && i > 6 && 128 + k - i < 128 then
-          r_bit (128 + k - i)
-        else ()
+      = if 0 <= i && i < 128 then begin
+          pbits_get a i;
+          pbits_get r_block (128 + k - i);
+          if 128 + k - i < 128 then r_bit (128 + k - i);
+          if i > 6 then assert (bit a i == false)
+        end
     in
     FStar.Classical.forall_intro aux;
     pmul_get (pbits a) (pbits r_block) (128 + k);

@@ -64,7 +64,14 @@ let lw0 (h: Seq.seq nat)
   = assert_norm (rad * 0 == B4.rad * 0 + 0);
     W4.eval_win2 h 0 0 52;
     assert_norm (B4.rad - 0 == 64);
+    assert_norm (pow2 0 == 1);
+    assert_norm (rad == 52);
     Math.pow2_plus 12 52;
+    Math.paren_mul_right (pow2 12) (pow2 52) (B4.vat h 1);
+    Math.swap_mul (pow2 52) (B4.vat h 1);
+    Math.paren_mul_right (pow2 12) (B4.vat h 1) (pow2 52);
+    assert (W4.win (B4.eval h) (rad * 0) rad ==
+            (B4.vat h 0 + (pow2 12 * B4.vat h 1) * pow2 52) % pow2 52);
     Math.lemma_mod_plus (B4.vat h 0) (pow2 12 * B4.vat h 1) (pow2 52)
 
 let lw1 (h: Seq.seq nat)
@@ -103,6 +110,11 @@ let lw4 (h: Seq.seq nat)
     Math.pow2_le_compat 52 48;
     Math.small_mod (B4.vat h 3 / pow2 16) (pow2 52)
 
+(** The five limb indices, as a case split kept out of the context below. *)
+let below5 (k: nat { k < nl })
+  : Lemma (k == 0 \/ k == 1 \/ k == 2 \/ k == 3 \/ k == 4)
+  = assert_norm (nl == 5)
+
 let load_windows (h s: Seq.seq nat)
   : Lemma (requires Seq.length h == B4.nl /\ B4.bnd h B4.base /\ Seq.length s == nl /\
              Seq.index s 0 == B4.vat h 0 % pow2 52 /\
@@ -119,7 +131,10 @@ let load_windows (h s: Seq.seq nat)
         else if k = 1 then lw1 h
         else if k = 2 then lw2 h
         else if k = 3 then lw3 h
-        else lw4 h in
+        else begin
+          below5 k;
+          lw4 h
+        end in
     Classical.forall_intro aux
 
 (** {2 Storing}
@@ -165,6 +180,11 @@ let sw3 (s: Seq.seq nat)
     assert_norm (rad - 36 == 16);
     W.eval_win2 s 3 36 64
 
+(** The four limb indices, as a case split kept out of the context below. *)
+let below4 (j: nat { j < B4.nl })
+  : Lemma (j == 0 \/ j == 1 \/ j == 2 \/ j == 3)
+  = assert_norm (B4.nl == 4)
+
 let store_windows (s u: Seq.seq nat)
   : Lemma (requires Seq.length s == nl /\ bnd s base /\ Seq.length u == B4.nl /\
              Seq.index u 0 == (vat s 0 / pow2 0 + pow2 52 * vat s 1) % pow2 64 /\
@@ -179,7 +199,7 @@ let store_windows (s u: Seq.seq nat)
         if j = 0 then sw0 s
         else if j = 1 then sw1 s
         else if j = 2 then sw2 s
-        else sw3 s in
+        else begin below4 j; sw3 s end in
     Classical.forall_intro aux
 
 (** {2 The two ends}

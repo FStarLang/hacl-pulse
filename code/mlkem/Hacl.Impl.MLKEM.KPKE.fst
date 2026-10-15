@@ -63,7 +63,14 @@ module Codec = Hacl.Impl.MLKEM.Codec
 module Poly = Hacl.Impl.MLKEM.Poly
 module Sampler = Hacl.Impl.MLKEM.Sampler
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+
+(* proof-only: the matrix size, with the nonlinear step made explicit *)
+let kkn_eq (k: nat)
+  : Lemma ((k * 256) * k == k * k * n)
+  = Math.paren_mul_right k 256 k;
+    Math.swap_mul 256 k;
+    Math.paren_mul_right k k 256
 
 (** Algorithm 13.  [d] is the 32-byte seed. *)
 fn kpke_keygen_impl (ek dk dseed: A.array S8.t) (p: erased params) ([@@@FStar.Attributes.monomorphize] k: SZ.t) ([@@@FStar.Attributes.monomorphize] eta1: SZ.t)
@@ -86,7 +93,11 @@ ensures exists* vek vdk.
   assert_norm (pow2 32 == 4294967296);
   assert_norm (pow2 8 == 256);
   let kn = SZ.mul k 256sz;
+  assert (pure (SZ.v kn == SZ.v k * n));
+  Math.lemma_mult_le_right n (SZ.v k) 4;
+  assert (pure (SZ.v kn <= 4 * n));
   let kkn = SZ.mul kn k;
+  kkn_eq (SZ.v k);
   let k384 = SZ.mul k 384sz;
   let kb = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 k);
   Math.small_mod (SZ.v k) 256;
@@ -112,7 +123,9 @@ ensures exists* vek vdk.
   let mut sigma = [| (S8.zero <: S8.t); 32sz |];
   Copy.copy_range sigma 0sz g 32sz 32sz;
   with vsigma. assert (A.pts_to sigma vsigma);
+  A.pts_to_len sigma;
   slice_eq vg 32 vsigma;
+  assert (pure (Seq.length vsigma == 32));
   assert (pure (vrho == Seq.slice vg 0 32 /\ vsigma == Seq.slice vg 32 64));
 
   (* A-hat, then the two noise vectors in the NTT domain *)
@@ -199,7 +212,11 @@ ensures exists* vct.
   assert_norm (pow2 8 == 256);
   assert_norm (pow2 1 == 2);
   let kn = SZ.mul k 256sz;
+  assert (pure (SZ.v kn == SZ.v k * n));
+  Math.lemma_mult_le_right n (SZ.v k) 4;
+  assert (pure (SZ.v kn <= 4 * n));
   let kkn = SZ.mul kn k;
+  kkn_eq (SZ.v k);
   let k384 = SZ.mul k 384sz;
   SZ.fits_u32_implies_fits (32 * SZ.v du);
   SZ.fits_u32_implies_fits (SZ.v k * (32 * SZ.v du));
@@ -348,6 +365,9 @@ ensures exists* vout.
   assert_norm (4 * 4 * n < pow2 32);
   assert_norm (pow2 1 == 2);
   let kn = SZ.mul k 256sz;
+  assert (pure (SZ.v kn == SZ.v k * n));
+  Math.lemma_mult_le_right n (SZ.v k) 4;
+  assert (pure (SZ.v kn <= 4 * n));
   SZ.fits_u32_implies_fits (32 * SZ.v du);
   SZ.fits_u32_implies_fits (SZ.v k * (32 * SZ.v du));
   SZ.fits_u32_implies_fits (32 * SZ.v dv);
@@ -391,6 +411,8 @@ ensures exists* vout.
 
   (* w = v - NTT^-1(s-hat . NTT(u)) *)
   let mut s = [| (S16.zero <: zqt); kn |];
+  Math.swap_mul 384 (SZ.v k);
+  assert (pure (Seq.length vdk == SZ.v k * (32 * 12)));
   VC.vec_decode_impl s dkey 12sz k;
   with vs. assert (A.pts_to s vs);
   let mut tmp = [| (S16.zero <: zqt); 256sz |];

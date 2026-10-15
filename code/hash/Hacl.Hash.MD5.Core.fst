@@ -63,6 +63,10 @@ let len_fits (n: nat) : Lemma (requires n < pow2 61) (ensures 8 * n < pow2 64)
 let small_fits (n: nat) : Lemma (requires n <= 512) (ensures SZ.fits n)
   = assert_norm (512 < pow2 16)
 
+let tail_blocks_exact (n q: nat)
+  : Lemma (requires (n == 64 \/ n == 128) /\ q == n / 64) (ensures q * 64 == n)
+  = assert_norm (64 / 64 == 1); assert_norm (128 / 64 == 2)
+
 (** How much of the two-block scratch buffer the padding occupies. *)
 inline_for_extraction
 let tail_len (rem: (r: SZ.t { SZ.v r < block_len }))
@@ -149,6 +153,23 @@ ensures A.pts_to wb (words_from_le #S32.t block_words (block_at vb (SZ.v off))) 
 
 (** {2 One block} *)
 
+let update_block_final (blk: Seq.lseq S8.t block_len)
+                       (vst0: Seq.lseq S32.t state_words) (vsh: Seq.seq S32.t) (n: nat)
+  : Lemma (requires Seq.length vsh == state_words /\ n == rounds /\
+                    vsh == repeati_g n (shuffle_core (words_from_le #S32.t block_words blk)) vst0)
+          (ensures
+            Seq.upd (Seq.upd (Seq.upd (Seq.upd vsh
+              0 (S32.add_mod (Seq.index vst0 0) (Seq.index vsh 0)))
+              1 (S32.add_mod (Seq.index vst0 1) (Seq.index vsh 1)))
+              2 (S32.add_mod (Seq.index vst0 2) (Seq.index vsh 2)))
+              3 (S32.add_mod (Seq.index vst0 3) (Seq.index vsh 3)) ==
+            update_block blk vst0)
+  = set4_irrelevant vsh vst0
+      (S32.add_mod (Seq.index vst0 0) (Seq.index vsh 0))
+      (S32.add_mod (Seq.index vst0 1) (Seq.index vsh 1))
+      (S32.add_mod (Seq.index vst0 2) (Seq.index vsh 2))
+      (S32.add_mod (Seq.index vst0 3) (Seq.index vsh 3))
+
 inline_for_extraction
 fn update_block_impl (kt: A.array S32.t) (st: A.array rot)
                      (wb: A.array S32.t) (state: A.array S32.t)
@@ -214,6 +235,8 @@ ensures exists* vw.
   with vsh. assert (A.pts_to state vsh);
   set4_irrelevant vsh vst0
     (S32.add_mod a0 a1) (S32.add_mod b0 b1) (S32.add_mod c0 c1) (S32.add_mod d0 d1);
+  with vi_end. assert (pts_to i vi_end);
+  update_block_final (block_at vb (SZ.v off)) vst0 vsh (SZ.v vi_end);
   A.((state.(0sz) <- S32.add_mod a0 a1));
   A.((state.(1sz) <- S32.add_mod b0 b1));
   A.((state.(2sz) <- S32.add_mod c0 c1));
@@ -227,6 +250,27 @@ ensures exists* vw.
     The bit length goes in little-endian, so byte [j] sits at [off + j] rather
     than at [off + 7 - j]; that one index is the whole of the difference from
     [Hacl.Hash.SHA2.Core.write_len_be]. *)
+
+let len_byte_le (bits8: U64.t) (vsh: U32.t) (n: nat) (vd: nat)
+  : Lemma (requires vd < 8 /\ U64.v bits8 == n /\ U32.v vsh == 8 * vd)
+          (ensures Cast.uint64_to_uint8 (U64.shift_right bits8 vsh) ==
+                   U8.uint_to_t ((n / pow2 (8 * vd)) % 256))
+  = assert_norm (pow2 8 == 256);
+    let sh = U64.shift_right bits8 vsh in
+    let q = n / pow2 (8 * vd) in
+    assert (U64.v sh == U64.v bits8 / pow2 (U32.v vsh));
+    assert (U64.v sh == q);
+    let c = Cast.uint64_to_uint8 sh in
+    assert (U8.v c == U64.v sh % pow2 8);
+    assert (U8.v c == q % 256);
+    U8.v_inj c (U8.uint_to_t ((n / pow2 (8 * vd)) % 256))
+
+let bits8_val (len: SZ.t)
+  : Lemma (requires 8 * SZ.v len < pow2 64)
+          (ensures U64.v (U64.mul 8uL (SZ.sizet_to_uint64 len)) == 8 * SZ.v len)
+  = let x = SZ.sizet_to_uint64 len in
+    assert (U64.v x == SZ.v len);
+    assert (U64.v 8uL == 8)
 
 #push-options "--z3rlimit 300 --fuel 0 --ifuel 0"
 
@@ -242,7 +286,9 @@ ensures exists* vb'. A.pts_to b vb' **
            Seq.index vb' k == Seq.index vb k))
 {
   A.pts_to_len b;
+  bits8_val len;
   let bits8 = U64.mul 8uL (SZ.sizet_to_uint64 len);
+  assert (pure (U64.v bits8 == 8 * SZ.v len));
   let mut d = 0sz;
   let mut sh = 0ul;
   while (let vd = !d; SZ.lt vd 8sz)
@@ -260,6 +306,7 @@ ensures exists* vb'. A.pts_to b vb' **
     let vd = !d;
     let vsh = !sh;
     let c = Cast.uint64_to_uint8 (U64.shift_right bits8 vsh);
+    len_byte_le bits8 vsh (8 * SZ.v len) (SZ.v vd);
     let bs = S8.classify c;
     A.((b.(SZ.add off vd) <- bs));
     Math.distributivity_add_right 8 (SZ.v vd) 1;
@@ -286,10 +333,13 @@ requires A.pts_to tl vt0 ** A.pts_to input #pin vin **
 ensures exists* vt.
   A.pts_to tl vt ** A.pts_to input #pin vin **
   pure (Seq.length vt == 2 * block_len /\ SZ.v base + SZ.v rem == Seq.length vin /\
-        (forall (k: nat). k < SZ.v rem ==> Seq.index vt k == Seq.index vin (SZ.v base + k)) /\
+        (forall (k: nat). {:pattern (Seq.index vt k)}
+           k < SZ.v rem ==> Seq.index vt k == Seq.index vin (SZ.v base + k)) /\
         Seq.index vt (SZ.v rem) == S8.classify 0x80uy /\
-        (forall (k: nat). SZ.v rem < k /\ k < SZ.v ntail - 8 ==> Seq.index vt k == S8.classify 0uy) /\
-        (forall (j: nat). j < 8 ==>
+        (forall (k: nat). {:pattern (Seq.index vt k)}
+           SZ.v rem < k /\ k < SZ.v ntail - 8 ==> Seq.index vt k == S8.classify 0uy) /\
+        (forall (j: nat). {:pattern (Seq.index vt (SZ.v ntail - 8 + j))}
+           j < 8 ==>
            Seq.index vt (SZ.v ntail - 8 + j) ==
              S8.classify (U8.uint_to_t ((8 * SZ.v len / pow2 (8 * j)) % 256))))
 {
@@ -390,7 +440,37 @@ ensures exists* vw.
   drop_table stt;
 }
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
+let tail_blocks_of (pre vin vt: Seq.seq S8.t) (len base_in rem ntail base: nat)
+  : Lemma
+      (requires
+        Seq.length pre + Seq.length vin == len /\ len < max_input /\
+        Seq.length vin == base_in + rem /\ rem == len % block_len /\ base == len - rem /\
+        ntail == (if rem + 1 + len_len <= block_len then block_len else 2 * block_len) /\
+        Seq.length vt == 2 * block_len /\
+        (forall (k: nat). k < rem ==> Seq.index vt k == Seq.index vin (base_in + k)) /\
+        Seq.index vt rem == S8.classify 0x80uy /\
+        (forall (k: nat). rem < k /\ k < ntail - 8 ==> Seq.index vt k == S8.classify 0uy) /\
+        (forall (j: nat). j < 8 ==>
+           Seq.index vt (ntail - 8 + j) ==
+             S8.classify (U8.uint_to_t ((8 * len / pow2 (8 * j)) % 256))))
+      (ensures
+        Seq.length (Seq.append pre vin) == len /\
+        (forall (o: nat). o + block_len <= ntail ==>
+           block_at (padded (Seq.append pre vin)) (base + o) == block_at vt o))
+  = Seq.lemma_len_append pre vin;
+    len_fits len;
+    Math.euclidean_division_definition len block_len;
+    L2.append_index_at pre vin base base_in rem;
+    tail_bytes (Seq.append pre vin) vt ntail base
+
+let tail_final (msg: Seq.seq S8.t { Seq.length msg < max_input }) (n: nat)
+               (vst: Seq.lseq S32.t state_words)
+  : Lemma (requires Seq.length (padded msg) / block_len == n /\
+                    vst == repeati_g n (update_step (padded msg)) iv)
+          (ensures finish vst == hash msg)
+  = ()
+
+#push-options "--z3rlimit 400 --fuel 1 --ifuel 1 --using_facts_from '* -Spec.MD5.update_block -Spec.MD5.shuffle -Spec.MD5.block_at'"
 
 (** The padding blocks and the digest. *)
 
@@ -436,8 +516,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   build_tail tarr input len base_in rem ntail;
   with vt. assert (A.pts_to tarr vt);
   pad_zeros_alt (SZ.v len);
-  L2.append_index_at (reveal pre) (reveal vin) (SZ.v base) (SZ.v base_in) (SZ.v rem);
-  tail_bytes (Seq.append pre vin) vt (SZ.v ntail) (SZ.v base);
+  tail_blocks_of pre vin vt (SZ.v len) (SZ.v base_in) (SZ.v rem) (SZ.v ntail) (SZ.v base);
   Math.multiple_division_lemma (SZ.v ntail / block_len) block_len;
   Math.multiply_fractions (SZ.v ntail) block_len;
   let ntb = SZ.div ntail 64sz;
@@ -478,14 +557,14 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   Math.multiple_modulo_lemma 2 block_len;
   assert (pure (SZ.v ntail == block_len \/ SZ.v ntail == 2 * block_len));
   Math.euclidean_division_definition (SZ.v ntail) block_len;
+  tail_blocks_exact (SZ.v ntail) (SZ.v ntb);
   assert (pure (SZ.v ntb * block_len == SZ.v ntail));
   Math.distributivity_add_left (SZ.v nblocks) (SZ.v ntb) block_len;
   Math.multiple_division_lemma (SZ.v nblocks + SZ.v ntb) block_len;
   assert (pure (Seq.length (padded (Seq.append pre vin)) / block_len ==
                 SZ.v nblocks + SZ.v ntb));
-  assert (pure (update_all (padded (Seq.append pre vin)) iv ==
-                repeati_g (SZ.v nblocks + SZ.v ntb)
-                  (update_step (padded (Seq.append pre vin))) iv));
+  with vst. assert (A.pts_to st vst);
+  tail_final (Seq.append pre vin) (SZ.v nblocks + SZ.v ntb) vst;
   write_digest out st;
   ()
 }

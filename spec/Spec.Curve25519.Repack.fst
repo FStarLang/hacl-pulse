@@ -53,33 +53,45 @@ let lw0 (h: Seq.seq nat)
   : Lemma (requires Seq.length h == 8 /\ B32.bnd h B32.base)
           (ensures W32.win (B32.eval h) (rad * 0) rad ==
                    (B32.vat h 0 / pow2 0 + pow2 32 * B32.vat h 1) % pow2 51)
-  = W32.eval_win2 h 0 0 51
+  = assert_norm (rad * 0 == B32.rad * 0 + 0 /\ rad == 51 /\ B32.rad - 0 == 32);
+    W32.eval_win2 h 0 0 51
 
 let lw1 (h: Seq.seq nat)
   : Lemma (requires Seq.length h == 8 /\ B32.bnd h B32.base)
           (ensures W32.win (B32.eval h) (rad * 1) rad ==
                    (B32.vat h 1 / pow2 19 + pow2 13 * B32.vat h 2 +
                     pow2 45 * B32.vat h 3) % pow2 51)
-  = W32.eval_win h 1 19 51
+  = assert_norm (rad * 1 == B32.rad * 1 + 19 /\ rad == 51 /\
+                 B32.rad - 19 == 13 /\ 2 * B32.rad - 19 == 45);
+    W32.eval_win h 1 19 51
 
 let lw2 (h: Seq.seq nat)
   : Lemma (requires Seq.length h == 8 /\ B32.bnd h B32.base)
           (ensures W32.win (B32.eval h) (rad * 2) rad ==
                    (B32.vat h 3 / pow2 6 + pow2 26 * B32.vat h 4) % pow2 51)
-  = W32.eval_win2 h 3 6 51
+  = assert_norm (rad * 2 == B32.rad * 3 + 6 /\ rad == 51 /\ B32.rad - 6 == 26);
+    W32.eval_win2 h 3 6 51
 
 let lw3 (h: Seq.seq nat)
   : Lemma (requires Seq.length h == 8 /\ B32.bnd h B32.base)
           (ensures W32.win (B32.eval h) (rad * 3) rad ==
                    (B32.vat h 4 / pow2 25 + pow2 7 * B32.vat h 5 +
                     pow2 39 * B32.vat h 6) % pow2 51)
-  = W32.eval_win h 4 25 51
+  = assert_norm (rad * 3 == B32.rad * 4 + 25 /\ rad == 51 /\
+                 B32.rad - 25 == 7 /\ 2 * B32.rad - 25 == 39);
+    W32.eval_win h 4 25 51
 
 let lw4 (h: Seq.seq nat)
   : Lemma (requires Seq.length h == 8 /\ B32.bnd h B32.base)
           (ensures W32.win (B32.eval h) (rad * 4) rad ==
                    (B32.vat h 6 / pow2 12 + pow2 20 * B32.vat h 7) % pow2 51)
-  = W32.eval_win2 h 6 12 51
+  = assert_norm (rad * 4 == B32.rad * 6 + 12 /\ rad == 51 /\ B32.rad - 12 == 20);
+    W32.eval_win2 h 6 12 51
+
+(** The five limb indices, as a case split kept out of the context below. *)
+let below5 (k: nat { k < nl })
+  : Lemma (k == 0 \/ k == 1 \/ k == 2 \/ k == 3 \/ k == 4)
+  = assert_norm (nl == 5)
 
 let load_windows (h s: Seq.seq nat)
   : Lemma (requires Seq.length h == 8 /\ B32.bnd h B32.base /\ Seq.length s == nl /\
@@ -99,7 +111,7 @@ let load_windows (h s: Seq.seq nat)
         else if k = 1 then lw1 h
         else if k = 2 then lw2 h
         else if k = 3 then lw3 h
-        else begin assert (k == 4); lw4 h end in
+        else begin below5 k; lw4 h end in
     Classical.forall_intro aux
 
 (** And the eight thirty-two-bit limbs as windows of the five.  Offsets
@@ -178,6 +190,11 @@ let sw7 (s: Seq.seq nat)
     assert_norm (rad - 20 == 31);
     W.eval_win2 s 4 20 32
 
+(** The eight limb indices, as a case split kept out of the context below. *)
+let below8 (j: nat { j < 8 })
+  : Lemma (j == 0 \/ j == 1 \/ j == 2 \/ j == 3 \/ j == 4 \/ j == 5 \/ j == 6 \/ j == 7)
+  = ()
+
 let store_windows (s u: Seq.seq nat)
   : Lemma (requires Seq.length s == nl /\ bnd s base /\ Seq.length u == 8 /\
              Seq.index u 0 == (vat s 0 / pow2 0 + pow2 51 * vat s 1) % pow2 32 /\
@@ -199,7 +216,7 @@ let store_windows (s u: Seq.seq nat)
         else if j = 4 then sw4 s
         else if j = 5 then sw5 s
         else if j = 6 then sw6 s
-        else begin assert (j == 7); sw7 s end in
+        else begin below8 j; sw7 s end in
     Classical.forall_intro aux
 
 #pop-options

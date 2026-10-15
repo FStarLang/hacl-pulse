@@ -78,7 +78,12 @@ let mone_ok (_: unit)
 
 let mform_zero (d: modulus)
   : Lemma (requires modulus_ok d) (ensures mform d (MA.zero #d.m) mzero)
-  = mzero_ok ()
+  = mzero_ok ();
+    assert (MA.zero #d.m == 0);
+    assert (0 * pow2 256 == 0);
+    Math.small_mod 0 d.m;
+    assert (res d mzero);
+    assert (eval mzero == MA.zero #d.m * pow2 256 % d.m)
 
 let mform_one (d: modulus)
   : Lemma (requires modulus_ok d) (ensures mform d (MA.one #d.m) d.r1)

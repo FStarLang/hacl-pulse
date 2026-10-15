@@ -150,7 +150,77 @@ let ks_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
     SZ.fits_lte (block_len #t + 7 + 10 + 16 + n) (256 + 128 + 64 + n);
     SZ.fits_lte (block_len #t + hash_bytes p + 9 + 10 + 16 + n + 1) (256 + 128 + 64 + n)
 
-#push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
+(** The [SZ.fits] precondition of [labeled_expand_impl] in the key
+    schedule, from the bound {!ks_bound} gives for the context length. *)
+let expand_fits (#t: Type0) {| word t |} (p: params t) (lsid llbl linfo n: nat)
+  : Lemma (requires SZ.fits (block_len #t + hash_bytes p + 9 + 10 + 16 + n + 1) /\
+                    lsid == 10 /\ llbl <= 16 /\ linfo == n)
+          (ensures SZ.fits (block_len #t + hash_bytes p + 9 + lsid + llbl + linfo + 1))
+  = SZ.fits_lte (block_len #t + hash_bytes p + 9 + lsid + llbl + linfo + 1)
+                (block_len #t + hash_bytes p + 9 + 10 + 16 + n + 1)
+
+(** The key schedule context, [mode || psk_id_hash || info_hash], as an
+    opaque fact.  The sequence equality is only needed for the final
+    postcondition of [key_schedule_impl]; exposing it earlier, next to the
+    pointwise facts left by [copy_at], lets the solver chase [Seq.index]
+    through the appends at every later query. *)
+[@@"opaque_to_smt"]
+let ks_ctx (vks: Seq.seq S8.t) (b: S8.t) (pskh infoh: Seq.seq S8.t) : prop =
+  vks == Seq.append (Seq.append (Seq.create 1 b) pskh) infoh
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+let ks_ctx_intro (v0 v1 vks pskh infoh: Seq.seq S8.t) (b: S8.t) (base1 base2 n: SZ.t)
+  : Lemma
+    (requires
+      SZ.v base1 == 1 /\ SZ.v base2 == 1 + SZ.v n /\
+      Seq.length v0 == 1 + (SZ.v n + SZ.v n) /\ Seq.index v0 0 == b /\
+      Seq.length pskh == SZ.v n /\ Seq.length infoh == SZ.v n /\
+      Seq.length v1 == Seq.length v0 /\
+      (forall (k: nat). k < SZ.v n ==> Seq.index v1 (SZ.v base1 + k) == Seq.index pskh k) /\
+      (forall (k: nat). k < Seq.length v0 /\ (k < SZ.v base1 \/ SZ.v base1 + SZ.v n <= k) ==>
+         Seq.index v1 k == Seq.index v0 k) /\
+      Seq.length vks == Seq.length v1 /\
+      (forall (k: nat). k < SZ.v n ==> Seq.index vks (SZ.v base2 + k) == Seq.index infoh k) /\
+      (forall (k: nat). k < Seq.length v1 /\ (k < SZ.v base2 \/ SZ.v base2 + SZ.v n <= k) ==>
+         Seq.index vks k == Seq.index v1 k))
+    (ensures ks_ctx vks b pskh infoh)
+  = reveal_opaque (`%ks_ctx) (ks_ctx vks b pskh infoh);
+    cat3_pointwise vks (Seq.create 1 b) pskh infoh
+#pop-options
+
+(** The postcondition of [key_schedule_impl], from the facts its body
+    leaves behind, proved here with nothing else in scope. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
+let ks_final (#t: Type0) {| word t |} (cs: ciphersuite t { ~(ExportOnly? cs.aead) }) (m: mode)
+             (vsh vinfo vpsk vpid vsid vpskh vinfoh vks vsec wkey wbn wexp: Seq.seq S8.t)
+  : Lemma
+    (requires
+      Seq.length vsh == 32 /\ fits cs.kdf (Seq.length vinfo) /\
+      fits cs.kdf (Seq.length vpsk) /\ fits cs.kdf (Seq.length vpid) /\
+      vsid == suite_id cs /\
+      vpskh == labeled_extract cs.kdf vsid Seq.empty label_psk_id_hash vpid /\
+      vinfoh == labeled_extract cs.kdf vsid Seq.empty label_info_hash vinfo /\
+      ks_ctx vks (S8.classify (mode_byte m)) vpskh vinfoh /\
+      fits cs.kdf (Seq.length vks) /\
+      vsec == labeled_extract cs.kdf vsid vsh label_secret vpsk /\
+      Seq.length vsec <= 64 /\
+      Seq.length wkey == size_key cs /\
+      Seq.length wkey < 65536 /\ Seq.length wkey <= 255 * hash_bytes cs.kdf /\
+      wkey == labeled_expand cs.kdf vsid vsec label_key vks (Seq.length wkey) /\
+      Seq.length wbn == size_nonce cs /\
+      Seq.length wbn < 65536 /\ Seq.length wbn <= 255 * hash_bytes cs.kdf /\
+      wbn == labeled_expand cs.kdf vsid vsec label_base_nonce vks (Seq.length wbn) /\
+      Seq.length wexp == size_kdf cs /\
+      Seq.length wexp < 65536 /\ Seq.length wexp <= 255 * hash_bytes cs.kdf /\
+      wexp == labeled_expand cs.kdf vsid vsec label_exp vks (Seq.length wexp))
+    (ensures
+      (let c = key_schedule cs m vsh vinfo vpsk vpid in
+       wkey == c.ckey /\ wbn == c.cbase_nonce /\ wexp == c.cexporter))
+  = reveal_opaque (`%ks_ctx) (ks_ctx vks (S8.classify (mode_byte m)) vpskh vinfoh);
+    U8.uv_inv (mode_byte m)
+#pop-options
+
+#push-options "--z3rlimit 400 --fuel 0 --ifuel 0 --using_facts_from '* -Spec.HPKE.key_schedule -Spec.HPKE.labeled -Spec.HPKE.suite_id -Spec.HPKE.two_bytes -Spec.HKDF -Spec.HMAC'"
 
 fn key_schedule_impl (#t: Type0) {| w: word t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
@@ -221,6 +291,7 @@ ensures exists* wkey wbn wexp.
   let mut sid = [| z8; 10sz |];
   A.pts_to_len sid;
   suite_id_impl cs sid;
+  with vsid. assert (A.pts_to sid vsid);
 
   (* psk_id_hash and info_hash *)
   let mut pskh = [| z8; hb |];
@@ -230,6 +301,7 @@ ensures exists* wkey wbn wexp.
   labeled_extract_nosalt cs.kdf kt ivt pskh sid 10sz l1 11sz psk_id psk_id_len;
   drop_table l1;
   with vpskh. assert (A.pts_to pskh vpskh);
+  A.pts_to_len pskh;
 
   let mut infoh = [| z8; hb |];
   A.pts_to_len infoh;
@@ -238,18 +310,24 @@ ensures exists* wkey wbn wexp.
   labeled_extract_nosalt cs.kdf kt ivt infoh sid 10sz l2 9sz info info_len;
   drop_table l2;
   with vinfoh. assert (A.pts_to infoh vinfoh);
+  A.pts_to_len infoh;
 
   (* key_schedule_context = mode || psk_id_hash || info_hash *)
   let ks_len = SZ.add 1sz (SZ.add hb hb);
   let mut ks = [| z8; ks_len |];
   A.pts_to_len ks;
+  assert (pure (SZ.v ks_len == 2 * size_kdf cs + 1));
+  ks_bound cs.kdf (SZ.v ks_len);
+  assert (pure (size_kdf cs <= 255 * hash_bytes cs.kdf));
   A.((ks.(0sz) <- S8.classify (mode_byte m)));
+  with v0. assert (A.pts_to ks v0);
+  assert (pure (Seq.index v0 0 == S8.classify (mode_byte m)));
   copy_at ks 1sz pskh hb;
+  with v1. assert (A.pts_to ks v1);
   copy_at ks (SZ.add 1sz hb) infoh hb;
   with vks. assert (A.pts_to ks vks);
   A.pts_to_len ks;
-  cat3_pointwise vks (Seq.create 1 (S8.classify (mode_byte m))) vpskh vinfoh;
-  ks_bound cs.kdf (2 * size_kdf cs + 1);
+  ks_ctx_intro v0 v1 vks vpskh vinfoh (S8.classify (mode_byte m)) 1sz (SZ.add 1sz hb) hb;
 
   (* secret = LabeledExtract(shared_secret, "secret", psk) *)
   let mut secret = [| z8; hb |];
@@ -258,24 +336,37 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len l3;
   labeled_extract_impl cs.kdf kt ivt secret sid 10sz shared 32sz l3 6sz psk psk_len;
   drop_table l3;
+  with vsec. assert (A.pts_to secret vsec);
+  A.pts_to_len secret;
 
   let l4 = table label_key_arr 3sz;
   A.pts_to_len l4;
+  with pl4 vl4. assert (A.pts_to l4 #pl4 vl4);
+  expand_fits cs.kdf (Seq.length vsid) (Seq.length vl4) (Seq.length vks) (SZ.v ks_len);
   labeled_expand_impl cs.kdf kt ivt key (key_len cs.aead) secret hb sid 10sz
                       l4 3sz ks ks_len;
   drop_table l4;
 
   let l5 = table label_base_nonce_arr 10sz;
   A.pts_to_len l5;
+  with pl5 vl5. assert (A.pts_to l5 #pl5 vl5);
+  expand_fits cs.kdf (Seq.length vsid) (Seq.length vl5) (Seq.length vks) (SZ.v ks_len);
   labeled_expand_impl cs.kdf kt ivt base_nonce 12sz secret hb sid 10sz
                       l5 10sz ks ks_len;
   drop_table l5;
 
   let l6 = table label_exp_arr 3sz;
   A.pts_to_len l6;
+  with pl6 vl6. assert (A.pts_to l6 #pl6 vl6);
+  expand_fits cs.kdf (Seq.length vsid) (Seq.length vl6) (Seq.length vks) (SZ.v ks_len);
   labeled_expand_impl cs.kdf kt ivt exporter hb secret hb sid 10sz
                       l6 3sz ks ks_len;
   drop_table l6;
+  with wkey. assert (A.pts_to key wkey);
+  with wbn. assert (A.pts_to base_nonce wbn);
+  with wexp. assert (A.pts_to exporter wexp);
+  ks_final cs m vsh vinfo vpsk vpid vsid vpskh vinfoh vks vsec wkey wbn wexp;
+  ()
 }
 
 #pop-options
@@ -332,6 +423,46 @@ let nonce_eq (n: nat { n < pow2 64 }) (bn o: Seq.lseq S8.t 12)
 #pop-options
 
 
+(** Loop invariant of [compute_nonce_impl], kept opaque so that the
+    quantifier is only exposed through the init/step/elim lemmas below. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 10"
+
+[@@"opaque_to_smt"]
+let nonce_inv (bn ns wo: Seq.seq S8.t) (i: nat) : prop =
+  i <= 12 /\ Seq.length wo == 12 /\ Seq.length bn == 12 /\ Seq.length ns == 12 /\
+  (forall (k: nat). k < i ==>
+     Seq.index wo k == S8.logxor (Seq.index bn k) (Seq.index ns k))
+
+let nonce_inv_init (bn ns wo: Seq.seq S8.t)
+  : Lemma (requires Seq.length wo == 12 /\ Seq.length bn == 12 /\ Seq.length ns == 12)
+          (ensures nonce_inv bn ns wo 0)
+  = reveal_opaque (`%nonce_inv) (nonce_inv bn ns wo 0)
+
+let nonce_inv_step (bn ns wo: Seq.seq S8.t) (i: nat) (b a: S8.t)
+  : Lemma (requires nonce_inv bn ns wo i /\ i < 12 /\
+                    Seq.length wo == 12 /\ Seq.length bn == 12 /\ Seq.length ns == 12 /\
+                    b == Seq.index bn i /\ a == Seq.index ns i)
+          (ensures Seq.length wo == 12 /\
+                   nonce_inv bn ns (Seq.upd wo i (S8.logxor b a)) (i + 1))
+  = reveal_opaque (`%nonce_inv) (nonce_inv bn ns wo i);
+    let wo' = Seq.upd wo i (S8.logxor b a) in
+    introduce forall (k: nat). k < i + 1 ==>
+        Seq.index wo' k == S8.logxor (Seq.index bn k) (Seq.index ns k)
+    with introduce _ ==> _ with (
+      if k = i then () else ()
+    );
+    reveal_opaque (`%nonce_inv) (nonce_inv bn ns wo' (i + 1))
+
+let nonce_inv_elim (bn ns wo: Seq.seq S8.t) (i: nat)
+  : Lemma (requires nonce_inv bn ns wo i /\ i >= 12 /\
+                    Seq.length bn == 12 /\ Seq.length ns == 12)
+          (ensures Seq.length wo == 12 /\
+                   (forall (k: nat). k < 12 ==>
+                      Seq.index wo k == S8.logxor (Seq.index bn k) (Seq.index ns k)))
+  = reveal_opaque (`%nonce_inv) (nonce_inv bn ns wo i)
+
+#pop-options
+
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0 --using_facts_from '* -Spec.HPKE +Spec.HPKE.xor_bytes'"
 
 (** [out <- base_nonce xor be96(sq)].
@@ -363,28 +494,26 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to bn #pb vbn **
   with w1. assert (A.pts_to be w1);
   A.pts_to_len be;
   nonce_be (U64.v sq) w1;
+  nonce_inv_init vbn w1 vout;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 12sz)
   invariant exists* (vi: SZ.t) (wo: Seq.seq S8.t).
     pts_to i vi ** A.pts_to out wo ** A.pts_to bn #pb vbn ** A.pts_to be w1 **
     pure (SZ.v vi <= 12 /\ Seq.length wo == 12 /\ Seq.length vbn == 12 /\
-          Seq.length w1 == 12 /\
-          (forall (k: nat). k < 12 ==>
-             Seq.index w1 k == Seq.index (B.nat_to_be 12 (U64.v sq)) k) /\
-          (forall (k: nat). k < SZ.v vi ==>
-             Seq.index wo k ==
-               S8.logxor (Seq.index vbn k)
-                         (Seq.index (B.nat_to_be 12 (U64.v sq)) k)))
+          Seq.length w1 == 12 /\ nonce_inv vbn w1 wo (SZ.v vi))
   decreases (12 - SZ.v (!i))
   {
     let vi = !i;
+    with wo. assert (A.pts_to out wo);
     let a = A.(be.(vi));
     let b = A.(bn.(vi));
     A.((out.(vi) <- S8.logxor b a));
+    nonce_inv_step vbn w1 wo (SZ.v vi) b a;
     i := SZ.add vi 1sz;
   };
-  with wo. assert (A.pts_to out wo);
+  with vi wo. assert (pts_to i vi ** A.pts_to out wo);
   A.pts_to_len out;
+  nonce_inv_elim vbn w1 wo (SZ.v vi);
   assert (pure (forall (k: nat). k < 12 ==>
                   Seq.index wo k ==
                     S8.logxor (Seq.index vbn k)

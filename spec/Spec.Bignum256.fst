@@ -209,7 +209,12 @@ let eval_row (a b: Seq.seq nat) (i: nat { i < nl })
     let suf = Seq.slice r i nw in
     eval_pad suf nl;
     Seq.lemma_eq_intro (Seq.slice suf 0 nl) (scale (vat a i) b);
-    eval_scale (vat a i) b
+    eval_scale (vat a i) b;
+    assert (eval suf == vat a i * eval b);
+    assert (eval r == pow2 (rad * i) * (vat a i * eval b));
+    Math.paren_mul_right (pow2 (rad * i)) (vat a i) (eval b);
+    Math.swap_mul (pow2 (rad * i)) (vat a i);
+    Math.paren_mul_right (vat a i) (pow2 (rad * i)) (eval b)
 
 (** {2 The schoolbook product} *)
 
