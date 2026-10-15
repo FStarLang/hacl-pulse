@@ -628,12 +628,12 @@ fn win_add (ox oy oz ux uy uz sx sy sz: A.array S64.t)
            (#vox #voy #voz: erased (Seq.seq S64.t))
            (#vux #vuy #vuz: erased (Seq.seq S64.t))
            (#vsx #vsy #vsz: erased (Seq.seq S64.t))
-           (#ptb: perm) (#vtx #vty #vtz: erased (Seq.seq S64.t))
+           (#ptx #pty #ptz: perm) (#vtx #vty #vtz: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
   A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
-  A.pts_to tx #ptb vtx ** A.pts_to ty #ptb vty ** A.pts_to tz #ptb vtz **
+  A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty ** A.pts_to tz #ptz vtz **
   pure (Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
         Seq.length vsx == nl /\ Seq.length vsy == nl /\ Seq.length vsz == nl /\
         Seq.length vtx == 64 /\ Seq.length vty == 64 /\ Seq.length vtz == 64 /\
@@ -645,7 +645,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
   A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
-  A.pts_to tx #ptb vtx ** A.pts_to ty #ptb vty ** A.pts_to tz #ptb vtz **
+  A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty ** A.pts_to tz #ptz vtz **
   pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
         Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
         pok wx wy wz /\

@@ -1159,13 +1159,13 @@ their `target("bmi2")` for this -- none uses BMI2, and inlined into X25519's
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
-mentions both takes minutes.  So `code/p256` is twenty-two modules: the on-curve
+mentions both takes minutes.  So `code/p256` is twenty-seven modules: the on-curve
 test and the scalar reduction never appear in the same verification context,
 and `Hacl.P256.Key` (private keys, the scalar field) and
 `Hacl.P256.Key.Public` (public keys, the field) are separate files for no
-other reason.  Two more are the fixed-base window.  `code/k256` is the same
-twenty-two for the same reasons, plus the four modules of its own radix-52
-base field.
+other reason.  Seven more are the fixed-base window and its compiled-in
+tables.  `code/k256` is split the same way for the same reasons, plus the
+modules of its own radix-52 base field.
 
 **`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
 addition formulas are Renes-Costello-Batina, twelve field multiplications
@@ -1198,15 +1198,35 @@ together against `G`, `2^64 G`, `2^128 G` and `2^192 G`, sixteen rungs of
 four doublings and four additions, 184 point operations rather than 335.
 `Spec.P256.Base` says what the three extra base points are, as a doubling
 chain the normaliser evaluates at typechecking time, and
-`Spec.Group.Smul.dblk_ok` turns that into a statement about `smul`.  Their
-six field constants are **Montgomery forms** -- that is what this field
-runs in -- and they live in `Hacl.P256.TablesG` rather than beside the
-other eight, because a dozen two-hundred-and-fifty-six-bit literals in one
-solver context is enough to stop a file of routine limb lemmas
-terminating.  Everything below the rung is `Hacl.P256.PointWin`'s, whose
-table layer carries a scale for exactly this reason.  ECDH as initiator
-went from 272 us to **165** and signing from 287 to **182**, which is 1.04x
-and 1.08x of HACL\*.
+`Spec.Group.Smul.dblk_ok` turns that into a statement about `smul`.
+Everything below the rung is `Hacl.P256.PointWin`'s, whose table layer
+carries a scale for exactly this reason.  ECDH as initiator went from 272 us
+to **165** and signing from 287 to **182**, which is 1.04x and 1.08x of
+HACL\*.
+
+**The four tables are compiled in.**  They were first built at run time
+from the three extra base points, which was about an eighth of the
+fixed-base operations.  They are now sixty-four precomputed multiples
+`d * 2^{64j} G`, stored as twelve `static const uint64_t [64]` arrays of
+**Montgomery forms** (what this field runs in), with entry 0 the point at
+infinity `(0, R, 0)` and every `z` equal to `R`.  `spec/Spec.P256.Win0` ..
+`Win3` prove each entry on the curve and equal to the previous entry plus
+the scale point with one `assert_norm` apiece, lifted to `smul` by
+`Spec.Group.smul_add_congr`; `code/p256/Hacl.P256.Win0` .. `Win3` hold the
+arrays and `Hacl.P256.WinTable` turns four limb facts into the window's
+`ent`.  All eight are generated, and each takes about a minute.  `win_add`
+takes one permission per coordinate array, as on the other two curves.
+This took ECDH as initiator from 97 us to 69 under gcc and from 77 to 59
+under clang, and signing and verification by similar absolute amounts
+(`bench/REPORT.md` Part 63).
+
+**Inversion is an exponentiation on the specialised field.**  `finv` and
+`fsqrt` were the generic four-limb `mexp`, which multiplies with the general
+Montgomery core, and an eighth of a variable-base ECDH was spent there.
+`Hacl.P256.Exp`, a port of `Hacl.K256.Exp52` to four 64-bit limbs, does the
+same left-to-right square-and-multiply with `Hacl.P256.Field`'s `fmul` and
+`fsqr`; it is about 10 us off every operation under clang and 3-5 us under
+gcc (Part 64).
 
 **Verification is not constant time and need not be.**
 `point_mul_double_g u1 u2 Q` is two independent multiplications and one
@@ -3608,7 +3628,11 @@ had the special-prime field too (`Hacl.P256.Field64`, Part 62), which took
 another 35-50% off every row: under gcc ECDH as initiator 176 us to **112**,
 as responder 285 to **180**, signing 192 to **131** and verification 448 to
 **292**; under clang 163 to **88**, 256 to **129**, 185 to **110** and 428
-to **222**.  The table above predates it.
+to **222**.  Compiled-in generator tables and an inversion on that field
+(Parts 63 and 64) then took, in a second harness, ECDH as initiator from 97
+us to **65** under gcc and from 77 to **49** under clang, signing from 119 to
+**86** and 96 to **69**, and verification from 256 to **224** and 194 to
+**166**.  The table above predates all three.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -4241,8 +4265,13 @@ us; both rows above predate them.
 And P-256 now has a field specialised to its prime (`Hacl.P256.Field64`,
 Part 62): ECDH (variable-base) takes 180 us under gcc and 129 us under clang,
 signing 131 and 110, verification 292 and 222.  That is 2.7x--5.5x
-OpenSSL's `nistz256` assembly rather than 5x--11x; what is left is mostly
-its precomputed generator multiples and the double-scalar verification.
+OpenSSL's `nistz256` assembly rather than 5x--11x.  Since then the generator
+tables are compiled in and inversion runs on the specialised field (Parts 63
+and 64): in that part's harness ECDH (variable-base) went from 152 us to 148
+under gcc and from 118 to 105 under clang, signing from 119 to 86 and 96 to
+69, verification from 256 to 224 and 194 to 166.  What is left against
+`nistz256` is its assembly field, its 150 KB of generator multiples and the
+double-scalar verification.
 
 ## Proof engineering notes
 
@@ -4881,9 +4910,8 @@ rough order of value:
    **1.04x**, signing from 287 to **182** and 1.69x to **1.08x**, and
    verification from 545 to **449** and 1.27x to **1.05x**, with variable-base
    `dh-responder` unmoved at **0.77x** as the control.  Its six constants are
-   Montgomery forms, since that is the representation P-256's field runs in,
-   and they live in `code/p256/Hacl.P256.TablesG.fst` rather than beside the
-   other eight for the reason given there.  The scalar arithmetic all three
+   Montgomery forms, since that is the representation P-256's field runs in
+   (they have since been replaced by compiled-in tables; see below).  The scalar arithmetic all three
    share is `spec/Spec.Group.Split4.fst`.  The variable-base
    half is **done on all three curves**: `code/k256/Hacl.K256.PointWin.fst`,
    `code/p256/Hacl.P256.PointWin.fst` and
@@ -4973,8 +5001,11 @@ rough order of value:
    arrays in radix 2^52, a hundred and ninety-two field constants), the
    chunking half of `Hacl.Impl.Lit52` and `Hacl.K256.WinTable`; it cost an
    afternoon, verified at every step on the first attempt, and let
-   `Hacl.K256.Tables52G` be deleted.  The same change is available on P-256,
-   at 192 field constants, and has not been made.
+   `Hacl.K256.Tables52G` be deleted.  P-256 has **now had it too**, at 192
+   field constants in Montgomery form (`Hacl.P256.Win0` .. `Win3`,
+   `Hacl.P256.WinTable`), which let `Hacl.P256.TablesG` be deleted and took
+   ECDH as initiator from 97 us to 69 under gcc and 77 to 59 under clang
+   (Part 63).
 7. **Ed25519's group-order arithmetic on the four-limb Montgomery core**,
    **done**.  `Hacl.Ed25519.Scalar` was the last bit-at-a-time arithmetic in
    the repository and the last user of the eight-limb, thirty-two-bit

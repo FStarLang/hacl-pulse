@@ -1,0 +1,400 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+(** The fixed-base window's fourth table: the sixteen multiples of
+    [2^192 G].
+
+    {!Spec.P256.Base} says what the base point is; this says what the
+    table built from it holds, so that the table can be a constant in the
+    binary rather than fifteen additions on every call.  The entries are
+    affine, and each is settled by two [assert_norm]s -- that it is on the
+    curve, and that it is the previous entry plus the base point -- and one
+    application of {!Spec.P256.Smul.smul_add_congr}.
+
+    This is {!Spec.K256.Win3} on a different curve. *)
+module Spec.P256.Win3
+
+module G = Spec.Group.Smul
+module SM = Spec.P256.Smul
+module Base = Spec.P256.Base
+module Math = FStar.Math.Lemmas
+
+open Spec.P256
+open Spec.P256.Group
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
+
+(** The table's scale: entry [d] is the [d 2^192]-th multiple of [g]. *)
+let n : nat = pow2 192
+
+(** [(k + 1) n] as [k n + n], which is the step the chain takes. *)
+let step (k: nat) : Lemma (k * n + n == (k + 1) * n)
+  = Math.distributivity_add_left k 1 n
+
+(** {2 The first two entries} *)
+
+let e0 : proj_point = point_at_infinity
+
+let e0_ok (_: unit)
+  : Lemma (on_curve e0 /\ peq e0 (SM.smul (0 * n) g))
+  = point_at_infinity_on_curve ();
+    SM.smul_zero g;
+    peq_refl e0
+
+let e1 : proj_point = Base.q3
+
+let e1_ok (_: unit)
+  : Lemma (on_curve e1 /\ peq e1 (SM.smul (1 * n) g))
+  = Base.q3_ok ()
+
+(** {2 The chain} *)
+
+[@@"opaque_to_smt"]
+let e2x : felem =
+  assert_norm (28507834610654566637594510161138892506432594947274618437317219361070848981768 < prime);
+  28507834610654566637594510161138892506432594947274618437317219361070848981768
+
+[@@"opaque_to_smt"]
+let e2y : felem =
+  assert_norm (3950927579959704485379855502273046145130032444601645974019069495340412976281 < prime);
+  3950927579959704485379855502273046145130032444601645974019069495340412976281
+
+let e2 : proj_point = (e2x, e2y, fone)
+
+let e2_ok (_: unit)
+  : Lemma (on_curve e2 /\ peq e2 (SM.smul (2 * n) g))
+  = assert_norm (on_curve e2);
+    assert_norm (peq e2 (point_add e1 e1));
+    e1_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (1 * n) n g e1 e1;
+    step 1;
+    SM.smul_ok (2 * n) g;
+    peq_trans e2 (point_add e1 e1) (SM.smul (2 * n) g)
+
+[@@"opaque_to_smt"]
+let e3x : felem =
+  assert_norm (3589176183919003615258891761702394680843104791829138624469854942968637937764 < prime);
+  3589176183919003615258891761702394680843104791829138624469854942968637937764
+
+[@@"opaque_to_smt"]
+let e3y : felem =
+  assert_norm (20670691424877116197522645446763929263758239767436166559333969405902833911806 < prime);
+  20670691424877116197522645446763929263758239767436166559333969405902833911806
+
+let e3 : proj_point = (e3x, e3y, fone)
+
+let e3_ok (_: unit)
+  : Lemma (on_curve e3 /\ peq e3 (SM.smul (3 * n) g))
+  = assert_norm (on_curve e3);
+    assert_norm (peq e3 (point_add e2 e1));
+    e2_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (2 * n) n g e2 e1;
+    step 2;
+    SM.smul_ok (3 * n) g;
+    peq_trans e3 (point_add e2 e1) (SM.smul (3 * n) g)
+
+[@@"opaque_to_smt"]
+let e4x : felem =
+  assert_norm (106918977496937714720284163058033002522801120928276972663745392498681798181500 < prime);
+  106918977496937714720284163058033002522801120928276972663745392498681798181500
+
+[@@"opaque_to_smt"]
+let e4y : felem =
+  assert_norm (1346539278960570545851414518155188004217509775692549416990760340077370277457 < prime);
+  1346539278960570545851414518155188004217509775692549416990760340077370277457
+
+let e4 : proj_point = (e4x, e4y, fone)
+
+let e4_ok (_: unit)
+  : Lemma (on_curve e4 /\ peq e4 (SM.smul (4 * n) g))
+  = assert_norm (on_curve e4);
+    assert_norm (peq e4 (point_add e3 e1));
+    e3_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (3 * n) n g e3 e1;
+    step 3;
+    SM.smul_ok (4 * n) g;
+    peq_trans e4 (point_add e3 e1) (SM.smul (4 * n) g)
+
+[@@"opaque_to_smt"]
+let e5x : felem =
+  assert_norm (59195218128945308799837576542163955836163534146003825676038283560657111990366 < prime);
+  59195218128945308799837576542163955836163534146003825676038283560657111990366
+
+[@@"opaque_to_smt"]
+let e5y : felem =
+  assert_norm (103525814137817850013371469664068775705985257126046427390367625513616705319531 < prime);
+  103525814137817850013371469664068775705985257126046427390367625513616705319531
+
+let e5 : proj_point = (e5x, e5y, fone)
+
+let e5_ok (_: unit)
+  : Lemma (on_curve e5 /\ peq e5 (SM.smul (5 * n) g))
+  = assert_norm (on_curve e5);
+    assert_norm (peq e5 (point_add e4 e1));
+    e4_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (4 * n) n g e4 e1;
+    step 4;
+    SM.smul_ok (5 * n) g;
+    peq_trans e5 (point_add e4 e1) (SM.smul (5 * n) g)
+
+[@@"opaque_to_smt"]
+let e6x : felem =
+  assert_norm (41474166047978734481941587718088097067420456263834594984197281159483253182556 < prime);
+  41474166047978734481941587718088097067420456263834594984197281159483253182556
+
+[@@"opaque_to_smt"]
+let e6y : felem =
+  assert_norm (30159320828583078463889907185560803203647682258206705306828200136721640629001 < prime);
+  30159320828583078463889907185560803203647682258206705306828200136721640629001
+
+let e6 : proj_point = (e6x, e6y, fone)
+
+let e6_ok (_: unit)
+  : Lemma (on_curve e6 /\ peq e6 (SM.smul (6 * n) g))
+  = assert_norm (on_curve e6);
+    assert_norm (peq e6 (point_add e5 e1));
+    e5_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (5 * n) n g e5 e1;
+    step 5;
+    SM.smul_ok (6 * n) g;
+    peq_trans e6 (point_add e5 e1) (SM.smul (6 * n) g)
+
+[@@"opaque_to_smt"]
+let e7x : felem =
+  assert_norm (17242637097321580336229632529373345115409110360922941155638014181629839501488 < prime);
+  17242637097321580336229632529373345115409110360922941155638014181629839501488
+
+[@@"opaque_to_smt"]
+let e7y : felem =
+  assert_norm (62696863895197274273539846469593891159809624557797514097050959211130461552927 < prime);
+  62696863895197274273539846469593891159809624557797514097050959211130461552927
+
+let e7 : proj_point = (e7x, e7y, fone)
+
+let e7_ok (_: unit)
+  : Lemma (on_curve e7 /\ peq e7 (SM.smul (7 * n) g))
+  = assert_norm (on_curve e7);
+    assert_norm (peq e7 (point_add e6 e1));
+    e6_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (6 * n) n g e6 e1;
+    step 6;
+    SM.smul_ok (7 * n) g;
+    peq_trans e7 (point_add e6 e1) (SM.smul (7 * n) g)
+
+[@@"opaque_to_smt"]
+let e8x : felem =
+  assert_norm (69871290583902823756312358757194974531816844293401433072353406819188419207248 < prime);
+  69871290583902823756312358757194974531816844293401433072353406819188419207248
+
+[@@"opaque_to_smt"]
+let e8y : felem =
+  assert_norm (105635023119392007220470460253250131344596988052532839563748788415404510957778 < prime);
+  105635023119392007220470460253250131344596988052532839563748788415404510957778
+
+let e8 : proj_point = (e8x, e8y, fone)
+
+let e8_ok (_: unit)
+  : Lemma (on_curve e8 /\ peq e8 (SM.smul (8 * n) g))
+  = assert_norm (on_curve e8);
+    assert_norm (peq e8 (point_add e7 e1));
+    e7_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (7 * n) n g e7 e1;
+    step 7;
+    SM.smul_ok (8 * n) g;
+    peq_trans e8 (point_add e7 e1) (SM.smul (8 * n) g)
+
+[@@"opaque_to_smt"]
+let e9x : felem =
+  assert_norm (49430858382930211453798757290416110171386091917423305144708637822741795012660 < prime);
+  49430858382930211453798757290416110171386091917423305144708637822741795012660
+
+[@@"opaque_to_smt"]
+let e9y : felem =
+  assert_norm (27457592048331411183636128873427892716236553183552750174818855018314469527088 < prime);
+  27457592048331411183636128873427892716236553183552750174818855018314469527088
+
+let e9 : proj_point = (e9x, e9y, fone)
+
+let e9_ok (_: unit)
+  : Lemma (on_curve e9 /\ peq e9 (SM.smul (9 * n) g))
+  = assert_norm (on_curve e9);
+    assert_norm (peq e9 (point_add e8 e1));
+    e8_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (8 * n) n g e8 e1;
+    step 8;
+    SM.smul_ok (9 * n) g;
+    peq_trans e9 (point_add e8 e1) (SM.smul (9 * n) g)
+
+[@@"opaque_to_smt"]
+let e10x : felem =
+  assert_norm (14134167467293075552109193522828562774082874196533322570585603009405827776649 < prime);
+  14134167467293075552109193522828562774082874196533322570585603009405827776649
+
+[@@"opaque_to_smt"]
+let e10y : felem =
+  assert_norm (56157038170318992072860945718117774318684150053585629665477891802754776947081 < prime);
+  56157038170318992072860945718117774318684150053585629665477891802754776947081
+
+let e10 : proj_point = (e10x, e10y, fone)
+
+let e10_ok (_: unit)
+  : Lemma (on_curve e10 /\ peq e10 (SM.smul (10 * n) g))
+  = assert_norm (on_curve e10);
+    assert_norm (peq e10 (point_add e9 e1));
+    e9_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (9 * n) n g e9 e1;
+    step 9;
+    SM.smul_ok (10 * n) g;
+    peq_trans e10 (point_add e9 e1) (SM.smul (10 * n) g)
+
+[@@"opaque_to_smt"]
+let e11x : felem =
+  assert_norm (66782844464555313143280710914629442942473516347148224101329259654797469234632 < prime);
+  66782844464555313143280710914629442942473516347148224101329259654797469234632
+
+[@@"opaque_to_smt"]
+let e11y : felem =
+  assert_norm (20474324301073859468771317336487896939071060327643396495141365837669498206276 < prime);
+  20474324301073859468771317336487896939071060327643396495141365837669498206276
+
+let e11 : proj_point = (e11x, e11y, fone)
+
+let e11_ok (_: unit)
+  : Lemma (on_curve e11 /\ peq e11 (SM.smul (11 * n) g))
+  = assert_norm (on_curve e11);
+    assert_norm (peq e11 (point_add e10 e1));
+    e10_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (10 * n) n g e10 e1;
+    step 10;
+    SM.smul_ok (11 * n) g;
+    peq_trans e11 (point_add e10 e1) (SM.smul (11 * n) g)
+
+[@@"opaque_to_smt"]
+let e12x : felem =
+  assert_norm (113787769664007514070035787512322713346985960735321925831956653617477224218840 < prime);
+  113787769664007514070035787512322713346985960735321925831956653617477224218840
+
+[@@"opaque_to_smt"]
+let e12y : felem =
+  assert_norm (10849167215304168905937505436319161495117549633352210520554501389498447845121 < prime);
+  10849167215304168905937505436319161495117549633352210520554501389498447845121
+
+let e12 : proj_point = (e12x, e12y, fone)
+
+let e12_ok (_: unit)
+  : Lemma (on_curve e12 /\ peq e12 (SM.smul (12 * n) g))
+  = assert_norm (on_curve e12);
+    assert_norm (peq e12 (point_add e11 e1));
+    e11_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (11 * n) n g e11 e1;
+    step 11;
+    SM.smul_ok (12 * n) g;
+    peq_trans e12 (point_add e11 e1) (SM.smul (12 * n) g)
+
+[@@"opaque_to_smt"]
+let e13x : felem =
+  assert_norm (28807952474903207273372298090030001316887618384091071254442917376850609063866 < prime);
+  28807952474903207273372298090030001316887618384091071254442917376850609063866
+
+[@@"opaque_to_smt"]
+let e13y : felem =
+  assert_norm (71137644749649770620387882912830091951460209779886529241309116011807711052120 < prime);
+  71137644749649770620387882912830091951460209779886529241309116011807711052120
+
+let e13 : proj_point = (e13x, e13y, fone)
+
+let e13_ok (_: unit)
+  : Lemma (on_curve e13 /\ peq e13 (SM.smul (13 * n) g))
+  = assert_norm (on_curve e13);
+    assert_norm (peq e13 (point_add e12 e1));
+    e12_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (12 * n) n g e12 e1;
+    step 12;
+    SM.smul_ok (13 * n) g;
+    peq_trans e13 (point_add e12 e1) (SM.smul (13 * n) g)
+
+[@@"opaque_to_smt"]
+let e14x : felem =
+  assert_norm (90691365280031901966754623489095867713256635360539373975308503925306053966536 < prime);
+  90691365280031901966754623489095867713256635360539373975308503925306053966536
+
+[@@"opaque_to_smt"]
+let e14y : felem =
+  assert_norm (94688509081385540354615068321501902447617453438339951571659487306435058574098 < prime);
+  94688509081385540354615068321501902447617453438339951571659487306435058574098
+
+let e14 : proj_point = (e14x, e14y, fone)
+
+let e14_ok (_: unit)
+  : Lemma (on_curve e14 /\ peq e14 (SM.smul (14 * n) g))
+  = assert_norm (on_curve e14);
+    assert_norm (peq e14 (point_add e13 e1));
+    e13_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (13 * n) n g e13 e1;
+    step 13;
+    SM.smul_ok (14 * n) g;
+    peq_trans e14 (point_add e13 e1) (SM.smul (14 * n) g)
+
+[@@"opaque_to_smt"]
+let e15x : felem =
+  assert_norm (98916189093377933934977985758796889626801715667030378903949630295544959037889 < prime);
+  98916189093377933934977985758796889626801715667030378903949630295544959037889
+
+[@@"opaque_to_smt"]
+let e15y : felem =
+  assert_norm (53480225302702099863239424792143277267551811355909694114485908007337733628387 < prime);
+  53480225302702099863239424792143277267551811355909694114485908007337733628387
+
+let e15 : proj_point = (e15x, e15y, fone)
+
+let e15_ok (_: unit)
+  : Lemma (on_curve e15 /\ peq e15 (SM.smul (15 * n) g))
+  = assert_norm (on_curve e15);
+    assert_norm (peq e15 (point_add e14 e1));
+    e14_ok ();
+    e1_ok ();
+    g_on_curve ();
+    SM.smul_add_congr (14 * n) n g e14 e1;
+    step 14;
+    SM.smul_ok (15 * n) g;
+    peq_trans e15 (point_add e14 e1) (SM.smul (15 * n) g)
+
+#pop-options
