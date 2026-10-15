@@ -4139,9 +4139,14 @@ groups.
 - *2x--4x* -- ChaCha20, SHA-1, SHA-2 and its HMACs, RSA, FFDHE and Ed25519.
   The hashes are an instruction-set gap: OpenSSL's SHA-1 and SHA-256 and
   Firedancer's SHA-512 compute the message schedule with AVX2, which neither
-  this library nor HACL\* does.  ChaCha20 is not: hacl-pulse's backend is
-  already the same eight-block AVX2 algorithm as libsodium's and OpenSSL's,
-  so its 2x is code quality, and the most surprising row in the table.  RSA
+  this library nor HACL\* does.  ChaCha20 is an instruction-set gap
+  too, but a different one: on this AVX-512 machine libsodium runs a
+  sixteen-block `zmm` kernel and OpenSSL an AVX-512VL kernel with native
+  `vprold` rotates.  Called directly, libsodium's AVX2 kernel takes 102 us
+  on 256 KiB against hacl-pulse's 100 us, and its AVX-512 kernel 49 us.
+  With AVX-512 masked off (`OPENSSL_ia32cap`), OpenSSL falls from 61 us to
+  91 us.  The same AVX-512 kernel accounts for libsodium's Salsa20
+  (48 us, against libjade's AVX2 at 96 us).  RSA
   and FFDHE are portable 64-bit Montgomery multiplication against OpenSSL's
   MULX/ADX assembly, and Ed25519 is portable radix-2^51 C, with compiled-in
   base-point tables, against s2n-bignum's assembly in AWS-LC and Firedancer.
@@ -4159,8 +4164,7 @@ libjade and the s2n-bignum routines in AWS-LC and Firedancer are verified
 too, and they lead or nearly lead theirs.  The gaps are mostly backends that have
 not been written yet, and this table, rather than the HACL\* one, is the
 better guide to which matter most: P-256, ML-KEM, Salsa20, the AVX2
-SHA-2 message schedule, and whatever is costing the ChaCha20 kernel half its
-speed.
+SHA-2 message schedule, and an AVX-512 ChaCha20 kernel.
 
 ## Proof engineering notes
 

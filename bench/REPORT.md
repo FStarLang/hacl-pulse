@@ -8012,12 +8012,38 @@ over the fastest other):
   and OpenSSL leads Poly1305 and GCM.
 - 2–4x: ChaCha20 2.02x, SHA-2/HMAC 2.03–2.14x, RSA sign and FFDHE 2.35x,
   Ed25519 3.3–3.9x, SHA-1 3.89x.  The SHA rows reflect AVX2 message
-  schedules that hacl-pulse lacks.  ChaCha20 does not: libsodium's kernel is
-  the same eight-block AVX2 algorithm as ours, so this 2x is unexplained and
-  is the first thing to investigate.
+  schedules that hacl-pulse lacks.  The ChaCha20 gap is AVX-512; see Part 59.
 - 5x and more: ML-KEM 5–6.4x, against AWS-LC's mlkem-native AVX2.  P-256
   is 5.4–10.7x against `nistz256` assembly and tables, RSA verify 9.5x, and
   Salsa20 10x (no vector backend), which also drives secretbox to 3.9x.
 
 The table and discussion are in the top-level README under *Against other
 libraries*.
+
+## Part 59 — The ChaCha20 gap is AVX-512
+
+Part 58 found ChaCha20 2.02x behind libsodium.  I timed 256 KiB pinned to one
+core, calling libsodium's internal implementation tables directly
+(`crypto_stream_chacha20_dolbeau_{avx2,avx512}_implementation`) and taking
+the best of 36 interleaved runs:
+
+| Kernel | 256 KiB |
+|---|---|
+| hacl-pulse AVX2 (8 blocks) | 100.3 us |
+| libsodium AVX2 (8 blocks) | 102.1 us |
+| libsodium AVX-512 (16 blocks, `zmm`, `vprold`) | 48.9 us |
+
+The Xeon Gold 6140 has AVX-512F, so libsodium's dispatcher picks the AVX-512
+kernel; gdb disassembly confirms `zmm` registers.  OpenSSL has the same
+story.  Unmodified, it takes 61 us.  With `OPENSSL_ia32cap=':~0x10000'`
+(AVX-512F masked) it still takes 61 us, because it also uses its AVX-512VL
+path (`ymm` registers with `vprold`).  With all AVX-512 bits masked
+(`:~0xd0230000`) it takes 91 us, which is plain AVX2, and 177 us with AVX2
+masked as well.
+
+So among AVX2 kernels hacl-pulse ties libsodium and is about 10% behind
+OpenSSL's hand-scheduled assembly.  There is no code-quality problem to fix.
+Closing the gap needs an AVX-512 backend: a trusted `Hacl.Vec512` with 16
+lanes and native rotate, behind `__builtin_cpu_supports("avx512f")`.
+libsodium's Salsa20 also has an AVX-512 kernel (`salsa20_xmm6int-avx512.c`),
+which is why it leads libjade's AVX2 Salsa20 by 2x.
