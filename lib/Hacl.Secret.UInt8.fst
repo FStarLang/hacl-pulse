@@ -95,14 +95,28 @@ let is_zero_bit_lemma (d: U8.t)
     end;
     Math.small_mod (U64.v m) (pow2 8)
 
+(* [x ^ y] is zero exactly when [x] and [y] agree. *)
+private
+let logxor_zero_iff (x y: U8.t)
+  : Lemma (U8.v (U8.logxor x y) == 0 <==> U8.v x == U8.v y)
+  = UInt.logxor_self #8 (U8.v x);
+    UInt.logxor_neq_nonzero #8 (U8.v x) (U8.v y)
+
+(* Negating a bit gives the all-zeros or the all-ones mask. *)
+private
+let neg_bit_lemma (b: U8.t { U8.v b <= 1 })
+  : Lemma (U8.v (U8.sub_mod 0uy b) == (if U8.v b = 1 then pow2 8 - 1 else 0))
+  = assert_norm ((0 - 1) % pow2 8 == pow2 8 - 1);
+    assert_norm ((0 - 0) % pow2 8 == 0)
+
 let eq_mask x y =
   let d = U8.logxor x y in
-  UInt.logxor_self #8 (v x);
-  UInt.logxor_neq_nonzero #8 (v x) (v y);
+  logxor_zero_iff x y;
   (* [d] is zero exactly when [x] and [y] agree. *)
   let d64 = Cast.uint8_to_uint64 d in
   let m = U64.shift_right (U64.sub_mod d64 1UL) 63ul in
   is_zero_bit_lemma d;
+  neg_bit_lemma (Cast.uint64_to_uint8 m);
   U8.sub_mod 0uy (Cast.uint64_to_uint8 m)
 
 (* [borrow x y] is 1 when [x < y] and 0 otherwise. *)

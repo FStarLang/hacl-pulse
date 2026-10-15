@@ -67,7 +67,18 @@ unfold let msg_ok (#t: Type0) {| word t |} (p: params t)
   (forall (k: nat). k < Seq.length info ==>
      Seq.index m ((hash_bytes p) + k) == Seq.index info k)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
+(** What [copy_at] of [info] at offset [hash_bytes p] establishes, restated
+    as [msg_ok] in a small context. *)
+let msg_ok_of_copy (#t: Type0) {| word t |} (p: params t)
+                   (m: Seq.seq S8.t) (info: Seq.seq S8.t) (base n: SZ.t)
+  : Lemma (requires SZ.v base == hash_bytes p /\ SZ.v n == Seq.length info /\
+                    Seq.length m == SZ.v base + SZ.v n + 1 /\
+                    (forall (k: nat). k < SZ.v n ==>
+                       Seq.index m (SZ.v base + k) == Seq.index info k))
+          (ensures msg_ok p m info)
+  = ()
+
+#push-options "--z3rlimit 20 --fuel 1 --ifuel 0"
 
 (** Round 1: [T(0)] is empty, so hash the [info | 1] suffix of the buffer. *)
 fn round_one (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
@@ -165,7 +176,96 @@ ensures exists* (vdg': Seq.seq S8.t) (vmsg': Seq.seq S8.t).
 
 (** {2 Expand} *)
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 0"
+(** The loop's main invariant: the first [b] bytes of the output (or all of
+    it, if shorter) agree with [expand_all] at the final round count.  Kept
+    opaque so that the Pulse queries never see its quantifier; the three
+    lemmas below are the only things that open it. *)
+[@@"opaque_to_smt"]
+let prefix_ok (#t: Type0) {| word t |} (p: params t)
+              (prk: Seq.seq S8.t { prk_ok p prk })
+              (info: Seq.seq S8.t { info_ok p info })
+              (len: nat { len <= 255 * (hash_bytes p) })
+              (vout: Seq.seq S8.t) (b: nat) : prop =
+  Seq.length vout == len /\
+  (forall (k: nat). k < len /\ k < b ==>
+     Seq.index vout k == Seq.index (expand_all p prk info (nrounds p len)) k)
+
+#push-options "--z3rlimit 10 --fuel 0 --ifuel 0"
+
+let prefix_ok_zero (#t: Type0) {| word t |} (p: params t)
+                   (prk: Seq.seq S8.t { prk_ok p prk })
+                   (info: Seq.seq S8.t { info_ok p info })
+                   (len: nat { len <= 255 * (hash_bytes p) })
+                   (vout: Seq.seq S8.t) (b: nat)
+  : Lemma (requires Seq.length vout == len /\ (b == 0 \/ len == 0))
+          (ensures prefix_ok p prk info len vout b)
+  = reveal_opaque (`%prefix_ok) (prefix_ok p prk info len vout b)
+
+let prefix_ok_weaken (#t: Type0) {| word t |} (p: params t)
+                     (prk: Seq.seq S8.t { prk_ok p prk })
+                     (info: Seq.seq S8.t { info_ok p info })
+                     (len: nat { len <= 255 * (hash_bytes p) })
+                     (vout: Seq.seq S8.t) (b b': nat)
+  : Lemma (requires prefix_ok p prk info len vout b /\ b' <= b)
+          (ensures prefix_ok p prk info len vout b')
+  = reveal_opaque (`%prefix_ok) (prefix_ok p prk info len vout b);
+    reveal_opaque (`%prefix_ok) (prefix_ok p prk info len vout b')
+
+let prefix_ok_final (#t: Type0) {| word t |} (p: params t)
+                    (prk: Seq.seq S8.t { prk_ok p prk })
+                    (info: Seq.seq S8.t { info_ok p info })
+                    (len: nat { len <= 255 * (hash_bytes p) })
+                    (vout: Seq.seq S8.t)
+  : Lemma (requires prefix_ok p prk info len vout len)
+          (ensures Seq.length vout == len /\ vout == expand p prk info len)
+  = reveal_opaque (`%prefix_ok) (prefix_ok p prk info len vout len);
+    Seq.lemma_eq_intro vout (expand p prk info len)
+
+(** One round: [vnew] is [vold] with [T(vc+1)] written at [vc * hb]. *)
+let prefix_ok_step (#t: Type0) {| word t |} (p: params t)
+                   (prk: Seq.seq S8.t { prk_ok p prk })
+                   (info: Seq.seq S8.t { info_ok p info })
+                   (len: nat { len <= 255 * (hash_bytes p) })
+                   (vc: nat { vc < 255 })
+                   (vold vnew vdg: Seq.seq S8.t)
+  : Lemma (requires
+             Seq.length vold == len /\
+             Seq.length vnew == Seq.length vold /\
+             vc * (hash_bytes p) < len /\
+             prefix_ok p prk info len vold (vc * (hash_bytes p)) /\
+             (forall (k: nat). k < vc * (hash_bytes p) ==> Seq.index vnew k == Seq.index vold k) /\
+             (forall (k: nat). k < Seq.length vdg /\ vc * (hash_bytes p) + k < Seq.length vold ==>
+                Seq.index vnew (vc * (hash_bytes p) + k) == Seq.index vdg k) /\
+             vdg == expand_t p prk info (vc + 1))
+          (ensures
+             vc + 1 <= nrounds p len /\
+             (vc + 1) * (hash_bytes p) == vc * (hash_bytes p) + hash_bytes p /\
+             prefix_ok p prk info len vnew (vc * (hash_bytes p) + hash_bytes p))
+  = let hb = hash_bytes p in
+    let n = nrounds p len in
+    reveal_opaque (`%prefix_ok) (prefix_ok p prk info len vold (vc * hb));
+    reveal_opaque (`%prefix_ok) (prefix_ok p prk info len vnew (vc * hb + hb));
+    Spec.HKDF.mult_lt_cancel vc n hb;
+    Math.distributivity_add_left vc 1 hb;
+    expand_all_index_last p prk info (vc + 1);
+    expand_all_index_le p prk info (vc + 1) n;
+    let aux (k: nat)
+      : Lemma (requires k < len /\ k < vc * hb + hb)
+              (ensures k < len /\
+                       Seq.index vnew k == Seq.index (expand_all p prk info n) k)
+      = if k < vc * hb then ()
+        else begin
+          let j = k - vc * hb in
+          assert (Seq.index vnew (vc * hb + j) == Seq.index vdg j);
+          assert (Seq.index (expand_all p prk info (vc + 1)) (vc * hb + j) ==
+                  Seq.index (expand_t p prk info (vc + 1)) j)
+        end
+    in
+    FStar.Classical.forall_intro (FStar.Classical.move_requires aux)
+
+#pop-options
+
+#push-options "--z3rlimit 30 --fuel 0 --ifuel 0"
 
 fn expand_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (len: SZ.t)
@@ -203,6 +303,7 @@ ensures exists* vout'.
 
   SZ.fits_lte (SZ.v hb + SZ.v ilen) (block_len #t + (hash_bytes p) + Seq.length vinfo + 1);
   let ml = SZ.add (SZ.add hb ilen) 1sz;
+  assert (pure (SZ.v ml == SZ.v hb + SZ.v ilen + 1));
 
   let mut marr = [| z8; ml |];
   A.pts_to_len marr;
@@ -213,6 +314,9 @@ ensures exists* vout'.
   A.pts_to_len darr;
 
   copy_at marr hb info ilen;
+  with vm0. assert (A.pts_to marr vm0);
+  assert (pure (Seq.length vm0 == SZ.v ml));
+  msg_ok_of_copy p vm0 (reveal vinfo) hb ilen;
 
   if (SZ.gt len 0sz)
   ensures exists* (vout': Seq.seq S8.t) (vdg': Seq.seq S8.t) (vmsg': Seq.seq S8.t).
@@ -223,15 +327,15 @@ ensures exists* vout'.
           Seq.length vout' == Seq.length vout /\
           Seq.length vdg' == (hash_bytes p) /\ Seq.length vmsg' == SZ.v ml /\
           Seq.length vout <= 255 * (hash_bytes p) /\
-          (forall (k: nat). k < Seq.length vout' ==>
-             k < (nrounds p (Seq.length vout)) * (hash_bytes p) /\
-             Seq.index vout' k ==
-               Seq.index (expand_all p vprk vinfo (nrounds p (Seq.length vout))) k))
+          prefix_ok p vprk vinfo (SZ.v len) vout' (SZ.v len))
   {
+    with vout0. assert (A.pts_to out vout0);
+    prefix_ok_zero p (reveal vprk) (reveal vinfo) (SZ.v len) vout0 0;
     round_one p kt ivt darr prk plen marr ml #vinfo;
+    with vdg1. assert (A.pts_to darr vdg1);
     write_chunk out len 0sz darr hb;
-    expand_all_index_last p (reveal vprk) (reveal vinfo) 1;
-    expand_all_index_le p (reveal vprk) (reveal vinfo) 1 (nrounds p (SZ.v len));
+    with vout1. assert (A.pts_to out vout1);
+    prefix_ok_step p (reveal vprk) (reveal vinfo) (SZ.v len) 0 vout0 vout1 vdg1;
 
     let mut base = hb;
     let mut ci = 1uy;
@@ -250,10 +354,7 @@ ensures exists* vout'.
             0 < U8.v vc /\ U8.v vc <= nrounds p (SZ.v len) /\
             SZ.v vb == U8.v vc * (hash_bytes p) /\
             vdg' == expand_t p vprk vinfo (U8.v vc) /\
-            (forall (k: nat). k < Seq.length vout' /\ k < SZ.v vb ==>
-               k < (nrounds p (SZ.v len)) * (hash_bytes p) /\
-               Seq.index vout' k ==
-                 Seq.index (expand_all p vprk vinfo (nrounds p (SZ.v len))) k))
+            prefix_ok p vprk vinfo (SZ.v len) vout' (SZ.v vb))
     decreases (255 - U8.v (!ci))
     {
       let vb = !base;
@@ -262,25 +363,37 @@ ensures exists* vout'.
       (* [vb = vc * hb < len <= n * hb], so there is at least one more round. *)
       Spec.HKDF.mult_lt_cancel (U8.v vc) n (hash_bytes p);
       let nc = U8.add vc 1uy;
+      with vold. assert (A.pts_to out vold);
       round_step p kt ivt darr prk plen marr ml nc #vinfo;
+      with vdg1. assert (A.pts_to darr vdg1);
       write_chunk out len vb darr hb;
-      expand_all_index_last p (reveal vprk) (reveal vinfo) (U8.v nc);
-      expand_all_index_le p (reveal vprk) (reveal vinfo) (U8.v nc) n;
-      Math.distributivity_add_left (U8.v vc) 1 (hash_bytes p);
+      with vnew. assert (A.pts_to out vnew);
+      prefix_ok_step p (reveal vprk) (reveal vinfo) (SZ.v len) (U8.v vc) vold vnew vdg1;
       Math.lemma_mult_le_right (hash_bytes p) (U8.v nc) 255;
       SZ.fits_lte (SZ.v vb + SZ.v hb) (255 * (hash_bytes p));
       base := SZ.add vb hb;
       ci := nc;
     };
+    with vbf. assert (pts_to base vbf);
+    with voutf. assert (A.pts_to out voutf);
+    assert (pure (SZ.v len <= SZ.v vbf));
+    prefix_ok_weaken p (reveal vprk) (reveal vinfo) (SZ.v len) voutf (SZ.v vbf) (SZ.v len);
+    assert (pure (prefix_ok p vprk vinfo (SZ.v len) voutf (SZ.v len)));
+    with vdgf. assert (A.pts_to darr vdgf);
+    with vmf. assert (A.pts_to marr vmf);
+    assert (pure (Seq.length vdgf == hash_bytes p));
+    assert (pure (Seq.length vmf == SZ.v ml));
+    assert (pure (Seq.length voutf == Seq.length vout));
+    assert (pure (prk_ok p vprk /\ info_ok p vinfo));
   }
   else
   {
-    ()
+    prefix_ok_zero p (reveal vprk) (reveal vinfo) (SZ.v len) vout (SZ.v len);
+    assert (pure (prefix_ok p vprk vinfo (SZ.v len) vout (SZ.v len)));
   };
 
   with vout'. assert (A.pts_to out vout');
-  Seq.lemma_eq_intro (reveal vout')
-    (Seq.slice (expand_all p vprk vinfo (nrounds p (Seq.length vout))) 0 (Seq.length vout));
+  prefix_ok_final p (reveal vprk) (reveal vinfo) (SZ.v len) vout';
   ()
 }
 
@@ -314,7 +427,7 @@ ensures exists* vout'.
     the hash core so that one generic copy serves both -- would subsume all
     three, and is the right thing to do before a fourth consumer needs it. *)
 
-#push-options "--z3rlimit 400 --fuel 1 --ifuel 0"
+#push-options "--z3rlimit 20 --fuel 1 --ifuel 0"
 
 (** Round 1: [T(0)] is empty, so hash the [info | 1] suffix of the buffer. *)
 fn round_one_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
@@ -410,7 +523,7 @@ ensures exists* (vdg': Seq.seq S8.t) (vmsg': Seq.seq S8.t).
 
 #pop-options
 
-#push-options "--z3rlimit 600 --fuel 1 --ifuel 0"
+#push-options "--z3rlimit 30 --fuel 0 --ifuel 0"
 
 fn expand_impl_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
                (kt: A.array S32.t) (ivt: A.array S32.t) (out: A.array S8.t) (len: SZ.t)
@@ -448,6 +561,7 @@ ensures exists* vout'.
 
   SZ.fits_lte (SZ.v hb + SZ.v ilen) (block_len #S32.t + (hash_bytes p) + Seq.length vinfo + 1);
   let ml = SZ.add (SZ.add hb ilen) 1sz;
+  assert (pure (SZ.v ml == SZ.v hb + SZ.v ilen + 1));
 
   let mut marr = [| z8; ml |];
   A.pts_to_len marr;
@@ -458,6 +572,9 @@ ensures exists* vout'.
   A.pts_to_len darr;
 
   copy_at marr hb info ilen;
+  with vm0. assert (A.pts_to marr vm0);
+  assert (pure (Seq.length vm0 == SZ.v ml));
+  msg_ok_of_copy p vm0 (reveal vinfo) hb ilen;
 
   if (SZ.gt len 0sz)
   ensures exists* (vout': Seq.seq S8.t) (vdg': Seq.seq S8.t) (vmsg': Seq.seq S8.t).
@@ -468,15 +585,15 @@ ensures exists* vout'.
           Seq.length vout' == Seq.length vout /\
           Seq.length vdg' == (hash_bytes p) /\ Seq.length vmsg' == SZ.v ml /\
           Seq.length vout <= 255 * (hash_bytes p) /\
-          (forall (k: nat). k < Seq.length vout' ==>
-             k < (nrounds p (Seq.length vout)) * (hash_bytes p) /\
-             Seq.index vout' k ==
-               Seq.index (expand_all p vprk vinfo (nrounds p (Seq.length vout))) k))
+          prefix_ok p vprk vinfo (SZ.v len) vout' (SZ.v len))
   {
+    with vout0. assert (A.pts_to out vout0);
+    prefix_ok_zero p (reveal vprk) (reveal vinfo) (SZ.v len) vout0 0;
     round_one_ni p kt ivt darr prk plen marr ml #vinfo;
+    with vdg1. assert (A.pts_to darr vdg1);
     write_chunk out len 0sz darr hb;
-    expand_all_index_last p (reveal vprk) (reveal vinfo) 1;
-    expand_all_index_le p (reveal vprk) (reveal vinfo) 1 (nrounds p (SZ.v len));
+    with vout1. assert (A.pts_to out vout1);
+    prefix_ok_step p (reveal vprk) (reveal vinfo) (SZ.v len) 0 vout0 vout1 vdg1;
 
     let mut base = hb;
     let mut ci = 1uy;
@@ -495,10 +612,7 @@ ensures exists* vout'.
             0 < U8.v vc /\ U8.v vc <= nrounds p (SZ.v len) /\
             SZ.v vb == U8.v vc * (hash_bytes p) /\
             vdg' == expand_t p vprk vinfo (U8.v vc) /\
-            (forall (k: nat). k < Seq.length vout' /\ k < SZ.v vb ==>
-               k < (nrounds p (SZ.v len)) * (hash_bytes p) /\
-               Seq.index vout' k ==
-                 Seq.index (expand_all p vprk vinfo (nrounds p (SZ.v len))) k))
+            prefix_ok p vprk vinfo (SZ.v len) vout' (SZ.v vb))
     decreases (255 - U8.v (!ci))
     {
       let vb = !base;
@@ -507,25 +621,37 @@ ensures exists* vout'.
       (* [vb = vc * hb < len <= n * hb], so there is at least one more round. *)
       Spec.HKDF.mult_lt_cancel (U8.v vc) n (hash_bytes p);
       let nc = U8.add vc 1uy;
+      with vold. assert (A.pts_to out vold);
       round_step_ni p kt ivt darr prk plen marr ml nc #vinfo;
+      with vdg1. assert (A.pts_to darr vdg1);
       write_chunk out len vb darr hb;
-      expand_all_index_last p (reveal vprk) (reveal vinfo) (U8.v nc);
-      expand_all_index_le p (reveal vprk) (reveal vinfo) (U8.v nc) n;
-      Math.distributivity_add_left (U8.v vc) 1 (hash_bytes p);
+      with vnew. assert (A.pts_to out vnew);
+      prefix_ok_step p (reveal vprk) (reveal vinfo) (SZ.v len) (U8.v vc) vold vnew vdg1;
       Math.lemma_mult_le_right (hash_bytes p) (U8.v nc) 255;
       SZ.fits_lte (SZ.v vb + SZ.v hb) (255 * (hash_bytes p));
       base := SZ.add vb hb;
       ci := nc;
     };
+    with vbf. assert (pts_to base vbf);
+    with voutf. assert (A.pts_to out voutf);
+    assert (pure (SZ.v len <= SZ.v vbf));
+    prefix_ok_weaken p (reveal vprk) (reveal vinfo) (SZ.v len) voutf (SZ.v vbf) (SZ.v len);
+    assert (pure (prefix_ok p vprk vinfo (SZ.v len) voutf (SZ.v len)));
+    with vdgf. assert (A.pts_to darr vdgf);
+    with vmf. assert (A.pts_to marr vmf);
+    assert (pure (Seq.length vdgf == hash_bytes p));
+    assert (pure (Seq.length vmf == SZ.v ml));
+    assert (pure (Seq.length voutf == Seq.length vout));
+    assert (pure (prk_ok p vprk /\ info_ok p vinfo));
   }
   else
   {
-    ()
+    prefix_ok_zero p (reveal vprk) (reveal vinfo) (SZ.v len) vout (SZ.v len);
+    assert (pure (prefix_ok p vprk vinfo (SZ.v len) vout (SZ.v len)));
   };
 
   with vout'. assert (A.pts_to out vout');
-  Seq.lemma_eq_intro (reveal vout')
-    (Seq.slice (expand_all p vprk vinfo (nrounds p (Seq.length vout))) 0 (Seq.length vout));
+  prefix_ok_final p (reveal vprk) (reveal vinfo) (SZ.v len) vout';
   ()
 }
 

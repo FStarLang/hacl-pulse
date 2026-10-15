@@ -97,7 +97,18 @@ ensures exists* (w: Seq.seq S32.t). A.pts_to a w **
   Sub.unsub a (SZ.v off) (SZ.v e) b;
 }
 
+(** The offsets [load_group] computes fit in a [size_t]: they are bounded by
+    the length of an array. *)
+let group_fits (#a: Type0) (x: A.array a) (off q: nat)
+  : Lemma (requires q < 4 /\ off + 64 <= A.length x)
+          (ensures SZ.fits (16 * q) /\ SZ.fits (off + 16 * q) /\
+                   SZ.fits (off + 16 * q + 16))
+  = SZ.fits_lte (off + 16 * q + 16) (A.length x);
+    SZ.fits_lte (off + 16 * q) (A.length x);
+    SZ.fits_lte (16 * q) (A.length x)
+
 (** Sixteen bytes of the message block, read big-endian. *)
+#push-options "--fuel 0 --ifuel 0"
 inline_for_extraction
 fn load_group (block: A.array S8.t) (off: SZ.t) (q: SZ.t)
               (#pb: perm) (#vb: erased (Seq.seq S8.t))
@@ -112,6 +123,7 @@ ensures A.pts_to block #pb vb **
                             (4 * SZ.v q + m)))
 {
   A.pts_to_len block;
+  group_fits block (SZ.v off) (SZ.v q);
   let i0 = SZ.add off (SZ.mul 16sz q);
   block_group vb (SZ.v off) (SZ.v q);
   let i1 = SZ.add i0 16sz;
@@ -120,6 +132,7 @@ ensures A.pts_to block #pb vb **
   Sub.unsub_id block (SZ.v i0) (SZ.v i1) s;
   r
 }
+#pop-options
 
 (** Storing a group extends the run of final slots by four.  A lemma of its
     own because the store's postcondition is pointwise over the whole array
@@ -223,9 +236,32 @@ ensures exists* (n0: Vec.t) (n1: Vec.t).
 }
 #pop-options
 
+(** The two stores at the end of [store_state] write the whole state. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
+let store_two (h: Seq.lseq S32.t 8) (lo hi: reg) (v0 v1 v2: Seq.seq S32.t)
+  : Lemma (requires
+             Seq.length v0 == 8 /\ Seq.length v1 == Seq.length v0 /\
+             Seq.length v2 == Seq.length v1 /\
+             (forall (m: nat). m < 4 ==> lane lo m == Seq.index h m) /\
+             (forall (m: nat). m < 4 ==> lane hi m == Seq.index h (m + 4)) /\
+             (forall (k: nat). k < Seq.length v1 ==>
+                Seq.index v1 k == (if 0 <= k && k < 4 then lane lo (k - 0)
+                                   else Seq.index v0 k)) /\
+             (forall (k: nat). k < Seq.length v2 ==>
+                Seq.index v2 k == (if 4 <= k && k < 8 then lane hi (k - 4)
+                                   else Seq.index v1 k)))
+          (ensures v2 == h)
+  = let aux (k: nat { k < 8 }) : Lemma (Seq.index v2 k == Seq.index h k)
+      = if k < 4 then () else assert (Seq.index v2 k == lane hi (k - 4))
+    in
+    FStar.Classical.forall_intro aux;
+    Seq.lemma_eq_intro v2 h
+#pop-options
+
 (** The tail: unpack the shuffled state, add the saved state back and write
     it out.  A helper of its own so that the main function's query stays
     small. *)
+#push-options "--fuel 0 --ifuel 0"
 inline_for_extraction
 fn store_state (st: A.array S32.t) (f0: Vec.t) (f1: Vec.t)
                (#vst0: erased (Seq.lseq S32.t 8))
@@ -254,11 +290,15 @@ ensures A.pts_to st (add_state (reveal vst0) (reveal hs))
   unpack_state (Vec.vv r0) (Vec.vv r1) (Vec.vv lo2) (Vec.vv hi2)
                (add_state (reveal vst0) (reveal hs));
   store4 st 0sz lo2;
+  with v1. assert (A.pts_to st v1);
   store4 st 4sz hi2;
   with vfin. assert (A.pts_to st vfin);
-  Seq.lemma_eq_intro vfin (add_state (reveal vst0) (reveal hs));
-  Seq.lemma_eq_elim vfin (add_state (reveal vst0) (reveal hs));
+  store_two (add_state (reveal vst0) (reveal hs)) (Vec.vv lo2) (Vec.vv hi2)
+            (reveal vst0) v1 vfin;
+  assert (pure (Seq.length vfin == 8));
+  assert (pure (vfin == add_state (reveal vst0) (reveal hs)));
 }
+#pop-options
 
 (** {2 The three loops}
 
@@ -442,7 +482,26 @@ ensures exists* (vw: Seq.seq S32.t).
     through [tail_and_finish] unchanged -- there are at most two of them, and
     the saving would not pay for a third copy. *)
 
-#push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
+(** One step of [hash_blocks_ni], in a small context: the block it hashes,
+    and the size_t facts its offset arithmetic needs. *)
+#push-options "--z3rlimit 20 --fuel 0 --ifuel 0"
+let blocks_ni_step (p: params S32.t) (pre vin: Seq.seq S8.t) (nprev: nat)
+                   (vi2 nfull: SZ.t) (h: Seq.lseq S32.t 8)
+  : Lemma (requires Seq.length pre == nprev * block_len #S32.t /\
+                    Seq.length pre + Seq.length vin < max_input #S32.t /\
+                    SZ.v nfull == Seq.length vin / block_len #S32.t /\
+                    SZ.v vi2 < SZ.v nfull /\ SZ.fits (Seq.length vin))
+          (ensures SZ.fits (SZ.v vi2 * 64) /\ SZ.fits (SZ.v vi2 + 1) /\
+                   SZ.v vi2 * 64 + block_len #S32.t <= Seq.length vin /\
+                   update_step p (padded #S32.t (Seq.append pre vin)) (nprev + SZ.v vi2) h ==
+                   update_block p (block_at #S32.t vin (SZ.v vi2 * 64)) h)
+  = assert_norm (block_len #S32.t == 64);
+    hash_blocks_step #S32.t p pre vin nprev (SZ.v vi2) (SZ.v nfull) h;
+    SZ.fits_lte (SZ.v vi2 + 1) (SZ.v nfull);
+    SZ.fits_lte (SZ.v vi2 * 64) (Seq.length vin)
+#pop-options
+
+#push-options "--z3rlimit 30 --fuel 0 --ifuel 0"
 
 fn hash_blocks_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
                   (kt: A.array S32.t) (wsb: A.array S32.t) (st: A.array S32.t)
@@ -481,22 +540,15 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t 8).
   decreases (SZ.v nfull - SZ.v (!i))
   {
     let vi2 = !i;
-    Math.lemma_mult_le_right (block_len #S32.t) (SZ.v vi2 + 1) (SZ.v nfull);
-    Math.lemma_mult_le_right (block_len #S32.t) (SZ.v nfull)
-      (Seq.length vin / block_len #S32.t);
-    padded_index_block_shift #S32.t (reveal pre) (reveal vin) (SZ.v vi2 * block_len #S32.t);
-    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2) (block_len #S32.t);
-    Math.distributivity_add_left (SZ.v nprev) (SZ.v vi2 + 1) (block_len #S32.t);
+    with vst. assert (A.pts_to st vst);
+    blocks_ni_step p (reveal pre) (reveal vin) (SZ.v nprev) vi2 nfull vst;
     unfold_repeati_g (SZ.v nprev + SZ.v vi2)
       (update_step p (padded #S32.t (Seq.append pre vin))) (reveal p.iv);
-    assert (pure (block_at #S32.t (padded #S32.t (Seq.append pre vin))
-                    ((SZ.v nprev + SZ.v vi2) * block_len #S32.t) ==
-                  block_at #S32.t vin (SZ.v vi2 * block_len #S32.t)));
-    assert (pure ((SZ.v nprev + SZ.v vi2 + 1) * block_len #S32.t <=
-                  Seq.length (padded #S32.t (Seq.append pre vin))));
     update_block_ni p kt wsb st input (SZ.mul vi2 64sz);
     i := SZ.add vi2 1sz;
   };
+  with vi2. assert (pts_to i vi2);
+  assert (pure (SZ.v vi2 == SZ.v nfull));
 }
 #pop-options
 
