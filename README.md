@@ -145,9 +145,9 @@ microarchitecture matters the answer is a C intrinsic behind a narrow,
 axiomatized interface, verified against the same specification as the portable
 code and tested against an independent transcription of the standard: AES-NI,
 `AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
-Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20 and
-Poly1305 (`lib/Hacl.Vec256.fst`), and AVX-512F under ChaCha20
-(`lib/Hacl.Vec512.fst`).  Each is selected at run time by
+Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20,
+Salsa20 and Poly1305 (`lib/Hacl.Vec256.fst`), and AVX-512F under ChaCha20
+and Salsa20 (`lib/Hacl.Vec512.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
 ## How a hash is put together
@@ -1791,7 +1791,10 @@ ChaCha20 tests.  `lib/Hacl.Vec512.fst` is the fourth, with seventeen axioms
 four unpacks and four `vshufi32x4` group selections), each checked by
 `tests/test_vec512.c` in the same way, the rotate also at a distance the
 compiler cannot see; the same two ChaCha20 tests exercise it, since every
-length from 1,024 bytes on goes through it on an AVX-512 machine.
+length from 1,024 bytes on goes through it on an AVX-512 machine.  Salsa20's
+two vector paths use the same two axiom sets, and `tests/test_salsa20_vec.c`
+runs every length from 0 to 2,100 bytes at seven counters against an
+independent Salsa20 block function.
 
 **The key schedule needed the same treatment, and was worth more than the
 cipher.**  It runs once per message rather than once per block, which is why
@@ -3019,6 +3022,22 @@ own a `write_keystream`; it is now `Hacl.Impl.Bytes.store_words_le`, which
 writes any `n` words little-endian, and both ciphers call it, so there is
 one copy of that loop in the generated C rather than two.
 
+**Vector Salsa20.**  The vector backends were ported the same way:
+`Hacl.Salsa20.Vec512` (sixteen blocks, AVX-512F) and `Hacl.Salsa20.Vec256`
+(eight, AVX2) are `Hacl.Chacha20.Vec512` and `Hacl.Chacha20.Vec256` with
+Salsa20's `line`, quarter-round order, column and row rounds, and the counter
+in word 8.  Everything after the rounds -- the transposes that turn lanes
+back into blocks, the exclusive-or and the driver -- is ChaCha20's
+unchanged, because both ciphers serialize the keystream as sixteen
+little-endian words; both modules verified on the first attempt.
+`Hacl.Salsa20.encrypt` calls `encrypt_vec` exactly as ChaCha20 does, so
+XSalsa20, secretbox and box get it too.  Salsa20's rotations (7, 9, 13, 18)
+are none of them whole bytes, so AVX2 needs a shift-shift-or for each where
+ChaCha20 has two byte shuffles; AVX-512's `vprold` does every one in an
+instruction.  On 256 KiB this took Salsa20 from 480 us to 45 us under gcc
+and 43 us under clang (97 us with AVX-512 masked off), and secretbox from
+542 us to 98 us, now mostly Poly1305 (`bench/REPORT.md` Part 61).
+
 HSalsa20 is the piece NaCl needs.  It is twenty rounds on a state whose
 nonce is sixteen bytes wide, with **no feedforward** -- the input is not
 added back -- and its output is eight of the sixteen words, namely 0, 5,
@@ -4175,20 +4194,25 @@ groups.
   verification with e = 65537 is little but that kind of multiplication;
   ML-KEM is the specification's NTT with no lazy reduction or
   vectorisation, against AWS-LC's mlkem-native with its AVX2 assembly; and
-  Salsa20 has no vector backend at all, which is also most of secretbox.
+  Salsa20 had no vector backend at all, which was also most of secretbox
+  (since fixed; see below).
 
 Verification does not by itself put a library at the back of a row:
 libjade and the s2n-bignum routines in AWS-LC and Firedancer are verified
 too, and they lead or nearly lead theirs.  The gaps are mostly backends that have
 not been written yet, and this table, rather than the HACL\* one, is the
-better guide to which matter most: P-256, ML-KEM, Salsa20 and the AVX2
-SHA-2 message schedule.
+better guide to which matter most: P-256, ML-KEM and the AVX2 SHA-2
+message schedule.
 
 *Since this table was measured*, hacl-pulse has an AVX-512F ChaCha20
 (`Hacl.Chacha20.Vec512`, `bench/REPORT.md` Part 60).  On the same machine
 and core it takes 256 KiB from 102 us to 54 us under gcc and 49 us under
 clang, level with libsodium's 47--49 us; the ChaCha20 row above predates
 it, and so does ChaCha20-Poly1305, which keeps its AVX2 Poly1305.
+Likewise Salsa20 now has AVX-512F and AVX2 backends (`Hacl.Salsa20.Vec512`
+and `Vec256`, Part 61): 256 KiB takes 45 us under gcc and 43 us under clang,
+against libsodium's 48 us, and secretbox 98 us and 91 us, against 139--141
+us; both rows above predate them.
 
 ## Proof engineering notes
 
@@ -5140,7 +5164,10 @@ rough order of value:
     twenty-three axioms.  **AVX-512 ChaCha20 is done** as well:
     `lib/Hacl.Vec512.fst` (seventeen axioms, `tests/test_vec512.c`) and the
     sixteen-lane `Hacl.Chacha20.Vec512`, another 1.9x on 256 KiB (Part 60).
-    What remains is AVX-512 Poly1305 (eight lanes), on the same pattern.
+    **Salsa20 has both** (`Hacl.Salsa20.Vec512`, `Hacl.Salsa20.Vec256`,
+    10.6x on 256 KiB, Part 61), ported from ChaCha20's with only the rounds
+    changed.  What remains is AVX-512 Poly1305 (eight lanes), on the same
+    pattern; it is now most of secretbox's time.
 
 18. **One hash core, two block implementations.**  `hash_blocks_ni`,
     `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of

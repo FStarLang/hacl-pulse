@@ -8088,3 +8088,39 @@ That is level with libsodium's AVX-512 kernel (47–49 us) and ahead of
 OpenSSL (57–61 us).  `tests/test_chacha20_vec.c` covers every length from 0
 to 2,100 bytes at counters up to the last legal block, so the
 AVX-512 → AVX2 → scalar hand-offs are all exercised.
+
+## Part 61 — Vector Salsa20
+
+**What changed.**  Salsa20 was the last stream cipher without a vector
+backend: 1.83 ns/B against libsodium's 0.18.  `Hacl.Salsa20.Vec512`
+(sixteen lanes, AVX-512F) and `Hacl.Salsa20.Vec256` (eight lanes, AVX2) are
+the ChaCha20 modules with the round function replaced -- Salsa20's
+`a ^= (b + c) <<< s`, its quarter-round order, column and row rounds -- and
+the counter moved from word 12 to word 8.  The transposes, the
+exclusive-or and the chunk driver are unchanged, since the keystream is
+serialized identically.  No new axioms; both modules verified as first
+written (about 3 min and 1.5 min).  `Hacl.Salsa20.encrypt` now calls
+`encrypt_vec` first and the scalar loop resumes at `ctr0 + nb / 64`, so
+XSalsa20, secretbox and box get it with no changes of their own.
+
+**Numbers** (core 6, best of 7, one-shot calls):
+
+| | before (gcc) | after (gcc) | after (clang) | AVX2 only (gcc) |
+|---|---|---|---|---|
+| Salsa20, 1 KiB | 1.89 us | 0.219 us | 0.197 us | 0.402 us |
+| Salsa20, 256 KiB | 480 us | 45.2 us | 43.3 us | 97.1 us |
+| secretbox, 1 KiB | 2.56 us | 1.76 us | 1.68 us | -- |
+| secretbox, 256 KiB | 542 us | 98.2 us | 90.5 us | -- |
+
+Salsa20 is now ahead of libsodium's AVX-512 kernel (48 us) and the AVX2-only
+path level with libjade's AVX2 (96 us).  secretbox is ahead of libsodium and
+libjade (139--141 us); what is left of it is mostly the AVX2 Poly1305.
+
+**Testing.**  `tests/test_salsa20_vec.c` runs every length from 0 to 2,100
+bytes at seven counters, up to the last legal block, against an
+independent Salsa20 block function, checking that the input is untouched
+and nothing past the output is written.  It passed against the old scalar
+code first (validating the reference), then with the new dispatch, and
+again with `Hacl_Vec512_supported` and then also `Hacl_Vec256_supported`
+forced false, so the AVX-512, AVX2 and scalar paths and every hand-off
+between them are exercised.

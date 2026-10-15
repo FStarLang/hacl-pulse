@@ -383,8 +383,12 @@ ensures exists* (vo: Seq.seq S8.t).
   init_state starr key nonce ctr0;
   let st0 : G.erased state = G.hide (init (reveal vkey) (reveal vnon) ctr0);
 
-  let mut base = 0sz;
-  let mut ctr = ctr0;
+  (* Sixteen or eight blocks at a time while that is possible and the
+     processor allows; the loop below finishes up one block at a time. *)
+  let nb = Hacl.Salsa20.Vec256.encrypt_vec out msg mlen starr ctr0 st0;
+
+  let mut base = nb;
+  let mut ctr = U32.add_mod ctr0 (SZ.sizet_to_uint32 (SZ.div nb 64sz));
 
   while (let b = !base; SZ.lt b mlen)
   invariant exists* (b: SZ.t) (c: U32.t) (vo: Seq.seq S8.t)
