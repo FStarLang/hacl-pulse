@@ -32,9 +32,12 @@
     the carry out of the top word ([2^256 = 38 mod p]).  Only {!freeze}
     produces the canonical representative.
 
-    Every function here is compiled with [target("bmi2")] and forced
-    inline; they are only reached from {!Hacl.Curve25519.Ladder64}, which is
-    only called on machines that have BMI2. *)
+    Every function here is forced inline, and all but the product
+    ({!mrow}, {!mrow_add}, {!mul8}) are compiled with [target("bmi2")];
+    they are only reached from {!Hacl.Curve25519.Ladder64}, which is only
+    called on machines that have BMI2.  The product carries no target so
+    that {!Hacl.P256.Field64} can inline it too: inlined into a [bmi2]
+    caller it compiles exactly as before. *)
 module Hacl.Curve25519.Field64
 
 #lang-pulse
@@ -254,7 +257,7 @@ ensures exists* (vout': Seq.seq S64.t).
     accumulator at offset [k]; four words plus a row always fit in five, so
     neither has a precondition beyond the lengths. *)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((always_inline))"]
 fn mrow (q: A.array S64.t) (k: SZ.t) (x b0 b1 b2 b3: S64.t) (#vq: erased (Seq.seq S64.t))
 requires A.pts_to q vq ** pure (Seq.length vq == 8 /\ SZ.v k <= 3)
 ensures exists* (vq': Seq.seq S64.t).
@@ -304,7 +307,7 @@ ensures exists* (vq': Seq.seq S64.t).
   A.((q.(SZ.add k 4sz) <- r4));
 }
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((always_inline))"]
 fn mrow_add (t: A.array S64.t) (k: SZ.t) (x b0 b1 b2 b3: S64.t) (#vt: erased (Seq.seq S64.t))
 requires A.pts_to t vt ** pure (Seq.length vt == 8 /\ SZ.v k <= 3)
 ensures exists* (vt': Seq.seq S64.t).
@@ -444,7 +447,7 @@ let fmul_glue (va vb u v x y: Seq.seq S64.t) (a0 a1 a2 a3 b0 b1 b2 b3: S64.t)
 
 #push-options "--z3rlimit 200"
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((always_inline))"]
 fn mul8 (t a b: A.array S64.t)
         (#vt: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))

@@ -8124,3 +8124,59 @@ code first (validating the reference), then with the new dispatch, and
 again with `Hacl_Vec512_supported` and then also `Hacl_Vec256_supported`
 forced false, so the AVX-512, AVX2 and scalar paths and every hand-off
 between them are exercised.
+
+## Part 62 — A field for P-256's prime
+
+**What changed.**  P-256's field ran on `Hacl.Impl.Mont4`, the generic
+four-limb CIOS multiplier that takes its modulus as table data and sums
+columns in `__int128`.  `code/p256/Hacl.P256.Field64.fst` replaces it for
+`fadd`, `fsub`, `fmul`, `fsqr` and `fto`:
+
+- the product is `Hacl.Curve25519.Field64.mul8` (sixteen `mul`s chained with
+  `adc` through `Hacl.Carry64`), whose `mrow`, `mrow_add` and `mul8` lost
+  their `target("bmi2")` prologue so non-BMI2 code can inline them --
+  they use no BMI2 instruction, and X25519 compiles exactly as before
+  (48.6 / 48.3 us gcc, 35.5 / 36.3 us clang, noise);
+- four Montgomery steps `rstep0`..`rstep3`: `mu == 1`, so the quotient is
+  the bottom word `u`, and `p + 1 = 2^96 + 2^192 * 0xffffffff00000001`, so
+  `(W + u p) / 2^64` is `W / 2^64 + (u << 32) + 2^64 (u >> 32) + 2^128 u P3`
+  -- two shifts and one multiplication per step.  Each step's postcondition
+  is `w * W_(k+1) == W_k + u * p` with every power of the radix a numeral,
+  linear for Z3; a precondition bounding `W_k + u p` is what proves the top
+  carry zero;
+- `csub`: `W_4 < 2p`, one borrow chain through the fifth word and a masked
+  select;
+- `fadd`/`fsub`: one carry chain, then a borrow chain against `p` and a
+  select (add), or a masked `p` added back (sub).
+
+`Hacl.P256.Field` keeps its interface.  Three lemmas connect the two views:
+`eval (vals s) == ev s` for four words, and "a residue with the value of
+`mmul`/`madd`/`msub` has the same `mev`", which reuses `rcancel` and the
+existing `mev_*` lemmas.  The module needed `#restart-solver` between its
+functions: each verifies in seconds alone, but in one Z3 session `fadd`
+ran for over twenty minutes without tripping its rlimit.  The whole module
+checks in about six and a half minutes; `rstep0` is the slowest query (23 s).
+
+**Numbers** (core 6, best of 7, HEAD vs this change, same binary harness):
+
+| | gcc before | gcc after | clang before | clang after |
+|---|---|---|---|---|
+| `fmul` | 33.8 ns | 24.7 ns | 46.5 ns | 18.4 ns |
+| `fadd` | 7.0 ns | 4.2 ns | 3.9 ns | 3.3 ns |
+| `fsub` | 8.7 ns | 2.4 ns | 3.0 ns | 2.5 ns |
+| ECDH initiator | 176 us | 112 us | 163 us | 88 us |
+| ECDH responder | 285 us | 180 us | 256 us | 129 us |
+| ECDSA sign | 192 us | 131 us | 185 us | 110 us |
+| ECDSA verify | 448 us | 292 us | 428 us | 222 us |
+
+Against OpenSSL's `nistz256` assembly (Part 58: ECDH 48 us, sign 24 us,
+verify 67 us) that is 2.7x-5.5x, down from 5.4x-10.7x.  What is left is
+algorithmic: the generator tables are still built at run time
+(`Hacl.P256.TablesG`, about 12% of instructions), verification does two
+separate scalar multiplications rather than one interleaved one, and the
+fixed-base comb has four sixteen-entry tables where `nistz256` has 150 KB.
+
+**Testing.**  `tests/test_p256.c` (RFC 6979 vectors, ECDH agreement and
+rejection) and the whole of `make test` pass.  A C prototype of the same
+reduction agreed with the old multiplier on a million random inputs before
+the Pulse was written.

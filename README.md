@@ -39,8 +39,9 @@ is now *faster* than the reference at 0.76x, secp256k1's is within 1.39x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
 generator multiply it out of four compiled-in base points rather than one.
-P-256 is the one that gained most from the latter: signing is now within
-1.06x of the reference and key agreement within 1.05x.  Ed25519 and secp256k1 go
+P-256 is the one that gained most from the latter, and it has since had a
+field specialised to its prime as well, which puts every operation at
+0.50x-0.78x of the reference under gcc.  Ed25519 and secp256k1 go
 further still and compile in the whole of their fixed-base windows,
 sixty-four precomputed multiples of the generator apiece: Ed25519 signing and
 key generation are within 1.23x under gcc and 1.37x under clang, and
@@ -1135,6 +1136,26 @@ The Montgomery constant `mu = -m^-1 mod 2^64` had to be recomputed for three
 of the four moduli.  P-256's prime keeps `mu == 1` -- its low limb is
 `2^64 - 1`, so its inverse is still `-1` -- which is a small gift from its
 Solinas shape and the only one this representation collects.
+
+**The field has since left that layer.**  `Hacl.P256.Field64` is a
+multiplier for this prime alone: the product is X25519-64's sixteen-`mulx`
+`mul8`, chained with `adc` through `Hacl.Carry64`, and each of the four
+Montgomery steps uses `mu == 1` and `p + 1 = 2^96 + 2^192 * 0xffffffff00000001`
+to add `u * p` as two shifts and one multiplication, where the generic step
+has four.  Four steps leave a number below `2p`, and one borrow chain and a
+masked select finish it.  Addition and subtraction are one carry chain and a
+masked correction.  Every step's statement is linear in numerals --
+`2^64 * W_(k+1) == W_k + u * p` -- so none needed a lemma beyond the
+carry-chain postconditions.  `Hacl.P256.Field` keeps its interface and calls
+it for `fadd`, `fsub`, `fmul`, `fsqr` and the entry into Montgomery form,
+with three small lemmas connecting `ev4` of four words to `Spec.Mont4`'s
+`mev` of their `vals` (any residue with the right value has the specification's
+limbs, so `mev_mul`, `mev_add` and `mev_sub` carry over).  `fmul` went from
+34 ns to 25 under gcc and from 47 to 18 under clang, and every P-256
+operation got 35-50% faster (`bench/REPORT.md` Part 62).  The scalar field
+stays on `Hacl.Impl.Mont4`.  `mul8` and the two row functions below it lost
+their `target("bmi2")` for this -- none uses BMI2, and inlined into X25519's
+`bmi2` field they compile exactly as before.
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
@@ -3533,7 +3554,8 @@ representation HACL\* and libsecp256k1 use, with the special-prime fold
 of the two field multiplies side by side -- ours and HACL\*'s, each behind a
 call, each fed its own previous output -- puts ours at 29.4 ns against 25.9,
 so the secp256k1 field is within 14% of the reference and is no longer worth
-attention.  P-256's prime admits the same treatment and has not had it yet.
+attention.  P-256's prime has since had the same treatment, in its own
+Montgomery form (see below).
 Third, the scalar multiplication.  Both curves have now had that, on the
 variable-base side: each walks the scalar four bits at a time against a
 sixteen-entry table of small multiples of the input point, built at run time,
@@ -3581,9 +3603,12 @@ ahead of it on one.  Under clang it is ahead on three of the four:
 (**0.91x**), `dh-responder` 241 against 355 (**0.68x**), with signing at
 parity, 172 against 169 (**1.02x**).  That the two compilers disagree about
 which side of 1.0x three of these rows fall on is the right way to read
-them: the remaining difference is no longer algorithmic.  What P-256 has
-still not had is the special-prime field; that is now the only item left on
-its list.
+them: the remaining difference is no longer algorithmic.  P-256 has since
+had the special-prime field too (`Hacl.P256.Field64`, Part 62), which took
+another 35-50% off every row: under gcc ECDH as initiator 176 us to **112**,
+as responder 285 to **180**, signing 192 to **131** and verification 448 to
+**292**; under clang 163 to **88**, 256 to **129**, 185 to **110** and 428
+to **222**.  The table above predates it.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -4188,8 +4213,8 @@ groups.
   MULX/ADX assembly, and Ed25519 is portable radix-2^51 C, with compiled-in
   base-point tables, against s2n-bignum's assembly in AWS-LC and Firedancer.
 - *5x and more* -- P-256, RSA verification, ML-KEM, Salsa20 and secretbox.
-  P-256 runs on the generic four-limb Montgomery field in portable C with
-  four-bit windows, against OpenSSL's and AWS-LC's `nistz256` assembly
+  P-256 ran on the generic four-limb Montgomery field in portable C with
+  four-bit windows (it now has a dedicated field; see below), against OpenSSL's and AWS-LC's `nistz256` assembly
   field and its roughly 150 KB of precomputed generator multiples; RSA
   verification with e = 65537 is little but that kind of multiplication;
   ML-KEM is the specification's NTT with no lazy reduction or
@@ -4213,6 +4238,11 @@ Likewise Salsa20 now has AVX-512F and AVX2 backends (`Hacl.Salsa20.Vec512`
 and `Vec256`, Part 61): 256 KiB takes 45 us under gcc and 43 us under clang,
 against libsodium's 48 us, and secretbox 98 us and 91 us, against 139--141
 us; both rows above predate them.
+And P-256 now has a field specialised to its prime (`Hacl.P256.Field64`,
+Part 62): ECDH (variable-base) takes 180 us under gcc and 129 us under clang,
+signing 131 and 110, verification 292 and 222.  That is 2.7x--5.5x
+OpenSSL's `nistz256` assembly rather than 5x--11x; what is left is mostly
+its precomputed generator multiples and the double-scalar verification.
 
 ## Proof engineering notes
 
@@ -4807,9 +4837,12 @@ rough order of value:
    are now the numbers themselves rather than multiples of `R`.  The old
    `Hacl.K256.Field` is deleted.  It was worth 313 us to 227 on ECDSA sign and
    291 to 213 on ECDH, and it puts our `fmul` at 29.4 ns against HACL\*'s
-   25.9, so the field is no longer the gap.  P-256's prime admits the same
-   treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
-   subtractions rather than a multiply -- and has not had it.
+   25.9, so the field is no longer the gap.  P-256's half is **done** too,
+   in its own Montgomery form rather than a fold: `code/p256/Hacl.P256.Field64.fst`
+   reduces with `mu == 1` and `p + 1 = 2^96 + 2^192 * 0xffffffff00000001`, so
+   each of the four steps is two shifts and one multiplication, on top of
+   X25519-64's `mul8`.  `fmul` went from 34 ns to 25 (gcc) and 47 to 18
+   (clang), and every P-256 operation 35-50% faster (Part 62).
 
 6. **The fixed-base window**, **done on all three curves**.
    `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
