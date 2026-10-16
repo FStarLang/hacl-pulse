@@ -96,3 +96,59 @@ let zeta_table_index (i: nat { i < 128 })
 let zeta_arr : (a: G.static_array zqt
                   { G.static_array_elems a == (zeta_table <: Seq.seq zqt) })
   = G.mk_static_array zeta_list
+
+/// The Shoup companions [floor(zeta_i 2^16 / q)] of the roots, for
+/// {!Hacl.Impl.MLKEM.Zq.zq_mul_shoup}.  Checked the same way.
+
+let rec shoup_ok (i: nat) (l: list S16.t)
+  : GTot bool (decreases l)
+  = match l with
+    | [] -> i = 128
+    | x :: tl -> i < 128 && S16.v x = (zetas i * 65536) / 3329 && shoup_ok (i + 1) tl
+
+let rec shoup_ok_index (i: nat) (l: list S16.t) (j: nat { j < L.length l })
+  : Lemma (requires shoup_ok i l)
+          (ensures i + j < 128 /\ S16.v (L.index l j) == (zetas (i + j) * 65536) / 3329)
+          (decreases j)
+  = match l with
+    | x :: tl -> if j > 0 then shoup_ok_index (i + 1) tl (j - 1)
+
+let zeta_shoup_list : list S16.t = [
+  S16.classify 19us; S16.classify 34037us; S16.classify 50790us; S16.classify 64748us; S16.classify 52011us; S16.classify 12402us; S16.classify 37345us; S16.classify 16694us;
+  S16.classify 20906us; S16.classify 37778us; S16.classify 3799us; S16.classify 15690us; S16.classify 54846us; S16.classify 64177us; S16.classify 11201us; S16.classify 34372us;
+  S16.classify 5827us; S16.classify 48172us; S16.classify 26360us; S16.classify 29057us; S16.classify 59964us; S16.classify 1102us; S16.classify 44097us; S16.classify 26241us;
+  S16.classify 28072us; S16.classify 41223us; S16.classify 10532us; S16.classify 56736us; S16.classify 47109us; S16.classify 56677us; S16.classify 38860us; S16.classify 16162us;
+  S16.classify 5689us; S16.classify 6516us; S16.classify 64039us; S16.classify 34569us; S16.classify 23564us; S16.classify 45357us; S16.classify 44825us; S16.classify 40455us;
+  S16.classify 12796us; S16.classify 38919us; S16.classify 49471us; S16.classify 12441us; S16.classify 56401us; S16.classify 649us; S16.classify 25986us; S16.classify 37699us;
+  S16.classify 45652us; S16.classify 28249us; S16.classify 15886us; S16.classify 8898us; S16.classify 28309us; S16.classify 56460us; S16.classify 30198us; S16.classify 47286us;
+  S16.classify 52109us; S16.classify 51519us; S16.classify 29155us; S16.classify 12756us; S16.classify 48704us; S16.classify 61224us; S16.classify 24155us; S16.classify 17914us;
+  S16.classify 334us; S16.classify 54354us; S16.classify 11477us; S16.classify 52149us; S16.classify 32226us; S16.classify 14233us; S16.classify 45042us; S16.classify 21655us;
+  S16.classify 27738us; S16.classify 52405us; S16.classify 64591us; S16.classify 4586us; S16.classify 14882us; S16.classify 42443us; S16.classify 59354us; S16.classify 60043us;
+  S16.classify 33525us; S16.classify 32502us; S16.classify 54905us; S16.classify 35218us; S16.classify 36360us; S16.classify 18741us; S16.classify 28761us; S16.classify 52897us;
+  S16.classify 18485us; S16.classify 45436us; S16.classify 47975us; S16.classify 47011us; S16.classify 14430us; S16.classify 46007us; S16.classify 5275us; S16.classify 12618us;
+  S16.classify 31183us; S16.classify 45239us; S16.classify 40101us; S16.classify 63390us; S16.classify 7382us; S16.classify 50180us; S16.classify 41144us; S16.classify 32384us;
+  S16.classify 20926us; S16.classify 6279us; S16.classify 54590us; S16.classify 14902us; S16.classify 41321us; S16.classify 11044us; S16.classify 48546us; S16.classify 51066us;
+  S16.classify 55200us; S16.classify 21497us; S16.classify 7933us; S16.classify 20198us; S16.classify 22501us; S16.classify 42325us; S16.classify 54629us; S16.classify 17442us;
+  S16.classify 33899us; S16.classify 23859us; S16.classify 36892us; S16.classify 20257us; S16.classify 41538us; S16.classify 57779us; S16.classify 17422us; S16.classify 42404us ]
+
+#push-options "--z3rlimit 100"
+let zeta_shoup_list_ok : squash (shoup_ok 0 zeta_shoup_list /\ L.length zeta_shoup_list == 128)
+  = assert_norm (shoup_ok 0 zeta_shoup_list);
+    assert_norm (L.length zeta_shoup_list == 128)
+#pop-options
+
+let zeta_shoup_table : Seq.lseq S16.t 128 = Seq.seq_of_list zeta_shoup_list
+
+let zeta_shoup_table_index (i: nat { i < 128 })
+  : Lemma (S16.v (Seq.index zeta_shoup_table i) == (S16.v (Seq.index zeta_table i) * pow2 16) / q)
+          [SMTPat (Seq.index zeta_shoup_table i)]
+  = assert_norm (pow2 16 == 65536);
+    shoup_ok_index 0 zeta_shoup_list i;
+    zeta_table_index i;
+    Seq.lemma_seq_of_list_index zeta_shoup_list i;
+    let z = S16.v (Seq.index zeta_table i) in
+    assert (S16.v (Seq.index zeta_shoup_table i) == (z * 65536) / 3329)
+
+let zeta_shoup_arr : (a: G.static_array S16.t
+                        { G.static_array_elems a == (zeta_shoup_table <: Seq.seq S16.t) })
+  = G.mk_static_array zeta_shoup_list

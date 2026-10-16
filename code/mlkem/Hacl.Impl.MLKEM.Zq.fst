@@ -26,11 +26,10 @@
 
     Everything is branch-free.  Addition and subtraction reduce with a
     conditional subtraction driven by {!Hacl.Secret.UInt16.gte_mask};
-    multiplication reduces with a Barrett step in sixty-four bits.  The
-    obvious optimisation is Montgomery multiplication with the zeta table
-    stored pre-scaled, which is what every fast implementation does; it
-    changes the representation invariant, so it belongs in a later pass and
-    not in the first correct one. *)
+    multiplication reduces with a Barrett step in sixty-four bits, or, when
+    one factor is a tabulated constant, with Shoup's trick in sixteen and
+    thirty-two bits ({!zq_mul_shoup}), which keeps the representation
+    canonical and is what the transform uses. *)
 module Hacl.Impl.MLKEM.Zq
 
 open Spec.MLKEM.Zq
@@ -38,6 +37,7 @@ open Spec.MLKEM.Zq
 module U16 = FStar.UInt16
 module U64 = FStar.UInt64
 module S16 = Hacl.Secret.UInt16
+module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
 module Math = FStar.Math.Lemmas
@@ -133,6 +133,78 @@ let zq_mul (a b: zqt) : r: zqt { S16.v r == mul (S16.v a) (S16.v b) }
     let x = S64.mul_mod (Cast.u16_to_u64 a) (Cast.u16_to_u64 b) in
     let t = S64.shift_right (S64.mul_mod x (S64.classify 5039uL)) 24ul in
     csub (Cast.u64_to_u16 (S64.sub_mod x (S64.mul_mod t (S64.classify 3329uL))))
+
+(** {2 Multiplication by a known constant}
+
+    When one factor [z] is fixed -- a root of unity out of a table -- its
+    companion [zs = floor(z 2^16 / q)] can be tabulated too, and then
+    [t = (y zs) >> 16] approximates [y z / q] from below by less than two
+    (Shoup's trick).  Everything stays in sixteen and thirty-two bits: the
+    remainder [y z - t q] is below [2q], so computing it modulo [2^16] is
+    exact, and the two products are the high and low halves a vector unit
+    multiplies sixteen lanes at a time. *)
+
+let le_cancel (a b: nat) (p: pos)
+  : Lemma (requires a * p <= b * p) (ensures a <= b)
+  = if a > b then Math.lemma_mult_lt_right p b a
+
+let lt_cancel (a b: nat) (p: pos)
+  : Lemma (requires a * p < b * p) (ensures a < b)
+  = if a >= b then Math.lemma_mult_le_right p b a
+
+let shoup_bound (y z zs: nat)
+  : Lemma (requires y < pow2 16 /\ z < q /\ zs == (z * pow2 16) / q)
+          (ensures (let t = (y * zs) / pow2 16 in
+                    t * q <= y * z /\ y * z - t * q < 2 * q))
+  = let p = pow2 16 in
+    let t = (y * zs) / p in
+    let r1 = (y * zs) % p in
+    Math.lemma_div_mod (z * p) q;
+    Math.lemma_div_mod (y * zs) p;
+    let d = (z * p) % q in
+    assert (z * p == zs * q + d /\ d < q);
+    assert (y * zs == t * p + r1 /\ r1 < p);
+    (* (y z - t q) p = y (z p) - q (t p) = y (zs q + d) - q (y zs - r1) = y d + q r1 *)
+    Math.paren_mul_right y z p;
+    Math.distributivity_add_right y (zs * q) d;
+    Math.paren_mul_right y zs q;
+    Math.paren_mul_right t p q;
+    Math.swap_mul p q;
+    Math.paren_mul_right t q p;
+    Math.distributivity_sub_left (y * z) (t * q) p;
+    assert ((y * z - t * q) * p == y * d + q * r1);
+    Math.lemma_mult_le_right d y p;
+    Math.lemma_mult_lt_left q r1 p;
+    Math.lemma_mult_le_left y d q;
+    Math.lemma_mult_lt_right q y p;
+    assert ((y * z - t * q) * p >= 0);
+    assert ((y * z - t * q) * p < (2 * q) * p);
+    if y * z - t * q < 0 then Math.lemma_mult_lt_right p (y * z - t * q) 0;
+    lt_cancel (y * z - t * q) (2 * q) p
+
+inline_for_extraction
+let zq_mul_shoup (z: zqt) (zs: S16.t { S16.v zs == (S16.v z * pow2 16) / q }) (y: zqt)
+  : r: zqt { S16.v r == mul (S16.v z) (S16.v y) }
+  = assert_norm (pow2 16 * pow2 16 == pow2 32);
+    assert_norm (2 * q < pow2 16);
+    assert_norm (pow2 16 == 65536);
+    Math.lemma_mult_le_right (S16.v zs) (S16.v y) (pow2 16);
+    Math.lemma_mult_lt_left (pow2 16) (S16.v zs) (pow2 16);
+    Math.small_mod (S16.v y * S16.v zs) (pow2 32);
+    shoup_bound (S16.v y) (S16.v z) (S16.v zs);
+    let tw = S32.shift_right (S32.mul_mod (Cast.u16_to_u32 y) (Cast.u16_to_u32 zs)) 16ul in
+    let t = Cast.u32_to_u16 tw in
+    Math.lemma_div_lt_nat (S16.v y * S16.v zs) 32 16;
+    Math.small_mod (S32.v tw) (pow2 16);
+    assert (S16.v t == (S16.v y * S16.v zs) / pow2 16);
+    let r = S16.sub_mod (S16.mul_mod y z) (S16.mul_mod t qw) in
+    Math.lemma_mod_sub_distr ((S16.v y * S16.v z) % pow2 16) (S16.v t * q) (pow2 16);
+    Math.lemma_mod_add_distr (- (S16.v t * q)) (S16.v y * S16.v z) (pow2 16);
+    Math.small_mod (S16.v y * S16.v z - S16.v t * q) (pow2 16);
+    assert (S16.v r == S16.v y * S16.v z - S16.v t * q);
+    Math.lemma_mod_sub (S16.v y * S16.v z) q (S16.v t);
+    Math.swap_mul (S16.v y) (S16.v z);
+    csub r
 
 #pop-options
 

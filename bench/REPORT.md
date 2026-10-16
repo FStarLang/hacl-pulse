@@ -8335,3 +8335,61 @@ Montgomery operations), 38% `precomp` (about 11 squarings and 65
 doublings) and the rest hashing.  Every Montgomery operation is dominated
 by the `n^2` reduction, so the next lever for verification, signing and
 FFDHE alike is a MULX/ADX dual-carry-chain multiply and reduction.
+
+## Part 68: ML-KEM's NTT in place, with Shoup multiplication
+
+A callgrind profile of ML-KEM-768 put the forward and inverse NTT at 42% of
+all instructions (`ntt_inplace` 28%, `intt_inplace` 14%).  The transform was
+written in the shape of the specification: each layer a flat loop over all
+256 output coefficients, a branch per coefficient choosing the butterfly arm,
+the zeta product computed separately for each arm, a sixty-four-bit Barrett
+reduction per product, and two buffers used alternately with a copy at the
+end.  About 6.1 us (gcc) and 7.3 us (clang) per transform.
+
+Now:
+
+- `Hacl.Impl.MLKEM.Zq.zq_mul_shoup`: multiplication by a constant `z` whose
+  companion `zs = floor(z 2^16 / q)` is known.  `t = (y zs) >> 16` in
+  thirty-two bits, `r = y z - t q` modulo `2^16`, one conditional
+  subtraction.  `shoup_bound` proves `0 <= y z - t q < 2q`, so the sixteen-bit
+  wrap is exact.
+- `Hacl.MLKEM.Tables.zeta_shoup_arr`: the 128 companions, checked against the
+  zeta table by normalization like the zetas themselves.
+- `Hacl.Impl.MLKEM.NTT`: each layer is an outer loop over blocks, which reads
+  the root and its companion once, and an inner loop of `len` butterflies
+  that read both inputs before writing either.  The layer function is
+  `inline_for_extraction` and called with literal `len`, so the inner loop
+  has a constant trip count in the C and is vectorised.  The invariant
+  `part` (opaque to SMT, with start/read/step/next/done lemmas) says which
+  coefficients already hold the layer's output; the rest still hold its
+  input.  The inverse transform's final scaling by `128^-1` is also Shoup.
+  `ntt_inplace`/`intt_inplace` keep their scratch parameter, now unused, so
+  no caller changes.
+
+A C prototype of this shape ran an NTT in 0.81 us (gcc) and 0.59 us
+(clang) with `-march=native`; the same shape with a runtime `len` was
+1.4--2.8 us because nothing vectorised.
+
+ML-KEM-768, best of interleaved runs, in microseconds:
+
+| build | keypair | encaps | decaps |
+| --- | ---: | ---: | ---: |
+| `bench.c`, gcc `-O3`, old | 98.6 | 106.8 | 138.9 |
+| `bench.c`, gcc `-O3`, new | 65.3 | 75.1 | 90.2 |
+| `others.c`, clang `-O3`, old (Part 66 table) | 90 | 131 | 190 |
+| `others.c`, clang `-O3`, new | 52.8 | 59.7 | 71.1 |
+| gcc `-O3 -march=native`, old | 75.2 | 83.0 | 111.5 |
+| gcc `-O3 -march=native`, new | 43.9 | 49.9 | 57.5 |
+| clang `-O3 -march=native`, old | 70.5 | 105.0 | 158.2 |
+| clang `-O3 -march=native`, new | 36.6 | 42.0 | 49.6 |
+
+AWS-LC measured in the same run as the `others.c` rows: 16.6, 17.6 and
+20.9 us, so the gap is now 3.2x--3.4x instead of 5.2x--6.4x.  The README's
+ML-KEM table is regenerated with `mkkem.py` from three `bench.c` runs; the
+three other-library rows were edited from this run.
+
+After the change the profile is `sample_ntt` (SHAKE128 plus rejection) 39%,
+SHAKE256 15%, `multiply` (base-case products, still sixty-four-bit Barrett)
+11%, CBD sampling 8.5%, NTT 5.8% and inverse NTT 5.1%.  The next levers are
+the matrix expansion (several SHAKE128 lanes at once) and the base-case
+products.

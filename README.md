@@ -3263,7 +3263,8 @@ modulo `X^2 - zeta`.  `Spec.MLKEM.NTT` says exactly
 that and `Hacl.Impl.MLKEM.NTT` implements it in place, with the zeta table
 a 128-entry constant.  Addition and subtraction reduce with a
 conditional-subtract mask and multiplication with a Barrett step in
-sixty-four bits, all branch-free, and the coefficient type is a refinement
+sixty-four bits, or, by a root of unity in the transform, with Shoup's
+trick against a second table of `floor(zeta 2^16 / q)`, all branch-free, and the coefficient type is a refinement
 --- `zqt = x: S16.t { S16.v x < q }` --- so every intermediate carries its
 bound in its type instead of in a lemma.
 
@@ -4135,9 +4136,9 @@ measured the same way as the rest of this section:
 
 | operation | 512 | 768 | 1024 |
 | --- | ---: | ---: | ---: |
-| keypair | 60 us | 97 us | 145 us |
-| encapsulate | 66 us | 104 us | 152 us |
-| decapsulate | 91 us | 138 us | 193 us |
+| keypair | 39 us | 66 us | 102 us |
+| encapsulate | 46 us | 75 us | 114 us |
+| decapsulate | 56 us | 89 us | 132 us |
 
 These rows come from the same `bench.c` as everything else, guarded by
 `BS_HAVE_MLKEM` because there is no HACL\* side to compile them against, and
@@ -4147,13 +4148,15 @@ Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
 re-encrypts in order to check.  The numbers are a few times what a
 hand-optimised reference implementation of Kyber gets on the same class of
-machine, and the gap is not in the transform: a large share of every
-operation is Keccak, where this library is already ahead of HACL\*'s
-portable C, and the rest is the NTT and the rejection sampler, neither of
-which has been tuned at all --- the NTT is the specification's seven
-layers written out, with a Barrett reduction on every product and no
-lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
-look first if these ever need to be faster.
+machine.  The transform is no longer where the time goes: since Part 68
+it is in-place butterflies whose inner loop has a constant trip count and
+multiplies by the roots with Shoup's trick in sixteen and thirty-two bits,
+which compilers vectorise, and the forward and inverse NTT together fell
+from 42% of the instructions of an ML-KEM-768 run to 11%.  What is left
+is mostly Keccak: the rejection sampler that expands the public matrix
+(SHAKE128, one lane at a time) is now 39% and SHAKE256 15%, then the
+base-case products (11%, still a sixty-four-bit Barrett step per product)
+and the binomial sampler.
 
 These numbers used to be half again as large, and the reason they are not
 is *A bit string is a number* below.  There was a specialisation gap here
@@ -4231,14 +4234,14 @@ rounds, interleaved, canary-filtered); the harness is
 | FFDHE-2048 | -- | 4.7 ms | 4.6 ms | **1.9 ms** | 3.7 ms | -- | -- | -- | -- | 2.39x |
 | P-256 ECDH | -- | 183 us | 120 us | 50 us | **47 us** | -- | -- | -- | -- | 2.53x |
 | Ed25519 verify | -- | 114 us | 126 us | 120 us | 39 us | 57 us | -- | 46 us | **36 us** | 3.12x |
+| ML-KEM-768 keygen | -- | 65 us | 53 us | 59 us | **17 us** | -- | -- | -- | -- | 3.19x |
 | P-256 ECDSA verify | -- | 261 us | 177 us | 70 us | **54 us** | -- | -- | 64 us | -- | 3.27x |
 | RSA-PSS-2048 verify | -- | 64 us | 60 us | 23 us | **18 us** | -- | -- | -- | -- | 3.37x |
+| ML-KEM-768 encaps | -- | 76 us | 60 us | 36 us | **18 us** | -- | -- | -- | -- | 3.39x |
+| ML-KEM-768 decaps | -- | 89 us | 71 us | 55 us | **21 us** | -- | -- | -- | -- | 3.40x |
 | P-256 ECDSA sign | -- | 90 us | 66 us | 25 us | **17 us** | -- | -- | -- | -- | 3.77x |
 | Ed25519 sign | -- | 36 us | 41 us | 45 us | **9.2 us** | 19 us | -- | 9.5 us | 18 us | 3.88x |
 | SHA-1 | 256 KiB | 1.6 ms | 1.0 ms | 265 us | **264 us** | -- | -- | 963 us | -- | 3.90x |
-| ML-KEM-768 keygen | -- | 99 us | 90 us | 59 us | **18 us** | -- | -- | -- | -- | 5.16x |
-| ML-KEM-768 encaps | -- | 107 us | 131 us | 36 us | **19 us** | -- | -- | -- | -- | 5.77x |
-| ML-KEM-768 decaps | -- | 140 us | 190 us | 55 us | **22 us** | -- | -- | -- | -- | 6.36x |
 
 A dash means the library does not offer the operation through the API used:
 AWS-LC has BLAKE2b only with a 256-bit output and no BLAKE2s; libsodium has no
@@ -4271,7 +4274,7 @@ ChaCha20 and Salsa20 backends (`Hacl.Chacha20.Vec512`, `Hacl.Salsa20.Vec512`;
 `bench/REPORT.md` Parts 60 and 61) are level with libsodium's sixteen-block
 `zmm` kernel and ahead of OpenSSL's AVX-512VL one, and secretbox is a third
 faster than libsodium's or libjade's because they pair that cipher with a
-scalar or AVX2 Poly1305.  Elsewhere the gaps fall into three groups.
+scalar or AVX2 Poly1305.  Elsewhere the gaps fall into two groups.
 
 - *Within 1.6x* -- BLAKE2s, Poly1305, MD5, both AES-GCMs, BLAKE2b, X25519,
   SHA-3 and SHAKE.  Every one of these is a primitive where hacl-pulse
@@ -4279,7 +4282,8 @@ scalar or AVX2 Poly1305.  Elsewhere the gaps fall into three groups.
   AES-NI and PCLMUL, BMI2), and the remaining distance is hand-scheduled
   assembly: OpenSSL's Poly1305 and GCM, libjade's Keccak, s2n-bignum's
   X25519.
-- *2x--4x* -- SHA-1, SHA-2 and its HMACs, RSA, FFDHE, P-256 and Ed25519.
+- *2x--4x* -- SHA-1, SHA-2 and its HMACs, RSA, FFDHE, P-256, Ed25519 and
+  ML-KEM.
   The hashes are an instruction-set gap: OpenSSL's SHA-1 and SHA-256 and
   Firedancer's SHA-512 compute the message schedule with AVX2, which
   neither this library nor HACL\* does.  RSA and FFDHE are portable 64-bit
@@ -4293,10 +4297,12 @@ scalar or AVX2 Poly1305.  Elsewhere the gaps fall into three groups.
   multiples and the double-scalar verification.  RSA verification was
   at 9.5x until its variable-time ladder stopped squaring through the
   leading zeros of `65537` (Part 67, measured separately from this run);
-  at 3.4x it is now the same Montgomery-multiply gap as signing.
-- *5x and more* -- ML-KEM.  ML-KEM is the
-  specification's NTT with no lazy reduction or vectorisation, against
-  AWS-LC's mlkem-native with its AVX2 assembly.
+  at 3.4x it is now the same Montgomery-multiply gap as signing.  ML-KEM
+  was at 5.2x--6.4x until its NTT became in-place butterflies with Shoup
+  multiplication by the roots (Part 68; these three rows, hacl-pulse and
+  AWS-LC, were measured separately from this run); what is left against
+  mlkem-native's AVX2 assembly is mostly the rejection sampler and
+  SHAKE128 one lane at a time, and the base-case products.
 
 Verification does not by itself put a library at the back of a row:
 libjade and the s2n-bignum routines in AWS-LC and Firedancer are verified
