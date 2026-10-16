@@ -8285,3 +8285,53 @@ hacl-pulse now leads on ChaCha20, Salsa20, ChaCha20-Poly1305 and secretbox,
 and P-256 is 2.5x--3.8x behind AWS-LC rather than 5x--11x.  Absolute times
 for every library were about 4% higher than in the previous run; ratios are
 the comparison.
+
+## Part 67: RSA verification starts at the exponent's top bit
+
+RSA-PSS verification was 9.5x behind AWS-LC.  A callgrind profile (built
+`-march=haswell -madx`, since valgrind cannot run AVX-512) showed why:
+`mod_exp_vartime` walked every bit of the 64-bit limb holding `e = 65537`,
+so it paid for 64 squarings and two multiplies where 16 squarings and one
+multiply are enough.  Each squaring was a `copy` and a `mont_mul`.
+
+Changes, all verified:
+
+- `Hacl.Bignum.Exponentiation`: new `top_bit`, which finds the exponent's
+  highest set bit with a variable-time scan (the exponent is public), and
+  `seed_acc`, which sets the accumulator to `aM` (and leaves it at the
+  Montgomery one when the exponent is zero).  The lemmas `lead_zero` and `lead_one` justify
+  dropping the leading zeros and taking the top one for free.  The ladder
+  then runs from the bit below that, and squares with `mont_sqr`.  The
+  constant-time ladder is untouched and still runs over the full bit length.
+- `Hacl.Bignum.Montgomery.precomp`: its ladder step squares with `mont_sqr`
+  instead of `copy` + `mont_mul` (about 1.7M to 1.5M instructions per call).
+
+A/B against the previous commit, using the same `bench.c` and interleaved
+runs, best of each, in microseconds:
+
+| row | gcc old | gcc new | | clang old | clang new | |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| rsapss-2048-verify | 177.6 | 64.2 | 2.77x | 158.9 | 59.7 | 2.66x |
+| rsapss-2048-sign | | | 1.00x | | | 0.96x |
+| ffdhe2048 | | | 0.98x | | | 0.96x--0.97x |
+| bn2048-modexp-consttime | | | 1.00x | | | 0.96x |
+
+The constant-time rows are noise or layout, not code.  Their C is identical
+apart from function order.  Under clang, `mont_sqr` now has three callers
+and is no longer inlined into `Exponentiation.mont_sq`, so the code shifts.
+In a standalone harness old and new are 4342 and 4359 us; with
+`-falign-functions=64 -falign-loops=64` on both they are about 4570, so the
+old build was alignment-lucky, and with forced alignment the bench's sign
+and FFDHE rows are 1.00x--1.01x.  Under gcc, the old object had four
+`Exponentiation.mont_sq.constprop` clones, one per modulus size, and the
+new one has none, for the same reason.  That accounts for the remaining 2%
+on FFDHE.
+
+Against the other libraries, verification goes from 9.5x to about 3.4x
+behind AWS-LC's 18 us, and against HACL\* from 1.28x to 0.46x.  These two
+README rows were edited from this A/B run rather than from a full table run.
+A verify is now about 3.9M instructions: about 54% exponentiation (about 20
+Montgomery operations), 38% `precomp` (about 11 squarings and 65
+doublings) and the rest hashing.  Every Montgomery operation is dominated
+by the `n^2` reduction, so the next lever for verification, signing and
+FFDHE alike is a MULX/ADX dual-carry-chain multiply and reduction.

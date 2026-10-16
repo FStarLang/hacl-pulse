@@ -2756,7 +2756,8 @@ For RSA-2048 the constant now costs 32.5 us where the doubling chain cost
 361, an elevenfold improvement, and HACL\*'s own `precomp` takes 95.  It
 matters out of proportion to its size for *verification*, where the exponent
 is 17 bits and everything else is over in a moment: `rsapss-2048-verify`
-drops from 516 us to 198.
+drops from 516 us to 198.  The ladder step now squares with `mont_sqr`
+rather than copying the accumulator into `mont_mul`.
 
 **One carry bit, not a propagated carry.**  The reduction loop clears one
 limb per step by adding a multiple of the modulus.  Each step spills a carry
@@ -2789,7 +2790,11 @@ bits, and one more multiply.  That is five `mont_mul`s per four bits
 instead of eight, so a 2048-bit exponent costs about 2,560 of them rather
 than 4,096 -- 1.6x, and measured at 1.56x on gcc and 1.58x on clang.  The
 variable-time ladder and `mod_inv_prime_vartime` are still bit-at-a-time;
-their exponents are public and they are not on any hot path.
+their exponents are public.  The variable-time ladder does skip the
+exponent's leading zeros: it finds the top set bit, seeds the accumulator
+with `a * R mod n` and squares with `mont_sqr` from there, so `65537`
+costs 16 squarings and one multiply rather than 64 squarings and two
+multiplies (Part 67).
 
 The window closes most, but not all, of the gap to the reference: RSA-PSS
 signing and FFDHE were 1.97x behind HACL* and are now about 1.25x.  What
@@ -2980,6 +2985,8 @@ the exponent's whole bit length to the ladder rather than its significant
 bit length, so nothing about a private exponent leaks through a loop bound;
 the constant-time ladder is selected for signing and the variable-time one
 for verification, where the exponent is public and is usually `65537`.
+Only the variable-time ladder looks for the top set bit and skips the
+zeros above it.
 
 **One `if` in `pss_encode_impl` exists only for GCC.**  The scratch buffer
 there is `emLen - hLen - 1` bytes, a difference of caller-supplied sizes,
@@ -3411,6 +3418,7 @@ reference**.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Salsa20 | 256 KiB | 49 us | 424 us | **0.11x** | 424 us | 0.11x |
 | NaCl secretbox | 256 KiB | 98 us | 604 us | **0.16x** | 604 us | 0.16x |
+| RSA-PSS-2048 verify | -- | 64 us | 139 us | **0.46x** | 139 us | 0.46x |
 | SHA3-256 | 256 KiB | 1.1 ms | 2.3 ms | **0.47x** | 2.3 ms | 0.47x |
 | SHAKE128 | 256 KiB | 869 us | 1.8 ms | **0.47x** | 1.8 ms | 0.47x |
 | ChaCha20 | 256 KiB | 48 us | 92 us | **0.53x** | 804 us | 0.06x |
@@ -3430,14 +3438,13 @@ reference**.
 | secp256k1 ECDSA sign | -- | 63 us | 58 us | **1.08x** | 58 us | 1.08x |
 | MD5 | 256 KiB | 496 us | 395 us | **1.26x** | 395 us | 1.25x |
 | Ed25519 sign | -- | 70 us | 55 us | **1.27x** | 55 us | 1.27x |
-| RSA-PSS-2048 verify | -- | 178 us | 139 us | **1.28x** | 139 us | 1.28x |
 | BLAKE2s | 256 KiB | 573 us | 448 us | **1.28x** | 542 us | 1.06x |
 | BLAKE2b | 256 KiB | 390 us | 301 us | **1.30x** | 342 us | 1.14x |
 | AES-128-GCM | 256 KiB | 73 us | 48 us | **1.51x** | 48 us | 1.51x |
 | X25519 | -- | 50 us | 33 us | **1.53x** | 38 us | 1.34x |
 
 Against what HACL\* can actually do on this machine, every row is within
-1.53x and eighteen are ahead or within 3%.  The furthest ahead are the
+1.53x and nineteen are ahead or within 3%.  The furthest ahead are the
 stream ciphers: Salsa20 and secretbox at 0.11x and 0.16x, because HACL\* has
 no vector Salsa20, and ChaCha20 and ChaCha20-Poly1305 at 0.53x and 0.67x,
 because the AVX-512F backend here (see `bench/REPORT.md` Part 60) runs
@@ -3449,8 +3456,11 @@ compiled-in generator tables, inversion on that field and a faster scalar
 inversion (Parts 62--65).  Poly1305 matches HACL\*'s AVX2 Poly1305, the
 modular exponentiations are level, and this processor has no SHA
 extensions, so SHA-1 and SHA-256 are scalar against scalar and level.
-secp256k1 is at 1.08x.  MD5, Ed25519 signing and RSA verification sit at
-1.26x--1.28x, which is the cost of a portable scalar implementation meeting
+secp256k1 is at 1.08x.  RSA verification, which was at 1.28x, is now at
+0.46x: its ladder starts at the exponent's top set bit instead of walking
+all 64 bits of the limb holding `65537` (Part 67; this row is from that
+part's A/B run, not the full table run).  MD5 and Ed25519 signing sit at
+1.26x--1.27x, which is the cost of a portable scalar implementation meeting
 hand-tuned scalar code, and the BLAKE2 rows are behind HACL\*'s vectorized
 BLAKE2 rather than its scalar one.  MD5, at 1.57x two tables ago, has been
 near 1.25x since its sixty-four steps were unrolled so that every round
@@ -3562,7 +3572,7 @@ exponent ladder over the *Montgomery* exponent --- squaring doubles it, a
 single modular doubling adds one --- seeded at the topmost limb of the
 modulus rather than at one, which reaches the same value in about a dozen
 squarings and sixty-five doublings: 32.5 us, 11.1x faster, and 2.9x faster
-than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198, and the squaring has since taken it to 166.
+than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198, and the squaring has since taken it to 166; starting the variable-time ladder at the exponent's top bit (Part 67) took it to 64 us under gcc and 60 under clang.
 
 What is left on these rows is the reduction, not the multiply: a 32-limb
 `reduction` costs 1,035 ns to the multiply's 931 and the squaring's 579, so
@@ -4222,13 +4232,13 @@ rounds, interleaved, canary-filtered); the harness is
 | P-256 ECDH | -- | 183 us | 120 us | 50 us | **47 us** | -- | -- | -- | -- | 2.53x |
 | Ed25519 verify | -- | 114 us | 126 us | 120 us | 39 us | 57 us | -- | 46 us | **36 us** | 3.12x |
 | P-256 ECDSA verify | -- | 261 us | 177 us | 70 us | **54 us** | -- | -- | 64 us | -- | 3.27x |
+| RSA-PSS-2048 verify | -- | 64 us | 60 us | 23 us | **18 us** | -- | -- | -- | -- | 3.37x |
 | P-256 ECDSA sign | -- | 90 us | 66 us | 25 us | **17 us** | -- | -- | -- | -- | 3.77x |
 | Ed25519 sign | -- | 36 us | 41 us | 45 us | **9.2 us** | 19 us | -- | 9.5 us | 18 us | 3.88x |
 | SHA-1 | 256 KiB | 1.6 ms | 1.0 ms | 265 us | **264 us** | -- | -- | 963 us | -- | 3.90x |
 | ML-KEM-768 keygen | -- | 99 us | 90 us | 59 us | **18 us** | -- | -- | -- | -- | 5.16x |
 | ML-KEM-768 encaps | -- | 107 us | 131 us | 36 us | **19 us** | -- | -- | -- | -- | 5.77x |
 | ML-KEM-768 decaps | -- | 140 us | 190 us | 55 us | **22 us** | -- | -- | -- | -- | 6.36x |
-| RSA-PSS-2048 verify | -- | 178 us | 168 us | 23 us | **18 us** | -- | -- | -- | -- | 9.48x |
 
 A dash means the library does not offer the operation through the API used:
 AWS-LC has BLAKE2b only with a 256-bit output and no BLAKE2s; libsodium has no
@@ -4280,9 +4290,11 @@ scalar or AVX2 Poly1305.  Elsewhere the gaps fall into three groups.
   compiled-in generator tables, inversion on that field and a faster scalar
   inversion (Parts 62--65) have taken it to 2.5x--3.8x.  What is left
   against `nistz256` is its assembly field, its 150 KB of generator
-  multiples and the double-scalar verification.
-- *5x and more* -- RSA verification and ML-KEM.  RSA verification with
-  e = 65537 is little but Montgomery multiplication; ML-KEM is the
+  multiples and the double-scalar verification.  RSA verification was
+  at 9.5x until its variable-time ladder stopped squaring through the
+  leading zeros of `65537` (Part 67, measured separately from this run);
+  at 3.4x it is now the same Montgomery-multiply gap as signing.
+- *5x and more* -- ML-KEM.  ML-KEM is the
   specification's NTT with no lazy reduction or vectorisation, against
   AWS-LC's mlkem-native with its AVX2 assembly.
 

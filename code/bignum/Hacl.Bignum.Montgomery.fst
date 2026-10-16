@@ -1110,8 +1110,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
   A.pts_to_len wide;
   A.pts_to_len nmod;
   modulus_low vn;
-  copy t1 res nn;
-  mont_mul t2 res t1 wide nmod nn mu;
+  mont_sqr t2 res wide nmod nn mu;
   with vsq. assert (A.pts_to t2 vsq);
   exp_sq_step (num vres) (num vsq) 2 (reveal e) (wt (SZ.v nn)) (num vn)
               (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
