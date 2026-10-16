@@ -8272,3 +8272,16 @@ passes.
 about 40% faster than `fmul` on itself but takes only 1-3% off whole
 operations.  fiat-crypto's `p256_64.h` Montgomery multiplier is slower than
 `Hacl.P256.Field64`'s: 28.6 ns against 17.5 (clang), 70 against 24.4 (gcc).
+
+## Part 66: tables re-measured
+
+Both README tables regenerated at HEAD after Part 65 (`table.sh 3` under gcc
+and clang, `others.sh 3`, cores 2, 6 and 10, `mktable.py`/`mkothers.py`).
+Against HACL\* best under gcc: ChaCha20 1.09x to 0.53x, ChaCha20-Poly1305
+1.06x to 0.67x, Salsa20 1.18x to 0.11x, secretbox 0.93x to 0.16x, P-256
+1.28x--1.35x to 0.60x--0.72x, secp256k1 sign 1.23x to 1.08x.  Under clang
+P-256 went from 2.8x--2.9x to 0.93x--1.16x.  Against other libraries,
+hacl-pulse now leads on ChaCha20, Salsa20, ChaCha20-Poly1305 and secretbox,
+and P-256 is 2.5x--3.8x behind AWS-LC rather than 5x--11x.  Absolute times
+for every library were about 4% higher than in the previous run; ratios are
+the comparison.
