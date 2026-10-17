@@ -349,8 +349,11 @@ ensures exists* (vout': Seq.seq S8.t).
   if (odd && gt1 && below) {
     mod_exp_be sbn mbn eb eLen en nbn nn ct
                #_ #_ #_ #_ #_ #_ #(hide (as_modulus0 (reveal vnbn)));
-    (* The result is written at full limb width and the bytes above the
-       output are checked, rather than assumed, to be zero. *)
+    (* The result is written at full limb width, and the bytes above the
+       output must be zero.  When the output is as wide as the modulus they
+       are, because the result is below the modulus: that is the signing
+       path, where the result is secret and is not looked at.  Otherwise
+       -- verification, where it is public -- they are checked. *)
     let width = SZ.mul 8sz nn;
     let off = SZ.sub width outLen;
     let mut tmp = [| (zero8 <: S8.t); width |];
@@ -358,7 +361,8 @@ ensures exists* (vout': Seq.seq S8.t).
     Conv.to_bytes_be tmp sbn nn;
     with vt. assert (A.pts_to tmp vt);
     be_nat_prefix_zero vt (SZ.v outLen);
-    let fits = all_zero tmp off;
+    be_nat_bound vnb;
+    let fits = if (SZ.eq outLen kLen) { true } else { all_zero tmp off };
     if fits {
       be_nat_trunc vt (SZ.v outLen);
       copy_range out 0sz tmp off outLen;
@@ -554,6 +558,12 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
 }
 
 #pop-options
+
+(* The entry points below run at the default options, and how long their
+   queries take depends on what the solver has seen before them: a change
+   to the body of [rsa_exp] alone was enough to time one out.  A fresh
+   solver makes them independent of everything above. *)
+#restart-solver
 
 (** {2 The entry points}
 

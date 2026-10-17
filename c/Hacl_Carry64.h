@@ -23,6 +23,11 @@
  * `mulx`, and `Hacl_Carry64_supported` is the run-time check that picks it.
  * Elsewhere the bodies fall back to `__int128`, which is correct but is not
  * what anyone should be calling: `supported` is false there.
+ *
+ * The carry in `c` must be 0 or 1.  The verified callers guarantee it --
+ * it is a precondition of the `assume val`s -- but the three bodies do not
+ * agree outside that range: `_addcarry_u64` reads any nonzero `c` as 1,
+ * while the builtin and the `__int128` fallback add `c` as a number.
  */
 
 #ifndef HACL_CARRY64_H

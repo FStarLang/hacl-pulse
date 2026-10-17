@@ -2954,7 +2954,10 @@ for the same reason.
 **Nothing is trusted.**  `rsa_exp`, the primitive both directions go
 through, checks at run time that the modulus is odd, that it is greater than
 one, that the base is below it and that the result fits the output width,
-and returns `false` otherwise.  A caller cannot reach Montgomery reduction
+and returns `false` otherwise.  The last check reads the result, so it is
+made only where the result is public: when signing, the output is as wide
+as the modulus, the result is below the modulus, and the fit is proved
+rather than tested.  A caller cannot reach Montgomery reduction
 with an even modulus, which is the one way to make the bignum layer produce
 nonsense rather than an error.  `tests/test_rsapss.c` clears the low bit of
 each modulus and checks that both directions refuse it.
