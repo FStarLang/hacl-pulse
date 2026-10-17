@@ -440,6 +440,12 @@ let negw_ok (a: Seq.seq nat)
 
 let fneg_spec (a: Seq.seq nat) : Seq.seq nat = carry_pass (negw a)
 
+(** [sub_mod_lemma] from zero, in a context that knows nothing else. *)
+let fneg_mod_lemma (x b: nat)
+  : Lemma (requires x + b == 64 * prime)
+          (ensures x % prime == K.fneg (b % prime))
+  = sub_mod_lemma x 0 b
+
 let fneg_spec_ok (a: Seq.seq nat)
   : Lemma (requires felem a)
           (ensures felem (fneg_spec a) /\ fev (fneg_spec a) == K.fneg (fev a))
@@ -447,9 +453,7 @@ let fneg_spec_ok (a: Seq.seq nat)
     assert_norm (64 * (base - 1) + 64 < base * 65);
     assert_norm (base - 1 + cf * ((64 * (base - 1) + 64) / base) <= lim);
     pass (negw a) (64 * (base - 1)) 64 lim;
-    Seq.lemma_eq_intro (subw (Seq.create nl 0) a) (negw a);
-    sub_mod_lemma (eval (negw a)) 0 (eval a);
-    eval_zeros (Seq.create nl 0)
+    fneg_mod_lemma (eval (negw a)) (eval a)
 
 #pop-options
 
@@ -514,6 +518,8 @@ let prep_ok (c: Seq.seq nat)
     limb holding no more than the carry that reached it. *)
 let dhi : pos = pow2 57
 
+#push-options "--fuel 0 --ifuel 0"
+
 let prep_ble (c: Seq.seq nat) (cu: nat)
   : Lemma (requires Seq.length c == nw /\ ble c cu /\ cu + dhi < base * (dhi + 1))
           (ensures (forall (i: nat). i < nl ==> vat (prep c) i <= cu) /\
@@ -526,12 +532,17 @@ let prep_ble (c: Seq.seq nat) (cu: nat)
     let h = hi c in
     let u = Seq.slice c 0 nl in
     assert_norm (base <= dhi);
+    assert (prep c == Seq.append u h);
+    assert (forall (j: nat). j < nl ==> vat h j <= dhi);
     let aux (i: nat { nl <= i /\ i < 2 * nl }) : Lemma (vat (prep c) i <= dhi) =
-      Seq.lemma_index_app2 u h i in
+      Seq.lemma_index_app2 u h i;
+      assert (vat h (i - nl) <= dhi) in
     Classical.forall_intro aux;
     let aux2 (i: nat { i < nl }) : Lemma (vat (prep c) i <= cu) =
       Seq.lemma_index_app1 u h i in
     Classical.forall_intro aux2
+
+#pop-options
 
 (** {3 The carry pass on a shaped number}
 
@@ -542,7 +553,23 @@ let prep_ble (c: Seq.seq nat) (cu: nat)
 let rec shchain (c0: nat) (k: nat) : Tot nat (decreases k) =
   if k = 0 then c0 else base - 1 + shchain c0 (k - 1) / base
 
-#push-options "--fuel 2 --z3rlimit 400"
+(** One link of the chain on a shaped number: limb [k - 1] is at most [a]
+    before the step, so limb [k] is at most [base - 1 + a / base] after it,
+    and every other limb stays a proper digit. *)
+let carry_step_shaped (r: Seq.seq nat) (k: nat) (a: nat)
+  : Lemma (requires Seq.length r == nl /\ 0 < k /\ k < nl /\
+                    (forall (i: nat). i < k - 1 ==> vat r i < base) /\
+                    vat r (k - 1) <= a /\
+                    (forall (i: nat). k - 1 < i /\ i < nl ==> vat r i < base))
+          (ensures (let r' = carry_step (k - 1) r in
+                    Seq.length r' == nl /\
+                    (forall (i: nat). i < k ==> vat r' i < base) /\
+                    vat r' k <= base - 1 + a / base /\
+                    (forall (i: nat). k < i /\ i < nl ==> vat r' i < base)))
+  = Math.lemma_div_le (vat r (k - 1)) a base;
+    Math.lemma_mod_lt (vat r (k - 1)) base
+
+#push-options "--fuel 1 --ifuel 0 --z3rlimit 40"
 
 let rec carry_run_shaped (s: Seq.seq nat) (c0: nat) (k: nat)
   : Lemma (requires shaped s c0 /\ k < nl)
@@ -553,14 +580,15 @@ let rec carry_run_shaped (s: Seq.seq nat) (c0: nat) (k: nat)
                     (forall (i: nat). k < i /\ i < nl ==> vat r i < base)))
           (decreases k)
   = carry_run_len s k;
-    if k = 0 then ()
+    if k = 0 then Loops.repeati_zero carry_step s
     else begin
       carry_run_shaped s c0 (k - 1);
       carry_run_len s (k - 1);
       let r = carry_run s (k - 1) in
+      Loops.unfold_repeati (k - 1) carry_step s;
       assert (carry_run s k == carry_step (k - 1) r);
-      assert (shchain c0 k == base - 1 + shchain c0 (k - 1) / base);
-      Math.lemma_div_le (vat r (k - 1)) (shchain c0 (k - 1)) base
+      carry_step_shaped r k (shchain c0 (k - 1));
+      assert (shchain c0 k == base - 1 + shchain c0 (k - 1) / base)
     end
 
 #pop-options
