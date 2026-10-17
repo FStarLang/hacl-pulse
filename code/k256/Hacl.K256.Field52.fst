@@ -552,6 +552,47 @@ ensures exists* (vout': Seq.seq S64.t).
 
 #push-options "--z3rlimit 400"
 
+(** Nine columns, equal position by position. *)
+let nine_eq_v (x y: Seq.seq nat)
+  : Lemma (requires Seq.length x == nw /\ Seq.length y == nw /\
+                    vat x 0 == vat y 0 /\ vat x 1 == vat y 1 /\ vat x 2 == vat y 2 /\
+                    vat x 3 == vat y 3 /\ vat x 4 == vat y 4 /\ vat x 5 == vat y 5 /\
+                    vat x 6 == vat y 6 /\ vat x 7 == vat y 7 /\ vat x 8 == vat y 8)
+          (ensures x == y)
+  = assert_norm (nw == 9);
+    Seq.lemma_eq_intro x y
+
+(** Nine columns out, against a specification whose columns are known one
+    by one; as [store5], so that the writes and the extensionality step are
+    checked in a context of nine equations, not the products before. *)
+inline_for_extraction
+fn store9 (t: A.array S128.t) (c0 c1 c2 c3 c4 c5 c6 c7 c8: S128.t)
+          (sp: erased (Seq.seq nat))
+          (#vt: erased (Seq.seq S128.t))
+requires A.pts_to t vt **
+  pure (Seq.length vt == nw /\ Seq.length sp == nw /\
+        vat sp 0 == S128.v c0 /\ vat sp 1 == S128.v c1 /\ vat sp 2 == S128.v c2 /\
+        vat sp 3 == S128.v c3 /\ vat sp 4 == S128.v c4 /\ vat sp 5 == S128.v c5 /\
+        vat sp 6 == S128.v c6 /\ vat sp 7 == S128.v c7 /\ vat sp 8 == S128.v c8)
+ensures exists* (w: Seq.seq S128.t).
+  A.pts_to t w ** pure (Seq.length w == nw /\ vals128 w == reveal sp)
+{
+  A.pts_to_len t;
+  assert_norm (nw == 9);
+  A.((t.(0sz) <- c0)); A.((t.(1sz) <- c1)); A.((t.(2sz) <- c2));
+  A.((t.(3sz) <- c3)); A.((t.(4sz) <- c4)); A.((t.(5sz) <- c5));
+  A.((t.(6sz) <- c6)); A.((t.(7sz) <- c7)); A.((t.(8sz) <- c8));
+  with w. assert (A.pts_to t w);
+  A.pts_to_len t;
+  assert (pure (vat (vals128 w) 0 == S128.v c0 /\ vat (vals128 w) 1 == S128.v c1 /\
+                vat (vals128 w) 2 == S128.v c2 /\ vat (vals128 w) 3 == S128.v c3 /\
+                vat (vals128 w) 4 == S128.v c4 /\ vat (vals128 w) 5 == S128.v c5 /\
+                vat (vals128 w) 6 == S128.v c6 /\ vat (vals128 w) 7 == S128.v c7 /\
+                vat (vals128 w) 8 == S128.v c8));
+  nine_eq_v (vals128 w) (reveal sp);
+  assert (pure (vals128 w == reveal sp))
+}
+
 (** {3 The twenty-five products} *)
 
 [@@ FStar.Attributes.CInline]
@@ -590,18 +631,63 @@ ensures exists* (vt': Seq.seq S128.t).
   let c7 = addd (mul52 a3 b4) (mul52 a4 b3);
   let c8 = mul52 a4 b4;
 
-  A.((t.(0sz) <- c0)); A.((t.(1sz) <- c1)); A.((t.(2sz) <- c2));
-  A.((t.(3sz) <- c3)); A.((t.(4sz) <- c4)); A.((t.(5sz) <- c5));
-  A.((t.(6sz) <- c6)); A.((t.(7sz) <- c7)); A.((t.(8sz) <- c8));
-
-  with vt'. assert (A.pts_to t vt');
   part_len (vals va) (vals vb) nl;
   p0 (vals va) (vals vb); p1 (vals va) (vals vb); p2 (vals va) (vals vb);
   p3 (vals va) (vals vb); p4 (vals va) (vals vb); p5 (vals va) (vals vb);
   p6 (vals va) (vals vb); p7 (vals va) (vals vb); p8 (vals va) (vals vb);
-  nine_eq (vals128 vt') (part (vals va) (vals vb) nl);
+  store9 t c0 c1 c2 c3 c4 c5 c6 c7 c8 (hide (part (vals va) (vals vb) nl));
+  part_ble (vals va) (vals vb) lim lim nl;
   ()
 }
+
+(** Five limbs out, against a specification whose limbs are known one by
+    one.  A separate function so that the writes and the extensionality step
+    are checked in a context of five equations, not inside [freeze], whose
+    context carries every division of three carry chains. *)
+inline_for_extraction
+fn store5 (out: A.array S64.t) (p0 p1 p2 p3 p4: S64.t) (t: erased (Seq.seq nat))
+          (#vout: erased (Seq.seq S64.t))
+requires A.pts_to out vout **
+  pure (Seq.length vout == nl /\ Seq.length t == nl /\
+        Seq.index t 0 == S64.v p0 /\ Seq.index t 1 == S64.v p1 /\
+        Seq.index t 2 == S64.v p2 /\ Seq.index t 3 == S64.v p3 /\
+        Seq.index t 4 == S64.v p4)
+ensures exists* (w: Seq.seq S64.t). A.pts_to out w ** pure (vals w == reveal t)
+{
+  A.pts_to_len out;
+  assert_norm (nl == 5);
+  A.((out.(0sz) <- p0)); A.((out.(1sz) <- p1)); A.((out.(2sz) <- p2));
+  A.((out.(3sz) <- p3)); A.((out.(4sz) <- p4));
+  with w. assert (A.pts_to out w);
+  assert (pure (Seq.length (vals w) == nl));
+  assert (pure (Seq.index (vals w) 0 == S64.v p0 /\ Seq.index (vals w) 1 == S64.v p1 /\
+                Seq.index (vals w) 2 == S64.v p2 /\ Seq.index (vals w) 3 == S64.v p3 /\
+                Seq.index (vals w) 4 == S64.v p4));
+  five_eq (vals w) (reveal t);
+  assert (pure (vals w == reveal t))
+}
+
+(** One carry pass, limb by limb: given the limbs [f] of [s] and the chain
+    the code ran -- the four low carries and the top carry [k] folded back
+    against [cf] -- the limbs it holds are those of [carry_pass s].  Over
+    plain numbers, so the callers discharge it by matching equations, and
+    the divisions are reasoned about here, in a context of their own. *)
+let pass_limbs (s: Seq.seq nat) (f0 f1 f2 f3 f4 g0 u1 g1 u2 g2 u3 g3 u4 g4 k r0: nat)
+  : Lemma (requires Seq.length s == nl /\
+                    Seq.index s 0 == f0 /\ Seq.index s 1 == f1 /\ Seq.index s 2 == f2 /\
+                    Seq.index s 3 == f3 /\ Seq.index s 4 == f4 /\
+                    g0 == f0 % base /\
+                    u1 == f1 + f0 / base /\ g1 == u1 % base /\
+                    u2 == f2 + u1 / base /\ g2 == u2 % base /\
+                    u3 == f3 + u2 / base /\ g3 == u3 % base /\
+                    u4 == f4 + u3 / base /\ g4 == u4 % base /\
+                    k == u4 / base /\ r0 == g0 + cf * k)
+          (ensures Seq.length (carry_pass s) == nl /\
+                   Seq.index (carry_pass s) 0 == r0 /\ Seq.index (carry_pass s) 1 == g1 /\
+                   Seq.index (carry_pass s) 2 == g2 /\ Seq.index (carry_pass s) 3 == g3 /\
+                   Seq.index (carry_pass s) 4 == g4)
+  = assert_norm (nl == 5);
+    wpass s
 
 (** {3 The chain, the fold and the two passes} *)
 
@@ -680,7 +766,9 @@ ensures exists* (vout': Seq.seq S64.t).
   let r0 = addd (Cast.u64_to_u128 g0) (mulcf t4);
 
   let s1 = hide (carry_pass ff);
-  wpass ff;
+  pass_limbs ff (S128.v f0) (S128.v f1) (S128.v f2) (S128.v f3) (S128.v f4)
+    (S64.v g0) (S128.v u1) (S64.v g1) (S128.v u2) (S64.v g2) (S128.v u3) (S64.v g3)
+    (S128.v u4) (S64.v g4) (S64.v t4) (S128.v r0);
   assert (pure (Seq.length s1 == nl));
   assert (pure (Seq.index s1 0 == S128.v r0 /\ Seq.index s1 1 == S64.v g1 /\
                 Seq.index s1 2 == S64.v g2 /\ Seq.index s1 3 == S64.v g3 /\
@@ -690,6 +778,8 @@ ensures exists* (vout': Seq.seq S64.t).
      hundred and twenty-eight bits. *)
   assert_norm (base - 1 + cf * dhi < base * (pow2 42 + 1));
   div_le_of_lt (base - 1 + cf * dhi) base (pow2 42);
+  Math.lemma_mod_lt (S128.v f0) base;
+  Math.lemma_mult_le_left cf (S64.v t4) dhi;
   Math.lemma_div_le (S128.v r0) (base - 1 + cf * dhi) base;
   assert_norm (pow2 42 < pow2 64);
   let p0 = lo52d r0;
@@ -713,15 +803,10 @@ ensures exists* (vout': Seq.seq S64.t).
   assert_norm (base - 1 + cf < pow2 64);
   let n0 = addw p0 (mulk cfw (hi52 w4));
 
-  wpass s1;
-  A.((out.(0sz) <- n0)); A.((out.(1sz) <- h1)); A.((out.(2sz) <- h2));
-  A.((out.(3sz) <- h3)); A.((out.(4sz) <- h4));
-  with w. assert (A.pts_to out w);
-  assert (pure (Seq.length (vals w) == nl));
-  assert (pure (Seq.index (vals w) 0 == S64.v n0 /\ Seq.index (vals w) 1 == S64.v h1 /\
-                Seq.index (vals w) 2 == S64.v h2 /\ Seq.index (vals w) 3 == S64.v h3 /\
-                Seq.index (vals w) 4 == S64.v h4));
-  five_eq (vals w) (carry_pass s1);
+  pass_limbs s1 (S128.v r0) (S64.v g1) (S64.v g2) (S64.v g3) (S64.v g4)
+    (S64.v p0) (S64.v w1) (S64.v h1) (S64.v w2) (S64.v h2) (S64.v w3) (S64.v h3)
+    (S64.v w4) (S64.v h4) (S64.v w4 / base) (S64.v n0);
+  store5 out n0 h1 h2 h3 h4 (hide (carry_pass s1));
   ()
 }
 
@@ -766,6 +851,32 @@ ensures exists* (vout': Seq.seq S64.t).
     [cf1] or zero into limb zero, carrying unconditionally -- which is a
     no-op when zero was selected, because the limbs are already proper --
     and masking the top limb back to forty-eight bits. *)
+
+(** The conditional subtraction, limb by limb: given the digits [u] of a
+    proper [s], the zero-or-[cf1] that was selected and the chain the code
+    ran, the limbs it stores are those of [fin s].  Stated over plain
+    numbers so that [freeze] discharges it by matching equations, and the
+    divisions are reasoned about here, away from the three chains before. *)
+let fin_limbs (s: Seq.seq nat) (d u0 u1 u2 u3 u4 y0 g1 g2 g3 g4 p0 p1 p2 p3 p4: nat)
+  : Lemma (requires proper s /\
+                    Seq.index s 0 == u0 /\ Seq.index s 1 == u1 /\ Seq.index s 2 == u2 /\
+                    Seq.index s 3 == u3 /\ Seq.index s 4 == u4 /\
+                    d == (if over s then cf1 else 0) /\
+                    y0 == u0 + d /\ p0 == y0 % base /\
+                    g1 == u1 + y0 / base /\ p1 == g1 % base /\
+                    g2 == u2 + g1 / base /\ p2 == g2 % base /\
+                    g3 == u3 + g2 / base /\ p3 == g3 % base /\
+                    g4 == u4 + g3 / base /\ p4 == g4 % hib)
+          (ensures Seq.length (fin s) == nl /\
+                   Seq.index (fin s) 0 == p0 /\ Seq.index (fin s) 1 == p1 /\
+                   Seq.index (fin s) 2 == p2 /\ Seq.index (fin s) 3 == p3 /\
+                   Seq.index (fin s) 4 == p4)
+  = assert_norm (nl == 5);
+    let x : nat = if over s then 1 else 0 in
+    fin_uniform s x;
+    let bb = Seq.upd s 0 (vat s 0 + cf1 * x) in
+    run4 bb;
+    carry_run_len bb (nl - 1)
 
 #push-options "--z3rlimit 400"
 
@@ -867,8 +978,7 @@ ensures exists* (vout': Seq.seq S64.t).
 
   (* The conditional subtraction. *)
   let d = S64.select m (S64.classify cf1w) S64.zero;
-  let xx = hide (if over s3 then 1 else 0);
-  assert (pure (S64.v d == cf1 * reveal xx));
+  assert (pure (S64.v d == (if over s3 then cf1 else 0)));
   assert_norm (base - 1 + cf1 < base * 2);
   assert_norm (base - 1 + cf1 < pow2 64);
   div_le_of_lt (base - 1 + cf1) base 1;
@@ -888,25 +998,12 @@ ensures exists* (vout': Seq.seq S64.t).
   let g4 = addw u4 (hi52 g3);
   let p4 = lo48 g4;
 
-  let bb = hide (Seq.upd s3 0 (vat s3 0 + cf1 * reveal xx));
-  run4 bb;
-  carry_run_len bb (nl - 1);
-  fin_uniform s3 (reveal xx);
-  assert (pure (Seq.length (freeze_spec (vals va)) == nl));
-  assert (pure (Seq.index (freeze_spec (vals va)) 0 == S64.v p0 /\
-                Seq.index (freeze_spec (vals va)) 1 == S64.v p1 /\
-                Seq.index (freeze_spec (vals va)) 2 == S64.v p2 /\
-                Seq.index (freeze_spec (vals va)) 3 == S64.v p3 /\
-                Seq.index (freeze_spec (vals va)) 4 == S64.v p4));
+  fin_limbs s3 (S64.v d) (S64.v u0) (S64.v u1) (S64.v u2) (S64.v u3) (S64.v u4)
+    (S64.v y0) (S64.v g1) (S64.v g2) (S64.v g3) (S64.v g4)
+    (S64.v p0) (S64.v p1) (S64.v p2) (S64.v p3) (S64.v p4);
+  assert (pure (freeze_spec (vals va) == fin s3));
 
-  A.((out.(0sz) <- p0)); A.((out.(1sz) <- p1)); A.((out.(2sz) <- p2));
-  A.((out.(3sz) <- p3)); A.((out.(4sz) <- p4));
-  with w. assert (A.pts_to out w);
-  assert (pure (Seq.length (vals w) == nl));
-  assert (pure (Seq.index (vals w) 0 == S64.v p0 /\ Seq.index (vals w) 1 == S64.v p1 /\
-                Seq.index (vals w) 2 == S64.v p2 /\ Seq.index (vals w) 3 == S64.v p3 /\
-                Seq.index (vals w) 4 == S64.v p4));
-  five_eq (vals w) (freeze_spec (vals va));
+  store5 out p0 p1 p2 p3 p4 (hide (freeze_spec (vals va)));
   freeze_ok (vals va);
   ()
 }
@@ -1205,6 +1302,25 @@ ensures exists* (vo': Seq.seq S64.t).
   ()
 }
 
+(** The comparison [feq] makes, over plain numbers: the canonical forms
+    agree limb for limb exactly when the field elements are equal. *)
+let feq_limbs (va vb: Seq.seq nat) (a0 a1 a2 a3 a4 b0 b1 b2 b3 b4: nat)
+  : Lemma (requires felem va /\ felem vb /\
+                    vat (freeze_spec va) 0 == a0 /\ vat (freeze_spec va) 1 == a1 /\
+                    vat (freeze_spec va) 2 == a2 /\ vat (freeze_spec va) 3 == a3 /\
+                    vat (freeze_spec va) 4 == a4 /\
+                    vat (freeze_spec vb) 0 == b0 /\ vat (freeze_spec vb) 1 == b1 /\
+                    vat (freeze_spec vb) 2 == b2 /\ vat (freeze_spec vb) 3 == b3 /\
+                    vat (freeze_spec vb) 4 == b4)
+          (ensures (a0 == b0 /\ a1 == b1 /\ a2 == b2 /\ a3 == b3 /\ a4 == b4) <==>
+                   fev va == fev vb)
+  = assert_norm (nl == 5);
+    freeze_ok va; freeze_ok vb;
+    let x = freeze_spec va in
+    let y = freeze_spec vb in
+    Classical.move_requires (Seq.lemma_eq_intro x) y;
+    Classical.move_requires (proper_uniq x) y
+
 (** Two field elements are equal when their canonical forms are equal limb
     for limb: [proper_uniq] is what says a canonical form is unique.  The
     mask is folded rather than branched on, and only the final answer --
@@ -1227,7 +1343,6 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.pts_to_len fa; A.pts_to_len fb;
   freeze fa a;
   freeze fb b;
-  freeze_ok (vals va); freeze_ok (vals vb);
   with sa. assert (A.pts_to fa sa);
   with sb. assert (A.pts_to fb sb);
   let a0 = A.(fa.(0sz)); let a1 = A.(fa.(1sz)); let a2 = A.(fa.(2sz));
@@ -1240,8 +1355,9 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   assert_norm ((pow2 64 - 1) % pow2 8 == pow2 8 - 1);
   let m8 = Cast.u64_to_u8 m;
   let r = Declassify.bool_of_mask m8;
-  Classical.move_requires (Seq.lemma_eq_intro (vals sa)) (vals sb);
-  Classical.move_requires (proper_uniq (vals sa)) (vals sb);
+  feq_limbs (vals va) (vals vb)
+    (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4)
+    (S64.v b0) (S64.v b1) (S64.v b2) (S64.v b3) (S64.v b4);
   Mem.wipe fb 5sz;
   Mem.wipe fa 5sz;
   r

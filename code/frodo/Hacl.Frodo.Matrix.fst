@@ -68,6 +68,28 @@ let mod_pow2_eq (r: nat) (c: pos) (d: U32.t { U32.v d <= 16 }) (m res: M.matrix 
 (** Serialization at a flat index: the loop writes the two bytes of entry
     [k] at [2k] and [2k+1], and every byte offset is of one of those two
     shapes. *)
+let to_bytes_index (r c: nat) (m: M.matrix r c) (k: nat { k < r * c })
+  : Lemma (Seq.index (M.to_bytes r c m) (2 * k) == S16.lo (Seq.index m k) /\
+           Seq.index (M.to_bytes r c m) (2 * k + 1) == S16.hi (Seq.index m k))
+  = FStar.Math.Lemmas.cancel_mul_div k 2;
+    FStar.Math.Lemmas.cancel_mul_mod k 2;
+    FStar.Math.Lemmas.lemma_div_plus 1 k 2;
+    FStar.Math.Lemmas.lemma_mod_plus 1 k 2
+
+let to_bytes_at (r c: nat) (m: M.matrix r c) (res: Seq.lseq S8.t (2 * (r * c)))
+                (t: nat { t < 2 * (r * c) })
+  : Lemma (requires (let k = t / 2 in
+                     k < r * c /\
+                     Seq.index res (2 * k) == S16.lo (Seq.index m k) /\
+                     Seq.index res (2 * k + 1) == S16.hi (Seq.index m k)))
+          (ensures Seq.index res t == Seq.index (M.to_bytes r c m) t)
+  = let k = t / 2 in
+    to_bytes_index r c m k;
+    FStar.Math.Lemmas.euclidean_division_definition t 2;
+    if t % 2 = 0
+    then assert (t == 2 * k)
+    else assert (t == 2 * k + 1)
+
 let to_bytes_eq (r c: nat) (m: M.matrix r c) (res: Seq.lseq S8.t (2 * (r * c)))
   : Lemma (requires forall (k: nat). k < r * c ==>
                       Seq.index res (2 * k) == S16.lo (Seq.index m k) /\
@@ -76,7 +98,7 @@ let to_bytes_eq (r c: nat) (m: M.matrix r c) (res: Seq.lseq S8.t (2 * (r * c)))
   = let aux (t: nat { t < 2 * (r * c) })
       : Lemma (Seq.index res t == Seq.index (M.to_bytes r c m) t)
       = M.div_lt t (r * c) 2;
-        FStar.Math.Lemmas.euclidean_division_definition t 2
+        to_bytes_at r c m res t
     in
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro res (M.to_bytes r c m)

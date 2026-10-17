@@ -199,7 +199,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to blk #pb vk **
 (** One SHAKE128 block: the fifty-six triples it holds exactly, in order.
     Keeping this out of the sampler means neither loop's verification
     condition has to mention the other's. *)
-#push-options "--z3rlimit 400"
+#push-options "--z3rlimit 400 --using_facts_from '* -Spec.SHA3 -Spec.MLKEM.Sample.xof_byte'"
 
 inline_for_extraction
 fn block_impl (dst: A.array zqt) (blk: A.array S8.t) (c: SZ.t)
