@@ -36,6 +36,7 @@ open Spec.MLDSA.Zq
 open Spec.MLDSA.Params
 open Spec.MLDSA.Rounding
 open Hacl.Impl.MLDSA.Zq
+open FStar.Ghost
 
 module U32 = FStar.UInt32
 module U64 = FStar.UInt64
@@ -173,19 +174,19 @@ inline_for_extraction
 let g2_div_ok (p: params) (gd: U32.t) : prop = U32.v gd == p.gamma2_div
 
 inline_for_extraction
-let gamma2_w (#p: params) (gd: U32.t { g2_div_ok p gd }) : x: S32.t { S32.v x == gamma2 p }
+let gamma2_w (#p: erased params) (gd: U32.t { g2_div_ok p gd }) : x: S32.t { S32.v x == gamma2 p }
   = gamma2_cases p;
     if U32.eq gd 88ul then S32.classify 95232ul else S32.classify 261888ul
 
 inline_for_extraction
-let hb_count_w (#p: params) (gd: U32.t { g2_div_ok p gd }) : x: S32.t { S32.v x == hb_count p }
+let hb_count_w (#p: erased params) (gd: U32.t { g2_div_ok p gd }) : x: S32.t { S32.v x == hb_count p }
   = gamma2_cases p;
     if U32.eq gd 88ul then S32.classify 44ul else S32.classify 16ul
 
 (** [floor((r + gamma2 - 1) / (2 gamma2))], by a multiplication and a
     shift by 48. *)
 inline_for_extraction
-let decompose_r1 (#p: params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
+let decompose_r1 (#p: erased params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
   : x: S32.t { S32.v x == (S32.v r + gamma2 p - 1) / (2 * gamma2 p) /\ S32.v x <= hb_count p }
   = gamma2_cases p;
     decompose_eq p (S32.v r);
@@ -211,7 +212,7 @@ let decompose_r1 (#p: params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
 
 (** Algorithm 37. *)
 inline_for_extraction
-let high_bits_w (#p: params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
+let high_bits_w (#p: erased params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
   : x: S32.t { S32.v x == high_bits p (S32.v r) /\ S32.v x < hb_count p }
   = decompose_eq p (S32.v r);
     let r1 = decompose_r1 #p gd r in
@@ -220,7 +221,7 @@ let high_bits_w (#p: params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
 
 (** Algorithm 38, as an element of [Z_q]. *)
 inline_for_extraction
-let low_bits_w (#p: params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
+let low_bits_w (#p: erased params) (gd: U32.t { g2_div_ok p gd }) (r: zqt)
   : x: zqt { S32.v x == low_bits p (S32.v r) }
   = decompose_eq p (S32.v r);
     gamma2_cases p;
@@ -289,7 +290,7 @@ let pos_mask_lemma (lo g2: nat)
 
 (** Algorithm 40.  The hint [h] is [0] or [1]. *)
 inline_for_extraction
-let use_hint_w (#p: params) (gd: U32.t { g2_div_ok p gd }) (h: S32.t) (r: zqt)
+let use_hint_w (#p: erased params) (gd: U32.t { g2_div_ok p gd }) (h: S32.t) (r: zqt)
   : Pure S32.t (requires S32.v h == 0 \/ S32.v h == 1)
       (ensures fun x -> S32.v x == use_hint p (S32.v h = 1) (S32.v r) /\ S32.v x < hb_count p)
   = gamma2_cases p;
@@ -319,7 +320,7 @@ let use_hint_w (#p: params) (gd: U32.t { g2_div_ok p gd }) (h: S32.t) (r: zqt)
 
 (** Algorithm 39, as [0] or [1]. *)
 inline_for_extraction
-let make_hint_w (#p: params) (gd: U32.t { g2_div_ok p gd }) (z r: zqt)
+let make_hint_w (#p: erased params) (gd: U32.t { g2_div_ok p gd }) (z r: zqt)
   : x: S32.t { bool_w (make_hint p (S32.v z) (S32.v r)) x }
   = let h1 = high_bits_w #p gd r in
     let h2 = high_bits_w #p gd (zq_add r z) in
