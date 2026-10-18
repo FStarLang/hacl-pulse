@@ -561,6 +561,14 @@ let store_shape (s: Seq.seq nat) (b: Seq.seq S8.t) (k: nat { k < nl }) (m: nat {
     else if m = 2 then digit (Seq.index s k) 2 (S8.v (Seq.index b (4 * k + 2)))
     else digit (Seq.index s k) 3 (S8.v (Seq.index b (4 * k + 3)))
 
+(** Byte [i] is byte [i % 4] of limb [i / 4], in the shape {!store_shape}
+    states it.  Left to the solver, the product has to be commuted against
+    {!Math.euclidean_division_definition}, which can diverge. *)
+private let byte_split (i: nat)
+  : Lemma (i % 4 < 4 /\ i == 4 * (i / 4) + i % 4)
+  = Math.lemma_mod_lt i 4;
+    Math.euclidean_division_definition i 4
+
 (** The same, indexed by the byte rather than by the limb. *)
 let store_byte_ok (s: Seq.seq nat) (b: Seq.seq S8.t) (i: nat { i < 32 })
   : Lemma (requires Seq.length s == nl /\ Seq.length b == 32 /\
@@ -571,8 +579,7 @@ let store_byte_ok (s: Seq.seq nat) (b: Seq.seq S8.t) (i: nat { i < 32 })
                        S8.v (Seq.index b (4 * k + 3)) == Seq.index s k / 16777216 % 256))
           (ensures S8.v (Seq.index b i) ==
                      (Seq.index s (i / 4) / pow2 (8 * (i % 4))) % 256)
-  = Math.lemma_mod_lt i 4;
-    Math.euclidean_division_definition i 4;
+  = byte_split i;
     store_shape s b (i / 4) (i % 4)
 
 (** Writing each limb out as four bytes produces the little-endian encoding.
