@@ -124,6 +124,21 @@ let bu_index (b0: zq) (d: pos { d <= 20 }) (b: Seq.lseq S8.t (32 * d)) (i: nat {
 
 let pack_ok (d: SZ.t) : prop = 1 <= SZ.v d /\ SZ.v d <= 20
 
+let shl_small (cm: S64.t) (vn: SZ.t { SZ.v vn < 8 })
+  : Lemma (requires S64.v cm < pow2 20)
+          (ensures FStar.UInt32.v (SZ.sizet_to_uint32 vn) == SZ.v vn /\
+                   S64.v (S64.shift_left cm (SZ.sizet_to_uint32 vn)) == S64.v cm * pow2 (SZ.v vn))
+  = let k = SZ.v vn in
+    Math.pow2_lt_compat 32 3;
+    assert_norm (pow2 3 == 8);
+    Math.small_mod k (pow2 32);
+    Math.lemma_mult_le_right (pow2 k) (S64.v cm) (pow2 20);
+    Math.pow2_le_compat 8 k;
+    Math.lemma_mult_le_left (pow2 20) (pow2 k) (pow2 8);
+    Math.pow2_plus 20 8;
+    Math.pow2_lt_compat 64 28;
+    Math.small_mod (S64.v cm * pow2 k) (pow2 64)
+
 #push-options "--z3rlimit 200"
 
 (** [out <- SimpleBitPack_d (src signed b f)]: [32 d] bytes. *)
@@ -177,6 +192,8 @@ ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
     Math.pow2_le_compat 8 (SZ.v vn);
     Math.pow2_plus 20 8;
     Math.small_mod (S64.v cm * pow2 (SZ.v vn)) (pow2 64);
+    assert (pure (S64.v cm < pow2 20));
+    shl_small cm vn;
     let y = S64.shift_left cm (SZ.sizet_to_uint32 vn);
     assert (pure (S64.v y == S64.v cm * pow2 (SZ.v vn)));
     KP.enc_acc_bound (SZ.v d) (src signed (S32.v b) vf) (SZ.v vi) (SZ.v vo) (SZ.v vn);

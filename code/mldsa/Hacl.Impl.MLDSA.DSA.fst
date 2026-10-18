@@ -38,6 +38,7 @@ module Seq = FStar.Seq
 module HSZ = Hacl.SizeT
 module Sub = Hacl.Impl.Sub
 module M = Spec.MLDSA
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -80,10 +81,13 @@ ensures exists* (v: Seq.seq S8.t).
   SZ.fits_u32_implies_fits (sk_len p);
   sk_layout p;
   let mut mu = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track mu;
   let tr = Sub.sub sk 64sz 128sz;
   mu_impl mu tr msg msg_len;
   Sub.unsub_id sk 64 128 tr;
-  sign_mu_impl sg sk mu rnd p k l eta tau ctl g1bits omega gd
+  let wr = sign_mu_impl sg sk mu rnd p k l eta tau ctl g1bits omega gd;
+  Mem.wipe mu 64sz;
+  wr
 }
 
 (** Algorithm 2, [ML-DSA.Sign], with [rnd] supplied by the caller.
@@ -124,10 +128,13 @@ ensures exists* (v: Seq.seq S8.t).
     SZ.fits_u32_implies_fits (sk_len p);
     sk_layout p;
     let mut mu = [| (S8.zero <: S8.t); 64sz |];
+    Mem.track mu;
     let tr = Sub.sub sk 64sz 128sz;
     mu_ctx_impl mu tr msg msg_len ctx ctx_len;
     Sub.unsub_id sk 64 128 tr;
-    sign_mu_impl sg sk mu rnd p k l eta tau ctl g1bits omega gd
+    let wr = sign_mu_impl sg sk mu rnd p k l eta tau ctl g1bits omega gd;
+    Mem.wipe mu 64sz;
+    wr
   }
 }
 
@@ -159,9 +166,12 @@ ensures exists* (v: Seq.seq S8.t).
          else M.sign p vk vm vc M.rnd_zero == None))
 {
   let mut rnd = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track rnd;
   with vr. assert (A.pts_to rnd vr);
   rnd_zero_eq vr;
-  sign_impl sg sk msg msg_len ctx ctx_len rnd p k l eta tau ctl g1bits omega gd
+  let wr = sign_impl sg sk msg msg_len ctx ctx_len rnd p k l eta tau ctl g1bits omega gd;
+  Mem.wipe rnd 32sz;
+  wr
 }
 
 (** {2 Verification} *)
@@ -193,10 +203,15 @@ ensures A.pts_to pk #pp vpk ** A.pts_to msg #pm vm ** A.pts_to sg #ps vsg **
   HSZ.fits32 ();
   let pkl = SZ.add 32sz (SZ.mul 320sz k);
   let mut tr = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track tr;
   Hacl.Hash.SHA3.shake256 tr 64sz pk pkl;
   let mut mu = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track mu;
   mu_impl mu tr msg msg_len;
-  verify_mu_impl pk mu sg p k l eta tau ctl g1bits omega gd
+  let wr = verify_mu_impl pk mu sg p k l eta tau ctl g1bits omega gd;
+  Mem.wipe mu 64sz;
+  Mem.wipe tr 64sz;
+  wr
 }
 
 (** Algorithm 3, [ML-DSA.Verify].  A context longer than 255 bytes is
@@ -233,10 +248,15 @@ ensures A.pts_to pk #pp vpk ** A.pts_to msg #pm vm ** A.pts_to ctx #pc vc **
     HSZ.fits32 ();
     let pkl = SZ.add 32sz (SZ.mul 320sz k);
     let mut tr = [| (S8.zero <: S8.t); 64sz |];
+    Mem.track tr;
     Hacl.Hash.SHA3.shake256 tr 64sz pk pkl;
     let mut mu = [| (S8.zero <: S8.t); 64sz |];
+    Mem.track mu;
     mu_ctx_impl mu tr msg msg_len ctx ctx_len;
-    verify_mu_impl pk mu sg p k l eta tau ctl g1bits omega gd
+    let wr = verify_mu_impl pk mu sg p k l eta tau ctl g1bits omega gd;
+    Mem.wipe mu 64sz;
+    Mem.wipe tr 64sz;
+    wr
   }
 }
 

@@ -34,6 +34,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module Seq = FStar.Seq
 module M = Spec.MLDSA
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
@@ -67,13 +68,19 @@ ensures exists* (v: Seq.seq S8.t).
   pure (Seq.length v == 64 /\ v == M.message_rep vt vm)
 {
   let mut st = [| (S64.zero <: S64.t); 25sz |];
+  Mem.track st;
   let mut buf = [| (S8.zero <: S8.t); 136sz |];
+  Mem.track buf;
   let mut tot = [| 0sz; 1sz |];
+  Mem.track tot;
   shake256_init st buf tot;
   shake256_update st buf tot tr 64sz (Seq.empty #S8.t);
   Seq.append_empty_l vt;
   shake256_update st buf tot msg msg_len vt;
   shake256_digest st buf tot mu 64sz (Seq.append vt vm);
+  Mem.wipe tot 1sz;
+  Mem.wipe buf 136sz;
+  Mem.wipe st 25sz;
   ()
 }
 
@@ -91,9 +98,13 @@ ensures exists* (v: Seq.seq S8.t).
         v == M.message_rep vt (M.format_msg vm vc))
 {
   let mut st = [| (S64.zero <: S64.t); 25sz |];
+  Mem.track st;
   let mut buf = [| (S8.zero <: S8.t); 136sz |];
+  Mem.track buf;
   let mut tot = [| 0sz; 1sz |];
+  Mem.track tot;
   let mut hd = [| (S8.zero <: S8.t); 2sz |];
+  Mem.track hd;
   A.(hd.(1sz) <- S8.classify (FStar.Int.Cast.uint32_to_uint8 (SZ.sizet_to_uint32 ctx_len)));
   with vh. assert (A.pts_to hd vh);
   FStar.Math.Lemmas.small_mod (SZ.v ctx_len) 256;
@@ -106,6 +117,10 @@ ensures exists* (v: Seq.seq S8.t).
   shake256_update st buf tot msg msg_len (Seq.append (Seq.append vt vh) vc);
   shake256_digest st buf tot mu 64sz (Seq.append (Seq.append (Seq.append vt vh) vc) vm);
   fmt_eq vt vh vc vm;
+  Mem.wipe hd 2sz;
+  Mem.wipe tot 1sz;
+  Mem.wipe buf 136sz;
+  Mem.wipe st 25sz;
   ()
 }
 

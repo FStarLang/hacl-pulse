@@ -45,6 +45,7 @@ module HSZ = Hacl.SizeT
 module Sub = Hacl.Impl.Sub
 module Copy = Hacl.Impl.Copy
 module M = Spec.MLDSA
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -95,9 +96,11 @@ ensures exists* (w0 w1: Seq.seq zqt).
   let ln = SZ.mul l 256sz;
   let kn = SZ.mul k 256sz;
   let mut s1h = [| (S32.zero <: zqt); ln |];
+  Mem.track s1h;
   zcopy s1h s1 ln;
   vec_ntt_impl s1h l;
   let mut tmp = [| (S32.zero <: zqt); 256sz |];
+  Mem.track tmp;
   mat_vec_mul_impl t a s1h tmp k l;
   vec_intt_impl t k;
   with u. assert (A.pts_to t u);
@@ -105,6 +108,8 @@ ensures exists* (w0 w1: Seq.seq zqt).
   with u'. assert (A.pts_to t u');
   add_eq p.k u' u vs2;
   power2round_impl t t1 k;
+  Mem.wipe tmp 256sz;
+  Mem.wipe s1h ln;
   ()
 }
 
@@ -202,6 +207,7 @@ ensures exists* (vp vs: Seq.seq S8.t).
   let kln = SZ.mul (SZ.mul k l) 256sz;
   (* h = H(xi || k || l, 128) *)
   let mut seed = [| (S8.zero <: S8.t); 34sz |];
+  Mem.track seed;
   A.pts_to_len seed;
   Copy.copy_prefix seed xi 32sz;
   A.(seed.(32sz) <- S8.classify (Cast.uint32_to_uint8 (SZ.sizet_to_uint32 k)));
@@ -211,35 +217,47 @@ ensures exists* (vp vs: Seq.seq S8.t).
   FStar.Math.Lemmas.small_mod (SZ.v l) 256;
   seed_eq p vx vsd;
   let mut h = [| (S8.zero <: S8.t); 128sz |];
+  Mem.track h;
   Hacl.Hash.SHA3.shake256 h 128sz seed 34sz;
+  Mem.wipe seed 34sz;
   with vh. assert (A.pts_to h vh);
   (* the matrix and the secret vectors *)
-  let mut a = [| (S32.zero <: zqt); kln |];
+  let a = Mem.alloc (S32.zero <: zqt) kln;
   let rho = Sub.sub h 0sz 32sz;
   expand_a_impl p a rho k l;
   Sub.unsub_id h 0 32 rho;
   with va. assert (A.pts_to a va);
   let mut s1 = [| (S32.zero <: zqt); ln |];
+  Mem.track s1;
   let mut s2 = [| (S32.zero <: zqt); kn |];
+  Mem.track s2;
   let rho' = Sub.sub h 32sz 96sz;
   expand_s_impl p s1 s2 rho' k l eta;
   Sub.unsub_id h 32 96 rho';
   with vs1. assert (A.pts_to s1 vs1);
   with vs2. assert (A.pts_to s2 vs2);
   (* t *)
-  let mut t = [| (S32.zero <: zqt); kn |];
-  let mut t1 = [| (S32.zero <: zqt); kn |];
+  let t = Mem.alloc (S32.zero <: zqt) kn;
+  let t1 = Mem.alloc (S32.zero <: zqt) kn;
   keygen_t_impl p t t1 a s1 s2 k l;
+  Mem.free a kln;
   with vt0. assert (A.pts_to t vt0);
   with vt1. assert (A.pts_to t1 vt1);
   (* pk *)
   pk_assemble p pk h t1 k;
+  Mem.free t1 kn;
   with vp. assert (A.pts_to pk vp);
   (* sk *)
   let mut tr = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track tr;
   Hacl.Hash.SHA3.shake256 tr 64sz pk pkl;
   with vtr. assert (A.pts_to tr vtr);
   sk_assemble p sk h tr s1 s2 t k l eta;
+  Mem.free t kn;
+  Mem.wipe s2 kn;
+  Mem.wipe s1 ln;
+  Mem.wipe h 128sz;
+  Mem.wipe tr 64sz;
   with vs. assert (A.pts_to sk vs);
   keygen_eq p vx vh va vs1 vs2 vt0 vt1 vtr vp vs;
   ()

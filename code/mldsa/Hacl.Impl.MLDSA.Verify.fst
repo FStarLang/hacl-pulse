@@ -50,6 +50,7 @@ module Seq = FStar.Seq
 module HSZ = Hacl.SizeT
 module Sub = Hacl.Impl.Sub
 module M = Spec.MLDSA
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -91,6 +92,7 @@ ensures exists* (r vz' vt' vc': Seq.seq zqt).
   let kn = SZ.mul k 256sz;
   vec_ntt_impl z l;
   let mut tmp = [| (S32.zero <: zqt); 256sz |];
+  Mem.track tmp;
   mat_vec_mul_impl w a z tmp k l;
   with u. assert (A.pts_to w u);
   ntt_inplace c;
@@ -99,12 +101,15 @@ ensures exists* (r vz' vt' vc': Seq.seq zqt).
   t1_shift_eq p.k ts vt t1s;
   vec_ntt_impl t1 k;
   let mut ct1 = [| (S32.zero <: zqt); kn |];
+  Mem.track ct1;
   vec_scale_impl ct1 c t1 k;
   with uc. assert (A.pts_to ct1 uc);
   sub_inplace w ct1 kn;
   with u'. assert (A.pts_to w u');
   sub_eq p.k u' u uc;
   vec_intt_impl w k;
+  Mem.wipe ct1 kn;
+  Mem.wipe tmp 256sz;
   ()
 }
 
@@ -171,25 +176,32 @@ ensures exists* (vz' vt': Seq.seq zqt).
   assert (pure (ct_len p <= sig_len p));
   let kn = SZ.mul k 256sz;
   let kln = SZ.mul (SZ.mul k l) 256sz;
-  let mut a = [| (S32.zero <: zqt); kln |];
+  let a = Mem.alloc (S32.zero <: zqt) kln;
   let rho = Sub.sub pk 0sz 32sz;
   expand_a_impl p a rho k l;
   Sub.unsub_id pk 0 32 rho;
   let mut c = [| (S32.zero <: zqt); 256sz |];
+  Mem.track c;
   let ct = Sub.sub sg 0sz ctl;
   sample_in_ball_impl p c ct ctl tau;
   Sub.unsub_id sg 0 (SZ.v ctl) ct;
-  let mut w = [| (S32.zero <: zqt); kn |];
+  let w = Mem.alloc (S32.zero <: zqt) kn;
   verify_w_impl p w a z t1 c k l (snd (pk_decode p vpk));
   with vw. assert (A.pts_to w vw);
-  let mut w1 = [| (S32.zero <: zqt); kn |];
+  Mem.free a kln;
+  Mem.wipe c 256sz;
+  let w1 = Mem.alloc (S32.zero <: zqt) kn;
   use_hint_impl w1 h w p gd k;
+  Mem.free w kn;
   let mut ct' = [| (S8.zero <: S8.t); ctl |];
+  Mem.track ct';
   challenge_impl p ct' mu w1 k ctl gd;
+  Mem.free w1 kn;
   with vct. assert (A.pts_to ct' vct);
   let ct2 = Sub.sub sg 0sz ctl;
   let res = Hacl.Impl.Bytes.bytes_eq ct' ct2 ctl;
   Sub.unsub_id sg 0 (SZ.v ctl) ct2;
+  Mem.wipe ct' ctl;
   assert (pure (as_zqs vw == M.verify_w p (expand_a p (Seq.slice vpk 0 32)) (snd (pk_decode p vpk))
                              (sample_in_ball p (Seq.slice vsg 0 (ct_len p))) (as_zqs vz)));
   res
@@ -222,25 +234,36 @@ ensures A.pts_to pk #pp vpk ** A.pts_to mu #pm vmu ** A.pts_to sg #ps vsg **
   HSZ.fits32 ();
   let kn = SZ.mul k 256sz;
   let ln = SZ.mul l 256sz;
-  let mut t1 = [| (S32.zero <: zqt); kn |];
+  let t1 = Mem.alloc (S32.zero <: zqt) kn;
   pk_decode_impl p t1 pk k;
   with vt. assert (A.pts_to t1 vt);
   let mut z = [| (S32.zero <: zqt); ln |];
+  Mem.track z;
   let mut h = [| (S32.zero <: S32.t); kn |];
+  Mem.track h;
   let ok = sig_decode_impl p z h sg k l ctl g1bits omega;
   with vz. assert (A.pts_to z vz);
   with vh. assert (A.pts_to h vh);
   if (not ok) {
     verify_reject p vpk vmu vsg (as_zqs vz) (hint_view vh);
+    Mem.wipe h kn;
+    Mem.wipe z ln;
+    Mem.free t1 kn;
     false
   } else {
     let zok = all_lt_impl z ln (z_bound #p g1bits tau eta);
     if (not zok) {
       verify_reject p vpk vmu vsg (as_zqs vz) (hint_view vh);
+      Mem.wipe h kn;
+      Mem.wipe z ln;
+      Mem.free t1 kn;
       false
     } else {
       let res = verify_tail pk mu sg z t1 h p k l tau ctl gd;
       verify_accept p vpk vmu vsg (as_zqs vz) (hint_view vh) res;
+      Mem.wipe h kn;
+      Mem.wipe z ln;
+      Mem.free t1 kn;
       res
     }
   }

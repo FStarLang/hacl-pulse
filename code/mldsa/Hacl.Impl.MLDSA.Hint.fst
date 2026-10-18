@@ -45,6 +45,7 @@ module Math = FStar.Math.Lemmas
 module Loops = Hacl.Spec.Loops
 module HSZ = Hacl.SizeT
 module KZ = Spec.MLKEM.Zq
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
@@ -374,6 +375,7 @@ ensures exists* v. A.pts_to h v ** A.pts_to y #py vy **
   assert (pure (hint_view v == hint_scatter p vy));
   let len = SZ.add omega k;
   let mut tmp = [| (S8.zero <: S8.t); len |];
+  Mem.track tmp;
   hint_pack_impl tmp h p k omega;
   with vt. assert (A.pts_to tmp vt);
   let mut ok = true;
@@ -396,6 +398,7 @@ ensures exists* v. A.pts_to h v ** A.pts_to y #py vy **
   let r = !ok;
   seq_eq_done vt vy;
   unpack_result p vy v r;
+  Mem.wipe tmp len;
   r
 }
 

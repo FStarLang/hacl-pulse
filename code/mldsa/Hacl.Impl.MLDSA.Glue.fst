@@ -41,6 +41,7 @@ module Sub = Hacl.Impl.Sub
 module Copy = Hacl.Impl.Copy
 module Pack = Hacl.Impl.MLDSA.Pack
 module M = Spec.MLDSA
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -132,6 +133,7 @@ ensures exists* (v: Seq.seq S8.t). A.pts_to ct v ** A.pts_to mu #pm vm ** A.pts_
   let el = SZ.mul k (SZ.mul 32sz wb);
   let bl = SZ.add 64sz el;
   let mut buf = [| (S8.zero <: S8.t); bl |];
+  Mem.track buf;
   A.pts_to_len buf;
   Copy.copy_prefix buf mu 64sz;
   let wbuf = Sub.sub buf 64sz bl;
@@ -142,6 +144,7 @@ ensures exists* (v: Seq.seq S8.t). A.pts_to ct v ** A.pts_to mu #pm vm ** A.pts_
   assert (pure (Seq.equal (Seq.slice vb 64 (SZ.v bl)) ve));
   challenge_glue p vb vm ve;
   Hacl.Hash.SHA3.shake256 ct ctl buf bl;
+  Mem.wipe buf bl;
   ()
 }
 

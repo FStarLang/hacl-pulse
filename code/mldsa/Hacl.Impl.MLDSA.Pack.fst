@@ -52,6 +52,7 @@ module Copy = Hacl.Impl.Copy
 module KZ = Spec.MLKEM.Zq
 module KE = Spec.MLKEM.Encode
 module SHA3 = Spec.SHA3
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -409,6 +410,19 @@ let expand_mask_at (p: params) (rho: Seq.lseq S8.t 64) (a: nat { a < max_attempt
       kappa_bound p a r;
       expand_mask_poly p rho (a * p.l + r)) r
 
+let seed_bytes (k: SZ.t) (kv: nat)
+  : Lemma (requires SZ.v k == kv /\ kv < pow2 16)
+          (ensures (let x = SZ.sizet_to_uint32 k in
+                    U32.v x == kv /\
+                    S8.v (S8.classify (Cast.uint32_to_uint8 (U32.rem x 256ul))) == kv % 256 /\
+                    S8.v (S8.classify (Cast.uint32_to_uint8 (U32.div x 256ul))) == kv / 256))
+  = assert_norm (pow2 16 == 65536);
+    assert_norm (pow2 32 == 4294967296);
+    assert_norm (pow2 8 == 256);
+    Math.small_mod kv (pow2 32);
+    Math.small_mod (kv % 256) 256;
+    Math.small_mod (kv / 256) 256
+
 let mask_step (p: params) (rho: Seq.lseq S8.t 64) (a: nat { a < max_attempts })
               (r: nat { r < p.l })
               (w0 w1: Seq.seq zqt) (b: Seq.seq zqt) (sd: Seq.seq S8.t) (buf: Seq.seq S8.t)
@@ -432,6 +446,10 @@ let mask_step (p: params) (rho: Seq.lseq S8.t 64) (a: nat { a < max_attempts })
     reveal_opaque (`%prefix_eq) (prefix_eq w1 (expand_mask p rho a) ((r + 1) * n));
     seed_16_full rho (a * p.l + r) sd;
     expand_mask_at p rho a r;
+    Math.lemma_mult_le_right n r p.l;
+    introduce forall (i: nat). i < r * n ==>
+                S32.v (Seq.index w0 i) == Seq.index (expand_mask p rho a) i
+    with introduce _ ==> _ with assert (i < p.l * n);
     flat_step p.l r w0 w1 b (expand_mask p rho a)
 
 fn expand_mask_impl (p: erased params) (y: A.array zqt) (rho: A.array S8.t)
@@ -460,7 +478,9 @@ ensures exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to rho #pr vr **
   let blen = SZ.mul 32sz zb;
   let z8 = S8.classify 0uy;
   let mut sd = [| z8; 66sz |];
+  Mem.track sd;
   let mut buf = [| z8; 640sz |];
+  Mem.track buf;
   A.pts_to_len sd;
   A.pts_to_len buf;
   Copy.copy_prefix sd rho 64sz;
@@ -485,6 +505,7 @@ ensures exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to rho #pr vr **
     let lo = SZ.mul vc 256sz;
     let hi = SZ.add lo 256sz;
     let x = SZ.sizet_to_uint32 (SZ.add kappa vc);
+    seed_bytes (SZ.add kappa vc) (a * p.l + SZ.v vc);
     let b0 = Cast.uint32_to_uint8 (U32.rem x 256ul);
     let b1 = Cast.uint32_to_uint8 (U32.div x 256ul);
     Math.small_mod (U32.v x % 256) 256;
@@ -492,6 +513,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to rho #pr vr **
     A.((sd.(64sz) <- S8.classify b0));
     A.((sd.(65sz) <- S8.classify b1));
     with vsd. assert (A.pts_to sd vsd);
+    assert (pure (S8.v (Seq.index vsd 64) == (a * p.l + SZ.v vc) % 256));
+    assert (pure (S8.v (Seq.index vsd 65) == (a * p.l + SZ.v vc) / 256));
     let ob = Sub.sub buf 0sz blen;
     Hacl.Hash.SHA3.shake256 ob blen sd 66sz;
     with vo. assert (A.pts_to ob vo);
@@ -507,6 +530,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to rho #pr vr **
   };
   with v. assert (A.pts_to y v);
   prefix_done p.l v (expand_mask p vr a);
+  Mem.wipe buf 640sz;
+  Mem.wipe sd 66sz;
   ()
 }
 

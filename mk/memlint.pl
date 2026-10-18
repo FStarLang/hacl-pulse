@@ -30,7 +30,7 @@ for my $f (@ARGV) {
   local $/; open my $fh, '<', $f or die "$f: $!"; my $s = <$fh>; close $fh;
   (my $code = $s) =~ s{\(\*(?!\)).*?\*\)}{ my $c = $&; $c =~ s/[^\n]/ /g; $c }gse;
   my $is_mem = $f =~ m{(^|/)lib/Hacl\.Mem\.fsti?$};
-  while ($code =~ /let\s+mut\s+(\w+)\s*=\s*\[\|.*?\|\]\s*;/sg) {
+  while ($code =~ /let\s+mut\s+([\w']+)\s*=\s*\[\|.*?\|\]\s*;/sg) {
     my ($n, $p, $e) = ($1, $-[0], $+[0]);
     fail($f, $s, $p, "local array '$n' is not followed by 'Mem.track $n;'")
       unless substr($code, $e) =~ /\A\s*Mem\.track\s+\Q$n\E\s*;/;

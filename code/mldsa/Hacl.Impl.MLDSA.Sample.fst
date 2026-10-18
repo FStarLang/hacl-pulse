@@ -66,6 +66,7 @@ module Copy = Hacl.Impl.Copy
 module Sub = Hacl.Impl.Sub
 module KZ = Spec.MLKEM.Zq
 module SHA3 = Spec.SHA3
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -222,11 +223,14 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   SZ.fits_u32_implies_fits 256;
   let z64 = S64.classify 0uL;
   let mut starr = [| z64; 25sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   let z8 = S8.classify 0uy;
   let mut blk = [| z8; 168sz |];
+  Mem.track blk;
   A.pts_to_len blk;
 
   table_lens ();
@@ -267,6 +271,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   };
 
   drop_table rc_tbl;
+  Mem.wipe blk 168sz;
+  Mem.wipe barr 25sz;
+  Mem.wipe starr 25sz;
   let vc = !cnt;
   let vj = !jj;
   with v. assert (A.pts_to dst v);
@@ -425,11 +432,14 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   SZ.fits_u32_implies_fits 256;
   let z64 = S64.classify 0uL;
   let mut starr = [| z64; 25sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   let z8 = S8.classify 0uy;
   let mut blk = [| z8; 136sz |];
+  Mem.track blk;
   A.pts_to_len blk;
 
   table_lens ();
@@ -469,6 +479,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   };
 
   drop_table rc_tbl;
+  Mem.wipe blk 136sz;
+  Mem.wipe barr 25sz;
+  Mem.wipe starr 25sz;
   let vc = !cnt;
   let vj = !jj;
   with v. assert (A.pts_to dst v);
@@ -611,13 +624,17 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   zero_poly dst;
   let z64 = S64.classify 0uL;
   let mut starr = [| z64; 25sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   let z8 = S8.classify 0uy;
   let mut blk = [| z8; 136sz |];
+  Mem.track blk;
   A.pts_to_len blk;
   let mut sgn = [| z8; 8sz |];
+  Mem.track sgn;
   A.pts_to_len sgn;
 
   table_lens ();
@@ -666,6 +683,10 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   };
 
   drop_table rc_tbl;
+  Mem.wipe sgn 8sz;
+  Mem.wipe blk 136sz;
+  Mem.wipe barr 25sz;
+  Mem.wipe starr 25sz;
   with (vi: SZ.t) (vj: SZ.t) (v: Seq.seq zqt).
     assert (pts_to ii vi ** pts_to jj vj ** A.pts_to dst v);
   ball_exit vi vj;
@@ -703,6 +724,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
   SZ.fits_u32_implies_fits 56;
   let z8 = S8.classify 0uy;
   let mut sd = [| z8; 34sz |];
+  Mem.track sd;
   A.pts_to_len sd;
   Copy.copy_prefix sd rho 32sz;
   prefix_zero vd (expand_a p vr);
@@ -749,6 +771,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
   with v. assert (A.pts_to dst v);
   prefix_done (p.k * p.l) v (expand_a p vr);
   assert (pure (as_zqs v == expand_a p vr));
+  Mem.wipe sd 34sz;
 }
 
 (** [s1] ([second = false], [l] polynomials, nonces [0 .. l)) or [s2]
@@ -776,6 +799,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
   assert_norm (pow2 8 == 256);
   let z8 = S8.classify 0uy;
   let mut sd = [| z8; 66sz |];
+  Mem.track sd;
   A.pts_to_len sd;
   Copy.copy_prefix sd rho 64sz;
   A.((sd.(65sz) <- S8.classify 0uy));
@@ -819,6 +843,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
   with v. assert (A.pts_to dst v);
   prefix_done (s_count p second) v (s_target p vr second);
   assert (pure (as_zqs v == s_target p vr second));
+  Mem.wipe sd 66sz;
 }
 
 (** Algorithm 33: [s1 <- ExpandS_1 rho'] and [s2 <- ExpandS_2 rho']. *)

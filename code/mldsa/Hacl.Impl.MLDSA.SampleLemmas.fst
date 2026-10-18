@@ -348,6 +348,9 @@ let expand_a_step (p: params) (rho: Seq.lseq S8.t 32) (t: nat { t < p.k * p.l })
     KZ.div_lt t p.k p.l;
     seed_2_eq rho (t % p.l) (t / p.l) sd;
     expand_a_at p rho t;
+    Math.lemma_mult_le_right n t (p.k * p.l);
+    introduce forall (i: nat). i < t * n ==> S32.v (Seq.index w0 i) == Seq.index (expand_a p rho) i
+    with introduce _ ==> _ with assert (i < p.k * p.l * n);
     flat_step (p.k * p.l) t w0 w1 b (expand_a p rho)
 
 (** [s1] and [s2] as one family: [s2]'s nonces start at [l]. *)
@@ -379,6 +382,10 @@ let expand_s_step (p: params) (rho': Seq.lseq S8.t 64) (second: bool)
     reveal_opaque (`%prefix_eq) (prefix_eq w1 (s_target p rho' second) ((t + 1) * n));
     seed_16_eq rho' (t + s_off p second) sd;
     if second then expand_s2_at p rho' t else expand_s1_at p rho' t;
+    Math.lemma_mult_le_right n t (s_count p second);
+    introduce forall (i: nat). i < t * n ==>
+                S32.v (Seq.index w0 i) == Seq.index (s_target p rho' second) i
+    with introduce _ ==> _ with assert (i < s_count p second * n);
     flat_step (s_count p second) t w0 w1 b (s_target p rho' second)
 
 #pop-options
