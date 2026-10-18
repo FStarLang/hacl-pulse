@@ -123,7 +123,9 @@ ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
     Math.pow2_le_compat 8 (SZ.v vn);
     Math.pow2_plus 12 8;
     Math.small_mod (S16.v c * pow2 (SZ.v vn)) (pow2 64);
+    Math.small_mod (SZ.v vn) (pow2 32);
     let y = S64.shift_left (Cast.u16_to_u64 c) (SZ.sizet_to_uint32 vn);
+    assert (pure (U32.v (SZ.sizet_to_uint32 vn) == SZ.v vn));
     assert (pure (S64.v y == S16.v c * pow2 (SZ.v vn)));
     enc_acc_bound (SZ.v d) (as_nats vf) (SZ.v vi) (SZ.v vo) (SZ.v vn);
     enc_push (SZ.v d) (as_nats vf) (SZ.v vi) (SZ.v vo) (SZ.v vn);
