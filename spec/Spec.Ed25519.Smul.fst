@@ -152,6 +152,10 @@ let ith_bit_gbit (k: Seq.lseq S8.t 32) (i: nat { i < 256 })
     Math.lemma_mod_plus (c / pow2 r) ((pow2 (8 - r) / 2) * t) 2;
     Math.pow2_plus 1 (8 - r - 1)
 
+private let mod8_of_mod4 (i: nat)
+  : Lemma (requires i % 4 == 0) (ensures i % 8 == 0 \/ i % 8 == 4)
+  = Math.modulo_modulo_lemma i 4 2
+
 (** And the same fact one nibble at a time, which is what a four-bit
     window reads.  A nibble never straddles a byte, because four divides
     eight: at a bit offset [i] divisible by four the shift [i % 8] is
@@ -174,6 +178,7 @@ let nibble_of_bytes (k: Seq.lseq S8.t 32) (i: nat { i < 256 /\ i % 4 == 0 })
     Math.paren_mul_right (pow2 r) (pow2 (8 - r)) t;
     Math.lemma_div_plus c (pow2 (8 - r) * t) (pow2 r);
     (* [r] is 0 or 4, so [8 - r >= 4] and [2^(8-r)] is a multiple of 16. *)
+    mod8_of_mod4 i;
     assert (r == 0 \/ r == 4);
     Math.pow2_le_compat (8 - r) 4;
     assert_norm (pow2 4 == 16);
