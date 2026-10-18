@@ -410,6 +410,13 @@ let digest_step_le (#t: Type0) {| w: word t |} (n: nat) (ws: Seq.lseq t n) (j: n
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
+private let le_bytes_split_mul (a b h: int)
+  : Lemma ((a * (256 * b)) * h == ((b * h) * 256) * a)
+  = Math.paren_mul_right a (256 * b) h;
+    Math.swap_mul a ((256 * b) * h);
+    Math.paren_mul_right 256 b h;
+    Math.swap_mul 256 (b * h)
+
 (** Which of two sixty-four-bit words a byte of the hundred-and-twenty-eight
     bit number comes from.  This is what lets a sixteen-byte little-endian
     store be two [store_le]s: below eight the byte is a byte of the low word,
@@ -422,13 +429,15 @@ let le_bytes_split (lo hi: nat) (k: nat)
                                  else (hi / pow2 (8 * (k - 8))) % 256))))
   = let n = lo + pow2 64 * hi in
     if k < 8 then begin
+      let p = pow2 (8 * k) in
+      let r = pow2 (56 - 8 * k) * hi in
       Math.pow2_plus (8 * k) (64 - 8 * k);
-      Math.paren_mul_right (pow2 (8 * k)) (pow2 (64 - 8 * k)) hi;
-      Math.lemma_div_plus lo (pow2 (64 - 8 * k) * hi) (pow2 (8 * k));
       Math.pow2_plus 8 (56 - 8 * k);
-      Math.paren_mul_right (pow2 8) (pow2 (56 - 8 * k)) hi;
       assert_norm (pow2 8 == 256);
-      Math.lemma_mod_plus (lo / pow2 (8 * k)) (pow2 (56 - 8 * k) * hi) 256
+      le_bytes_split_mul p (pow2 (56 - 8 * k)) hi;
+      assert (pow2 64 * hi == (r * 256) * p);
+      Math.lemma_div_plus lo (r * 256) p;
+      Math.lemma_mod_plus (lo / p) r 256
     end else begin
       Math.pow2_plus 64 (8 * (k - 8));
       Math.division_multiplication_lemma n (pow2 64) (pow2 (8 * (k - 8)));
