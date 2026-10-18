@@ -549,6 +549,20 @@ let chain (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat) : prop =
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+(** [chain] in terms of the named intermediate limbs, in a small context. *)
+private let chain_unfold (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
+                         (x0 x1 x3 x4 x01 x41 x11 x2 x31: int)
+  : Lemma (requires chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 /\
+                    x0 == e0 % radix /\ x1 == e1 + e0 / radix /\
+                    x3 == e3 % radix /\ x4 == e4 + e3 / radix /\
+                    x01 == x0 + 5 * (x4 / radix) /\ x41 == x4 % radix /\
+                    x11 == x1 % radix /\ x2 == e2 + x1 / radix /\ x31 == x3 + x2 / radix)
+          (ensures x0 >= 0 /\ x1 >= 0 /\ x3 >= 0 /\ x4 >= 0 /\ x01 >= 0 /\ x41 >= 0 /\
+                   x11 >= 0 /\ x2 >= 0 /\ x31 >= 0 /\
+                   t0 == x01 % radix /\ t1 == x11 + x01 / radix /\ t2 == x2 % radix /\
+                   t3 == x31 % radix /\ t4 == x41 + x31 / radix)
+  = ()
+
 let carry_chain_cong (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
   : Lemma (requires chain e0 e1 e2 e3 e4 t0 t1 t2 t3 t4)
           (ensures as_nat5 t0 t1 t2 t3 t4 % prime == as_nat5 e0 e1 e2 e3 e4 % prime)
@@ -562,6 +576,7 @@ let carry_chain_cong (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4: nat)
     let x2 = e2 + x1 / radix in
     let x02 = x01 % radix in
     let x12 = x11 + x01 / radix in
+    chain_unfold e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 x0 x1 x3 x4 x01 x41 x11 x2 (x3 + x2 / radix);
     carry0 e0 e1 e2 e3 e4;
     carry3 x0 x1 e2 e3 e4;
     carry_top x0 x1 e2 x3 x4;
@@ -760,6 +775,15 @@ let top_split (t0 t1 t2 t3 t4 f4 c: nat)
     Math.paren_mul_right c radix (pow2 104);
     Math.pow2_plus 104 26
 
+(** [ripple] in terms of the named partial sums, in a small context. *)
+private let ripple_unfold (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c f1 f2 f3 f4: nat)
+  : Lemma (requires ripple e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c /\
+                    f1 == e1 + e0 / radix /\ f2 == e2 + f1 / radix /\
+                    f3 == e3 + f2 / radix /\ f4 == e4 + f3 / radix)
+          (ensures t0 == e0 % radix /\ t1 == f1 % radix /\ t2 == f2 % radix /\
+                   t3 == f3 % radix /\ t4 == f4 % radix /\ c == f4 / radix)
+  = ()
+
 (** What a ripple is worth: the canonical part plus the carry at [2^130]. *)
 let ripple_eval (e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c: nat)
   : Lemma (requires ripple e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c)
@@ -770,6 +794,7 @@ let f1 = e1 + e0 / radix in
     let f2 = e2 + f1 / radix in
     let f3 = e3 + f2 / radix in
     let f4 = e4 + f3 / radix in
+    ripple_unfold e0 e1 e2 e3 e4 t0 t1 t2 t3 t4 c f1 f2 f3 f4;
     (* Stated one step at a time: the four congruences compose, but asking
        the solver to compose them itself is asking it to chase four
        rewrites through a context full of divisions, and it will not. *)
