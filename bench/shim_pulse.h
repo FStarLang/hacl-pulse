@@ -153,6 +153,21 @@ static inline void bs_mlkem1024_keypair(uint8_t *ek, uint8_t *dk, uint8_t *d, ui
 static inline void bs_mlkem1024_enc(uint8_t *ct, uint8_t *ss, uint8_t *ek, uint8_t *m) { Hacl_MLKEM1024_enc(ct, ss, ek, m); }
 static inline void bs_mlkem1024_dec(uint8_t *ss, uint8_t *ct, uint8_t *dk) { Hacl_MLKEM1024_dec(ss, ct, dk); }
 
+/* ---- ML-DSA ----
+   Likewise absent from HACL*, and likewise called directly.  Signing is the
+   hedged pure variant with an empty context; its cost depends on the message
+   through the number of rejected attempts, so the benchmark fixes one. */
+#define BS_HAVE_MLDSA 1
+static inline void bs_mldsa44_keypair(uint8_t *pk, uint8_t *sk, uint8_t *xi) { Hacl_MLDSA44_keypair(pk, sk, xi); }
+static inline bool bs_mldsa44_sign(uint8_t *sg, uint8_t *sk, uint8_t *m, size_t ml, uint8_t *rnd) { return Hacl_MLDSA44_sign(sg, sk, m, ml, NULL, 0, rnd); }
+static inline bool bs_mldsa44_verify(uint8_t *pk, uint8_t *m, size_t ml, uint8_t *sg) { return Hacl_MLDSA44_verify(pk, m, ml, NULL, 0, sg); }
+static inline void bs_mldsa65_keypair(uint8_t *pk, uint8_t *sk, uint8_t *xi) { Hacl_MLDSA65_keypair(pk, sk, xi); }
+static inline bool bs_mldsa65_sign(uint8_t *sg, uint8_t *sk, uint8_t *m, size_t ml, uint8_t *rnd) { return Hacl_MLDSA65_sign(sg, sk, m, ml, NULL, 0, rnd); }
+static inline bool bs_mldsa65_verify(uint8_t *pk, uint8_t *m, size_t ml, uint8_t *sg) { return Hacl_MLDSA65_verify(pk, m, ml, NULL, 0, sg); }
+static inline void bs_mldsa87_keypair(uint8_t *pk, uint8_t *sk, uint8_t *xi) { Hacl_MLDSA87_keypair(pk, sk, xi); }
+static inline bool bs_mldsa87_sign(uint8_t *sg, uint8_t *sk, uint8_t *m, size_t ml, uint8_t *rnd) { return Hacl_MLDSA87_sign(sg, sk, m, ml, NULL, 0, rnd); }
+static inline bool bs_mldsa87_verify(uint8_t *pk, uint8_t *m, size_t ml, uint8_t *sg) { return Hacl_MLDSA87_verify(pk, m, ml, NULL, 0, sg); }
+
 static inline void bs_global_init(void) {}
 
 #endif

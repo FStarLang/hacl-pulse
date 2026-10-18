@@ -79,4 +79,7 @@ module Frodo64 = Hacl.Frodo64
 module Frodo640 = Hacl.Frodo640
 module Frodo976 = Hacl.Frodo976
 module Frodo1344 = Hacl.Frodo1344
+module MLDSA44 = Hacl.MLDSA44
+module MLDSA65 = Hacl.MLDSA65
+module MLDSA87 = Hacl.MLDSA87
 module HPKE = Hacl.HPKE.Suites
