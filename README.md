@@ -82,7 +82,7 @@ effort than following `master` and fixing what breaks.
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules, and a `*.Correctness` module beside each scheme (see [Functional correctness](#functional-correctness)) |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, and the 64-bit add-with-carry / subtract-with-borrow used by X25519 |
 | `tests/` | C test harnesses |
@@ -3273,12 +3273,18 @@ bound in its type instead of in a lemma.
 
 The correctness statement is that the implementation computes the
 algorithms of FIPS 203, coefficient for coefficient, including that the NTT
-is the specification's NTT.  What is *not* proved, and is honest to say so,
-is the mathematical fact that the specification's NTT is multiplication in
-the ring: that is a finite-field argument about roots of unity, not a
-memory-safety or refinement argument, and it is future work.  The spec is
-pinned instead by the published vectors, which is the same bar the rest of
-this repository meets.
+is the specification's NTT.  Separately, `Spec.MLKEM.NTT.Lemmas` proves the
+mathematical fact behind it: the specification's NTT is a ring isomorphism
+`R_q ~ prod_i Z_q[X]/(X^2 - gamma_i)`, so `intt (multiply_ntts (ntt f)
+(ntt g))` is the schoolbook product of `f` and `g` modulo `X^256 + 1`, and
+`intt` and `ntt` are mutually inverse.  That is a finite-field argument
+about roots of unity, independent of the implementation; the bit-reversal
+facts about the twiddle tables are checked exhaustively by normalization.
+On top of it, `Spec.MLKEM.Correctness` proves that decapsulation recovers
+the encapsulated key whenever the decryption noise is below `q/4` (see
+[Functional correctness](#functional-correctness)).  The spec is also
+pinned by the published vectors, which is the bar the rest of this
+repository meets.
 
 One implementation serves all three parameter sets.  As with Frodo the
 parameters are a `[@@@monomorphize]` record --- `k`, `eta1`, `eta2`, `du`,
@@ -3378,6 +3384,56 @@ quadratic, and at twelve it does not come back.  Writing them as an
 allocation (whose contents are `Seq.create 12 0uy`, reachable by one
 `SMTPat`), a `store_be`, and a loop with a pointwise invariant takes ten
 seconds.
+
+## Functional correctness
+
+Everything above is a refinement proof: the C computes what the `Spec.*`
+function says.  That leaves open whether the specification is the right
+one, and the published test vectors are only part of the answer.  The
+other part is a set of theorems about the specifications themselves, the
+statements a cryptographer would write down first: decryption inverts
+encryption, both parties of a key exchange agree, and an honest signature
+verifies.  Each sits in a `*.Correctness` module next to the
+specification it is about, is stated over exactly the functions the
+implementation's postconditions name, and has no admits and no
+assumptions beyond those listed here.
+
+| scheme | module | theorem | hypotheses |
+| --- | --- | --- | --- |
+| ChaCha20-Poly1305 | `Spec.Chacha20Poly1305.Correctness` | `decrypt_encrypt`: the tag verifies and decryption returns the message | message length bound |
+| AES-GCM (128, 256) | `Spec.GCM.Correctness` | `decrypt_encrypt`: `gcm_decrypt (gcm_encrypt m) == Some m` | the spec's length bounds |
+| NaCl secretbox | `Spec.NaCl.Correctness` | `secretbox_open_secretbox`, `secretbox_open_easy` | message length bound |
+| NaCl box | `Spec.NaCl.Correctness` | `beforenm_agree`; `box_open_box_agree`, `box_open_easy_agree`: the receiver, holding only the sender's public key, opens what the sender sealed | none |
+| X25519 | `Spec.Curve25519.Correctness` | `ecdh_agree`: `ecdh a (pub b) == ecdh b (pub a)`, result and flag | none |
+| P-256, secp256k1 ECDH | `Spec.{P256,K256}.ECDH.Correctness` | `dh_agree`; `dh_initiator_valid`: a generated public key passes validation | both private keys valid |
+| FFDHE (all five groups) | `Spec.FFDHE.Correctness` | `ffdheN_agree`: both shared secrets are equal | both peers' public-key checks pass |
+| Ed25519 | `Spec.Ed25519.Correctness` | `sign_verify`, `sign_expanded_verify`: `verify pub msg (sign sk msg) == true` | none (beyond the spec's message type) |
+| P-256, secp256k1 ECDSA | `Spec.{P256,K256}.ECDSA.Correctness` | `verify_sign` and every hashed front end; for secp256k1 also the low-S signer and verifier | the signer returned `Some` |
+| RSA-PSS | `Spec.RSAPSS.Correctness` | `sign_then_verify`: an honest signature verifies | `n = p q`, `p != q` prime, `e d = 1` mod `p-1` and `q-1`; `2^(modBits-1) <= n`; signing succeeded |
+| HPKE (all modes, both KEMs, all AEADs) | `Spec.HPKE.Correctness` | `encap_decap`, `auth_encap_decap`, `setup_agree`, `context_open_seal`, `open_base_seal_base` | the public keys are those of the private keys; the sender succeeded |
+| ML-KEM (all parameter sets) | `Spec.MLKEM.Correctness` | `mlkem_correct`: `decaps dk (encaps ek m) == k`; `kpke_correct` | decryption noise below `q/4` in every coefficient |
+| FrodoKEM (all parameter sets) | `Spec.Frodo.Correctness` | `kem_correct`: `dec ct sk == ss`; `pke_correct` | every entry of `S'E + E'' - E'S` below `q/2^(B+1)` |
+
+The supporting facts are proved, not assumed, along the way: that the
+P-256 and secp256k1 group orders are prime (Pocklington certificates in
+`Spec.Group.OrderPrimes`), that `n G` is the identity on all three curves
+(by evaluation), that Ed25519 point compression round-trips, that the
+X25519 Montgomery ladder computes the u-coordinate of a scalar multiple on
+the proved Edwards group (`Spec.Curve25519.Montgomery`), RSA inversion
+from Fermat's little theorem and Euclid's lemma
+(`Spec.RSAPSS.Fermat`), the ML-KEM and FrodoKEM byte-encoding round trips,
+and the ML-KEM NTT ring isomorphism (`Spec.MLKEM.NTT.Lemmas`).
+
+Two kinds of statement are deliberately absent.  The lattice KEMs are
+correct only with overwhelming probability, so their theorems take the
+noise bound as a hypothesis and stop there; bounding the probability that
+honestly sampled noise exceeds it (2^-138 to 2^-252 for FrodoKEM, 2^-139
+to 2^-174 for ML-KEM) needs a probability framework, an idealised model of
+the hashes and a numeric tail bound, and is future work.  And the
+Diffie-Hellman theorems for FFDHE assume the peers' public-key checks
+pass rather than proving that an honest key always does, since that needs
+the primality of the RFC 7919 moduli, which this repository establishes
+only by test.
 
 ## Performance
 
