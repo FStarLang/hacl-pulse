@@ -168,8 +168,24 @@ let acc (wk: pos) (lo pre ak bb x0 x1 x2 x3 y0 y1 y2 y3 y4 s0 s1 s2 s3 c1 c2 c3 
 (** {2 Squares} *)
 
 let ring () : Tac unit =
-  norm [delta_only [`%ev4]];
   canon_semiring int_cr
+
+(** [sq_identity] over a symbolic base [x], so the ring normaliser never sees
+    the large literal powers of [w]. *)
+let sq_identity_gen (x a0 a1 a2 a3: int)
+  : Lemma ((a0 + x * a1 + (x * x) * a2 + (x * x * x) * a3) *
+           (a0 + x * a1 + (x * x) * a2 + (x * x * x) * a3) ==
+           (a0 * a0 + (x * x) * (a1 * a1) + (x * x * x * x) * (a2 * a2) +
+            (x * x * x * x * x * x) * (a3 * a3)) +
+           2 * (x * (a0 * a1) + (x * x) * (a0 * a2) + (x * x * x) * (a0 * a3 + a1 * a2) +
+                (x * x * x * x) * (a1 * a3) + (x * x * x * x * x) * (a2 * a3)))
+  = assert ((a0 + x * a1 + (x * x) * a2 + (x * x * x) * a3) *
+            (a0 + x * a1 + (x * x) * a2 + (x * x * x) * a3) ==
+            (a0 * a0 + (x * x) * (a1 * a1) + (x * x * x * x) * (a2 * a2) +
+             (x * x * x * x * x * x) * (a3 * a3)) +
+            2 * (x * (a0 * a1) + (x * x) * (a0 * a2) + (x * x * x) * (a0 * a3 + a1 * a2) +
+                 (x * x * x * x) * (a1 * a3) + (x * x * x * x * x) * (a2 * a3)))
+        by (ring ())
 
 (** [A^2] is the four squares on the even positions plus twice the six cross
     products. *)
@@ -178,11 +194,9 @@ let sq_identity (a0 a1 a2 a3: int)
            (a0 * a0 + w2 * (a1 * a1) + w4 * (a2 * a2) + w6 * (a3 * a3)) +
            2 * (w * (a0 * a1) + w2 * (a0 * a2) + w3 * (a0 * a3 + a1 * a2) +
                 w4 * (a1 * a3) + w5 * (a2 * a3)))
-  = assert (ev4 a0 a1 a2 a3 * ev4 a0 a1 a2 a3 ==
-            (a0 * a0 + w2 * (a1 * a1) + w4 * (a2 * a2) + w6 * (a3 * a3)) +
-            2 * (w * (a0 * a1) + w2 * (a0 * a2) + w3 * (a0 * a3 + a1 * a2) +
-                 w4 * (a1 * a3) + w5 * (a2 * a3)))
-        by (ring ())
+  = assert_norm (w * w == w2 /\ w * w * w == w3 /\ w * w * w * w == w4 /\
+                 w * w * w * w * w == w5 /\ w * w * w * w * w * w == w6);
+    sq_identity_gen w a0 a1 a2 a3
 
 (** The cross products fit in seven words. *)
 let cross_lt (a0 a1 a2 a3: nat)
@@ -218,6 +232,24 @@ module S8 = Hacl.Secret.UInt8
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
+let byte_split_lo (lo hi a b c: int)
+  : Lemma (requires a > 0 /\ b == 256 * c)
+          (ensures ((lo + (a * b) * hi) / a) % 256 == (lo / a) % 256)
+  = Math.paren_mul_right a b hi;
+    Math.swap_mul a (b * hi);
+    Math.lemma_div_plus lo (b * hi) a;
+    Math.paren_mul_right 256 c hi;
+    Math.swap_mul 256 (c * hi);
+    Math.lemma_mod_plus (lo / a) (c * hi) 256
+
+let byte_split_hi (lo hi: int) (a b: pos)
+  : Lemma (requires 0 <= lo /\ lo < a)
+          (ensures (lo + a * hi) / (a * b) == hi / b)
+  = Math.division_multiplication_lemma (lo + a * hi) a b;
+    Math.swap_mul a hi;
+    Math.lemma_div_plus lo hi a;
+    Math.small_division_lemma_1 lo a
+
 (** {!Hacl.Spec.Bytes.le_bytes_split} for a low part of any whole number of
     bytes, and no bound on the high part. *)
 let byte_split (lo hi: nat) (m: pos) (k: nat)
@@ -226,40 +258,58 @@ let byte_split (lo hi: nat) (m: pos) (k: nat)
                     ((n / pow2 (8 * k)) % 256 ==
                        (if k < m then (lo / pow2 (8 * k)) % 256
                                  else (hi / pow2 (8 * (k - m))) % 256))))
-  = let n = lo + pow2 (8 * m) * hi in
-    if k < m then begin
-      Math.pow2_plus (8 * k) (8 * m - 8 * k);
-      Math.paren_mul_right (pow2 (8 * k)) (pow2 (8 * m - 8 * k)) hi;
-      Math.lemma_div_plus lo (pow2 (8 * m - 8 * k) * hi) (pow2 (8 * k));
-      Math.pow2_plus 8 (8 * m - 8 * k - 8);
-      Math.paren_mul_right (pow2 8) (pow2 (8 * m - 8 * k - 8)) hi;
+  = if k < m then begin
+      let d = 8 * m - 8 * k in
+      Math.pow2_plus (8 * k) d;
+      assert (8 * k + d == 8 * m);
+      Math.pow2_plus 8 (d - 8);
+      assert (8 + (d - 8) == d);
       assert_norm (pow2 8 == 256);
-      Math.lemma_mod_plus (lo / pow2 (8 * k)) (pow2 (8 * m - 8 * k - 8) * hi) 256
+      byte_split_lo lo hi (pow2 (8 * k)) (pow2 d) (pow2 (d - 8))
     end else begin
-      Math.pow2_plus (8 * m) (8 * (k - m));
-      Math.division_multiplication_lemma n (pow2 (8 * m)) (pow2 (8 * (k - m)));
-      Math.lemma_div_plus lo hi (pow2 (8 * m));
-      Math.small_division_lemma_1 lo (pow2 (8 * m))
+      let d = 8 * (k - m) in
+      Math.pow2_plus (8 * m) d;
+      assert (8 * m + d == 8 * k);
+      byte_split_hi lo hi (pow2 (8 * m)) (pow2 d)
     end
 
 let sel4 (l0 l1 l2 l3: nat) (j: nat { j < 4 }) : nat =
   if j = 0 then l0 else if j = 1 then l1 else if j = 2 then l2 else l3
+
+let store_half (a b: nat) (i: nat { i < 16 })
+  : Lemma (requires a < w /\ b < w)
+          (ensures ((a + w * b) / pow2 (8 * i)) % 256 ==
+                   (if i < 8 then (a / pow2 (8 * i)) % 256
+                             else (b / pow2 (8 * (i - 8))) % 256))
+  = assert_norm (pow2 (8 * 8) == w);
+    byte_split a b 8 i
+
+(** Index arithmetic for {!store_byte}, kept apart from the nonlinear facts. *)
+let byte_idx (j: nat { j < 4 }) (k: nat { k < 8 })
+  : Lemma (let i = 8 * j + k in
+           (j == 0 \/ j == 1 \/ j == 2 \/ j == 3) /\
+           (j == 0 ==> i < 8 /\ 8 * i == 8 * k) /\
+           (j == 1 ==> 8 <= i /\ i < 16 /\ 8 * (i - 8) == 8 * k) /\
+           (j == 2 ==> 16 <= i /\ i - 16 < 8 /\ 8 * (i - 16) == 8 * k) /\
+           (j == 3 ==> 24 <= i /\ 8 <= i - 16 /\ i - 16 < 16 /\ 8 * (i - 16 - 8) == 8 * k))
+  = ()
 
 (** Byte [8 j + k] of a four-word number is byte [k] of word [j]. *)
 let store_byte (l0 l1 l2 l3: nat) (j: nat { j < 4 }) (k: nat { k < 8 })
   : Lemma (requires l0 < w /\ l1 < w /\ l2 < w /\ l3 < w)
           (ensures (ev4 l0 l1 l2 l3 / pow2 (8 * (8 * j + k))) % 256 ==
                    (sel4 l0 l1 l2 l3 j / pow2 (8 * k)) % 256)
-  = consts ();
-    assert_norm (pow2 128 == w2);
-    assert_norm (pow2 (8 * 8) == w);
+  = let i = 8 * j + k in
+    byte_idx j k;
     assert_norm (pow2 (8 * 16) == w2);
     let lo = l0 + w * l1 in
     let hi = l2 + w * l3 in
     assert (ev4 l0 l1 l2 l3 == lo + pow2 (8 * 16) * hi);
-    byte_split lo hi 16 (8 * j + k);
-    if j < 2 then byte_split l0 l1 8 (8 * j + k)
-    else byte_split l2 l3 8 (8 * j + k - 16)
+    Math.lemma_mult_le_left w l1 (w - 1);
+    assert (lo < pow2 (8 * 16));
+    byte_split lo hi 16 i;
+    if j = 0 || j = 1 then store_half l0 l1 i
+    else store_half l2 l3 (i - 16)
 
 (** Thirty-two bytes are four little-endian words. *)
 let load_split (u: Seq.seq S8.t { Seq.length u == 32 })

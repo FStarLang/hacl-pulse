@@ -258,6 +258,10 @@ let top_byte_bound (s: Seq.seq S8.t { 0 < Seq.length s }) (b: nat)
     Math.lemma_mult_le_right (pow2 (8 * (n - 1))) (be_nat hd + 1) (pow2 b);
     Math.pow2_plus b (8 * (n - 1))
 
+let spare_bits (emBits: pos)
+  : Lemma ((8 - spare emBits) + 8 * (em_len emBits - 1) == emBits)
+  = ()
+
 let pss_encode_lt (#t: Type0) {| word t |} (p: params t)
                   (sLen: nat) (emBits: pos { pss_ok p sLen emBits })
                   (salt: Seq.lseq S8.t sLen)
@@ -278,7 +282,11 @@ let pss_encode_lt (#t: Type0) {| word t |} (p: params t)
     UInt.logand_le #8 (S8.v (S8.logxor (Seq.index db 0) (Seq.index mask 0)))
                       (S8.v (top_mask emBits));
     top_mask_v emBits;
-    top_byte_bound em (8 - spare emBits)
+    assert (S8.v (Seq.index em 0) < pow2 (8 - spare emBits));
+    assert (Seq.length em == emLen);
+    spare_bits emBits;
+    top_byte_bound em (8 - spare emBits);
+    assert (be_nat em < pow2 emBits)
 
 (** {2 Sign then verify} *)
 

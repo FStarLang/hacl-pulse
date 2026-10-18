@@ -326,7 +326,11 @@ let cs2_bound (p: params) (c: poly) (s2: pvec p.k)
       NL.intt_poly_mul_ntt c (vec_at s2 m);
       introduce forall (j': nat). j' < n ==> norm (Seq.index (vec_at s2 m) j') <= p.eta
       with introduce _ ==> _ with EL.flat_at_index p.k n s2 m j';
-      SL.ring_mul_bound c (vec_at s2 m) p.eta j
+      SL.ring_mul_bound c (vec_at s2 m) p.eta j;
+      assert (vec_at cs2 m == ring_mul c (vec_at s2 m));
+      assert (Seq.index cs2 i == Seq.index (ring_mul c (vec_at s2 m)) j);
+      Math.swap_mul p.tau p.eta;
+      assert (p.eta * SL.l1 c n <= beta p)
     end
 
 (** One coefficient: the hint at [r + c t0] gives the high part of [w]. *)

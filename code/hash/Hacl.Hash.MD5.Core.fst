@@ -320,8 +320,8 @@ ensures exists* vw.
   with vsh. assert (A.pts_to state vsh);
   set4_irrelevant vsh vst0
     (S32.add_mod a0 a1) (S32.add_mod b0 b1) (S32.add_mod c0 c1) (S32.add_mod d0 d1);
-  with vi_end. assert (pts_to i vi_end);
-  update_block_final (block_at vb (SZ.v off)) vst0 vsh (SZ.v vi_end);
+  shuffle_unfold (words_from_le #S32.t block_words (block_at vb (SZ.v off))) vst0;
+  update_block_final (block_at vb (SZ.v off)) vst0 vsh rounds;
   A.((state.(0sz) <- S32.add_mod a0 a1));
   A.((state.(1sz) <- S32.add_mod b0 b1));
   A.((state.(2sz) <- S32.add_mod c0 c1));

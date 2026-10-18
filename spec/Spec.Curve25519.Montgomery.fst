@@ -110,6 +110,12 @@ let mul4 (a b c d: elem) : Lemma (fmul (fmul a b) (fmul c d) == fmul (fmul a c) 
 let mul_one (x: elem) : Lemma (fmul x one == x /\ fmul one x == x) =
   fmul_one x; fmul_comm one x
 
+let fmul_zero (x: elem) : Lemma (fmul x 0 == 0 /\ fmul 0 x == 0) =
+  M.mul_zero_right_is_zero x; M.mul_zero_left_is_zero x; M.small_mod 0 prime
+
+let fadd_sub_zero (x: elem) : Lemma (fadd x 0 == x /\ fsub x 0 == x) =
+  M.small_mod x prime; M.lemma_mod_plus x 1 prime
+
 let finv_one () : Lemma (finv one == one) = mul_finv one; mul_one (finv one)
 
 let div_eq (a b c d: elem)
@@ -320,6 +326,7 @@ let dbl_aff_rep (u v: elem)
     MC.dbl_aff u v;
     let (x', z') = MC.mdbl (fadd one v, fsub one v) in
     if v = 0 then begin
+      fadd_sub_zero one;
       assert (fadd one v == 1 /\ fsub one v == 1);
       assert_norm (snd (MC.mdbl (1, 1)) <> 0)
     end else begin
@@ -380,6 +387,12 @@ let on_v0 (u: elem) : Lemma (requires S.on u 0) (ensures fmul u u == prime - 1) 
   cpt_parts u 0;
   mul_one one; mul_one (fmul u u);
   let uu = fmul u u in
+  fmul_zero 0; fmul_zero uu; fmul_zero d;
+  mul_one (fsub 0 uu);
+  fadd_sub_zero one;
+  assert (fadd one 0 == one);
+  assert (S.hr (S.cpt u 0) == one);
+  assert (S.hl (S.cpt u 0) == fsub 0 uu);
   assert (fsub 0 uu == one);
   if uu = 0 then assert (fsub 0 uu == 0)
   else M.small_mod (prime - uu) prime
@@ -761,6 +774,7 @@ let dbl_z (a: proj)
   : Lemma (requires fmul (fst a) (snd a) == 0) (ensures fmul (fst (MC.mdbl a)) (snd (MC.mdbl a)) == 0)
   = let (x, z) = a in
     MC.dbl_zero x z;
+    fmul_zero (fst (MC.mdbl a));
     assert (fmul (fst (MC.mdbl a)) 0 == 0)
 
 let zrung0 (a b: proj) : Lemma (requires zinv (a, b)) (ensures zinv (MC.mdbl a, MC.mdiff 0 a b)) =

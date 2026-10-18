@@ -334,7 +334,9 @@ let root_lemma (e: nat { 1 <= e /\ e <= 7 }) (i: nat { i < 128 })
            pow (gammas i) (pow2 (e - 1)) ==
              (if (2 * i) / pow2 e % 2 = 0 then zetas m else neg (zetas m)))
   = root_ok_holds e i;
+    Math.nat_over_pos_is_nat (2 * i) (pow2 (e + 1));
     let m = pow2 (7 - e) + (2 * i) / pow2 (e + 1) in
+    assert (0 <= m /\ m < 128);
     let x = (2 * bitrev7 i + 1) * pow2 (e - 1) in
     pow_mul zeta (2 * bitrev7 i + 1) (pow2 (e - 1));
     root_of_exponents (pow (gammas i) (pow2 (e - 1))) (zetas m) x (bitrev7 m)
@@ -397,11 +399,26 @@ let layer_child (e: nat { 1 <= e /\ e <= 7 }) (st: poly) (l c pp p cs m: nat) (z
   = let t = cs + k in
     ntt_layer_index e st t;
     assert (zidx e t == m);
-    if c % 2 = 0 then even_step e t
-    else begin
+    assert ((t / l) % 2 == c % 2);
+    if c % 2 = 0 then begin
+      even_step e t;
+      assert (cs == p);
+      assert (blk (ntt_layer e st) cs l k == Seq.index (ntt_layer e st) t);
+      assert (blk st p l k == Seq.index st t);
+      assert (blk st (p + l) l k == Seq.index st (t + l));
+      assert (Seq.index (ntt_layer e st) t == add (Seq.index st t) (mul z (Seq.index st (t + l))))
+    end else begin
       odd_step e t;
-      sub_is_add_neg (Seq.index st (t - l)) (mul z (Seq.index st t));
-      neg_mul z (Seq.index st t)
+      assert (cs == p + l);
+      let a = Seq.index st (t - l) in
+      let b = Seq.index st t in
+      assert (blk (ntt_layer e st) cs l k == Seq.index (ntt_layer e st) t);
+      assert (blk st p l k == a);
+      assert (blk st (p + l) l k == b);
+      assert (Seq.index (ntt_layer e st) t == sub a (mul z b));
+      sub_is_add_neg a (mul z b);
+      neg_mul z b;
+      assert (w == neg z)
     end
 
 let inv_step (e: nat { 1 <= e /\ e <= 7 }) (f st: poly) (i: nat { i < 128 }) (s: nat { s < 2 })
@@ -747,10 +764,28 @@ let multiply_ntts_ntt (f g: poly)
       Math.lemma_div_mod t 2;
       multiply_ntts_index (ntt f) (ntt g) t;
       gamma_128 i;
+      let gm = gammas i in
       ntt_eval f i 0; ntt_eval f i 1;
       ntt_eval g i 0; ntt_eval g i 1;
       ntt_eval (poly_mul f g) i s;
-      ev_poly_mul (gammas i) f g
+      ev_poly_mul gm f g;
+      let f0 = ev gm 0 n (blk f 0 n) in
+      let f1 = ev gm 1 n (blk f 0 n) in
+      let g0 = ev gm 0 n (blk g 0 n) in
+      let g1 = ev gm 1 n (blk g 0 n) in
+      let h = poly_mul f g in
+      assert (2 * i + 0 == 2 * i);
+      assert (Seq.index (ntt f) (2 * i) == f0);
+      assert (Seq.index (ntt f) (2 * i + 1) == f1);
+      assert (Seq.index (ntt g) (2 * i) == g0);
+      assert (Seq.index (ntt g) (2 * i + 1) == g1);
+      let c = base_case_multiply f0 f1 g0 g1 gm in
+      assert (fst c == ev gm 0 n (blk h 0 n) /\ snd c == ev gm 1 n (blk h 0 n));
+      assert (Seq.index a t == (if s = 0 then fst c else snd c));
+      assert (t == 2 * i + s);
+      assert (Seq.index b t == ev gm s n (blk h 0 n));
+      if s = 0 then assert (Seq.index a t == Seq.index b t)
+      else assert (Seq.index a t == Seq.index b t)
     end;
     Seq.lemma_eq_intro a b
 
@@ -930,7 +965,14 @@ let intt_ntt_layer_at (e: nat { 1 <= e /\ e <= 7 }) (st: poly) (t: nat { t < n }
     if (t / l) % 2 = 0 then begin
       partner_up e t;
       ntt_layer_index e st (t + l);
-      add_sub_cancel (Seq.index st t) (mul z (Seq.index st (t + l)))
+      let a = Seq.index st t in
+      let b = Seq.index st (t + l) in
+      assert ((t + l) - l == t);
+      assert (Seq.index fw t == add a (mul z b));
+      assert (Seq.index fw (t + l) == sub a (mul z b));
+      assert (Seq.index (intt_layer e fw) t == add (Seq.index fw t) (Seq.index fw (t + l)));
+      add_sub_cancel a (mul z b);
+      two_mul a
     end else begin
       partner_down e t;
       ntt_layer_index e st (t - l);

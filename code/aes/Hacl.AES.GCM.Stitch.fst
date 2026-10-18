@@ -729,6 +729,11 @@ ensures exists* (vm': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
   let j5 = SZ.add j 80sz;
   let j6 = SZ.add j 96sz;
   let j7 = SZ.add j 112sz;
+  assert (pure (SZ.v j == 16 * (bi + 0) /\
+                SZ.v j1 == 16 * (bi + 1) /\ SZ.v j2 == 16 * (bi + 2) /\
+                SZ.v j3 == 16 * (bi + 3) /\ SZ.v j4 == 16 * (bi + 4) /\
+                SZ.v j5 == 16 * (bi + 5) /\ SZ.v j6 == 16 * (bi + 6) /\
+                SZ.v j7 == 16 * (bi + 7)));
 
   NI.xor_at_ni msg j e0;
   with vmA. assert A.pts_to msg vmA;
@@ -804,6 +809,7 @@ ensures exists* (vm': Seq.seq S8.t) (vc' va': Vec.t).
   A.pts_to_len hk;
   vals_len vh;
   j_facts (SZ.v j);
+  assert (pure (SZ.v j / 16 >= 0 /\ (SZ.v j + 128) / 16 >= 0));
 
   (* The eight counter blocks, and the next one, in registers. *)
   let c0 = !rc;
@@ -917,6 +923,14 @@ ensures exists* (vm': Seq.seq S8.t) (vc' va': Vec.t).
 }
 #pop-options
 
+(* The block index of byte offset [j], typed once here so that the loop
+   invariant below need not re-prove [j / 16 >= 0] in a large context. *)
+let jblk (j: nat) : nat = j / 16
+
+let jblk_spec (j: nat) : Lemma (jblk j == j / 16) = ()
+
+let jblk_128 () : Lemma (jblk 128 == 4 + 4) = assert_norm (jblk 128 == 4 + 4)
+
 
 (** {2 The loop}
 
@@ -953,6 +967,7 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
   A.pts_to_len acc;
   vals_len vh;
   j_facts (SZ.v n);
+  assert (pure (SZ.v n / 16 >= 0));
   counter_block_zero (vals vc0);
 
   (* The first 128 bytes: counter mode only, there being nothing yet to
@@ -967,6 +982,7 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
   ctr4_step p.pv (vals vw) (vals vc0) (vals vm0) (vals vmA) (vals vmB)
             (SZ.v n) 64 4 (vals vcA);
   counter_block_add (vals vc0) 4 4;
+  jblk_128 ();
   ctr_inv_def p.pv (vals vw) (vals vc0) (vals vm0) (vals vmB) 128;
   with vcB. assert A.pts_to ctr vcB;
 
@@ -1011,7 +1027,7 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
           pw_ok y5 yb5 ym5 (Alg.hblk (vals vh) 4) /\ pw_ok y6 yb6 ym6 (Alg.hblk (vals vh) 5) /\
           pw_ok y7 yb7 ym7 (Alg.hblk (vals vh) 6) /\ pw_ok y8 yb8 ym8 (Alg.hblk (vals vh) 7) /\
           Seq.length va0 == blocklen /\ SZ.v n == Seq.length vm0 /\
-          Vec.bv vc == counter_block (vals vc0) (SZ.v vj / 16) /\
+          Vec.bv vc == counter_block (vals vc0) (jblk (SZ.v vj)) /\
           ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v vj) /\
           Vec.bv va == gh_prefix (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
                                  (ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0))
@@ -1021,15 +1037,18 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
     let vj = !j;
     step_bounds (SZ.v vj) (SZ.v n);
     j_facts (SZ.v vj);
+    jblk_spec (SZ.v vj);
     stitch8 p msg vj w hk rc ra (vals vm0) (vals vc0) (vals va0)
             y y2 y3 y4 y5 y6 y7 y8
             yb1 ym1 yb2 ym2 yb3 ym3 yb4 ym4 yb5 ym5 yb6 ym6 yb7 ym7 yb8 ym8;
     let nj = SZ.add vj 128sz;
     assert pure (SZ.v nj - 128 == SZ.v vj);
+    jblk_spec (SZ.v nj);
     j := nj;
   };
 
   (* The last 128 bytes: GHASH only. *)
+  jblk_spec (SZ.v n);
   with vm. assert A.pts_to msg vm;
   ctr_fin p.pv (vals vw) (vals vc0) (vals vm0) (vals vm);
   let vc = !rc;

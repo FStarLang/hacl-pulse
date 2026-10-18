@@ -123,6 +123,17 @@ let step_ok (ctr0: U32.t) (len: nat) (b n: nat)
       div_lt size_block (b + n) (pow2 32 - U32.v ctr0)
     end
 
+let ctr_step_ok (ctr0: U32.t) (len: nat) (b n: nat) (c: U32.t)
+  : Lemma
+      (requires
+        U32.v c == U32.v ctr0 + b / size_block /\
+        (b + n < len ==>
+          (b + n) / size_block == b / size_block + 1 /\
+          U32.v ctr0 + (b + n) / size_block < pow2 32))
+      (ensures
+        b + n < len ==> U32.v (U32.add_mod c 1ul) == U32.v ctr0 + (b + n) / size_block)
+  = if b + n < len then Math.modulo_lemma (U32.v c + 1) (pow2 32)
+
 (** {2 The initial state}
 
     Salsa20 does not lay its state out in blocks, so the setup is written as
@@ -424,9 +435,17 @@ ensures exists* (vo: Seq.seq S8.t).
     xor_chunk out msg kbarr b n st0 ctr0 c (G.hide vs0);
 
     step_ok ctr0 (Seq.length vmsg) (SZ.v b) (SZ.v n);
+    with_counter_agree vs0 st0 c;
+    ctr_step_ok ctr0 (Seq.length vmsg) (SZ.v b) (SZ.v n) c;
 
-    base := SZ.add b n;
-    ctr := U32.add_mod c 1ul;
+    let b' = SZ.add b n;
+    let c' = U32.add_mod c 1ul;
+    assert (pure (SZ.v b' == SZ.v b + SZ.v n));
+    assert (pure (SZ.v b' < Seq.length vmsg ==>
+                  SZ.v b' % size_block == 0 /\
+                  U32.v c' == U32.v ctr0 + SZ.v b' / size_block));
+    base := b';
+    ctr := c';
   };
 
   with vo. assert (A.pts_to out vo);

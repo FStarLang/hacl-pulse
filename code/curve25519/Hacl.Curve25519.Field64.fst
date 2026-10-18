@@ -79,7 +79,7 @@ let ev8 (s: Seq.seq S64.t) : GTot nat = win s 0 + w4 * win s 4
 
 let fe (s: Seq.seq S64.t) : GTot C.elem = ev s % C.prime
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --z3refresh --smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
 
 [@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
 fn put4 (o: A.array S64.t) (x0 x1 x2 x3: S64.t) (#vo: erased (Seq.seq S64.t))
@@ -175,6 +175,11 @@ ensures exists* (vo': Seq.seq S64.t).
 
 (** {2 Addition and subtraction} *)
 
+let fadd_post (vo va vb: Seq.seq S64.t) (t: int)
+  : Lemma (requires ev vo % C.prime == t % C.prime /\ t == ev va + ev vb)
+          (ensures fe vo == C.fadd (fe va) (fe vb))
+  = fadd_ok (ev va) (ev vb)
+
 [@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
 fn fadd (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
@@ -210,7 +215,9 @@ ensures exists* (vout': Seq.seq S64.t).
   assert (pure (ev4 (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) + w4 * S64.v c ==
                 ev va + ev vb));
   fold_top out s0 s1 s2 s3 c;
-  fadd_ok (ev va) (ev vb);
+  with vo'. assert (A.pts_to out vo');
+  fadd_post vo' va vb (ev4 (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) + w4 * S64.v c);
+  ()
 }
 
 [@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
@@ -249,6 +256,7 @@ ensures exists* (vout': Seq.seq S64.t).
                 ev va - ev vb));
   fold_top_sub out s0 s1 s2 s3 c;
   fsub_ok (ev va) (ev vb);
+  ()
 }
 
 (** {2 Products}
@@ -429,6 +437,12 @@ let fmul_post (o y va vb: Seq.seq S64.t)
           (ensures fe o == C.fmul (fe va) (fe vb))
   = fmul_ok (ev va) (ev vb)
 
+let ev8_split (y u v x: Seq.seq S64.t)
+  : Lemma (requires ix y 0 == ix u 0 /\ ix y 1 == ix v 1 /\ ix y 2 == ix x 2)
+          (ensures ev8 y == ev4 (ix u 0) (ix v 1) (ix x 2) (ix y 3) +
+                            w4 * ev4 (ix y 4) (ix y 5) (ix y 6) (ix y 7))
+  = ()
+
 let fmul_glue (va vb u v x y: Seq.seq S64.t) (a0 a1 a2 a3 b0 b1 b2 b3: S64.t)
   : Lemma (requires
       Seq.length va == 4 /\ Seq.length vb == 4 /\
@@ -442,11 +456,20 @@ let fmul_glue (va vb u v x y: Seq.seq S64.t) (a0 a1 a2 a3 b0 b1 b2 b3: S64.t)
       win y 3 + w4 * ix y 7 == win x 3 + S64.v a3 * ev4 (S64.v b0) (S64.v b1) (S64.v b2) (S64.v b3) /\
       ix y 0 == ix u 0 /\ ix y 1 == ix v 1 /\ ix y 2 == ix x 2)
     (ensures ev8 y == ev va * ev vb)
-  = mul_combine (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (ev vb)
+  = let bb = ev vb in
+    let eb = ev4 (S64.v b0) (S64.v b1) (S64.v b2) (S64.v b3) in
+    let ea = ev4 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) in
+    assert (eb == bb);
+    assert (ev va == ea);
+    assert (S64.v a0 * eb == S64.v a0 * bb /\ S64.v a1 * eb == S64.v a1 * bb /\
+            S64.v a2 * eb == S64.v a2 * bb /\ S64.v a3 * eb == S64.v a3 * bb);
+    mul_combine (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) bb
       (ix u 0) (ix u 1) (ix u 2) (ix u 3) (ix u 4)
       (ix v 1) (ix v 2) (ix v 3) (ix v 4) (ix v 5)
       (ix x 2) (ix x 3) (ix x 4) (ix x 5) (ix x 6)
-      (ix y 3) (ix y 4) (ix y 5) (ix y 6) (ix y 7)
+      (ix y 3) (ix y 4) (ix y 5) (ix y 6) (ix y 7);
+    ev8_split y u v x;
+    assert (ea * bb == ev va * ev vb)
 
 #push-options "--z3rlimit 200"
 
@@ -549,6 +572,21 @@ ensures exists* (vout': Seq.seq S64.t).
     Four words times [121665] is four words and a fifth below [121665],
     which {!fold_top} takes. *)
 
+(** The sum behind {!fscale}: linear once the products are named. *)
+let scale_sum (ea a0 a1 a2 a3 l0 h0 l1 h1 l2 h2 l3 h3 r1 r2 r3 c1 c2 c3 h: int)
+  : Lemma (requires ea == ev4 a0 a1 a2 a3 /\
+                    l0 + w * h0 == a0 * 121665 /\ l1 + w * h1 == a1 * 121665 /\
+                    l2 + w * h2 == a2 * 121665 /\ l3 + w * h3 == a3 * 121665 /\
+                    r1 + w * c1 == l1 + h0 /\ r2 + w * c2 == l2 + h1 + c1 /\
+                    r3 + w * c3 == l3 + h2 + c2 /\ h == h3 + c3)
+          (ensures ev4 l0 r1 r2 r3 + w4 * h == 121665 * ea)
+  = ()
+
+let scale_post (vo va: Seq.seq S64.t) (t: int)
+  : Lemma (requires ev vo % C.prime == t % C.prime /\ t == 121665 * ev va)
+          (ensures fe vo == C.fmul C.a24 (fe va))
+  = Math.lemma_mod_mul_distr_r 121665 (ev va) C.prime
+
 [@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
 fn fscale (out a: A.array S64.t)
           (#vout: erased (Seq.seq S64.t))
@@ -585,18 +623,24 @@ ensures exists* (vout': Seq.seq S64.t).
   L.lo_hi p3;
   assert (pure (S64.v h3 < 121665));
   let mut r = z0;
-  let c = K.addc z0 l1 h0 r;
+  let c1 = K.addc z0 l1 h0 r;
   let r1 = !r;
-  let c = K.addc c l2 h1 r;
+  let c2 = K.addc c1 l2 h1 r;
   let r2 = !r;
-  let c = K.addc c l3 h2 r;
+  let c = K.addc c2 l3 h2 r;
   let r3 = !r;
   Math.small_mod (S64.v h3 + S64.v c) (pow2 64);
   let h = S64.add_mod h3 c;
+  scale_sum (ev va) (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3)
+    (S64.v l0) (S64.v h0) (S64.v l1) (S64.v h1) (S64.v l2) (S64.v h2)
+    (S64.v l3) (S64.v h3) (S64.v r1) (S64.v r2) (S64.v r3)
+    (S64.v c1) (S64.v c2) (S64.v c) (S64.v h);
   assert (pure (ev4 (S64.v l0) (S64.v r1) (S64.v r2) (S64.v r3) + w4 * S64.v h ==
                 121665 * ev va));
   fold_top out l0 r1 r2 r3 h;
-  Math.lemma_mod_mul_distr_r 121665 (ev va) C.prime;
+  with vo'. assert (A.pts_to out vo');
+  scale_post vo' va (ev4 (S64.v l0) (S64.v r1) (S64.v r2) (S64.v r3) + w4 * S64.v h);
+  ()
 }
 
 (** {2 Moves} *)
@@ -683,6 +727,59 @@ ensures exists* (va': Seq.seq S64.t).
   put4 a l0 l1 l2 l3m;
 }
 
+(** The postcondition of {!Hacl.Impl.Bytes.store_le} at [S64.t]. *)
+[@@"opaque_to_smt"]
+let store_post (vb vb': Seq.seq S8.t) (off: SZ.t) (x: S64.t) : prop =
+  Seq.length vb' == Seq.length vb /\
+  SZ.v off + Hacl.Secret.Word.bytes #S64.t <= Seq.length vb' /\
+  (forall (k: nat). k < Hacl.Secret.Word.bytes #S64.t ==>
+     S8.v (Seq.index vb' (SZ.v off + k)) == (Hacl.Secret.Word.v x / pow2 (8 * k)) % 256) /\
+  (forall (k: nat). k < Seq.length vb ==> k < SZ.v off \/ k >= SZ.v off + Hacl.Secret.Word.bytes #S64.t ==>
+     Seq.index vb' k == Seq.index vb k)
+
+let store_post_elim (vb vb': Seq.seq S8.t) (off: SZ.t) (x: S64.t) (k: nat)
+  : Lemma (requires store_post vb vb' off x)
+          (ensures Seq.length vb' == Seq.length vb /\ SZ.v off + 8 <= Seq.length vb' /\
+                   (k < 8 ==> S8.v (Seq.index vb' (SZ.v off + k)) == (S64.v x / pow2 (8 * k)) % 256) /\
+                   (k < Seq.length vb /\ (k < SZ.v off \/ k >= SZ.v off + 8) ==>
+                      Seq.index vb' k == Seq.index vb k))
+  = FStar.Pervasives.reveal_opaque (`%store_post) store_post;
+    assert_norm (Hacl.Secret.Word.bytes #S64.t == 8);
+    assert_norm (Hacl.Secret.Word.v x == S64.v x)
+
+let store4_ok (v0 v1 v2 v3 v4: Seq.seq S8.t) (l0 l1 l2 l3: S64.t)
+  : Lemma (requires Seq.length v0 == 32 /\
+                    store_post v0 v1 0sz l0 /\ store_post v1 v2 8sz l1 /\
+                    store_post v2 v3 16sz l2 /\ store_post v3 v4 24sz l3)
+          (ensures stored v4 (S64.v l0) (S64.v l1) (S64.v l2) (S64.v l3))
+  = assert (SZ.v 0sz == 0 /\ SZ.v 8sz == 8 /\ SZ.v 16sz == 16 /\ SZ.v 24sz == 24);
+    store_post_elim v0 v1 0sz l0 0;
+    store_post_elim v1 v2 8sz l1 0;
+    store_post_elim v2 v3 16sz l2 0;
+    store_post_elim v3 v4 24sz l3 0;
+    let aux (k: nat { k < 8 })
+      : Lemma (S8.v (Seq.index v4 k) == (S64.v l0 / pow2 (8 * k)) % 256 /\
+               S8.v (Seq.index v4 (8 + k)) == (S64.v l1 / pow2 (8 * k)) % 256 /\
+               S8.v (Seq.index v4 (16 + k)) == (S64.v l2 / pow2 (8 * k)) % 256 /\
+               S8.v (Seq.index v4 (24 + k)) == (S64.v l3 / pow2 (8 * k)) % 256)
+      = store_post_elim v0 v1 0sz l0 k;
+        store_post_elim v1 v2 8sz l1 k;
+        store_post_elim v2 v3 16sz l2 k;
+        store_post_elim v3 v4 24sz l3 k;
+        store_post_elim v2 v3 16sz l2 (8 + k);
+        store_post_elim v3 v4 24sz l3 (8 + k);
+        store_post_elim v3 v4 24sz l3 (16 + k)
+    in
+    introduce forall (k: nat). k < 8 ==> S8.v (Seq.index v4 k) == (S64.v l0 / pow2 (8 * k)) % 256
+    with introduce _ ==> _ with aux k;
+    introduce forall (k: nat). k < 8 ==> S8.v (Seq.index v4 (8 + k)) == (S64.v l1 / pow2 (8 * k)) % 256
+    with introduce _ ==> _ with aux k;
+    introduce forall (k: nat). k < 8 ==> S8.v (Seq.index v4 (16 + k)) == (S64.v l2 / pow2 (8 * k)) % 256
+    with introduce _ ==> _ with aux k;
+    introduce forall (k: nat). k < 8 ==> S8.v (Seq.index v4 (24 + k)) == (S64.v l3 / pow2 (8 * k)) % 256
+    with introduce _ ==> _ with aux k;
+    assert (Seq.length v4 == 32)
+
 [@@ CPrologue "__attribute__((target(\"bmi2\")))"]
 fn store (b: A.array S8.t) (a: A.array S64.t)
          (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -700,10 +797,15 @@ ensures exists* (vb': Seq.seq S8.t).
   let l2 = A.(a.(2sz));
   let l3 = A.(a.(3sz));
   Bytes.store_le #S64.t b 0sz l0;
+  with v1. assert (A.pts_to b v1);
   Bytes.store_le #S64.t b 8sz l1;
+  with v2. assert (A.pts_to b v2);
   Bytes.store_le #S64.t b 16sz l2;
+  with v3. assert (A.pts_to b v3);
   Bytes.store_le #S64.t b 24sz l3;
   with v. assert (A.pts_to b v);
+  FStar.Pervasives.reveal_opaque (`%store_post) store_post;
+  store4_ok vb v1 v2 v3 v l0 l1 l2 l3;
   assert (pure (stored v (S64.v l0) (S64.v l1) (S64.v l2) (S64.v l3)));
   store_ok v (S64.v l0) (S64.v l1) (S64.v l2) (S64.v l3);
   assert (pure (ev va == ev4 (S64.v l0) (S64.v l1) (S64.v l2) (S64.v l3)));
@@ -753,6 +855,11 @@ ensures exists* (va': Seq.seq S64.t).
   put4 a s0 s1 s2 s3;
 }
 
+let carry_out_zero (y x: nat) (c: int)
+  : Lemma (requires y + w4 * c == x + 19 /\ x < pow2 255 /\ 0 <= c /\ c <= 1)
+          (ensures c == 0)
+  = consts ()
+
 [@@ CPrologue "__attribute__((target(\"bmi2\")))"]
 fn freeze (a: A.array S64.t) (#va: erased (Seq.seq S64.t))
 requires A.pts_to a va ** pure (Seq.length va == 4)
@@ -778,6 +885,10 @@ ensures exists* (va': Seq.seq S64.t).
   let y2 = !r;
   let c = K.addc c x3 z0 r;
   let y3 = !r;
+  assert (pure (ev4 (S64.v y0) (S64.v y1) (S64.v y2) (S64.v y3) + w4 * S64.v c ==
+                ev4 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) + 19));
+  assert (pure (ev v2 == ev4 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3)));
+  carry_out_zero (ev4 (S64.v y0) (S64.v y1) (S64.v y2) (S64.v y3)) (ev v2) (S64.v c);
   assert (pure (S64.v c == 0));
   let t = S64.shift_right y3 63ul;
   let y3m = S64.logand y3 (S64.mask_low 63ul);

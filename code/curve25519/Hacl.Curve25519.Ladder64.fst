@@ -232,6 +232,13 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
+let ladder_exit (x1: C.elem) (k: Seq.lseq S8.t 32) (vi: SZ.t) (a b c d: C.elem)
+  : Lemma (requires SZ.v vi <= 256 /\ false == SZ.lt vi 256sz /\
+                    ((a, b), (c, d)) ==
+                      Loops.repeati_g (SZ.v vi) (C.ladder_at x1 k) (C.ladder_init x1))
+          (ensures (a, b) == fst (C.montgomery_ladder x1 k))
+  = ()
+
 [@@ CPrologue "__attribute__((target(\"bmi2\")))";
    custard_c_closure_prologue "__attribute__((target(\"bmi2\")))" ""]
 fn ladder (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
@@ -311,9 +318,13 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
                         (C.ladder_init (fe vx1))));
     i := SZ.add vi 1sz;
   };
+  with vi. assert (pts_to i vi);
   with wx2. assert (A.pts_to x2 wx2);
   with wz2. assert (A.pts_to z2 wz2);
-  assert (pure ((fe wx2, fe wz2) == fst (C.montgomery_ladder (fe vx1) vk)));
+  with wx3. assert (A.pts_to x3 wx3);
+  with wz3. assert (A.pts_to z3 wz3);
+  ladder_exit (fe vx1) vk vi (fe wx2) (fe wz2) (fe wx3) (fe wz3);
+  ()
 }
 
 #pop-options

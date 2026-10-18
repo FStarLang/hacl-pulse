@@ -70,6 +70,10 @@ let byte_bit (b0 b1 b2 b3 b4 b5 b6 b7: (n: nat { n < 2 })) (r: nat { r < 8 })
     else if r = 6 then bit_of (b0 * 32 + b1 * 16 + b2 * 8 + b3 * 4 + b4 * 2 + b5) b6 b7 1
     else bit_of (b0 * 64 + b1 * 32 + b2 * 16 + b3 * 8 + b4 * 4 + b5 * 2 + b6) b7 0 0
 
+let nat_lt_8 (r: nat { r < 8 })
+  : Lemma (r == 0 \/ r == 1 \/ r == 2 \/ r == 3 \/ r == 4 \/ r == 5 \/ r == 6 \/ r == 7)
+  = ()
+
 let byte_val_bit (d: pos) (m: Seq.seq S16.t) (i: nat) (r: nat { r < 8 })
   : Lemma ((byte_val d m i / pow2 (7 - r)) % 2 == pack_bit d m (8 * i + r))
   = let b0 = pack_bit d m (8 * i) in
@@ -83,6 +87,7 @@ let byte_val_bit (d: pos) (m: Seq.seq S16.t) (i: nat) (r: nat { r < 8 })
     assert (byte_val d m i ==
             b0 * 128 + b1 * 64 + b2 * 32 + b3 * 16 + b4 * 8 + b5 * 4 + b6 * 2 + b7);
     byte_bit b0 b1 b2 b3 b4 b5 b6 b7 r;
+    nat_lt_8 r;
     if r = 0 then assert (8 * i + r == 8 * i)
     else if r = 1 then () else if r = 2 then () else if r = 3 then ()
     else if r = 4 then () else if r = 5 then () else if r = 6 then ()
@@ -111,21 +116,68 @@ let horner_step (y: nat) (k: pos)
 
 #push-options "--fuel 1"
 
-let rec unpack_val_bits (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) (k: nat { k <= d })
-  : Lemma (requires forall (t: nat). t < d ==> stream_bit b (off + t) == (x / pow2 (d - 1 - t)) % 2)
-          (ensures unpack_val b off k == (x / pow2 (d - k)) % pow2 k)
-          (decreases k)
-  = if k = 0 then assert_norm (pow2 0 == 1)
-    else begin
-      unpack_val_bits b off d x (k - 1);
-      Math.pow2_plus (d - k) 1;
-      assert_norm (pow2 1 == 2);
-      Math.division_multiplication_lemma x (pow2 (d - k)) 2;
-      Math.lemma_div_le 0 x (pow2 (d - k));
-      horner_step (x / pow2 (d - k)) k
-    end
+let unpack_val_zero (b: Seq.seq S8.t) (off: nat)
+  : Lemma (unpack_val b off 0 == 0)
+  = ()
+
+let unpack_val_step (b: Seq.seq S8.t) (off: nat) (k: pos) (k': nat { k' == k - 1 })
+  : Lemma (unpack_val b off k == 2 * unpack_val b off k' + stream_bit b (off + k'))
+  = ()
 
 #pop-options
+
+let unpack_val_bits_zero (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) (k: nat { k == 0 })
+  : Lemma (unpack_val b off k == (x / pow2 (d - k)) % pow2 k)
+  = unpack_val_zero b off;
+    assert_norm (pow2 0 == 1);
+    Math.small_mod 0 1;
+    Math.lemma_mod_plus 0 (x / pow2 d) 1
+
+let horner_step' (u u' s y: int) (k: pos)
+  : Lemma (requires y >= 0 /\ u == 2 * u' + s /\ u' == (y / 2) % pow2 (k - 1) /\ s == y % 2)
+          (ensures u == y % pow2 k)
+  = horner_step y k
+
+let unpack_val_bits_step (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) (k: pos { k <= d })
+  : Lemma (requires stream_bit b (off + (k - 1)) == (x / pow2 (d - k)) % 2 /\
+                    unpack_val b off (k - 1) == (x / pow2 (d - (k - 1))) % pow2 (k - 1))
+          (ensures unpack_val b off k == (x / pow2 (d - k)) % pow2 k)
+  = let k' : nat = k - 1 in
+    Math.pow2_plus (d - k) 1;
+    assert_norm (pow2 1 == 2);
+    Math.division_multiplication_lemma x (pow2 (d - k)) 2;
+    Math.nat_over_pos_is_nat x (pow2 (d - k));
+    let y : nat = x / pow2 (d - k) in
+    assert (x / pow2 (d - k') == y / 2);
+    unpack_val_step b off k k';
+    horner_step' (unpack_val b off k) (unpack_val b off k') (stream_bit b (off + k')) y k
+
+[@@"opaque_to_smt"]
+let bits_of (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) : prop =
+  forall (t: nat). t < d ==> stream_bit b (off + t) == (x / pow2 (d - 1 - t)) % 2
+
+let bits_of_at (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) (k: pos { k <= d })
+  : Lemma (requires bits_of b off d x)
+          (ensures stream_bit b (off + (k - 1)) == (x / pow2 (d - k)) % 2)
+  = reveal_opaque (`%bits_of) (bits_of b off d x);
+    assert (d - 1 - (k - 1) == d - k)
+
+let rec unpack_val_bits_aux (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) (k: nat { k <= d })
+  : Lemma (requires bits_of b off d x)
+          (ensures unpack_val b off k == (x / pow2 (d - k)) % pow2 k)
+          (decreases k)
+  = if k = 0 then unpack_val_bits_zero b off d x k
+    else begin
+      unpack_val_bits_aux b off d x (k - 1);
+      bits_of_at b off d x k;
+      unpack_val_bits_step b off d x k
+    end
+
+let unpack_val_bits (b: Seq.seq S8.t) (off: nat) (d: nat) (x: nat) (k: nat { k <= d })
+  : Lemma (requires forall (t: nat). t < d ==> stream_bit b (off + t) == (x / pow2 (d - 1 - t)) % 2)
+          (ensures unpack_val b off k == (x / pow2 (d - k)) % pow2 k)
+  = reveal_opaque (`%bits_of) (bits_of b off d x);
+    unpack_val_bits_aux b off d x k
 
 (** {2 The round trip} *)
 
@@ -162,6 +214,7 @@ let unpack_pack (d: pos { d <= 16 }) (len: nat { len % 8 == 0 }) (m: Seq.lseq S1
                 (j: nat { j < len })
   : Lemma (S16.v (Seq.index (unpack d len (pack d len m)) j) == S16.v (Seq.index m j) % pow2 d)
   = stream_bits_pack d len m j;
+    Math.nat_times_nat_is_nat j d;
     unpack_val_all (pack d len m) (j * d) d (S16.v (Seq.index m j));
     Math.pow2_le_compat 16 d
 

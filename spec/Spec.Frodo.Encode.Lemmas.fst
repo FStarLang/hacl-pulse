@@ -113,21 +113,59 @@ let row_head_step (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (k: 
 
 #pop-options
 
-let rec row_head_chunk (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat)
-                       (k: nat { k <= nbar })
-  : Lemma (requires forall (k': nat). k' < nbar ==> dc p (M.get nbar nbar m i k') == field p x k')
+let row_head_chunk_zero (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat)
+                        (k: nat { k == 0 })
+  : Lemma (row_head p m i k == low p x k)
+  = assert_norm (pow2 0 == 1);
+    row_head_zero p m i;
+    Math.cancel_mul_mod x 1;
+    assert (bits p * 0 == 0);
+    assert (pw p 0 == 1);
+    assert (x * 1 == x);
+    assert (x % 1 == 0);
+    assert (low p x 0 == x % pw p 0)
+
+let row_head_chunk_step (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat)
+                        (k: pos { k <= nbar })
+  : Lemma (requires row_head p m i (k - 1) == low p x (k - 1) /\
+                    dc p (M.get nbar nbar m i (k - 1)) == field p x (k - 1))
+          (ensures row_head p m i k == low p x k)
+  = let a = pw p (k - 1) in
+    let f = field p x (k - 1) in
+    pw_step p k;
+    mod_split x a (pow2 (bits p));
+    row_head_step p m i k;
+    assert (low p x k == x % (a * pow2 (bits p)));
+    assert (low p x k == low p x (k - 1) + f * a)
+
+[@@"opaque_to_smt"]
+let row_fields (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat) : prop =
+  forall (k': nat). k' < nbar ==> dc p (M.get nbar nbar m i k') == field p x k'
+
+let row_fields_at (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat)
+                  (k': nat { k' < nbar })
+  : Lemma (requires row_fields p m i x)
+          (ensures dc p (M.get nbar nbar m i k') == field p x k')
+  = reveal_opaque (`%row_fields) (row_fields p m i x)
+
+let rec row_head_chunk_aux (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat)
+                           (k: nat { k <= nbar })
+  : Lemma (requires row_fields p m i x)
           (ensures row_head p m i k == low p x k)
           (decreases k)
-  = if k = 0 then begin
-      assert_norm (pow2 0 == 1);
-      row_head_zero p m i;
-      Math.cancel_mul_mod x 1
-    end else begin
-      row_head_chunk p m i x (k - 1);
-      pw_step p k;
-      mod_split x (pw p (k - 1)) (pow2 (bits p));
-      row_head_step p m i k
+  = if k = 0 then row_head_chunk_zero p m i x k
+    else begin
+      row_head_chunk_aux p m i x (k - 1);
+      row_fields_at p m i x (k - 1);
+      row_head_chunk_step p m i x k
     end
+
+let row_head_chunk (p: params) (m: M.matrix nbar nbar) (i: nat { i < nbar }) (x: nat)
+                   (k: nat { k <= nbar })
+  : Lemma (requires forall (k': nat). k' < nbar ==> dc p (M.get nbar nbar m i k') == field p x k')
+          (ensures row_head p m i k == low p x k)
+  = reveal_opaque (`%row_fields) (row_fields p m i x);
+    row_head_chunk_aux p m i x k
 
 
 let key_decode_fields (p: params) (mu: Seq.lseq S8.t (bytes_mu p)) (m: M.matrix nbar nbar)

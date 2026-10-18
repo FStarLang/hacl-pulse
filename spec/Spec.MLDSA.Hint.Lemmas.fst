@@ -105,6 +105,35 @@ let cnt_strict_all (s: Seq.seq bool) (b: nat { b <= Seq.length s })
   = introduce forall (a: nat). a < b /\ Seq.index s a ==> cnt s a < cnt s b
     with introduce _ ==> _ with cnt_strict s b a
 
+let cnt_zero (s: Seq.seq bool) : Lemma (cnt s 0 == 0) = ()
+
+let cnt_succ (s: Seq.seq bool) (t: nat { t < Seq.length s })
+  : Lemma (cnt s (t + 1) == cnt s t + ind (Seq.index s t))
+  = ()
+
+let pack_inv_elim (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t <= p.k * n })
+                  (y: Seq.lseq U8.t (hint_len p)) (idx: nat)
+  : Lemma (requires pack_inv p h t (y, idx))
+          (ensures idx == cnt h t /\
+             (forall (t': nat). t' < t /\ Seq.index h t' ==>
+                cnt h t' < p.omega /\ U8.v (Seq.index y (cnt h t')) == t' % n) /\
+             (forall (e: nat). idx <= e /\ e < p.omega ==> U8.v (Seq.index y e) == 0) /\
+             (forall (i: nat). i < p.k /\ (i + 1) * n <= t ==>
+                U8.v (Seq.index y (p.omega + i)) == cnt h ((i + 1) * n)))
+  = ()
+
+let pack_inv_intro (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t <= p.k * n })
+                   (y: Seq.lseq U8.t (hint_len p)) (idx: nat)
+  : Lemma (requires idx == cnt h t /\
+             (forall (t': nat). t' < t /\ Seq.index h t' ==>
+                cnt h t' < p.omega /\ U8.v (Seq.index y (cnt h t')) == t' % n) /\
+             (forall (e: nat). idx <= e /\ e < p.omega ==> U8.v (Seq.index y e) == 0) /\
+             (forall (i: nat). i < p.k /\ (i + 1) * n <= t ==>
+                U8.v (Seq.index y (p.omega + i)) == cnt h ((i + 1) * n)))
+          (ensures pack_inv p h t (y, idx))
+  = ()
+
+#push-options "--fuel 0"
 (** The first half of a step: record the position of a one. *)
 let pack_mark (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t < p.k * n })
               (y: Seq.lseq U8.t (hint_len p)) (idx: nat)
@@ -119,9 +148,30 @@ let pack_mark (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t < p.k * n })
                     (forall (e: nat). idx1 <= e /\ e < p.omega ==> U8.v (Seq.index y1 e) == 0) /\
                     (forall (i: nat). i < p.k /\ (i + 1) * n <= t ==>
                        U8.v (Seq.index y1 (p.omega + i)) == cnt h ((i + 1) * n))))
-  = cnt_mono h (t + 1) (p.k * n);
-    cnt_strict_all h t;
-    assert_norm (pow2 8 == 256)
+  = pack_inv_elim p h t y idx;
+    cnt_mono h (t + 1) (p.k * n);
+    assert_norm (pow2 8 == 256);
+    cnt_succ h t;
+    assert (cnt h (t + 1) == idx + ind (Seq.index h t));
+    assert (Seq.index h t ==> idx < p.omega);
+    if Seq.index h t then begin
+      assert (idx < p.omega);
+      let y1 = Seq.upd y idx (U8.uint_to_t (t % n)) in
+      assert (U8.v (Seq.index y1 idx) == t % n);
+      introduce forall (t': nat). t' < t + 1 /\ Seq.index h t' ==>
+                cnt h t' < p.omega /\ U8.v (Seq.index y1 (cnt h t')) == t' % n
+      with introduce _ ==> _ with
+        if t' = t then () else cnt_strict h t t';
+      introduce forall (e: nat). idx + 1 <= e /\ e < p.omega ==> U8.v (Seq.index y1 e) == 0
+      with introduce _ ==> _ with assert (Seq.index y1 e == Seq.index y e);
+      introduce forall (i: nat). i < p.k /\ (i + 1) * n <= t ==>
+                U8.v (Seq.index y1 (p.omega + i)) == cnt h ((i + 1) * n)
+      with introduce _ ==> _ with assert (Seq.index y1 (p.omega + i) == Seq.index y (p.omega + i))
+    end else begin
+      introduce forall (t': nat). t' < t + 1 /\ Seq.index h t' ==>
+                cnt h t' < p.omega /\ U8.v (Seq.index y (cnt h t')) == t' % n
+      with introduce _ ==> _ with assert (t' < t)
+    end
 
 (** The second half: at the end of a polynomial, record the count. *)
 let pack_count (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t < p.k * n })
@@ -140,7 +190,29 @@ let pack_count (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t < p.k * n })
                        then Seq.upd y1 (p.omega + i) (U8.uint_to_t idx1), idx1
                        else y1, idx1)))
   = KZ.div_lt t p.k n;
-    assert_norm (pow2 8 == 256)
+    assert_norm (pow2 8 == 256);
+    let i = t / n in
+    let j = t % n in
+    if j = n - 1 && idx1 < 256 then begin
+      let y2 = Seq.upd y1 (p.omega + i) (U8.uint_to_t idx1) in
+      assert ((i + 1) * n == t + 1);
+      introduce forall (t': nat). t' < t + 1 /\ Seq.index h t' ==>
+                cnt h t' < p.omega /\ U8.v (Seq.index y2 (cnt h t')) == t' % n
+      with introduce _ ==> _ with
+        assert (Seq.index y2 (cnt h t') == Seq.index y1 (cnt h t'));
+      introduce forall (e: nat). idx1 <= e /\ e < p.omega ==> U8.v (Seq.index y2 e) == 0
+      with introduce _ ==> _ with assert (Seq.index y2 e == Seq.index y1 e);
+      introduce forall (i': nat). i' < p.k /\ (i' + 1) * n <= t + 1 ==>
+                U8.v (Seq.index y2 (p.omega + i')) == cnt h ((i' + 1) * n)
+      with introduce _ ==> _ with
+        if i' = i then () else assert (Seq.index y2 (p.omega + i') == Seq.index y1 (p.omega + i'));
+      pack_inv_intro p h (t + 1) y2 idx1
+    end else begin
+      introduce forall (i': nat). i' < p.k /\ (i' + 1) * n <= t + 1 ==>
+                U8.v (Seq.index y1 (p.omega + i')) == cnt h ((i' + 1) * n)
+      with introduce _ ==> _ with assert ((i' + 1) * n <= t);
+      pack_inv_intro p h (t + 1) y1 idx1
+    end
 
 let pack_step (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t < p.k * n })
               (st: hint_state p)
@@ -160,7 +232,7 @@ let rec pack_loop (p: params) (h: Seq.lseq bool (p.k * n)) (t: nat { t <= p.k * 
                      (Loops.repeati #(hint_state p) t (hint_pack_step p h) (Seq.create (hint_len p) 0uy, 0)))
           (decreases t)
   = let init : hint_state p = (Seq.create (hint_len p) 0uy, 0) in
-    if t = 0 then Loops.repeati_zero (hint_pack_step p h) init
+    if t = 0 then (cnt_zero h; Loops.repeati_zero (hint_pack_step p h) init)
     else begin
       pack_loop p h (t - 1);
       Loops.unfold_repeati (t - 1) (hint_pack_step p h) init;
@@ -172,7 +244,8 @@ let lo_hi (p: params) (h: Seq.lseq bool (p.k * n)) (y: Seq.lseq S8.t (hint_len p
   : Lemma (requires forall (j: nat). j < p.k ==>
                       S8.v (Seq.index y (p.omega + j)) == cnt h ((j + 1) * n))
           (ensures hint_lo p y i == cnt h (i * n) /\ hint_hi p y i == cnt h ((i + 1) * n))
-  = if i > 0 then begin
+  = cnt_zero h;
+    if i > 0 then begin
       let i' : nat = i - 1 in
       assert (S8.v (Seq.index y (p.omega + i')) == cnt h ((i' + 1) * n))
     end
@@ -303,4 +376,5 @@ let hint_unpack_pack (p: params) (h: Seq.lseq bool (p.k * n))
           (ensures hint_unpack p (hint_pack p h) == Some h)
   = hint_scatter_pack p h
 
+#pop-options
 #pop-options

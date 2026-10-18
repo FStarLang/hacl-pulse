@@ -83,6 +83,9 @@ let rec lev_of_nat (bit: nat -> GTot (x: nat { x < 2 })) (off: nat) (m: nat) (x:
     else begin
       assert (bit (off + 0) == (x / pow2 0) % 2);
       assert_norm (pow2 0 == 1);
+      assert (x / pow2 0 == x / 1);
+      Math.cancel_mul_div x 1;
+      assert (off + 0 == off);
       assert (bit off == x % 2);
       Math.pow2_double_mult (m - 1);
       introduce forall (j: nat). j < m - 1 ==> bit (off + 1 + j) == ((x / 2) / pow2 j) % 2
@@ -109,13 +112,34 @@ let lev_step (bit: nat -> GTot (x: nat { x < 2 })) (off: nat) (m: nat)
 let lev_zero (bit: nat -> GTot (x: nat { x < 2 })) (off: nat) : Lemma (lev bit off 0 == 0) = ()
 #pop-options
 
+let lev_step_at (bit: nat -> GTot (x: nat { x < 2 })) (off off': nat) (m m': nat)
+  : Lemma (requires off' == off + 1 /\ m' == m + 1)
+          (ensures lev bit off m' == bit off + 2 * lev bit off' m)
+  = lev_step bit off m
+
+let horner8 (c0 c1 c2 c3 c4 c5 c6 c7 l0 l1 l2 l3 l4 l5 l6 l7 l8: int)
+  : Lemma (requires l8 == 0 /\ l7 == c7 + 2 * l8 /\ l6 == c6 + 2 * l7 /\ l5 == c5 + 2 * l6 /\
+                    l4 == c4 + 2 * l5 /\ l3 == c3 + 2 * l4 /\ l2 == c2 + 2 * l3 /\
+                    l1 == c1 + 2 * l2 /\ l0 == c0 + 2 * l1)
+          (ensures l0 == c0 * 1 + c1 * 2 + c2 * 4 + c3 * 8 + c4 * 16 + c5 * 32 + c6 * 64 + c7 * 128)
+  = ()
+
 let byte_val_lev (d: pos) (f: Seq.seq nat) (i: nat)
   : Lemma (byte_val d f i == lev (coeff_bit d f) (8 * i) 8)
   = let b = coeff_bit d f in
     let o = 8 * i in
-    lev_step b o 7; lev_step b (o + 1) 6; lev_step b (o + 2) 5; lev_step b (o + 3) 4;
-    lev_step b (o + 4) 3; lev_step b (o + 5) 2; lev_step b (o + 6) 1; lev_step b (o + 7) 0;
-    lev_zero b (o + 8)
+    lev_zero b (o + 8);
+    lev_step_at b (o + 7) (o + 8) 0 1;
+    lev_step_at b (o + 6) (o + 7) 1 2;
+    lev_step_at b (o + 5) (o + 6) 2 3;
+    lev_step_at b (o + 4) (o + 5) 3 4;
+    lev_step_at b (o + 3) (o + 4) 4 5;
+    lev_step_at b (o + 2) (o + 3) 5 6;
+    lev_step_at b (o + 1) (o + 2) 6 7;
+    lev_step_at b o (o + 1) 7 8;
+    horner8 (b o) (b (o + 1)) (b (o + 2)) (b (o + 3)) (b (o + 4)) (b (o + 5)) (b (o + 6)) (b (o + 7))
+      (lev b o 8) (lev b (o + 1) 7) (lev b (o + 2) 6) (lev b (o + 3) 5) (lev b (o + 4) 4)
+      (lev b (o + 5) 3) (lev b (o + 6) 2) (lev b (o + 7) 1) (lev b (o + 8) 0)
 
 (** Position [j * d + i] of a coefficient stream is bit [i] of coefficient
     [j]. *)
@@ -154,7 +178,11 @@ let byte_decode_encode_at (d: pos { d <= 12 }) (f: Seq.lseq nat n) (j: nat { j <
     introduce forall (i: nat). i < d ==> coeff_bit d f (j * d + i) == (x / pow2 i) % 2
     with introduce _ ==> _ with begin
       coeff_pos d j i;
-      Math.lemma_mult_le_right d (j + 1) n
+      Math.lemma_mult_le_right d (j + 1) n;
+      Math.distributivity_add_left j 1 d;
+      Math.swap_mul n d;
+      assert (j * d + i < d * Seq.length f);
+      assert (coeff_bit d f (j * d + i) == (Seq.index f ((j * d + i) / d) / pow2 ((j * d + i) % d)) % 2)
     end;
     lev_of_nat (coeff_bit d f) (j * d) d x;
     Math.small_mod x q

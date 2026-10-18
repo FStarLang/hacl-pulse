@@ -135,6 +135,10 @@ ensures exists* (vo': Seq.seq S64.t) (w1': Seq.seq S64.t).
   ()
 }
 
+let div_pow2_zero (n: nat) (k: nat)
+  : Lemma (requires k == 0) (ensures n / pow2 k == n)
+  = assert_norm (pow2 0 == 1)
+
 (** [out := a ^ (eval e)], with [e] four public limbs.  The accumulator
     starts at one, which is now a literal rather than a table.
 
@@ -181,8 +185,10 @@ ensures exists* (vo': Seq.seq S64.t).
     M4.edigit (reveal n) (SZ.v vi);
     i := ni;
   };
-  assert_norm (pow2 0 == 1);
   Mem.wipe a1 4sz;
+  with vi v. assert (pts_to i vi ** A.pts_to out v);
+  assert (pure (SZ.v vi == 0));
+  div_pow2_zero (reveal n) (SZ.v vi);
   ()
 }
 #pop-options
