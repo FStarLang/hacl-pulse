@@ -50,6 +50,7 @@ module UInt = FStar.UInt
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module MA = Spec.ModArith
+module Mem = Hacl.Mem
 
 (** Comparing against a literal is a nuisance under [--fuel 0]: the machine
     integer [1uL] is [uint_to_t 1], whose typing needs [pow2 64].  Doing it
@@ -214,7 +215,9 @@ ensures exists* (vo': Seq.seq S64.t).
   let en = hide (eval (pvals ve));
   ebnd (pvals ve);
   let z = S64.zero;
-  let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a1 = [| z; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; A.pts_to_len a1; A.pts_to_len a2;
   acopy out r1;
   ebnd (pvals ve);
   Math.small_div (reveal en) (pow2 256);
@@ -240,6 +243,8 @@ ensures exists* (vo': Seq.seq S64.t).
     i := ni;
   };
   assert_norm (pow2 0 == 1);
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
   ()
 }
 #pop-options

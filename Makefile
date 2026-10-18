@@ -4,6 +4,8 @@
 #   make verify     verify everything
 #   make extract    (re)generate dist/
 #   make test       build and run the C test suite
+#   make lint       check that all scratch memory goes through Hacl.Mem
+#   make stack      check the stack frames of the generated C
 #   make clean
 
 include mk/common.mk
@@ -202,10 +204,11 @@ include mk/extract.mk
 
 .DEFAULT_GOAL := all
 .PHONY: all
-all: verify extract compile test
+all: lint verify extract compile stack test
 
 include mk/test.mk
 include mk/clones.mk
+include mk/lint.mk
 
 .PHONY: clean
 clean:

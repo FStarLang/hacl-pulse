@@ -44,6 +44,7 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module S8 = Hacl.Secret.UInt8
+module Mem = Hacl.Mem
 
 (** The streaming interface threads what it has seen as a left-nested
     append; the specification is right-nested.  Reconciling the two inside
@@ -58,6 +59,10 @@ let cat5 (a b c d e: Seq.seq S8.t)
         (Seq.append (Seq.empty #S8.t) a) b) c) d) e)
       (Seq.append a (Seq.append b (Seq.append c (Seq.append d e)))))
 
+let cat2 (a b: Seq.seq S8.t)
+  : Lemma (Seq.append (Seq.append (Seq.empty #S8.t) a) b == Seq.append a b)
+  = Seq.append_empty_l a
+
 (** This module is arithmetic-heavy, and the default SMT encoding boxes
     every integer operation, which hides the structure of the products from
     Z3's arithmetic solver.  Encoding linear arithmetic natively and leaving
@@ -67,6 +72,7 @@ let cat5 (a b c d e: Seq.seq S8.t)
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn hmac_cat (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+            ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
             (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
             (key: A.array S8.t)
             (a: A.array S8.t) (b: A.array S8.t) (c: A.array S8.t) (d: A.array S8.t)
@@ -110,19 +116,26 @@ ensures exists* vout'.
   let z8 = S8.classify 0uy;
   let z0: t = zero #t #w;
 
-  let mut k0arr = [| z8; bl |]; A.pts_to_len k0arr;
+  let mut k0arr = [| z8; bl |];
+  Mem.track k0arr; A.pts_to_len k0arr;
   A.pts_to_len k0arr;
-  let mut padarr = [| z8; bl |]; A.pts_to_len padarr;
+  let mut padarr = [| z8; bl |];
+  Mem.track padarr; A.pts_to_len padarr;
   A.pts_to_len padarr;
-  let mut dgarr = [| z8; p.nhash_bytes |]; A.pts_to_len dgarr;
+  let mut dgarr = [| z8; p.nhash_bytes |];
+  Mem.track dgarr; A.pts_to_len dgarr;
   A.pts_to_len dgarr;
-  let mut accarr = [| z0; 8sz |]; A.pts_to_len accarr;
+  let mut accarr = [| z0; 8sz |];
+  Mem.track accarr; A.pts_to_len accarr;
   A.pts_to_len accarr;
-  let mut bufarr = [| z8; bl |]; A.pts_to_len bufarr;
+  let mut bufarr = [| z8; bl |];
+  Mem.track bufarr; A.pts_to_len bufarr;
   A.pts_to_len bufarr;
-  let mut totarr = [| 0sz; 1sz |]; A.pts_to_len totarr;
+  let mut totarr = [| 0sz; 1sz |];
+  Mem.track totarr; A.pts_to_len totarr;
   A.pts_to_len totarr;
-  let mut wsarr = [| z0; p.nrounds |]; A.pts_to_len wsarr;
+  let mut wsarr = [| z0; p.nrounds |];
+  Mem.track wsarr; A.pts_to_len wsarr;
   A.pts_to_len wsarr;
 
   key_block_impl p kt ivt k0arr dgarr key lk;
@@ -131,24 +144,39 @@ ensures exists* vout'.
   fill_xor #t padarr k0arr ipad;
   with vpad. assert (A.pts_to padarr vpad);
   init_impl p ivt accarr bufarr totarr;
-  update_impl p kt wsarr accarr bufarr totarr padarr bl (Seq.empty #S8.t);
-  update_impl p kt wsarr accarr bufarr totarr a la (Seq.append (Seq.empty #S8.t) vpad);
-  update_impl p kt wsarr accarr bufarr totarr b lb
+  update_with p blocks kt wsarr accarr bufarr totarr padarr bl (Seq.empty #S8.t);
+  update_with p blocks kt wsarr accarr bufarr totarr a la (Seq.append (Seq.empty #S8.t) vpad);
+  update_with p blocks kt wsarr accarr bufarr totarr b lb
     (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va);
-  update_impl p kt wsarr accarr bufarr totarr c lc
+  update_with p blocks kt wsarr accarr bufarr totarr c lc
     (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb);
-  update_impl p kt wsarr accarr bufarr totarr d ld
+  update_with p blocks kt wsarr accarr bufarr totarr d ld
     (Seq.append (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) vpad) va) vb) vc);
   digest_impl p kt wsarr accarr bufarr totarr dgarr
     (Seq.append (Seq.append (Seq.append (Seq.append
       (Seq.append (Seq.empty #S8.t) vpad) va) vb) vc) vd);
   cat5 (reveal vpad) (reveal va) (reveal vb) (reveal vc) (reveal vd);
+  with vdg. assert (A.pts_to dgarr vdg);
 
   (** {3 The outer hash} *)
   fill_xor #t padarr k0arr opad;
+  with vpad2. assert (A.pts_to padarr vpad2);
   sizes #t p;
-  hash_prefixed p kt ivt out padarr dgarr p.nhash_bytes;
+  init_impl p ivt accarr bufarr totarr;
+  update_with p blocks kt wsarr accarr bufarr totarr padarr bl (Seq.empty #S8.t);
+  update_with p blocks kt wsarr accarr bufarr totarr dgarr p.nhash_bytes
+    (Seq.append (Seq.empty #S8.t) vpad2);
+  digest_impl p kt wsarr accarr bufarr totarr out
+    (Seq.append (Seq.append (Seq.empty #S8.t) vpad2) vdg);
+  cat2 (reveal vpad2) (reveal vdg);
 
+  Mem.wipe wsarr p.nrounds;
+  Mem.wipe totarr 1sz;
+  Mem.wipe bufarr bl;
+  Mem.wipe accarr 8sz;
+  Mem.wipe dgarr p.nhash_bytes;
+  Mem.wipe padarr bl;
+  Mem.wipe k0arr bl;
   ()
 }
 

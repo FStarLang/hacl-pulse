@@ -49,6 +49,7 @@ module U64 = FStar.UInt64
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module Declassify = Hacl.Secret.Declassify
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -737,7 +738,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   pw_one (num va);
   (* the table: T[d] = a^d in Montgomery form, for d < 16 *)
   let z64 = S64.zero;
-  let mut tbl = [| z64; SZ.mul 16sz nn |];
+  let tbl = Mem.alloc z64 (SZ.mul 16sz nn);
   A.pts_to_len tbl;
   with vtbl. assert (A.pts_to tbl vtbl);
   table_store tbl acc nn 0sz;
@@ -832,6 +833,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   with vf. assert (A.pts_to res vf);
   exp_end (num vf) (num vaccf) (pw (num va) (num vbb)) (wt (SZ.v nn)) (num vn)
           (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
+  Mem.free tbl (SZ.mul 16sz nn);
   ()
 }
 

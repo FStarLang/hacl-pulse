@@ -39,6 +39,7 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module S8 = Hacl.Secret.UInt8
+module Mem = Hacl.Mem
 
 (** The counter is one machine word, so that the state is three pointers and
     nothing else. *)
@@ -123,12 +124,14 @@ ensures exists* vkey' vval' vctr'.
 {
   A.pts_to_len k; A.pts_to_len v; A.pts_to_len ctr;
   A.pts_to_len entropy; A.pts_to_len additional;
-  let mut earr = [| (S8.classify 0uy <: S8.t); 0sz |]; A.pts_to_len earr;
+  let mut earr = [| (S8.classify 0uy <: S8.t); 0sz |];
+  Mem.track earr; A.pts_to_len earr;
   A.pts_to_len earr;
   with vempty. assert (A.pts_to earr vempty);
   assert (pure (Seq.equal (dcat ve va vempty) (Seq.append ve va)));
   Hacl.HMAC.DRBG.Core.update p kt ivt k v entropy elen additional alen earr 0sz;
   A.((ctr.(0sz) <- 1sz));
+  Mem.wipe earr 0sz;
   ()
 }
 
@@ -218,9 +221,11 @@ ensures exists* vkey' vval' vctr' vout'.
   if (SZ.gt c 1024sz || SZ.gt n (big max_output_length)) {
     false
   } else {
-    let mut e1a = [| (S8.classify 0uy <: S8.t); 0sz |]; A.pts_to_len e1a;
+    let mut e1a = [| (S8.classify 0uy <: S8.t); 0sz |];
+    Mem.track e1a; A.pts_to_len e1a;
     A.pts_to_len e1a;
-    let mut e2a = [| (S8.classify 0uy <: S8.t); 0sz |]; A.pts_to_len e2a;
+    let mut e2a = [| (S8.classify 0uy <: S8.t); 0sz |];
+    Mem.track e2a; A.pts_to_len e2a;
     A.pts_to_len e2a;
     with ve1. assert (A.pts_to e1a ve1);
     with ve2. assert (A.pts_to e2a ve2);
@@ -232,6 +237,8 @@ ensures exists* vkey' vval' vctr' vout'.
     A.((ctr.(0sz) <- SZ.add c 1sz));
     with vctr'. assert (A.pts_to ctr vctr');
     assert (pure (ctr_val vctr' == SZ.v c + 1));
+    Mem.wipe e2a 0sz;
+    Mem.wipe e1a 0sz;
     true
   }
 }

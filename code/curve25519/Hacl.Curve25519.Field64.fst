@@ -61,6 +61,7 @@ module L = Hacl.Impl.Limb64
 module K = Hacl.Carry64
 module Bytes = Hacl.Impl.Bytes
 module C = Spec.Curve25519
+module Mem = Hacl.Mem
 
 (** {2 The view} *)
 
@@ -322,6 +323,7 @@ ensures exists* (vt': Seq.seq S64.t).
   consts ();
   let z = z0;
   let mut q = [| z; 8sz |];
+  Mem.track q;
   A.pts_to_len q;
   mrow q 0sz x b0 b1 b2 b3;
   let q0 = A.(q.(0sz));
@@ -350,6 +352,7 @@ ensures exists* (vt': Seq.seq S64.t).
   A.((t.(SZ.add k 2sz) <- s2));
   A.((t.(SZ.add k 3sz) <- s3));
   A.((t.(SZ.add k 4sz) <- s4));
+  Mem.nowipe q;
 }
 
 (** Eight words to four, with [2^256 = 38]: the top four times thirty-eight
@@ -502,6 +505,7 @@ ensures exists* (vout': Seq.seq S64.t).
   let z0 = S64.classify 0uL;
   let z = z0;
   let mut t = [| z; 8sz |];
+  Mem.track t;
   A.pts_to_len t;
   mul8 t a b;
   with y. assert (A.pts_to t y);
@@ -509,6 +513,7 @@ ensures exists* (vout': Seq.seq S64.t).
   with o. assert (A.pts_to out o);
   fmul_post o y va vb;
   assert (pure (fe o == C.fmul (fe va) (fe vb)));
+  Mem.nowipe t;
 }
 
 #pop-options
@@ -533,8 +538,10 @@ ensures exists* (vout': Seq.seq S64.t).
   let x3 = A.(a.(3sz));
   let z = z0;
   let mut b = [| z; 4sz |];
+  Mem.track b;
   put4 b x0 x1 x2 x3;
   fmul out a b;
+  Mem.nowipe b;
 }
 
 (** {2 Times [a24]}

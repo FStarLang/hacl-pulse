@@ -87,6 +87,7 @@ module T0 = Hacl.P256.Win0
 module T1 = Hacl.P256.Win1
 module T2 = Hacl.P256.Win2
 module T3 = Hacl.P256.Win3
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -387,12 +388,18 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut ux = [| z; 4sz |]; A.pts_to_len ux;
-  let mut uy = [| z; 4sz |]; A.pts_to_len uy;
-  let mut uz = [| z; 4sz |]; A.pts_to_len uz;
-  let mut sx = [| z; 4sz |]; A.pts_to_len sx;
-  let mut sy = [| z; 4sz |]; A.pts_to_len sy;
-  let mut sz = [| z; 4sz |]; A.pts_to_len sz;
+  let mut ux = [| z; 4sz |];
+  Mem.track ux; A.pts_to_len ux;
+  let mut uy = [| z; 4sz |];
+  Mem.track uy; A.pts_to_len uy;
+  let mut uz = [| z; 4sz |];
+  Mem.track uz; A.pts_to_len uz;
+  let mut sx = [| z; 4sz |];
+  Mem.track sx; A.pts_to_len sx;
+  let mut sy = [| z; 4sz |];
+  Mem.track sy; A.pts_to_len sy;
+  let mut sz = [| z; 4sz |];
+  Mem.track sz; A.pts_to_len sz;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz;
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz;
 
@@ -418,6 +425,12 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Tbl.drop_table t1x; Tbl.drop_table t1y; Tbl.drop_table t1z;
   Tbl.drop_table t2x; Tbl.drop_table t2y; Tbl.drop_table t2z;
   Tbl.drop_table t3x; Tbl.drop_table t3y; Tbl.drop_table t3z;
+  Mem.wipe sz 4sz;
+  Mem.wipe sy 4sz;
+  Mem.wipe sx 4sz;
+  Mem.wipe uz 4sz;
+  Mem.wipe uy 4sz;
+  Mem.wipe ux 4sz;
   ()
 }
 

@@ -56,6 +56,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module Spec = Spec.Poly1305
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -167,6 +168,7 @@ ensures exists* (ve': Seq.seq S64.t). A.pts_to e ve' ** A.pts_to b #pb vb **
   A.pts_to_len b;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   copy_range tarr 0sz b off blen;
@@ -184,6 +186,7 @@ ensures exists* (ve': Seq.seq S64.t). A.pts_to e ve' ** A.pts_to b #pb vb **
   Seq.lemma_eq_intro (Seq.slice vt 0 8) (Seq.slice vt 0 8);
   assert_norm (pow2 (8 * 8) == pow2 64);
   store_limbs e lo hi S64.zero;
+  Mem.wipe tarr 16sz;
   ()
 }
 
@@ -209,9 +212,11 @@ ensures exists* (vr': Seq.seq S64.t). A.pts_to r vr' ** A.pts_to k #pk vk **
   A.pts_to_len k;
   let zr = S64.zero;
   let mut rtmp = [| zr; 5sz |];
+  Mem.track rtmp;
   A.pts_to_len rtmp;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   copy_range tarr 0sz k 0sz 16sz;
@@ -253,6 +258,8 @@ ensures exists* (vr': Seq.seq S64.t). A.pts_to r vr' ** A.pts_to k #pk vk **
   A.((r.(6sz) <- times5 a2));
   A.((r.(7sz) <- times5 a3));
   A.((r.(8sz) <- times5 a4));
+  Mem.wipe tarr 16sz;
+  Mem.wipe rtmp 5sz;
   ()
 }
 

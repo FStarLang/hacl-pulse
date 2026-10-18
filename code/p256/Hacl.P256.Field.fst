@@ -56,6 +56,7 @@ module Math = FStar.Math.Lemmas
 module F = Hacl.P256.Field64
 module F64 = Hacl.Curve25519.Field64
 module W = Spec.Curve25519.Field64
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -205,9 +206,11 @@ ensures exists* (vo': Seq.seq S64.t).
   pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev va))
 {
   let z = S64.zero;
-  let mut ac = [| z; 4sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 4sz |];
+  Mem.track ac; A.pts_to_len ac; A.pts_to_len ac;
   acopy ac a;
   fmul out a ac;
+  Mem.nowipe ac;
   ()
 }
 
@@ -322,9 +325,11 @@ ensures A.pts_to a #pa va ** pure (r == (fev va = P.fzero))
   mev_iszero fmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 4sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 4sz |];
+  Mem.track az; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
+  Mem.wipe az 4sz;
   r
 }
 
@@ -396,12 +401,16 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (pow2 256 < 2 * P.prime);
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = fnm ();
   let r = abelow at asv nm fmod;
   drop_table nm;
   fto out at;
+  Mem.wipe asv 4sz;
+  Mem.wipe at 4sz;
   r
 }
 
@@ -414,9 +423,11 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (fev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; A.pts_to_len at;
   ffrom at a;
   store_be b at;
+  Mem.wipe at 4sz;
   ()
 }
 

@@ -40,6 +40,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+module Mem = Hacl.Mem
 
 (** The outer message -- one block plus a digest -- is always small. *)
 let sizes (#t: Type0) {| word t |} (p: params t)
@@ -173,14 +174,17 @@ ensures exists* vout'.
   let z8 = S8.classify 0uy;
 
   let mut k0arr = [| z8; bl |];
+  Mem.track k0arr;
   A.pts_to_len k0arr;
   A.pts_to_len k0arr;
 
   let mut padarr = [| z8; bl |];
+  Mem.track padarr;
   A.pts_to_len padarr;
   A.pts_to_len padarr;
 
   let mut dgarr = [| z8; p.nhash_bytes |];
+  Mem.track dgarr;
   A.pts_to_len dgarr;
   A.pts_to_len dgarr;
 
@@ -194,6 +198,9 @@ ensures exists* vout'.
   sizes #t p;
   hash_prefixed p kt ivt out padarr dgarr p.nhash_bytes;
 
+  Mem.wipe dgarr p.nhash_bytes;
+  Mem.wipe padarr bl;
+  Mem.wipe k0arr bl;
   ()
 }
 

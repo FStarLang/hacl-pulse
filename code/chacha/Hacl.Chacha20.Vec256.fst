@@ -68,6 +68,7 @@ module G = FStar.Ghost
 module V = Hacl.Vec256
 module Sub = Hacl.Impl.Sub
 module Classical = FStar.Classical
+module Mem = Hacl.Mem
 
 (** {2 Looking down a lane} *)
 
@@ -793,8 +794,11 @@ ensures exists* (vo': Seq.seq S8.t).
   A.pts_to_len msg;
   let z = V.zero ();
   let mut vst = [| z; 16sz |];
+  Mem.track vst;
   let mut ks = [| z; 16sz |];
+  Mem.track ks;
   let mut t = [| z; 16sz |];
+  Mem.track t;
   let mut base = b0;
   while (let b = !base; SZ.lte 512sz (SZ.sub mlen b))
   invariant exists* (b: SZ.t) (v: Seq.seq S8.t) (vv vk vt: Seq.seq V.t).
@@ -825,6 +829,9 @@ ensures exists* (vo': Seq.seq S8.t).
     base := SZ.add b 512sz;
   };
   let n = !base;
+  Mem.wipe t 16sz;
+  Mem.wipe ks 16sz;
+  Mem.wipe vst 16sz;
   n
 }
 

@@ -99,9 +99,9 @@ ensures exists* vout'.
           Seq.length vout' <= 255 * (hash_bytes sha2_224) /\
           vout' == expand sha2_224 vprk vinfo (Seq.length vout'))
   {
-    expand_impl_ni sha2_224 kt ivt out out_len prk prk_len info info_len;
+    expand_impl sha2_224 (Hacl.Hash.SHA2.NI.blocks_ni sha2_224) kt ivt out out_len prk prk_len info info_len;
   } else {
-    expand_impl sha2_224 kt ivt out out_len prk prk_len info info_len;
+    expand_impl sha2_224 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_224) kt ivt out out_len prk prk_len info info_len;
   };
   drop_table ivt;
   drop_table kt;
@@ -163,9 +163,9 @@ ensures exists* vout'.
           Seq.length vout' <= 255 * (hash_bytes sha2_256) /\
           vout' == expand sha2_256 vprk vinfo (Seq.length vout'))
   {
-    expand_impl_ni sha2_256 kt ivt out out_len prk prk_len info info_len;
+    expand_impl sha2_256 (Hacl.Hash.SHA2.NI.blocks_ni sha2_256) kt ivt out out_len prk prk_len info info_len;
   } else {
-    expand_impl sha2_256 kt ivt out out_len prk prk_len info info_len;
+    expand_impl sha2_256 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_256) kt ivt out out_len prk prk_len info info_len;
   };
   drop_table ivt;
   drop_table kt;
@@ -220,7 +220,7 @@ ensures exists* vout'.
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
-  expand_impl sha2_384 kt ivt out out_len prk prk_len info info_len;
+  expand_impl sha2_384 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_384) kt ivt out out_len prk prk_len info info_len;
   drop_table ivt;
   drop_table kt;
 }
@@ -269,7 +269,7 @@ ensures exists* vout'.
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
-  expand_impl sha2_512 kt ivt out out_len prk prk_len info info_len;
+  expand_impl sha2_512 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_512) kt ivt out out_len prk prk_len info info_len;
   drop_table ivt;
   drop_table kt;
 }

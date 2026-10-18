@@ -60,6 +60,7 @@ module S128 = Hacl.Secret.UInt128
 module Launder = Hacl.Launder
 
 module UInt = FStar.UInt
+module Mem = Hacl.Mem
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
 (** {2 The number an array denotes, and its prefixes}
@@ -1637,6 +1638,7 @@ ensures exists* (v: Seq.seq S64.t).
   (* The sixteen masks, each laundered as it is stored. *)
   let zm = S64.zero;
   let mut mk = [| zm; 16sz |];
+  Mem.track mk;
   A.pts_to_len mk;
   let mut e = 0sz;
   let mut ec = S64.classify 0uL;
@@ -1709,6 +1711,7 @@ ensures exists* (v: Seq.seq S64.t).
   Math.lemma_mult_le_right (SZ.v n) (reveal k + 1) 16;
   Seq.lemma_eq_intro wres
     (Seq.slice vt (reveal k * SZ.v n) (reveal k * SZ.v n + SZ.v n));
+  Mem.wipe mk 16sz;
   ()
 }
 

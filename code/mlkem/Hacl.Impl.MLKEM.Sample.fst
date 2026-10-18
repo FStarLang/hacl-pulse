@@ -66,6 +66,7 @@ module Math = FStar.Math.Lemmas
 module HSZ = Hacl.SizeT
 module Copy = Hacl.Impl.Copy
 module Sub = Hacl.Impl.Sub
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -264,11 +265,14 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   HSZ.fits32 ();
   let z64 = S64.classify 0uL;
   let mut starr = [| z64; 25sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   let z8 = S8.classify 0uy;
   let mut blk = [| z8; 168sz |];
+  Mem.track blk;
   A.pts_to_len blk;
 
   table_lens ();
@@ -312,6 +316,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   };
 
   drop_table rc_tbl;
+  Mem.wipe blk 168sz;
+  Mem.wipe barr 25sz;
+  Mem.wipe starr 25sz;
   let vc = !cnt;
   let vj = !jj;
   with v. assert (A.pts_to dst v);
@@ -323,7 +330,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
     assert (pure (sampled vs max_triples == sampled vs (SZ.v vj * 56)));
     as_poly_intro v (sample_ntt vs);
     assert (pure (as_poly v == sample_ntt vs));
-  }
+  };
 }
 
 #pop-options
@@ -443,6 +450,7 @@ ensures exists* v. A.pts_to out v ** A.pts_to s #p vs **
   SZ.fits_u32_implies_fits (64 * SZ.v eta);
   let z8 = S8.classify 0uy;
   let mut msg = [| z8; 33sz |];
+  Mem.track msg;
   A.pts_to_len msg;
   Copy.copy_prefix msg s 32sz;
   A.((msg.(32sz) <- S8.classify byte));
@@ -450,6 +458,7 @@ ensures exists* v. A.pts_to out v ** A.pts_to s #p vs **
   Seq.lemma_eq_intro (reveal vm) (Seq.snoc vs (S8.classify byte));
   assert (pure (reveal vm == Seq.snoc vs (S8.classify byte)));
   shake256 out (SZ.mul 64sz eta) msg 33sz;
+  Mem.wipe msg 33sz;
 }
 
 (** [SamplePolyCBD] driven by the PRF, which is how every caller uses it. *)
@@ -470,12 +479,14 @@ ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
   SZ.fits_u32_implies_fits (64 * SZ.v eta);
   let z8 = S8.classify 0uy;
   let mut buf = [| z8; 192sz |];
+  Mem.track buf;
   A.pts_to_len buf;
   let el = SZ.mul 64sz eta;
   let bs = Sub.sub buf 0sz el;
   prf_impl bs s byte eta;
   cbd_impl dst bs eta;
   Sub.unsub buf 0 (SZ.v el) bs;
+  Mem.wipe buf 192sz;
   ()
 }
 

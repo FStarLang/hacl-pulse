@@ -53,6 +53,7 @@ module S128 = Hacl.Secret.UInt128
 module L = Hacl.Impl.Limb64
 module K = Hacl.Carry64
 module F64 = Hacl.Curve25519.Field64
+module Mem = Hacl.Mem
 
 (** {2 Numbers} *)
 
@@ -412,11 +413,13 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   let z = S64.classify 0uL;
   let mut t = [| z; 8sz |];
+  Mem.track t;
   A.pts_to_len t;
   F64.mul8 t a b;
   with y. assert (A.pts_to t y);
   prod_lt (F64.ev va) (F64.ev vb) pp pp;
   let mut s = [| z; 9sz |];
+  Mem.track s;
   A.pts_to_len s;
   A.((s.(0sz) <- t.(0sz)));
   A.((s.(1sz) <- t.(1sz)));
@@ -441,6 +444,8 @@ ensures exists* (vo': Seq.seq S64.t).
   with o. assert (A.pts_to out o);
   glue (F64.ev o) (wv s4 4) (F64.ev va * F64.ev vb)
        (F64.ix s0 0 + w * F64.ix s1 1 + w2 * F64.ix s2 2 + w3 * F64.ix s3 3);
+  Mem.nowipe s;
+  Mem.nowipe t;
 }
 
 #pop-options

@@ -48,6 +48,7 @@ module S8 = Hacl.Secret.UInt8
 module Copy = Hacl.Impl.Copy
 module Sel = Hacl.Impl.Select
 module Hash = Hacl.Impl.MLKEM.Hash
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -76,11 +77,13 @@ ensures exists* vek vdk.
   let eklen = SZ.add k384 32sz;
 
   let mut dkp = [| (S8.zero <: S8.t); k384 |];
+  Mem.track dkp;
   kpke_keygen_impl ek dkp dseed p k eta1;
   with vek. assert (A.pts_to ek vek);
   with vdkp. assert (A.pts_to dkp vdkp);
 
   let mut hek = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track hek;
   Hash.hash_h_impl hek ek eklen;
   with vhek. assert (A.pts_to hek vhek);
 
@@ -92,6 +95,8 @@ ensures exists* vek vdk.
   append4_eq vdkp vek vhek vz vdk;
   kem_keygen_eq p vd vz vek vdk;
   assert (pure (vek == fst (keygen p vd vz) /\ vdk == snd (keygen p vd vz)));
+  Mem.wipe hek 32sz;
+  Mem.wipe dkp k384;
 }
 
 (** Algorithm 17.  [m] is the 32-byte message; the shared secret and the
@@ -124,17 +129,21 @@ ensures exists* vss vct.
   let eklen = SZ.add (SZ.mul k 384sz) 32sz;
 
   let mut hek = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track hek;
   Hash.hash_h_impl hek ekey eklen;
   with vhek. assert (A.pts_to hek vhek);
 
   let mut gin = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track gin;
   Copy.copy_prefix gin msg 32sz;
   Copy.copy_at gin 32sz hek 32sz;
   with vgin. assert (A.pts_to gin vgin);
   append2_eq vm vhek vgin;
 
   let mut g = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track g;
   Hash.hash_g_impl g gin 64sz;
+  Mem.wipe gin 64sz;
   with vg. assert (A.pts_to g vg);
   assert (pure (vg == hash_g (Seq.append vm (hash_h vek))));
 
@@ -143,14 +152,18 @@ ensures exists* vss vct.
   slice_eq vg 0 vss;
 
   let mut r = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track r;
   Copy.copy_range r 0sz g 32sz 32sz;
   with vr. assert (A.pts_to r vr);
   slice_eq vg 32 vr;
+  Mem.wipe g 64sz;
 
   kpke_encrypt_impl ct ekey msg r p k eta1 eta2 du dv;
   with vct. assert (A.pts_to ct vct);
   encaps_eq p vek vm vss vct;
   assert (pure (vss == fst (encaps p vek vm) /\ vct == snd (encaps p vek vm)));
+  Mem.wipe r 32sz;
+  Mem.wipe hek 32sz;
 }
 
 (** Algorithm 18.  Decapsulation always returns a key: on a ciphertext
@@ -190,61 +203,85 @@ ensures exists* vss.
 
   (* the four pieces of the decapsulation key *)
   let mut dkp = [| (S8.zero <: S8.t); k384 |];
+  Mem.track dkp;
   Copy.copy_prefix dkp dkey k384;
   with vdkp. assert (A.pts_to dkp vdkp);
   slice_eq vdk 0 vdkp;
   let mut ekey = [| (S8.zero <: S8.t); eklen |];
+  Mem.track ekey;
   Copy.copy_range ekey 0sz dkey k384 eklen;
   with vekey. assert (A.pts_to ekey vekey);
   slice_eq vdk (dk_pke_len p) vekey;
   let mut h = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track h;
   Copy.copy_range h 0sz dkey (SZ.add k384 eklen) 32sz;
   with vh. assert (A.pts_to h vh);
   slice_eq vdk (dk_pke_len p + ek_len p) vh;
   let mut z = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track z;
   Copy.copy_range z 0sz dkey (SZ.add (SZ.add k384 eklen) 32sz) 32sz;
   with vz. assert (A.pts_to z vz);
   slice_eq vdk (dk_pke_len p + ek_len p + 32) vz;
 
   (* decrypt, then re-derive the key stream and the randomness *)
   let mut m = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track m;
   kpke_decrypt_impl m dkp ct p k du dv;
+  Mem.wipe dkp k384;
   with vm. assert (A.pts_to m vm);
   let mut gin = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track gin;
   Copy.copy_prefix gin m 32sz;
   Copy.copy_at gin 32sz h 32sz;
   with vgin. assert (A.pts_to gin vgin);
   append2_eq vm vh vgin;
+  Mem.wipe h 32sz;
   let mut g = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track g;
   Hash.hash_g_impl g gin 64sz;
+  Mem.wipe gin 64sz;
   with vg. assert (A.pts_to g vg);
   let mut kk = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track kk;
   Copy.copy_prefix kk g 32sz;
   with vkk. assert (A.pts_to kk vkk);
   slice_eq vg 0 vkk;
   let mut r = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track r;
   Copy.copy_range r 0sz g 32sz 32sz;
   with vr. assert (A.pts_to r vr);
   slice_eq vg 32 vr;
+  Mem.wipe g 64sz;
 
   (* re-encrypt and compare *)
   let mut c2 = [| (S8.zero <: S8.t); ctlen |];
+  Mem.track c2;
   kpke_encrypt_impl c2 ekey m r p k eta1 eta2 du dv;
   with vc2. assert (A.pts_to c2 vc2);
   let mask = Sel.eq_mask_bytes ct c2 ctlen;
+  Mem.wipe c2 ctlen;
+  Mem.wipe r 32sz;
+  Mem.wipe m 32sz;
+  Mem.wipe ekey eklen;
 
   (* the rejection value *)
   let mut jin = [| (S8.zero <: S8.t); SZ.add 32sz ctlen |];
+  Mem.track jin;
   Copy.copy_prefix jin z 32sz;
   Copy.copy_at jin 32sz ct ctlen;
   with vjin. assert (A.pts_to jin vjin);
   append2_eq vz vc vjin;
+  Mem.wipe z 32sz;
   let mut jj = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track jj;
   Hash.hash_j_impl jj jin (SZ.add 32sz ctlen);
+  Mem.wipe jin (SZ.add 32sz ctlen);
   with vjj. assert (A.pts_to jj vjj);
 
   Sel.select_copy ss 0sz kk jj 32sz mask;
   with vss. assert (A.pts_to ss vss);
   decaps_eq p vdk vc mask vkk vjj vss vc2;
   assert (pure (vss == decaps p vdk vc));
+  Mem.wipe jj 32sz;
+  Mem.wipe kk 32sz;
 }

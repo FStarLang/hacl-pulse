@@ -40,6 +40,7 @@ module K = Spec.K256
 module Hash = Hacl.Hash.SHA2
 module SHA2 = Spec.SHA2
 module C = Spec.SHA2.Constants
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -77,9 +78,11 @@ ensures exists* (wm: Seq.seq S64.t).
 {
   K.msg_ok_hashable vb; K.digest_is_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  let mut d0 = [| z8; 32sz |];
+  Mem.track d0; A.pts_to_len d0; A.pts_to_len d0;
   Hash.sha256 d0 msg msg_len;
   msg_qelem mq d0;
+  Mem.wipe d0 32sz;
   ()
 }
 

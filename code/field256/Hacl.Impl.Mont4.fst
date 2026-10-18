@@ -57,6 +57,7 @@ module Cast = Hacl.Secret.Cast
 module Declassify = Hacl.Secret.Declassify
 module UInt = FStar.UInt
 module Math = FStar.Math.Lemmas
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -83,10 +84,18 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut ap = [| z128; 8sz |]; A.pts_to_len ap; let mut at = [| z128; 9sz |]; A.pts_to_len at; let mut ar = [| z128; 5sz |]; A.pts_to_len ar; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len ap; A.pts_to_len at; A.pts_to_len ar; A.pts_to_len asv;
+  let mut ap = [| z128; 8sz |];
+  Mem.track ap; A.pts_to_len ap; let mut at = [| z128; 9sz |];
+  Mem.track at; A.pts_to_len at; let mut ar = [| z128; 5sz |];
+  Mem.track ar; A.pts_to_len ar; let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len ap; A.pts_to_len at; A.pts_to_len ar; A.pts_to_len asv;
   assert_norm (nw == 8);
   assert_norm (ncol == 9);
   mmul_op out a b ap at ar asv ms nm mu d;
+  Mem.wipe asv 4sz;
+  Mem.wipe ar 5sz;
+  Mem.wipe at 9sz;
+  Mem.wipe ap 8sz;
   ()
 }
 
@@ -108,8 +117,10 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == madd d (vals va) (vals vb))
 {
   let z128 : S128.t = S128.zero;
-  let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len asv;
+  let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len asv;
   madd_op out a b asv nm d;
+  Mem.wipe asv 4sz;
   ()
 }
 
@@ -129,8 +140,10 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == msub d (vals va) (vals vb))
 {
   let z128 : S128.t = S128.zero;
-  let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len asv;
+  let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len asv;
   msub_op out a b asv ms d;
+  Mem.wipe asv 4sz;
   ()
 }
 
@@ -149,11 +162,13 @@ ensures exists* (vo': Seq.seq S64.t).
         vals vo' == mneg d (vals va))
 {
   let z = S64.zero;
-  let mut az = [| z; 4sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 4sz |];
+  Mem.track az; A.pts_to_len az; A.pts_to_len az;
   with vz. assert (A.pts_to az vz);
   Seq.lemma_eq_intro (vals vz) mzero;
   mzero_ok ();
   asub out az a ms d;
+  Mem.wipe az 4sz;
   ()
 }
 
@@ -284,7 +299,8 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
 {
   A.pts_to_len a; A.pts_to_len b;
   let z128 : S128.t = S128.zero;
-  let mut at = [| z128; 4sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z128; 4sz |];
+  Mem.track at; A.pts_to_len at; A.pts_to_len at;
   let co = negsub_op at a b;
   msub_pre d (vals va) (vals vb);
   ebnd (carry_low (addw (vals va) (negw (vals vb))));
@@ -292,6 +308,7 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   let m = S64.eq_mask co S64.zero;
   let m8 = Cast.u64_to_u8 m;
   let lo = Declassify.bool_of_mask m8;
+  Mem.wipe at 4sz;
   not lo
 }
 
@@ -319,7 +336,8 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S128.t).
 {
   A.pts_to_len a;
   let z = S64.zero;
-  let mut ac = [| z; 4sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 4sz |];
+  Mem.track ac; A.pts_to_len ac; A.pts_to_len ac;
   acopy ac a;
   ebnd (vals va);
   csub_op a s nm S64.zero d;
@@ -327,6 +345,7 @@ ensures exists* (va': Seq.seq S64.t) (vs': Seq.seq S128.t).
   with va'. assert (A.pts_to a va');
   let r = aeq a ac;
   Classical.move_requires (res_uniq (vals va')) (vals va);
+  Mem.wipe ac 4sz;
   r
 }
 

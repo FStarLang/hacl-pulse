@@ -55,6 +55,7 @@ module S128 = Hacl.Secret.UInt128
 module K = Spec.K256
 module MA = Spec.ModArith
 module Math = FStar.Math.Lemmas
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -262,18 +263,30 @@ ensures exists* (vo': Seq.seq S64.t).
   qmod_m ();
   let x : erased K.qelem = hide (qev va);
   let z = S64.zero;
-  let mut x2 = [| z; 4sz |]; A.pts_to_len x2;
-  let mut t3 = [| z; 4sz |]; A.pts_to_len t3;
-  let mut t5 = [| z; 4sz |]; A.pts_to_len t5;
-  let mut t7 = [| z; 4sz |]; A.pts_to_len t7;
-  let mut t9 = [| z; 4sz |]; A.pts_to_len t9;
-  let mut t11 = [| z; 4sz |]; A.pts_to_len t11;
-  let mut t13 = [| z; 4sz |]; A.pts_to_len t13;
-  let mut t15 = [| z; 4sz |]; A.pts_to_len t15;
-  let mut c = [| z; 4sz |]; A.pts_to_len c;
-  let mut e8 = [| z; 4sz |]; A.pts_to_len e8;
-  let mut e16 = [| z; 4sz |]; A.pts_to_len e16;
-  let mut e32 = [| z; 4sz |]; A.pts_to_len e32;
+  let mut x2 = [| z; 4sz |];
+  Mem.track x2; A.pts_to_len x2;
+  let mut t3 = [| z; 4sz |];
+  Mem.track t3; A.pts_to_len t3;
+  let mut t5 = [| z; 4sz |];
+  Mem.track t5; A.pts_to_len t5;
+  let mut t7 = [| z; 4sz |];
+  Mem.track t7; A.pts_to_len t7;
+  let mut t9 = [| z; 4sz |];
+  Mem.track t9; A.pts_to_len t9;
+  let mut t11 = [| z; 4sz |];
+  Mem.track t11; A.pts_to_len t11;
+  let mut t13 = [| z; 4sz |];
+  Mem.track t13; A.pts_to_len t13;
+  let mut t15 = [| z; 4sz |];
+  Mem.track t15; A.pts_to_len t15;
+  let mut c = [| z; 4sz |];
+  Mem.track c; A.pts_to_len c;
+  let mut e8 = [| z; 4sz |];
+  Mem.track e8; A.pts_to_len e8;
+  let mut e16 = [| z; 4sz |];
+  Mem.track e16; A.pts_to_len e16;
+  let mut e32 = [| z; 4sz |];
+  Mem.track e32; A.pts_to_len e32;
   A.pts_to_len out;
   qsqr x2 a;
   MA.exp_two (qev va);
@@ -383,6 +396,18 @@ ensures exists* (vo': Seq.seq S64.t).
   qstep out a c 1sz x 57896044618658097711785492504343953926418782139537452191302581570759080747167 1;
   assert_norm (57896044618658097711785492504343953926418782139537452191302581570759080747167 * pow2 1 + 1 == 115792089237316195423570985008687907852837564279074904382605163141518161494335);
   assert_norm (115792089237316195423570985008687907852837564279074904382605163141518161494335 == K.order - 2);
+  Mem.wipe e32 4sz;
+  Mem.wipe e16 4sz;
+  Mem.wipe e8 4sz;
+  Mem.wipe c 4sz;
+  Mem.wipe t15 4sz;
+  Mem.wipe t13 4sz;
+  Mem.wipe t11 4sz;
+  Mem.wipe t9 4sz;
+  Mem.wipe t7 4sz;
+  Mem.wipe t5 4sz;
+  Mem.wipe t3 4sz;
+  Mem.wipe x2 4sz;
 }
 #pop-options
 
@@ -411,9 +436,11 @@ ensures A.pts_to a #pa va ** pure (r == (qev va = K.qzero))
   mev_iszero qmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 4sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 4sz |];
+  Mem.track az; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
+  Mem.wipe az 4sz;
   r
 }
 
@@ -487,13 +514,17 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (pow2 256 < 2 * K.order);
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = qnm ();
   let lo = abelow at asv nm qmod;
   drop_table nm;
   qto out at;
   let nz = qis_zero out;
+  Mem.wipe asv 4sz;
+  Mem.wipe at 4sz;
   lo && not nz
 }
 
@@ -510,12 +541,16 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (pow2 256 < 2 * K.order);
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = qnm ();
   ared at asv nm qmod;
   drop_table nm;
   qto out at;
+  Mem.wipe asv 4sz;
+  Mem.wipe at 4sz;
   ()
 }
 
@@ -528,9 +563,11 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (qev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; A.pts_to_len at;
   qfrom at a;
   store_be b at;
+  Mem.wipe at 4sz;
   ()
 }
 

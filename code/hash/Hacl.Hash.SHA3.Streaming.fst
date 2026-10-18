@@ -57,6 +57,7 @@ module S64 = Hacl.Secret.UInt64
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** {2 The state invariant} *)
 
@@ -394,6 +395,7 @@ ensures exists* (vb: Seq.seq S64.t) (vout: Seq.seq S8.t).
 
   let z64 = S64.classify 0uL;
   let mut starr = [| z64; 25sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   copy25 starr st;
@@ -411,6 +413,7 @@ ensures exists* (vb: Seq.seq S64.t) (vout: Seq.seq S8.t).
 
   let z8 = S8.classify 0uy;
   let mut blkarr = [| z8; 200sz |];
+  Mem.track blkarr;
   A.pts_to_len blkarr;
   let blk = Sub.sub blkarr 0sz r;
   last_block blk tail blen r suffix;
@@ -435,6 +438,8 @@ ensures exists* (vb: Seq.seq S64.t) (vout: Seq.seq S8.t).
 
   Sub.unsub blkarr 0 (SZ.v r) blk;
   A.pts_to_len b;
+  Mem.wipe blkarr 200sz;
+  Mem.wipe starr 25sz;
 }
 
 #pop-options

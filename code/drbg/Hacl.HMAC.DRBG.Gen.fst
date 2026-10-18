@@ -41,6 +41,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+module Mem = Hacl.Mem
 
 (** [out] holds the first [i] bytes of the answer, and running the rest of
     the generation from [vcur] produces exactly what is missing. *)
@@ -184,7 +185,8 @@ ensures exists* vval' vout'.
   let hb = p.nhash_bytes;
   let z8 = S8.classify 0uy;
 
-  let mut v1arr = [| z8; hb |]; A.pts_to_len v1arr;
+  let mut v1arr = [| z8; hb |];
+  Mem.track v1arr; A.pts_to_len v1arr;
   A.pts_to_len v1arr;
 
   let mut i = 0sz;
@@ -214,6 +216,7 @@ ensures exists* vval' vout'.
   gen_zero p (reveal vkey) (reveal vcur);
   Seq.append_empty_r (Seq.slice vout' 0 (SZ.v n));
   assert (pure (Seq.equal (Seq.slice vout' 0 (SZ.v n)) vout'));
+  Mem.wipe v1arr hb;
   ()
 }
 

@@ -62,6 +62,7 @@ module L4 = Hacl.Impl.Limb4
 module Hash = Hacl.Hash.SHA2
 module Stream = Hacl.Streaming.SHA2
 module SHA2 = Spec.SHA2
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 100"
 
@@ -115,7 +116,11 @@ ensures exists* (vout': Seq.seq S8.t).
   pure (vout' == E.point_compress (E.point_mul_g vk))
 {
   let zz = S64.zero;
-  let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4;
+  let mut a1 = [| zz; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 5sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 5sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| zz; 5sz |];
+  Mem.track a4; A.pts_to_len a4;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   point_mul_g a1 a2 a3 a4 ks;
@@ -125,6 +130,10 @@ ensures exists* (vout': Seq.seq S8.t).
   with wt. assert (A.pts_to a4 wt);
   compress_congr (P.pt wx wy wz wt) vk;
   point_compress out a1 a2 a3 a4;
+  Mem.wipe a4 5sz;
+  Mem.wipe a3 5sz;
+  Mem.wipe a2 5sz;
+  Mem.wipe a1 5sz;
   ()
 }
 
@@ -143,9 +152,11 @@ ensures exists* (vout': Seq.seq S8.t).
   pure (vout' == E.scalar_bytes (E.sha512_mod_q vh))
 {
   let zz = S64.zero;
-  let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; A.pts_to_len a1;
+  let mut a1 = [| zz; 4sz |];
+  Mem.track a1; A.pts_to_len a1; A.pts_to_len a1;
   Scalar.reduce64 a1 h;
   Scalar.store_le out a1;
+  Mem.wipe a1 4sz;
   ()
 }
 
@@ -167,7 +178,8 @@ ensures exists* (wl: Seq.seq S8.t) (wp: Seq.seq S8.t).
 {
   A.pts_to_len low; A.pts_to_len prefix; A.pts_to_len secret;
   let z8 = S8.zero;
-  let mut a1 = [| z8; 64sz |]; A.pts_to_len a1; A.pts_to_len a1;
+  let mut a1 = [| z8; 64sz |];
+  Mem.track a1; A.pts_to_len a1; A.pts_to_len a1;
   assert_norm (32 < pow2 61);
   Hash.sha512 a1 secret 32sz;
   with vh. assert (A.pts_to a1 vh);
@@ -195,6 +207,7 @@ ensures exists* (wl: Seq.seq S8.t) (wp: Seq.seq S8.t).
   assert (pure (E.expand_low vs == C.clamp (Seq.slice (E.sha512 vs) 0 32)));
   assert (pure (reveal vhi == Seq.slice (reveal vh) 32 64));
   assert (pure (reveal wp == E.expand_prefix vs));
+  Mem.wipe a1 64sz;
   ()
 }
 
@@ -212,12 +225,24 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut b1 = [| z8; 32sz |]; A.pts_to_len b1; let mut b2 = [| z8; 32sz |]; A.pts_to_len b2; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; A.pts_to_len b1; A.pts_to_len b2;
+  let mut b1 = [| z8; 32sz |];
+  Mem.track b1; A.pts_to_len b1; let mut b2 = [| z8; 32sz |];
+  Mem.track b2; A.pts_to_len b2; let mut a1 = [| zz; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 5sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 5sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| zz; 5sz |];
+  Mem.track a4; A.pts_to_len a4; A.pts_to_len b1; A.pts_to_len b2;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand b1 b2 secret;
   point_mul_g_compress out b1;
 
+  Mem.wipe a4 5sz;
+  Mem.wipe a3 5sz;
+  Mem.wipe a2 5sz;
+  Mem.wipe a1 5sz;
+  Mem.wipe b2 32sz;
+  Mem.wipe b1 32sz;
   ()
 }
 
@@ -236,7 +261,9 @@ ensures exists* (vout': Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z8 = S8.zero;
-  let mut b1 = [| z8; 32sz |]; A.pts_to_len b1; let mut b2 = [| z8; 32sz |]; A.pts_to_len b2; A.pts_to_len b1; A.pts_to_len b2;
+  let mut b1 = [| z8; 32sz |];
+  Mem.track b1; A.pts_to_len b1; let mut b2 = [| z8; 32sz |];
+  Mem.track b2; A.pts_to_len b2; A.pts_to_len b1; A.pts_to_len b2;
   secret_expand b1 b2 secret;
   with wl. assert (A.pts_to b1 wl);
   with wp. assert (A.pts_to b2 wp);
@@ -267,6 +294,8 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out;
 
   assert (pure (Seq.equal o3 (Seq.append pubv (Seq.append wl wp))));
+  Mem.wipe b2 32sz;
+  Mem.wipe b1 32sz;
 }
 
 #pop-options
@@ -293,7 +322,10 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out; A.pts_to_len a; A.pts_to_len msg;
   let z64 = S64.zero;
   let z8 = S8.zero;
-  let mut c1 = [| z64; 8sz |]; A.pts_to_len c1; let mut c2 = [| z8; 128sz |]; A.pts_to_len c2; let mut c3 = [| 0sz; 1sz |]; A.pts_to_len c3; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c1 = [| z64; 8sz |];
+  Mem.track c1; A.pts_to_len c1; let mut c2 = [| z8; 128sz |];
+  Mem.track c2; A.pts_to_len c2; let mut c3 = [| 0sz; 1sz |];
+  Mem.track c3; A.pts_to_len c3; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   assert_norm (E.max_msg == pow2 32);
   assert_norm (pow2 32 + 64 < pow2 61);
   Stream.sha512_init c1 c2 c3;
@@ -303,6 +335,9 @@ ensures exists* (vout': Seq.seq S8.t).
     (Seq.append (Seq.append (Seq.empty #S8.t) va) vm);
   assert (pure (Seq.equal (Seq.append (Seq.append (Seq.empty #S8.t) va) vm)
                           (Seq.append va vm)));
+  Mem.wipe c3 1sz;
+  Mem.wipe c2 128sz;
+  Mem.wipe c1 8sz;
   ()
 }
 
@@ -324,7 +359,10 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len out; A.pts_to_len a; A.pts_to_len b; A.pts_to_len msg;
   let z64 = S64.zero;
   let z8 = S8.zero;
-  let mut c1 = [| z64; 8sz |]; A.pts_to_len c1; let mut c2 = [| z8; 128sz |]; A.pts_to_len c2; let mut c3 = [| 0sz; 1sz |]; A.pts_to_len c3; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c1 = [| z64; 8sz |];
+  Mem.track c1; A.pts_to_len c1; let mut c2 = [| z8; 128sz |];
+  Mem.track c2; A.pts_to_len c2; let mut c3 = [| 0sz; 1sz |];
+  Mem.track c3; A.pts_to_len c3; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   assert_norm (E.max_msg == pow2 32);
   assert_norm (pow2 32 + 64 < pow2 61);
   Stream.sha512_init c1 c2 c3;
@@ -337,6 +375,9 @@ ensures exists* (vout': Seq.seq S8.t).
   assert (pure (Seq.equal
                   (Seq.append (Seq.append (Seq.append (Seq.empty #S8.t) va) vb) vm)
                   (Seq.append va (Seq.append vb vm))));
+  Mem.wipe c3 1sz;
+  Mem.wipe c2 128sz;
+  Mem.wipe c1 8sz;
   ()
 }
 
@@ -379,7 +420,20 @@ ensures exists* (vsg': Seq.seq S8.t).
   A.pts_to_len sg;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 64sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; let mut a2 = [| zz; 4sz |]; A.pts_to_len a2; let mut a3 = [| zz; 4sz |]; A.pts_to_len a3; let mut a4 = [| zz; 4sz |]; A.pts_to_len a4; let mut a5 = [| zz; 4sz |]; A.pts_to_len a5; let mut a8 = [| zz; 5sz |]; A.pts_to_len a8; let mut a9 = [| zz; 5sz |]; A.pts_to_len a9; let mut aa = [| zz; 5sz |]; A.pts_to_len aa; let mut ab = [| zz; 5sz |]; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
+  let mut c1 = [| z8; 64sz |];
+  Mem.track c1; A.pts_to_len c1; let mut c2 = [| z8; 32sz |];
+  Mem.track c2; A.pts_to_len c2; let mut c3 = [| z8; 32sz |];
+  Mem.track c3; A.pts_to_len c3; let mut c4 = [| z8; 32sz |];
+  Mem.track c4; A.pts_to_len c4; let mut a1 = [| zz; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 4sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 4sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| zz; 4sz |];
+  Mem.track a4; A.pts_to_len a4; let mut a5 = [| zz; 4sz |];
+  Mem.track a5; A.pts_to_len a5; let mut a8 = [| zz; 5sz |];
+  Mem.track a8; A.pts_to_len a8; let mut a9 = [| zz; 5sz |];
+  Mem.track a9; A.pts_to_len a9; let mut aa = [| zz; 5sz |];
+  Mem.track aa; A.pts_to_len aa; let mut ab = [| zz; 5sz |];
+  Mem.track ab; A.pts_to_len ab; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3; A.pts_to_len c4;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
   A.pts_to_len a5;
   A.pts_to_len a8; A.pts_to_len a9; A.pts_to_len aa; A.pts_to_len ab;
@@ -427,6 +481,19 @@ ensures exists* (vsg': Seq.seq S8.t).
   join32 o2 vrr vss;
 
   assert (pure (Seq.equal o2 (Seq.append vrr vss)));
+  Mem.wipe ab 5sz;
+  Mem.wipe aa 5sz;
+  Mem.wipe a9 5sz;
+  Mem.wipe a8 5sz;
+  Mem.wipe a5 4sz;
+  Mem.wipe a4 4sz;
+  Mem.wipe a3 4sz;
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe c4 32sz;
+  Mem.wipe c3 32sz;
+  Mem.wipe c2 32sz;
+  Mem.wipe c1 64sz;
 }
 
 #pop-options
@@ -445,13 +512,27 @@ ensures exists* (vsg': Seq.seq S8.t).
 {
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut a1 = [| zz; 5sz |]; A.pts_to_len a1; let mut a2 = [| zz; 5sz |]; A.pts_to_len a2; let mut a3 = [| zz; 5sz |]; A.pts_to_len a3; let mut a4 = [| zz; 5sz |]; A.pts_to_len a4; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c1 = [| z8; 32sz |];
+  Mem.track c1; A.pts_to_len c1; let mut c2 = [| z8; 32sz |];
+  Mem.track c2; A.pts_to_len c2; let mut c3 = [| z8; 32sz |];
+  Mem.track c3; A.pts_to_len c3; let mut a1 = [| zz; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 5sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 5sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| zz; 5sz |];
+  Mem.track a4; A.pts_to_len a4; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3; A.pts_to_len a4;
 
   secret_expand c2 c3 secret;
   point_mul_g_compress c1 c2;
   sign_expanded sg c1 c2 c3 msg mlen;
 
+  Mem.wipe a4 5sz;
+  Mem.wipe a3 5sz;
+  Mem.wipe a2 5sz;
+  Mem.wipe a1 5sz;
+  Mem.wipe c3 32sz;
+  Mem.wipe c2 32sz;
+  Mem.wipe c1 32sz;
   ()
 }
 
@@ -532,10 +613,38 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
   A.pts_to_len pub; A.pts_to_len sg;
   let z8 = S8.zero;
   let zz = S64.zero;
-  let mut c1 = [| z8; 32sz |]; A.pts_to_len c1; let mut c2 = [| z8; 32sz |]; A.pts_to_len c2; let mut c3 = [| z8; 32sz |]; A.pts_to_len c3; let mut c4 = [| z8; 32sz |]; A.pts_to_len c4; let mut c5 = [| z8; 64sz |]; A.pts_to_len c5; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
+  let mut c1 = [| z8; 32sz |];
+  Mem.track c1; A.pts_to_len c1; let mut c2 = [| z8; 32sz |];
+  Mem.track c2; A.pts_to_len c2; let mut c3 = [| z8; 32sz |];
+  Mem.track c3; A.pts_to_len c3; let mut c4 = [| z8; 32sz |];
+  Mem.track c4; A.pts_to_len c4; let mut c5 = [| z8; 64sz |];
+  Mem.track c5; A.pts_to_len c5; A.pts_to_len c1; A.pts_to_len c2; A.pts_to_len c3;
   A.pts_to_len c4; A.pts_to_len c5;
 
-  let mut d1 = [| zz; 5sz |]; A.pts_to_len d1; let mut d2 = [| zz; 5sz |]; A.pts_to_len d2; let mut d3 = [| zz; 5sz |]; A.pts_to_len d3; let mut d4 = [| zz; 5sz |]; A.pts_to_len d4; let mut d5 = [| zz; 5sz |]; A.pts_to_len d5; let mut d6 = [| zz; 5sz |]; A.pts_to_len d6; let mut d7 = [| zz; 5sz |]; A.pts_to_len d7; let mut d8 = [| zz; 5sz |]; A.pts_to_len d8; let mut d9 = [| zz; 5sz |]; A.pts_to_len d9; let mut e1 = [| zz; 5sz |]; A.pts_to_len e1; let mut e2 = [| zz; 5sz |]; A.pts_to_len e2; let mut e3 = [| zz; 5sz |]; A.pts_to_len e3; let mut e4 = [| zz; 5sz |]; A.pts_to_len e4; let mut e5 = [| zz; 5sz |]; A.pts_to_len e5; let mut e6 = [| zz; 5sz |]; A.pts_to_len e6; let mut e7 = [| zz; 5sz |]; A.pts_to_len e7; let mut e8 = [| zz; 5sz |]; A.pts_to_len e8; let mut e9 = [| zz; 5sz |]; A.pts_to_len e9; let mut f1 = [| zz; 5sz |]; A.pts_to_len f1; let mut f2 = [| zz; 5sz |]; A.pts_to_len f2; let mut f3 = [| zz; 4sz |]; A.pts_to_len f3; let mut f4 = [| zz; 4sz |]; A.pts_to_len f4; let mut f5 = [| zz; 4sz |]; A.pts_to_len f5; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
+  let mut d1 = [| zz; 5sz |];
+  Mem.track d1; A.pts_to_len d1; let mut d2 = [| zz; 5sz |];
+  Mem.track d2; A.pts_to_len d2; let mut d3 = [| zz; 5sz |];
+  Mem.track d3; A.pts_to_len d3; let mut d4 = [| zz; 5sz |];
+  Mem.track d4; A.pts_to_len d4; let mut d5 = [| zz; 5sz |];
+  Mem.track d5; A.pts_to_len d5; let mut d6 = [| zz; 5sz |];
+  Mem.track d6; A.pts_to_len d6; let mut d7 = [| zz; 5sz |];
+  Mem.track d7; A.pts_to_len d7; let mut d8 = [| zz; 5sz |];
+  Mem.track d8; A.pts_to_len d8; let mut d9 = [| zz; 5sz |];
+  Mem.track d9; A.pts_to_len d9; let mut e1 = [| zz; 5sz |];
+  Mem.track e1; A.pts_to_len e1; let mut e2 = [| zz; 5sz |];
+  Mem.track e2; A.pts_to_len e2; let mut e3 = [| zz; 5sz |];
+  Mem.track e3; A.pts_to_len e3; let mut e4 = [| zz; 5sz |];
+  Mem.track e4; A.pts_to_len e4; let mut e5 = [| zz; 5sz |];
+  Mem.track e5; A.pts_to_len e5; let mut e6 = [| zz; 5sz |];
+  Mem.track e6; A.pts_to_len e6; let mut e7 = [| zz; 5sz |];
+  Mem.track e7; A.pts_to_len e7; let mut e8 = [| zz; 5sz |];
+  Mem.track e8; A.pts_to_len e8; let mut e9 = [| zz; 5sz |];
+  Mem.track e9; A.pts_to_len e9; let mut f1 = [| zz; 5sz |];
+  Mem.track f1; A.pts_to_len f1; let mut f2 = [| zz; 5sz |];
+  Mem.track f2; A.pts_to_len f2; let mut f3 = [| zz; 4sz |];
+  Mem.track f3; A.pts_to_len f3; let mut f4 = [| zz; 4sz |];
+  Mem.track f4; A.pts_to_len f4; let mut f5 = [| zz; 4sz |];
+  Mem.track f5; A.pts_to_len f5; A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3; A.pts_to_len d4;
   A.pts_to_len d5; A.pts_to_len d6; A.pts_to_len d7; A.pts_to_len d8;
   A.pts_to_len d9; A.pts_to_len e1; A.pts_to_len e2; A.pts_to_len e3;
   A.pts_to_len e4; A.pts_to_len e5; A.pts_to_len e6; A.pts_to_len e7;
@@ -608,9 +717,65 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
     verify_char vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
                 (le_nat vs0) (B4.eval (L4.vals vacc))
                 (P.pt vbx vby vbz vbt) (P.pt vkx vky vkz vkt) r;
+    Mem.wipe f5 4sz;
+    Mem.wipe f4 4sz;
+    Mem.wipe f3 4sz;
+    Mem.wipe f2 5sz;
+    Mem.wipe f1 5sz;
+    Mem.wipe e9 5sz;
+    Mem.wipe e8 5sz;
+    Mem.wipe e7 5sz;
+    Mem.wipe e6 5sz;
+    Mem.wipe e5 5sz;
+    Mem.wipe e4 5sz;
+    Mem.wipe e3 5sz;
+    Mem.wipe e2 5sz;
+    Mem.wipe e1 5sz;
+    Mem.wipe d9 5sz;
+    Mem.wipe d8 5sz;
+    Mem.wipe d7 5sz;
+    Mem.wipe d6 5sz;
+    Mem.wipe d5 5sz;
+    Mem.wipe d4 5sz;
+    Mem.wipe d3 5sz;
+    Mem.wipe d2 5sz;
+    Mem.wipe d1 5sz;
+    Mem.wipe c5 64sz;
+    Mem.wipe c4 32sz;
+    Mem.wipe c3 32sz;
+    Mem.wipe c2 32sz;
+    Mem.wipe c1 32sz;
     r
   } else {
     verify_false vpub vm vsg;
+    Mem.wipe f5 4sz;
+    Mem.wipe f4 4sz;
+    Mem.wipe f3 4sz;
+    Mem.wipe f2 5sz;
+    Mem.wipe f1 5sz;
+    Mem.wipe e9 5sz;
+    Mem.wipe e8 5sz;
+    Mem.wipe e7 5sz;
+    Mem.wipe e6 5sz;
+    Mem.wipe e5 5sz;
+    Mem.wipe e4 5sz;
+    Mem.wipe e3 5sz;
+    Mem.wipe e2 5sz;
+    Mem.wipe e1 5sz;
+    Mem.wipe d9 5sz;
+    Mem.wipe d8 5sz;
+    Mem.wipe d7 5sz;
+    Mem.wipe d6 5sz;
+    Mem.wipe d5 5sz;
+    Mem.wipe d4 5sz;
+    Mem.wipe d3 5sz;
+    Mem.wipe d2 5sz;
+    Mem.wipe d1 5sz;
+    Mem.wipe c5 64sz;
+    Mem.wipe c4 32sz;
+    Mem.wipe c3 32sz;
+    Mem.wipe c2 32sz;
+    Mem.wipe c1 32sz;
     false
   }
 }

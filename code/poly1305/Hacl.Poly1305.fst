@@ -60,6 +60,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module Spec = Spec.Poly1305
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -266,6 +267,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to_len msg;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   Hacl.Impl.Copy.copy_range tarr 0sz msg off blen;
@@ -276,6 +278,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   step_cong (feval vh) (reveal acc) (feval ve0) (feval vr);
   fadd h e;
   fmul h r d;
+  Mem.wipe tarr 16sz;
   ()
 }
 
@@ -346,15 +349,19 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   let z = S64.zero;
   let mut rarr = [| z; 9sz |];
+  Mem.track rarr;
   A.pts_to_len rarr;
   A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];
+  Mem.track harr;
   A.pts_to_len harr;
   A.pts_to_len harr;
   let mut earr = [| z; 5sz |];
+  Mem.track earr;
   A.pts_to_len earr;
   A.pts_to_len earr;
   let mut darr = [| z; 5sz |];
+  Mem.track darr;
   A.pts_to_len darr;
   A.pts_to_len darr;
 
@@ -382,6 +389,10 @@ ensures exists* (vout': Seq.seq S8.t).
   reduce harr;
   with vhf. assert (A.pts_to harr vhf);
   store_tag out harr key;
+  Mem.wipe darr 5sz;
+  Mem.wipe earr 5sz;
+  Mem.wipe harr 5sz;
+  Mem.wipe rarr 9sz;
   ()
 }
 

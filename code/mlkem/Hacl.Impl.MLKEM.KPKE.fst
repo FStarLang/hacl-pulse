@@ -62,6 +62,7 @@ module VC = Hacl.Impl.MLKEM.VecCodec
 module Codec = Hacl.Impl.MLKEM.Codec
 module Poly = Hacl.Impl.MLKEM.Poly
 module Sampler = Hacl.Impl.MLKEM.Sampler
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -96,20 +97,24 @@ ensures exists* vek vdk.
 
   (* G(d || k) *)
   let mut gin = [| (S8.zero <: S8.t); 33sz |];
+  Mem.track gin;
   Copy.copy_prefix gin dseed 32sz;
   A.((gin.(32sz) <- S8.classify kb));
   with vgin. assert (A.pts_to gin vgin);
   snoc_eq vd (S8.classify kb) vgin;
   let mut g = [| (S8.zero <: S8.t); 64sz |];
+  Mem.track g;
   Hash.hash_g_impl g gin 33sz;
   with vg. assert (A.pts_to g vg);
   assert (pure (vg == hash_g (Seq.snoc vd (S8.classify (U8.uint_to_t (reveal p).k)))));
 
   let mut rho = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track rho;
   Copy.copy_prefix rho g 32sz;
   with vrho. assert (A.pts_to rho vrho);
   slice_eq vg 0 vrho;
   let mut sigma = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track sigma;
   Copy.copy_range sigma 0sz g 32sz 32sz;
   with vsigma. assert (A.pts_to sigma vsigma);
   slice_eq vg 32 vsigma;
@@ -117,12 +122,15 @@ ensures exists* vek vdk.
 
   (* A-hat, then the two noise vectors in the NTT domain *)
   let mut a = [| (S16.zero <: zqt); kkn |];
+  Mem.track a;
   Gen.gen_matrix_impl a rho false k;
   with va. assert (A.pts_to a va);
   assert (pure (as_zqs va == gen_matrix (SZ.v k) vrho false));
 
   let mut tmp = [| (S16.zero <: zqt); 256sz |];
+  Mem.track tmp;
   let mut s = [| (S16.zero <: zqt); kn |];
+  Mem.track s;
   Gen.noise_vec_impl s sigma 0uy eta1 k;
   with s0. assert (A.pts_to s s0);
   Vec.vec_ntt_impl s tmp k;
@@ -131,6 +139,7 @@ ensures exists* vek vdk.
                   (noise_vec (SZ.v k) (SZ.v eta1) vsigma 0)));
 
   let mut e = [| (S16.zero <: zqt); kn |];
+  Mem.track e;
   Gen.noise_vec_impl e sigma kb eta1 k;
   with e0. assert (A.pts_to e e0);
   Vec.vec_ntt_impl e tmp k;
@@ -140,6 +149,7 @@ ensures exists* vek vdk.
 
   (* t-hat = A-hat s-hat + e-hat *)
   let mut t = [| (S16.zero <: zqt); kn |];
+  Mem.track t;
   Vec.mat_vec_mul_impl t a s tmp k;
   with t0. assert (A.pts_to t t0);
   Vec.add_inplace t e kn;
@@ -150,6 +160,7 @@ ensures exists* vek vdk.
 
   (* the two keys *)
   let mut tb = [| (S8.zero <: S8.t); k384 |];
+  Mem.track tb;
   VC.vec_encode_impl tb t 12sz k;
   with vtb. assert (A.pts_to tb vtb);
   as_ints_widen vt;
@@ -166,6 +177,16 @@ ensures exists* vek vdk.
 
   keygen_eq p vd vek vdk;
   assert (pure (vek == fst (kpke_keygen p vd) /\ vdk == snd (kpke_keygen p vd)));
+  Mem.wipe tb k384;
+  Mem.wipe t kn;
+  Mem.wipe e kn;
+  Mem.wipe s kn;
+  Mem.wipe tmp 256sz;
+  Mem.wipe a kkn;
+  Mem.wipe sigma 32sz;
+  Mem.wipe rho 32sz;
+  Mem.wipe g 64sz;
+  Mem.wipe gin 33sz;
 }
 
 (** Algorithm 14.  [m] is the 32-byte message and [r] the encryption
@@ -221,16 +242,19 @@ ensures exists* vct.
 
   (* the key: t-hat and rho *)
   let mut tb = [| (S8.zero <: S8.t); k384 |];
+  Mem.track tb;
   Copy.copy_prefix tb ekey k384;
   with vtb. assert (A.pts_to tb vtb);
   slice_eq vek 0 vtb;
   let mut t = [| (S16.zero <: zqt); kn |];
+  Mem.track t;
   VC.vec_decode_impl t tb 12sz k;
   with vt. assert (A.pts_to t vt);
   assert (pure (as_zqs vt == vec_decode 12 (SZ.v k)
                   (Seq.slice vek 0 ((reveal p).k * (32 * 12)))));
 
   let mut rho = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track rho;
   Copy.copy_range rho 0sz ekey k384 32sz;
   with vrho. assert (A.pts_to rho vrho);
   slice_eq vek ((reveal p).k * (32 * 12)) vrho;
@@ -238,11 +262,14 @@ ensures exists* vct.
 
   (* the transpose, the masking vector and the three noise terms *)
   let mut a = [| (S16.zero <: zqt); kkn |];
+  Mem.track a;
   Gen.gen_matrix_impl a rho true k;
   with va. assert (A.pts_to a va);
 
   let mut tmp = [| (S16.zero <: zqt); 256sz |];
+  Mem.track tmp;
   let mut y = [| (S16.zero <: zqt); kn |];
+  Mem.track y;
   Gen.noise_vec_impl y rnd 0uy eta1 k;
   Vec.vec_ntt_impl y tmp k;
   with vy. assert (A.pts_to y vy);
@@ -250,19 +277,23 @@ ensures exists* vct.
                   (noise_vec (SZ.v k) (SZ.v eta1) vr 0)));
 
   let mut e1 = [| (S16.zero <: zqt); kn |];
+  Mem.track e1;
   Gen.noise_vec_impl e1 rnd kb eta2 k;
   with ve1. assert (A.pts_to e1 ve1);
   let mut e2 = [| (S16.zero <: zqt); 256sz |];
+  Mem.track e2;
   Sampler.sample_poly_cbd_impl e2 rnd k2b eta2;
   with ve2. assert (A.pts_to e2 ve2);
   assert (pure (as_poly ve2 == sample_poly_cbd (SZ.v eta2) vr k2b));
 
   (* the message as a polynomial *)
   let mut md = [| (S16.zero <: zqt); 256sz |];
+  Mem.track md;
   Codec.decode_poly md msg 1sz;
   with vmd. assert (A.pts_to md vmd);
   decode_bound 1 vm vmd;
   let mut mu = [| (S16.zero <: zqt); 256sz |];
+  Mem.track mu;
   Codec.decompress_poly mu md 1sz;
   with vmu. assert (A.pts_to mu vmu);
   as_nats_widen vmd;
@@ -270,6 +301,7 @@ ensures exists* vct.
 
   (* u = NTT^-1(A-hat^T y-hat) + e1 *)
   let mut u = [| (S16.zero <: zqt); kn |];
+  Mem.track u;
   Vec.mat_vec_mul_impl u a y tmp k;
   Vec.vec_intt_impl u tmp k;
   with u0. assert (A.pts_to u u0);
@@ -283,6 +315,7 @@ ensures exists* vct.
 
   (* v = NTT^-1(t-hat . y-hat) + e2 + mu *)
   let mut vp = [| (S16.zero <: zqt); 256sz |];
+  Mem.track vp;
   Vec.dot_impl vp t y tmp k;
   Poly.intt_inplace vp tmp;
   with v0. assert (A.pts_to vp v0);
@@ -299,18 +332,22 @@ ensures exists* vct.
 
   (* serialise *)
   let mut uc = [| (S16.zero <: zqt); kn |];
+  Mem.track uc;
   VC.vec_compress_impl uc u du k;
   with vuc. assert (A.pts_to uc vuc);
   let mut c1 = [| (S8.zero <: S8.t); c1len |];
+  Mem.track c1;
   VC.vec_encode_impl c1 uc du k;
   with vc1. assert (A.pts_to c1 vc1);
   assert (pure (vc1 == vec_encode (SZ.v du) (SZ.v k)
                          (vec_compress (SZ.v du) #(SZ.v k) (as_zqs vu))));
 
   let mut vc = [| (S16.zero <: zqt); 256sz |];
+  Mem.track vc;
   Codec.compress_poly vc vp dv;
   with vvc. assert (A.pts_to vc vvc);
   let mut c2 = [| (S8.zero <: S8.t); c2len |];
+  Mem.track c2;
   Codec.encode_poly c2 vc dv;
   with vc2. assert (A.pts_to c2 vc2);
   assert (pure (vc2 == byte_encode (SZ.v dv)
@@ -322,6 +359,22 @@ ensures exists* vct.
   append2_eq vc1 vc2 vct;
   encrypt_eq p vek vm vr vct;
   assert (pure (vct == kpke_encrypt p vek vm vr));
+  Mem.wipe c2 c2len;
+  Mem.wipe vc 256sz;
+  Mem.wipe c1 c1len;
+  Mem.wipe uc kn;
+  Mem.wipe vp 256sz;
+  Mem.wipe u kn;
+  Mem.wipe mu 256sz;
+  Mem.wipe md 256sz;
+  Mem.wipe e2 256sz;
+  Mem.wipe e1 kn;
+  Mem.wipe y kn;
+  Mem.wipe tmp 256sz;
+  Mem.wipe a kkn;
+  Mem.wipe rho 32sz;
+  Mem.wipe t kn;
+  Mem.wipe tb k384;
 }
 
 (** Algorithm 15.  The subtraction is where the noise has to fit: [w] is
@@ -359,19 +412,23 @@ ensures exists* vout.
 
   (* the two ciphertext components *)
   let mut c1 = [| (S8.zero <: S8.t); c1len |];
+  Mem.track c1;
   Copy.copy_prefix c1 ct c1len;
   with vc1. assert (A.pts_to c1 vc1);
   slice_eq vc 0 vc1;
   let mut c2 = [| (S8.zero <: S8.t); c2len |];
+  Mem.track c2;
   Copy.copy_range c2 0sz ct c1len c2len;
   with vc2. assert (A.pts_to c2 vc2);
   slice_eq vc ((reveal p).k * (32 * (reveal p).du)) vc2;
 
   let mut ud = [| (S16.zero <: zqt); kn |];
+  Mem.track ud;
   VC.vec_decode_impl ud c1 du k;
   with vud. assert (A.pts_to ud vud);
   vec_decode_bound_arr (SZ.v du) (SZ.v k) vc1 vud;
   let mut u = [| (S16.zero <: zqt); kn |];
+  Mem.track u;
   VC.vec_decompress_impl u ud du k;
   with vu. assert (A.pts_to u vu);
   as_ints_widen vud;
@@ -379,10 +436,12 @@ ensures exists* vout.
                   (widen (vec_decode (SZ.v du) (SZ.v k) vc1))));
 
   let mut vd = [| (S16.zero <: zqt); 256sz |];
+  Mem.track vd;
   Codec.decode_poly vd c2 dv;
   with vvd. assert (A.pts_to vd vvd);
   decode_bound (SZ.v dv) vc2 vvd;
   let mut vp = [| (S16.zero <: zqt); 256sz |];
+  Mem.track vp;
   Codec.decompress_poly vp vd dv;
   with vv. assert (A.pts_to vp vv);
   as_nats_widen vvd;
@@ -391,12 +450,15 @@ ensures exists* vout.
 
   (* w = v - NTT^-1(s-hat . NTT(u)) *)
   let mut s = [| (S16.zero <: zqt); kn |];
+  Mem.track s;
   VC.vec_decode_impl s dkey 12sz k;
   with vs. assert (A.pts_to s vs);
   let mut tmp = [| (S16.zero <: zqt); 256sz |];
+  Mem.track tmp;
   Vec.vec_ntt_impl u tmp k;
   with vun. assert (A.pts_to u vun);
   let mut w = [| (S16.zero <: zqt); 256sz |];
+  Mem.track w;
   Vec.dot_impl w s u tmp k;
   Poly.intt_inplace w tmp;
   with vw. assert (A.pts_to w vw);
@@ -409,10 +471,21 @@ ensures exists* vout.
 
   (* Compress_1 back to a message *)
   let mut wc = [| (S16.zero <: zqt); 256sz |];
+  Mem.track wc;
   Codec.compress_poly wc vp 1sz;
   with vwc. assert (A.pts_to wc vwc);
   Codec.encode_poly out wc 1sz;
   with vout. assert (A.pts_to out vout);
   decrypt_eq p vdk vc vout;
   assert (pure (vout == kpke_decrypt p vdk vc));
+  Mem.wipe wc 256sz;
+  Mem.wipe w 256sz;
+  Mem.wipe tmp 256sz;
+  Mem.wipe s kn;
+  Mem.wipe vp 256sz;
+  Mem.wipe vd 256sz;
+  Mem.wipe u kn;
+  Mem.wipe ud kn;
+  Mem.wipe c2 c2len;
+  Mem.wipe c1 c1len;
 }

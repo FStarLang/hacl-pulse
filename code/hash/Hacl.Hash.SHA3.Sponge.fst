@@ -50,6 +50,7 @@ module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module G = FStar.Ghost
 module Loops = Hacl.Spec.Loops
+module Mem = Hacl.Mem
 
 (** {2 Shifts with a runtime offset} *)
 
@@ -325,6 +326,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
   absorb_full st b rc_tbl msg n r (G.hide suffix);
   let z8 = S8.classify 0uy;
   let mut arr = [| z8; 200sz |];
+  Mem.track arr;
   A.pts_to_len arr;
   let blk = Sub.sub arr 0sz r;
   last_block blk msg n r suffix;
@@ -335,6 +337,7 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
   xor_block_at st blk 0sz r;
   permute_impl st b rc_tbl;
   Sub.unsub arr 0 (SZ.v r) blk;
+  Mem.wipe arr 200sz;
   ()
 }
 

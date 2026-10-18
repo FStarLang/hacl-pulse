@@ -53,6 +53,7 @@ module S32 = Hacl.Secret.UInt32
 module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** {2 Two facts about the state} *)
 
@@ -371,10 +372,13 @@ ensures exists* (vo: Seq.seq S8.t).
   let z8 = S8.classify 0uy;
 
   let mut starr = [| z32; 16sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut ksarr = [| z32; 16sz |];
+  Mem.track ksarr;
   A.pts_to_len ksarr;
   let mut kbarr = [| z8; 64sz |];
+  Mem.track kbarr;
   A.pts_to_len kbarr;
   A.pts_to_len starr;
   A.pts_to_len ksarr;
@@ -429,6 +433,9 @@ ensures exists* (vo: Seq.seq S8.t).
   Seq.lemma_eq_intro vo (encrypt_bytes st0 ctr0 vmsg);
   Seq.lemma_eq_elim vo (encrypt_bytes st0 ctr0 vmsg);
 
+  Mem.wipe kbarr 64sz;
+  Mem.wipe ksarr 16sz;
+  Mem.wipe starr 16sz;
   ()
 }
 
@@ -485,14 +492,18 @@ ensures exists* (vo: Seq.seq S8.t).
 
   let z32 = S32.zero;
   let mut starr = [| z32; 16sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut ksarr = [| z32; 16sz |];
+  Mem.track ksarr;
   A.pts_to_len ksarr;
   A.pts_to_len starr;
 
   init_state starr key nonce 0ul;
   core_impl ksarr starr 0ul;
   store_words_le #S32.t out ksarr 16sz;
+  Mem.wipe ksarr 16sz;
+  Mem.wipe starr 16sz;
   ()
 }
 
@@ -526,8 +537,10 @@ ensures exists* (vo: Seq.seq S8.t).
 
   let z32 = S32.zero;
   let mut starr = [| z32; 16sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut hw = [| z32; 8sz |];
+  Mem.track hw;
   A.pts_to_len hw;
   A.pts_to_len starr;
 
@@ -549,6 +562,8 @@ ensures exists* (vo: Seq.seq S8.t).
 
   store_words_le #S32.t out hw 8sz;
   assert (pure (Seq.length vkey == 32));
+  Mem.wipe hw 8sz;
+  Mem.wipe starr 16sz;
   ()
 }
 

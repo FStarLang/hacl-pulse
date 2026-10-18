@@ -81,15 +81,15 @@ effort than following `master` and fixing what breaks.
 
 | directory | contents |
 | --- | --- |
-| `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
+| `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables, wiped scratch memory (`Hacl.Mem`) |
 | `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT, sampling and encoding modules |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
-| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, and the 64-bit add-with-carry / subtract-with-borrow used by X25519 |
+| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, the 64-bit add-with-carry / subtract-with-borrow used by X25519, and the memory wiping in `Hacl_Mem.h` |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
 | `design/` | the inventory of HACL\* that this library is measured against |
 
-## The four design commitments
+## The five design commitments
 
 ### Secret integers are types, not an index
 
@@ -150,6 +150,50 @@ Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20,
 Salsa20 and Poly1305 (`lib/Hacl.Vec256.fst`), and AVX-512F under ChaCha20
 and Salsa20 (`lib/Hacl.Vec512.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
+
+### Scratch memory is wiped, and its size is ours
+
+Every array the library allocates goes through `lib/Hacl.Mem.fsti`, and is
+zeroed before it is released:
+
+```
+let mut buf = [| z; n |];      let h = Mem.alloc z n;
+Mem.track buf;                 ...
+...                            Mem.free h n;
+Mem.wipe buf n;
+```
+
+`track` produces a ghost resource `must_wipe buf` and only `wipe` consumes
+it; `alloc` produces `must_free h` and only `free` consumes it.  Pulse
+rejects a function that ends holding a resource, so a forgotten wipe is a
+type error ("Leftover resources: Mem.must_wipe buf"), not a review comment.
+The wiping is a `memset` followed by an empty `asm` that takes the buffer
+as a memory input, which stops the compiler deleting it as a dead store
+(`c/Hacl_Mem.h`, trusted).  `free` wipes and then calls `free(3)`; a failed
+`malloc` aborts.
+
+The one exception is `Mem.nowipe`, which releases `must_wipe` without
+wiping.  It is for the temporaries of the hottest leaves -- the Curve25519
+and P-256 field multiplications and squarings, and the Keccak state of
+one-shot SHA-3 -- which gcc otherwise keeps in registers.  Wiping them takes
+their address and pushes every intermediate value through memory: x25519
+becomes 45% slower, P-256 10%, a short SHA-3 twice as slow.  What they leave
+behind is in register spill slots, which no wipe reaches anyway; their
+callers still wipe everything they hold.
+
+The size of a stack array is never chosen by the caller.  Anything whose
+size depends on an argument -- RSA's limbs and PSS buffers, the
+`mod_exp_consttime` window table -- or is merely large -- FrodoKEM's
+matrices -- is on the heap.  HKDF and HPKE, which used to copy `info` onto
+the stack, now stream it; see "HKDF without a buffer the caller sizes".
+
+Two build checks keep it that way (`mk/lint.mk`, both part of `make`).
+`make lint` requires every `let mut x = [| ... |]` to be followed by
+`Mem.track x`, and forbids `Pulse.Lib.Vec`, `Pulse.Lib.Box`, `with_local`,
+`Array.alloc` and `drop_` outside `Hacl.Mem`, and `nowipe` outside the
+functions listed in `mk/memlint.pl`.  `make stack` compiles
+`dist/Hacl.c` with `-fstack-usage` and fails on any frame gcc cannot bound,
+or any frame larger than `STACK_MAX`.
 
 ## How a hash is put together
 
@@ -282,20 +326,24 @@ transcriptions at `S32.t`, in the same way `hash_blocks_ni` already was.
 HMAC-SHA-256 went from 1,136 us to 227 us, which is exactly what hashing
 256 KiB costs.
 
-### HKDF's one scratch buffer
+### HKDF without a buffer the caller sizes
 
-`expand` hashes `T(i-1) || info || i` once per round.  `Hacl.HKDF.Core` lays
-that out in a single buffer
+`expand` hashes `T(i-1) || info || i` once per round.  An earlier version laid
+that out in one stack buffer of `hb + |info| + 1` bytes, which let whoever
+supplied `info` choose the size of our stack frame (issue #1).  Now each round
+is one call to `Hacl.HMAC.Cat.hmac_cat`, which takes the message in four
+pieces and streams them through the incremental hash:
 
 ```
-[ T(i-1) |   info   | i ]
-   hb       |info|    1
+hmac_cat prk  T(i-1)  pre  info  [i]
 ```
 
-writes `info` into it exactly once, and then each round overwrites only the
-leading digest and the trailing counter byte.  Round 1 is the exception --
-`T(0)` is empty -- and is handled by hashing the `info || i` *window* of the
-buffer, using `Hacl.Impl.Sub`.
+so the only scratch is two digests and a counter byte, whatever `info` is.
+`pre` is a second piece of `info`: HPKE's `LabeledExpand` puts a few dozen
+bytes of labels in front of the caller's string, and passing them as their
+own piece means neither side is ever copied.  Plain HKDF passes an empty
+`pre`, as round 1 passes an empty `T(0)` -- a zero-length window of a one-byte
+array, using `Hacl.Impl.Sub`.
 
 The loop invariant never mentions `expand_all` at the round count reached so
 far; it is stated against the *final* count, so that on exit it is literally
@@ -305,28 +353,19 @@ lets a round establish it.  The loop measure is the round counter, not the
 bytes remaining: the last round overshoots the requested length, so
 `len - base` is not a `nat`.
 
-**Expand reaches HMAC the long way round, and that cost it 1.9x.**  Giving
-`Hacl.HMAC.hmac_sha256` the SHA extensions did nothing for HKDF-expand,
-because expand does not call it: it calls `round_one` and `round_step`,
-which call the generic `hmac_impl` directly, and generic code cannot branch
-into an implementation that exists only at thirty-two-bit words.  A
-sixty-four-byte expand is two HMACs of a few dozen bytes, which is eight
-compression blocks, and at 270 ns a scalar block against 55 that accounted
-for the whole of the gap: 3,086 ns measured against a reference's 1,348.
-The three functions are therefore transcribed at `S32.t` with
-`hmac_impl_ni`, and `expand_sha224`/`expand_sha256` choose between the pair.
-Expand now costs 1,635 ns, which is exactly twice the 809 ns that
-`hmac_sha256` costs on the same inputs --- the floor for an algorithm that
-is two HMACs.
-
-That is the third copy of this shape, after `hash_blocks_ni` and
-`hmac_impl_ni`, and the pattern's cost is now plain.  A static
-specialisation hierarchy pays for an implementation choice in duplicated
-proof, where EverCrypt's runtime agility pays for it in indirect calls.
-`Hacl.HMAC.DRBG.Core`, `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and
-`Hacl.Streaming.HMAC` are still on the generic path, and a fourth copy is
-not the answer: threading the block function through the hash core so that
-one generic copy serves both is, and it is roadmap item 18.
+**The block function is an argument.**  Generic code cannot branch into the
+SHA extensions, which exist only at thirty-two-bit words, and expand used to
+be transcribed at `S32.t` for that reason -- a third copy of the shape after
+`hash_blocks_ni` and `hmac_impl_ni`.  Instead, `Hacl.Hash.SHA2.Core.blocks_t`
+is the type of `hash_blocks` without its block-length argument; the
+incremental hash (`update_with`), `hmac_cat` and `expand_impl` take one as a
+`[@@@monomorphize]` parameter; and `expand_sha256` passes
+`Hacl.Hash.SHA2.NI.blocks_ni sha2_256` or `blocks_scalar sha2_256` depending
+on `sha_supported ()`.  Custard specialises each call site into its own C
+function, so there is no indirect call, and there is one proof.
+`Hacl.HMAC.DRBG.Core`, `Hacl.HPKE.Labeled` and `Hacl.Streaming.HMAC` still
+pass `blocks_scalar`; giving them the SHA extensions is now a one-argument
+change each.
 
 ### The incremental hash
 
@@ -2842,10 +2881,11 @@ check, so, like HACL*, we do not claim it.
 temporary is a caller-supplied array: a ladder needs three `nn` words of
 scratch plus one `2*nn` for the products, and `res` serves as a fourth
 while the loop runs.  The one exception is the window table, `16*nn`
-words, which `mod_exp_consttime` takes on its own stack -- 4 KiB for
-RSA-2048, 16 KiB for FFDHE-8192.  Threading it through every caller would
-have changed four public signatures to no purpose, and `Hacl.RSAPSS`
-already stack-allocates at a run-time length.
+words -- 4 KiB for RSA-2048, 16 KiB for FFDHE-8192 -- which
+`mod_exp_consttime` takes from the heap with `Hacl.Mem.alloc` and wipes on
+the way out.  Threading it through every caller would have changed four
+public signatures to no purpose, and a stack array sized by `nn` would let
+the caller choose our frame size; see "Scratch memory" below.
 
 `tests/test_montgomery.c` checks every one of these against Python, which
 inverts the radix with `pow(R, -1, n)` and multiplies out, and compares
@@ -2910,9 +2950,8 @@ an exponentiation of `bits` rungs each of which is a full multiply: a few
 hundredths of a percent, for several kilobytes of table per group and no
 precomputation context in the API.
 
-This is also the one place in the library that allocates.  The scratch is
-seven `nn`-limb arrays and one `2*nn`, on the *stack*, in the per-group
-wrapper -- about 9 KB for FFDHE-8192.  An entry point named for its group
+The scratch is seven `nn`-limb arrays and one `2*nn`, on the *stack*, in
+the per-group wrapper -- about 9 KB for FFDHE-8192.  An entry point named for its group
 knows its size, which is precisely the condition under which a stack array
 is legitimate; the generic layer underneath it still takes every temporary
 from its caller.
@@ -2946,10 +2985,12 @@ free it; every operation then re-derives the bit lengths from the same
 `modBits` that was already passed in.  Here the modulus is `ceil(modBits/8)`
 big-endian bytes -- the form it arrives in, from a certificate or a
 `SubjectPublicKeyInfo` -- and the exponent is however many bytes the caller
-has.  There is no key object, no loader, no allocation and no free.  The
-conversion to limbs happens on the stack inside the call, which is also
-where `R^2 mod n` is computed, exactly as in the Diffie-Hellman groups and
-for the same reason.
+has.  There is no key object, no loader, and nothing for the caller to
+free.  The conversion to limbs happens inside the call, which is also where
+`R^2 mod n` is computed.  Unlike the Diffie-Hellman groups, the size is the
+caller's `modBits`, so that scratch -- and the PSS encoding buffers, whose
+size depends on the salt length -- comes from `Hacl.Mem.alloc` rather than
+the stack, and is wiped before it is freed.
 
 **Nothing is trusted.**  `rsa_exp`, the primitive both directions go
 through, checks at run time that the modulus is odd, that it is greater than
@@ -3209,8 +3250,10 @@ the known-answer tests catch immediately.
 One implementation serves all four parameter sets.  The parameters are a
 record --- `n`, `log q`, the extracted bits, the shared-secret length, the
 error table and the SHAKE choice --- passed as an ordinary argument and
-tagged `[@@@monomorphize]`, and every buffer is a stack allocation whose
-width is computed from it.  `nbar`, the width of the small matrices, is a
+tagged `[@@@monomorphize]`, and every buffer's width is computed from it.
+The matrices are tens of kilobytes at FrodoKEM-1344 (a whole decapsulation
+used to need a 173 KB stack frame), so every buffer sized by `n` comes from
+`Hacl.Mem.alloc` and the rest are on the stack; see "Scratch memory".  `nbar`, the width of the small matrices, is a
 constant rather than a field: it is eight in every parameter set ever
 proposed, and making it one turns `publicmatrixbytes` into `log q * n`
 rather than `log q * n * nbar / 8`, which removes a division the solver
@@ -5277,19 +5320,12 @@ rough order of value:
     changed.  What remains is AVX-512 Poly1305 (eight lanes), on the same
     pattern; it is now most of secretbox's time.
 
-18. **One hash core, two block implementations.**  `hash_blocks_ni`,
-    `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of
-    generic code at `S32.t`, differing from their originals in exactly one
-    call each.  They exist because the `word` typeclass is a statement about
-    *values* and offers no way for code at an abstract `t` to obtain the
-    witness `t == S32.t` that calling the SHA-EXT implementation needs.
-    Three copies is where the pattern stops being free: `Hacl.HMAC.DRBG.Core`,
-    `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and `Hacl.Streaming.HMAC` are all
-    still on the scalar path, and a fourth, fifth and sixth copy is not the
-    answer.  The answer is to make the block function a parameter of
-    `hash_blocks` --- a higher-order stateful argument whose specification is
-    exactly the one `update_block_impl` already has --- so that one generic
-    copy serves both and `inline_for_extraction` plus `monomorphize`
-    specialises it away in C.  That is a refactor of verified code rather
-    than a change, which is why it has not been done yet, but every
-    additional consumer of HMAC makes it more clearly correct.
+18. **One hash core, two block implementations.**  Partly done.
+    `Hacl.Hash.SHA2.Core.blocks_t` is the type of a block function, the
+    incremental hash (`update_with`) and `Hacl.HMAC.Cat.hmac_cat` take one
+    as a `[@@@monomorphize]` argument, and `Hacl.HKDF.Core.expand_impl` is
+    one generic copy that runs on SHA-EXT through it; `expand_impl_ni` is
+    gone.  `hash_blocks_ni` and `hmac_impl_ni` are still transcriptions at
+    `S32.t`, and `Hacl.HMAC.DRBG.Core`, `Hacl.HPKE.Labeled` and
+    `Hacl.Streaming.HMAC` still pass `blocks_scalar`.  Moving the one-shot
+    hash and HMAC onto the same argument would remove the remaining copies.

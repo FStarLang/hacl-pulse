@@ -53,6 +53,7 @@ module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module U32 = FStar.UInt32
 module C2 = Hacl.Hash.SHA2.Core
+module Mem = Hacl.Mem
 
 (** {2 Sizes as machine values} *)
 
@@ -329,6 +330,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
              (SZ.v rem) (SZ.v base);
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 128sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   C2.len_fits (SZ.v len);
@@ -374,6 +376,7 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
     update_block_impl wsb st tarr (SZ.mul vj 64sz);
     j := SZ.add vj 1sz;
   };
+  Mem.wipe tarr 128sz;
   Math.multiple_modulo_lemma 1 block_len;
   Math.multiple_modulo_lemma 2 block_len;
   assert (pure (SZ.v ntail == block_len \/ SZ.v ntail == 2 * block_len));
@@ -466,6 +469,7 @@ ensures exists* vout'.
   let z0 = S32.classify 0ul;
 
   let mut starr = [| z0; 5sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   A.((starr.(0sz) <- S32.classify 0x67452301ul));
@@ -478,6 +482,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (iv <: Seq.seq S32.t);
 
   let mut wsarr = [| z0; rounds_sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
 
@@ -486,6 +491,8 @@ ensures exists* vout'.
   Math.euclidean_division_definition (SZ.v len) block_len;
   hash_blocks wsarr starr input 0sz nfull empty;
   tail_and_finish wsarr starr out input len nfull (SZ.sub len rem) rem empty;
+  Mem.wipe wsarr rounds_sz;
+  Mem.wipe starr 5sz;
   ()
 }
 
@@ -524,6 +531,7 @@ ensures exists* vout'.
   let z0 = S32.classify 0ul;
 
   let mut starr = [| z0; 5sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   A.((starr.(0sz) <- S32.classify 0x67452301ul));
@@ -536,6 +544,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (iv <: Seq.seq S32.t);
 
   let mut wsarr = [| z0; rounds_sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
 
@@ -561,6 +570,8 @@ ensures exists* vout'.
   let base_in = SZ.sub lin rem;
   tail_and_finish wsarr starr out input len nb base_in rem vb;
 
+  Mem.wipe wsarr rounds_sz;
+  Mem.wipe starr 5sz;
   ()
 }
 

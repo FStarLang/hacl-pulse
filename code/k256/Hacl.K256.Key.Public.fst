@@ -47,6 +47,7 @@ module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -57,8 +58,14 @@ returns r: bool
 ensures A.pts_to b #pb vb ** pure (r == Some? (lpt vb))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 5sz |]; A.pts_to_len a0; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 5sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 5sz |];
+  Mem.track a2; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   let r = load_point a0 a1 a2 b;
+  Mem.wipe a2 5sz;
+  Mem.wipe a1 5sz;
+  Mem.wipe a0 5sz;
   r
 }
 

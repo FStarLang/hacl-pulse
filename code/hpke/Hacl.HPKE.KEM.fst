@@ -56,6 +56,7 @@ module C = Hacl.Curve25519
 module PE = Hacl.P256.Ecdh
 module PS = Hacl.P256.Sec1
 module B = Hacl.Spec.Bytes
+module Mem = Hacl.Mem
 
 (** The wire length of a public key, as a machine value. *)
 let pk_len ([@@@FStar.Attributes.monomorphize] k: kem_alg)
@@ -117,10 +118,12 @@ ensures exists* wo. A.pts_to out wo ** A.pts_to sk #ps vs ** A.pts_to pk #pp vp 
   if (DH_P256? k) {
     let z8 = S8.zero;
     let mut raw = [| z8; 64sz |];
+    Mem.track raw;
     A.pts_to_len raw;
     let ok1 = PS.uncompressed_to_raw raw pk;
     if ok1 {
       let mut sh = [| z8; 64sz |];
+      Mem.track sh;
       A.pts_to_len sh;
       let ok2 = PE.dh_responder sh raw sk;
       if ok2 {
@@ -129,9 +132,14 @@ ensures exists* wo. A.pts_to out wo ** A.pts_to sk #ps vs ** A.pts_to pk #pp vp 
         with vsh. assert (A.pts_to sh vsh);
         A.pts_to_len out;
         Seq.lemma_eq_elim (reveal wo) (Seq.slice (reveal vsh) 0 32);
+        Mem.wipe sh 64sz;
+        Mem.wipe raw 64sz;
         true
-      } else { false }
-    } else { false }
+      } else { Mem.wipe sh 64sz;
+      Mem.wipe raw 64sz;
+      false }
+    } else { Mem.wipe raw 64sz;
+    false }
   } else {
     let ok = C.ecdh out sk pk;
     ok
@@ -156,12 +164,15 @@ ensures exists* wo. A.pts_to out wo ** A.pts_to sk #ps vs **
   if (DH_P256? k) {
     let z8 = S8.zero;
     let mut raw = [| z8; 64sz |];
+    Mem.track raw;
     A.pts_to_len raw;
     let ok = PE.dh_initiator raw sk;
     if ok {
       PS.raw_to_uncompressed out raw;
+      Mem.wipe raw 64sz;
       true
-    } else { false }
+    } else { Mem.wipe raw 64sz;
+    false }
   } else {
     C.secret_to_public out sk;
     true
@@ -199,10 +210,12 @@ ensures exists* wo. A.pts_to out wo ** A.pts_to dho #pd vdho ** A.pts_to ctx #pc
   let z8 = S8.zero;
 
   let mut sid = [| z8; 5sz |];
+  Mem.track sid;
   A.pts_to_len sid;
   kem_sid k sid;
 
   let mut prk = [| z8; 32sz |];
+  Mem.track prk;
   A.pts_to_len prk;
 
   let lab1 = table label_eae_prk_arr 7sz;
@@ -217,6 +230,8 @@ ensures exists* wo. A.pts_to out wo ** A.pts_to dho #pd vdho ** A.pts_to ctx #pc
 
   drop_table ivt;
   drop_table kt;
+  Mem.wipe prk 32sz;
+  Mem.wipe sid 5sz;
 }
 
 #pop-options
@@ -259,12 +274,14 @@ ensures exists* wsh we.
   let z8 = S8.zero;
 
   let mut dho = [| z8; 32sz |];
+  Mem.track dho;
   A.pts_to_len dho;
   let ok1 = dh_impl k dho skE pkR;
   if ok1 {
     let ok2 = stp_impl k enc skE;
     if ok2 {
       let mut ctx = [| z8; SZ.add pl pl |];
+      Mem.track ctx;
       A.pts_to_len ctx;
       copy_at ctx 0sz enc pl;
       copy_at ctx pl pkR pl;
@@ -273,9 +290,13 @@ ensures exists* wsh we.
       A.pts_to_len ctx;
       cat2_pointwise vctx we vpkR;
       extract_and_expand_impl k shared dho 32sz ctx (SZ.add pl pl);
+      Mem.wipe ctx (SZ.add pl pl);
+      Mem.wipe dho 32sz;
       true
-    } else { false }
-  } else { false }
+    } else { Mem.wipe dho 32sz;
+    false }
+  } else { Mem.wipe dho 32sz;
+  false }
 }
 
 fn decap_impl ([@@@FStar.Attributes.monomorphize] k: kem_alg)
@@ -303,14 +324,17 @@ ensures exists* wsh.
   let z8 = S8.zero;
 
   let mut dho = [| z8; 32sz |];
+  Mem.track dho;
   A.pts_to_len dho;
   let ok1 = dh_impl k dho skR enc;
   if ok1 {
     let mut pkRm = [| z8; pl |];
+    Mem.track pkRm;
     A.pts_to_len pkRm;
     let ok2 = stp_impl k pkRm skR;
     if ok2 {
       let mut ctx = [| z8; SZ.add pl pl |];
+      Mem.track ctx;
       A.pts_to_len ctx;
       copy_at ctx 0sz enc pl;
       copy_at ctx pl pkRm pl;
@@ -319,9 +343,15 @@ ensures exists* wsh.
       A.pts_to_len ctx;
       cat2_pointwise vctx ve wp;
       extract_and_expand_impl k shared dho 32sz ctx (SZ.add pl pl);
+      Mem.wipe ctx (SZ.add pl pl);
+      Mem.wipe pkRm pl;
+      Mem.wipe dho 32sz;
       true
-    } else { false }
-  } else { false }
+    } else { Mem.wipe pkRm pl;
+    Mem.wipe dho 32sz;
+    false }
+  } else { Mem.wipe dho 32sz;
+  false }
 }
 
 (** {2 The authenticated variants}
@@ -364,8 +394,10 @@ ensures exists* wsh we.
   let z8 = S8.zero;
 
   let mut dho = [| z8; 64sz |];
+  Mem.track dho;
   A.pts_to_len dho;
   let mut tmp = [| z8; 32sz |];
+  Mem.track tmp;
   A.pts_to_len tmp;
 
   let ok1 = dh_impl k tmp skE pkR;
@@ -382,10 +414,12 @@ ensures exists* wsh we.
       let ok3 = stp_impl k enc skE;
       if ok3 {
         let mut pkS = [| z8; pl |];
+        Mem.track pkS;
         A.pts_to_len pkS;
         let ok4 = stp_impl k pkS skS;
         if ok4 {
           let mut ctx = [| z8; SZ.add (SZ.add pl pl) pl |];
+          Mem.track ctx;
           A.pts_to_len ctx;
           copy_at ctx 0sz enc pl;
           copy_at ctx pl pkR pl;
@@ -396,11 +430,24 @@ ensures exists* wsh we.
           A.pts_to_len ctx;
           cat3_pointwise vctx we vpkR wps;
           extract_and_expand_impl k shared dho 64sz ctx (SZ.add (SZ.add pl pl) pl);
+          Mem.wipe ctx (SZ.add (SZ.add pl pl) pl);
+          Mem.wipe pkS pl;
+          Mem.wipe tmp 32sz;
+          Mem.wipe dho 64sz;
           true
-        } else { false }
-      } else { false }
-    } else { false }
-  } else { false }
+        } else { Mem.wipe pkS pl;
+        Mem.wipe tmp 32sz;
+        Mem.wipe dho 64sz;
+        false }
+      } else { Mem.wipe tmp 32sz;
+      Mem.wipe dho 64sz;
+      false }
+    } else { Mem.wipe tmp 32sz;
+    Mem.wipe dho 64sz;
+    false }
+  } else { Mem.wipe tmp 32sz;
+  Mem.wipe dho 64sz;
+  false }
 }
 
 fn auth_decap_impl ([@@@FStar.Attributes.monomorphize] k: kem_alg)
@@ -433,8 +480,10 @@ ensures exists* wsh.
   let z8 = S8.zero;
 
   let mut dho = [| z8; 64sz |];
+  Mem.track dho;
   A.pts_to_len dho;
   let mut tmp = [| z8; 32sz |];
+  Mem.track tmp;
   A.pts_to_len tmp;
 
   let ok1 = dh_impl k tmp skR enc;
@@ -449,10 +498,12 @@ ensures exists* wsh.
       A.pts_to_len dho;
       cat2_pointwise vdho d1 d2;
       let mut pkRm = [| z8; pl |];
+      Mem.track pkRm;
       A.pts_to_len pkRm;
       let ok3 = stp_impl k pkRm skR;
       if ok3 {
         let mut ctx = [| z8; SZ.add (SZ.add pl pl) pl |];
+        Mem.track ctx;
         A.pts_to_len ctx;
         copy_at ctx 0sz enc pl;
         copy_at ctx pl pkRm pl;
@@ -462,10 +513,21 @@ ensures exists* wsh.
         A.pts_to_len ctx;
         cat3_pointwise vctx ve wp vpkS;
         extract_and_expand_impl k shared dho 64sz ctx (SZ.add (SZ.add pl pl) pl);
+        Mem.wipe ctx (SZ.add (SZ.add pl pl) pl);
+        Mem.wipe pkRm pl;
+        Mem.wipe tmp 32sz;
+        Mem.wipe dho 64sz;
         true
-      } else { false }
-    } else { false }
-  } else { false }
+      } else { Mem.wipe pkRm pl;
+      Mem.wipe tmp 32sz;
+      Mem.wipe dho 64sz;
+      false }
+    } else { Mem.wipe tmp 32sz;
+    Mem.wipe dho 64sz;
+    false }
+  } else { Mem.wipe tmp 32sz;
+  Mem.wipe dho 64sz;
+  false }
 }
 
 #pop-options

@@ -52,6 +52,7 @@ module Declassify = Hacl.Secret.Declassify
 module Copy = Hacl.Impl.Copy
 module Loops = Hacl.Spec.Loops
 module C = Spec.Curve25519
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -407,7 +408,20 @@ ensures exists* (vout': Seq.seq S8.t).
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
   let z8 = S8.classify 0uy;
-  let mut ka = [| z8; 32sz |]; A.pts_to_len ka; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut b0 = [| z; 5sz |]; A.pts_to_len b0; let mut b1 = [| z; 5sz |]; A.pts_to_len b1; let mut b2 = [| z; 5sz |]; A.pts_to_len b2; let mut b3 = [| z; 5sz |]; A.pts_to_len b3; let mut b4 = [| z; 5sz |]; A.pts_to_len b4; let mut b5 = [| z; 5sz |]; A.pts_to_len b5;  let mut bw = [| z128; 9sz |]; A.pts_to_len bw; A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut ka = [| z8; 32sz |];
+  Mem.track ka; A.pts_to_len ka; let mut a1 = [| z; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 5sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 5sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 5sz |];
+  Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 5sz |];
+  Mem.track a5; A.pts_to_len a5; let mut b0 = [| z; 5sz |];
+  Mem.track b0; A.pts_to_len b0; let mut b1 = [| z; 5sz |];
+  Mem.track b1; A.pts_to_len b1; let mut b2 = [| z; 5sz |];
+  Mem.track b2; A.pts_to_len b2; let mut b3 = [| z; 5sz |];
+  Mem.track b3; A.pts_to_len b3; let mut b4 = [| z; 5sz |];
+  Mem.track b4; A.pts_to_len b4; let mut b5 = [| z; 5sz |];
+  Mem.track b5; A.pts_to_len b5;  let mut bw = [| z128; 9sz |];
+  Mem.track bw; A.pts_to_len bw; A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len b0; A.pts_to_len b1;
   A.pts_to_len b2; A.pts_to_len b3; A.pts_to_len b4; A.pts_to_len b5;
   A.pts_to_len bw; A.pts_to_len out;
@@ -445,6 +459,19 @@ ensures exists* (vout': Seq.seq S8.t).
   with vo. assert (A.pts_to out vo);
   assert (pure (vo == C.scalarmult vk vu));
 
+  Mem.wipe bw 9sz;
+  Mem.wipe b5 5sz;
+  Mem.wipe b4 5sz;
+  Mem.wipe b3 5sz;
+  Mem.wipe b2 5sz;
+  Mem.wipe b1 5sz;
+  Mem.wipe b0 5sz;
+  Mem.wipe a5 5sz;
+  Mem.wipe a4 5sz;
+  Mem.wipe a3 5sz;
+  Mem.wipe a2 5sz;
+  Mem.wipe a1 5sz;
+  Mem.wipe ka 32sz;
   ()
 }
 
@@ -511,11 +538,13 @@ ensures exists* (vout': Seq.seq S8.t).
   pure (vout' == C.secret_to_public vk)
 {
   let z8 = S8.classify 0uy;
-  let mut ba = [| z8; 32sz |]; A.pts_to_len ba; A.pts_to_len ba;
+  let mut ba = [| z8; 32sz |];
+  Mem.track ba; A.pts_to_len ba; A.pts_to_len ba;
   set_basepoint ba;
   with vb. assert (A.pts_to ba vb);
   assert (pure (Seq.length vb == 32));
   scalarmult out k ba;
+  Mem.wipe ba 32sz;
   ()
 }
 

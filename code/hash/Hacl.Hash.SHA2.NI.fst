@@ -56,6 +56,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 unfold let sha_prologue : string = "__attribute__((target(\"ssse3,sse4.1,sha\")))"
 
@@ -500,6 +501,31 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t 8).
 }
 #pop-options
 
+(** [hash_blocks_ni] at the type [Hacl.Hash.SHA2.Core.blocks_t]: the
+    argument to pass to the streaming hash, [hmac_cat] and HKDF when the
+    machine has the SHA instructions. *)
+fn blocks_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t { is_sha256 p })
+             (kt: A.array S32.t) (wsb: A.array S32.t) (st: A.array S32.t) (input: A.array S8.t)
+             (nprev: SZ.t) (nfull: SZ.t) (pre: erased (Seq.seq S8.t))
+             (#pk: perm) (#vk: erased (Seq.seq S32.t))
+             (#vw0: erased (Seq.seq S32.t)) (#vst0: erased (Seq.lseq S32.t 8))
+             (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to wsb vw0 ** A.pts_to st vst0 ** A.pts_to input #pin vin **
+         pure (reveal vk == (reveal p.k <: Seq.seq S32.t) /\ Seq.length vw0 == (rounds p) /\
+               Seq.length pre == SZ.v nprev * block_len #S32.t /\
+               Seq.length pre + Seq.length vin < max_input #S32.t /\
+               SZ.v nfull == Seq.length vin / block_len #S32.t /\
+               reveal vst0 == repeati_g (SZ.v nprev)
+                                (update_step p (padded #S32.t (Seq.append pre vin))) (reveal p.iv))
+ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t 8).
+  A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to st vst ** A.pts_to input #pin vin **
+  pure (Seq.length pre + Seq.length vin < max_input #S32.t /\ Seq.length vw == (rounds p) /\
+        vst == repeati_g (SZ.v nprev + SZ.v nfull)
+                 (update_step p (padded #S32.t (Seq.append pre vin))) (reveal p.iv))
+{
+  hash_blocks_ni p kt wsb st input nprev nfull pre
+}
+
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
 fn hash_impl_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
@@ -529,6 +555,7 @@ ensures exists* vout'.
   let z0: S32.t = zero #S32.t;
 
   let mut starr = [| z0; 8sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut c = 0sz;
   while (let vc = !c; SZ.lt vc 8sz)
@@ -549,6 +576,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (reveal p.iv <: Seq.seq S32.t);
 
   let mut wsarr = [| z0; p.nrounds |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
 
   let empty : erased (Seq.seq S8.t) = hide (Seq.empty #S8.t);
@@ -556,6 +584,8 @@ ensures exists* vout'.
   Math.euclidean_division_definition (SZ.v len) (block_len #S32.t);
   hash_blocks_ni p kt wsarr starr input 0sz nfull empty;
   tail_and_finish p kt wsarr starr out input len nfull (SZ.sub len rem) rem empty;
+  Mem.wipe wsarr p.nrounds;
+  Mem.wipe starr 8sz;
   ()
 }
 #pop-options
@@ -613,6 +643,7 @@ ensures exists* vout'.
   let z0: S32.t = zero #S32.t;
 
   let mut starr = [| z0; 8sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut c = 0sz;
   while (let vc = !c; SZ.lt vc 8sz)
@@ -633,6 +664,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (reveal p.iv <: Seq.seq S32.t);
 
   let mut wsarr = [| z0; p.nrounds |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
 
   Seq.lemma_len_append (reveal vb) (reveal vin);
@@ -657,6 +689,8 @@ ensures exists* vout'.
   let base_in = SZ.sub lin rem;
   tail_and_finish p kt wsarr starr out input len nb base_in rem vb;
 
+  Mem.wipe wsarr p.nrounds;
+  Mem.wipe starr 8sz;
   ()
 }
 

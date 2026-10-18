@@ -70,6 +70,7 @@ module V = Hacl.Vec256
 module Sub = Hacl.Impl.Sub
 module Classical = FStar.Classical
 module Spec = Spec.Poly1305
+module Mem = Hacl.Mem
 
 (** {2 The vector operations}
 
@@ -1095,8 +1096,11 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   let zz : S64.t = S64.classify 0uL;
   (* r^2, r^3 and r^4, one at a time *)
   let mut p2 = [| zz; 5sz |];
+  Mem.track p2;
   let mut p3 = [| zz; 5sz |];
+  Mem.track p3;
   let mut p4 = [| zz; 5sz |];
+  Mem.track p4;
   copy5 p2 r;
   fmul p2 r d;
   with vp2. assert (A.pts_to p2 vp2);
@@ -1110,7 +1114,9 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   (* the multipliers: r^4 in every lane, and r^4, r^2, r^3, r for the end *)
   let z = V.zero ();
   let mut q4 = [| z; 9sz |];
+  Mem.track q4;
   let mut qp = [| z; 9sz |];
+  Mem.track qp;
   let w0 = A.(p4.(0sz));
   let w1 = A.(p4.(1sz));
   let w2 = A.(p4.(2sz));
@@ -1135,9 +1141,13 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   (* the first four blocks, and the incoming accumulator in lane 0 *)
   let c = c24 ();
   let mut a = [| z; 5sz |];
+  Mem.track a;
   let mut m = [| z; 5sz |];
+  Mem.track m;
   let mut t = [| z; 5sz |];
+  Mem.track t;
   let mut buf = [| zz; 4sz |];
+  Mem.track buf;
   zeros_ok ();
   write5 a (V.set64 A.(h.(0sz)) zz zz zz) (V.set64 A.(h.(1sz)) zz zz zz)
            (V.set64 A.(h.(2sz)) zz zz zz) (V.set64 A.(h.(3sz)) zz zz zz)
@@ -1189,6 +1199,15 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
   carry_chain_impl h d;
   with vh'. assert (A.pts_to h vh');
   final_ok va vqp va1 ve vh' vmsg (reveal acc) (SZ.v g) vp4 vp2 vp3 vr;
+  Mem.wipe buf 4sz;
+  Mem.wipe t 5sz;
+  Mem.wipe m 5sz;
+  Mem.wipe a 5sz;
+  Mem.wipe qp 9sz;
+  Mem.wipe q4 9sz;
+  Mem.wipe p4 5sz;
+  Mem.wipe p3 5sz;
+  Mem.wipe p2 5sz;
   g
 }
 

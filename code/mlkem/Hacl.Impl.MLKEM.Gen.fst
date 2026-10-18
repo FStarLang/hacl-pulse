@@ -46,6 +46,7 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module Sub = Hacl.Impl.Sub
 module HSZ = Hacl.SizeT
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -70,6 +71,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #p vr **
   assert_norm (pow2 8 == 256);
   let z8 = S8.classify 0uy;
   let mut sd = [| z8; 34sz |];
+  Mem.track sd;
   A.pts_to_len sd;
   copy_prefix sd rho 32sz;
   let kk = SZ.mul k k;
@@ -127,6 +129,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #p vr **
   with v. assert (A.pts_to dst v);
   gen_entry_done (SZ.v k) vr tr v;
   assert (pure (as_zqs v == gen_matrix (SZ.v k) vr tr));
+  Mem.wipe sd 34sz;
 }
 
 (** Algorithm 13 lines 8-11: [k] consecutive PRF calls with a running

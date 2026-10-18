@@ -56,6 +56,7 @@ module F = Spec.Frodo
 module Math = FStar.Math.Lemmas
 module Loops = Hacl.Spec.Loops
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 let fits_small (x: nat) : Lemma (requires x < pow2 32) (ensures SZ.fits x) =
   Hacl.SizeT.fits32 (); SZ.fits_u32_implies_fits x
@@ -136,7 +137,7 @@ let msg_eq (i: nat { i < pow2 16 }) (seed: Seq.lseq S8.t 16) (m: Seq.lseq S8.t 1
           (ensures m == Seq.append (F.index_bytes i) seed)
   = Seq.lemma_eq_intro m (Seq.append (F.index_bytes i) seed)
 
-#push-options "--z3rlimit 800 --fuel 1 --ifuel 0"
+#push-options "--z3rlimit 800 --fuel 1 --ifuel 0 --z3refresh"
 
 (** Row [i] of A, as [n] entries rather than as [2n] bytes.  [msg] and
     [row] are scratch the caller owns; keeping them out of here means the
@@ -230,8 +231,11 @@ ensures exists* vb.
   fits_small (2 * n p);
   let two_n = SZ.mul 2sz p.nn;
   let mut msg = [| (S8.zero <: S8.t); 18sz |];
+  Mem.track msg;
   let mut rowb = [| (S8.zero <: S8.t); two_n |];
+  Mem.track rowb;
   let mut rowa = [| (S16.zero <: S16.t); p.nn |];
+  Mem.track rowa;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi p.nn)
   invariant exists* (vi: SZ.t) (vmsg: Seq.seq S8.t) (vrowb: Seq.seq S8.t)
@@ -298,6 +302,9 @@ ensures exists* vb.
       (fun i' j' -> M.dot_t (n p) (n p) nbar (F.gen_matrix p vseed) vst i' j');
     i := SZ.add vi 1sz;
   };
+  Mem.wipe rowa p.nn;
+  Mem.wipe rowb two_n;
+  Mem.wipe msg 18sz;
   with vb. assert (A.pts_to b vb);
   assert (pure (forall (i': nat) (j': nat). i' < n p /\ j' < nbar ==>
                   Seq.index vb (i' * nbar + j') ==
@@ -328,8 +335,11 @@ ensures exists* vb.
   let two_n = SZ.mul 2sz p.nn;
   let bsize = SZ.mul 8sz p.nn;
   let mut msg = [| (S8.zero <: S8.t); 18sz |];
+  Mem.track msg;
   let mut rowb = [| (S8.zero <: S8.t); two_n |];
+  Mem.track rowb;
   let mut rowa = [| (S16.zero <: S16.t); p.nn |];
+  Mem.track rowa;
 
   let mut z = 0sz;
   while (let vz = !z; SZ.lt vz bsize)
@@ -430,6 +440,9 @@ ensures exists* vb.
     };
     k := SZ.add vk 1sz;
   };
+  Mem.wipe rowa p.nn;
+  Mem.wipe rowb two_n;
+  Mem.wipe msg 18sz;
   with vb. assert (A.pts_to b vb);
   assert (pure (forall (i': nat) (j': nat). i' < nbar /\ j' < n p ==>
                   M.get nbar (n p) vb i' j' ==

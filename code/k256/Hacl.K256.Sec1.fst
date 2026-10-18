@@ -46,6 +46,7 @@ module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
 module Declassify = Hacl.Secret.Declassify
 module UInt = FStar.UInt
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -197,9 +198,15 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out; A.pts_to_len pk;
   let z = S64.zero;
-  let mut m0 = [| z; 5sz |]; A.pts_to_len m0; let mut m1 = [| z; 5sz |]; A.pts_to_len m1; let mut m2 = [| z; 5sz |]; A.pts_to_len m2; let mut m3 = [| z; 5sz |]; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
+  let mut m0 = [| z; 5sz |];
+  Mem.track m0; A.pts_to_len m0; let mut m1 = [| z; 5sz |];
+  Mem.track m1; A.pts_to_len m1; let mut m2 = [| z; 5sz |];
+  Mem.track m2; A.pts_to_len m2; let mut m3 = [| z; 5sz |];
+  Mem.track m3; A.pts_to_len m3; A.pts_to_len m0; A.pts_to_len m1; A.pts_to_len m2; A.pts_to_len m3;
   let z8 = S8.classify 0uy;
-  let mut n0 = [| z8; 32sz |]; A.pts_to_len n0; let mut n1 = [| z8; 32sz |]; A.pts_to_len n1; A.pts_to_len n0; A.pts_to_len n1;
+  let mut n0 = [| z8; 32sz |];
+  Mem.track n0; A.pts_to_len n0; let mut n1 = [| z8; 32sz |];
+  Mem.track n1; A.pts_to_len n1; A.pts_to_len n0; A.pts_to_len n1;
 
   let h = Declassify.u8 (A.(pk.(0sz)));
   if (h = 2uy || h = 3uy) {
@@ -220,14 +227,38 @@ ensures exists* (wo: Seq.seq S8.t).
         with wo. assert (A.pts_to out wo);
         A.pts_to_len out;
         assert (pure (Seq.equal wo (Seq.append vxb wyb)));
+      Mem.wipe n1 32sz;
+      Mem.wipe n0 32sz;
+      Mem.wipe m3 5sz;
+      Mem.wipe m2 5sz;
+      Mem.wipe m1 5sz;
+      Mem.wipe m0 5sz;
       true
       } else {
+      Mem.wipe n1 32sz;
+      Mem.wipe n0 32sz;
+      Mem.wipe m3 5sz;
+      Mem.wipe m2 5sz;
+      Mem.wipe m1 5sz;
+      Mem.wipe m0 5sz;
       false
       }
     } else {
+      Mem.wipe n1 32sz;
+      Mem.wipe n0 32sz;
+      Mem.wipe m3 5sz;
+      Mem.wipe m2 5sz;
+      Mem.wipe m1 5sz;
+      Mem.wipe m0 5sz;
       false
     }
   } else {
+      Mem.wipe n1 32sz;
+      Mem.wipe n0 32sz;
+      Mem.wipe m3 5sz;
+      Mem.wipe m2 5sz;
+      Mem.wipe m1 5sz;
+      Mem.wipe m0 5sz;
       false
   }
 }

@@ -45,6 +45,7 @@ module U32 = FStar.UInt32
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
+module Mem = Hacl.Mem
 
 (** {2 One round}
 
@@ -148,9 +149,10 @@ ensures exists* vres'.
   let z8 = S8.classify 0uy;
   let ml = SZ.add slen 4sz;
 
-  let mut marr = [| z8; ml |];
+  let marr = Mem.alloc z8 ml;
   A.pts_to_len marr;
   let mut darr = [| z8; hb |];
+  Mem.track darr;
   A.pts_to_len darr;
 
   copy_at marr 0sz seed slen;
@@ -200,6 +202,8 @@ ensures exists* vres'.
   with vres'. assert (A.pts_to res vres');
   mgf_index p (reveal vseed) (Seq.length vres) (SZ.v n);
   Seq.lemma_eq_intro (reveal vres') (mgf p (reveal vseed) (Seq.length vres));
+  Mem.wipe darr hb;
+  Mem.free marr ml;
   ()
 }
 

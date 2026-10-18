@@ -42,6 +42,7 @@ module P = Spec.P256
 module Hash = Hacl.Hash.SHA2
 module SHA2 = Spec.SHA2
 module C = Spec.SHA2.Constants
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -60,12 +61,14 @@ ensures exists* (wm: Seq.seq S64.t).
   pure (qelem wm /\ qev wm == mqe vb)
 {
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  let mut d0 = [| z8; 32sz |];
+  Mem.track d0; A.pts_to_len d0; A.pts_to_len d0;
   copy_prefix d0 b 32sz;
   with vhb. assert (A.pts_to d0 vhb);
   A.pts_to_len d0;
   assert (pure (Seq.equal vhb (Seq.slice vb 0 32)));
   qload_mod mq d0;
+  Mem.wipe d0 32sz;
   ()
 }
 
@@ -96,9 +99,11 @@ ensures exists* (wm: Seq.seq S64.t).
 {
   P.msg_ok_hashable vb; P.digest_ge_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  let mut d0 = [| z8; 32sz |];
+  Mem.track d0; A.pts_to_len d0; A.pts_to_len d0;
   Hash.sha256 d0 msg msg_len;
   msg_qelem mq d0;
+  Mem.wipe d0 32sz;
   ()
 }
 
@@ -114,9 +119,11 @@ ensures exists* (wm: Seq.seq S64.t).
 {
   P.msg_ok_hashable vb; P.digest_ge_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 48sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  let mut d0 = [| z8; 48sz |];
+  Mem.track d0; A.pts_to_len d0; A.pts_to_len d0;
   Hash.sha384 d0 msg msg_len;
   msg_qelem mq d0;
+  Mem.wipe d0 48sz;
   ()
 }
 
@@ -132,9 +139,11 @@ ensures exists* (wm: Seq.seq S64.t).
 {
   P.msg_ok_hashable vb; P.digest_ge_32 ();
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 64sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  let mut d0 = [| z8; 64sz |];
+  Mem.track d0; A.pts_to_len d0; A.pts_to_len d0;
   Hash.sha512 d0 msg msg_len;
   msg_qelem mq d0;
+  Mem.wipe d0 64sz;
   ()
 }
 

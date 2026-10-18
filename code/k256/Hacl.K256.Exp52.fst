@@ -52,6 +52,7 @@ module F4 = Spec.Field4
 module M4 = Spec.Mont4
 module L4 = Hacl.Impl.Lit4
 module E4 = Hacl.Impl.Exp4
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -157,7 +158,8 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (1 < prime);
   F4.limbs_ok (reveal n);
   let z = S64.zero;
-  let mut a1 = [| z; 5sz |]; A.pts_to_len a1; A.pts_to_len a1;
+  let mut a1 = [| z; 5sz |];
+  Mem.track a1; A.pts_to_len a1; A.pts_to_len a1;
   fone out;
   Math.small_div (reveal n) (pow2 256);
   MA.exp_zero #prime (fev (vals va));
@@ -179,6 +181,7 @@ ensures exists* (vo': Seq.seq S64.t).
     i := ni;
   };
   assert_norm (pow2 0 == 1);
+  Mem.wipe a1 5sz;
   ()
 }
 #pop-options

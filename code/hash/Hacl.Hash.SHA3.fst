@@ -39,6 +39,7 @@ module S64 = Hacl.Secret.UInt64
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module G = Pulse.Lib.GlobalArray
+module Mem = Hacl.Mem
 
 (** {2 The constant tables}
 
@@ -88,10 +89,12 @@ ensures exists* (vout: Seq.seq S8.t).
   let z64 = S64.classify 0uL;
 
   let mut starr = [| z64; 25sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
 
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   A.pts_to_len barr;
 
@@ -102,6 +105,8 @@ ensures exists* (vout: Seq.seq S8.t).
   squeeze_impl out out_len starr barr rc_tbl r;
 
   drop_table rc_tbl;
+  Mem.nowipe barr;
+  Mem.nowipe starr;
   ()
 }
 

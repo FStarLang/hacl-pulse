@@ -49,6 +49,7 @@ module Cast = Hacl.Secret.Cast
 module Copy = Hacl.Impl.Copy
 module Loops = Hacl.Spec.Loops
 module C = Spec.Curve25519
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60 --smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
 
@@ -357,17 +358,29 @@ ensures exists* (vout': Seq.seq S8.t).
   let z = S64.zero;
   let z8 = S8.classify 0uy;
   let mut ka = [| z8; 32sz |];
+  Mem.track ka;
   let mut a1 = [| z; 4sz |];
+  Mem.track a1;
   let mut a2 = [| z; 4sz |];
+  Mem.track a2;
   let mut a3 = [| z; 4sz |];
+  Mem.track a3;
   let mut a4 = [| z; 4sz |];
+  Mem.track a4;
   let mut a5 = [| z; 4sz |];
+  Mem.track a5;
   let mut b0 = [| z; 4sz |];
+  Mem.track b0;
   let mut b1 = [| z; 4sz |];
+  Mem.track b1;
   let mut b2 = [| z; 4sz |];
+  Mem.track b2;
   let mut b3 = [| z; 4sz |];
+  Mem.track b3;
   let mut b4 = [| z; 4sz |];
+  Mem.track b4;
   let mut b5 = [| z; 4sz |];
+  Mem.track b5;
   A.pts_to_len ka; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len b0; A.pts_to_len b1;
   A.pts_to_len b2; A.pts_to_len b3; A.pts_to_len b4; A.pts_to_len b5;
@@ -406,6 +419,18 @@ ensures exists* (vout': Seq.seq S8.t).
   store out b1;
   with vo. assert (A.pts_to out vo);
   assert (pure (vo == C.scalarmult vk vu));
+  Mem.wipe b5 4sz;
+  Mem.wipe b4 4sz;
+  Mem.wipe b3 4sz;
+  Mem.wipe b2 4sz;
+  Mem.wipe b1 4sz;
+  Mem.wipe b0 4sz;
+  Mem.wipe a5 4sz;
+  Mem.wipe a4 4sz;
+  Mem.wipe a3 4sz;
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe ka 32sz;
 }
 
 #pop-options

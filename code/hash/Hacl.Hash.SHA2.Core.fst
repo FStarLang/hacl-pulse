@@ -48,6 +48,7 @@ module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module U64 = FStar.UInt64
 module Cast = FStar.Int.Cast
+module Mem = Hacl.Mem
 
 (** {2 Byte counts as machine values} *)
 
@@ -345,6 +346,7 @@ ensures A.pts_to out (finish p vst) ** A.pts_to st #pst vst
   let z8 = S8.classify 0uy;
   let dlen = SZ.mul 8sz nb;
   let mut darr = [| z8; dlen |];
+  Mem.track darr;
   A.pts_to_len darr;
   A.pts_to_len darr;
 
@@ -387,6 +389,7 @@ ensures A.pts_to out (finish p vst) ** A.pts_to st #pst vst
   with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (finish p vst);
   Seq.lemma_eq_elim vo (finish p vst);
+  Mem.wipe darr dlen;
   ()
 }
 
@@ -445,6 +448,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
   let base = SZ.sub len rem;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; bl2 |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   len_fits (SZ.v len);
@@ -502,6 +506,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8) (vout': Seq.seq S8.t).
                 repeati_g (SZ.v nblocks + SZ.v ntb)
                   (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv)));
   write_digest p out st;
+  Mem.wipe tarr bl2;
   ()
 }
 
@@ -565,6 +570,59 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
 
 #pop-options
 
+(** {2 The block function as a parameter}
+
+    [hash_blocks]' contract, as a type.  Code that absorbs whole blocks and
+    should run on the SHA instructions when they are there -- the streaming
+    hash, and HMAC and HKDF on top of it -- takes one of these as a
+    monomorphized argument rather than calling [hash_blocks] by name.
+    Custard specializes it away, so passing [blocks_scalar p] or
+    [Hacl.Hash.SHA2.NI.blocks_ni p] costs no indirect call, and one generic
+    copy of the caller serves both. *)
+
+inline_for_extraction noextract
+let blocks_t (#t: Type0) {| w: word t |} (p: params t) =
+  (kt: A.array t) -> (wsb: A.array t) -> (st: A.array t) -> (input: A.array S8.t) ->
+  (nprev: SZ.t) -> (nfull: SZ.t) -> (pre: erased (Seq.seq S8.t)) ->
+  (#pk: perm) -> (#vk: erased (Seq.seq t)) ->
+  (#vw0: erased (Seq.seq t)) -> (#vst0: erased (Seq.lseq t 8)) ->
+  (#pin: perm) -> (#vin: erased (Seq.seq S8.t)) ->
+  stt unit
+    (requires A.pts_to kt #pk vk ** A.pts_to wsb vw0 ** A.pts_to st vst0 ** A.pts_to input #pin vin **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ Seq.length vw0 == (rounds p) /\
+               Seq.length pre == SZ.v nprev * block_len #t /\
+               Seq.length pre + Seq.length vin < max_input #t /\
+               SZ.v nfull == Seq.length vin / block_len #t /\
+               reveal vst0 == repeati_g (SZ.v nprev)
+                                (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv)))
+    (ensures fun _ -> exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
+      A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to st vst ** A.pts_to input #pin vin **
+      pure (Seq.length pre + Seq.length vin < max_input #t /\ Seq.length vw == (rounds p) /\
+            vst == repeati_g (SZ.v nprev + SZ.v nfull)
+                     (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv)))
+
+fn blocks_scalar (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+                 (kt: A.array t) (wsb: A.array t) (st: A.array t) (input: A.array S8.t)
+                 (nprev: SZ.t) (nfull: SZ.t) (pre: erased (Seq.seq S8.t))
+                 (#pk: perm) (#vk: erased (Seq.seq t))
+                 (#vw0: erased (Seq.seq t)) (#vst0: erased (Seq.lseq t 8))
+                 (#pin: perm) (#vin: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to wsb vw0 ** A.pts_to st vst0 ** A.pts_to input #pin vin **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ Seq.length vw0 == (rounds p) /\
+               Seq.length pre == SZ.v nprev * block_len #t /\
+               Seq.length pre + Seq.length vin < max_input #t /\
+               SZ.v nfull == Seq.length vin / block_len #t /\
+               reveal vst0 == repeati_g (SZ.v nprev)
+                                (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
+ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
+  A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to st vst ** A.pts_to input #pin vin **
+  pure (Seq.length pre + Seq.length vin < max_input #t /\ Seq.length vw == (rounds p) /\
+        vst == repeati_g (SZ.v nprev + SZ.v nfull)
+                 (update_step p (padded #t (Seq.append pre vin))) (reveal p.iv))
+{
+  hash_blocks p kt wsb st input (block_len_sz #t #w) nprev nfull pre
+}
+
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 0"
 fn hash_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (input: A.array S8.t) (len: SZ.t)
@@ -591,6 +649,7 @@ ensures exists* vout'.
   let z0: t = zero #t #w;
 
   let mut starr = [| z0; 8sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   let mut c = 0sz;
@@ -611,6 +670,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (reveal p.iv <: Seq.seq t);
 
   let mut wsarr = [| z0; p.nrounds |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
 
@@ -620,6 +680,8 @@ ensures exists* vout'.
   hash_blocks p kt wsarr starr input bl 0sz nfull empty;
   tail_and_finish p kt wsarr starr out input len nfull (SZ.sub len rem) rem empty;
 
+  Mem.wipe wsarr p.nrounds;
+  Mem.wipe starr 8sz;
   ()
 }
 
@@ -675,6 +737,7 @@ ensures exists* vout'.
   let z0: t = zero #t #w;
 
   let mut starr = [| z0; 8sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   let mut c = 0sz;
@@ -695,6 +758,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (reveal p.iv <: Seq.seq t);
 
   let mut wsarr = [| z0; p.nrounds |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
 
@@ -720,6 +784,8 @@ ensures exists* vout'.
   let base_in = SZ.sub lin rem;
   tail_and_finish p kt wsarr starr out input len nb base_in rem vb;
 
+  Mem.wipe wsarr p.nrounds;
+  Mem.wipe starr 8sz;
   ()
 }
 

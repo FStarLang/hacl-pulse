@@ -35,6 +35,7 @@ module SZ = FStar.SizeT
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module C = Spec.Curve25519
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60 --smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
 
@@ -143,7 +144,16 @@ ensures exists* (vout': Seq.seq S64.t).
 {
   let z0 = S64.classify 0uL;
   let z = z0;
-  let mut arr1 = [| z; 4sz |]; A.pts_to_len arr1; let mut arr2 = [| z; 4sz |]; A.pts_to_len arr2; let mut arr3 = [| z; 4sz |]; A.pts_to_len arr3; let mut arr4 = [| z; 4sz |]; A.pts_to_len arr4; let mut arr5 = [| z; 4sz |]; A.pts_to_len arr5; let mut arr6 = [| z; 4sz |]; A.pts_to_len arr6; let mut arr7 = [| z; 4sz |]; A.pts_to_len arr7; let mut arrc = [| z; 4sz |]; A.pts_to_len arrc; let mut arrd = [| z; 4sz |]; A.pts_to_len arrd; A.pts_to_len arr1; A.pts_to_len arr2; A.pts_to_len arr3; A.pts_to_len arr4;
+  let mut arr1 = [| z; 4sz |];
+  Mem.track arr1; A.pts_to_len arr1; let mut arr2 = [| z; 4sz |];
+  Mem.track arr2; A.pts_to_len arr2; let mut arr3 = [| z; 4sz |];
+  Mem.track arr3; A.pts_to_len arr3; let mut arr4 = [| z; 4sz |];
+  Mem.track arr4; A.pts_to_len arr4; let mut arr5 = [| z; 4sz |];
+  Mem.track arr5; A.pts_to_len arr5; let mut arr6 = [| z; 4sz |];
+  Mem.track arr6; A.pts_to_len arr6; let mut arr7 = [| z; 4sz |];
+  Mem.track arr7; A.pts_to_len arr7; let mut arrc = [| z; 4sz |];
+  Mem.track arrc; A.pts_to_len arrc; let mut arrd = [| z; 4sz |];
+  Mem.track arrd; A.pts_to_len arrd; A.pts_to_len arr1; A.pts_to_len arr2; A.pts_to_len arr3; A.pts_to_len arr4;
   A.pts_to_len arr5; A.pts_to_len arr6; A.pts_to_len arr7;
   A.pts_to_len arrc; A.pts_to_len arrd;
   A.pts_to_len out; A.pts_to_len a;
@@ -291,6 +301,15 @@ ensures exists* (vout': Seq.seq S64.t).
   assert_norm ((pow2 250 - 1) * pow2 5 + 11 == pow2 255 - 19 - 2);
   assert (pure (fe v22 == C.fexp (fe va) (C.prime - 2)));
   assert (pure (fe v22 == C.finv (fe va)));
+  Mem.wipe arrd 4sz;
+  Mem.wipe arrc 4sz;
+  Mem.wipe arr7 4sz;
+  Mem.wipe arr6 4sz;
+  Mem.wipe arr5 4sz;
+  Mem.wipe arr4 4sz;
+  Mem.wipe arr3 4sz;
+  Mem.wipe arr2 4sz;
+  Mem.wipe arr1 4sz;
 }
 
 #pop-options

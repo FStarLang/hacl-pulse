@@ -44,6 +44,7 @@ module U32 = FStar.UInt32
 module U64 = FStar.UInt64
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -101,12 +102,15 @@ ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' **
   A.pts_to_len h;
   let z = S64.zero;
   let mut aarr = [| z; 5sz |];
+  Mem.track aarr;
   A.pts_to_len aarr;
   A.pts_to_len aarr;
   let mut rarr = [| z; 5sz |];
+  Mem.track rarr;
   A.pts_to_len rarr;
   A.pts_to_len rarr;
   let mut qarr = [| z; 5sz |];
+  Mem.track qarr;
   A.pts_to_len qarr;
   A.pts_to_len qarr;
 
@@ -178,6 +182,9 @@ ensures exists* (vh': Seq.seq S64.t). A.pts_to h vh' **
   A.((h.(2sz) <- S64.select m q2 r2));
   A.((h.(3sz) <- S64.select m q3 r3));
   A.((h.(4sz) <- S64.select m q4 r4));
+  Mem.wipe qarr 5sz;
+  Mem.wipe rarr 5sz;
+  Mem.wipe aarr 5sz;
   ()
 }
 
