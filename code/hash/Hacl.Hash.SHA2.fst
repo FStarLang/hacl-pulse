@@ -72,13 +72,15 @@ let sha2_256_facts (_: unit)
            SZ.v sha2_256.nhash_bytes == 32)
   = ()
 
+(** [fits_at_least_16] gives the lengths' [fits] from [pow2 16], which the
+    solver cannot compute at fuel 0. *)
 let sha2_384_facts (_: unit)
   : Lemma (sha2_384.k == k512 /\ sha2_384.iv == iv384 /\ SZ.v sha2_384.nhash_bytes == 48)
-  = ()
+  = assert_norm (pow2 16 == 65536)
 
 let sha2_512_facts (_: unit)
   : Lemma (sha2_512.k == k512 /\ sha2_512.iv == iv512 /\ SZ.v sha2_512.nhash_bytes == 64)
-  = ()
+  = assert_norm (pow2 16 == 65536)
 #pop-options
 
 (** {2 The four algorithms}
