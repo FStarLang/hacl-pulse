@@ -321,6 +321,12 @@ let over_sub (s: Seq.seq nat)
 
 let freeze_spec (s: Seq.seq nat) : Seq.seq nat = fin (step3 s)
 
+let proper_felem (t: Seq.seq nat)
+  : Lemma (requires proper t) (ensures felem t)
+  = assert_norm (nl == 5);
+    assert_norm (hib <= lim);
+    assert_norm (base - 1 <= lim)
+
 let freeze_ok (s: Seq.seq nat)
   : Lemma (requires felem s)
           (ensures felem (freeze_spec s) /\ proper (freeze_spec s) /\
@@ -335,11 +341,13 @@ let freeze_ok (s: Seq.seq nat)
     assert (proper r);
     if over r then begin
       over_sub r;
+      proper_felem (freeze_spec s);
       Math.lemma_mod_plus (eval (freeze_spec s)) 1 prime;
       Math.small_mod (eval (freeze_spec s)) prime
     end
     else begin
       not_over_lt r;
+      proper_felem (freeze_spec s);
       Math.small_mod (eval (freeze_spec s)) prime
     end
 
