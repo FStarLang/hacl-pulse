@@ -23,9 +23,10 @@
     and it is the property a reader of the C output can check against FIPS
     203 line by line.  The deeper theorem, that [NTT] is the isomorphism
     [R_q ~ prod_i Z_q[X]/(X^2 - zeta^(2 BitRev7(i) + 1))] and hence that
-    [MultiplyNTTs] is multiplication in [R_q], is not proved here; it is
-    independent of the implementation and can be added later without
-    touching any code.
+    [MultiplyNTTs] is multiplication in [R_q], is proved separately in
+    {!Spec.MLKEM.NTT.Lemmas} ([intt_multiply_ntts]: [intt (multiply_ntts
+    (ntt f) (ntt g)) == poly_mul f g]); it is about these definitions only
+    and independent of the implementation.
 
     The one place this presentation departs from the pseudocode is that a
     layer is written {i pointwise} -- as a function of the input polynomial
