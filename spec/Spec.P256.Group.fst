@@ -49,6 +49,9 @@ let sub_zero (a b: felem) : Lemma (requires fsub a b == 0) (ensures a == b) =
   end
   else M.small_mod (a + prime - b) prime
 
+private let fsub_zero (a: felem) : Lemma (fsub a 0 == a) =
+  M.lemma_mod_plus a 1 prime; M.small_mod a prime
+
 let add_zero (a b: felem) : Lemma (requires fadd a b == 0) (ensures a == fneg b) =
   if b = 0 then M.small_mod a prime
   else begin
@@ -109,12 +112,18 @@ let inf_shape_of (p: proj_point)
       prime_lem ();
       let c = fmul (fmul x x) x in
       let zz = fmul z z in
+      MA.mul_zero #prime z;
       assert (zz == 0);
+      MA.mul_zero #prime (fmul y y);
       assert (fmul (fmul y y) z == 0);
+      MA.mul_zero #prime (fmul (fadd fone (fadd fone fone)) x);
       assert (fmul (fmul (fadd fone (fadd fone fone)) x) zz == 0);
+      MA.mul_zero #prime zz;
       assert (fmul zz z == 0);
+      MA.mul_zero #prime b_coeff;
       assert (fmul b_coeff (fmul zz z) == 0);
       M.small_mod c prime;
+      fsub_zero c;
       assert (fsub c 0 == c);
       assert (fadd c 0 == c);
       assert (fmul (fmul x x) x == 0);
