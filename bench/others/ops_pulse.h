@@ -125,3 +125,25 @@ static inline void bo_mlkem768_enc(uint8_t *ct, uint8_t *ss) {
   Hacl_MLKEM768_enc(ct, ss, pl_kem_ek, m);
 }
 static inline void bo_mlkem768_dec(uint8_t *ss, uint8_t *ct) { Hacl_MLKEM768_dec(ss, ct, pl_kem_dk); }
+
+/* ML-DSA: deterministic signing (rnd = 0), empty context. */
+#define PL_MLDSA(P_, PK_, SK_)                                                   \
+  static uint8_t pl_dsa##P_##_pk[PK_], pl_dsa##P_##_sk[SK_], pl_dsa##P_##_sk2[SK_]; \
+  static inline void bo_mldsa##P_##_keygen(uint8_t *pk, uint8_t *xi) {          \
+    Hacl_MLDSA##P_##_keypair(pk, pl_dsa##P_##_sk2, xi);                          \
+  }                                                                              \
+  static inline void bo_mldsa##P_##_setup(uint8_t *pk, uint8_t *sk) {           \
+    memcpy(pl_dsa##P_##_pk, pk, PK_); memcpy(pl_dsa##P_##_sk, sk, SK_);          \
+  }                                                                              \
+  static inline int bo_mldsa##P_##_sign(uint8_t *sg, uint8_t *m, size_t n) {     \
+    return Hacl_MLDSA##P_##_sign_deterministic(sg, pl_dsa##P_##_sk, m, n, NULL, 0); \
+  }                                                                              \
+  static inline int bo_mldsa##P_##_verify(uint8_t *m, size_t n, uint8_t *sg) {   \
+    return Hacl_MLDSA##P_##_verify(pl_dsa##P_##_pk, m, n, NULL, 0, sg);          \
+  }
+#define BO_MLDSA44
+#define BO_MLDSA65
+#define BO_MLDSA87
+PL_MLDSA(44, 1312, 2560)
+PL_MLDSA(65, 1952, 4032)
+PL_MLDSA(87, 2592, 4896)

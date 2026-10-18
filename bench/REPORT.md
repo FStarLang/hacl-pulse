@@ -8393,3 +8393,66 @@ SHAKE256 15%, `multiply` (base-case products, still sixty-four-bit Barrett)
 11%, CBD sampling 8.5%, NTT 5.8% and inverse NTT 5.1%.  The next levers are
 the matrix expansion (several SHAKE128 lanes at once) and the base-case
 products.
+
+## Part 69: tables re-measured on Zen 3, and ML-DSA against other libraries
+
+All three README tables were re-run after the issue #1 wiping work, the
+ML-DSA merge and the F\* nightly of 10-18.  The machine is now an AMD EPYC
+7V13 (Zen 3: AVX2, ADX, SHA extensions, no AVX-512) in a shared virtual
+machine, not the Xeon Gold 6140 of Parts 60--68, so the AVX-512 backends do
+not run and HACL\*'s best build uses Vale's SHA-EXT code.  `table.sh 3` was
+run once under gcc and once under clang; `others.sh 3` twice, and the six
+rounds pooled.
+
+**Canary noise.**  The canary ranged from 176 to 191 ms across `others.sh`
+runs, about 8%, against the 1--2% of the old machine.  The 2% filter in
+`mkothers.py` dropped 110 of 144 runs and left libcrux with none, so both
+`mkothers.py` and the new `mkmldsa.py` take the tolerance as an optional
+second argument; the README tables use 0.05 (45 of 144 dropped).  At 0.03
+every cell agrees with 0.05 to within a few percent.
+
+**ML-DSA contenders.**  `others.sh` now also builds pq-crystals/dilithium
+(`ref/` and `avx2/`, all three parameter sets into one archive each,
+`-Wa,-I` for the AVX2 assembly's `.include`), mldsa-native (monolithic
+multilevel build with the x86-64 arithmetic and Keccak backends) and a
+libcrux-ml-dsa 0.0.11 FFI crate.  libcrux-platform 0.0.4 does not build
+with the distribution's rustc 1.93 (`__cpuid` became safe later), so the
+crate pins 1.99.1 in `rust-toolchain.toml`.  OpenSSL and AWS-LC gain
+ML-DSA rows too.  Every implementation's key from a 32-byte seed must
+equal hacl-pulse's, and its signatures must equal `sign_deterministic` on
+64 messages; AWS-LC's EVP signing is hedged only, so it is cross-verified.
+`TIME_MIN` keeps the iteration count a multiple of 64 so that signing
+averages over all 64 messages, whose rejection-sampling attempts differ.
+
+ML-DSA-65, microseconds (keygen / sign / verify): hacl-pulse gcc
+193/700/193, clang 202/563/194; pq-crystals ref 129/606/138; OpenSSL
+173/1039/186; pq-crystals avx2 39/105/41; mldsa-native 36/107/37; AWS-LC
+53/147/50; libcrux 40/132/40.  hacl-pulse is 5.1x--5.9x behind the fastest
+across 44/65/87.
+
+**Ed25519 and secp256k1 signing under gcc.**  In the main table these went
+from 1.27x and 1.08x of HACL\* best to 1.71x and 1.52x.  A/B on this machine,
+`dist/Hacl.c` as committed against the same file with `Hacl_Mem_wipe` a
+no-op (best of 30 x 200 calls, pinned):
+
+| build | Ed25519 sign | secp256k1 sign |
+| --- | ---: | ---: |
+| gcc, as committed | 83 us | 85 us |
+| gcc, no wiping | 59 us | 56 us |
+| gcc, wrappers `always_inline`, `-mmemset-strategy=unrolled_loop` | 61 us | 66 us |
+| clang, as committed | 75 us | 77 us |
+| clang, no wiping | 73 us | 75 us |
+
+Custard extracts `Mem.wipe` at each element type as an out-of-line
+`static void Hacl_Mem_wipe__t_N(T *a, size_t eta)`.  gcc keeps it out of
+line, and with a length it cannot see it clears even a 40-byte field
+element with `rep stosq`, whose start-up cost dominates; Ed25519's point
+addition and doubling wipe seven temporaries each and account for about
+14 of the 25 us.  Inlining the wrappers alone recovers about 60%;
+inlining plus no `rep stos` recovers all of it on Ed25519.  A store loop
+in `c/Hacl_Mem.h` instead of `memset` was slower (101 us), presumably
+because it defeats the constant-length lowering after inlining.  The fix
+belongs in the extraction -- emit the wrappers `static inline`, or call
+the macro directly with the literal length -- and is not part of this
+change.  The 7--11% measured for Ed25519 when the wiping landed does not
+reproduce on this machine.

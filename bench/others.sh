@@ -15,6 +15,17 @@
 #               (its makefile refuses this machine's gcc 15.2)
 #   dalek       ed25519-dalek 2 / x25519-dalek 2 via others/dalek, LTO,
 #               -C target-cpu=native
+#   ML-DSA only:
+#   pqcrystals-ref, pqcrystals-avx2
+#               pq-crystals/dilithium ref/ and avx2/, with their own
+#               makefiles' flags, gcc
+#   mldsa-native
+#               pq-code-package/mldsa-native, monolithic multilevel build
+#               with the x86-64 native (AVX2) backends, gcc
+#   libcrux     libcrux-ml-dsa via others/libcrux (Rust, its AVX2 code
+#               selected at run time), LTO, -C target-cpu=native; the crate
+#               pins its toolchain (rust-toolchain.toml), so CARGO must be
+#               rustup's
 #
 # Every driver checks its library against hacl-pulse before timing anything
 # and exits non-zero on a mismatch (see others/others.c).
@@ -23,7 +34,7 @@
 #   BENCH_CPU   core to pin to      (default 2)
 #   BENCH_OUT   output directory    (default /tmp/bench-others)
 #   OTHERS      dependency cache    (default /tmp/others)
-#   CARGO       cargo binary        (default: cargo on PATH, else ~/.cargo/bin/cargo)
+#   CARGO       cargo binary        (default: ~/.cargo/bin/cargo, else cargo on PATH)
 set -e
 cd "$(dirname "$0")"
 ROUNDS=${1:-3}
@@ -31,12 +42,14 @@ R=$(cd .. && pwd)
 CPU=${BENCH_CPU:-2}
 OUT=${BENCH_OUT:-/tmp/bench-others}
 D=${OTHERS:-/tmp/others}
-CARGO=${CARGO:-$(command -v cargo || echo ~/.cargo/bin/cargo)}
+CARGO=${CARGO:-$([ -x ~/.cargo/bin/cargo ] && echo ~/.cargo/bin/cargo || command -v cargo)}
 J=$(nproc)
 
 AWSLC_REV=ffca1276f5565a71cf4717c29828b29b600e4251
 SODIUM_REV=1da41306a7abd814dcea30389ac63ef3b6907302
 FD_REV=849c582ad1175fd22f6aef28e3afff543e06096b
+PQC_REV=d35ba3fe5449bee3e6d43e1f296c3ca818bd36be
+MLDSA_NATIVE_REV=6daba6073b1b51097e36c20c5ba61f644d0273cc
 JADE_URL=https://github.com/formosa-crypto/libjade/releases/download/release%2F2023.05-2/libjade-dist-src-amd64.tar.gz
 JADE_SHA=ffbf658c247407f9f030d6309b80428692676f81e22ca0f8e5b6465e00e32c51
 
@@ -97,6 +110,34 @@ echo "building dalek..." >&2
 (cd others/dalek && RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR="$D/dalek-target" \
    "$CARGO" build --release --locked -q)
 
+echo "building libcrux..." >&2
+(cd others/libcrux && RUSTFLAGS="-C target-cpu=native" CARGO_TARGET_DIR="$D/libcrux-target" \
+   "$CARGO" build --release --locked -q)
+
+# pq-crystals: every parameter set is a separate build of the same sources
+# (namespaced symbols), Keccak once; one archive per variant.
+pqc() { # variant cflags
+  local v=$1 f m o; local S="$D/dilithium/$v" B="$D/pqc-$v"; shift
+  local MODE="sign.c packing.c polyvec.c poly.c rounding.c symmetric-shake.c" SHARED="fips202.c"
+  [ $v = ref ] && MODE="$MODE ntt.c reduce.c"
+  [ $v = avx2 ] && MODE="$MODE ntt.S invntt.S pointwise.S shuffle.S consts.c rejsample.c" \
+                && SHARED="$SHARED fips202x4.c f1600x4.S"
+  rm -rf "$B"; mkdir -p "$B"
+  for m in 2 3 5; do for f in $MODE; do
+    gcc "$@" -Wa,-I"$S" -DDILITHIUM_MODE=$m -c "$S/$f" -o "$B/${m}_${f%.*}.o"
+  done; done
+  for f in $SHARED; do gcc "$@" -Wa,-I"$S" -c "$S/$f" -o "$B/${f%.*}.o"; done
+  rm -f "$D/libpqc-$v.a"; ar rcs "$D/libpqc-$v.a" "$B"/*.o
+}
+if ! built pqc $PQC_REV; then
+  echo "building pq-crystals dilithium..." >&2
+  checkout dilithium https://github.com/pq-crystals/dilithium.git $PQC_REV
+  pqc ref -O3 -fomit-frame-pointer
+  pqc avx2 -mavx2 -mpopcnt -march=native -mtune=native -O3
+  echo $PQC_REV > "$D/pqc.done"
+fi
+checkout mldsa-native https://github.com/pq-code-package/mldsa-native.git $MLDSA_NATIVE_REV
+
 # ---- drivers ---------------------------------------------------------------
 W="-std=c17 -O3 -Wall -Wno-unused-variable -Wno-unused-function"
 INC="-I $R/dist -I $R/c"
@@ -129,9 +170,19 @@ echo | clang -march=native -dM -E - | grep -q '__AVX512IFMA__ ' && FDF="$FDF -DF
 drv firedancer  clang ops_firedancer.h $FDF -I "$D/firedancer/src" "$OUT/hacl_gcc.o" \
   "$FDL/libfd_ballet.a" "$FDL/libfd_util.a" -lpthread -lm
 drv dalek       gcc   ops_dalek.h "$OUT/hacl_gcc.o" "$D/dalek-target/release/libdalekffi.a" -lpthread -ldl -lm
+drv libcrux     gcc   ops_libcrux.h "$OUT/hacl_gcc.o" "$D/libcrux-target/release/liblibcruxffi.a" -lpthread -ldl -lm
+drv pqcrystals-ref  gcc ops_pqcrystals.h "$OUT/hacl_gcc.o" "$D/libpqc-ref.a"
+drv pqcrystals-avx2 gcc ops_pqcrystals.h -DPQ_AVX2 "$OUT/hacl_gcc.o" "$D/libpqc-avx2.a"
+# mldsa-native's own flags for this CPU (examples/*/auto.mk): AVX2, BMI2, POPCNT.
+MN="$D/mldsa-native/mldsa"
+MNF="-O3 -mavx2 -mbmi2 -mpopcnt -DMLD_CONFIG_MULTILEVEL_BUILD -DMLD_CONFIG_USE_NATIVE_BACKEND_ARITH
+     -DMLD_CONFIG_USE_NATIVE_BACKEND_FIPS202 -I $MN"
+gcc $MNF -DMLD_CONFIG_MULTILEVEL_WITH_SHARED -c "$MN/mldsa_native_asm.S" -o "$OUT/mldsa_native_asm.o"
+drv mldsa-native gcc  ops_mldsanative.h $MNF "$OUT/hacl_gcc.o" "$OUT/mldsa_native_asm.o"
 
 # ---- runs ------------------------------------------------------------------
-V="pulse-gcc pulse-clang openssl awslc libsodium libjade firedancer dalek"
+V="pulse-gcc pulse-clang openssl awslc libsodium libjade firedancer dalek
+   libcrux pqcrystals-ref pqcrystals-avx2 mldsa-native"
 VR=$(echo $V | tr ' ' '\n' | tac | tr '\n' ' ')
 rm -f "$OUT"/O*.csv
 for r in $(seq 1 $ROUNDS); do

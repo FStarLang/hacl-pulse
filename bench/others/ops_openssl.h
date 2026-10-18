@@ -331,3 +331,58 @@ static inline void bo_mlkem768_dec(uint8_t *ss, uint8_t *ct) {
   size_t sl = 32;
   EVP_PKEY_decapsulate(os_kem_dec, ss, &sl, ct, 1088);
 }
+
+/* ML-DSA (OpenSSL >= 3.5): key generation from a seed through a keygen
+   context, the public key read back out; deterministic ML-DSA.Sign with an
+   empty context through the sign_message API; keys imported from
+   hacl-pulse's raw (expanded) encodings. */
+#define OS_MLDSA(P_, PK_, SK_, SG_)                                              \
+  static EVP_PKEY_CTX *os_dsa##P_##_gen, *os_dsa##P_##_sgn, *os_dsa##P_##_vfy;   \
+  static EVP_SIGNATURE *os_dsa##P_##_alg;                                        \
+  static void os_dsa##P_##_init(void) {                                          \
+    if (os_dsa##P_##_gen) return;                                                \
+    os_dsa##P_##_gen = EVP_PKEY_CTX_new_from_name(NULL, "ML-DSA-" #P_, NULL);    \
+    os_dsa##P_##_alg = EVP_SIGNATURE_fetch(NULL, "ML-DSA-" #P_, NULL);           \
+    if (!os_dsa##P_##_gen || !os_dsa##P_##_alg ||                                \
+        EVP_PKEY_keygen_init(os_dsa##P_##_gen) <= 0) os_die("ml-dsa init");      \
+  }                                                                              \
+  static inline void bo_mldsa##P_##_keygen(uint8_t *pk, uint8_t *xi) {          \
+    OSSL_PARAM ps[] = {                                                          \
+      OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_ML_DSA_SEED, xi, 32),    \
+      OSSL_PARAM_construct_end() };                                              \
+    EVP_PKEY *k = NULL;                                                          \
+    size_t l = 0;                                                                \
+    os_dsa##P_##_init();                                                         \
+    if (EVP_PKEY_CTX_set_params(os_dsa##P_##_gen, ps) <= 0 ||                    \
+        EVP_PKEY_generate(os_dsa##P_##_gen, &k) <= 0 ||                          \
+        !EVP_PKEY_get_octet_string_param(k, OSSL_PKEY_PARAM_PUB_KEY, pk, PK_, &l)) \
+      os_die("ml-dsa keygen");                                                   \
+    EVP_PKEY_free(k);                                                            \
+  }                                                                              \
+  static inline void bo_mldsa##P_##_setup(uint8_t *pk, uint8_t *sk) {           \
+    EVP_PKEY *pub = EVP_PKEY_new_raw_public_key_ex(NULL, "ML-DSA-" #P_, NULL, pk, PK_); \
+    EVP_PKEY *prv = EVP_PKEY_new_raw_private_key_ex(NULL, "ML-DSA-" #P_, NULL, sk, SK_); \
+    os_dsa##P_##_init();                                                         \
+    if (!pub || !prv) os_die("ml-dsa import");                                   \
+    os_dsa##P_##_sgn = EVP_PKEY_CTX_new_from_pkey(NULL, prv, NULL);              \
+    os_dsa##P_##_vfy = EVP_PKEY_CTX_new_from_pkey(NULL, pub, NULL);              \
+  }                                                                              \
+  static inline int bo_mldsa##P_##_sign(uint8_t *sg, uint8_t *m, size_t n) {     \
+    int det = 1;                                                                 \
+    size_t l = SG_;                                                              \
+    OSSL_PARAM ps[] = {                                                          \
+      OSSL_PARAM_construct_int(OSSL_SIGNATURE_PARAM_DETERMINISTIC, &det),        \
+      OSSL_PARAM_construct_end() };                                              \
+    return EVP_PKEY_sign_message_init(os_dsa##P_##_sgn, os_dsa##P_##_alg, ps) == 1 && \
+           EVP_PKEY_sign(os_dsa##P_##_sgn, sg, &l, m, n) == 1;                   \
+  }                                                                              \
+  static inline int bo_mldsa##P_##_verify(uint8_t *m, size_t n, uint8_t *sg) {   \
+    return EVP_PKEY_verify_message_init(os_dsa##P_##_vfy, os_dsa##P_##_alg, NULL) == 1 && \
+           EVP_PKEY_verify(os_dsa##P_##_vfy, sg, SG_, m, n) == 1;                \
+  }
+#define BO_MLDSA44
+#define BO_MLDSA65
+#define BO_MLDSA87
+OS_MLDSA(44, 1312, 2560, 2420)
+OS_MLDSA(65, 1952, 4032, 3309)
+OS_MLDSA(87, 2592, 4896, 4627)

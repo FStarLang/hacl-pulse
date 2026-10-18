@@ -222,3 +222,40 @@ static inline void bo_mlkem768_dec(uint8_t *ss, uint8_t *ct) {
   size_t sl = 32;
   EVP_PKEY_decapsulate(al_kem_dec, ss, &sl, ct, 1088);
 }
+
+/* ML-DSA: key generation from a seed (EVP_PKEY_pqdsa_new_raw_private_key
+   expands a 32-byte seed into a key pair), the public key read back out.
+   AWS-LC's EVP signs hedged, with fresh randomness and an empty context, so
+   its signatures are checked by hacl-pulse rather than byte for byte (the
+   per-signature RAND_bytes is part of what is timed). */
+#define BO_MLDSA_HEDGED
+#define AL_MLDSA(P_, PK_, SK_, SG_)                                              \
+  static EVP_PKEY *al_dsa##P_##_prv, *al_dsa##P_##_pub;                          \
+  static EVP_MD_CTX *al_dsa##P_##_md;                                            \
+  static inline void bo_mldsa##P_##_keygen(uint8_t *pk, uint8_t *xi) {          \
+    EVP_PKEY *k = EVP_PKEY_pqdsa_new_raw_private_key(NID_MLDSA##P_, xi, 32);     \
+    size_t l = PK_;                                                              \
+    if (!k || !EVP_PKEY_get_raw_public_key(k, pk, &l)) al_die("ml-dsa keygen");  \
+    EVP_PKEY_free(k);                                                            \
+  }                                                                              \
+  static inline void bo_mldsa##P_##_setup(uint8_t *pk, uint8_t *sk) {           \
+    al_dsa##P_##_pub = EVP_PKEY_pqdsa_new_raw_public_key(NID_MLDSA##P_, pk, PK_); \
+    al_dsa##P_##_prv = EVP_PKEY_pqdsa_new_raw_private_key(NID_MLDSA##P_, sk, SK_); \
+    al_dsa##P_##_md = EVP_MD_CTX_new();                                          \
+    if (!al_dsa##P_##_pub || !al_dsa##P_##_prv) al_die("ml-dsa import");         \
+  }                                                                              \
+  static inline int bo_mldsa##P_##_sign(uint8_t *sg, uint8_t *m, size_t n) {     \
+    size_t l = SG_;                                                              \
+    return EVP_DigestSignInit(al_dsa##P_##_md, NULL, NULL, NULL, al_dsa##P_##_prv) == 1 && \
+           EVP_DigestSign(al_dsa##P_##_md, sg, &l, m, n) == 1;                   \
+  }                                                                              \
+  static inline int bo_mldsa##P_##_verify(uint8_t *m, size_t n, uint8_t *sg) {   \
+    return EVP_DigestVerifyInit(al_dsa##P_##_md, NULL, NULL, NULL, al_dsa##P_##_pub) == 1 && \
+           EVP_DigestVerify(al_dsa##P_##_md, sg, SG_, m, n) == 1;                \
+  }
+#define BO_MLDSA44
+#define BO_MLDSA65
+#define BO_MLDSA87
+AL_MLDSA(44, 1312, 2560, 2420)
+AL_MLDSA(65, 1952, 4032, 3309)
+AL_MLDSA(87, 2592, 4896, 4627)

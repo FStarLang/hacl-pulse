@@ -109,7 +109,8 @@ Output is one CSV per contender per offset per round, named
 | `gapbest.py DIR` | rank every benchmark by hacl-pulse / HACL\*-best. **This is the ranking that chooses what to work on next.** |
 | `mktable.py DIR` | regenerate the markdown performance table in the top-level `README.md`, so those numbers are never typed by hand |
 | `mkkem.py DIR` | the same for the ML-KEM table, which is absolute rather than relative because HACL\* has no ML-KEM to compare against |
-| `mkothers.py DIR` | the other-libraries table, from an `others.sh` run |
+| `mkothers.py DIR [TOL]` | the other-libraries table, from an `others.sh` run; runs whose canary is more than `TOL` (default 0.02) above the best are dropped first |
+| `mkmldsa.py DIR [TOL]` | the ML-DSA table (44/65/87, every ML-DSA contender), from the same `others.sh` run, with the same filter |
 
 `CFG` is a configuration string recorded alongside the numbers; `cfg.c` prints
 EverCrypt's view of the CPU (`shaext`, `avx2`, `aesni`, `adx`, …) so that a
@@ -132,6 +133,9 @@ an ops header that defines only the rows that library has:
 | `libjade` | `ops_jade.h` | the libjade 2023.05-2 release's pre-generated Jasmin assembly, best variant per row |
 | `firedancer` | `ops_firedancer.h` | Firedancer's `ballet`, `MACHINE=native`, clang (its makefile rejects gcc 15.2) |
 | `dalek` | `ops_dalek.h` | ed25519-dalek 2 / x25519-dalek 2 through the FFI crate in `others/dalek`, LTO, `target-cpu=native` |
+| `libcrux` | `ops_libcrux.h` | ML-DSA only: libcrux-ml-dsa 0.0.11 through the FFI crate in `others/libcrux` (AVX2 chosen at run time), LTO, `target-cpu=native`; the crate pins Rust 1.99.1 in `rust-toolchain.toml`, so `CARGO` must be rustup's |
+| `pqcrystals-ref`, `pqcrystals-avx2` | `ops_pqcrystals.h` | ML-DSA only: pq-crystals/dilithium `ref/` and `avx2/`, each parameter set a separate build of the sources, with their own makefiles' flags |
+| `mldsa-native` | `ops_mldsanative.h` | ML-DSA only: pq-code-package/mldsa-native, its monolithic multilevel build with the x86-64 native (AVX2) arithmetic and Keccak backends |
 
 Every binary also links hacl-pulse, which generates all keys, messages and
 nonces and acts as the oracle: before a row is timed the library's output is

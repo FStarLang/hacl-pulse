@@ -1,15 +1,19 @@
 """Regenerate the README's other-libraries table from an others.sh output dir.
 
-Usage: python3 mkothers.py <bench-dir>
+Usage: python3 mkothers.py <bench-dir> [canary tolerance, default 0.02]
 
 One row per primitive, one column per contender (fastest of all runs), the
 fastest entry in each row in bold, and a last column giving the better of
 the two hacl-pulse builds divided by the fastest other library.  Rows are
 sorted by that ratio.  Runs with an unhealthy canary are dropped first.  A dash means the library does not offer the row.
+
+The ML-DSA-only contenders get no column here and do not count in the
+ratio; mkmldsa.py prints the full ML-DSA table.
 """
 import csv, glob, os, sys
 
 d = sys.argv[1]
+TOL = float(sys.argv[2]) if len(sys.argv) > 2 else 0.02
 
 COLS = [  # (csv file prefix, header)
     ("pulse-gcc",   "hacl-pulse (gcc)"),
@@ -29,11 +33,11 @@ def canary(f):
             return float(r[3])
     return None
 
-# A run whose canary is more than 2% above the best seen anywhere measured a
+# A run whose canary is more than TOL (2%) above the best seen anywhere measured a
 # slower core, not a slower library, and is dropped.
 CAN = {f: canary(f) for f in glob.glob(os.path.join(d, "O*.csv"))}
 FLOOR = min(c for c in CAN.values() if c)
-DROPPED = [f for f, c in CAN.items() if c is None or c > 1.02 * FLOOR]
+DROPPED = [f for f, c in CAN.items() if c is None or c > (1 + TOL) * FLOOR]
 print("canary floor %.0f ms; dropped %d of %d runs"
       % (FLOOR / 1e6, len(DROPPED), len(CAN)), file=sys.stderr)
 
@@ -55,7 +59,7 @@ def load(prefix):
     return best
 
 DATA = {c: load(c) for c, _ in COLS}
-for c, _ in COLS:
+for c in DATA:
     if not DATA[c]:
         sys.exit("no healthy run of %s in %s" % (c, d))
 
@@ -91,6 +95,9 @@ ROWS = [
     ("ML-KEM-768 keygen",    "--",      "mlkem768-keypair", "0"),
     ("ML-KEM-768 encaps",    "--",      "mlkem768-encapsulate", "0"),
     ("ML-KEM-768 decaps",    "--",      "mlkem768-decapsulate", "0"),
+    ("ML-DSA-65 keygen",     "--",      "mldsa65-keypair", "0"),
+    ("ML-DSA-65 sign",       "--",      "mldsa65-sign", "0"),
+    ("ML-DSA-65 verify",     "--",      "mldsa65-verify", "0"),
 ]
 
 def t(ns):
@@ -105,7 +112,7 @@ for name, szl, k, sz in ROWS:
     key = (k, sz)
     vals = {c: DATA[c].get(key) for c, _ in COLS}
     pulse = [vals[c] for c in PULSE if vals[c] is not None]
-    others = [vals[c] for c, _ in COLS if c not in PULSE and vals[c] is not None]
+    others = [v for c, v in vals.items() if c not in PULSE and v is not None]
     if not pulse:
         print("MISSING", key, file=sys.stderr)
         continue

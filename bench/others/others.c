@@ -11,7 +11,8 @@
  * output is checked against hacl-pulse's -- byte for byte where the
  * operation is deterministic, by cross-verification where it is not (ECDSA
  * signatures are verified by hacl-pulse; ML-KEM ciphertexts are
- * decapsulated by the other side) -- and the binary aborts on any mismatch,
+ * decapsulated by the other side; hedged ML-DSA signatures are verified by
+ * hacl-pulse) -- and the binary aborts on any mismatch,
  * so a row can never be measuring something different from its label.
  *
  * Keys are expanded or loaded once, outside the timed region, wherever the
@@ -63,9 +64,12 @@ static void report(const char *name, size_t bytes, double secs) {
   fflush(stdout);
 }
 
-#define TIME(name_, bytes_, body_)                                             \
+#define TIME(name_, bytes_, body_) TIME_MIN(name_, bytes_, 1, body_)
+
+/* min_ is a power of two; every iteration count is then a multiple of it. */
+#define TIME_MIN(name_, bytes_, min_, body_)                                   \
   do {                                                                         \
-    uint64_t iters = 1;                                                        \
+    uint64_t iters = (min_);                                                   \
     double t = 0;                                                              \
     for (;;) {                                                                 \
       t = now_sec();                                                           \
@@ -354,6 +358,62 @@ int main(void) {
     TIME("mlkem768-encapsulate", 0, { bo_mlkem768_enc(ct, ss); sink += ss[0]; });
     TIME("mlkem768-decapsulate", 0, { bo_mlkem768_dec(ss, rct); sink += ss[0]; });
   }
+#endif
+
+  /* ---------------- ML-DSA ----------------
+   * Key generation from a 32-byte seed (pk compared with hacl-pulse's).
+   * Signing is FIPS 204 ML-DSA.Sign with an empty context, over NMSG
+   * different 32-byte messages in turn (the number of rejection-loop
+   * iterations varies per message, so every library signs the same set, an
+   * equal number of times each); deterministic signers are compared byte for
+   * byte with hacl-pulse's sign_deterministic, hedged ones (BO_MLDSA_HEDGED)
+   * are verified by hacl-pulse.  Verification runs over hacl-pulse's
+   * signatures of the same messages, and must reject a forged one. */
+#define NMSG 64
+#define MLDSA_ROWS(P_, PK_, SK_, SG_)                                          \
+  do {                                                                         \
+    static uint8_t pk[PK_], sk[SK_], kpk[PK_], sg[SG_], rsg[NMSG][SG_];        \
+    uint8_t xi[32];                                                            \
+    uint64_t k = 0;                                                            \
+    fill(xi, 32, 70 + P_);                                                     \
+    Hacl_MLDSA##P_##_keypair(pk, sk, xi);                                      \
+    bo_mldsa##P_##_keygen(kpk, xi);                                            \
+    same("ml-dsa-" #P_ " keypair", kpk, pk, PK_);                              \
+    bo_mldsa##P_##_setup(pk, sk);                                              \
+    for (int j = 0; j < NMSG; j++) {                                           \
+      if (!Hacl_MLDSA##P_##_sign_deterministic(rsg[j], sk, msg + j, 32, NULL, 0)) \
+        fail("hacl-pulse ml-dsa-" #P_ " sign");                                \
+      if (!bo_mldsa##P_##_sign(sg, msg + j, 32)) fail("ml-dsa-" #P_ " sign");  \
+      if (MLDSA_HEDGED) {                                                      \
+        if (!Hacl_MLDSA##P_##_verify(pk, msg + j, 32, NULL, 0, sg))            \
+          fail("ml-dsa-" #P_ " signature");                                    \
+      } else                                                                   \
+        same("ml-dsa-" #P_ " signature", sg, rsg[j], SG_);                     \
+      if (!bo_mldsa##P_##_verify(msg + j, 32, rsg[j]))                         \
+        fail("ml-dsa-" #P_ " verify (valid)");                                 \
+    }                                                                          \
+    rsg[0][40] ^= 1;                                                           \
+    if (bo_mldsa##P_##_verify(msg, 32, rsg[0])) fail("ml-dsa-" #P_ " verify (forged)"); \
+    rsg[0][40] ^= 1;                                                           \
+    TIME("mldsa" #P_ "-keypair", 0, { bo_mldsa##P_##_keygen(kpk, xi); sink += kpk[0]; }); \
+    TIME_MIN("mldsa" #P_ "-sign", 0, NMSG,                                     \
+             { sink += bo_mldsa##P_##_sign(sg, msg + (k % NMSG), 32); k++; }); \
+    TIME_MIN("mldsa" #P_ "-verify", 0, NMSG,                                   \
+             { sink += bo_mldsa##P_##_verify(msg + (k % NMSG), 32, rsg[k % NMSG]); k++; }); \
+  } while (0)
+#ifdef BO_MLDSA_HEDGED
+#define MLDSA_HEDGED 1
+#else
+#define MLDSA_HEDGED 0
+#endif
+#ifdef BO_MLDSA44
+  MLDSA_ROWS(44, 1312, 2560, 2420);
+#endif
+#ifdef BO_MLDSA65
+  MLDSA_ROWS(65, 1952, 4032, 3309);
+#endif
+#ifdef BO_MLDSA87
+  MLDSA_ROWS(87, 2592, 4896, 4627);
 #endif
 
   {
