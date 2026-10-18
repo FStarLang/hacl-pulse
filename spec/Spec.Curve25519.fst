@@ -86,11 +86,17 @@ let fmul_assoc (x y z: elem) : Lemma (fmul (fmul x y) z == fmul x (fmul y z)) =
   Math.lemma_mod_mul_distr_r x (y * z) prime;
   Math.paren_mul_right x y z
 
+(** One unfolding of [fexp], in a small context. *)
+private let fexp_succ (x: elem) (m n: nat)
+  : Lemma (requires m == n + 1) (ensures fexp x m == fmul x (fexp x n)) = ()
+
 let rec fexp_add (x: elem) (a b: nat)
   : Lemma (ensures fexp x (a + b) == fmul (fexp x a) (fexp x b)) (decreases a)
   = if a = 0 then (fmul_comm (fexp x 0) (fexp x b); fmul_one (fexp x b))
     else begin
       fexp_add x (a - 1) b;
+      fexp_succ x (a + b) ((a - 1) + b);
+      fexp_succ x a (a - 1);
       fmul_assoc x (fexp x (a - 1)) (fexp x b)
     end
 
