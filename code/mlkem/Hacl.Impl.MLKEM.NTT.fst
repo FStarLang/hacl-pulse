@@ -330,10 +330,19 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
     SZ.fits_u32_implies_fits (SZ.v vi + 1);
     let nc = SZ.add vc 1sz;
     assert (pure (SZ.v nc == SZ.v vc + 1 /\ SZ.v dbl == pow2 (reveal e + 1)));
+    (* As in [ntt_layer_impl], spell out each branch. *)
     if (SZ.eq nc dbl) {
+      assert (pure (SZ.v nc == SZ.v dbl));
       b := SZ.add vb 1sz;
       c := 0sz;
+      assert (pure (SZ.v vi + 1 == (SZ.v vb + 1) * pow2 (reveal e + 1) + 0 /\
+                    0 < pow2 (reveal e + 1)));
     } else {
+      assert (pure (SZ.v nc <> SZ.v dbl));
+      assert (pure (SZ.v nc <= SZ.v dbl));
+      assert (pure (SZ.v nc < SZ.v dbl));
+      assert (pure (SZ.v vi + 1 == SZ.v vb * pow2 (reveal e + 1) + SZ.v nc));
+      assert (pure (SZ.v nc < pow2 (reveal e + 1)));
       c := nc;
     };
     i := SZ.add vi 1sz;
