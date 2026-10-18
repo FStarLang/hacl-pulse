@@ -82,7 +82,7 @@ effort than following `master` and fixing what breaks.
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules, `Spec.MLDSA` and its parameter, field, NTT, sampling, rounding and encoding modules |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules, `Spec.MLDSA` and its parameter, field, NTT, sampling, rounding and encoding modules, with their lemmas and the sign-then-verify proof `Spec.MLDSA.Correctness` |
 | `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/mldsa/`, `code/hpke/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, and the 64-bit add-with-carry / subtract-with-borrow used by X25519 |
 | `tests/` | C test harnesses |
@@ -3338,8 +3338,20 @@ The specification is `Spec.MLDSA` and its modules --- `Params`, `Zq`,
 `NTT`, `Sample`, `Rounding`, `Encode` --- written from the standard's
 algorithm listings, and the implementation is `code/mldsa/`.  The
 correctness statement is the same shape as ML-KEM's: each entry point
-computes the FIPS 204 algorithm byte for byte, and, with the same caveat,
-that the specification's NTT is multiplication in the ring is not proved.
+computes the FIPS 204 algorithm byte for byte.
+
+The specification is also proved correct as a signature scheme.
+`Spec.MLDSA.Correctness.sign_verify` states that for every seed, message,
+context and randomness, a signature produced by `sign` under the private
+key from `keygen_internal` is accepted by `verify` under the matching
+public key (and likewise for the `_internal` and `_mu` entry points).  The
+proof rests on lemmas proved along the way: the NTT is a ring isomorphism
+onto `Z_q[X]/(X^256 + 1)` (`Spec.MLDSA.Ring`, `Spec.MLDSA.NTT.Lemmas`); the
+hint recovers the high bits, and high bits are stable under small
+perturbations (`Spec.MLDSA.Rounding.Lemmas`); the key, signature and hint
+encodings round-trip (`Spec.MLDSA.Encode.Lemmas`, `Spec.MLDSA.Hint.Lemmas`);
+and the sampled secrets and challenge are short enough that `c s2` is
+bounded by `beta` (`Spec.MLDSA.Sample.Lemmas`).
 The coefficient type is again a refinement (`x: S32.t { S32.v x < q }`),
 the transform multiplies by its roots with Shoup's trick against a
 precomputed quotient table, and pointwise products use a Montgomery step.

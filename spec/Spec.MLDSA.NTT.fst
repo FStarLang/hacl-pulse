@@ -25,9 +25,9 @@
     256 entries indexed by [BitRev8], and the product in the NTT domain is
     coefficient by coefficient.
 
-    As in ML-KEM, that [NTT] is a ring isomorphism is not proved here; the
-    claim is that the implementation computes what the standard's
-    pseudocode computes. *)
+    That [NTT] is a ring isomorphism is proved separately, in
+    {!Spec.MLDSA.NTT.Lemmas}; this module is the standard's pseudocode,
+    which the implementation is proved to compute. *)
 module Spec.MLDSA.NTT
 
 open Spec.MLDSA.Zq
