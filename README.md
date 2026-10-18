@@ -12,14 +12,14 @@ library uses the feature.  `design/` records what HACL\* does and
 Status: **feature parity with HACL\***, and past it in places -- all four
 FrodoKEM parameter sets are here, HPKE is here in all four modes where
 HACL\* ships only Base and only over ChaCha20-Poly1305, and ML-KEM
-(FIPS 203) is here in all three parameter sets, which HACL\* does not have
-at all.  The one deliberate omission
+(FIPS 203) and ML-DSA (FIPS 204) are here in all three parameter sets
+each, which HACL\* does not have at all.  The one deliberate omission
 is an agile provider in the shape of EverCrypt; see the roadmap below.
 Everything listed there is specified, implemented, verified, extracted and
 tested against the published vectors -- FIPS 180-4, FIPS 202, RFC 4231,
 RFC 5869, RFC 7748, RFC 8032, RFC 7919, RFC 9180, FIPS 186-4, PKCS#1 v2.2,
 the NIST CAVP sets for AES-GCM and HMAC-DRBG, the FrodoKEM known-answer
-tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
+tests, the NIST ACVP vectors for ML-KEM and ML-DSA, and the NaCl vectors --
 thirty-four C test harnesses in `tests/`.
 
 Performance is measured against HACL\* configured for the machine and allowed
@@ -82,8 +82,8 @@ effort than following `master` and fixing what breaks.
 | directory | contents |
 | --- | --- |
 | `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables, wiped scratch memory (`Hacl.Mem`) |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules, and a `*.Correctness` module beside each scheme (see [Functional correctness](#functional-correctness)) |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules, `Spec.MLDSA` and its parameter, field, NTT, sampling, rounding and encoding modules, with their lemmas and the sign-then-verify proof `Spec.MLDSA.Correctness` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/mldsa/`, `code/hpke/`) |
 | `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, the 64-bit add-with-carry / subtract-with-borrow used by X25519, and the memory wiping in `Hacl_Mem.h` |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
@@ -3372,6 +3372,85 @@ The generator re-validates its reference against all one hundred and eighty
 published keyGen, encapsulation and decapsulation cases before it emits
 anything.
 
+### ML-DSA, where signing is a loop that is allowed to fail
+
+ML-DSA is FIPS 204, the standardised Dilithium, and it is ML-KEM's
+signature-scheme sibling: the same module-lattice idea, a different ring.
+The modulus is `q = 8380417 = 2^23 - 2^13 + 1`, which has a primitive
+512th root of unity (1753), so in `Z_q[X]/(X^256 + 1)` the transform goes
+all the way down: eight layers of butterflies, and polynomial multiplication
+in the NTT domain is 256 independent products of coefficients rather than
+ML-KEM's products of linear polynomials.  There is no ML-DSA in HACL\*
+either; this is new code.
+
+The specification is `Spec.MLDSA` and its modules --- `Params`, `Zq`,
+`NTT`, `Sample`, `Rounding`, `Encode` --- written from the standard's
+algorithm listings, and the implementation is `code/mldsa/`.  The
+correctness statement is the same shape as ML-KEM's: each entry point
+computes the FIPS 204 algorithm byte for byte.
+
+The specification is also proved correct as a signature scheme.
+`Spec.MLDSA.Correctness.sign_verify` states that for every seed, message,
+context and randomness, a signature produced by `sign` under the private
+key from `keygen_internal` is accepted by `verify` under the matching
+public key (and likewise for the `_internal` and `_mu` entry points).  The
+proof rests on lemmas proved along the way: the NTT is a ring isomorphism
+onto `Z_q[X]/(X^256 + 1)` (`Spec.MLDSA.Ring`, `Spec.MLDSA.NTT.Lemmas`); the
+hint recovers the high bits, and high bits are stable under small
+perturbations (`Spec.MLDSA.Rounding.Lemmas`); the key, signature and hint
+encodings round-trip (`Spec.MLDSA.Encode.Lemmas`, `Spec.MLDSA.Hint.Lemmas`);
+and the sampled secrets and challenge are short enough that `c s2` is
+bounded by `beta` (`Spec.MLDSA.Sample.Lemmas`).
+The coefficient type is again a refinement (`x: S32.t { S32.v x < q }`),
+the transform multiplies by its roots with Shoup's trick against a
+precomputed quotient table, and pointwise products use a Montgomery step.
+
+Signing is Fiat-Shamir with aborts: draw a mask `y`, commit to the high bits
+of `A y`, hash to a challenge `c`, form `z = y + c s1`, and throw the
+attempt away if `z`, the low bits of `w - c s2`, `c t0` or the hint leak
+anything about the key.  The standard writes this as an unbounded loop; a
+total specification cannot, so `Spec.MLDSA.Params.max_attempts` bounds it at
+1024 attempts, and `sign` returns `None` (`false` in C) if every one is
+rejected.  The expected number is four to five and running out has
+probability far below `2^-256`, so this is a statement about the proof, not
+about any observable behaviour.  The bound also keeps the 16-bit counter
+`kappa` from wrapping.
+
+The rejection loop is also the constant-time question.  The private key and
+the mask are secret throughout, and each attempt declassifies exactly its
+four verdicts, as section 3.6.3 of FIPS 204 and the reference
+implementation do: whether an attempt is rejected, and by which test,
+reveals nothing the accepted signature does not.  The hint is computed under
+a secret mask; only its population count is declassified for the last test,
+and its positions only once the signature is accepted and they are output.
+Verification handles public data only.
+
+`Hacl.MLDSA44`, `Hacl.MLDSA65` and `Hacl.MLDSA87` instantiate one
+implementation at the three parameter records and export:
+
+| function | FIPS 204 |
+| --- | --- |
+| `keypair(pk, sk, xi)` | `ML-DSA.KeyGen_internal`, from a 32-byte seed |
+| `sign(sg, sk, msg, msg_len, ctx, ctx_len, rnd)` | `ML-DSA.Sign`, hedged, with a context string |
+| `sign_deterministic(sg, sk, msg, msg_len, ctx, ctx_len)` | `ML-DSA.Sign` with `rnd` all zero |
+| `verify(pk, msg, msg_len, ctx, ctx_len, sg)` | `ML-DSA.Verify` |
+| `sign_internal`, `verify_internal` | algorithms 7 and 8 on a formatted message `M'` |
+| `sign_mu`, `verify_mu` | algorithms 7 and 8 on a caller-computed 64-byte `mu` ("external mu") |
+
+A context longer than 255 bytes makes `sign` and `verify` return `false`,
+as the standard requires.  Pre-hashed HashML-DSA is not implemented.  The
+caller supplies randomness, as everywhere else in this library: `xi` for
+key generation and `rnd` for hedged signing.
+
+`tests/test_mldsa.c` anchors each parameter set at the first NIST ACVP
+keyGen seed and checks digests of the keys and of deterministic, hedged and
+internal signatures, that `sign_mu` agrees with `sign_internal`, and that
+verification rejects a flipped bit, a different context, a pure signature
+presented to the internal interface and a modified `mu`.  Beyond the
+checked-in test, the extracted C was run offline against all 480 ACVP
+keyGen, sigGen and sigVer cases that do not use pre-hashing, with no
+failures.
+
 ### HPKE, where the ciphersuite is a record rather than fifteen modules
 
 RFC 9180 is an agility standard: a hybrid public-key encryption scheme
@@ -4284,6 +4363,24 @@ they are the ones measured at 1.31x on encapsulation above.  The lesson
 is the same one the clone survey teaches, applied to our own hand: a
 specialisation is justified by a measurement, not by the fact that
 something downstream of it used to be slow.
+
+### ML-DSA, against the reference implementation
+
+HACL\* has no ML-DSA either.  Measured with the same harness, on the same
+machine, and with the pq-crystals reference C (`ref/`, `gcc -O3`) for scale:
+
+| operation | 44 | 65 | 87 | reference 44 / 65 / 87 |
+| --- | ---: | ---: | ---: | ---: |
+| keypair | 126 us | 227 us | 356 us | 88 / 156 / 235 us |
+| sign | 462 us | 761 us | 964 us | 405 / 648 / 787 us |
+| verify | 129 us | 213 us | 358 us | 95 / 150 / 244 us |
+
+Signing is an average over random messages, and a single signature takes
+however many attempts it takes, so its spread is wide.  The gap to the
+reference is 1.1x to 1.5x.  About 45% of the time is Keccak, which is the
+shared SHA-3 permutation squeezed a byte at a time; the pointwise product,
+which reduces twice per coefficient, is 16% and the transforms 19%.  Those
+are the obvious next steps.
 
 ### Against other libraries
 

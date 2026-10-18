@@ -182,6 +182,16 @@ CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM512., keypair enc dec ek_valid dk_valid
 CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM768., keypair enc dec ek_valid dk_valid)
 CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM1024., keypair enc dec ek_valid dk_valid)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.MLDSA44., \
+  keypair sign sign_deterministic verify \
+  sign_internal verify_internal sign_mu verify_mu)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLDSA65., \
+  keypair sign sign_deterministic verify \
+  sign_internal verify_internal sign_mu verify_mu)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLDSA87., \
+  keypair sign sign_deterministic verify \
+  sign_internal verify_internal sign_mu verify_mu)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.HPKE.Suites., \
   x25519_sha256_chachapoly_setup_base_s x25519_sha256_chachapoly_setup_base_r \
   x25519_sha256_chachapoly_seal x25519_sha256_chachapoly_open \
