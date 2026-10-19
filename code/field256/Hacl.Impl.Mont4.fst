@@ -174,6 +174,10 @@ ensures exists* (vo': Seq.seq S64.t).
 
 (** {2 Copying} *)
 
+(** Straight-line, not a loop: gcc vectorizes a four-word copy loop into
+    two 16-byte loads, and when the source was just written by the field
+    multiply's four 8-byte stores the loads miss store forwarding.  That
+    stall made P-256 point arithmetic 1.4x slower under gcc. *)
 fn acopy (dst src: A.array S64.t)
          (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
 requires A.pts_to dst vd ** A.pts_to src #ps vs **
@@ -184,24 +188,16 @@ ensures exists* (vd': Seq.seq S64.t).
 {
   A.pts_to_len dst;
   A.pts_to_len src;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 4sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S64.t).
-    pts_to i vi ** A.pts_to dst v ** A.pts_to src #ps vs **
-    pure (SZ.v vi <= 4 /\ Seq.length v == nl /\
-          (forall (k: nat). k < SZ.v vi ==> Seq.index v k == Seq.index vs k))
-  decreases (4 - SZ.v (!i))
-  {
-    let vi = !i;
-    let x = A.(src.(vi));
-    A.((dst.(vi) <- x));
-    i := SZ.add vi 1sz;
-  };
+  let x0 = A.(src.(0sz));
+  let x1 = A.(src.(1sz));
+  let x2 = A.(src.(2sz));
+  let x3 = A.(src.(3sz));
+  A.((dst.(0sz) <- x0));
+  A.((dst.(1sz) <- x1));
+  A.((dst.(2sz) <- x2));
+  A.((dst.(3sz) <- x3));
   with v. assert (A.pts_to dst v);
-  assert (pure (Seq.length v == nl /\
-                (forall (k: nat). k < nl ==> Seq.index v k == Seq.index vs k)));
-  Seq.lemma_eq_intro v vs;
-  ()
+  assert (pure (v `Seq.equal` reveal vs));
 }
 
 (** {2 Zeroing} *)

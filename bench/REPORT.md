@@ -8545,3 +8545,55 @@ Poly1305 from 1.33x to 1.23x, and Salsa20 and secretbox from 1.14x to
 HACL\*'s 79 us, is in the round function's code generation, not in wiping.
 The Custard behaviour is worth fixing upstream: a seed's own string should
 go to what that seed alone reaches.
+
+
+## Part 72: a four-word copy loop and store forwarding
+
+Under gcc every P-256 operation ran 1.6--1.9x slower than under clang
+(ECDH 88 us against 50, verification 290 against 162), while secp256k1 and
+Ed25519, on the same carry primitives, were level or ahead under gcc.  The
+field multiply was not the reason: timed alone, P-256's `fmul` took 25 ns
+under gcc and 19.6 under clang, but a point doubling, twelve multiplies and
+about twenty additions, took 586 ns against 298.
+
+The doubling copies a field element after nearly every operation, because
+Pulse will not let an output alias an input, and every copy is
+`Hacl.Impl.Mont4.acopy`, a four-iteration loop.  gcc's loop vectorizer turns
+it into two 16-byte loads and stores.  When the source was just written by
+the multiply's four 8-byte stores -- which is almost always -- the 16-byte
+load cannot be forwarded from the store buffer and waits for the stores to
+retire.  clang does not vectorize the loop.  Turning the vectorizer off took
+the doubling from 586 ns to 430 under gcc; enabling BMI2 (for `mulx`)
+changed nothing, and neither did `_addcarry_u64` in place of
+`__builtin_addcll` (faster `fmul`, slower doubling), nor dropping the copy
+in `fsqr`.
+
+`acopy` is now four loads and four stores in straight-line code, as
+Curve25519's `Field64.copy` and secp256k1's `Field52.fcopy` already were.
+gcc's SLP vectorizer still pairs a few copies, but the doubling is 414 ns
+and inversion 9.0 us instead of 13.7.  Ed25519's five-word loop copy
+(`Hacl_Curve25519_Field_copy`) was tried the same way and made no
+difference, so it is unchanged.
+
+| best of 8, interleaved, same session | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| P-256 ECDH (initiator) | 88.2 us | 64.3 us | 50.9 us | 51.5 us |
+| P-256 ECDH (responder) | 206 us | 149 us | 111 us | 111 us |
+| P-256 ECDSA sign | 99.5 us | 75.5 us | 60.9 us | 61.5 us |
+| P-256 ECDSA verify | 290 us | 216 us | 165 us | 162 us |
+
+secp256k1 and Ed25519, whose scalar code also uses `Mont4`, moved within
+1% under gcc and 4% under clang.  What is left of the gcc gap, about 1.25x,
+is the multiply itself: gcc spills and re-materializes carries
+(`setc`/`movzbl`/`addb $-1`) between the product's row chains and the four
+reduction steps where clang keeps one `adc` chain.
+
+Tables re-measured under gcc (`table.sh 3`; the clang table is unchanged,
+since clang never vectorized the loop).  Against HACL\* best, P-256 ECDH
+went from 0.64x to 0.47x, signing from 0.66x to 0.51x and verification
+from 0.76x to 0.57x; every other row moved within noise.  In the table
+against other libraries (`others.sh 3`, 6% canary cut, only the P-256 rows
+replaced) the gcc column went from 209 us to 155 for variable-base ECDH,
+104 to 77 for signing and 304 to 220 for verification; the ratios, which
+take the faster of the two compilers and so are clang's, are unchanged
+within noise at 2.2x--3.8x.

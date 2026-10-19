@@ -3601,57 +3601,61 @@ reference**.
 
 | primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Salsa20 | 256 KiB | 95 us | 392 us | **0.24x** | 390 us | 0.24x |
-| NaCl secretbox | 256 KiB | 141 us | 559 us | **0.25x** | 562 us | 0.25x |
-| RSA-PSS-2048 verify | -- | 51 us | 117 us | **0.44x** | 118 us | 0.43x |
-| SHA-512 | 256 KiB | 627 us | 1.2 ms | **0.52x** | 1.2 ms | 0.52x |
-| SHA3-256 | 256 KiB | 753 us | 1.4 ms | **0.54x** | 1.4 ms | 0.54x |
-| HMAC-SHA-512 | 256 KiB | 655 us | 1.2 ms | **0.54x** | 1.2 ms | 0.54x |
-| SHAKE128 | 256 KiB | 633 us | 1.1 ms | **0.56x** | 1.1 ms | 0.56x |
-| P-256 ECDH | -- | 88 us | 137 us | **0.64x** | 136 us | 0.64x |
-| P-256 ECDSA sign | -- | 98 us | 149 us | **0.66x** | 147 us | 0.67x |
-| P-256 ECDSA verify | -- | 290 us | 382 us | **0.76x** | 376 us | 0.77x |
-| BLAKE2b | 256 KiB | 337 us | 388 us | **0.87x** | 324 us | 1.04x |
-| BLAKE2s | 256 KiB | 525 us | 559 us | **0.94x** | 549 us | 0.96x |
-| FFDHE-2048 | -- | 3.7 ms | 3.9 ms | **0.95x** | 3.9 ms | 0.95x |
-| Poly1305 | 256 KiB | 44 us | 46 us | **0.97x** | 167 us | 0.26x |
-| RSA-PSS-2048 sign | -- | 3.8 ms | 3.9 ms | **0.97x** | 3.9 ms | 0.97x |
-| RSA-2048 modexp | -- | 3.7 ms | 3.8 ms | **0.98x** | 3.8 ms | 0.99x |
-| SHA-1 | 256 KiB | 1.6 ms | 1.5 ms | **1.09x** | 1.5 ms | 1.08x |
-| ChaCha20-Poly1305 | 256 KiB | 139 us | 126 us | **1.10x** | 1.0 ms | 0.14x |
-| AES-128-GCM | 256 KiB | 70 us | 61 us | **1.15x** | 60 us | 1.17x |
-| SHA-256 | 256 KiB | 182 us | 157 us | **1.16x** | 972 us | 0.19x |
-| secp256k1 ECDSA sign | -- | 65 us | 56 us | **1.16x** | 57 us | 1.16x |
-| HMAC-SHA-256 | 256 KiB | 185 us | 158 us | **1.17x** | 969 us | 0.19x |
-| ChaCha20 | 256 KiB | 93 us | 79 us | **1.19x** | 816 us | 0.11x |
-| MD5 | 256 KiB | 506 us | 391 us | **1.30x** | 392 us | 1.29x |
-| X25519 | -- | 48 us | 36 us | **1.31x** | 36 us | 1.34x |
-| Ed25519 sign | -- | 66 us | 50 us | **1.32x** | 50 us | 1.32x |
+| Salsa20 | 256 KiB | 96 us | 393 us | **0.24x** | 390 us | 0.25x |
+| NaCl secretbox | 256 KiB | 142 us | 568 us | **0.25x** | 557 us | 0.26x |
+| RSA-PSS-2048 verify | -- | 51 us | 119 us | **0.43x** | 118 us | 0.43x |
+| P-256 ECDH | -- | 64 us | 137 us | **0.47x** | 138 us | 0.47x |
+| P-256 ECDSA sign | -- | 76 us | 148 us | **0.51x** | 149 us | 0.51x |
+| HMAC-SHA-512 | 256 KiB | 636 us | 1.2 ms | **0.52x** | 1.2 ms | 0.53x |
+| SHAKE128 | 256 KiB | 630 us | 1.2 ms | **0.53x** | 1.1 ms | 0.55x |
+| SHA3-256 | 256 KiB | 765 us | 1.4 ms | **0.54x** | 1.4 ms | 0.54x |
+| SHA-512 | 256 KiB | 650 us | 1.2 ms | **0.54x** | 1.2 ms | 0.54x |
+| P-256 ECDSA verify | -- | 216 us | 376 us | **0.57x** | 378 us | 0.57x |
+| BLAKE2b | 256 KiB | 338 us | 388 us | **0.87x** | 326 us | 1.04x |
+| BLAKE2s | 256 KiB | 524 us | 563 us | **0.93x** | 548 us | 0.96x |
+| RSA-PSS-2048 sign | -- | 3.7 ms | 3.9 ms | **0.95x** | 3.9 ms | 0.95x |
+| Poly1305 | 256 KiB | 44 us | 46 us | **0.95x** | 165 us | 0.27x |
+| FFDHE-2048 | -- | 3.7 ms | 3.8 ms | **0.96x** | 3.8 ms | 0.97x |
+| RSA-2048 modexp | -- | 3.7 ms | 3.8 ms | **0.98x** | 3.8 ms | 0.98x |
+| ChaCha20-Poly1305 | 256 KiB | 138 us | 128 us | **1.08x** | 1.0 ms | 0.14x |
+| SHA-1 | 256 KiB | 1.6 ms | 1.5 ms | **1.08x** | 1.5 ms | 1.10x |
+| AES-128-GCM | 256 KiB | 68 us | 61 us | **1.12x** | 61 us | 1.12x |
+| secp256k1 ECDSA sign | -- | 65 us | 57 us | **1.14x** | 57 us | 1.15x |
+| ChaCha20 | 256 KiB | 93 us | 81 us | **1.15x** | 814 us | 0.11x |
+| SHA-256 | 256 KiB | 185 us | 158 us | **1.17x** | 974 us | 0.19x |
+| HMAC-SHA-256 | 256 KiB | 187 us | 160 us | **1.17x** | 974 us | 0.19x |
+| MD5 | 256 KiB | 504 us | 397 us | **1.27x** | 391 us | 1.29x |
+| X25519 | -- | 48 us | 37 us | **1.28x** | 36 us | 1.33x |
+| Ed25519 sign | -- | 66 us | 51 us | **1.30x** | 50 us | 1.31x |
 
 Against what HACL\* can actually do on this machine, sixteen rows are ahead
-and every row is within 1.32x.  The furthest ahead are Salsa20 and
+and every row is within 1.30x.  The furthest ahead are Salsa20 and
 secretbox at 0.24x--0.25x, because HACL\* has no vector Salsa20; RSA
-verification at 0.44x, whose ladder starts at the exponent's top set bit
-(`bench/REPORT.md` Part 67); SHA-512, HMAC-SHA-512, SHA-3 and SHAKE at
-0.52x--0.56x, where HACL\* has no vector SHA-512 and no vector sponge; and
-the three P-256 rows at 0.64x--0.76x.  The BLAKE2 rows, Poly1305 and the
+verification at 0.43x, whose ladder starts at the exponent's top set bit
+(`bench/REPORT.md` Part 67); the three P-256 rows at 0.47x--0.57x; and
+SHA-512, HMAC-SHA-512, SHA-3 and SHAKE at 0.52x--0.54x, where HACL\* has
+no vector SHA-512 and no vector sponge.  P-256 was at 0.64x--0.76x until
+its field-element copy stopped being a loop: gcc vectorized the four-word
+loop into 16-byte loads that missed store forwarding from the multiply's
+8-byte stores, and every point operation copies after nearly every field
+operation (`bench/REPORT.md` Part 72).  The BLAKE2 rows, Poly1305 and the
 modular exponentiations are level or slightly ahead.
 
 The stream-cipher rows lost their lead with the processor.  On the Skylake
 machine ChaCha20 and ChaCha20-Poly1305 were at 0.53x and 0.67x because the
 AVX-512F backend ran sixteen blocks to HACL\*'s eight (Part 60); this
 processor has no AVX-512, so the comparison is now AVX2 against AVX2, at
-1.19x and 1.10x (1.31x and 1.17x until Custard was stopped from compiling
+1.15x and 1.08x (1.31x and 1.17x until Custard was stopped from compiling
 the vector wipes for the wrong target; `bench/REPORT.md` Part 71).  It does
 have SHA extensions, so SHA-256 and HMAC-SHA-256 are this repository's
-intrinsics against Vale's SHA-EXT assembly, at 1.16x--1.17x (and 0.19x of
-HACL\*'s portable C).  AES-128-GCM is at 1.15x, MD5 at 1.30x, and X25519
-at 1.31x: under gcc the radix-2^64 field (see
+intrinsics against Vale's SHA-EXT assembly, at 1.17x (and 0.19x of
+HACL\*'s portable C).  AES-128-GCM is at 1.12x, MD5 at 1.27x, and X25519
+at 1.28x: under gcc the radix-2^64 field (see
 [Curve25519 again, four limbs of sixty-four bits](#curve25519-again-four-limbs-of-sixty-four-bits))
 is a little slower than the radix-51 code it replaced; under clang it is
 level with HACL\*'s BMI2/ADX assembly.
 
-Ed25519 and secp256k1 signing, at 1.32x and 1.16x, were briefly at 1.71x
+Ed25519 and secp256k1 signing, at 1.30x and 1.14x, were briefly at 1.71x
 and 1.52x when the tables were first re-measured after secret temporaries
 began to be wiped (issue #1).  Under gcc, a wipe whose length gcc cannot
 see, or of 128 bytes or more, became `rep stosq`, whose start-up cost
@@ -3869,7 +3873,11 @@ us to **65** under gcc and from 77 to **49** under clang, signing from 119 to
 **86** and 96 to **69**, and verification from 256 to **224** and 194 to
 **166**.  A faster scalar multiplier and an addition-chain inversion (Part
 65) then took signing to **75** and **57** and verification to **213** and
-**154**.  The table above includes all four: P-256 is now at 0.60x--0.72x
+**154**.  Making the four-word field copy straight-line code instead of a
+loop that gcc vectorized into store-forwarding stalls (Part 72) then took
+every row a quarter faster under gcc and left clang unchanged: ECDH as
+initiator 88 us to **64**, signing 98 to **76** and verification 290 to
+**216**.  The table above includes all five: P-256 is now at 0.47x--0.57x
 of HACL\* under gcc and 0.93x--1.16x under clang.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
@@ -4468,18 +4476,18 @@ left none of hacl-pulse's gcc build).  The harness is
 | FFDHE-2048 | -- | 4.0 ms | 4.5 ms | **2.1 ms** | 4.1 ms | -- | -- | -- | -- | 1.90x |
 | SHA-512 | 256 KiB | 637 us | 758 us | 332 us | 468 us | 495 us | 643 us | **322 us** | -- | 1.98x |
 | HMAC-SHA-512 | 256 KiB | 673 us | 756 us | 329 us | 463 us | 501 us | -- | **324 us** | -- | 2.08x |
-| P-256 ECDH | -- | 209 us | 111 us | 49 us | **48 us** | -- | -- | -- | -- | 2.32x |
+| P-256 ECDH | -- | 155 us | 109 us | 50 us | **49 us** | -- | -- | -- | -- | 2.22x |
 | RSA-PSS-2048 verify | -- | 51 us | 60 us | 21 us | **17 us** | -- | -- | -- | -- | 2.98x |
 | Ed25519 verify | -- | 118 us | 128 us | 114 us | 40 us | 52 us | -- | 45 us | **37 us** | 3.15x |
-| P-256 ECDSA verify | -- | 304 us | 166 us | 68 us | **52 us** | -- | -- | 63 us | -- | 3.18x |
+| P-256 ECDSA verify | -- | 220 us | 166 us | 67 us | **52 us** | -- | -- | 63 us | -- | 3.20x |
 | ML-KEM-768 keygen | -- | 54 us | 43 us | 48 us | **13 us** | -- | -- | -- | -- | 3.24x |
 | ML-KEM-768 decaps | -- | 70 us | 57 us | 51 us | **17 us** | -- | -- | -- | -- | 3.31x |
 | ML-KEM-768 encaps | -- | 63 us | 49 us | 33 us | **14 us** | -- | -- | -- | -- | 3.51x |
 | ML-DSA-65 keygen | -- | 195 us | 198 us | 176 us | **53 us** | -- | -- | -- | -- | 3.70x |
 | ML-DSA-65 sign | -- | 707 us | 570 us | 1.1 ms | **150 us** | -- | -- | -- | -- | 3.80x |
 | ML-DSA-65 verify | -- | 198 us | 193 us | 188 us | **50 us** | -- | -- | -- | -- | 3.84x |
+| P-256 ECDSA sign | -- | 77 us | 61 us | 25 us | **16 us** | -- | -- | -- | -- | 3.80x |
 | Ed25519 sign | -- | 34 us | 40 us | 41 us | 9.1 us | 16 us | -- | **8.7 us** | 18 us | 3.89x |
-| P-256 ECDSA sign | -- | 104 us | 62 us | 24 us | **16 us** | -- | -- | -- | -- | 3.91x |
 | SHA-1 | 256 KiB | 1.6 ms | 884 us | **148 us** | 148 us | -- | -- | 819 us | -- | 6.00x |
 
 A dash means the library does not offer the operation through the API used:
@@ -4527,7 +4535,7 @@ libjade.  Elsewhere the gaps fall into two groups.
   instruction-set gap: OpenSSL and Firedancer compute its message schedule
   with AVX2, which neither this library nor HACL\* does; SHA-1 is a wider
   one, since OpenSSL uses the SHA extensions for it and hacl-pulse does not.
-  P-256 is at 2.3x--3.9x against `nistz256`'s assembly field, its 150 KB
+  P-256 is at 2.2x--3.8x against `nistz256`'s assembly field, its 150 KB
   of generator multiples and its double-scalar verification.  Ed25519, at
   3.2x--3.9x, is portable radix-2^51 C against s2n-bignum's assembly.
   ML-KEM, at 3.2x--3.5x, and ML-DSA-65, at 3.7x--3.8x of AWS-LC (5.1x--5.3x
