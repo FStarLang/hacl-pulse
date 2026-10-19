@@ -297,7 +297,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
     pure (SZ.v vj <= 16 /\ Seq.length v == n /\
           Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vk == 168 /\
           reveal vrc == (rc <: Seq.seq S64.t) /\
-          reveal vst == squeeze_state (SZ.v vj) (absorb 168 shake_suffix vs) /\
+          reveal vst == squeeze_state (xof_prev (SZ.v vj)) (absorb 168 shake_suffix vs) /\
           SZ.v vc == Seq.length (sampled vs (SZ.v vj * 56)) /\
           (forall (k: nat). k < SZ.v vc ==>
              S16.v (Seq.index v k) == Seq.index (sampled vs (SZ.v vj * 56)) k))
@@ -305,7 +305,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   {
     let vj = !jj;
     let vc = !cnt;
-    xof_block blk starr barr rc_tbl (hide (SZ.v vj)) (hide (absorb 168 shake_suffix vs));
+    xof_block blk starr barr rc_tbl vj (hide (absorb 168 shake_suffix vs));
     xof_block_bytes vs (SZ.v vj);
     assert (pure (3 * (SZ.v vj * 56) == SZ.v vj * 168));
     let x = block_impl dst blk vc vs (hide (SZ.v vj * 56));

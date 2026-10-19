@@ -481,8 +481,12 @@ theta parities.
 Absorb xors whole message blocks straight out of the caller's buffer, and
 stages only the last, padded, block in a 200-byte stack buffer — 200 rather
 than the rate because the rate is not known at compile time.  Squeeze emits
-`min(rate, remaining)` bytes per permutation, so a SHAKE call shorter than the
-rate does exactly one permutation and a long one does not overrun.
+`min(rate, remaining)` bytes per permutation and does not permute after the
+last block (`permute_if`), so a SHAKE call shorter than the rate does
+exactly one permutation and a long one does not overrun.  The streaming
+XOFs the ML-KEM and ML-DSA samplers use (`xof_block`) permute on the way in
+instead, for every block but the first, so the block a sampler stops at
+is not followed by a permutation either.
 
 The proof needed three things that the SHA-2 proof did not.  The round steps
 (`theta_c`, `theta`, `rho_pi`, `chi`) are `[@@"opaque_to_smt"]`, because a

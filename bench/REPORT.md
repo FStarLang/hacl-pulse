@@ -8597,3 +8597,45 @@ replaced) the gcc column went from 209 us to 155 for variable-base ECDH,
 104 to 77 for signing and 304 to 220 for verification; the ratios, which
 take the faster of the two compilers and so are clang's, are unchanged
 within noise at 2.2x--3.8x.
+
+## Part 73: no permutation after the last squeezed block
+
+Before starting on a four-way Keccak, a prototype in C put the portable
+permutation at about 400 ns, but a one-block SHAKE128 of a 34-byte seed,
+which needs one permutation, took 1070 ns.  The squeeze permuted after
+every block it emitted, the last one included, and nothing ever read the
+state that last permutation produced.  When the output length is a
+constant shorter than the rate (SHA3-256, SHA3-512) gcc saw the loop runs
+once and deleted the dead permutation; with a runtime length (SHAKE, and
+so the ML-KEM PRF and ML-DSA's hashes) it could not.  The streaming XOFs
+behind the rejection samplers had the same shape, and there the extra
+permutation sat inside a loop whose trip count depends on the data: one
+wasted permutation per matrix entry, per `RejBoundedPoly` call, per
+`SampleInBall`.
+
+`squeeze_impl` now calls `permute_if`, which permutes only if more output
+remains.  `xof_block` in both `Hacl.Impl.MLKEM.XOF` and
+`Hacl.Impl.MLDSA.XOF` takes the block index at run time and permutes on
+the way in unless it is zero, so the caller's invariant is the state of
+block `xof_prev j` rather than of block `j`.  The first attempt put the
+`if` straight into `squeeze_impl`'s loop body and the query never came
+back (killed after ten minutes); moving it into a helper with its own
+specification verified at once.
+
+| gcc, best of 3, interleaved, same session | before | after | |
+| --- | ---: | ---: | ---: |
+| SHAKE128, 64 bytes | 955 ns | 540 ns | 1.77x |
+| SHAKE128, 1 KiB | 3.73 us | 3.31 us | 1.13x |
+| SHA3-256, 64 bytes | 528 ns | 494 ns | 1.07x |
+| ML-KEM-512 keygen / encaps / decaps | 33.6 / 39.5 / 49.5 us | 30.4 / 35.8 / 45.6 us | 1.09x--1.10x |
+| ML-KEM-768 keygen / encaps / decaps | 55.4 / 64.6 / 77.8 us | 49.4 / 57.8 / 71.2 us | 1.09x--1.12x |
+| ML-KEM-1024 keygen / encaps / decaps | 86.2 / 97.5 / 114 us | 77.0 / 87.6 / 104 us | 1.10x--1.12x |
+| ML-DSA-44 keygen / sign / verify | 126 / 587 / 129 us | 116 / 566 / 121 us | 1.04x--1.09x |
+| ML-DSA-65 keygen / sign / verify | 209 / 848 / 213 us | 192 / 819 / 199 us | 1.04x--1.09x |
+| ML-DSA-87 keygen / sign / verify | 354 / 795 / 359 us | 324 / 762 / 334 us | 1.04x--1.09x |
+
+Long SHA-3 and SHAKE inputs, where one saved permutation is lost among
+hundreds, moved within noise.  The session ran about 7% slower than the
+one that produced the README tables, so only the ratios above are
+comparable; the tables are left as they are until the four-way Keccak
+lands and everything is re-measured once.

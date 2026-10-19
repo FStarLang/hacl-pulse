@@ -255,13 +255,13 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
     pure (SZ.v vj <= 16 /\
           Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vk == 168 /\
           reveal vrc == (rc <: Seq.seq S64.t) /\
-          reveal vst == SHA3.squeeze_state (SZ.v vj) (xof_start 168 vs) /\
+          reveal vst == SHA3.squeeze_state (xof_prev (SZ.v vj)) (xof_start 168 vs) /\
           agree v (SZ.v vc) (ntt_sampled vs (SZ.v vj * 56)))
   decreases (16 - SZ.v (!jj))
   {
     let vj = !jj;
     let vc = !cnt;
-    xof_block blk starr barr rc_tbl 168sz (hide (SZ.v vj)) (hide (xof_start 168 vs));
+    xof_block blk starr barr rc_tbl 168sz vj (hide (xof_start 168 vs));
     block128_bytes vs (SZ.v vj);
     assert (pure (3 * (SZ.v vj * 56) == SZ.v vj * 168));
     let x = block128_impl dst blk vc vs (hide (SZ.v vj * 56));
@@ -464,13 +464,13 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
     pure (SZ.v vj <= 8 /\ (SZ.v eta == 2 \/ SZ.v eta == 4) /\
           Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length vk == 136 /\
           reveal vrc == (rc <: Seq.seq S64.t) /\
-          reveal vst == SHA3.squeeze_state (SZ.v vj) (xof_start 136 vs) /\
+          reveal vst == SHA3.squeeze_state (xof_prev (SZ.v vj)) (xof_start 136 vs) /\
           agree v (SZ.v vc) (bounded_sampled (SZ.v eta) vs (SZ.v vj * 136)))
   decreases (8 - SZ.v (!jj))
   {
     let vj = !jj;
     let vc = !cnt;
-    xof_block blk starr barr rc_tbl 136sz (hide (SZ.v vj)) (hide (xof_start 136 vs));
+    xof_block blk starr barr rc_tbl 136sz vj (hide (xof_start 136 vs));
     block256_bytes vs (SZ.v vj);
     let x = block256_bounded_impl dst blk vc eta vs (hide (SZ.v vj * 136));
     assert (pure (SZ.v vj * 136 + 136 == (SZ.v vj + 1) * 136));
@@ -643,7 +643,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   assert (pure (reveal vrc == (rc <: Seq.seq S64.t)));
 
   xof_absorb starr barr rc_tbl seed slen 136sz;
-  xof_block blk starr barr rc_tbl 136sz (hide 0) (hide (xof_start 136 vs));
+  xof_block blk starr barr rc_tbl 136sz 0sz (hide (xof_start 136 vs));
   block256_bytes vs 0;
   Copy.copy_prefix sgn blk 8sz;
 
@@ -667,14 +667,14 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
           Seq.length vg == 8 /\
           (forall (k: nat). k < 8 ==> Seq.index vg k == shake256_byte vs k) /\
           reveal vrc == (rc <: Seq.seq S64.t) /\
-          reveal vst == SHA3.squeeze_state (SZ.v vj) (xof_start 136 vs) /\
+          reveal vst == SHA3.squeeze_state (xof_prev (SZ.v vj)) (xof_start 136 vs) /\
           ball_agree v (SZ.v vi) (ball_sampled (SZ.v tau) vs (SZ.v vj * 136 - 8)) /\
           ball_ok (SZ.v tau) (ball_sampled (SZ.v tau) vs (SZ.v vj * 136 - 8)))
   decreases (8 - SZ.v (!jj))
   {
     let vj = !jj;
     let vi = !ii;
-    xof_block blk starr barr rc_tbl 136sz (hide (SZ.v vj)) (hide (xof_start 136 vs));
+    xof_block blk starr barr rc_tbl 136sz vj (hide (xof_start 136 vs));
     block256_bytes vs (SZ.v vj);
     ball_idx (SZ.v vj);
     let x = ball_block_impl dst sgn blk vi 0sz tau vs (hide (SZ.v vj * 136));

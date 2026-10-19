@@ -393,6 +393,33 @@ ensures exists* (vout: Seq.seq S8.t).
 
 #pop-options
 
+#push-options "--z3rlimit 100"
+
+(** [st <- permute st] when [c], and nothing otherwise.  The squeeze uses
+    it to skip the permutation after its last block, whose result nobody
+    reads. *)
+inline_for_extraction
+fn permute_if (c: bool) (st: A.array S64.t) (b: A.array S64.t)
+              (rc_tbl: A.array S64.t)
+              (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
+              (#prc: perm) (#vrc: erased (Seq.seq S64.t))
+requires A.pts_to st vst0 ** A.pts_to b vb0 ** A.pts_to rc_tbl #prc vrc **
+         pure (Seq.length vst0 == 25 /\ Seq.length vb0 == 25 /\
+               reveal vrc == (rc <: Seq.seq S64.t))
+ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
+  A.pts_to st vst ** A.pts_to b vb ** A.pts_to rc_tbl #prc vrc **
+  pure (Seq.length vst0 == 25 /\ Seq.length vst == 25 /\ Seq.length vb == 25 /\
+        (c ==> vst == permute vst0) /\ (not c ==> vst == reveal vst0))
+{
+  if c {
+    permute_impl st b rc_tbl;
+  } else {
+    ()
+  }
+}
+
+#pop-options
+
 #push-options "--z3rlimit 800 --fuel 1 --ifuel 1"
 
 (** The whole squeeze phase: [out <- squeeze r st (len out)]. *)
@@ -446,7 +473,7 @@ ensures exists* (vout: Seq.seq S8.t) (vst: Seq.seq S64.t)
     squeeze_range_eq (SZ.v r) (reveal vst0) (Seq.length vout0) (SZ.v vbase) (SZ.v cnt);
     squeeze_block out vbase cnt st;
     Loops.unfold_repeati (SZ.v q) (fun _ st -> permute st) (reveal vst0);
-    permute_impl st b rc_tbl;
+    permute_if (SZ.lt (SZ.add vbase cnt) outlen) st b rc_tbl;
     Math.lemma_div_plus 0 (SZ.v q) (SZ.v r);
     Math.lemma_mod_plus 0 (SZ.v q) (SZ.v r);
     Math.distributivity_add_left (SZ.v q) 1 (SZ.v r);
