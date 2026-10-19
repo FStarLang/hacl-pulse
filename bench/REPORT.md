@@ -8452,7 +8452,47 @@ addition and doubling wipe seven temporaries each and account for about
 inlining plus no `rep stos` recovers all of it on Ed25519.  A store loop
 in `c/Hacl_Mem.h` instead of `memset` was slower (101 us), presumably
 because it defeats the constant-length lowering after inlining.  The fix
-belongs in the extraction -- emit the wrappers `static inline`, or call
-the macro directly with the literal length -- and is not part of this
-change.  The 7--11% measured for Ed25519 when the wiping landed does not
+turned out to belong in `c/Hacl_Mem.h` instead; see Part 70.  The 7--11% measured for Ed25519 when the wiping landed does not
 reproduce on this machine.
+
+## Part 70: small constant wipes as volatile word stores
+
+Part 69 left Ed25519 and secp256k1 signing 40--50% slower under gcc than
+with wiping compiled out.  Two candidate fixes were tried by editing a copy
+of `dist/Hacl.c` before touching the source:
+
+| `dist/Hacl.c` built with gcc `-O3` | Ed25519 sign | secp256k1 sign |
+| --- | ---: | ---: |
+| as committed | 83 us | 84 us |
+| `Hacl_Mem_wipe` a no-op | 59 us | 56 us |
+| wrappers `static inline` (what `[@@CInline]` on `Mem.wipe` would give) | 78 us | 81 us |
+| wrappers `always_inline` (what `inline_for_extraction` would give) | 68 us | 75 us |
+| plain store loop in the macro, no `__builtin_constant_p` | 101 us | -- |
+| volatile word stores for constant lengths <= 512 bytes | 65 us | 64 us |
+
+`static inline` is not enough: gcc keeps the six scalar wrappers out of
+line.  Inlining every wrapper makes the length constant, but gcc still
+lowers a constant memset of 128 bytes or more -- Ed25519's nine-element
+`unsigned __int128` products, for instance -- to `rep stosq`, and it would
+have meant changing `Hacl.Mem.fsti` and re-verifying everything.  The last
+row needs neither: `Hacl_Mem_wipe` tests `__builtin_constant_p` on the byte
+length, and when it is a multiple of eight of at most 512 it zeroes through
+`volatile` eight-byte stores of a type declared `aligned(1), may_alias`,
+so it is correct on unaligned buffers and on any element type.  Volatile
+stores cannot be removed, so that path needs no asm barrier; every other
+length keeps memset and the narrow `"m"` barrier.  gcc folds the test after
+inlining, which is why it pays even with the wrappers out of line: the
+wrappers become small enough to inline.  `Hacl_Mem_free` keeps the old
+memset path unconditionally -- a heap length is never constant -- because
+routing it through the new macro changed gcc's inlining enough to trip a
+false `-Wstringop-overflow` in `Hacl_RSAPSS_bn_from_be`, which `-Werror`
+turns into a build failure.
+
+Tables re-measured with the change (`table.sh 3` under gcc and clang,
+`others.sh 3`).  Under gcc, Ed25519 signing went from 85 us (1.71x of
+HACL\* best) to 66 us (1.32x), secp256k1 signing from 85 us (1.52x) to
+65 us (1.15x), the P-256 rows 5--6% faster, SHA-512 4%, BLAKE2b 7%; no row
+got slower beyond noise.  Under clang the table is unchanged within noise,
+with Ed25519 and secp256k1 signing 2% slower in the A/B.  The C tests pass
+under both compilers with the build's `-Wall -Wextra -Werror`.
+
