@@ -8496,3 +8496,52 @@ got slower beyond noise.  Under clang the table is unchanged within noise,
 with Ed25519 and secp256k1 signing 2% slower in the A/B.  The C tests pass
 under both compilers with the build's `-Wall -Wextra -Werror`.
 
+
+## Part 71: vector wipes compiled for the wrong target
+
+ChaCha20 at 256 KiB was 11% slower with wiping than with `Hacl_Mem_wipe`
+compiled out, under both compilers, although it wipes about 1.5 KB once per
+call.  The wipe was not the cost; the call was.  `encrypt_blocks8` passes
+its sixteen-vector scratch arrays to `Hacl_Mem_wipe__t_6`, Custard's
+monomorphized `Mem.wipe` at `Hacl_Vec256_t`, and an array whose address
+reaches an out-of-line call has to live in memory for the whole loop: gcc
+emitted 127 vector stores to the stack and 76 loads in the function, against
+46 and 15 without the wipes.
+
+Neither compiler would inline the wrapper because Custard had marked it
+`__attribute__((target("bmi2")))`, which an AVX2 caller does not include.
+Custard's closure-prologue propagation (`propagate_prologues`, its section
+51.3) gives every declaration reached only from functions carrying
+`custard_c_closure_prologue` the *first* such string in the program -- one
+seed's strings are taken to be as good as another's -- and the first in this
+program is Curve25519's `bmi2`.  The only declarations it reached that way
+were the two vector wipe instances, `Hacl_Mem_wipe__t_5` (`Hacl_Vec512_t`)
+and `__t_6`, called from the ChaCha20, Salsa20 and Poly1305 vector loops.
+A declaration that carries its own `Prologue` is left alone, so
+`Hacl.Mem.wipe` now has `[@@CPrologue ""]` (in `Hacl.Mem.fst`, so nothing
+but that module is re-checked), and both compilers inline every instance.
+
+| ChaCha20, 256 KiB, best of 10 | gcc | clang |
+| --- | ---: | ---: |
+| as before | 93.8 us | 93.1 us |
+| wrappers without the attribute | 85.1 us | 82.7 us |
+| `Hacl_Mem_wipe` a no-op | 83.8 us | 82.7 us |
+| scratch arrays per iteration, wiped per iteration | 119 us | 126 us |
+
+(The machine alternated between two clock states during these runs; the
+table is the faster one.  The last row, from an earlier run in the slower
+state, where the first row was 112 us, is the restructuring considered
+first and rejected.)
+
+Tables re-measured (`table.sh 3` under gcc and clang; `others.sh 3`, which
+on this run needed a 6% canary cut).  Against HACL\* best, ChaCha20 went
+from 1.31x to 1.19x under gcc and from 1.02x to 0.94x under clang,
+ChaCha20-Poly1305 from 1.17x to 1.10x and from 1.00x to 0.92x, and Salsa20
+and secretbox from 0.26x to 0.24x--0.25x under gcc and from 0.19x--0.20x to
+0.18x under clang; the other rows moved within noise.  Against the other
+libraries, ChaCha20 went from 1.35x to 1.21x of the fastest, ChaCha20-
+Poly1305 from 1.33x to 1.23x, and Salsa20 and secretbox from 1.14x to
+1.07x--1.08x.  The ChaCha20 gap that remains under gcc, 93 us against
+HACL\*'s 79 us, is in the round function's code generation, not in wiping.
+The Custard behaviour is worth fixing upstream: a seed's own string should
+go to what that seed alone reaches.

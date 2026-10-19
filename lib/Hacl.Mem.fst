@@ -37,6 +37,14 @@ assume val memzero (#t: Type0) (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
   : stt unit (requires A.pts_to a s ** pure (SZ.v n == A.length a))
              (ensures fun _ -> exists* s'. A.pts_to a s')
 
+(* The empty prologue keeps Custard's closure-prologue propagation off the
+   wrappers.  It gives every callee reached only from a
+   [custard_c_closure_prologue] function the *first* such string in the
+   program, so the Vec256 and Vec512 instances came out [target("bmi2")]:
+   neither compiler would then inline them into an AVX2 or AVX-512 caller,
+   and passing the scratch arrays to an out-of-line call kept them in memory
+   for the whole loop (ChaCha20 11% slower; bench/REPORT.md Part 71). *)
+[@@CPrologue ""]
 fn wipe (#t: Type0) (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
   requires A.pts_to a s ** must_wipe a ** pure (SZ.v n == A.length a)
   ensures exists* s'. A.pts_to a s'
