@@ -21,8 +21,9 @@
     [rho] and a pair of public indices, and the matrix it produces travels
     in the clear as part of the encapsulation key.  So the three bytes of
     each candidate are declassified -- {!Hacl.Secret.Declassify} is where
-    that claim is written down -- and the rejection test is an ordinary
-    branch.
+    that claim is written down -- and the loop stops at an ordinary
+    branch once the polynomial is full.  The rejection test itself is
+    branch-free anyway ({!push_impl}), for speed rather than secrecy.
 
     The loop is the specification's, restructured in two ways.  It runs
     over blocks and then over the fifty-six triples a 168-byte SHAKE128
@@ -101,12 +102,41 @@ ensures exists* v. A.pts_to dst v **
   assert (pure (as_poly v == poly_zero));
 }
 
+(** [(d - q) >> 31] in thirty-two bits is the borrow of [d - q]: one
+    exactly when [d] is accepted. *)
+let accept_bit (d: U32.t { U32.v d < 4096 })
+  : Lemma (U32.v (U32.shift_right (U32.sub_mod d 3329ul) 31ul) == (if U32.v d < q then 1 else 0))
+  = assert_norm (pow2 31 == 2147483648);
+    assert_norm (pow2 32 == 4294967296);
+    if U32.v d >= q then begin
+      Math.small_mod (U32.v d - q) (pow2 32);
+      Math.small_div (U32.v d - q) (pow2 31)
+    end else begin
+      Math.lemma_mod_plus (U32.v d - q) 1 (pow2 32);
+      Math.small_mod (U32.v d - q + pow2 32) (pow2 32)
+    end
+
+let accepted_mod (d: U32.t)
+  : Lemma (U32.v d < q ==> U32.v d % q == U32.v d)
+  = if U32.v d < q then Math.small_mod (U32.v d) q
+
 (** One candidate: accepted if there is room and it is below [q].  The
     specification side of this is {!Spec.MLKEM.Sample.push}, but the two
     are deliberately kept apart: stating it operationally, as a count and
     an array update, keeps the sampler's ghost accumulator out of this
     function's arguments, and a ghost argument mentioning
-    {!Spec.MLKEM.Sample.cand1} costs minutes of normalisation. *)
+    {!Spec.MLKEM.Sample.cand1} costs minutes of normalisation.
+
+    The acceptance test is not a branch.  Whenever there is room the
+    candidate is stored at [dst[c]] -- reduced by {!Hacl.Impl.MLKEM.Zq.csub},
+    which leaves an accepted candidate unchanged and keeps a rejected one
+    a valid coefficient -- and the count moves on by {!accept_bit}.  A
+    rejected candidate is overwritten by the next store, or lies past the
+    count, which the postcondition says nothing about.  About one candidate
+    in five is rejected, at random, so as a branch the test is
+    mispredicted every few candidates, and the sampler spent about a third
+    of its time on it.  Only the [c < n] test, which fails once, remains a
+    branch. *)
 inline_for_extraction
 fn push_impl (dst: A.array zqt) (c: SZ.t) (d: U32.t) (#v0: erased (Seq.seq zqt))
 requires A.pts_to dst v0 **
@@ -122,11 +152,15 @@ ensures exists* v. A.pts_to dst v **
   A.pts_to_len dst;
   HSZ.fits32 ();
   assert_norm (pow2 16 == 65536);
-  if (SZ.lt c 256sz && U32.lt d 3329ul) {
+  if (SZ.lt c 256sz) {
     Math.small_mod (U32.v d) (pow2 16);
-    A.((dst.(c) <- S16.classify (Cast.uint32_to_uint16 d)));
+    let x = csub (S16.classify (Cast.uint32_to_uint16 d));
+    accepted_mod d;
+    A.((dst.(c) <- x));
+    let inc = U32.shift_right (U32.sub_mod d 3329ul) 31ul;
+    accept_bit d;
     SZ.fits_u32_implies_fits (SZ.v c + 1);
-    SZ.add c 1sz
+    SZ.add c (SZ.uint32_to_sizet inc)
   } else {
     c
   }

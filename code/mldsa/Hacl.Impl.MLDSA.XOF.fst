@@ -119,7 +119,10 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
 }
 
 (** [blk <- block j]; the state is block [j - 1]'s on the way in and block
-    [j]'s on the way out. *)
+    [j]'s on the way out.  Inlined so each sampler gets its own copy with
+    the rate known: left to itself, gcc keeps one shared out-of-line copy,
+    which costs ML-DSA-65 keygen 9%. *)
+inline_for_extraction
 fn xof_block (blk: A.array S8.t) (st: A.array S64.t) (b: A.array S64.t)
              (rc_tbl: A.array S64.t) (r: SZ.t)
              (j: SZ.t) (vsq: erased (Seq.seq S64.t))
@@ -146,7 +149,7 @@ ensures exists* (v: Seq.seq S8.t) (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
   A.pts_to_len st;
   permute_if (SZ.gt j 0sz) st b rc_tbl;
   squeeze_state_succ (xof_prev (SZ.v j)) vsq;
-  squeeze_block blk 0sz r st;
+  squeeze_block_lanes blk 0sz r st;
 }
 
 #pop-options

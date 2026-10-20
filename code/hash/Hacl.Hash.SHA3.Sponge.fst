@@ -400,28 +400,80 @@ let squeeze_step (vst: Seq.seq S64.t) (vout0 vout: Seq.seq S8.t)
                        Seq.index vout' k == Seq.index vout0 k)))
   = ()
 
-#push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
+(** Byte [k] of lane [l] is byte [8 l + k] of the state. *)
+let lane_byte_index (l k: nat)
+  : Lemma (requires k < 8) (ensures (8 * l + k) / 8 == l /\ (8 * l + k) % 8 == k)
+  = Math.lemma_div_plus k l 8;
+    Math.small_div k 8;
+    Math.lemma_mod_plus k l 8;
+    Math.small_mod k 8
 
-(** Write [cnt] bytes of the current state to [out[base ..)]. *)
+#push-options "--z3rlimit 200"
+
+(** Byte [k] of lane [l], already read into [x]: one step of
+    [squeeze_block]'s window, at position [8 l + k]. *)
 inline_for_extraction
-fn squeeze_block (out: A.array S8.t) (base: SZ.t) (cnt: SZ.t)
-                 (st: A.array S64.t) (#pst: perm) (#vst: erased (Seq.seq S64.t))
-                 (#vout0: erased (Seq.seq S8.t))
-requires A.pts_to out vout0 ** A.pts_to st #pst vst **
-         pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\
-               SZ.v base + SZ.v cnt <= Seq.length vout0)
-ensures exists* (vout: Seq.seq S8.t).
-  A.pts_to out vout ** A.pts_to st #pst vst **
-  pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\ Seq.length vout == Seq.length vout0 /\
-        SZ.v base + SZ.v cnt <= Seq.length vout /\
-        (forall (k: nat). SZ.v base <= k /\ k < SZ.v base + SZ.v cnt ==>
-           Seq.index vout k == state_byte vst (k - SZ.v base)) /\
-        (forall (k: nat). k < Seq.length vout0 /\ (k < SZ.v base \/ SZ.v base + SZ.v cnt <= k) ==>
-           Seq.index vout k == Seq.index vout0 k))
+fn squeeze_lane_byte (out: A.array S8.t) (base: SZ.t) (l: SZ.t) (k: SZ.t) (x: S64.t)
+                     (vst: erased (Seq.seq S64.t)) (vout0: erased (Seq.seq S8.t))
+                     (cnt: erased nat) (#vout: erased (Seq.seq S8.t))
+requires A.pts_to out vout **
+         pure (Seq.length vst == 25 /\ SZ.v k < 8 /\ 8 * SZ.v l + 8 <= cnt /\ cnt <= 200 /\
+               Seq.length vout == Seq.length vout0 /\ SZ.v base + cnt <= Seq.length vout /\
+               x == Seq.index vst (SZ.v l) /\
+               (forall (j: nat). SZ.v base <= j /\ j < SZ.v base + (8 * SZ.v l + SZ.v k) ==>
+                  Seq.index vout j == state_byte vst (j - SZ.v base)) /\
+               (forall (j: nat). j < Seq.length vout0 /\
+                  (j < SZ.v base \/ SZ.v base + (8 * SZ.v l + SZ.v k) <= j) ==>
+                  Seq.index vout j == Seq.index vout0 j))
+ensures exists* (vout': Seq.seq S8.t). A.pts_to out vout' **
+  pure (Seq.length vst == 25 /\ SZ.v k < 8 /\ 8 * SZ.v l + 8 <= cnt /\ cnt <= 200 /\
+        Seq.length vout' == Seq.length vout0 /\ SZ.v base + cnt <= Seq.length vout' /\
+        (forall (j: nat). SZ.v base <= j /\ j < SZ.v base + (8 * SZ.v l + SZ.v k + 1) ==>
+           Seq.index vout' j == state_byte vst (j - SZ.v base)) /\
+        (forall (j: nat). j < Seq.length vout0 /\
+           (j < SZ.v base \/ SZ.v base + (8 * SZ.v l + SZ.v k + 1) <= j) ==>
+           Seq.index vout' j == Seq.index vout0 j))
 {
   A.pts_to_len out;
-  A.pts_to_len st;
-  let mut t = 0sz;
+  lane_byte_index (SZ.v l) (SZ.v k);
+  let t = SZ.add (SZ.mul 8sz l) k;
+  let y = Cast.u64_to_u8 (shiftr_u32 x (shift8 k));
+  state_byte_lane vst (SZ.v t) x;
+  squeeze_step vst vout0 vout (SZ.v base) (SZ.v t) y;
+  A.((out.(SZ.add base t) <- y));
+}
+
+#pop-options
+
+#push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
+
+(** Bytes [t0 ..< cnt] of [squeeze_block]'s window, one at a time, given
+    bytes [0 ..< t0] already written. *)
+inline_for_extraction
+fn squeeze_bytes (out: A.array S8.t) (base: SZ.t) (cnt: SZ.t)
+                 (st: A.array S64.t) (t0: SZ.t) (vout0: erased (Seq.seq S8.t))
+                 (#pst: perm) (#vst: erased (Seq.seq S64.t))
+                 (#vout: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to st #pst vst **
+         pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\ SZ.v t0 <= SZ.v cnt /\
+               Seq.length vout == Seq.length vout0 /\
+               SZ.v base + SZ.v cnt <= Seq.length vout /\
+               (forall (k: nat). SZ.v base <= k /\ k < SZ.v base + SZ.v t0 ==>
+                  Seq.index vout k == state_byte vst (k - SZ.v base)) /\
+               (forall (k: nat). k < Seq.length vout0 /\
+                  (k < SZ.v base \/ SZ.v base + SZ.v t0 <= k) ==>
+                  Seq.index vout k == Seq.index vout0 k))
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to out vout' ** A.pts_to st #pst vst **
+  pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\ Seq.length vout' == Seq.length vout0 /\
+        SZ.v base + SZ.v cnt <= Seq.length vout' /\
+        (forall (k: nat). SZ.v base <= k /\ k < SZ.v base + SZ.v cnt ==>
+           Seq.index vout' k == state_byte vst (k - SZ.v base)) /\
+        (forall (k: nat). k < Seq.length vout0 /\ (k < SZ.v base \/ SZ.v base + SZ.v cnt <= k) ==>
+           Seq.index vout' k == Seq.index vout0 k))
+{
+  A.pts_to_len out;
+  let mut t = t0;
   while (let vt = !t; SZ.lt vt cnt)
   invariant exists* (vt: SZ.t) (vout: Seq.seq S8.t).
     pts_to t vt ** A.pts_to out vout ** A.pts_to st #pst vst **
@@ -448,6 +500,84 @@ ensures exists* (vout: Seq.seq S8.t).
     A.((out.(SZ.add base vt) <- y));
     t := SZ.add vt 1sz;
   };
+}
+
+(** Write [cnt] bytes of the current state to [out[base ..)]. *)
+inline_for_extraction
+fn squeeze_block (out: A.array S8.t) (base: SZ.t) (cnt: SZ.t)
+                 (st: A.array S64.t) (#pst: perm) (#vst: erased (Seq.seq S64.t))
+                 (#vout0: erased (Seq.seq S8.t))
+requires A.pts_to out vout0 ** A.pts_to st #pst vst **
+         pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\
+               SZ.v base + SZ.v cnt <= Seq.length vout0)
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to out vout ** A.pts_to st #pst vst **
+  pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\ Seq.length vout == Seq.length vout0 /\
+        SZ.v base + SZ.v cnt <= Seq.length vout /\
+        (forall (k: nat). SZ.v base <= k /\ k < SZ.v base + SZ.v cnt ==>
+           Seq.index vout k == state_byte vst (k - SZ.v base)) /\
+        (forall (k: nat). k < Seq.length vout0 /\ (k < SZ.v base \/ SZ.v base + SZ.v cnt <= k) ==>
+           Seq.index vout k == Seq.index vout0 k))
+{
+  A.pts_to_len out;
+  A.pts_to_len st;
+  squeeze_bytes out base cnt st 0sz vout0;
+}
+
+(** [squeeze_block], whole lanes first: each lane is read once and
+    written as eight bytes with constant shifts, which a compiler turns
+    into one eight-byte store, and then the bytes of a last partial lane
+    one at a time.  The samplers use it.  The one-shot sponges keep the
+    byte loop: inlined next to the absorb rounds, the lane loop shifts
+    gcc's register allocation of the whole function and costs SHA3-256
+    six percent. *)
+inline_for_extraction
+fn squeeze_block_lanes (out: A.array S8.t) (base: SZ.t) (cnt: SZ.t)
+                       (st: A.array S64.t) (#pst: perm) (#vst: erased (Seq.seq S64.t))
+                       (#vout0: erased (Seq.seq S8.t))
+requires A.pts_to out vout0 ** A.pts_to st #pst vst **
+         pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\
+               SZ.v base + SZ.v cnt <= Seq.length vout0)
+ensures exists* (vout: Seq.seq S8.t).
+  A.pts_to out vout ** A.pts_to st #pst vst **
+  pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\ Seq.length vout == Seq.length vout0 /\
+        SZ.v base + SZ.v cnt <= Seq.length vout /\
+        (forall (k: nat). SZ.v base <= k /\ k < SZ.v base + SZ.v cnt ==>
+           Seq.index vout k == state_byte vst (k - SZ.v base)) /\
+        (forall (k: nat). k < Seq.length vout0 /\ (k < SZ.v base \/ SZ.v base + SZ.v cnt <= k) ==>
+           Seq.index vout k == Seq.index vout0 k))
+{
+  A.pts_to_len out;
+  A.pts_to_len st;
+  let nl = SZ.div cnt 8sz;
+  Math.multiply_fractions (SZ.v cnt) 8;
+  let mut l = 0sz;
+  while (let vl = !l; SZ.lt vl nl)
+  invariant exists* (vl: SZ.t) (vout: Seq.seq S8.t).
+    pts_to l vl ** A.pts_to out vout ** A.pts_to st #pst vst **
+    pure (Seq.length vst == 25 /\ SZ.v cnt <= 200 /\ SZ.v vl <= SZ.v nl /\
+          Seq.length vout == Seq.length vout0 /\
+          SZ.v base + SZ.v cnt <= Seq.length vout /\
+          (forall (k: nat). SZ.v base <= k /\ k < SZ.v base + 8 * SZ.v vl ==>
+             Seq.index vout k == state_byte vst (k - SZ.v base)) /\
+          (forall (k: nat). k < Seq.length vout0 /\
+             (k < SZ.v base \/ SZ.v base + 8 * SZ.v vl <= k) ==>
+             Seq.index vout k == Seq.index vout0 k))
+  decreases (SZ.v nl - SZ.v (!l))
+  {
+    let vl = !l;
+    let x = A.(st.(vl));
+    squeeze_lane_byte out base vl 0sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 1sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 2sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 3sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 4sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 5sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 6sz x vst vout0 (SZ.v cnt);
+    squeeze_lane_byte out base vl 7sz x vst vout0 (SZ.v cnt);
+    l := SZ.add vl 1sz;
+  };
+  squeeze_bytes out base cnt st (SZ.mul nl 8sz) vout0;
 }
 
 #pop-options

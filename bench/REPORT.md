@@ -8837,3 +8837,61 @@ byte-by-byte squeeze and branchy loop are about half), `mat_vec_mul`
 `sha3_256` of the key (9.4 k), and the encoders: `decode12` (4.4 k) and
 `encode10` (3.2 k) are generic bit accumulators that take the bit width at
 run time.
+
+## Part 78: branch-free rejection sampling, lane-wise squeeze, and an inlined ML-DSA XOF
+
+After Part 77 the largest item in encapsulation was the matrix, and within
+it the rejection sampler.  Timed on its own with a different seed on every
+iteration, so that the branch predictor cannot learn one input's pattern
+of accepts and rejects, `sample_ntt4` (four matrix entries) cost 16.3 k
+cycles under gcc and 13.7 k under clang.  Two things were slow: the
+acceptance test was a data-dependent branch that mispredicts about one
+candidate in five, and the squeeze copied the state into the block buffer
+one byte at a time, with a division and a remainder per byte.
+
+`Sample.push_impl` now always stores `csub d` at `dst[c]` and advances `c`
+by `(d - q) >> 31` (as an unsigned 32-bit value), which is 1 exactly when
+`d < q` (lemma `accept_bit`).  A rejected value is overwritten by the next
+candidate, and the postcondition, which only talks about the prefix below
+`c`, is unchanged.  The obvious spelling,
+`if d < q then 1 else 0`, does not survive gcc: it jump-threads the test
+into the following `c < 256` check and turns it back into a branch.
+
+The samplers' streams now squeeze with `Sponge.squeeze_block_lanes`, which
+reads each lane once and writes it as eight bytes with constant shifts
+(which compilers merge into one store), then any bytes of a last partial
+lane.  Together the two changes bring `sample_ntt4` to 10.7--10.9 k cycles
+under both compilers.  The one-shot sponges keep the old byte loop: with
+the lane loop inlined into `sha3_256` the code is fine, but gcc's register
+allocation of the whole function shifts, and the absorb round loop, which
+does not change, gains fifteen register moves per round, making SHA3-256
+six percent slower (103.6 k to 109.6 k cycles on 16 KiB).  Putting the byte
+loop back into that one function restored 103.6 k.
+
+The full benchmark then showed ML-DSA keygen and verify about nine percent
+*slower*, although nothing in them changed except the squeeze.  The
+reason: the larger squeeze pushed ML-DSA's `xof_block` (one permutation
+and one squeeze) over gcc's inlining threshold, and gcc left a single
+out-of-line copy shared by all the samplers, with the rate as a run-time
+argument.  `xof_block` is now `inline_for_extraction`, and ML-DSA-65
+keygen goes from 422 k cycles (before) and 461 k (out of line) to 389 k.
+
+With 64 different keys per run, ML-KEM-768 is 22.3 / 25.9 / 32.1 us
+(best of 3) against 27.8 / 30.5 / 38.2 before.  `bench.c` uses one fixed
+seed per operation, which lets the branch predictor learn the old
+sampler's branches, so it shows a smaller gain:
+
+| gcc, best / median of 20, interleaved, same session | before | after | median |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 16.0 / 18.5 / 24.3 us | 15.4 / 17.7 / 23.3 us | 1.03x--1.05x |
+| ML-KEM-768 keygen / encaps / decaps | 28.4 / 30.0 / 37.2 us | 25.9 / 27.6 / 36.3 us | 1.05x--1.06x |
+| ML-KEM-1024 keygen / encaps / decaps | 38.4 / 44.9 / 52.9 us | 36.3 / 42.0 / 50.5 us | 1.05x--1.06x |
+| ML-DSA-44 keygen / sign / verify | 104.9 / 534.6 / 112.3 us | 98.3 / 513.6 / 103.5 us | 1.02x--1.09x |
+| ML-DSA-65 keygen / sign / verify | 179.4 / 746.5 / 190.7 us | 168.0 / 727.8 / 172.5 us | 1.02x--1.10x |
+| ML-DSA-87 keygen / sign / verify | 302.0 / 759.9 / 304.7 us | 284.2 / 673.6 / 277.7 us | 1.04x--1.10x |
+
+SHA-3 and SHAKE are unchanged (all within 0.1% at the median).  One
+side effect lands in code this change does not touch: `Hacl.c` is a single
+translation unit, and gcc now clones the SHA-512 block function
+differently, which makes bulk SHA2-512 3.6% faster and HMAC-SHA2-512 3.5%
+slower (108.6 k to 112.3 k cycles on 16 KiB, reproduced in isolation).

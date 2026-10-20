@@ -176,7 +176,7 @@ ensures exists* (v: Seq.seq zqt) (vk: Seq.seq S8.t).
   pure (Seq.length vk == 168 /\ stream_ok v vst vs (SZ.v c') (SZ.v j) (SZ.v j + 1))
 {
   stream_ok_elim v0 vst vs (SZ.v c) (SZ.v j) (SZ.v j);
-  squeeze_block blk 0sz 168sz st;
+  squeeze_block_lanes blk 0sz 168sz st;
   with vk. assert (A.pts_to blk vk);
   stream_bytes vk vst vs (SZ.v j);
   let x = S.block_impl dst blk c vs (hide (SZ.v j * 56));

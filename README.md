@@ -482,20 +482,29 @@ theta parities.
 Absorb xors whole message blocks straight out of the caller's buffer, and
 stages only the last, padded, block in a 200-byte stack buffer — 200 rather
 than the rate because the rate is not known at compile time.  Squeeze emits
-`min(rate, remaining)` bytes per permutation and does not permute after the
+`min(rate, remaining)` bytes per permutation, and does not permute after the
 last block (`permute_if`), so a SHAKE call shorter than the rate does
 exactly one permutation and a long one does not overrun.  The streaming
 XOFs the ML-KEM and ML-DSA samplers use (`xof_block`) permute on the way in
 instead, for every block but the first, so the block a sampler stops at
-is not followed by a permutation either.
+is not followed by a permutation either.  They squeeze with
+`squeeze_block_lanes`, a whole lane (eight constant shifts, which compilers
+merge into one store) at a time and then any bytes of a final partial lane;
+the one-shot sponges keep the byte loop, because inlined next to the
+absorb rounds the lane loop perturbs gcc's register allocation of the
+round loop and costs SHA3-256 six percent.  ML-DSA's `xof_block` is
+`inline_for_extraction`, so each sampler gets a copy with its rate fixed.
 
 **Four permutations at a time, on AVX2.**  `Hacl.Hash.SHA3.Core4.permute4`
 runs Keccak-f[1600] on four independent states at once, one 64-bit lane of
 each per 256-bit register, and proves `w_k == permute v_k` for each.  The
 ML-KEM matrix is `k * k` independent SHAKE128 rejection samplers, so
 `Hacl.Impl.MLKEM.Sample4` runs four of them in lock step: each stream is the
-scalar sampler's state, read block by block with the same `squeeze_block`
-and fed to the same `block_impl`, and only the permutations are shared --
+scalar sampler's state, read block by block with the same `squeeze_block_lanes`
+and fed to the same `block_impl` (whose acceptance test is branch-free:
+every candidate is stored, reduced by `csub` so that it is a valid
+coefficient, and the count advances by the borrow bit of `d - q`; a random
+one-in-five rejection is the worst case for a branch predictor), and only the permutations are shared --
 the one that ends each absorb (`absorb_pre` is `absorb_impl` without it) and
 the one before every squeezed block after the first.  `gen_matrix_impl`
 takes four entries at a time while four remain and the processor has AVX2,

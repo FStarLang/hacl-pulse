@@ -141,7 +141,7 @@ ensures exists* (v: Seq.seq S8.t) (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
   A.pts_to_len st;
   permute_if (SZ.gt j 0sz) st b rc_tbl;
   squeeze_state_succ (xof_prev (SZ.v j)) vsq;
-  squeeze_block blk 0sz 168sz st;
+  squeeze_block_lanes blk 0sz 168sz st;
 }
 
 #pop-options
