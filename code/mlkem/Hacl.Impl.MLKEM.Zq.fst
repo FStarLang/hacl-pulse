@@ -25,7 +25,7 @@
     through every loop invariant in the transform.
 
     Everything is branch-free.  Addition and subtraction reduce with a
-    conditional subtraction driven by {!Hacl.Secret.UInt16.gte_mask};
+    conditional subtraction driven by a sixteen-bit borrow mask;
     multiplication reduces with a Barrett step in sixty-four bits, or, when
     one factor is a tabulated constant, with Shoup's trick in sixteen and
     thirty-two bits ({!zq_mul_shoup}), which keeps the representation
@@ -41,6 +41,7 @@ module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
 module Math = FStar.Math.Lemmas
+module UInt = FStar.UInt
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
@@ -53,15 +54,43 @@ let qw : w: S16.t { S16.v w == q } = S16.classify 3329us
 (** {2 Conditional subtraction}
 
     The one primitive everything else is built from: [x] is known to be
-    below [2q], and exactly one subtraction brings it below [q].  [select]
-    rather than [logand] because [select] is specified on the mask's two
-    possible values instead of on its bits. *)
-inline_for_extraction
+    below [2q], and exactly one subtraction brings it below [q].
+
+    The mask is computed in sixteen bits: [s = x - q] wraps exactly when
+    [x < q], and then lands at or above [2^16 - q > 2^15], so its top bit
+    is the borrow, and [s + (m & q)] undoes the subtraction when it
+    wrapped.  Both choices are about vectorization.
+    {!Hacl.Secret.UInt16.gte_mask} gives the same mask but takes the
+    borrow from a thirty-two-bit difference, which makes a vectorizer
+    widen every lane to thirty-two bits; and gcc's loop vectorizer gives
+    up entirely on the and-or blend that {!Hacl.Secret.UInt16.select}
+    becomes.  The masked add keeps the AVX2 butterfly layers in sixteen-bit
+    lanes.  Opaque to SMT so that callers see only the refinement. *)
+inline_for_extraction [@@"opaque_to_smt"]
 let csub (x: S16.t { S16.v x < 2 * q }) : r: zqt { S16.v r == S16.v x % q }
-  = let m = S16.gte_mask x qw in
-    let r = S16.select m (S16.sub_mod x qw) x in
-    if S16.v x >= q then Math.small_mod (S16.v x - q) q else Math.small_mod (S16.v x) q;
-    r
+  = assert_norm (pow2 15 == 32768);
+    assert_norm (pow2 16 == 65536);
+    let s = S16.sub_mod x qw in
+    let b = S16.shift_right s 15ul in
+    let m = S16.sub_mod (S16.classify 0us) b in
+    let c = S16.logand m qw in
+    if S16.v x >= q then begin
+      Math.small_mod (S16.v x - q) (pow2 16);
+      Math.small_div (S16.v s) (pow2 15);
+      UInt.logand_commutative #16 0 q;
+      UInt.logand_lemma_1 #16 q;
+      Math.small_mod (S16.v x - q) (pow2 16);
+      Math.small_mod (S16.v x - q) q
+    end else begin
+      Math.lemma_mod_plus (S16.v x - q) 1 (pow2 16);
+      Math.small_mod (S16.v x - q + pow2 16) (pow2 16);
+      UInt.logand_commutative #16 (pow2 16 - 1) q;
+      UInt.logand_lemma_2 #16 q;
+      Math.lemma_mod_plus (S16.v x) 1 (pow2 16);
+      Math.small_mod (S16.v x) (pow2 16);
+      Math.small_mod (S16.v x) q
+    end;
+    S16.add_mod s c
 
 (** {2 Addition and subtraction}
 

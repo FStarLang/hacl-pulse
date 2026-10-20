@@ -3331,7 +3331,8 @@ multiplication becomes 128 independent products of linear polynomials
 modulo `X^2 - zeta`.  `Spec.MLKEM.NTT` says exactly
 that and `Hacl.Impl.MLKEM.NTT` implements it in place, with the zeta table
 a 128-entry constant.  Addition and subtraction reduce with a
-conditional-subtract mask and multiplication with a Barrett step in
+conditional subtraction whose mask is the top bit of the sixteen-bit
+difference `x - q`, added back as `s + (m & q)`, and multiplication with a Barrett step in
 sixty-four bits, or, by a root of unity in the transform, with Shoup's
 trick against a second table of `floor(zeta 2^16 / q)`, all branch-free, and the coefficient type is a refinement
 --- `zqt = x: S16.t { S16.v x < q }` --- so every intermediate carries its
@@ -3348,7 +3349,10 @@ sampler are each extracted twice from the same verified body, once under
 `__attribute__((target("avx2")))` and once without, and a dispatcher with
 the same specification picks one on `Hacl.Vec256.supported`: gcc and clang
 then vectorize the butterflies sixteen coefficients wide instead of eight,
-without a line of new proof.
+without a line of new proof.  The vectorizers are why the conditional
+subtraction is shaped the way it is: a mask taken from a thirty-two-bit
+borrow widens every lane to thirty-two bits, and gcc does not vectorize the
+and-or blend of a `select` at all.
 
 The correctness statement is that the implementation computes the
 algorithms of FIPS 203, coefficient for coefficient, including that the NTT

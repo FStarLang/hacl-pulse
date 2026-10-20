@@ -8787,3 +8787,53 @@ standard requires), `kpke_encrypt`'s own compress and encode (14.6 M), the
 matrix (`gen_entries4` and `permute4`, 24 M, of which the rejection
 sampling is now the larger part), and the ninth matrix entry for `k = 3`,
 still sampled by the scalar `sample_ntt_impl` (6.1 M).
+
+## Part 77: a sixteen-bit conditional subtraction
+
+A cycle profile of ML-KEM-768 encapsulation after Part 76 (TSC, best of
+2000, AVX2 host) put the three transforms of a vector at 5.3 k cycles each,
+more than the 1184-byte `sha3_256` of the encapsulation key.  Timing single
+layers of the forward NTT in isolation showed why.  Every coefficient goes
+through `Zq.csub`, and `csub` took its mask from
+`Hacl.Secret.UInt16.gte_mask`, which computes the borrow of a
+*thirty-two-bit* difference.  gcc dutifully widened every lane of the
+butterfly to thirty-two bits, and the `len = 128` layer cost 245 cycles
+where a pure sixteen-bit conditional subtraction costs about 49 (that is,
+the call overhead).  The `len = 4` and `len = 2` layers went from 465 and
+416 to 220 and 196.
+
+`csub` now computes `s = x - q` in sixteen bits and takes the mask from the
+top bit of `s`, which is set exactly when the subtraction wrapped, because
+`x < 2q` puts a wrapped `s` at or above `2^16 - q > 2^15`.  The first
+attempt fed that mask to `S16.select`, and the transforms got three to four
+times *slower*: gcc's loop vectorizer gives up on the and-or blend `select`
+compiles to (`couldn't vectorize loop`), and nothing was vectorized at all.
+The second form, `s + (m & q)`, vectorizes under both gcc and clang.  The
+proof is a dozen lines of `small_mod` and `logand_lemma_{1,2}`.  `csub` is
+also now `opaque_to_smt`, since otherwise its body leaks into the contexts
+of its callers and `Sample.cbd_coef` timed out.
+
+TSC cycles, ML-KEM-768, best of 2000:
+
+| | before | after |
+| --- | ---: | ---: |
+| `vec_ntt` (3 polynomials) | 5267 | 1421 |
+| `vec_intt` (3 polynomials) | 5267 | 1837 |
+| `mat_vec_mul` | 10314 | 8330 |
+| `dot` | 3430 | 2327 |
+| `add` of two vectors | 416 | 171 |
+| encapsulation | 92 k | 80 k |
+
+| gcc, best / median of 20, interleaved, same session | before | after | median |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 18.3 / 21.3 / 27.5 us | 16.0 / 17.9 / 23.0 us | 1.18x--1.23x |
+| ML-KEM-768 keygen / encaps / decaps | 29.3 / 34.0 / 43.3 us | 25.6 / 29.2 / 36.7 us | 1.18x--1.21x |
+| ML-KEM-1024 keygen / encaps / decaps | 42.9 / 48.2 / 59.7 us | 37.4 / 41.9 / 50.2 us | 1.11x--1.21x |
+
+The transforms are now small.  The top of encapsulation is the matrix
+(`gen_matrix`, 31 k cycles, of which the four-way rejection sampler's
+byte-by-byte squeeze and branchy loop are about half), `mat_vec_mul`
+(the base-case products, still reduced with a sixty-four-bit Barrett step),
+`sha3_256` of the key (9.4 k), and the encoders: `decode12` (4.4 k) and
+`encode10` (3.2 k) are generic bit accumulators that take the bit width at
+run time.
