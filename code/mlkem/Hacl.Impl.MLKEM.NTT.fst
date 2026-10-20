@@ -50,6 +50,7 @@ module T = Hacl.Impl.Table
 module HSZ = Hacl.SizeT
 module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
+module V = Hacl.Vec256
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
@@ -437,7 +438,8 @@ ensures exists* v. A.pts_to f v **
 
 (** [f <- NTT(f)], in place.  The scratch buffer is no longer used; it
     stays in the signature so the callers do not change. *)
-fn ntt_inplace (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
+inline_for_extraction
+fn ntt_inplace_ (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
 requires A.pts_to f vf ** A.pts_to tmp vt **
          pure (Seq.length vf == n /\ Seq.length vt == n)
 ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
@@ -484,7 +486,8 @@ let scale_step (w v: Seq.seq zqt) (i: nat) (x: zqt)
 
 (** [f <- NTT^-1(f)].  The layers run the other way and the whole thing is
     scaled by [128^-1] at the end. *)
-fn intt_inplace (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
+inline_for_extraction
+fn intt_inplace_ (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
 requires A.pts_to f vf ** A.pts_to tmp vt **
          pure (Seq.length vf == n /\ Seq.length vt == n)
 ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
@@ -537,6 +540,57 @@ ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
   with v. assert (A.pts_to f v);
   as_poly_intro v (poly_scale inv_128 (as_poly w));
   assert (pure (as_poly v == poly_scale inv_128 (as_poly w)));
+}
+
+
+(** {2 Dispatch}
+
+    The transforms and the pointwise product are each extracted twice from
+    the same verified body: once as they are, and once with
+    [target("avx2")], which lets the C compiler vectorise their loops with
+    thirty-two-byte vectors instead of sixteen.  Nothing in them mentions a
+    vector; the choice is made at run time, by [Hacl.Vec256.supported]. *)
+
+[@@CPrologue "__attribute__((target(\"avx2\")))"]
+fn ntt_inplace_avx2 (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
+requires A.pts_to f vf ** A.pts_to tmp vt **
+         pure (Seq.length vf == n /\ Seq.length vt == n)
+ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
+        pure (Seq.length vf == n /\ Seq.length v == n /\ Seq.length w == n /\
+              as_poly v == ntt (as_poly vf))
+{
+  ntt_inplace_ f tmp
+}
+
+fn ntt_inplace (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
+requires A.pts_to f vf ** A.pts_to tmp vt **
+         pure (Seq.length vf == n /\ Seq.length vt == n)
+ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
+        pure (Seq.length vf == n /\ Seq.length v == n /\ Seq.length w == n /\
+              as_poly v == ntt (as_poly vf))
+{
+  if (V.supported ()) { ntt_inplace_avx2 f tmp } else { ntt_inplace_ f tmp }
+}
+
+[@@CPrologue "__attribute__((target(\"avx2\")))"]
+fn intt_inplace_avx2 (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
+requires A.pts_to f vf ** A.pts_to tmp vt **
+         pure (Seq.length vf == n /\ Seq.length vt == n)
+ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
+        pure (Seq.length vf == n /\ Seq.length v == n /\ Seq.length w == n /\
+              as_poly v == intt (as_poly vf))
+{
+  intt_inplace_ f tmp
+}
+
+fn intt_inplace (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
+requires A.pts_to f vf ** A.pts_to tmp vt **
+         pure (Seq.length vf == n /\ Seq.length vt == n)
+ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
+        pure (Seq.length vf == n /\ Seq.length v == n /\ Seq.length w == n /\
+              as_poly v == intt (as_poly vf))
+{
+  if (V.supported ()) { intt_inplace_avx2 f tmp } else { intt_inplace_ f tmp }
 }
 
 (** {2 The pointwise product}
@@ -741,7 +795,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.((dst.(j1) <- c1));
 }
 
-fn multiply (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
+inline_for_extraction
+fn multiply_ (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
          pure (Seq.length vd == n /\ Seq.length va == n /\ Seq.length vb == n)
 ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
@@ -780,5 +835,27 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   mul_prefix_full v va vb;
   assert (pure (as_poly v == multiply_ntts (as_poly va) (as_poly vb)));
 }
+
+[@@CPrologue "__attribute__((target(\"avx2\")))"]
+fn multiply_avx2 (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
+requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+         pure (Seq.length vd == n /\ Seq.length va == n /\ Seq.length vb == n)
+ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+        pure (Seq.length v == n /\ Seq.length va == n /\ Seq.length vb == n /\
+              as_poly v == multiply_ntts (as_poly va) (as_poly vb))
+{
+  multiply_ dst a b
+}
+
+fn multiply (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
+requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+         pure (Seq.length vd == n /\ Seq.length va == n /\ Seq.length vb == n)
+ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+        pure (Seq.length v == n /\ Seq.length va == n /\ Seq.length vb == n /\
+              as_poly v == multiply_ntts (as_poly va) (as_poly vb))
+{
+  if (V.supported ()) { multiply_avx2 dst a b } else { multiply_ dst a b }
+}
+
 
 #pop-options

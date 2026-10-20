@@ -48,6 +48,7 @@ module Sub = Hacl.Impl.Sub
 module HSZ = Hacl.SizeT
 module Mem = Hacl.Mem
 module V = Hacl.Vec256
+module Sampler = Hacl.Impl.MLKEM.Sampler
 
 (** [SZ.rem] is specified via [SZ.mod_spec]; relate it to [%] explicitly. *)
 let mod_spec_eq (a: SZ.t) (b: SZ.t { SZ.v b <> 0 })
@@ -217,6 +218,7 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v ** A.pts_to src vs **
 
 (** Matrix entries [c .. c + 4), sampled together.  Uses AVX2: the caller
     checks {!Hacl.Vec256.supported}. *)
+[@@CPrologue "__attribute__((target(\"avx2\")))"]
 fn gen_entries4 (dst: A.array zqt) (rho: A.array S8.t) (tr: bool) (k: SZ.t) (vc: SZ.t)
                 (#vd: erased (Seq.seq zqt)) (#p: perm) (#vr: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to rho #p vr **
@@ -367,7 +369,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #p vr **
 
 (** Algorithm 13 lines 8-11: [k] consecutive PRF calls with a running
     counter. *)
-fn noise_vec_impl (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
+inline_for_extraction
+fn noise_vec_impl_ (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                   (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to s #p vs **
          pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
@@ -421,6 +424,129 @@ ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
   with v. assert (A.pts_to dst v);
   noise_entry_done (SZ.v k) (SZ.v eta) vs (U8.v start) v;
   assert (pure (as_zqs v == noise_vec (SZ.v k) (SZ.v eta) vs (U8.v start)));
+}
+
+let lane_byte (start: U8.t) (j: nat { j < 4 }) (k: nat)
+  : Lemma (requires U8.v start + k <= 256)
+          (ensures j < k ==> U8.v (U8.add_mod start (U8.uint_to_t j)) == U8.v start + j)
+  = if j < k then Math.small_mod (U8.v start + j) 256
+
+(** Entry [i] of the noise vector from a PRF output [p] already computed,
+    when [i < k]; nothing otherwise.  The four calls in {!noise_vec4_impl}
+    each extend the prefix of [dst] that is known to be right by one entry,
+    until it is all [k] of them. *)
+inline_for_extraction
+fn noise_entry (dst: A.array zqt) (p: A.array S8.t) (start: U8.t) (b: U8.t) (i: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
+               ([@@@FStar.Attributes.monomorphize] k: SZ.t)
+               (vs: erased (Seq.seq S8.t))
+               (#vd: erased (Seq.seq zqt)) (#vp: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to p vp **
+  pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        U8.v start + SZ.v k <= 256 /\ SZ.v i < 4 /\
+        Seq.length vs == 32 /\ Seq.length vd == SZ.v k * n /\ Seq.length vp == 192 /\
+        Seq.slice vp 0 (64 * SZ.v eta) == prf (SZ.v eta) vs b /\
+        (SZ.v i < SZ.v k ==> U8.v b == U8.v start + SZ.v i) /\
+        (forall (t: nat). t < (if SZ.v i < SZ.v k then SZ.v i else SZ.v k) * n ==>
+           S16.v (Seq.index vd t) == Seq.index (noise_vec (SZ.v k) (SZ.v eta) vs (U8.v start)) t))
+ensures exists* (w: Seq.seq zqt). A.pts_to dst w ** A.pts_to p vp **
+  pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        U8.v start + SZ.v k <= 256 /\ SZ.v i < 4 /\
+        Seq.length vs == 32 /\ Seq.length w == SZ.v k * n /\
+        (forall (t: nat). t < (if SZ.v i + 1 < SZ.v k then SZ.v i + 1 else SZ.v k) * n ==>
+           S16.v (Seq.index w t) == Seq.index (noise_vec (SZ.v k) (SZ.v eta) vs (U8.v start)) t))
+{
+  A.pts_to_len dst;
+  A.pts_to_len p;
+  if (SZ.lt i k) {
+    HSZ.fits32 ();
+    assert_norm (4 * n < pow2 32);
+    assert_norm (64 * 3 < pow2 32);
+    Math.lemma_mult_le_right n (SZ.v i + 1) (SZ.v k);
+    SZ.fits_u32_implies_fits (SZ.v i * n + n);
+    SZ.fits_u32_implies_fits (64 * SZ.v eta);
+    let lo = SZ.mul i 256sz;
+    let hi = SZ.add lo 256sz;
+    let el = SZ.mul 64sz eta;
+    U8.uv_inv b;
+    assert (pure (b == U8.uint_to_t (U8.v start + SZ.v i)));
+    let pb = Sub.sub p 0sz el;
+    let blk = Sub.sub dst lo hi;
+    Sampler.cbd_impl blk pb eta;
+    with b1. assert (A.pts_to blk b1);
+    Sub.unsub dst (SZ.v lo) (SZ.v hi) blk;
+    with w1. assert (A.pts_to dst w1);
+    Sub.unsub_id p 0 (SZ.v el) pb;
+    assert (pure (as_poly b1 == sample_poly_cbd (SZ.v eta) vs (U8.uint_to_t (U8.v start + SZ.v i))));
+    noise_entry_step (SZ.v k) (SZ.v eta) vs (U8.v start) (SZ.v i) vd w1 b1;
+  } else {
+    ()
+  }
+}
+
+(** {!noise_vec_impl} over {!Sampler.prf4_impl}: the [k <= 4] PRFs are
+    one four-way call, whatever lanes [k] leaves over computing a PRF
+    nobody reads. *)
+fn noise_vec4_impl (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
+                   (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to s #p vs **
+         pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+               U8.v start + SZ.v k <= 256 /\
+               Seq.length vd == SZ.v k * n /\ Seq.length vs == 32)
+ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
+  pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        U8.v start + SZ.v k <= 256 /\ Seq.length vs == 32 /\
+        Seq.length v == SZ.v k * n /\
+        as_zqs v == noise_vec (SZ.v k) (SZ.v eta) vs (U8.v start))
+{
+  A.pts_to_len dst;
+  A.pts_to_len s;
+  let z8 = S8.classify 0uy;
+  let mut p0 = [| z8; 192sz |];
+  Mem.track p0;
+  A.pts_to_len p0;
+  let mut p1 = [| z8; 192sz |];
+  Mem.track p1;
+  A.pts_to_len p1;
+  let mut p2 = [| z8; 192sz |];
+  Mem.track p2;
+  A.pts_to_len p2;
+  let mut p3 = [| z8; 192sz |];
+  Mem.track p3;
+  A.pts_to_len p3;
+  let b1 = U8.add_mod start 1uy;
+  let b2 = U8.add_mod start 2uy;
+  let b3 = U8.add_mod start 3uy;
+  lane_byte start 1 (SZ.v k);
+  lane_byte start 2 (SZ.v k);
+  lane_byte start 3 (SZ.v k);
+  Sampler.prf4_impl p0 p1 p2 p3 s start b1 b2 b3 eta;
+  noise_entry dst p0 start start 0sz eta k vs;
+  noise_entry dst p1 start b1 1sz eta k vs;
+  noise_entry dst p2 start b2 2sz eta k vs;
+  noise_entry dst p3 start b3 3sz eta k vs;
+  with v. assert (A.pts_to dst v);
+  noise_entry_done (SZ.v k) (SZ.v eta) vs (U8.v start) v;
+  Mem.wipe p3 192sz;
+  Mem.wipe p2 192sz;
+  Mem.wipe p1 192sz;
+  Mem.wipe p0 192sz;
+}
+
+(** Algorithm 13 lines 8-11, four PRFs at a time where AVX2 allows. *)
+fn noise_vec_impl (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
+                  (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to s #p vs **
+         pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+               U8.v start + SZ.v k <= 256 /\
+               Seq.length vd == SZ.v k * n /\ Seq.length vs == 32)
+ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
+  pure (1 <= SZ.v k /\ SZ.v k <= 4 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        U8.v start + SZ.v k <= 256 /\ Seq.length vs == 32 /\
+        Seq.length v == SZ.v k * n /\
+        as_zqs v == noise_vec (SZ.v k) (SZ.v eta) vs (U8.v start))
+{
+  if (V.supported ()) { noise_vec4_impl dst s start eta k } else { noise_vec_impl_ dst s start eta k }
 }
 
 #pop-options

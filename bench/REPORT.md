@@ -8725,3 +8725,65 @@ inverse NTT (62 k and 75 k, a Shoup multiply and a conditional subtract per
 butterfly), SHAKE256 for the PRF (129 k per decaps, one stream at a time),
 and the matrix (85 k plus 43 k in `permute4`).  The first wants AVX2
 butterflies over sixteen coefficients, the second the four-way Keccak.
+
+## Part 76: AVX2 clones of the ML-KEM arithmetic, and a four-way PRF
+
+Part 75 left the transforms and SHAKE256 at the top of the profile.  gcc
+already vectorized the NTT layers with `len >= 8`, but with SSE2, eight
+coefficients per instruction; compiling the whole of `Hacl.c` with
+`-mavx2` took ML-KEM-768 from 30.4 / 36.4 / 48.0 to 27.3 / 31.6 / 40.1 us
+in the quick harness, which was the cheapest win on the table: no new
+proof, just the right instruction set.
+
+So `ntt_inplace`, `intt_inplace`, `multiply` and `cbd_impl` are now each
+extracted twice from one `inline_for_extraction` body -- `X_avx2` under
+`CPrologue "__attribute__((target(\"avx2\")))"` and `X_` without -- and `X`
+is a dispatcher with the body's specification that branches on
+`Hacl.Vec256.supported ()`.  The functions that only ever run under AVX2
+(`gen_entries4`, `sample_ntt4_impl`, `shake128_absorb_pre`) carry the
+attribute directly.  None of them uses `custard_c_closure_prologue`:
+Custard refuses a closure that reaches a global also reached from host code
+(`Hacl_Secret_UInt64_zero`, then `rc_arr`), and the closure is not needed,
+because gcc and clang inline a default-target static callee into an AVX2
+caller.
+
+The PRF is `SHAKE256(s || b, 64 eta)`: one 33-byte absorb and one squeezed
+block for `eta = 2`, two for `eta = 3`, and a noise vector is `k` of them
+with one seed.  `Hacl.Impl.MLKEM.PRF4.prf4_impl` runs four: four
+`prf_absorb_pre` (the absorb without its last permutation), one `permute4`,
+`squeeze_block` on each lane, and `Sample4.permute4_if (64 eta > 136)` for
+the second block.  Its whole proof is `prf_lane`, two applications of
+`Spec.SHA3.squeeze_range_eq`.  `Gen.noise_vec_impl` dispatches to
+`noise_vec4_impl`, which calls `prf4_impl` once and then `noise_entry` four
+times, each extending the verified prefix of the vector by one entry when
+`i < k` and doing nothing otherwise; the lanes past `k` compute a PRF
+nobody reads.  `prf_absorb_pre` takes the message length as an argument
+although it is always 33: as a constant, the inlined whole-block loop of
+the absorb extracts to `while (i < 0)`, which `-Wtype-limits` rejects.
+
+Callgrind, ML-KEM-768 encapsulation (instructions, 200 calls):
+
+| | before | after |
+| --- | ---: | ---: |
+| total | 107.8 M | 77.6 M |
+| `multiply` | 12.8 M | 6.1 M |
+| `intt_inplace` | 12.0 M | 4.0 M |
+| `ntt_inplace` | 6.2 M | 2.6 M |
+| CBD | 2.2 M | 0.8 M |
+| scalar `shake256` | 12.9 M | 1.8 M |
+| `prf4_impl` + `prf_absorb_pre` | -- | 2.2 M |
+| `permute4` | 8.6 M | 11.5 M |
+| `gen_entries4` | 17.0 M | 12.2 M |
+
+| gcc, best / median of 20, interleaved, same session | before | after | median |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 21.7 / 24.8 / 33.0 us | 18.3 / 21.3 / 27.9 us | 1.16x--1.18x |
+| ML-KEM-768 keygen / encaps / decaps | 33.2 / 39.6 / 50.1 us | 29.4 / 33.7 / 43.3 us | 1.12x--1.17x |
+| ML-KEM-1024 keygen / encaps / decaps | 49.1 / 56.5 / 69.6 us | 42.8 / 48.1 / 59.3 us | 1.13x--1.18x |
+
+What is left at the top of encapsulation is `sha3_256` of the
+encapsulation key (12.7 M, one scalar stream over 1184 bytes, which the
+standard requires), `kpke_encrypt`'s own compress and encode (14.6 M), the
+matrix (`gen_entries4` and `permute4`, 24 M, of which the rejection
+sampling is now the larger part), and the ninth matrix entry for `k = 3`,
+still sampled by the scalar `sample_ntt_impl` (6.1 M).

@@ -84,3 +84,39 @@ val sample_poly_cbd_impl (dst: A.array zqt) (s: A.array S8.t) (byte: U8.t) ([@@@
         pure (Seq.length v == n /\ Seq.length vs == 32 /\
               1 <= SZ.v eta /\ SZ.v eta <= 3 /\
               as_poly v == sample_poly_cbd (SZ.v eta) vs byte))
+
+(** Algorithm 8 proper: [SamplePolyCBD] of a [64 eta]-byte buffer. *)
+val cbd_impl (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
+             (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
+  : stt unit
+      (A.pts_to dst vd ** A.pts_to b #p vb **
+       pure (Seq.length vd == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+             Seq.length vb == 64 * SZ.v eta))
+      (fun _ -> exists* (v: Seq.seq zqt). A.pts_to dst v ** A.pts_to b #p vb **
+        pure (Seq.length v == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+              Seq.length vb == 64 * SZ.v eta /\
+              as_poly v == sample_cbd (SZ.v eta) vb))
+
+(** Four PRFs of one seed at once, over the four-way Keccak:
+    [o_j[0, 64 eta) <- PRF_eta(s, b_j)].  The caller checks
+    {!Hacl.Vec256.supported}. *)
+val prf4_impl (o0 o1 o2 o3: A.array S8.t) (s: A.array S8.t)
+              (b0 b1 b2 b3: U8.t) (eta: SZ.t)
+              (#vo0 #vo1 #vo2 #vo3: erased (Seq.seq S8.t))
+              (#p: perm) (#vs: erased (Seq.seq S8.t))
+  : stt unit
+      (A.pts_to o0 vo0 ** A.pts_to o1 vo1 ** A.pts_to o2 vo2 ** A.pts_to o3 vo3 **
+       A.pts_to s #p vs **
+       pure (Seq.length vs == 32 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+             Seq.length vo0 == 192 /\ Seq.length vo1 == 192 /\
+             Seq.length vo2 == 192 /\ Seq.length vo3 == 192))
+      (fun _ -> exists* (w0 w1 w2 w3: Seq.seq S8.t).
+        A.pts_to o0 w0 ** A.pts_to o1 w1 ** A.pts_to o2 w2 ** A.pts_to o3 w3 **
+        A.pts_to s #p vs **
+        pure (Seq.length vs == 32 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+              Seq.length w0 == 192 /\ Seq.length w1 == 192 /\
+              Seq.length w2 == 192 /\ Seq.length w3 == 192 /\
+              Seq.slice w0 0 (64 * SZ.v eta) == prf (SZ.v eta) vs b0 /\
+              Seq.slice w1 0 (64 * SZ.v eta) == prf (SZ.v eta) vs b1 /\
+              Seq.slice w2 0 (64 * SZ.v eta) == prf (SZ.v eta) vs b2 /\
+              Seq.slice w3 0 (64 * SZ.v eta) == prf (SZ.v eta) vs b3))

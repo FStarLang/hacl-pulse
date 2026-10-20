@@ -499,7 +499,11 @@ and fed to the same `block_impl`, and only the permutations are shared --
 the one that ends each absorb (`absorb_pre` is `absorb_impl` without it) and
 the one before every squeezed block after the first.  `gen_matrix_impl`
 takes four entries at a time while four remain and the processor has AVX2,
-and one at a time otherwise.  The 64-bit lane operations live in their own
+and one at a time otherwise.  The noise vectors are the same idea for SHAKE256:
+`Hacl.Impl.MLKEM.PRF4` computes four `PRF_eta(s, b_j)` with one
+`permute4` ending the four 33-byte absorbs and, for `eta = 3`, a second one
+for the four second blocks, and `noise_vec_impl` calls it once per vector
+(the lanes past `k` compute a PRF nobody reads).  The 64-bit lane operations live in their own
 module rather than in `Hacl.Vec256`: adding them there perturbed the solver
 context of the ChaCha20 and Poly1305 vector proofs enough to time them out.
 
@@ -3339,7 +3343,12 @@ below `2^36`, and reduced by a single Barrett step with `m = floor(2^37 / q)`
 128-entry table instead of computed as a product.  The centred binomial
 sampler reads its input a group at a time -- `eta` bytes are four
 coefficients -- and adds up bits with constant shifts, rather than
-locating each bit with a division.
+locating each bit with a division.  The NTT, inverse NTT, pointwise product and CBD
+sampler are each extracted twice from the same verified body, once under
+`__attribute__((target("avx2")))` and once without, and a dispatcher with
+the same specification picks one on `Hacl.Vec256.supported`: gcc and clang
+then vectorize the butterflies sixteen coefficients wide instead of eight,
+without a line of new proof.
 
 The correctness statement is that the implementation computes the
 algorithms of FIPS 203, coefficient for coefficient, including that the NTT

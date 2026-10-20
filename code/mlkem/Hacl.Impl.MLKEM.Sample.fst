@@ -67,6 +67,7 @@ module HSZ = Hacl.SizeT
 module Copy = Hacl.Impl.Copy
 module Sub = Hacl.Impl.Sub
 module Mem = Hacl.Mem
+module V = Hacl.Vec256
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -461,7 +462,8 @@ let grp_pos (eta i t: nat)
   = ()
 
 (** [dst <- SamplePolyCBD_eta b]. *)
-fn cbd_impl (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
+inline_for_extraction
+fn cbd_impl_ (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
             (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
          pure (Seq.length vd == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
@@ -519,6 +521,35 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
   with v. assert (A.pts_to dst v);
   as_poly_intro v (sample_cbd (SZ.v eta) vb);
   assert (pure (as_poly v == sample_cbd (SZ.v eta) vb));
+}
+
+(** The same, extracted a second time with [target("avx2")] so that the C
+    compiler can vectorise it with wider vectors; chosen at run time. *)
+[@@CPrologue "__attribute__((target(\"avx2\")))"]
+fn cbd_impl_avx2 (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
+            (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to b #p vb **
+         pure (Seq.length vd == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+               Seq.length vb == 64 * SZ.v eta)
+ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
+  pure (Seq.length v == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        Seq.length vb == 64 * SZ.v eta /\
+        as_poly v == sample_cbd (SZ.v eta) vb)
+{
+  cbd_impl_ dst b eta
+}
+
+fn cbd_impl (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
+            (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to b #p vb **
+         pure (Seq.length vd == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+               Seq.length vb == 64 * SZ.v eta)
+ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
+  pure (Seq.length v == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+        Seq.length vb == 64 * SZ.v eta /\
+        as_poly v == sample_cbd (SZ.v eta) vb)
+{
+  if (V.supported ()) { cbd_impl_avx2 dst b eta } else { cbd_impl_ dst b eta }
 }
 
 (** {2 The pseudorandom function}
