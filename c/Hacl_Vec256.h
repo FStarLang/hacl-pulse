@@ -147,6 +147,35 @@ HACL_VEC256 void Hacl_Vec256_store64(uint64_t *p, Hacl_Vec256_t x) {
   _mm256_storeu_si256((__m256i *)(void *)p, x);
 }
 
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_xor64(Hacl_Vec256_t a,
+                                            Hacl_Vec256_t b) {
+  return _mm256_xor_si256(a, b);
+}
+
+/* `_mm256_andnot_si256(a, b)` is `~a & b`. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_andnot64(Hacl_Vec256_t a,
+                                               Hacl_Vec256_t b) {
+  return _mm256_andnot_si256(a, b);
+}
+
+/* As for `Hacl_Vec256_rotl`: every call site passes a literal, and a
+ * rotation by a whole number of bytes is one byte shuffle. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_rotl64(Hacl_Vec256_t a, uint32_t s) {
+  if (s == 8)
+    return _mm256_shuffle_epi8(
+        a, _mm256_setr_epi8(7, 0, 1, 2, 3, 4, 5, 6, 15, 8, 9, 10, 11, 12, 13,
+                            14, 7, 0, 1, 2, 3, 4, 5, 6, 15, 8, 9, 10, 11, 12,
+                            13, 14));
+  if (s == 56)
+    return _mm256_shuffle_epi8(
+        a, _mm256_setr_epi8(1, 2, 3, 4, 5, 6, 7, 0, 9, 10, 11, 12, 13, 14, 15,
+                            8, 1, 2, 3, 4, 5, 6, 7, 0, 9, 10, 11, 12, 13, 14,
+                            15, 8));
+  return _mm256_or_si256(
+      _mm256_sll_epi64(a, _mm_cvtsi32_si128((int)s)),
+      _mm256_srl_epi64(a, _mm_cvtsi32_si128((int)(64 - s))));
+}
+
 static inline bool Hacl_Vec256_supported(void) {
 #if defined(__GNUC__)
   __builtin_cpu_init();
@@ -206,6 +235,8 @@ HACL_VEC256_STUB2(Hacl_Vec256_lo128)
 HACL_VEC256_STUB2(Hacl_Vec256_hi128)
 HACL_VEC256_STUB2(Hacl_Vec256_add64)
 HACL_VEC256_STUB2(Hacl_Vec256_mul32)
+HACL_VEC256_STUB2(Hacl_Vec256_xor64)
+HACL_VEC256_STUB2(Hacl_Vec256_andnot64)
 #undef HACL_VEC256_STUB2
 static inline Hacl_Vec256_t Hacl_Vec256_shr64(Hacl_Vec256_t a, uint32_t s) {
   (void)s;
@@ -216,6 +247,10 @@ static inline Hacl_Vec256_t Hacl_Vec256_shl64(Hacl_Vec256_t a, uint32_t s) {
   return a;
 }
 static inline Hacl_Vec256_t Hacl_Vec256_mask26(Hacl_Vec256_t a) { return a; }
+static inline Hacl_Vec256_t Hacl_Vec256_rotl64(Hacl_Vec256_t a, uint32_t s) {
+  (void)s;
+  return a;
+}
 static inline Hacl_Vec256_t Hacl_Vec256_bcast64(uint64_t x) {
   Hacl_Vec256_t r;
   for (int i = 0; i < 4; i++) memcpy(&r.w[2 * i], &x, 8);

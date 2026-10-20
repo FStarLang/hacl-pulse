@@ -37,6 +37,7 @@ module S8 = Hacl.Secret.UInt8
 module U8 = FStar.UInt8
 module Seq = FStar.Seq
 module S = Hacl.Impl.MLKEM.Sample
+module S4 = Hacl.Impl.MLKEM.Sample4
 
 (** Algorithm 7, [SampleNTT]. *)
 fn sample_ntt_impl (dst: A.array zqt) (seed: A.array S8.t) (slen: SZ.t)
@@ -48,6 +49,30 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   pure (Seq.length v == n /\ as_poly v == sample_ntt vs)
 {
   S.sample_ntt_impl dst seed slen;
+}
+
+(** [SampleNTT] of four seeds at once. *)
+fn sample_ntt4_impl (d0 d1 d2 d3: A.array zqt) (s0 s1 s2 s3: A.array S8.t) (slen: SZ.t)
+                    (#vd0 #vd1 #vd2 #vd3: erased (Seq.seq zqt))
+                    (#p0 #p1 #p2 #p3: perm)
+                    (#vs0 #vs1 #vs2 #vs3: erased (Seq.seq S8.t))
+requires A.pts_to d0 vd0 ** A.pts_to d1 vd1 ** A.pts_to d2 vd2 ** A.pts_to d3 vd3 **
+         A.pts_to s0 #p0 vs0 ** A.pts_to s1 #p1 vs1 **
+         A.pts_to s2 #p2 vs2 ** A.pts_to s3 #p3 vs3 **
+         pure (Seq.length vd0 == n /\ Seq.length vd1 == n /\
+               Seq.length vd2 == n /\ Seq.length vd3 == n /\
+               SZ.v slen == Seq.length vs0 /\ SZ.v slen == Seq.length vs1 /\
+               SZ.v slen == Seq.length vs2 /\ SZ.v slen == Seq.length vs3)
+ensures exists* (w0 w1 w2 w3: Seq.seq zqt).
+  A.pts_to d0 w0 ** A.pts_to d1 w1 ** A.pts_to d2 w2 ** A.pts_to d3 w3 **
+  A.pts_to s0 #p0 vs0 ** A.pts_to s1 #p1 vs1 **
+  A.pts_to s2 #p2 vs2 ** A.pts_to s3 #p3 vs3 **
+  pure (Seq.length w0 == n /\ Seq.length w1 == n /\
+        Seq.length w2 == n /\ Seq.length w3 == n /\
+        as_poly w0 == sample_ntt vs0 /\ as_poly w1 == sample_ntt vs1 /\
+        as_poly w2 == sample_ntt vs2 /\ as_poly w3 == sample_ntt vs3)
+{
+  S4.sample_ntt4_impl d0 d1 d2 d3 s0 s1 s2 s3 slen;
 }
 
 (** Algorithm 8, [SamplePolyCBD]. *)

@@ -297,6 +297,55 @@ ensures exists* (vk: Seq.seq S8.t).
 
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
+(** The absorb phase but for its last permutation: [permute st] is
+    [absorb r suffix msg].  Four sponges absorbing side by side stop here and
+    finish with one {!Hacl.Hash.SHA3.Core4.permute4}. *)
+inline_for_extraction
+fn absorb_pre (st: A.array S64.t) (b: A.array S64.t)
+               (rc_tbl: A.array S64.t)
+               (msg: A.array S8.t) (n: SZ.t) (r: SZ.t) (suffix: U8.t)
+               (#vst0: erased (Seq.seq S64.t))
+               (#vb0: erased (Seq.seq S64.t))
+               (#prc: perm) (#vrc: erased (Seq.seq S64.t))
+               (#pm: perm) (#vm: erased (Seq.seq S8.t))
+requires A.pts_to st vst0 ** A.pts_to b vb0 **
+         A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+         pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
+               Seq.length vst0 == 25 /\
+               Seq.length vb0 == 25 /\
+               reveal vrc == (rc <: Seq.seq S64.t))
+         ** pure (SZ.v n == Seq.length vm)
+ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
+  A.pts_to st vst ** A.pts_to b vb **
+  A.pts_to rc_tbl #prc vrc ** A.pts_to msg #pm vm **
+  pure (SZ.v r % 8 == 0 /\ 0 < SZ.v r /\ SZ.v r < 200 /\
+        Seq.length vst == 25 /\ Seq.length vb == 25 /\
+        permute vst == absorb (SZ.v r) suffix vm)
+{
+  A.pts_to_len st;
+  A.pts_to_len msg;
+  zero_state_impl st;
+  absorb_full st b rc_tbl msg n r (G.hide suffix);
+  let z8 = S8.classify 0uy;
+  let mut arr = [| z8; 200sz |];
+  Mem.track arr;
+  A.pts_to_len arr;
+  let blk = Sub.sub arr 0sz r;
+  last_block blk msg n r suffix;
+  with vk. assert (A.pts_to blk vk);
+  nblocks_eq (SZ.v r) vm;
+  Loops.unfold_repeati (Seq.length vm / SZ.v r)
+    (absorb_step (SZ.v r) (padded (SZ.v r) suffix vm)) zero_state;
+  xor_block_at st blk 0sz r;
+  Sub.unsub arr 0 (SZ.v r) blk;
+  Mem.wipe arr 200sz;
+  ()
+}
+
+#pop-options
+
+#push-options "--z3rlimit 100"
+
 (** The whole absorb phase: [st <- absorb r suffix msg]. *)
 inline_for_extraction
 fn absorb_impl (st: A.array S64.t) (b: A.array S64.t)
@@ -320,30 +369,36 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
         Seq.length vst == 25 /\ Seq.length vb == 25 /\
         vst == absorb (SZ.v r) suffix vm)
 {
-  A.pts_to_len st;
-  A.pts_to_len msg;
-  zero_state_impl st;
-  absorb_full st b rc_tbl msg n r (G.hide suffix);
-  let z8 = S8.classify 0uy;
-  let mut arr = [| z8; 200sz |];
-  Mem.track arr;
-  A.pts_to_len arr;
-  let blk = Sub.sub arr 0sz r;
-  last_block blk msg n r suffix;
-  with vk. assert (A.pts_to blk vk);
-  nblocks_eq (SZ.v r) vm;
-  Loops.unfold_repeati (Seq.length vm / SZ.v r)
-    (absorb_step (SZ.v r) (padded (SZ.v r) suffix vm)) zero_state;
-  xor_block_at st blk 0sz r;
+  absorb_pre st b rc_tbl msg n r suffix;
   permute_impl st b rc_tbl;
-  Sub.unsub arr 0 (SZ.v r) blk;
-  Mem.wipe arr 200sz;
-  ()
 }
 
 #pop-options
 
 (** {2 Squeezing} *)
+
+(** Byte [i] of the state is byte [i % 8] of lane [i / 8]. *)
+let state_byte_lane (s: Seq.seq S64.t) (i: nat) (x: S64.t)
+  : Lemma (requires Seq.length s == 25 /\ i < 200 /\ x == Seq.index s (i / 8))
+          (ensures Cast.u64_to_u8 (shiftr x (8 * (i % 8))) == state_byte s i)
+  = ()
+
+(** One more byte of [squeeze_block]'s window. *)
+let squeeze_step (vst: Seq.seq S64.t) (vout0 vout: Seq.seq S8.t)
+                 (base: nat) (vt: nat) (y: S8.t)
+  : Lemma (requires Seq.length vst == 25 /\ vt < 200 /\
+                    Seq.length vout == Seq.length vout0 /\ base + vt < Seq.length vout /\
+                    y == state_byte vst vt /\
+                    (forall (k: nat). base <= k /\ k < base + vt ==>
+                       Seq.index vout k == state_byte vst (k - base)) /\
+                    (forall (k: nat). k < Seq.length vout0 /\ (k < base \/ base + vt <= k) ==>
+                       Seq.index vout k == Seq.index vout0 k))
+          (ensures (let vout' = Seq.upd vout (base + vt) y in
+                    (forall (k: nat). base <= k /\ k < base + (vt + 1) ==>
+                       Seq.index vout' k == state_byte vst (k - base)) /\
+                    (forall (k: nat). k < Seq.length vout0 /\ (k < base \/ base + (vt + 1) <= k) ==>
+                       Seq.index vout' k == Seq.index vout0 k)))
+  = ()
 
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
@@ -386,7 +441,11 @@ ensures exists* (vout: Seq.seq S8.t).
     Math.lemma_div_le (SZ.v vt) 199 8;
     assert (pure (SZ.v lane < 25 /\ SZ.v byte < 8));
     let x = A.(st.(lane));
-    A.((out.(SZ.add base vt) <- Cast.u64_to_u8 (shiftr_u32 x (shift8 byte))));
+    let y = Cast.u64_to_u8 (shiftr_u32 x (shift8 byte));
+    state_byte_lane vst (SZ.v vt) x;
+    with vout. assert (A.pts_to out vout);
+    squeeze_step vst vout0 vout (SZ.v base) (SZ.v vt) y;
+    A.((out.(SZ.add base vt) <- y));
     t := SZ.add vt 1sz;
   };
 }

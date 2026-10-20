@@ -8639,3 +8639,47 @@ hundreds, moved within noise.  The session ran about 7% slower than the
 one that produced the README tables, so only the ratios above are
 comparable; the tables are left as they are until the four-way Keccak
 lands and everything is re-measured once.
+
+## Part 74: a four-way Keccak for the ML-KEM matrix
+
+The matrix `A` is `k * k` SampleNTT calls: 4, 9 or 16 SHAKE128 streams of
+three or four blocks each, every block costing a scalar permutation.
+`Hacl.Hash.SHA3.Core4.permute4` does four permutations at once on AVX2,
+one lane of each state per 256-bit register: pack the four states into
+25 vectors, 24 rounds of theta / rho-pi / chi / iota with `vpxor`,
+`vpandn` and shift-or rotations (`vpshufb` for the 8- and 56-bit ones),
+unpack.  Measured alone, 640 ns per call, 160 ns per state, against
+480--527 ns for the scalar permutation (3.1x); a raw C prototype without
+the pack, unpack and wipes ran at 122 ns per state.
+
+`Hacl.Impl.MLKEM.Sample4.sample_ntt4_impl` runs four samplers in lock
+step over it, until all four are full or sixteen blocks have gone by;
+`gen_matrix_impl` calls it while four entries remain and
+`Hacl_Vec256_supported ()`, so ML-KEM-512 does its whole matrix in one
+batch, ML-KEM-768 in two plus one scalar entry, ML-KEM-1024 in four.
+
+Verification notes.  The permutation's proof is a per-lane invariant for
+each step, and every one of them had to be opaque, revealed only in small
+`_zero` / `_step` / `_done` lemmas: with the refinement of `rotl64`
+(a `rotate_left` on `nat`s) in the context, Z3 looped on facts as
+simple as `m < i`.  The fix was to state each step lemma for an arbitrary
+value `y` with its property behind an opaque predicate.  Putting the new
+lane axioms into `Hacl.Vec256` timed out the ChaCha20 and Poly1305 vector
+proofs, which never mention them; they live in `Hacl.Vec256.Lane64`.
+Splitting `absorb_pre` out of `absorb_impl` slowed the unrelated
+`squeeze_block` in the same module from 24 s to 460 s on one query; moving
+its loop step into two small lemmas (`state_byte_lane`, `squeeze_step`)
+brought the whole module back to 132 s, from 140 s before.
+
+| gcc, best of 3, interleaved, same session, AVX2 off / on | scalar | four-way | |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 27.3 / 32.5 / 41.3 us | 25.3 / 30.3 / 39.0 us | 1.06x--1.08x |
+| ML-KEM-768 keygen / encaps / decaps | 44.3 / 52.3 / 64.5 us | 40.6 / 48.3 / 60.2 us | 1.07x--1.09x |
+| ML-KEM-1024 keygen / encaps / decaps | 70.1 / 78.9 / 93.9 us | 60.3 / 69.6 / 83.8 us | 1.12x--1.16x |
+
+The "scalar" column is the same build with `Hacl_Vec256_supported` forced
+to false, so only the matrix differs; SHA-3 and SHAKE rows moved within
+noise.  This session ran faster than Part 73's, so compare ratios only.
+The pack and unpack (25 four-lane gathers each way) and the three wipes
+are a quarter of `permute4`'s time and the obvious next step, followed by
+the same batching in ML-DSA's `ExpandA`, `ExpandS` and `ExpandMask`.

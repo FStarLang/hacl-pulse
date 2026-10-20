@@ -147,7 +147,8 @@ axiomatized interface, verified against the same specification as the portable
 code and tested against an independent transcription of the standard: AES-NI,
 `AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
 Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20,
-Salsa20 and Poly1305 (`lib/Hacl.Vec256.fst`), and AVX-512F under ChaCha20
+Salsa20 and Poly1305 (`lib/Hacl.Vec256.fst`) and under the four-way Keccak
+behind the ML-KEM matrix (`lib/Hacl.Vec256.Lane64.fst`), and AVX-512F under ChaCha20
 and Salsa20 (`lib/Hacl.Vec512.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
@@ -487,6 +488,20 @@ exactly one permutation and a long one does not overrun.  The streaming
 XOFs the ML-KEM and ML-DSA samplers use (`xof_block`) permute on the way in
 instead, for every block but the first, so the block a sampler stops at
 is not followed by a permutation either.
+
+**Four permutations at a time, on AVX2.**  `Hacl.Hash.SHA3.Core4.permute4`
+runs Keccak-f[1600] on four independent states at once, one 64-bit lane of
+each per 256-bit register, and proves `w_k == permute v_k` for each.  The
+ML-KEM matrix is `k * k` independent SHAKE128 rejection samplers, so
+`Hacl.Impl.MLKEM.Sample4` runs four of them in lock step: each stream is the
+scalar sampler's state, read block by block with the same `squeeze_block`
+and fed to the same `block_impl`, and only the permutations are shared --
+the one that ends each absorb (`absorb_pre` is `absorb_impl` without it) and
+the one before every squeezed block after the first.  `gen_matrix_impl`
+takes four entries at a time while four remain and the processor has AVX2,
+and one at a time otherwise.  The 64-bit lane operations live in their own
+module rather than in `Hacl.Vec256`: adding them there perturbed the solver
+context of the ChaCha20 and Poly1305 vector proofs enough to time them out.
 
 The proof needed three things that the SHA-2 proof did not.  The round steps
 (`theta_c`, `theta`, `rho_pi`, `chi`) are `[@@"opaque_to_smt"]`, because a

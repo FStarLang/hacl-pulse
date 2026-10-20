@@ -253,6 +253,30 @@ AVX2 static void run(int rounds) {
     for (int i = 0; i < 4; i++) ok &= w[i] == x[i];
   }
   report("vec256 bcast64, set64 and store64", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    if (n == 0) { memset(a, 0xff, 32); memset(b, 0x5a, 32); }
+    Hacl_Vec256_store(r, Hacl_Vec256_xor64(Hacl_Vec256_load(a), Hacl_Vec256_load(b)));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == (lane64(a, i) ^ lane64(b, i));
+    Hacl_Vec256_store(r, Hacl_Vec256_andnot64(Hacl_Vec256_load(a), Hacl_Vec256_load(b)));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == (~lane64(a, i) & lane64(b, i));
+  }
+  report("vec256 xor64 and andnot64", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    if (n == 0) memset(a, 0xff, 32);
+    for (unsigned s = 1; s < 64; s++) {
+      Hacl_Vec256_store(r, Hacl_Vec256_rotl64(Hacl_Vec256_load(a), s));
+      for (int i = 0; i < 4; i++)
+        ok &= lane64(r, i) == ((lane64(a, i) << s) | (lane64(a, i) >> (64 - s)));
+    }
+  }
+  report("vec256 rotl64, every distance", ok);
 }
 
 #endif
