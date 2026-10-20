@@ -3331,7 +3331,15 @@ conditional-subtract mask and multiplication with a Barrett step in
 sixty-four bits, or, by a root of unity in the transform, with Shoup's
 trick against a second table of `floor(zeta 2^16 / q)`, all branch-free, and the coefficient type is a refinement
 --- `zqt = x: S16.t { S16.v x < q }` --- so every intermediate carries its
-bound in its type instead of in a lemma.
+bound in its type instead of in a lemma.  The base-case products reduce
+once per output coefficient rather than once per operation: each of
+`a0 b0 + a1 b1 gamma_i` and `a0 b1 + a1 b0` is formed in sixty-four bits,
+below `2^36`, and reduced by a single Barrett step with `m = floor(2^37 / q)`
+(`zq_reduce`), with `gamma_i = zeta^(2 brv(i) + 1)` read from a third
+128-entry table instead of computed as a product.  The centred binomial
+sampler reads its input a group at a time -- `eta` bytes are four
+coefficients -- and adds up bits with constant shifts, rather than
+locating each bit with a division.
 
 The correctness statement is that the implementation computes the
 algorithms of FIPS 203, coefficient for coefficient, including that the NTT

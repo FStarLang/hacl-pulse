@@ -8683,3 +8683,45 @@ noise.  This session ran faster than Part 73's, so compare ratios only.
 The pack and unpack (25 four-lane gathers each way) and the three wipes
 are a quarter of `permute4`'s time and the obvious next step, followed by
 the same batching in ML-DSA's `ExpandA`, `ExpandS` and `ExpandMask`.
+
+## Part 75: fewer reductions in the ML-KEM base multiply and CBD
+
+Against AWS-LC's ML-KEM-768 at 13 / 14 / 17 us we were at 3.2x--3.5x, and
+OpenSSL's portable C encapsulates in 33 us against our 49 (clang), so not
+all of the gap is vectors.  Callgrind on ML-KEM-768 put `NTT.multiply` at
+73 k instructions per keygen and 123 k per decaps, and the CBD sampler at
+68 k and 80 k: as much as each NTT.
+
+`multiply` did seven Barrett reductions per pair -- one after every product
+and sum, plus one for `zeta^2 * zeta` in `gamma_i`.  It now does two:
+each output, `a0 b0 + (a1 b1) gamma_i` or `a0 b1 + a1 b0`, is formed in
+sixty-four bits (below `2 q^3 < 2^36`) and reduced once by
+`Zq.zq_reduce`, a Barrett step with `m = 41285357 = floor(2^37 / q)`
+(`m q = 2^37 - 19`), and `gamma_i` comes from a new 128-entry table
+(`Tables.gamma_table`, checked against `gammas` by normalization).  The
+CBD sampler located each of its `2 eta` bits per coefficient with a
+division and a variable shift; it now takes `eta` bytes at a time, which is
+exactly four coefficients for every `eta`, and every shift in the group is
+a constant after monomorphization.
+
+Verification notes.  The first `base_mul` took 426 s and `multiply` 285 s,
+the whole NTT module 28 minutes: the loop invariant's
+`forall k. k < 2 i ==> v[k] == multiply_ntts (as_poly va) (as_poly vb)
+[k]` sat in every query, and with it Z3 timed out on `2 (i + 1) == 2 i + 2`.
+Behind an opaque `mul_prefix`, with the arithmetic in pure `bm0` / `bm1`
+and the update in two small lemmas, `base_mul` is 13 s and `multiply`
+36 s.  Adding the lemmas perturbed the untouched `part_step`, which now
+does its case split explicitly.
+
+| gcc, best / median of 6, interleaved, same session | before | after | median |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 25.4 / 30.1 / 39.3 us | 21.8 / 25.2 / 32.7 us | 1.17x--1.20x |
+| ML-KEM-768 keygen / encaps / decaps | 40.6 / 48.4 / 59.3 us | 33.5 / 39.5 / 49.9 us | 1.21x--1.22x |
+| ML-KEM-1024 keygen / encaps / decaps | 59.9 / 70.7 / 85.9 us | 49.6 / 56.8 / 70.5 us | 1.23x--1.28x |
+
+Callgrind per ML-KEM-768 operation after: `multiply` 48 k (keygen) and
+80 k (decaps), CBD 9 k and 11 k.  What is left at the top is the NTT and
+inverse NTT (62 k and 75 k, a Shoup multiply and a conditional subtract per
+butterfly), SHAKE256 for the PRF (129 k per decaps, one stream at a time),
+and the matrix (85 k plus 43 k in `permute4`).  The first wants AVX2
+butterflies over sixteen coefficients, the second the four-way Keccak.

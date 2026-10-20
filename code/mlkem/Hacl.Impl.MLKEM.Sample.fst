@@ -342,43 +342,123 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
 
 #push-options "--z3rlimit 200"
 
-(** [bit_sum b off m], a sum of [m] bits, with [m] at most three. *)
+(** The bits come out of the PRF output a group at a time: [eta] bytes
+    are [8 eta] bits, exactly four coefficients' worth, so a group's bytes
+    are loaded once and every bit position inside it is a constant. *)
+
+let stream_bit_byte (b: Seq.seq S8.t) (i k: nat)
+  : Lemma (requires i < Seq.length b /\ k < 8)
+          (ensures stream_bit b (8 * i + k) == (S8.v (Seq.index b i) / pow2 k) % 2)
+  = Math.lemma_div_plus k i 8;
+    Math.small_div k 8;
+    Math.lemma_mod_plus k i 8;
+    Math.small_mod k 8
+
+#push-options "--fuel 3"
+let bit_sum_unfold (b: Seq.seq S8.t) (off: nat) (m: nat { 1 <= m /\ m <= 3 })
+  : Lemma (bit_sum b off m ==
+             stream_bit b off +
+             (if m >= 2 then stream_bit b (off + 1) else 0) +
+             (if m = 3 then stream_bit b (off + 2) else 0))
+  = ()
+#pop-options
+
+(** The first [nb] of [y0], [y1], [y2] are bytes [base], [base + 1], ... *)
+let grp_ok (vb: Seq.seq S8.t) (base nb: nat) (y0 y1 y2: S8.t) : prop
+  = base + nb <= Seq.length vb /\ nb <= 3 /\
+    (nb > 0 ==> y0 == Seq.index vb base) /\
+    (nb > 1 ==> y1 == Seq.index vb (base + 1)) /\
+    (nb > 2 ==> y2 == Seq.index vb (base + 2))
+
+(** Bit [k] of a byte, as a sixteen-bit word. *)
 inline_for_extraction
-fn bit_sum_impl (b: A.array S8.t) (blen: SZ.t) (off: SZ.t) (m: SZ.t)
-                (#p: perm) (#vb: erased (Seq.seq S8.t))
-requires A.pts_to b #p vb **
-         pure (Seq.length vb == SZ.v blen /\ SZ.v m <= 3 /\
-               SZ.v off + SZ.v m <= 8 * SZ.v blen /\ SZ.v off + SZ.v m < pow2 32)
-returns x: S16.t
-ensures A.pts_to b #p vb **
-  pure (Seq.length vb == SZ.v blen /\ SZ.v m <= 3 /\
-        S16.v x == bit_sum vb (SZ.v off) (SZ.v m))
+let bit8 (y: S8.t) (k: U32.t { U32.v k < 8 })
+  : r: S16.t { S16.v r == (S8.v y / pow2 (U32.v k)) % 2 }
+  = let z = S8.shift_right y k in
+    Math.pow2_le_compat 16 8;
+    let e = S16.of_bytes_le z (S8.classify 0uy) in
+    S16.logand_mask_low e 1ul;
+    assert_norm (pow2 1 == 2);
+    S16.logand e (S16.mask_low 1ul)
+
+(** Bit [p] of a group. *)
+inline_for_extraction
+let sbit (vb: erased (Seq.seq S8.t)) (base nb: erased nat) (y0 y1 y2: S8.t)
+         (p: U32.t { U32.v p < 8 * reveal nb })
+  : Pure S16.t (requires grp_ok vb base nb y0 y1 y2)
+               (ensures fun r -> S16.v r == stream_bit vb (8 * base + U32.v p))
+  = if U32.lt p 8ul then begin
+      stream_bit_byte vb base (U32.v p);
+      bit8 y0 p
+    end else if U32.lt p 16ul then begin
+      stream_bit_byte vb (base + 1) (U32.v p - 8);
+      bit8 y1 (U32.sub p 8ul)
+    end else begin
+      stream_bit_byte vb (base + 2) (U32.v p - 16);
+      bit8 y2 (U32.sub p 16ul)
+    end
+
+(** [bit_sum] of [m] bits of a group, from bit [p]. *)
+inline_for_extraction
+let gsum (vb: erased (Seq.seq S8.t)) (base nb: erased nat) (y0 y1 y2: S8.t)
+         (p: U32.t) (m: U32.t { 1 <= U32.v m /\ U32.v m <= 3 /\ U32.v p + U32.v m <= 8 * reveal nb })
+  : Pure S16.t (requires grp_ok vb base nb y0 y1 y2)
+               (ensures fun r -> S16.v r == bit_sum vb (8 * base + U32.v p) (U32.v m))
+  = bit_sum_unfold vb (8 * base + U32.v p) (U32.v m);
+    assert_norm (pow2 16 == 65536);
+    let s0 = sbit vb base nb y0 y1 y2 p in
+    let s1 =
+      if U32.gte m 2ul then begin
+        let t = sbit vb base nb y0 y1 y2 (U32.add p 1ul) in
+        Math.small_mod (S16.v s0 + S16.v t) (pow2 16);
+        S16.add_mod s0 t
+      end else s0 in
+    if U32.eq m 3ul then begin
+      let t = sbit vb base nb y0 y1 y2 (U32.add p 2ul) in
+      Math.small_mod (S16.v s1 + S16.v t) (pow2 16);
+      S16.add_mod s1 t
+    end else s1
+
+(** The first [c] coefficients are done. *)
+let cbd_prefix (eta: pos { eta <= 3 }) (vb: Seq.lseq S8.t (64 * eta)) (v: Seq.seq zqt) (c: nat)
+  : prop
+  = Seq.length v == n /\
+    (forall (k: nat). k < c /\ k < n ==> S16.v (Seq.index v k) == Seq.index (sample_cbd eta vb) k)
+
+let cbd_prefix_step (eta: pos { eta <= 3 }) (vb: Seq.lseq S8.t (64 * eta)) (v: Seq.seq zqt)
+                    (c: nat { c < n }) (x: zqt)
+  : Lemma (requires cbd_prefix eta vb v c /\ S16.v x == Seq.index (sample_cbd eta vb) c)
+          (ensures cbd_prefix eta vb (Seq.upd v c x) (c + 1))
+  = ()
+
+(** Coefficient [c], whose [2 eta] bits start at bit [p] of the group. *)
+inline_for_extraction
+fn cbd_coef (dst: A.array zqt) (c: SZ.t) (y0 y1 y2: S8.t) (p: U32.t)
+            ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
+            (#vb: erased (Seq.seq S8.t)) (#base #nb: erased nat) (#v: erased (Seq.seq zqt))
+requires A.pts_to dst v **
+         pure (1 <= SZ.v eta /\ SZ.v eta <= 3 /\ Seq.length vb == 64 * SZ.v eta /\
+               SZ.v c < n /\ U32.v p + 2 * SZ.v eta <= 8 * reveal nb /\
+               2 * SZ.v c * SZ.v eta == 8 * reveal base + U32.v p /\
+               grp_ok vb base nb y0 y1 y2 /\ cbd_prefix (SZ.v eta) vb v (SZ.v c))
+ensures exists* v'. A.pts_to dst v' **
+        pure (1 <= SZ.v eta /\ SZ.v eta <= 3 /\ Seq.length vb == 64 * SZ.v eta /\
+              cbd_prefix (SZ.v eta) vb v' (SZ.v c + 1))
 {
-  A.pts_to_len b;
-  HSZ.fits32 ();
-  assert_norm (pow2 16 == 65536);
-  let mut acc = S16.zero;
-  let mut j = 0sz;
-  while (let vj = !j; SZ.lt vj m)
-  invariant exists* (vj: SZ.t) (a: S16.t).
-    pts_to j vj ** pts_to acc a ** A.pts_to b #p vb **
-    pure (SZ.v vj <= SZ.v m /\ SZ.v m <= 3 /\ Seq.length vb == SZ.v blen /\
-          SZ.v off + SZ.v m < pow2 32 /\
-          S16.v a == bit_sum vb (SZ.v off) (SZ.v vj))
-  decreases (SZ.v m - SZ.v (!j))
-  {
-    let vj = !j;
-    let a = !acc;
-    SZ.fits_u32_implies_fits (SZ.v off + SZ.v vj);
-    SZ.fits_u32_implies_fits (SZ.v vj + 1);
-    let bit = stream_bit_impl b blen (SZ.add off vj);
-    bit_sum_snoc vb (SZ.v off) (SZ.v vj + 1);
-    Math.small_mod (S16.v a + S16.v bit) (pow2 16);
-    acc := S16.add_mod a bit;
-    j := SZ.add vj 1sz;
-  };
-  !acc
+  A.pts_to_len dst;
+  let m = SZ.sizet_to_uint32 eta;
+  let x = gsum vb base nb y0 y1 y2 p m;
+  let y = gsum vb base nb y0 y1 y2 (U32.add p m) m;
+  sample_cbd_index (SZ.v eta) vb (SZ.v c);
+  let r = zq_sub x y;
+  cbd_prefix_step (SZ.v eta) vb v (SZ.v c) r;
+  A.(dst.(c) <- r);
 }
+
+(** Coefficient [4 i + t] starts at bit [2 eta t] of group [i]. *)
+let grp_pos (eta i t: nat)
+  : Lemma (2 * (4 * i + t) * eta == 8 * (eta * i) + t * (2 * eta))
+  = ()
 
 (** [dst <- SamplePolyCBD_eta b]. *)
 fn cbd_impl (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
@@ -395,33 +475,45 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
   A.pts_to_len b;
   HSZ.fits32 ();
   assert_norm (64 * 3 < pow2 32);
-  assert_norm (2 * n * 3 + 3 < pow2 32);
-  SZ.fits_u32_implies_fits (64 * SZ.v eta);
-  let blen = SZ.mul 64sz eta;
   let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 256sz)
+  while (let vi = !i; SZ.lt vi 64sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq zqt).
     pts_to i vi ** A.pts_to dst v ** A.pts_to b #p vb **
-    pure (SZ.v vi <= n /\ Seq.length v == n /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
+    pure (SZ.v vi <= 64 /\ 1 <= SZ.v eta /\ SZ.v eta <= 3 /\
           Seq.length vb == 64 * SZ.v eta /\
-          (forall (k: nat). k < SZ.v vi ==>
-             S16.v (Seq.index v k) == Seq.index (sample_cbd (SZ.v eta) vb) k))
-  decreases (n - SZ.v (!i))
+          cbd_prefix (SZ.v eta) vb v (4 * SZ.v vi))
+  decreases (64 - SZ.v (!i))
   {
     let vi = !i;
-    Math.lemma_mult_le_right (SZ.v eta) (2 * SZ.v vi) (2 * n);
-    Math.lemma_mult_le_left (2 * n) (SZ.v eta) 3;
-    SZ.fits_u32_implies_fits (2 * SZ.v vi * SZ.v eta + SZ.v eta);
-    SZ.fits_u32_implies_fits (SZ.v vi + 1);
-    let off = SZ.mul (SZ.mul 2sz vi) eta;
-    assert (pure (SZ.v off + 2 * SZ.v eta <= 8 * SZ.v blen /\
-                  SZ.v off + 2 * SZ.v eta < pow2 32));
-    let x = bit_sum_impl b blen off eta;
-    let y = bit_sum_impl b blen (SZ.add off eta) eta;
-    sample_cbd_index (SZ.v eta) vb (SZ.v vi);
-    assert (pure (Seq.index (sample_cbd (SZ.v eta) vb) (SZ.v vi) ==
-                  sub (S16.v x) (S16.v y)));
-    A.((dst.(vi) <- zq_sub x y));
+    Math.lemma_mult_le_left (SZ.v eta) (SZ.v vi + 1) 64;
+    Math.distributivity_add_right (SZ.v eta) (SZ.v vi) 1;
+    assert (pure (SZ.v eta * SZ.v vi + SZ.v eta <= 64 * SZ.v eta));
+    SZ.fits_u32_implies_fits (SZ.v eta * SZ.v vi + SZ.v eta);
+    SZ.fits_u32_implies_fits (4 * SZ.v vi + 4);
+    let base = SZ.mul eta vi;
+    let y0 = A.(b.(base));
+    let y1 = (if SZ.gte eta 2sz then A.(b.(SZ.add base 1sz)) else y0);
+    let y2 = (if SZ.eq eta 3sz then A.(b.(SZ.add base 2sz)) else y0);
+    assert (pure (grp_ok vb (SZ.v base) (SZ.v eta) y0 y1 y2));
+    let c = SZ.mul 4sz vi;
+    let pe = SZ.sizet_to_uint32 (SZ.add eta eta);
+    let c1 = SZ.add c 1sz;
+    let c2 = SZ.add c 2sz;
+    let c3 = SZ.add c 3sz;
+    let p2 = U32.add pe pe;
+    let p3 = U32.add pe p2;
+    assert (pure (SZ.v base == SZ.v eta * SZ.v vi /\ SZ.v c == 4 * SZ.v vi /\
+                  SZ.v c1 == 4 * SZ.v vi + 1 /\ SZ.v c2 == 4 * SZ.v vi + 2 /\
+                  SZ.v c3 == 4 * SZ.v vi + 3 /\ U32.v pe == 1 * (2 * SZ.v eta) /\
+                  U32.v p2 == 2 * (2 * SZ.v eta) /\ U32.v p3 == 3 * (2 * SZ.v eta)));
+    grp_pos (SZ.v eta) (SZ.v vi) 0;
+    grp_pos (SZ.v eta) (SZ.v vi) 1;
+    grp_pos (SZ.v eta) (SZ.v vi) 2;
+    grp_pos (SZ.v eta) (SZ.v vi) 3;
+    cbd_coef dst c y0 y1 y2 0ul eta #vb #(SZ.v base) #(SZ.v eta);
+    cbd_coef dst c1 y0 y1 y2 pe eta #vb #(SZ.v base) #(SZ.v eta);
+    cbd_coef dst c2 y0 y1 y2 p2 eta #vb #(SZ.v base) #(SZ.v eta);
+    cbd_coef dst c3 y0 y1 y2 p3 eta #vb #(SZ.v base) #(SZ.v eta);
     i := SZ.add vi 1sz;
   };
   with v. assert (A.pts_to dst v);

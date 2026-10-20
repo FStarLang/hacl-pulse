@@ -14,7 +14,7 @@
    limitations under the License.
 *)
 
-(** The zeta table, as a [static const] array in the program image.
+(** The zeta and gamma tables, as [static const] arrays in the program image.
 
     FIPS 203 tabulates these 128 constants in appendix A, but the
     specification defines them as [zeta^BitRev7(i)] rather than as
@@ -28,10 +28,10 @@
     it to be recovered.  The refinement erases, and the emitted array is a
     [static const uint16_t[128]].
 
-    There is no table for the [gamma] of [BaseCaseMultiply]:
-    [gamma_i = zeta_i^2 * zeta], so two multiplications recover it from
-    the table that is already here, and a second 128-entry table would be
-    256 bytes of cache for nothing. *)
+    The [gamma] of [BaseCaseMultiply] has a table of its own.  It could be
+    recovered from the zeta table as [zeta_i^2 * zeta], but that is two
+    modular multiplications for every pair of every product, and the
+    product is the hottest loop in the scheme. *)
 module Hacl.MLKEM.Tables
 
 open Spec.MLKEM.Zq
@@ -152,3 +152,63 @@ let zeta_shoup_table_index (i: nat { i < 128 })
 let zeta_shoup_arr : (a: G.static_array S16.t
                         { G.static_array_elems a == (zeta_shoup_table <: Seq.seq S16.t) })
   = G.mk_static_array zeta_shoup_list
+
+/// The [gamma_i = zeta^(2 BitRev7(i) + 1)] of [BaseCaseMultiply].  Checked
+/// against [zeta_i^2 zeta] rather than against the power directly, which
+/// reuses the normalization the zeta table already pays for.
+
+[@@"opaque_to_smt"]
+let gamma_of (i: nat { i < 128 }) : zq = mul (mul (zetas i) (zetas i)) zeta
+
+let rec gamma_ok (i: nat) (l: list zqt)
+  : GTot bool (decreases l)
+  = match l with
+    | [] -> i = 128
+    | x :: tl -> i < 128 && S16.v x = gamma_of i && gamma_ok (i + 1) tl
+
+let rec gamma_ok_index (i: nat) (l: list zqt) (j: nat { j < L.length l })
+  : Lemma (requires gamma_ok i l)
+          (ensures i + j < 128 /\
+                   S16.v (L.index l j) == gamma_of (i + j))
+          (decreases j)
+  = match l with
+    | x :: tl -> if j > 0 then gamma_ok_index (i + 1) tl (j - 1)
+
+let gamma_list : list zqt = [
+  S16.classify 17us; S16.classify 3312us; S16.classify 2761us; S16.classify 568us; S16.classify 583us; S16.classify 2746us; S16.classify 2649us; S16.classify 680us;
+  S16.classify 1637us; S16.classify 1692us; S16.classify 723us; S16.classify 2606us; S16.classify 2288us; S16.classify 1041us; S16.classify 1100us; S16.classify 2229us;
+  S16.classify 1409us; S16.classify 1920us; S16.classify 2662us; S16.classify 667us; S16.classify 3281us; S16.classify 48us; S16.classify 233us; S16.classify 3096us;
+  S16.classify 756us; S16.classify 2573us; S16.classify 2156us; S16.classify 1173us; S16.classify 3015us; S16.classify 314us; S16.classify 3050us; S16.classify 279us;
+  S16.classify 1703us; S16.classify 1626us; S16.classify 1651us; S16.classify 1678us; S16.classify 2789us; S16.classify 540us; S16.classify 1789us; S16.classify 1540us;
+  S16.classify 1847us; S16.classify 1482us; S16.classify 952us; S16.classify 2377us; S16.classify 1461us; S16.classify 1868us; S16.classify 2687us; S16.classify 642us;
+  S16.classify 939us; S16.classify 2390us; S16.classify 2308us; S16.classify 1021us; S16.classify 2437us; S16.classify 892us; S16.classify 2388us; S16.classify 941us;
+  S16.classify 733us; S16.classify 2596us; S16.classify 2337us; S16.classify 992us; S16.classify 268us; S16.classify 3061us; S16.classify 641us; S16.classify 2688us;
+  S16.classify 1584us; S16.classify 1745us; S16.classify 2298us; S16.classify 1031us; S16.classify 2037us; S16.classify 1292us; S16.classify 3220us; S16.classify 109us;
+  S16.classify 375us; S16.classify 2954us; S16.classify 2549us; S16.classify 780us; S16.classify 2090us; S16.classify 1239us; S16.classify 1645us; S16.classify 1684us;
+  S16.classify 1063us; S16.classify 2266us; S16.classify 319us; S16.classify 3010us; S16.classify 2773us; S16.classify 556us; S16.classify 757us; S16.classify 2572us;
+  S16.classify 2099us; S16.classify 1230us; S16.classify 561us; S16.classify 2768us; S16.classify 2466us; S16.classify 863us; S16.classify 2594us; S16.classify 735us;
+  S16.classify 2804us; S16.classify 525us; S16.classify 1092us; S16.classify 2237us; S16.classify 403us; S16.classify 2926us; S16.classify 1026us; S16.classify 2303us;
+  S16.classify 1143us; S16.classify 2186us; S16.classify 2150us; S16.classify 1179us; S16.classify 2775us; S16.classify 554us; S16.classify 886us; S16.classify 2443us;
+  S16.classify 1722us; S16.classify 1607us; S16.classify 1212us; S16.classify 2117us; S16.classify 1874us; S16.classify 1455us; S16.classify 1029us; S16.classify 2300us;
+  S16.classify 2110us; S16.classify 1219us; S16.classify 2935us; S16.classify 394us; S16.classify 885us; S16.classify 2444us; S16.classify 2154us; S16.classify 1175us ]
+
+#push-options "--z3rlimit 100"
+let gamma_list_ok : squash (gamma_ok 0 gamma_list /\ L.length gamma_list == 128)
+  = reveal_opaque (`%gamma_of) gamma_of;
+    assert_norm (gamma_ok 0 gamma_list);
+    assert_norm (L.length gamma_list == 128)
+#pop-options
+
+let gamma_table : Seq.lseq zqt 128 = Seq.seq_of_list gamma_list
+
+let gamma_table_index (i: nat { i < 128 })
+  : Lemma (S16.v (Seq.index gamma_table i) == gammas i)
+          [SMTPat (Seq.index gamma_table i)]
+  = gamma_ok_index 0 gamma_list i;
+    Seq.lemma_seq_of_list_index gamma_list i;
+    reveal_opaque (`%gamma_of) gamma_of;
+    gammas_zetas i
+
+let gamma_arr : (a: G.static_array zqt
+                   { G.static_array_elems a == (gamma_table <: Seq.seq zqt) })
+  = G.mk_static_array gamma_list

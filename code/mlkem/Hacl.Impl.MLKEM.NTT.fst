@@ -48,6 +48,8 @@ module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module T = Hacl.Impl.Table
 module HSZ = Hacl.SizeT
+module S64 = Hacl.Secret.UInt64
+module Cast = Hacl.Secret.Cast
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
@@ -145,7 +147,19 @@ let part_step (res: poly) (vs v: Seq.seq zqt) (lo len c: nat) (a d: zqt)
           (ensures Seq.length v == n /\
                    part res vs (Seq.upd (Seq.upd v (lo + c) a) (lo + len + c) d) lo len (c + 1))
   = reveal_opaque (`%part) (part res vs v lo len c);
-    let v' = Seq.upd (Seq.upd v (lo + c) a) (lo + len + c) d in
+    let v1 = Seq.upd v (lo + c) a in
+    let v' = Seq.upd v1 (lo + len + c) d in
+    introduce forall (k: nat). k < n ==>
+        S16.v (Seq.index v' k) ==
+          (if in_done lo len (c + 1) k then Seq.index res k else S16.v (Seq.index vs k))
+    with introduce _ ==> _
+    with (
+      if k = lo + len + c then Seq.lemma_index_upd1 v1 (lo + len + c) d
+      else begin
+        Seq.lemma_index_upd2 v1 (lo + len + c) d k;
+        if k = lo + c then Seq.lemma_index_upd1 v (lo + c) a
+        else Seq.lemma_index_upd2 v (lo + c) a k
+      end);
     reveal_opaque (`%part) (part res vs v' lo len (c + 1))
 
 (** Blocks tile the polynomial: a block that starts inside it ends inside
@@ -563,26 +577,144 @@ let multiply_ntts_pair (f g: poly) (i: nat { i < 128 })
 
 let pair_bound (i: nat { i < 128 }) : Lemma (2 * i + 2 <= n) = ()
 
-(** One of the 128 quadratic products, as a function of its own for the
-    same reason the butterflies are. *)
-#push-options "--z3rlimit 600"
+let double_succ (i j: nat)
+  : Lemma (requires j == i + 1) (ensures 2 * j == 2 * i + 2) = ()
+
+(** The arithmetic behind {!base_mul}: each output is one sum of products,
+    reduced once, and the sum fits the range {!zq_reduce} accepts. *)
+let base_mul_math (a0 a1 b0 b1 g: zq)
+  : Lemma (a0 * b0 + (a1 * b1) * g < pow2 36 /\
+           a0 * b1 + a1 * b0 < pow2 36 /\
+           (a0 * b0 + (a1 * b1) * g) % q == add (mul a0 b0) (mul (mul a1 b1) g) /\
+           (a0 * b1 + a1 * b0) % q == add (mul a0 b1) (mul a1 b0))
+  = assert_norm ((q - 1) * (q - 1) + (q - 1) * (q - 1) * (q - 1) < pow2 36);
+    Math.lemma_mult_le_right b0 a0 (q - 1);
+    Math.lemma_mult_le_left (q - 1) b0 (q - 1);
+    Math.lemma_mult_le_right b1 a1 (q - 1);
+    Math.lemma_mult_le_left (q - 1) b1 (q - 1);
+    Math.lemma_mult_le_right b1 a0 (q - 1);
+    Math.lemma_mult_le_left (q - 1) b1 (q - 1);
+    Math.lemma_mult_le_right b0 a1 (q - 1);
+    Math.lemma_mult_le_left (q - 1) b0 (q - 1);
+    Math.lemma_mult_le_right g (a1 * b1) ((q - 1) * (q - 1));
+    Math.lemma_mult_le_left ((q - 1) * (q - 1)) g (q - 1);
+    Math.lemma_mod_mul_distr_l (a1 * b1) g q;
+    Math.lemma_mod_add_distr (a0 * b0) ((a1 * b1) * g) q;
+    Math.lemma_mod_add_distr ((a1 * b1 * g) % q) (a0 * b0) q;
+    Math.lemma_mod_add_distr (a0 * b1) (a1 * b0) q;
+    Math.lemma_mod_add_distr ((a1 * b0) % q) (a0 * b1) q
+
+(** A product of two coefficients, widened. *)
 inline_for_extraction
-fn base_mul (dst a b zt: A.array zqt) (i: SZ.t)
+let wmul (a b: zqt) : r: S64.t { S64.v r == S16.v a * S16.v b }
+  = assert_norm (q * q < pow2 64);
+    Math.lemma_mult_le_right (S16.v b) (S16.v a) q;
+    Math.lemma_mult_le_left q (S16.v b) q;
+    Math.small_mod (S16.v a * S16.v b) (pow2 64);
+    S64.mul_mod (Cast.u16_to_u64 a) (Cast.u16_to_u64 b)
+
+(** The two outputs of a base-case product, each a sum of products formed
+    in sixty-four bits and reduced once. *)
+inline_for_extraction
+let bm0 (a0 a1 b0 b1 g: zqt)
+  : r: zqt { S16.v r == add (mul (S16.v a0) (S16.v b0))
+                            (mul (mul (S16.v a1) (S16.v b1)) (S16.v g)) }
+  = base_mul_math (S16.v a0) (S16.v a1) (S16.v b0) (S16.v b1) (S16.v g);
+    assert_norm (pow2 36 < pow2 64);
+    let p11 = wmul a1 b1 in
+    Math.small_mod (S64.v p11 * S16.v g) (pow2 64);
+    let p11g = S64.mul_mod p11 (Cast.u16_to_u64 g) in
+    let p00 = wmul a0 b0 in
+    Math.small_mod (S64.v p00 + S64.v p11g) (pow2 64);
+    zq_reduce (S64.add_mod p00 p11g)
+
+inline_for_extraction
+let bm1 (a0 a1 b0 b1: zqt)
+  : r: zqt { S16.v r == add (mul (S16.v a0) (S16.v b1)) (mul (S16.v a1) (S16.v b0)) }
+  = base_mul_math (S16.v a0) (S16.v a1) (S16.v b0) (S16.v b1) 0;
+    assert_norm (pow2 36 < pow2 64);
+    let p01 = wmul a0 b1 in
+    let p10 = wmul a1 b0 in
+    Math.small_mod (S64.v p01 + S64.v p10) (pow2 64);
+    zq_reduce (S64.add_mod p01 p10)
+
+(** The first [m] coefficients of [v] are those of the product of [va] and
+    [vb].  Opaque, so the loop in {!multiply} carries a single atom. *)
+[@@"opaque_to_smt"]
+let mul_prefix (v va vb: Seq.seq zqt) (m: nat) : prop =
+  Seq.length va == n /\ Seq.length vb == n /\
+  (forall (k: nat). k < m ==>
+     k < n /\ k < Seq.length v /\
+     S16.v (Seq.index v k) == Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k)
+
+let mul_prefix_zero (v va vb: Seq.seq zqt)
+  : Lemma (requires Seq.length va == n /\ Seq.length vb == n)
+          (ensures mul_prefix v va vb 0)
+  = reveal_opaque (`%mul_prefix) (mul_prefix v va vb 0)
+
+let mul_prefix_full (v va vb: Seq.seq zqt)
+  : Lemma (requires Seq.length v == n /\ mul_prefix v va vb n)
+          (ensures Seq.length va == n /\ Seq.length vb == n /\
+                   as_poly v == multiply_ntts (as_poly va) (as_poly vb))
+  = reveal_opaque (`%mul_prefix) (mul_prefix v va vb n);
+    as_poly_intro v (multiply_ntts (as_poly va) (as_poly vb))
+
+(** The values {!bm0} and {!bm1} compute are the [i]th pair of the product. *)
+let base_mul_vals (va vb: Seq.seq zqt) (i: nat { i < 128 /\ 2 * i + 2 <= n })
+                  (a0 a1 b0 b1 g c0 c1: zqt)
+  : Lemma (requires Seq.length va == n /\ Seq.length vb == n /\
+                    Seq.index va (2 * i) == a0 /\ Seq.index va (2 * i + 1) == a1 /\
+                    Seq.index vb (2 * i) == b0 /\ Seq.index vb (2 * i + 1) == b1 /\
+                    S16.v g == gammas i /\
+                    S16.v c0 == add (mul (S16.v a0) (S16.v b0))
+                                    (mul (mul (S16.v a1) (S16.v b1)) (S16.v g)) /\
+                    S16.v c1 == add (mul (S16.v a0) (S16.v b1)) (mul (S16.v a1) (S16.v b0)))
+          (ensures S16.v c0 == Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (2 * i) /\
+                   S16.v c1 == Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (2 * i + 1))
+  = multiply_ntts_pair (as_poly va) (as_poly vb) i;
+    as_poly_index va (2 * i);
+    as_poly_index va (2 * i + 1);
+    as_poly_index vb (2 * i);
+    as_poly_index vb (2 * i + 1)
+
+(** Writing the [i]th pair extends the verified prefix by two. *)
+let base_mul_upd (vd va vb: Seq.seq zqt) (i: nat { 2 * i + 2 <= n }) (c0 c1: zqt)
+  : Lemma (requires Seq.length vd == n /\ Seq.length va == n /\ Seq.length vb == n /\
+                    mul_prefix vd va vb (2 * i) /\
+                    S16.v c0 == Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (2 * i) /\
+                    S16.v c1 == Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (2 * i + 1))
+          (ensures (let v = Seq.upd (Seq.upd vd (2 * i) c0) (2 * i + 1) c1 in
+                    Seq.length v == n /\ mul_prefix v va vb (2 * i + 2)))
+  = reveal_opaque (`%mul_prefix) (mul_prefix vd va vb (2 * i));
+    let res = multiply_ntts (as_poly va) (as_poly vb) in
+    let v0 = Seq.upd vd (2 * i) c0 in
+    let v = Seq.upd v0 (2 * i + 1) c1 in
+    Seq.lemma_index_upd2 v0 (2 * i + 1) c1 (2 * i);
+    Seq.lemma_index_upd1 vd (2 * i) c0;
+    Seq.lemma_index_upd1 v0 (2 * i + 1) c1;
+    introduce forall (k: nat). k < 2 * i ==> S16.v (Seq.index v k) == Seq.index res k
+    with introduce _ ==> _
+    with (
+      Seq.lemma_index_upd2 v0 (2 * i + 1) c1 k;
+      Seq.lemma_index_upd2 vd (2 * i) c0 k);
+    extend_by_two v res i;
+    reveal_opaque (`%mul_prefix) (mul_prefix v va vb (2 * i + 2))
+
+(** One of the 128 quadratic products, as a function of its own for the
+    same reason the butterflies are.  [gamma_i] comes out of its own table. *)
+inline_for_extraction
+fn base_mul (dst a b gt: A.array zqt) (i: SZ.t)
             (#pa #pb #pz: perm) (#vd #va #vb: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-         A.pts_to zt #pz zeta_table **
+         A.pts_to gt #pz gamma_table **
          pure (SZ.v i < 128 /\ Seq.length vd == n /\
                Seq.length va == n /\ Seq.length vb == n /\
-               (forall (k: nat). k < 2 * SZ.v i ==>
-                  S16.v (Seq.index vd k) ==
-                    Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k))
+               mul_prefix vd va vb (2 * SZ.v i))
 ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-        A.pts_to zt #pz zeta_table **
+        A.pts_to gt #pz gamma_table **
         pure (SZ.v i < 128 /\ Seq.length v == n /\
               Seq.length va == n /\ Seq.length vb == n /\
-              (forall (k: nat). k < 2 * SZ.v i + 2 ==>
-                 S16.v (Seq.index v k) ==
-                   Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k))
+              mul_prefix v va vb (2 * SZ.v i + 2))
 {
   A.pts_to_len dst;
   A.pts_to_len a;
@@ -593,60 +725,21 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   let j = SZ.add i i;
   SZ.fits_u32_implies_fits (SZ.v j + 1);
   let j1 = SZ.add j 1sz;
-  let z = A.(zt.(i));
-  gammas_zetas (SZ.v i);
-  multiply_ntts_index (as_poly va) (as_poly vb) (SZ.v j);
-  multiply_ntts_index (as_poly va) (as_poly vb) (SZ.v j1);
-  let g = zq_mul (zq_mul z z) (S16.classify 17us);
+  let g = A.(gt.(i));
   let a0 = A.(a.(j));
   let a1 = A.(a.(j1));
   let b0 = A.(b.(j));
   let b1 = A.(b.(j1));
+  let c0 = bm0 a0 a1 b0 b1 g;
+  let c1 = bm1 a0 a1 b0 b1;
+  pair_bound (SZ.v i);
   Math.cancel_mul_div (SZ.v i) 2;
-  Math.lemma_div_plus 1 (SZ.v i) 2;
-  Math.lemma_mod_plus 1 (SZ.v i) 2;
-  assert (pure (S16.v g == gammas (SZ.v i)));
-  multiply_ntts_pair (as_poly va) (as_poly vb) (SZ.v i);
-  as_poly_index va (SZ.v j);
-  as_poly_index va (SZ.v j1);
-  as_poly_index vb (SZ.v j);
-  as_poly_index vb (SZ.v j1);
-  let c0 = zq_add (zq_mul a0 b0) (zq_mul (zq_mul a1 b1) g);
-  let c1 = zq_add (zq_mul a0 b1) (zq_mul a1 b0);
-  assert (pure (S16.v c0 ==
-                  Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (SZ.v j)));
-  assert (pure (S16.v c1 ==
-                  Seq.index (multiply_ntts (as_poly va) (as_poly vb)) (SZ.v j1)));
   assert (pure (SZ.v j == 2 * SZ.v i /\ SZ.v j1 == 2 * SZ.v i + 1));
+  base_mul_vals va vb (SZ.v i) a0 a1 b0 b1 g c0 c1;
+  base_mul_upd vd va vb (SZ.v i) c0 c1;
   A.((dst.(j) <- c0));
-  with v0. assert (A.pts_to dst v0);
-  assert (pure (Seq.index v0 (SZ.v j) == c0 /\
-                (forall (k: nat). k < Seq.length v0 /\ k <> SZ.v j ==>
-                   Seq.index v0 k == Seq.index vd k)));
   A.((dst.(j1) <- c1));
-  with v1. assert (A.pts_to dst v1);
-  assert (pure (Seq.index v1 (SZ.v j1) == c1 /\
-                (forall (k: nat). k < Seq.length v1 /\ k <> SZ.v j1 ==>
-                   Seq.index v1 k == Seq.index v0 k)));
-  assert (pure (Seq.length v1 == n /\ Seq.index v1 (SZ.v j) == c0));
-  (* The two freshly written entries, at concrete indices. *)
-  assert (pure (S16.v (Seq.index v1 (2 * SZ.v i)) ==
-                  Seq.index (multiply_ntts (as_poly va) (as_poly vb))
-                            (2 * SZ.v i)));
-  assert (pure (S16.v (Seq.index v1 (2 * SZ.v i + 1)) ==
-                  Seq.index (multiply_ntts (as_poly va) (as_poly vb))
-                            (2 * SZ.v i + 1)));
-  (* Everything below them is untouched by the two writes. *)
-  assert (pure (forall (k: nat). k < 2 * SZ.v i ==>
-                  S16.v (Seq.index v1 k) ==
-                    Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k));
-  extend_by_two v1 (multiply_ntts (as_poly va) (as_poly vb)) (SZ.v i);
-  assert (pure (forall (k: nat). k < 2 * SZ.v i + 2 ==>
-                  S16.v (Seq.index v1 k) ==
-                    Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k));
 }
-
-#pop-options
 
 fn multiply (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
@@ -658,32 +751,33 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   A.pts_to_len dst;
   A.pts_to_len a;
   A.pts_to_len b;
-  let zt = T.table zeta_arr 128sz;
-  with pz. assert (A.pts_to zt #pz zeta_table);
+  let gt = T.table gamma_arr 128sz;
+  with pz. assert (A.pts_to gt #pz gamma_table);
+  mul_prefix_zero vd va vb;
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 128sz)
   invariant exists* (vi: SZ.t) (v: Seq.seq zqt).
     pts_to i vi ** A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-    A.pts_to zt #pz zeta_table **
+    A.pts_to gt #pz gamma_table **
     pure (SZ.v vi <= 128 /\ Seq.length v == n /\
           Seq.length va == n /\ Seq.length vb == n /\
-          (forall (k: nat). k < 2 * SZ.v vi ==>
-             S16.v (Seq.index v k) ==
-               Seq.index (multiply_ntts (as_poly va) (as_poly vb)) k))
+          mul_prefix v va vb (2 * SZ.v vi))
   decreases (128 - SZ.v (!i))
   {
     let vi = !i;
     assert (pure (SZ.v vi < 128));
     pair_bound (SZ.v vi);
-    base_mul dst a b zt vi;
+    base_mul dst a b gt vi;
     HSZ.fits32 ();
     assert_norm (128 < pow2 32);
     SZ.fits_u32_implies_fits (SZ.v vi + 1);
-    i := SZ.add vi 1sz;
+    let vi' = SZ.add vi 1sz;
+    double_succ (SZ.v vi) (SZ.v vi');
+    i := vi';
   };
-  T.drop_table zt;
+  T.drop_table gt;
   with v. assert (A.pts_to dst v);
-  as_poly_intro v (multiply_ntts (as_poly va) (as_poly vb));
+  mul_prefix_full v va vb;
   assert (pure (as_poly v == multiply_ntts (as_poly va) (as_poly vb)));
 }
 

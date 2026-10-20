@@ -206,6 +206,55 @@ let zq_mul_shoup (z: zqt) (zs: S16.t { S16.v zs == (S16.v z * pow2 16) / q }) (y
     Math.swap_mul (S16.v y) (S16.v z);
     csub r
 
+(** {2 Reducing a wide sum}
+
+    The base-case product of {!Hacl.Impl.MLKEM.NTT} wants
+    [a0 b0 + a1 b1 gamma] modulo [q], a sum below [2^36].  Reducing each
+    product as it is formed costs a Barrett step apiece; reducing the sum
+    once costs one.  [41285357 = floor(2^37 / q)] and
+    [41285357 q = 2^37 - 19]: the shortfall is so small that the quotient
+    estimate is off by at most one over the whole range, and [x 41285357]
+    still fits in sixty-four bits. *)
+
+let barrett37_bound (x: nat { x < pow2 36 })
+  : Lemma (let t = (x * 41285357) / pow2 37 in t * q <= x /\ x - t * q < 2 * q)
+  = let p = pow2 37 in
+    assert_norm (pow2 37 == 137438953472);
+    assert_norm (pow2 36 == 68719476736);
+    let t = (x * 41285357) / p in
+    Math.lemma_div_mod (x * 41285357) p;
+    Math.lemma_mult_le_right q (t * p) (x * 41285357);
+    assert (t * p * q <= x * 41285357 * q);
+    assert (x * 41285357 * q == x * 137438953453);
+    Math.lemma_mult_le_right x 137438953453 137438953472;
+    assert (t * q * p <= x * p);
+    le_cancel (t * q) x p;
+    assert (t * p > x * 41285357 - p);
+    Math.lemma_mult_lt_right q (x * 41285357 - p) (t * p);
+    assert (t * q * p > x * 137438953453 - q * p);
+    assert ((x - t * q) * p < 19 * x + q * p);
+    Math.lemma_mult_lt_left 19 x (pow2 36);
+    assert ((x - t * q) * p < (2 * q) * p);
+    lt_cancel (x - t * q) (2 * q) p
+
+inline_for_extraction
+let zq_reduce (x: S64.t { S64.v x < pow2 36 }) : r: zqt { S16.v r == S64.v x % q }
+  = assert_norm (pow2 36 * 41285357 < pow2 64);
+    assert_norm (2 * q < pow2 16);
+    assert_norm (pow2 36 < pow2 64);
+    barrett37_bound (S64.v x);
+    Math.lemma_mult_lt_right 41285357 (S64.v x) (pow2 36);
+    Math.small_mod (S64.v x * 41285357) (pow2 64);
+    let t = S64.shift_right (S64.mul_mod x (S64.classify 41285357uL)) 37ul in
+    assert (S64.v t == (S64.v x * 41285357) / pow2 37);
+    Math.small_mod (S64.v t * q) (pow2 64);
+    Math.small_mod (S64.v x - S64.v t * q) (pow2 64);
+    let r = S64.sub_mod x (S64.mul_mod t (S64.classify 3329uL)) in
+    assert (S64.v r == S64.v x - S64.v t * q);
+    Math.small_mod (S64.v r) (pow2 16);
+    Math.lemma_mod_sub (S64.v x) q (S64.v t);
+    csub (Cast.u64_to_u16 r)
+
 #pop-options
 
 (** {2 Division by q}
