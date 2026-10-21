@@ -60,8 +60,12 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
   Seq.length v1 == blocklen /\
   vals v1 == cipher p.pv (vals vw) (vals v0))
 {
-  if Vec.supported () {
-    Hacl.AES.NI.cipher_ni p st w;
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      Hacl.AES.NI.cipher_ni p st w;
+    } else {
+      Hacl.AES.Cipher.cipher_portable p st w;
+    }
   } else {
     Hacl.AES.Cipher.cipher_portable p st w;
   }
@@ -143,8 +147,14 @@ ensures exists* (vm' vk': Seq.seq S8.t).
   A.pts_to_len msg;
   A.pts_to_len ctr;
   A.pts_to_len ka;
-  if Vec.supported () {
-    Hacl.AES.NI.ctr_block_ni p msg idx w ctr;
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      Hacl.AES.NI.ctr_block_ni p msg idx w ctr;
+    } else {
+      Copy.copy_exact ka ctr 16sz;
+      Hacl.AES.Cipher.cipher_portable p ka w;
+      xor_at msg idx ka;
+    }
   } else {
     Copy.copy_exact ka ctr 16sz;
     Hacl.AES.Cipher.cipher_portable p ka w;
@@ -162,6 +172,101 @@ ensures exists* (vm' vk': Seq.seq S8.t).
     [Hacl.AES.NI.ctr_block4_ni].  The portable path has nothing to gain from
     it, so it simply does four single blocks, and the two branches meet at
     the same postcondition. *)
+
+(** The portable branch of {!ctr_block4_impl}: four single blocks. *)
+inline_for_extraction
+fn ctr_block4_portable ([@@@FStar.Attributes.monomorphize] p: params)
+                   (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
+                   (ctr: A.array S8.t) (ka: A.array S8.t)
+                   (#vm #vw #vc #vk: erased (Seq.seq S8.t))
+requires A.pts_to msg vm ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
+  pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
+        Seq.length vk == blocklen /\ SZ.fits (SZ.v idx + 4 * blocklen) /\
+        SZ.v idx + 4 * blocklen <= Seq.length vm)
+ensures exists* (vm' vc' vk': Seq.seq S8.t).
+  A.pts_to msg vm' ** A.pts_to w vw ** A.pts_to ctr vc' ** A.pts_to ka vk' **
+  pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
+        Seq.length vc' == blocklen /\ Seq.length vk' == blocklen /\
+        SZ.v idx + 4 * blocklen <= Seq.length vm /\
+        Seq.length vm' == Seq.length vm /\
+        vals vc' == counter_block (vals vc) 4 /\
+        (forall (k: nat). k < Seq.length vm ==>
+           Seq.index (vals vm') k ==
+             (if SZ.v idx <= k && k < SZ.v idx + blocklen
+              then Seq.index (vals vm) k ^^
+                   Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 0))
+                             (k - SZ.v idx)
+              else if SZ.v idx + blocklen <= k && k < SZ.v idx + 2 * blocklen
+              then Seq.index (vals vm) k ^^
+                   Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 1))
+                             (k - SZ.v idx - blocklen)
+              else if SZ.v idx + 2 * blocklen <= k && k < SZ.v idx + 3 * blocklen
+              then Seq.index (vals vm) k ^^
+                   Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 2))
+                             (k - SZ.v idx - 2 * blocklen)
+              else if SZ.v idx + 3 * blocklen <= k && k < SZ.v idx + 4 * blocklen
+              then Seq.index (vals vm) k ^^
+                   Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 3))
+                             (k - SZ.v idx - 3 * blocklen)
+              else Seq.index (vals vm) k)))
+{
+  A.pts_to_len msg;
+  A.pts_to_len ctr;
+  A.pts_to_len ka;
+  counter_unfold (vals vc);
+  let i1 = SZ.add idx 16sz;
+  let i2 = SZ.add idx 32sz;
+  let i3 = SZ.add idx 48sz;
+
+  ctr_block_impl p msg idx w ctr ka;
+  with vmA. assert A.pts_to msg vmA;
+  assert (pure (Seq.length vmA == Seq.length vm /\
+    (forall (k: nat). k < Seq.length vm ==>
+       Seq.index (vals vmA) k ==
+         (if SZ.v idx <= k && k < SZ.v idx + blocklen
+          then Seq.index (vals vm) k ^^
+               Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 0))
+                         (k - SZ.v idx)
+          else Seq.index (vals vm) k))));
+  inc32_impl ctr;
+
+  ctr_block_impl p msg i1 w ctr ka;
+  with vmB. assert A.pts_to msg vmB;
+  assert (pure (Seq.length vmB == Seq.length vm /\
+    (forall (k: nat). k < Seq.length vm ==>
+       Seq.index (vals vmB) k ==
+         (if SZ.v i1 <= k && k < SZ.v i1 + blocklen
+          then Seq.index (vals vmA) k ^^
+               Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 1))
+                         (k - SZ.v i1)
+          else Seq.index (vals vmA) k))));
+  inc32_impl ctr;
+
+  ctr_block_impl p msg i2 w ctr ka;
+  with vmC. assert A.pts_to msg vmC;
+  assert (pure (Seq.length vmC == Seq.length vm /\
+    (forall (k: nat). k < Seq.length vm ==>
+       Seq.index (vals vmC) k ==
+         (if SZ.v i2 <= k && k < SZ.v i2 + blocklen
+          then Seq.index (vals vmB) k ^^
+               Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 2))
+                         (k - SZ.v i2)
+          else Seq.index (vals vmB) k))));
+  inc32_impl ctr;
+
+  ctr_block_impl p msg i3 w ctr ka;
+  with vmD. assert A.pts_to msg vmD;
+  assert (pure (Seq.length vmD == Seq.length vm /\
+    (forall (k: nat). k < Seq.length vm ==>
+       Seq.index (vals vmD) k ==
+         (if SZ.v i3 <= k && k < SZ.v i3 + blocklen
+          then Seq.index (vals vmC) k ^^
+               Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 3))
+                         (k - SZ.v i3)
+          else Seq.index (vals vmC) k))));
+  inc32_impl ctr;
+  ()
+}
 
 fn ctr_block4_impl ([@@@FStar.Attributes.monomorphize] p: params)
                    (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
@@ -202,61 +307,14 @@ ensures exists* (vm' vc' vk': Seq.seq S8.t).
   A.pts_to_len ctr;
   A.pts_to_len ka;
   counter_unfold (vals vc);
-  if Vec.supported () {
-    Hacl.AES.NI.ctr_block4_ni p msg idx w ctr;
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      Hacl.AES.NI.ctr_block4_ni p msg idx w ctr;
+    } else {
+      ctr_block4_portable p msg idx w ctr ka;
+    }
   } else {
-    let i1 = SZ.add idx 16sz;
-    let i2 = SZ.add idx 32sz;
-    let i3 = SZ.add idx 48sz;
-
-    ctr_block_impl p msg idx w ctr ka;
-    with vmA. assert A.pts_to msg vmA;
-    assert (pure (Seq.length vmA == Seq.length vm /\
-      (forall (k: nat). k < Seq.length vm ==>
-         Seq.index (vals vmA) k ==
-           (if SZ.v idx <= k && k < SZ.v idx + blocklen
-            then Seq.index (vals vm) k ^^
-                 Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 0))
-                           (k - SZ.v idx)
-            else Seq.index (vals vm) k))));
-    inc32_impl ctr;
-
-    ctr_block_impl p msg i1 w ctr ka;
-    with vmB. assert A.pts_to msg vmB;
-    assert (pure (Seq.length vmB == Seq.length vm /\
-      (forall (k: nat). k < Seq.length vm ==>
-         Seq.index (vals vmB) k ==
-           (if SZ.v i1 <= k && k < SZ.v i1 + blocklen
-            then Seq.index (vals vmA) k ^^
-                 Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 1))
-                           (k - SZ.v i1)
-            else Seq.index (vals vmA) k))));
-    inc32_impl ctr;
-
-    ctr_block_impl p msg i2 w ctr ka;
-    with vmC. assert A.pts_to msg vmC;
-    assert (pure (Seq.length vmC == Seq.length vm /\
-      (forall (k: nat). k < Seq.length vm ==>
-         Seq.index (vals vmC) k ==
-           (if SZ.v i2 <= k && k < SZ.v i2 + blocklen
-            then Seq.index (vals vmB) k ^^
-                 Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 2))
-                           (k - SZ.v i2)
-            else Seq.index (vals vmB) k))));
-    inc32_impl ctr;
-
-    ctr_block_impl p msg i3 w ctr ka;
-    with vmD. assert A.pts_to msg vmD;
-    assert (pure (Seq.length vmD == Seq.length vm /\
-      (forall (k: nat). k < Seq.length vm ==>
-         Seq.index (vals vmD) k ==
-           (if SZ.v i3 <= k && k < SZ.v i3 + blocklen
-            then Seq.index (vals vmC) k ^^
-                 Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 3))
-                           (k - SZ.v i3)
-            else Seq.index (vals vmC) k))));
-    inc32_impl ctr;
-    ()
+    ctr_block4_portable p msg idx w ctr ka;
   }
 }
 

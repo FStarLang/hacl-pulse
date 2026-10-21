@@ -616,7 +616,12 @@ let qb_collect (vu: vstate) (t0 t1 t2 t3 t4: vstate)
       (ensures qb_all vu t4)
   = let aux (g m: nat)
       : Lemma (g < 4 /\ m < 4 ==> qb_ok vu g (Seq.index t4 (4 * g + m)) m)
-      = ()
+      = if g < 4 && m < 4 then begin
+          let i = 4 * g + m in
+          if m < 3 then assert (Seq.index t4 i == Seq.index t3 i);
+          if m < 2 then assert (Seq.index t3 i == Seq.index t2 i);
+          if m < 1 then assert (Seq.index t2 i == Seq.index t1 i)
+        end
     in
     Classical.forall_intro_2 aux
 
@@ -625,14 +630,12 @@ let qb_collect (vu: vstate) (t0 t1 t2 t3 t4: vstate)
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 inline_for_extraction
-fn transpose (t: A.array V.t) (u: A.array V.t) (ks: A.array V.t)
-             (#vt: erased (Seq.seq V.t)) (#vu: erased (Seq.seq V.t))
-             (#vk: erased (Seq.seq V.t))
-requires A.pts_to t vt ** A.pts_to u vu ** A.pts_to ks vk **
-         pure (Seq.length vt == 16 /\ Seq.length vu == 16 /\ Seq.length vk == 16)
-ensures exists* (vt' vu': Seq.seq V.t). A.pts_to t vt' ** A.pts_to u vu' ** A.pts_to ks vk **
-  pure (Seq.length vk == 16 /\ Seq.length vt' == 16 /\ Seq.length vu' == 16 /\
-        (forall (j: nat). j < 16 ==> tr_ok vk (Seq.index vt' j) j))
+fn transpose_qa (u: A.array V.t) (ks: A.array V.t)
+                (#vu: erased (Seq.seq V.t)) (#vk: erased (Seq.seq V.t))
+requires A.pts_to u vu ** A.pts_to ks vk **
+         pure (Seq.length vu == 16 /\ Seq.length vk == 16)
+ensures exists* (vu': Seq.seq V.t). A.pts_to u vu' ** A.pts_to ks vk **
+  pure (Seq.length vk == 16 /\ Seq.length vu' == 16 /\ qa_all vk vu')
 {
   with u0. assert (A.pts_to u u0);
   transpose_a u ks 0sz;
@@ -644,6 +647,16 @@ ensures exists* (vt' vu': Seq.seq V.t). A.pts_to t vt' ** A.pts_to u vu' ** A.pt
   transpose_a u ks 3sz;
   with u4. assert (A.pts_to u u4);
   qa_collect vk u0 u1 u2 u3 u4;
+}
+
+inline_for_extraction
+fn transpose_qb (t: A.array V.t) (u: A.array V.t)
+                (#vt: erased (Seq.seq V.t)) (#vu: erased (Seq.seq V.t))
+requires A.pts_to t vt ** A.pts_to u vu **
+         pure (Seq.length vt == 16 /\ Seq.length vu == 16)
+ensures exists* (vt': Seq.seq V.t). A.pts_to t vt' ** A.pts_to u vu **
+  pure (Seq.length vu == 16 /\ Seq.length vt' == 16 /\ qb_all vu vt')
+{
   with t0. assert (A.pts_to t t0);
   transpose_b t u 0sz;
   with t1. assert (A.pts_to t t1);
@@ -653,8 +666,25 @@ ensures exists* (vt' vu': Seq.seq V.t). A.pts_to t vt' ** A.pts_to u vu' ** A.pt
   with t3. assert (A.pts_to t t3);
   transpose_b t u 3sz;
   with t4. assert (A.pts_to t t4);
-  qb_collect u4 t0 t1 t2 t3 t4;
+  qb_collect vu t0 t1 t2 t3 t4;
+}
+
+inline_for_extraction
+fn transpose (t: A.array V.t) (u: A.array V.t) (ks: A.array V.t)
+             (#vt: erased (Seq.seq V.t)) (#vu: erased (Seq.seq V.t))
+             (#vk: erased (Seq.seq V.t))
+requires A.pts_to t vt ** A.pts_to u vu ** A.pts_to ks vk **
+         pure (Seq.length vt == 16 /\ Seq.length vu == 16 /\ Seq.length vk == 16)
+ensures exists* (vt' vu': Seq.seq V.t). A.pts_to t vt' ** A.pts_to u vu' ** A.pts_to ks vk **
+  pure (Seq.length vk == 16 /\ Seq.length vt' == 16 /\ Seq.length vu' == 16 /\
+        (forall (j: nat). j < 16 ==> tr_ok vk (Seq.index vt' j) j))
+{
+  transpose_qa u ks;
+  with u4. assert (A.pts_to u u4);
+  transpose_qb t u;
+  with t4. assert (A.pts_to t t4);
   compose vk u4 t4;
+  assert pure (forall (j: nat). j < 16 ==> tr_ok vk (Seq.index t4 j) j);
 }
 
 #pop-options
@@ -742,8 +772,8 @@ let chunk_step (s0: state) (c: U32.t { U32.v c + 16 <= pow2 32 })
                (vo vm v v': Seq.seq S8.t) (off: nat) (n: nat { n < 16 }) (x: V.t)
   : Lemma
       (requires
-        chunk_inv s0 c vo vm v off n /\
         (forall (q: nat). q < 64 ==> Seq.index (V.vv x) q == chunk_ks s0 c (64 * n + q)) /\
+        chunk_inv s0 c vo vm v off n /\
         Seq.length v' == Seq.length v /\
         (forall (p: nat). p < Seq.length v ==>
            Seq.index v' p ==
@@ -898,7 +928,8 @@ let chunk_ctr (ctr0: U32.t) (len: nat) (b: nat)
     1024-byte chunks, and say how long it was.  [st] holds the initial
     state; its counter word is not read. *)
 [@@CPrologue "__attribute__((target(\"avx512f\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx512f\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx512f\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn encrypt_blocks16 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                     (st: A.array S32.t) (ctr0: U32.t)
                     (st0: G.erased state)
@@ -947,6 +978,7 @@ ensures exists* (vo': Seq.seq S8.t).
     A.pts_to_len t;
     chunk_vec out msg b st c vst ks u t;
     with v'. assert (A.pts_to out v');
+    Math.small_mod (SZ.v b / 64) (pow2 32);
     assert (pure (U32.v (SZ.sizet_to_uint32 (SZ.div b 64sz)) == SZ.v b / 64));
     assert (pure (U32.v c == U32.v ctr0 + SZ.v b / 64));
     assert (pure (U32.v c + 16 <= pow2 32));

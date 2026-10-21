@@ -790,7 +790,8 @@ let sz_div64_u32 (b: SZ.t)
     where it stopped.  [st] holds the initial state; its counter word is not
     read. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn encrypt_blocks8 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                    (st: A.array S32.t) (ctr0: U32.t)
                    (st0: G.erased state) (b0: SZ.t)
@@ -915,7 +916,9 @@ ensures exists* (vo': Seq.seq S8.t).
     leading bytes of [out] it wrote, a whole number of blocks; the caller does
     the rest one block at a time, from block counter [ctr0 + n / 64].  This
     function itself is compiled for the baseline target, so that the
-    [supported] tests run everywhere. *)
+    [supported] tests run everywhere.  It exists on x86-64 only;
+    [Hacl.Chacha20.encrypt] does not call it anywhere else. *)
+[@@custard_c_closure_guard "defined(__x86_64__)"]
 fn encrypt_vec (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                (st: A.array S32.t) (ctr0: U32.t)
                (st0: G.erased state)

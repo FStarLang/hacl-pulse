@@ -15,9 +15,14 @@
  * single translation unit hold both a baseline path and an AES-NI path and
  * pick between them at run time with `Hacl_Vec128_supported`.
  *
- * On a target that is not x86, `Hacl_Vec128_supported` is false and nothing
- * else in this file is ever reached; the bodies are there so the program
- * still compiles and links.
+ * Everything here is x86-64 only, and so is every generated function that
+ * uses it: those carry `custard_c_closure_guard "defined(__x86_64__)"` and
+ * are printed inside `#if defined(__x86_64__)`, and their callers test the
+ * `Hacl.X64.x86_64` flag, which is printed as the same `#if`.  On any other
+ * target this header defines only the type, as sixteen opaque bytes: the
+ * pair and triple structs Custard declares for the PCLMULQDQ code are types,
+ * which a guard does not cover, so they are in `Hacl.h` everywhere.  Nothing
+ * off x86-64 makes or reads one.
  */
 
 #ifndef HACL_VEC128_H
@@ -27,13 +32,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#if defined(__x86_64__) || defined(__i386__)
-#define HACL_VEC128_X86 1
-#else
-#define HACL_VEC128_X86 0
-#endif
-
-#if HACL_VEC128_X86
+#if defined(__x86_64__)
 
 #include <immintrin.h>
 
@@ -278,117 +277,11 @@ static inline bool Hacl_Vec128_supported(void) {
 #endif
 }
 
-#else /* not x86 */
+#else
 
 typedef struct {
-  uint8_t b[16];
+  uint8_t opaque[16];
 } Hacl_Vec128_t;
-
-/* Unreachable: every caller is guarded by Hacl_Vec128_supported.  They are
- * defined rather than merely declared so that the program links. */
-static inline Hacl_Vec128_t Hacl_Vec128_zero(void) {
-  Hacl_Vec128_t r;
-  memset(&r, 0, sizeof r);
-  return r;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_load(uint8_t *p) {
-  Hacl_Vec128_t r;
-  memcpy(&r, p, 16);
-  return r;
-}
-static inline void Hacl_Vec128_store(uint8_t *p, Hacl_Vec128_t x) {
-  memcpy(p, &x, 16);
-}
-static inline Hacl_Vec128_t Hacl_Vec128_xor(Hacl_Vec128_t a, Hacl_Vec128_t b) {
-  for (int i = 0; i < 16; i++) a.b[i] ^= b.b[i];
-  return a;
-}
-#define HACL_VEC128_STUB2(name)                                              \
-  static inline Hacl_Vec128_t name(Hacl_Vec128_t a, Hacl_Vec128_t b) {       \
-    (void)b;                                                                 \
-    return a;                                                                \
-  }
-HACL_VEC128_STUB2(Hacl_Vec128_aesenc)
-HACL_VEC128_STUB2(Hacl_Vec128_aesenclast)
-HACL_VEC128_STUB2(Hacl_Vec128_clmul_ll)
-HACL_VEC128_STUB2(Hacl_Vec128_clmul_lh)
-HACL_VEC128_STUB2(Hacl_Vec128_clmul_hl)
-HACL_VEC128_STUB2(Hacl_Vec128_clmul_hh)
-HACL_VEC128_STUB2(Hacl_Vec128_add32)
-HACL_VEC128_STUB2(Hacl_Vec128_align_right_4)
-HACL_VEC128_STUB2(Hacl_Vec128_align_right_8)
-HACL_VEC128_STUB2(Hacl_Vec128_blend_high)
-HACL_VEC128_STUB2(Hacl_Vec128_sha256msg1)
-HACL_VEC128_STUB2(Hacl_Vec128_sha256msg2)
-#undef HACL_VEC128_STUB2
-#define HACL_VEC128_STUB1(name)                                              \
-  static inline Hacl_Vec128_t name(Hacl_Vec128_t a) { return a; }
-HACL_VEC128_STUB1(Hacl_Vec128_subword)
-HACL_VEC128_STUB1(Hacl_Vec128_bcast_rot)
-HACL_VEC128_STUB1(Hacl_Vec128_bcast_sub)
-HACL_VEC128_STUB1(Hacl_Vec128_shift_left_bytes_4)
-HACL_VEC128_STUB1(Hacl_Vec128_shift_right_bytes_4)
-HACL_VEC128_STUB1(Hacl_Vec128_shift_left_bytes_8)
-HACL_VEC128_STUB1(Hacl_Vec128_shift_right_bytes_8)
-HACL_VEC128_STUB1(Hacl_Vec128_bswap)
-HACL_VEC128_STUB1(Hacl_Vec128_shuffle_swap_pairs)
-HACL_VEC128_STUB1(Hacl_Vec128_shuffle_reverse)
-HACL_VEC128_STUB1(Hacl_Vec128_shuffle_high_pair)
-HACL_VEC128_STUB1(Hacl_Vec128_bswap32)
-#undef HACL_VEC128_STUB1
-static inline Hacl_Vec128_t Hacl_Vec128_shift_left_lanes64(Hacl_Vec128_t a,
-                                                           uint32_t n) {
-  (void)n;
-  return a;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_shift_right_lanes64(Hacl_Vec128_t a,
-                                                            uint32_t n) {
-  (void)n;
-  return a;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_reduction(void) {
-  Hacl_Vec128_t r;
-  memset(&r, 0, sizeof r);
-  r.b[0] = 0xe1;
-  return r;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_word_bcast(uint8_t x) {
-  Hacl_Vec128_t r;
-  memset(&r, 0, sizeof r);
-  r.b[0] = x;
-  r.b[4] = x;
-  r.b[8] = x;
-  r.b[12] = x;
-  return r;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_lane_one(void) {
-  Hacl_Vec128_t r;
-  memset(&r, 0, sizeof r);
-  r.b[0] = 1;
-  return r;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_load32(uint32_t *p) {
-  Hacl_Vec128_t r;
-  memcpy(&r, p, 16);
-  return r;
-}
-static inline void Hacl_Vec128_store32(uint32_t *p, Hacl_Vec128_t x) {
-  memcpy(p, &x, 16);
-}
-static inline Hacl_Vec128_t Hacl_Vec128_sha256rnds2(Hacl_Vec128_t cdgh,
-                                                    Hacl_Vec128_t abef,
-                                                    Hacl_Vec128_t k) {
-  (void)abef;
-  (void)k;
-  return cdgh;
-}
-static inline Hacl_Vec128_t Hacl_Vec128_load_be32(uint8_t *p) {
-  Hacl_Vec128_t r;
-  memcpy(&r, p, 16);
-  return r;
-}
-static inline bool Hacl_Vec128_sha_supported(void) { return false; }
-static inline bool Hacl_Vec128_supported(void) { return false; }
 
 #endif
 

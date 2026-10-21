@@ -83,7 +83,8 @@ let slice_index (s: Seq.seq elem) (lo: nat) (hi: nat { lo <= hi /\ hi <= Seq.len
     counter-mode step in registers and never materialises the keystream. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn cipher_vec ([@@@FStar.Attributes.monomorphize] p: params)
               (x0: Vec.t) (w: A.array S8.t)
@@ -151,7 +152,8 @@ ensures A.pts_to w vw ** pure (
 (** {2 The cipher, in place on an array} *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn cipher_ni ([@@@FStar.Attributes.monomorphize] p: params)
              (st: A.array S8.t) (w: A.array S8.t)
              (#v0 #vw: erased (Seq.seq S8.t))
@@ -183,7 +185,8 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
     store-forwarding stall on every block. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn xor_at_ni (msg: A.array S8.t) (idx: SZ.t) (ks: Vec.t)
              (#vm: erased (Seq.seq S8.t))
@@ -230,7 +233,8 @@ ensures exists* (vm': Seq.seq S8.t). A.pts_to msg vm' ** pure (
     into the message in place, and discarded. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ctr_block_ni ([@@@FStar.Attributes.monomorphize] p: params)
                 (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t) (ctr: A.array S8.t)
                 (#vm #vw #vc: erased (Seq.seq S8.t))
@@ -330,7 +334,8 @@ let inc32_vec_ok (c: Vec.t)
     touched in between. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ctr_block4_ni ([@@@FStar.Attributes.monomorphize] p: params)
                  (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t) (ctr: A.array S8.t)
                  (#vm #vw #vc: erased (Seq.seq S8.t))

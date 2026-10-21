@@ -19,6 +19,9 @@
 #include <string.h>
 
 #include "Hacl_Vec128.h"
+
+#if defined(__x86_64__)
+
 #include "test_util.h"
 
 static const uint8_t sbox[256] = {
@@ -93,11 +96,7 @@ static void fill(uint8_t *p, size_t n) {
 /* The same rule the generated code obeys: a function that reaches an
    intrinsic wrapper must carry the wrapper's target attribute, or the
    compiler refuses to inline it.  See lib/Hacl.Vec128.fst. */
-#if defined(__x86_64__) || defined(__i386__)
 #define TEST_NI __attribute__((target("aes,pclmul,ssse3,sse4.1")))
-#else
-#define TEST_NI
-#endif
 
 TEST_NI static void vload_store(uint8_t *dst, const uint8_t *src) {
   Hacl_Vec128_store(dst, Hacl_Vec128_load((uint8_t *)src));
@@ -337,11 +336,7 @@ static void ref_perm(uint8_t out[16], const uint8_t a[16], const uint8_t b[16],
     setlane(out, i, lane(from_b[i] ? b : a, src[i]));
 }
 
-#if defined(__x86_64__) || defined(__i386__)
 #define TEST_SHA __attribute__((target("ssse3,sse4.1,sha")))
-#else
-#define TEST_SHA
-#endif
 
 TEST_SHA static int one_sha(const uint8_t a[16], const uint8_t b[16],
                             const char *what) {
@@ -529,3 +524,12 @@ int main(void) {
   if (r == 0) printf("all vec128 axioms agree with FIPS 197 and with a bitwise reference\n");
   return r;
 }
+
+#else
+
+int main(void) {
+  printf("  skip vec128: not x86-64\n");
+  return 0;
+}
+
+#endif

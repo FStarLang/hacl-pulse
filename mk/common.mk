@@ -29,7 +29,7 @@ DIST_DIR  ?= $(HACL_ROOT)/dist
 #
 # Point FSTAR_EXE at the binary, or FSTAR_ROOT at either kind of tree:
 #
-#   make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-18   # unpacked nightly
+#   make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-21   # unpacked nightly
 #   make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 #
 # A nightly has bin/fstar.exe; a checkout has stage3/out/bin/fstar.exe, and

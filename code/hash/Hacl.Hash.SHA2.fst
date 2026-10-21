@@ -103,16 +103,20 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
   sha2_224_facts ();
-  let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
-  if ni
+  if (Hacl.X64.x86_64)
   ensures exists* (vout': Seq.seq S8.t).
     A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
     A.pts_to out vout' ** A.pts_to input #pin vin **
     pure (Seq.length vin < max_input #S32.t /\ vout' == hash sha2_224 vin)
   {
-    NI.hash_impl_ni sha2_224 kt ivt out input input_len;
+    if (Vec.sha_supported ())
+    {
+      NI.hash_impl_ni sha2_224 kt ivt out input input_len;
+    } else {
+      hash_impl sha2_224 kt ivt out input input_len;
+    }
   } else {
     hash_impl sha2_224 kt ivt out input input_len;
   };
@@ -135,16 +139,20 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
   sha2_256_facts ();
-  let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
-  if ni
+  if (Hacl.X64.x86_64)
   ensures exists* (vout': Seq.seq S8.t).
     A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
     A.pts_to out vout' ** A.pts_to input #pin vin **
     pure (Seq.length vin < max_input #S32.t /\ vout' == hash sha2_256 vin)
   {
-    NI.hash_impl_ni sha2_256 kt ivt out input input_len;
+    if (Vec.sha_supported ())
+    {
+      NI.hash_impl_ni sha2_256 kt ivt out input input_len;
+    } else {
+      hash_impl sha2_256 kt ivt out input input_len;
+    }
   } else {
     hash_impl sha2_256 kt ivt out input input_len;
   };

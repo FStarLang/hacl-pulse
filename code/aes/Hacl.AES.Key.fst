@@ -1179,7 +1179,8 @@ let ks_round_vec (k t: Vec.t)
     r
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn ks_block_ni ([@@@FStar.Attributes.monomorphize] p: params)
                (w: A.array S8.t) (b: SZ.t) (rc: S8.t)
@@ -1258,7 +1259,8 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
     carried in a register exactly as the scalar loop carries it. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ks_loop_ni ([@@@FStar.Attributes.monomorphize] p: params)
               (w: A.array S8.t)
               (#key: erased (Seq.lseq elem (keylen p.pv)))
@@ -1400,8 +1402,12 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** A.pts_to key #pk vkey ** 
   with vw. assert A.pts_to w vw;
   key_prefix p.pv (vals vkey) vw (SZ.v nc);
 
-  if Vec.supported () {
-    ks_loop_ni p w #(hide (vals vkey));
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      ks_loop_ni p w #(hide (vals vkey));
+    } else {
+      ks_loop_scalar p w #(hide (vals vkey));
+    }
   } else {
     ks_loop_scalar p w #(hide (vals vkey));
   }

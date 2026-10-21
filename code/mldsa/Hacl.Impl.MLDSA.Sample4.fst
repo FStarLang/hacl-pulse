@@ -191,7 +191,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v **
 
 (** [d_i <- RejNTTPoly s_i] for four seeds of the same length.  Uses
     AVX2: the caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn rej_ntt_poly4_impl (d0 d1 d2 d3: A.array zqt) (s0 s1 s2 s3: A.array S8.t) (slen: SZ.t)
                       (#vd0 #vd1 #vd2 #vd3: erased (Seq.seq zqt))
                       (#p0 #p1 #p2 #p3: perm)
@@ -450,7 +451,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v ** A.pts_to src vs **
 
 (** Entries [t .. t + 4) of [A-hat], sampled together.  Uses AVX2: the
     caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn expand_a4 (p: erased params) (dst: A.array zqt) (rho: A.array S8.t) (l: SZ.t) (t: SZ.t)
              (#vd: erased (Seq.seq zqt)) (#pr: perm) (#vr: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to rho #pr vr **
@@ -561,9 +563,26 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
   decreases (SZ.v kl - SZ.v (!c))
   {
     let vc = !c;
-    if (SZ.lte (SZ.add vc 4sz) kl && V.supported ()) {
-      expand_a4 p dst rho l vc;
-      c := SZ.add vc 4sz;
+    if (Hacl.X64.x86_64) {
+      if (SZ.lte (SZ.add vc 4sz) kl && V.supported ()) {
+        expand_a4 p dst rho l vc;
+        c := SZ.add vc 4sz;
+      } else {
+        expand_a_bounds p.k p.l (SZ.v vc);
+        SZ.fits_u32_implies_fits (SZ.v vc * n + n);
+        let lo = SZ.mul vc 256sz;
+        let hi = SZ.add lo 256sz;
+        set_seed p sd l vc vr;
+        with vsd. assert (A.pts_to sd vsd);
+        with w0. assert (A.pts_to dst w0);
+        let blk = Sub.sub dst lo hi;
+        S.rej_ntt_poly_impl blk sd 34sz;
+        with b1. assert (A.pts_to blk b1);
+        Sub.unsub dst (SZ.v lo) (SZ.v hi) blk;
+        with w1. assert (A.pts_to dst w1);
+        expand_a_step p vr (SZ.v vc) w0 w1 b1 vsd;
+        c := SZ.add vc 1sz;
+      }
     } else {
       expand_a_bounds p.k p.l (SZ.v vc);
       SZ.fits_u32_implies_fits (SZ.v vc * n + n);

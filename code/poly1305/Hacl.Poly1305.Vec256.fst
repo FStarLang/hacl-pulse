@@ -758,15 +758,20 @@ let pows_ok (rr a2 a3 a4: nat)
     pow_next rr a2 (r2 rr) a3;
     pow_next rr a3 (r3 rr) a4
 
+let lane27 (s: Seq.seq V.t) (k: nat) (j: nat)
+  : Lemma (requires lbounded s j 27 /\ Seq.length s == 5 /\ k < 5)
+          (ensures l64 (Seq.index s k) j < pow2 27)
+  = assert (lv s k j == l64 (Seq.index s k) j)
+
 let lanes27 (s: Seq.seq V.t) (k: nat)
   : Lemma (requires vbounded s 27 /\ Seq.length s == 5 /\ k < 5)
           (ensures l64 (Seq.index s k) 0 < pow2 27 /\ l64 (Seq.index s k) 1 < pow2 27 /\
                    l64 (Seq.index s k) 2 < pow2 27 /\ l64 (Seq.index s k) 3 < pow2 27)
   = reveal_opaque (`%vbounded) (vbounded s 27);
-    assert (lbounded s 0 27);
-    assert (lbounded s 1 27);
-    assert (lbounded s 2 27);
-    assert (lbounded s 3 27)
+    lane27 s k 0;
+    lane27 s k 1;
+    lane27 s k 2;
+    lane27 s k 3
 
 #pop-options
 
@@ -1066,11 +1071,20 @@ ensures exists* (ve': Seq.seq S64.t) (vb': Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+(** The offset of block [g] and its bound, apart from [absorb4]'s loop
+    context, in which Z3 does not find them. *)
+let fits_offset (g n: SZ.t) (len: nat)
+  : Lemma (requires SZ.v g + 4 <= SZ.v n /\ 16 * SZ.v n <= len /\ SZ.fits len)
+          (ensures SZ.fits (16 * SZ.v g) /\ 16 * SZ.v g + 64 <= len)
+  = Math.lemma_mult_le_right 16 (SZ.v g + 4) (SZ.v n);
+    SZ.fits_lte (16 * SZ.v g) len
+
 (** Absorb the longest prefix of [n] blocks that is a multiple of four,
     four lanes at a time, and say how many blocks that was.  [d] is
     scratch. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn absorb4 (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
            (msg: A.array S8.t) (n: SZ.t)
            (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
@@ -1176,6 +1190,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
     vfmul a q4 t;
     with va1. assert (A.pts_to a va1);
     Math.lemma_mult_le_right 16 (SZ.v g + 4) (SZ.v n);
+    fits_offset g n (Seq.length vmsg);
     let o = SZ.mul 16sz g;
     load4 m msg o c (SZ.v g);
     with vm1. assert (A.pts_to m vm1);
@@ -1214,7 +1229,9 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
 (** The four-lane path when the processor has AVX2 and the message is long
     enough to pay for the powers of [r] -- eight blocks, measured, with gcc
     and clang; nothing otherwise.  Compiled for the
-    baseline target, so that the [supported] test runs everywhere. *)
+    baseline target, so that the [supported] test runs everywhere.  It
+    exists on x86-64 only; [Hacl.Poly1305] does not call it anywhere else. *)
+[@@custard_c_closure_guard "defined(__x86_64__)"]
 fn absorb_vec (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
               (msg: A.array S8.t) (n: SZ.t)
               (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))

@@ -66,6 +66,8 @@ module Mem = Hacl.Mem
 
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn hmac_impl_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
                 (kt: A.array S32.t) (ivt: A.array S32.t) (out: A.array S8.t)
                 (key: A.array S8.t) (lk: SZ.t) (msg: A.array S8.t) (lm: SZ.t)

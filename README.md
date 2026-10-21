@@ -59,6 +59,7 @@ make            verify, extract, compile, test
 make verify     verify everything
 make extract    (re)generate dist/
 make test       build and run the C tests
+make cross      compile the C for aarch64 and run the tests under qemu
 ```
 
 You need an F\* with the Pulse plugin and libraries installed, new enough to
@@ -67,11 +68,11 @@ is one -- the tarballs ship Pulse -- and so is a checkout of `master` built
 through `stage3`.  Point the build at either:
 
 ```
-make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-18   # unpacked nightly
+make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-21   # unpacked nightly
 make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 ```
 
-The tree tracks `master`: it is verified against the `nightly-2026-10-18`
+The tree tracks `master`: it is verified against the `nightly-2026-10-21`
 build above, and nothing older is supported.  F\* changes the encoding its
 proofs rest on often enough that supporting a past release means carrying
 workarounds for a solver that no longer exists, which is a worse use of the
@@ -1022,7 +1023,9 @@ chain for inversion and the ladder -- is Pulse, verified against
 `Spec.Curve25519.Field64`, which relates the four-word representation to the
 field.  The ladder and inversion carry `custard_c_closure_prologue` with
 `target("bmi2")`, so gcc and clang emit `mulx` for the whole call tree without
-the rest of the library being compiled for BMI2.
+the rest of the library being compiled for BMI2, and
+`custard_c_closure_guard "defined(__x86_64__)"`, so that call tree exists only
+on x86-64; elsewhere `scalarmult` is the radix-51 path.
 
 Two proof-engineering notes.  The closure prologue refuses a closure that
 reaches a global variable, so the shared `S64.zero` became one local
@@ -1918,12 +1921,48 @@ compiled with `-maes`, and the rest of the library must not be, or it would
 fault on a machine without the instructions; GCC and Clang both refuse to
 inline a `target`-attributed intrinsic into a caller without the attribute, so
 a wrapper in a header is not enough.  Custard's `CPrologue` puts a verbatim
-string on a declaration and `custard_c_closure_prologue` puts one on
-everything that declaration *exclusively* reaches, which is exactly the set
-that needs it -- a helper the baseline path also calls is deliberately left
-alone.  So `cipher_ni` and its subtree get
+string on a declaration and `custard_c_closure_prologue` puts one on a
+*copy* of everything that declaration reaches -- a helper the baseline path
+also calls keeps its undecorated original for that path.  So `cipher_ni` and its subtree get
 `__attribute__((target("aes,pclmul,ssse3,sse4.1")))` and the dispatcher, one
 call up, does not.  Feature detection is `__builtin_cpu_supports`.
+
+**Other architectures.**  The same C has to compile where there is no
+AES-NI to call: on aarch64 the `target` attribute, the intrinsics and
+`__builtin_cpu_supports("aes")` are all errors.  So every function carrying
+an x86 `target` also carries `custard_c_closure_guard "defined(__x86_64__)"`,
+which puts it and every copy its closure prologue makes inside `#if
+defined(__x86_64__)`, and every dispatcher tests `Hacl.X64.x86_64`, an
+`assume val` with `custard_c_ifdef "defined(__x86_64__)"`:
+
+```
+if (Hacl.X64.x86_64) {
+  if Vec.supported () { Hacl.AES.NI.cipher_ni p st w }
+  else { Hacl.AES.Cipher.cipher_portable p st w }
+} else { Hacl.AES.Cipher.cipher_portable p st w }
+```
+
+Custard prints that `if` as `#if` / `#else` / `#endif`; F\* knows nothing
+about the flag, so both arms are verified.  Nothing ties the flag's
+condition to the guard's, and a call that escapes the test fails only on the
+other architecture, as an undeclared function -- which is what `make cross`
+is for: it compiles `dist/Hacl.c` and the tests with
+`aarch64-linux-gnu-gcc` and runs them under `qemu-aarch64` (all but the
+constant-time audit, whose timings under an emulator measure the emulator).
+
+Three things the guard alone does not cover.  A portable function that only
+x86 code reaches -- `hash_impl_ni`, `gtag_fin`, the HKDF expansion over
+`blocks_ni`, and the streaming and HMAC instances below them -- would be an
+unused or dangling `static` on aarch64.  So those roots carry the guard with
+an empty `custard_c_closure_prologue ""`, which copies everything only they
+reach under the same `#if`.  A parameter that only the `#if` arm reads is
+unused in the `#else` arm, because Custard decides on `(void)x` before the
+preprocessor runs.  So the flag is tested in the caller that uses the
+parameters anyway (ChaCha20, Salsa20 and Poly1305 call their guarded
+`encrypt_vec` and `absorb_vec` only under it), rather than inside the vector
+function.  And a guard covers functions, not types: `c/Hacl_Vec128.h`
+still defines `Hacl_Vec128_t`, as sixteen opaque bytes, off x86-64, for
+the pair and triple structs `Hacl.h` declares.
 
 **The intrinsics are axioms, and they are tested.**  `lib/Hacl.Vec128.fst` is
 all `assume val`s, realized by `c/Hacl_Vec128.h`; the postcondition of

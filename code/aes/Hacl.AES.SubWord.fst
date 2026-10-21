@@ -83,7 +83,8 @@ let subword_index (a: Vec.t) (i: nat { i < 4 })
     left there, which is why the postcondition says nothing about them. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn subword_ni (s: A.array S8.t) (x0 x1 x2 x3: S8.t)
               (#vs: erased (Seq.seq S8.t))
 requires A.pts_to s vs ** pure (Seq.length vs == blocklen)
@@ -150,8 +151,12 @@ ensures exists* (vs': Seq.seq S8.t). A.pts_to s vs' ** pure (
   Seq.index (vals vs') 10 == sbox (S8.v x2) /\
   Seq.index (vals vs') 11 == sbox (S8.v x3))
 {
-  if Vec.supported () {
-    subword_ni s x0 x1 x2 x3;
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      subword_ni s x0 x1 x2 x3;
+    } else {
+      subword_portable s x0 x1 x2 x3;
+    }
   } else {
     subword_portable s x0 x1 x2 x3;
   }

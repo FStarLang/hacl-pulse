@@ -35,3 +35,50 @@ test: $(TEST_BINS)
 	  printf '  %-14s %s\n' RUN "$$(basename $$t)";                        \
 	  $$t || exit 1;                                                       \
 	done
+
+# ---------------------------------------------------------------------------
+# Another architecture
+# ---------------------------------------------------------------------------
+#
+# `make cross` compiles the library and the test suite with CROSS_CC, by
+# default for aarch64, and runs the tests with CROSS_RUN if that is set or
+# qemu-aarch64 is on the PATH.  It checks that every function compiled for an
+# x86 extension is guarded by `#if defined(__x86_64__)` and every call to one
+# is under the matching `Hacl.X64.x86_64` test; see lib/Hacl.X64.fst.  A
+# miss shows up here as an unknown `target` attribute or an undeclared
+# function.  It is not part of `make` because it needs a cross compiler
+# (on Debian and Ubuntu, gcc-aarch64-linux-gnu and qemu-user).  The
+# constant-time audit is compiled but not run: under an emulator its timings
+# measure qemu, not the code.
+
+CROSS_CC    ?= aarch64-linux-gnu-gcc
+CROSS_QEMU  ?= qemu-aarch64 -L /usr/aarch64-linux-gnu
+CROSS_RUN   ?= $(if $(shell command -v $(firstword $(CROSS_QEMU)) 2>/dev/null),$(CROSS_QEMU))
+CROSS_DIR   := $(BUILD_DIR)/cross
+CROSS_NORUN ?= test_consttime
+
+.PHONY: cross
+cross: $(C_FILES) $(C_HEADERS)
+	$(Q)mkdir -p $(CROSS_DIR)/tests
+	$(call msg, "CROSS-CC", "Hacl")
+	$(Q)$(CROSS_CC) $(HACL_CFLAGS) $(GENERATED_CFLAGS) -I $(DIST_DIR)         \
+	  -I $(HACL_ROOT)/c -c $(DIST_DIR)/Hacl.c -o $(CROSS_DIR)/Hacl.o
+	$(Q)for f in $(HAND_SRCS); do                                          \
+	  printf '  %-14s %s\n' CROSS-CC "c/$$(basename $$f)";                 \
+	  $(CROSS_CC) $(HACL_CFLAGS) -I $(HACL_ROOT)/c -c $$f                  \
+	    -o $(CROSS_DIR)/$$(basename $$f .c).o || exit 1;                   \
+	done
+	$(Q)for t in $(TEST_NAMES); do                                         \
+	  printf '  %-14s %s\n' CROSS-CC "$$t.c";                              \
+	  $(CROSS_CC) $(HACL_CFLAGS) -I $(DIST_DIR) -I $(HACL_ROOT)/c          \
+	    -I $(HACL_ROOT)/tests $(HACL_ROOT)/tests/$$t.c $(CROSS_DIR)/*.o    \
+	    -o $(CROSS_DIR)/tests/$$t || exit 1;                               \
+	done
+ifneq ($(strip $(CROSS_RUN)),)
+	$(Q)for t in $(filter-out $(CROSS_NORUN),$(TEST_NAMES)); do            \
+	  printf '  %-14s %s\n' CROSS-RUN "$$t";                               \
+	  $(CROSS_RUN) $(CROSS_DIR)/tests/$$t || exit 1;                       \
+	done
+else
+	@echo "  (no $(firstword $(CROSS_QEMU)); the cross-compiled tests were not run)"
+endif

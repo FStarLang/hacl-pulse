@@ -49,14 +49,21 @@
     to be reached from a function marked
 
     {[
-      [@@CPrologue vec_target; custard_c_closure_prologue vec_target ""]
+      [@@CPrologue vec_target; custard_c_closure_prologue vec_target]
     ]}
 
     which puts [__attribute__((target("aes,pclmul,ssse3,sse4.1")))] on that
-    function and on every function it reaches -- and, by passing [""] as the
-    shared prologue, on {i only} those reached exclusively through it.  A
-    helper that baseline code also calls must not acquire the attribute, or it
-    would fault on a machine without the instructions.
+    function and on a copy of every function it reaches; the originals stay
+    undecorated for baseline callers.  A helper that baseline code also calls
+    must not acquire the attribute, or it would fault on a machine without the
+    instructions.
+
+    All of it is x86-64 only, and [c/Hacl_Vec128.h] defines nothing on any
+    other target.  So that function also carries
+    [custard_c_closure_guard "defined(__x86_64__)"], which compiles it and its
+    copies only under that [#if], and the call to it -- and the call to
+    [supported ()] that picks it -- sits in the [then] branch of a test of
+    [Hacl.X64.x86_64]; see there.
 
     {2 The value of a vector}
 

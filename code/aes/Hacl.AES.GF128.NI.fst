@@ -878,7 +878,8 @@ let as_blk (s: Seq.seq S8.t { Seq.length s == blocklen })
   = s
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn gmul_ni (a: A.array S8.t) (h: A.array S8.t)
            (#va #vh: erased (Seq.seq S8.t))
 requires A.pts_to a va ** A.pts_to h vh ** pure (
@@ -911,7 +912,8 @@ ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
     stored once. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn gmul_add_ni (a: A.array S8.t) (h: A.array S8.t) (b: A.array S8.t) (off: SZ.t)
                (#va #vh: erased (Seq.seq S8.t))
                (#pb: perm) (#vb: erased (Seq.seq S8.t))
@@ -1196,7 +1198,8 @@ let slice_len_mod (vd: Seq.seq S8.t) (n: nat)
     the whole hash began with, which only the specification needs, and [cur0]
     is where the eight-way pass got to. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ghash_loop4_ni (cur0 y y2 y3 y4: Vec.t) (d: A.array S8.t)
                   (n: SZ.t) (start: SZ.t) (lim: SZ.t)
                   (#acc0: erased G.block)
@@ -1291,7 +1294,8 @@ ensures A.pts_to d #pd vd ** pure (
     about forty vector operations.  The eight products are also independent,
     so twice as many [PCLMULQDQ]s are available to the multiplier at once. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ghash_loop8_ni (a0 y y2 y3 y4 y5 y6 y7 y8: Vec.t) (d: A.array S8.t)
                   (n: SZ.t) (lim: SZ.t)
                   (#pd: perm) (#vd: erased (Seq.seq S8.t))
@@ -1424,7 +1428,8 @@ let power_step (a b: G.block)
     offset and nothing else; the receipt is traded straight back, so the
     caller sees the array it handed over. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn load_pow (h: A.array S8.t) (i: SZ.t)
             (#ph: perm) (#vh: erased (Seq.seq S8.t))
@@ -1457,7 +1462,8 @@ ensures A.pts_to h #ph vh **
     message too short to reach either loop still pays nothing: the loads are
     inside the test. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ghash_start (a0: Vec.t) (y: Vec.t) (h: A.array S8.t) (d: A.array S8.t)
                (n: SZ.t) (lim8: SZ.t) (lim: SZ.t)
                (#ph: perm) (#vh: erased (Seq.seq S8.t))
@@ -1514,7 +1520,8 @@ ensures A.pts_to h #ph vh ** A.pts_to d #pd vd ** pure (
 }
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ghash_loop_ni (acc: A.array S8.t) (h: A.array S8.t) (d: A.array S8.t) (n: SZ.t)
                  (#va0 #vh: erased (Seq.seq S8.t))
                  (#pd: perm) (#vd: erased (Seq.seq S8.t))

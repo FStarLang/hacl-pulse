@@ -742,7 +742,8 @@ ensures exists* (vst: Seq.seq V.t) (vb: Seq.seq V.t).
 
 (** Four states, each permuted: [s_k <- permute s_k]. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn permute4 (s0 s1 s2 s3: A.array S64.t) (rc_tbl: A.array S64.t)
             (#v0 #v1 #v2 #v3: erased (Seq.seq S64.t))
             (#prc: perm) (#vrc: erased (Seq.seq S64.t))

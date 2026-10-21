@@ -81,7 +81,8 @@ let fe (s: Seq.seq S64.t) : GTot C.elem = ev s % C.prime
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --z3refresh --smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn put4 (o: A.array S64.t) (x0 x1 x2 x3: S64.t) (#vo: erased (Seq.seq S64.t))
 requires A.pts_to o vo ** pure (Seq.length vo == 4)
 ensures exists* (vo': Seq.seq S64.t).
@@ -105,7 +106,8 @@ ensures exists* (vo': Seq.seq S64.t).
     out of the top the carry is worth thirty-eight again -- and this time
     the sum it lands in is below [38 h], so there is room. *)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fold_top (o: A.array S64.t) (x0 x1 x2 x3 h: S64.t) (#vo: erased (Seq.seq S64.t))
 requires A.pts_to o vo ** pure (Seq.length vo == 4 /\ S64.v h < 131072)
 ensures exists* (vo': Seq.seq S64.t).
@@ -141,7 +143,8 @@ ensures exists* (vo': Seq.seq S64.t).
     subtracting thirty-eight borrows again the difference was at least
     [2^256 - 38], so its bottom word has room. *)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fold_top_sub (o: A.array S64.t) (x0 x1 x2 x3 b: S64.t) (#vo: erased (Seq.seq S64.t))
 requires A.pts_to o vo ** pure (Seq.length vo == 4 /\ S64.v b <= 1)
 ensures exists* (vo': Seq.seq S64.t).
@@ -180,7 +183,8 @@ let fadd_post (vo va vb: Seq.seq S64.t) (t: int)
           (ensures fe vo == C.fadd (fe va) (fe vb))
   = fadd_ok (ev va) (ev vb)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fadd (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -220,7 +224,8 @@ ensures exists* (vout': Seq.seq S64.t).
   ()
 }
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fsub (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -368,7 +373,8 @@ ensures exists* (vt': Seq.seq S64.t).
     own positions and the high halves one up; what spills out of the top is
     below forty, and {!fold_top} takes it. *)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn red (o t: A.array S64.t) (#vo: erased (Seq.seq S64.t))
        (#pt: perm) (#vt: erased (Seq.seq S64.t))
 requires A.pts_to o vo ** A.pts_to t #pt vt **
@@ -514,7 +520,8 @@ ensures exists* (vt': Seq.seq S64.t).
   assert (pure (ev8 y == ev va * ev vb));
 }
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fmul (out a b: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -543,7 +550,8 @@ ensures exists* (vout': Seq.seq S64.t).
 
 (** Squaring is a product with itself: a dedicated squaring saves six of
     the sixteen multiplications but measures within a few percent here. *)
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fsqr (out a: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -587,7 +595,8 @@ let scale_post (vo va: Seq.seq S64.t) (t: int)
           (ensures fe vo == C.fmul C.a24 (fe va))
   = Math.lemma_mod_mul_distr_r 121665 (ev va) C.prime
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fscale (out a: A.array S64.t)
           (#vout: erased (Seq.seq S64.t))
           (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -645,7 +654,8 @@ ensures exists* (vout': Seq.seq S64.t).
 
 (** {2 Moves} *)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn cswap (sel: S64.t) (a b: A.array S64.t)
          (#va: erased (Seq.seq S64.t)) (#vb: erased (Seq.seq S64.t))
 requires A.pts_to a va ** A.pts_to b vb **
@@ -675,7 +685,8 @@ ensures exists* (va': Seq.seq S64.t) (vb': Seq.seq S64.t).
                                  else x `Seq.equal` reveal vb /\ y `Seq.equal` reveal va));
 }
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn copy (dst src: A.array S64.t)
         (#vd: erased (Seq.seq S64.t)) (#ps: perm) (#vs: erased (Seq.seq S64.t))
 requires A.pts_to dst vd ** A.pts_to src #ps vs **
@@ -693,7 +704,8 @@ ensures exists* (vd': Seq.seq S64.t).
   assert (pure (v `Seq.equal` reveal vs));
 }
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn set_small (a: A.array S64.t) (x: U64.t) (#va: erased (Seq.seq S64.t))
 requires A.pts_to a va ** pure (Seq.length va == 4)
 ensures exists* (va': Seq.seq S64.t).
@@ -705,7 +717,8 @@ ensures exists* (va': Seq.seq S64.t).
 
 (** {2 Bytes} *)
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn load (a: A.array S64.t) (b: A.array S8.t)
         (#va: erased (Seq.seq S64.t)) (#pb: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to a va ** A.pts_to b #pb vb **
@@ -780,7 +793,8 @@ let store4_ok (v0 v1 v2 v3 v4: Seq.seq S8.t) (l0 l1 l2 l3: S64.t)
     with introduce _ ==> _ with aux k;
     assert (Seq.length v4 == 32)
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn store (b: A.array S8.t) (a: A.array S64.t)
          (#vb: erased (Seq.seq S8.t)) (#pa: perm) (#va: erased (Seq.seq S64.t))
 requires A.pts_to b vb ** A.pts_to a #pa va **
@@ -820,7 +834,8 @@ ensures exists* (vb': Seq.seq S8.t).
     reaches bit 255, and that sum with the bit cleared is the number minus
     [p]. *)
 
-[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))"]
+[@@ CInline; CPrologue "__attribute__((target(\"bmi2\"), always_inline))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fold255 (a: A.array S64.t) (#va: erased (Seq.seq S64.t))
 requires A.pts_to a va ** pure (Seq.length va == 4)
 ensures exists* (va': Seq.seq S64.t).
@@ -860,7 +875,8 @@ let carry_out_zero (y x: nat) (c: int)
           (ensures c == 0)
   = consts ()
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn freeze (a: A.array S64.t) (#va: erased (Seq.seq S64.t))
 requires A.pts_to a va ** pure (Seq.length va == 4)
 ensures exists* (va': Seq.seq S64.t).

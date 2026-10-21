@@ -490,8 +490,12 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to out vout' ** A.pts_to k #pk vk ** A.pts_to u #pu vu **
   pure (vout' == C.scalarmult vk vu)
 {
-  if (Hacl.Carry64.supported ()) {
-    Hacl.Curve25519.Ladder64.scalarmult64 out k u
+  if (Hacl.X64.x86_64) {
+    if (Hacl.Carry64.supported ()) {
+      Hacl.Curve25519.Ladder64.scalarmult64 out k u
+    } else {
+      scalarmult51 out k u
+    }
   } else {
     scalarmult51 out k u
   }

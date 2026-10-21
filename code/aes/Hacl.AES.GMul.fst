@@ -48,8 +48,14 @@ ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   Seq.length va' == blocklen /\
   vals va' == gmul (vals va) (Poly.xtimes (vals vh)))
 {
-  if Vec.supported () {
-    Hacl.AES.GF128.NI.gmul_ni a h;
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      Hacl.AES.GF128.NI.gmul_ni a h;
+    } else {
+      Hacl.AES.GF128.gmul_portable a h;
+      Alg.gmul_xt_right (vals va) (vals vh) 1;
+      Hacl.AES.GF128.shift_reduce_impl a;
+    }
   } else {
     Hacl.AES.GF128.gmul_portable a h;
     Alg.gmul_xt_right (vals va) (vals vh) 1;
@@ -77,8 +83,16 @@ ensures exists* (va': Seq.seq S8.t).
                          (Seq.slice (vals vb) (SZ.v off) (SZ.v off + blocklen)))
                    (Poly.xtimes (vals vh)))
 {
-  if Vec.supported () {
-    Hacl.AES.GF128.NI.gmul_add_ni a h b off;
+  if (Hacl.X64.x86_64) {
+    if Vec.supported () {
+      Hacl.AES.GF128.NI.gmul_add_ni a h b off;
+    } else {
+      Hacl.AES.GF128.gadd_at_impl a b off;
+      with vx. assert A.pts_to a vx;
+      Hacl.AES.GF128.gmul_portable a h;
+      Alg.gmul_xt_right (vals vx) (vals vh) 1;
+      Hacl.AES.GF128.shift_reduce_impl a;
+    }
   } else {
     Hacl.AES.GF128.gadd_at_impl a b off;
     with vx. assert A.pts_to a vx;

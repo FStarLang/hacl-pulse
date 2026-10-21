@@ -309,7 +309,26 @@ ensures exists* (vo: Seq.seq S8.t).
 
   (* Eight blocks at a time while that is possible and the processor
      allows; the loop below finishes up one block at a time. *)
-  let nb = Hacl.Chacha20.Vec256.encrypt_vec out msg mlen starr ctr0 st0;
+  let mut nbr = 0sz;
+  if (Hacl.X64.x86_64)
+  ensures exists* (n: SZ.t) (vo': Seq.seq S8.t).
+    pts_to nbr n ** A.pts_to out vo' ** A.pts_to msg #pm vmsg **
+    A.pts_to starr (G.reveal st0) **
+    A.pts_to ksarr (Seq.create 16 z32) ** A.pts_to kbarr (Seq.create 64 z8) **
+    A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+    Mem.must_wipe starr ** Mem.must_wipe ksarr ** Mem.must_wipe kbarr **
+    pure (Seq.length vo' == Seq.length vmsg /\
+          SZ.v n <= SZ.v mlen /\ SZ.v n % size_block == 0 /\
+          (SZ.v n < SZ.v mlen ==> U32.v ctr0 + SZ.v n / size_block < pow2 32) /\
+          (forall (p: nat). p < SZ.v n ==>
+             Seq.index vo' p == Seq.index (encrypt_bytes st0 ctr0 vmsg) p))
+  {
+    let n = Hacl.Chacha20.Vec256.encrypt_vec out msg mlen starr ctr0 st0;
+    nbr := n;
+  } else {
+    ()
+  };
+  let nb = !nbr;
 
   let mut base = nb;
   let mut ctr = U32.add_mod ctr0 (SZ.sizet_to_uint32 (SZ.div nb 64sz));

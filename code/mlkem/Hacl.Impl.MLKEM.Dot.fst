@@ -206,7 +206,8 @@ ensures exists* w. A.pts_to dst w ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
   assert (pure (as_poly w == dot #(SZ.v k) (as_zqs vu) (as_zqs vv)));
 }
 
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn dot_avx2 (dst u v: A.array zqt) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
             (#pu #pv: perm) (#vd #vu #vv: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
@@ -230,7 +231,9 @@ ensures exists* w. A.pts_to dst w ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
         Seq.length vu == SZ.v k * n /\ Seq.length vv == SZ.v k * n /\
         as_poly w == dot #(SZ.v k) (as_zqs vu) (as_zqs vv))
 {
-  if (V.supported ()) { dot_avx2 dst u v k } else { dot_ dst u v k }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { dot_avx2 dst u v k } else { dot_ dst u v k }
+  } else { dot_ dst u v k }
 }
 
 #pop-options

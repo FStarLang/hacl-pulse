@@ -84,7 +84,8 @@ let prf_lane (eta: pos { eta <= 3 }) (vs: Seq.lseq S8.t 32) (b: U8.t)
     is always 33, but passed in: inlined as a constant, the whole-block loop
     of the absorb becomes [while (i < 0)], which gcc's [-Wtype-limits]
     rejects. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn prf_absorb_pre (st: A.array S64.t) (b: A.array S64.t) (rc_tbl: A.array S64.t)
                   (s: A.array S8.t) (byte: U8.t) (mlen: SZ.t)
                   (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
@@ -122,7 +123,8 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
 
 (** [o_j[0, 64 eta) <- PRF_eta(s, b_j)] for [j < 4].  The caller checks
     {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn prf4_impl (o0 o1 o2 o3: A.array S8.t) (s: A.array S8.t)
              (b0 b1 b2 b3: U8.t) (eta: SZ.t)
              (#vo0 #vo1 #vo2 #vo3: erased (Seq.seq S8.t))

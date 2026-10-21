@@ -537,6 +537,10 @@ let chunk_ks (s0: state) (c: U32.t { U32.v c + 8 <= pow2 32 }) (q: nat { q < 512
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+let half_split (i: nat)
+  : Lemma ((i % 2 == 0 /\ i == 2 * (i / 2)) \/ (i % 2 == 1 /\ i == 2 * (i / 2) + 1))
+  = Math.euclidean_division_definition i 2
+
 (** Abstract in the predicate, so that the solver does not unfold it. *)
 let transpose_both (p: (h: nat { h < 2 }) -> V.t -> (j: nat { j < 8 }) -> prop)
                    (vt1 vt2: vstate)
@@ -550,6 +554,7 @@ let transpose_both (p: (h: nat { h < 2 }) -> V.t -> (j: nat { j < 8 }) -> prop)
       : Lemma (p (i % 2) (Seq.index vt2 i) (i / 2))
       = let j = i / 2 in
         Math.euclidean_division_definition i 2;
+        half_split i;
         if i % 2 = 0 then assert (p 0 (Seq.index vt1 (2 * j)) j)
         else assert (p 1 (Seq.index vt2 (2 * j + 1)) j)
     in
@@ -624,6 +629,11 @@ let chunk_step (s0: state) (c: U32.t { U32.v c + 8 <= pow2 32 })
 
 #pop-options
 
+let chunk_off_fits (off: nat) (n: nat) (len: nat)
+  : Lemma (requires n < 16 /\ off + 512 <= len /\ SZ.fits len)
+          (ensures SZ.fits (off + 32 * n))
+  = SZ.fits_lte (off + 32 * n) len
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** Exclusive-or [chunk_ks s0 c] into [msg[off .. off+512]], writing [out]. *)
@@ -667,6 +677,9 @@ ensures exists* (vo': Seq.seq S8.t) (vv1 vk1 vt1: Seq.seq V.t).
   {
     let vi = !i;
     let x = A.(t.(vi));
+    with v0. assert (A.pts_to out v0);
+    assert pure (SZ.v vi < 16 /\ Seq.length v0 == Seq.length vm /\ SZ.v off + 512 <= Seq.length vm);
+    chunk_off_fits (SZ.v off) (SZ.v vi) (A.length msg);
     let ob = SZ.add off (SZ.mul 32sz vi);
     with v. assert (A.pts_to out v);
     Classical.forall_intro (chunk_byte s0 c vk x (SZ.v vi));
@@ -751,7 +764,8 @@ let chunk_ctr (ctr0: U32.t) (len: nat) (b: nat)
     where it stopped.  [st] holds the initial state; its counter word is not
     read. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn encrypt_blocks8 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                    (st: A.array S32.t) (ctr0: U32.t)
                    (st0: G.erased state) (b0: SZ.t)
@@ -875,7 +889,9 @@ ensures exists* (vo': Seq.seq S8.t).
     leading bytes of [out] it wrote, a whole number of blocks; the caller does
     the rest one block at a time, from block counter [ctr0 + n / 64].  This
     function itself is compiled for the baseline target, so that the
-    [supported] tests run everywhere. *)
+    [supported] tests run everywhere.  It exists on x86-64 only;
+    [Hacl.Salsa20.encrypt] does not call it anywhere else. *)
+[@@custard_c_closure_guard "defined(__x86_64__)"]
 fn encrypt_vec (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                (st: A.array S32.t) (ctr0: U32.t)
                (st0: G.erased state)

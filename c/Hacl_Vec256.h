@@ -6,11 +6,13 @@
  * library.  `tests/test_vec256.c` checks each of them against a scalar
  * transcription on random inputs.
  *
- * Everything except `Hacl_Vec256_supported` carries `target("avx2")`, and so
- * does every generated function that reaches it, by way of the `CPrologue`
- * and `custard_c_closure_prologue` attributes on the F* side.  On a target
- * that is not x86, `Hacl_Vec256_supported` is false and the rest of this file
- * is unreachable; the bodies are there so that the program links.
+ * Everything except `Hacl_Vec256_supported` carries `target("avx2")`, and
+ * so does every generated function that reaches it, by way of the
+ * `CPrologue` and `custard_c_closure_prologue` attributes on the F* side.
+ * All of it is x86-64 only: those functions also carry
+ * `custard_c_closure_guard "defined(__x86_64__)"`, and their callers test the
+ * `Hacl.X64.x86_64` flag, which is printed as the same `#if`.  On any other
+ * target this header defines nothing.
  */
 
 #ifndef HACL_VEC256_H
@@ -20,7 +22,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__)
 
 #include <immintrin.h>
 
@@ -184,89 +186,6 @@ static inline bool Hacl_Vec256_supported(void) {
   return false;
 #endif
 }
-
-#else /* not x86 */
-
-typedef struct {
-  uint32_t w[8];
-} Hacl_Vec256_t;
-
-/* Unreachable: every caller is guarded by Hacl_Vec256_supported.  They are
- * defined rather than merely declared so that the program links. */
-static inline Hacl_Vec256_t Hacl_Vec256_zero(void) {
-  Hacl_Vec256_t r;
-  memset(&r, 0, sizeof r);
-  return r;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_load(uint8_t *p) {
-  Hacl_Vec256_t r;
-  memcpy(&r, p, 32);
-  return r;
-}
-static inline void Hacl_Vec256_store(uint8_t *p, Hacl_Vec256_t x) {
-  memcpy(p, &x, 32);
-}
-static inline Hacl_Vec256_t Hacl_Vec256_bcast(uint32_t x) {
-  Hacl_Vec256_t r;
-  for (int i = 0; i < 8; i++) r.w[i] = x;
-  return r;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_iota(void) {
-  Hacl_Vec256_t r;
-  for (int i = 0; i < 8; i++) r.w[i] = (uint32_t)i;
-  return r;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_rotl(Hacl_Vec256_t a, uint32_t s) {
-  (void)s;
-  return a;
-}
-#define HACL_VEC256_STUB2(name)                                              \
-  static inline Hacl_Vec256_t name(Hacl_Vec256_t a, Hacl_Vec256_t b) {       \
-    (void)b;                                                                 \
-    return a;                                                                \
-  }
-HACL_VEC256_STUB2(Hacl_Vec256_add32)
-HACL_VEC256_STUB2(Hacl_Vec256_xor)
-HACL_VEC256_STUB2(Hacl_Vec256_unpacklo32)
-HACL_VEC256_STUB2(Hacl_Vec256_unpackhi32)
-HACL_VEC256_STUB2(Hacl_Vec256_unpacklo64)
-HACL_VEC256_STUB2(Hacl_Vec256_unpackhi64)
-HACL_VEC256_STUB2(Hacl_Vec256_lo128)
-HACL_VEC256_STUB2(Hacl_Vec256_hi128)
-HACL_VEC256_STUB2(Hacl_Vec256_add64)
-HACL_VEC256_STUB2(Hacl_Vec256_mul32)
-HACL_VEC256_STUB2(Hacl_Vec256_xor64)
-HACL_VEC256_STUB2(Hacl_Vec256_andnot64)
-#undef HACL_VEC256_STUB2
-static inline Hacl_Vec256_t Hacl_Vec256_shr64(Hacl_Vec256_t a, uint32_t s) {
-  (void)s;
-  return a;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_shl64(Hacl_Vec256_t a, uint32_t s) {
-  (void)s;
-  return a;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_mask26(Hacl_Vec256_t a) { return a; }
-static inline Hacl_Vec256_t Hacl_Vec256_rotl64(Hacl_Vec256_t a, uint32_t s) {
-  (void)s;
-  return a;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_bcast64(uint64_t x) {
-  Hacl_Vec256_t r;
-  for (int i = 0; i < 4; i++) memcpy(&r.w[2 * i], &x, 8);
-  return r;
-}
-static inline Hacl_Vec256_t Hacl_Vec256_set64(uint64_t x0, uint64_t x1,
-                                            uint64_t x2, uint64_t x3) {
-  Hacl_Vec256_t r;
-  uint64_t x[4] = {x0, x1, x2, x3};
-  memcpy(&r, x, 32);
-  return r;
-}
-static inline void Hacl_Vec256_store64(uint64_t *p, Hacl_Vec256_t x) {
-  memcpy(p, &x, 32);
-}
-static inline bool Hacl_Vec256_supported(void) { return false; }
 
 #endif
 
