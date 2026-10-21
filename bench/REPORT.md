@@ -9022,3 +9022,48 @@ same session.  The other 84 rows have a geometric-mean median ratio of
 1.0005, all within 0.96--1.04.  Why SHA3-256 gains less than SHA3-512
 and SHAKE128 under gcc has not been investigated.
 
+
+## Part 82: ML-DSA's ExpandA four streams at a time
+
+A callgrind profile of ML-DSA-65 (gcc, no inlining) put `ExpandA` at
+51% of key generation, 53% of verification and 13% of signing.  Signing
+is dominated by the transforms instead: INTT 31%, NTT 14%, pointwise
+products 16%.  ML-DSA used no AVX2 at all.
+
+`ExpandA` is `k * l` independent SHAKE128 rejection samplers, exactly
+the shape of ML-KEM's matrix (Part 74 onwards).  The new
+`Hacl.Impl.MLDSA.Sample4` copies ML-KEM's `Sample4`.  It runs four
+`RejNTTPoly` streams in lock step, ending their absorbs with one
+`permute4` and permuting all four before every block after the first.
+Each stream reads its block with `squeeze_block_lanes` and feeds it to
+the scalar `block128_impl`.  A stream that filled early keeps receiving
+blocks and ignores them (`ntt_sampled_stable`).  The per-stream
+invariant is one opaque `stream_ok`, as in ML-KEM.  `expand_a_impl`
+moved there from `Sample` because it now depends on the four-way
+sampler.  It takes four entries at a time while four remain and
+`Vec256.supported ()`, then samples into four stack polynomials and
+copies them into place.  The 16, 30 and 56 entries of the three
+parameter sets leave only ML-DSA-65's last two to the scalar path,
+which the tests therefore exercise on an AVX2 machine.  The module
+checks in a minute.
+
+| gcc, 12 interleaved runs, same session | before | after | min ratio |
+| --- | ---: | ---: | ---: |
+| ML-DSA-44 keygen / sign / verify | 89.0 / 484 / 95.4 us | 69.9 / 466 / 77.0 us | 1.27x / 1.04x / 1.24x |
+| ML-DSA-65 keygen / sign / verify | 143 / 705 / 156 us | 112 / 673 / 123 us | 1.28x / 1.05x / 1.27x |
+| ML-DSA-87 keygen / sign / verify | 243 / 639 / 255 us | 180 / 576 / 191 us | 1.35x / 1.11x / 1.34x |
+
+The other 107 rows, ML-KEM included, have a geometric-mean ratio of
+0.997, all within 0.96--1.03.
+
+**Not shipped: a lane-wise absorb.**  The one-shot sponge's absorb
+builds each lane with an eight-iteration byte loop.  Replacing it with
+`Hacl.Impl.Bytes.load_le` (with a `lane_of_le` lemma) made SHA3-256 on
+1184 bytes 4--9% faster in a TSC harness under both compilers.  In the
+full suite (5 rounds, 20 runs a side), gcc gained 1--5% on SHA3-256 but
+lost 2% on SHA3-512, 4% on long SHAKE128 inputs and 1--2% on ML-KEM.
+That is the register-allocation effect that kept the byte loop in the
+one-shot squeeze (README, "The sponge"), so the change was reverted.
+One fragile query it exposed downstream is fixed anyway:
+`verify_mu_impl` now asserts `ct_len p <= sig_len p` before slicing
+the signature, which was at 88% of its rlimit.

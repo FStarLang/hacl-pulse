@@ -529,7 +529,13 @@ one-in-five rejection is the worst case for a branch predictor), and only the pe
 the one that ends each absorb (`absorb_pre` is `absorb_impl` without it) and
 the one before every squeezed block after the first.  `gen_matrix_impl`
 takes four entries at a time while four remain and the processor has AVX2,
-and one at a time otherwise.  The noise vectors are the same idea for SHAKE256:
+and one at a time otherwise.  ML-DSA's `ExpandA` is the same idea:
+`Hacl.Impl.MLDSA.Sample4` runs four `RejNTTPoly` streams over the same
+scalar `block128_impl`, borrowing ML-KEM's `shake128_absorb_pre` and
+`permute4_if`, and its `expand_a_impl` takes four of the 16, 30 or 56
+entries at a time (ML-DSA-65's last two go one at a time).  Key generation
+and verification, of which `ExpandA` was half, got 1.24x--1.35x faster and
+signing 1.04x--1.11x (Part 82 of `bench/REPORT.md`).  The noise vectors are the same idea for SHAKE256:
 `Hacl.Impl.MLKEM.PRF4` computes four `PRF_eta(s, b_j)` with one
 `permute4` ending the four 33-byte absorbs and, for `eta = 3`, a second one
 for the four second blocks, and `noise_vec_impl` calls it once per vector
@@ -4511,8 +4517,9 @@ of it on signing under clang (0.93x--0.98x), and ahead of OpenSSL on
 signing by 1.7x--1.8x.  The profile is still the one that put it there: most of the
 time is Keccak, the shared SHA-3 permutation squeezed one lane at a time
 where the AVX2 implementations run four lanes, then the pointwise products
-and the transforms.  A four-way Keccak and the ML-KEM NTT's treatment of
-the transform are the obvious next steps.
+and the transforms.  The table predates the four-way Keccak, now used by
+`ExpandA` (Part 82 of `bench/REPORT.md`); the ML-KEM NTT's treatment of
+the transform is the obvious next step.
 
 ### Against other libraries
 

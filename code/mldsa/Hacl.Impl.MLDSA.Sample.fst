@@ -698,81 +698,10 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
   }
 }
 
-(** {2 Expansion: ExpandA and ExpandS} *)
+(** {2 Expansion: ExpandS}
 
-(** Algorithm 32: [A-hat], row major, entry [t = r * l + s] seeded with
-    [rho], [s], [r]. *)
-fn expand_a_impl (p: erased params) (dst: A.array zqt) (rho: A.array S8.t)
-                 ([@@@FStar.Attributes.monomorphize] k: SZ.t)
-                 ([@@@FStar.Attributes.monomorphize] l: SZ.t)
-                 (#vd: erased (Seq.seq zqt)) (#pr: perm) (#vr: erased (Seq.seq S8.t))
-requires A.pts_to dst vd ** A.pts_to rho #pr vr **
-         pure (Seq.length vr == 32 /\ SZ.v k == p.k /\ SZ.v l == p.l /\
-               Seq.length vd == p.k * p.l * n)
-ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
-  pure (Seq.length vr == 32 /\ Seq.length v == p.k * p.l * n /\
-        as_zqs v == expand_a p vr)
-{
-  A.pts_to_len dst;
-  A.pts_to_len rho;
-  HSZ.fits32 ();
-  assert_norm (8 * 7 * n < pow2 32);
-  assert_norm (pow2 32 == 4294967296);
-  assert_norm (pow2 8 == 256);
-  Math.lemma_mult_le_right (SZ.v l) (SZ.v k) 8;
-  Math.lemma_mult_le_left 8 (SZ.v l) 7;
-  SZ.fits_u32_implies_fits 56;
-  let z8 = S8.classify 0uy;
-  let mut sd = [| z8; 34sz |];
-  Mem.track sd;
-  A.pts_to_len sd;
-  Copy.copy_prefix sd rho 32sz;
-  prefix_zero vd (expand_a p vr);
-  let kl = SZ.mul k l;
-  let mut c = 0sz;
-  while (let vc = !c; SZ.lt vc kl)
-  invariant exists* (vc: SZ.t) (v: Seq.seq zqt) (vsd: Seq.seq S8.t).
-    pts_to c vc ** A.pts_to dst v ** A.pts_to rho #pr vr ** A.pts_to sd vsd **
-    pure (SZ.v vc <= SZ.v kl /\ SZ.v kl == p.k * p.l /\
-          SZ.v k == p.k /\ SZ.v l == p.l /\
-          Seq.length v == p.k * p.l * n /\ Seq.length vr == 32 /\
-          Seq.length vsd == 34 /\
-          (forall (t: nat). t < 32 ==> Seq.index vsd t == Seq.index vr t) /\
-          prefix_eq v (expand_a p vr) (SZ.v vc * n))
-  decreases (SZ.v kl - SZ.v (!c))
-  {
-    let vc = !c;
-    expand_a_bounds p.k p.l (SZ.v vc);
-    SZ.fits_u32_implies_fits (SZ.v vc * n + n);
-    SZ.fits_u32_implies_fits (SZ.v vc + 1);
-    let lo = SZ.mul vc 256sz;
-    let hi = SZ.add lo 256sz;
-    let ci = SZ.div vc l;
-    let cj = SZ.rem vc l;
-    let bi = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 ci);
-    let bj = Cast.uint32_to_uint8 (SZ.sizet_to_uint32 cj);
-    Math.small_mod (SZ.v ci) 256;
-    Math.small_mod (SZ.v cj) 256;
-    Math.small_mod (SZ.v ci) 4294967296;
-    Math.small_mod (SZ.v cj) 4294967296;
-    assert (pure (U8.v bi == SZ.v vc / p.l /\ U8.v bj == SZ.v vc % p.l));
-    A.((sd.(32sz) <- S8.classify bj));
-    A.((sd.(33sz) <- S8.classify bi));
-    with vsd. assert (A.pts_to sd vsd);
-    with w0. assert (A.pts_to dst w0);
-    let blk = Sub.sub dst lo hi;
-    rej_ntt_poly_impl blk sd 34sz;
-    with b1. assert (A.pts_to blk b1);
-    Sub.unsub dst (SZ.v lo) (SZ.v hi) blk;
-    with w1. assert (A.pts_to dst w1);
-    expand_a_step p vr (SZ.v vc) w0 w1 b1 vsd;
-    c := SZ.add vc 1sz;
-  };
-  with v. assert (A.pts_to dst v);
-  prefix_done (p.k * p.l) v (expand_a p vr);
-  assert (pure (as_zqs v == expand_a p vr));
-  Mem.wipe sd 34sz;
-}
+    ExpandA, which samples four entries at a time, is in
+    {!Hacl.Impl.MLDSA.Sample4}. *)
 
 (** [s1] ([second = false], [l] polynomials, nonces [0 .. l)) or [s2]
     ([second = true], [k] polynomials, nonces [l .. l + k)). *)

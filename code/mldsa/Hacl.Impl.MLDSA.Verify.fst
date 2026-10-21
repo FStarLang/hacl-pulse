@@ -232,6 +232,7 @@ ensures A.pts_to pk #pp vpk ** A.pts_to mu #pm vmu ** A.pts_to sg #ps vsg **
   A.pts_to_len pk;
   A.pts_to_len sg;
   HSZ.fits32 ();
+  assert (pure (ct_len p <= sig_len p));
   let kn = SZ.mul k 256sz;
   let ln = SZ.mul l 256sz;
   let t1 = Mem.alloc (S32.zero <: zqt) kn;
