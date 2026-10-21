@@ -46,6 +46,7 @@ module K = Spec.K256
 module B4 = Spec.Bignum4
 module L4 = Hacl.Impl.Limb4
 module GR = Spec.K256.Group
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -70,7 +71,11 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 5sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 5sz |];
+  Mem.track a3; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
 
   let ok = load_scalar a0 sk;
   if ok {
@@ -80,8 +85,16 @@ ensures exists* (wo: Seq.seq S8.t).
     GR.peq_to_aff_point (pt wx wy wz)
                         (K.point_mul_g (B4.eval (L4.vals vk)));
     store_point out a1 a2 a3;
+    Mem.wipe a3 5sz;
+    Mem.wipe a2 5sz;
+    Mem.wipe a1 5sz;
+    Mem.wipe a0 4sz;
     true
   } else {
+    Mem.wipe a3 5sz;
+    Mem.wipe a2 5sz;
+    Mem.wipe a1 5sz;
+    Mem.wipe a0 4sz;
     false
   }
 }
@@ -100,7 +113,14 @@ ensures exists* (wo: Seq.seq S8.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 5sz |]; A.pts_to_len a1; let mut a2 = [| z; 5sz |]; A.pts_to_len a2; let mut a3 = [| z; 5sz |]; A.pts_to_len a3; let mut a4 = [| z; 5sz |]; A.pts_to_len a4; let mut a5 = [| z; 5sz |]; A.pts_to_len a5; let mut a6 = [| z; 5sz |]; A.pts_to_len a6; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 5sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 5sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 5sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 5sz |];
+  Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 5sz |];
+  Mem.track a5; A.pts_to_len a5; let mut a6 = [| z; 5sz |];
+  Mem.track a6; A.pts_to_len a6; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len a6;
 
   let okq = load_point a1 a2 a3 pk;
@@ -117,12 +137,33 @@ ensures exists* (wo: Seq.seq S8.t).
       (K.point_mul (B4.eval (L4.vals vk)) (pt q0 q1 q2));
     let inf = fis_zero a6;
     if inf {
+      Mem.wipe a6 5sz;
+      Mem.wipe a5 5sz;
+      Mem.wipe a4 5sz;
+      Mem.wipe a3 5sz;
+      Mem.wipe a2 5sz;
+      Mem.wipe a1 5sz;
+      Mem.wipe a0 4sz;
       false
     } else {
       store_point out a4 a5 a6;
+      Mem.wipe a6 5sz;
+      Mem.wipe a5 5sz;
+      Mem.wipe a4 5sz;
+      Mem.wipe a3 5sz;
+      Mem.wipe a2 5sz;
+      Mem.wipe a1 5sz;
+      Mem.wipe a0 4sz;
       true
     }
   } else {
+    Mem.wipe a6 5sz;
+    Mem.wipe a5 5sz;
+    Mem.wipe a4 5sz;
+    Mem.wipe a3 5sz;
+    Mem.wipe a2 5sz;
+    Mem.wipe a1 5sz;
+    Mem.wipe a0 4sz;
     false
   }
 }

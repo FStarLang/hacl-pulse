@@ -19,8 +19,11 @@
     [LabeledExtract] and [LabeledExpand] are HKDF with three or four extra
     strings in front of the input: the version [HPKE-v1], a suite identifier,
     a per-use label, and -- for expand -- the output length.  Each is
-    assembled here in one scratch buffer and handed to [Hacl.HMAC.Core] or
-    [Hacl.HKDF.Core] as a single message.
+    streamed: extract hands the four pieces straight to
+    {!Hacl.HMAC.Cat.hmac_cat}, and expand builds the fixed-size prefix (at
+    most 41 bytes) in a local buffer and passes it to
+    {!Hacl.HKDF.Core.expand2_impl} alongside the caller's string.  Nothing
+    of caller-chosen size is ever copied or allocated.
 
     The suite identifier and the label are arguments rather than constants
     because both KDF stages go through this code: the KEM passes [KEM] and
@@ -35,7 +38,8 @@ open Pulse.Lib.Pervasives
 open Hacl.Secret.Word
 open Spec.SHA2
 open Spec.HPKE
-open Hacl.HMAC.Core
+open Hacl.Hash.SHA2.Core
+open Hacl.HMAC.Cat
 open Hacl.HKDF.Core
 open Hacl.HPKE.Tables
 open Hacl.Impl.Copy
@@ -49,9 +53,11 @@ module U32 = FStar.UInt32
 module S8 = Hacl.Secret.UInt8
 module B = Hacl.Spec.Bytes
 module Cast = FStar.Int.Cast
+module Sub = Hacl.Impl.Sub
+module Mem = Hacl.Mem
 
-(** The scratch buffer is the version, the suite identifier, the label and
-    the caller's string, and the first three are bounded by construction.
+(** The message is the version, the suite identifier, the label and the
+    caller's string, and the first three are bounded by construction.
     Restating the bound as a machine fact once keeps [SZ.fits] obligations out
     of the two functions below. *)
 let prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
@@ -95,6 +101,13 @@ let two_bytes_hi_lo (n: nat { n < 65536 }) (l32: U32.t)
     S8.v_extensional (Seq.index (two_bytes n) 0)
                      (S8.classify (Cast.uint32_to_uint8 (U32.div l32 256ul)));
     S8.v_extensional (Seq.index (two_bytes n) 1) (S8.classify (Cast.uint32_to_uint8 l32))
+
+(** [hmac_cat] hashes its pieces right-nested; [extract_input] is stated
+    left-nested. *)
+let extract_assoc (s l m: Seq.seq S8.t)
+  : Lemma (Seq.append version (Seq.append s (Seq.append l m)) == extract_input s l m)
+  = Seq.lemma_eq_intro (Seq.append version (Seq.append s (Seq.append l m)))
+                       (Seq.append (Seq.append (Seq.append version s) l) m)
 
 (** {2 LabeledExtract} *)
 
@@ -145,27 +158,8 @@ ensures exists* vout'.
   let vtab = table version_arr 7sz;
   A.pts_to_len vtab;
 
-  SZ.fits_lte (7 + Seq.length vsid + Seq.length vlabel + Seq.length vikm)
-              (block_len #t + 7 + Seq.length vsid + Seq.length vlabel + Seq.length vikm);
-  let n1 = SZ.add 7sz sid_len;
-  let n2 = SZ.add n1 lbl_len;
-  let tlen = SZ.add n2 ikm_len;
-
-  let z8 = S8.zero;
-  let mut buf = [| z8; tlen |];
-  A.pts_to_len buf;
-
-  copy_at buf 0sz vtab 7sz;
-  copy_at buf 7sz sid sid_len;
-  copy_at buf n1 lbl lbl_len;
-  copy_at buf n2 ikm ikm_len;
-
-  with vbuf. assert (A.pts_to buf vbuf);
-  cat4_pointwise vbuf version vsid vlabel vikm;
-  assert (pure (reveal vbuf == extract_input vsid vlabel vikm));
-  salt_bound #t (Seq.length vsalt);
-
-  hmac_impl p kt ivt out salt salt_len buf tlen;
+  hmac_cat p (blocks_scalar p) kt ivt out salt vtab sid lbl ikm salt_len 7sz sid_len lbl_len ikm_len;
+  extract_assoc vsid vlabel vikm;
   drop_table vtab;
 }
 
@@ -222,16 +216,14 @@ ensures exists* vout'.
   let vtab = table version_arr 7sz;
   A.pts_to_len vtab;
 
-  SZ.fits_lte (9 + Seq.length vsid + Seq.length vlabel + Seq.length vinfo)
-              (block_len #t + hash_bytes p + 9 + Seq.length vsid + Seq.length vlabel +
-               Seq.length vinfo + 1);
-  let n1 = SZ.add 2sz sid_len;
   let n2 = SZ.add 9sz sid_len;
   let n3 = SZ.add n2 lbl_len;
-  let tlen = SZ.add n3 info_len;
 
+  (* The prefix [I2OSP(L, 2) || "HPKE-v1" || sid || label] is at most
+     2 + 7 + 16 + 16 bytes; only its first [n3] bytes are used. *)
   let z8 = S8.zero;
-  let mut buf = [| z8; tlen |];
+  let mut buf = [| z8; 41sz |];
+  Mem.track buf;
   A.pts_to_len buf;
 
   (* [I2OSP(L, 2)]: the high byte then the low byte. *)
@@ -253,24 +245,21 @@ ensures exists* vout'.
   A.pts_to_len buf;
   assert (pure (Seq.index v2 0 == Seq.index v1 0 /\ Seq.index v2 1 == Seq.index v1 1));
   copy_at buf n2 lbl lbl_len;
-  with v3. assert (A.pts_to buf v3);
-  A.pts_to_len buf;
-  assert (pure (Seq.index v3 0 == Seq.index v2 0 /\ Seq.index v3 1 == Seq.index v2 1));
-  copy_at buf n3 info info_len;
 
   with vbuf. assert (A.pts_to buf vbuf);
-  A.pts_to_len buf;
-  assert (pure (Seq.index vbuf 0 == Seq.index v3 0 /\ Seq.index vbuf 1 == Seq.index v3 1));
-  assert (pure (Seq.length vbuf == 2 + 7 + Seq.length vsid + Seq.length vlabel + Seq.length vinfo));
-  two_bytes_hi_lo (SZ.v out_len) l32;
-  assert (pure (Seq.index vbuf 0 == Seq.index (two_bytes (SZ.v out_len)) 0));
-  assert (pure (Seq.index vbuf 1 == Seq.index (two_bytes (SZ.v out_len)) 1));
-  two_pointwise vbuf (two_bytes (SZ.v out_len));
-  cat5_pointwise vbuf (two_bytes (SZ.v out_len)) version vsid vlabel vinfo;
-  assert (pure (reveal vbuf == expand_input (SZ.v out_len) vsid vlabel vinfo));
-  salt_bound #t (Seq.length vprk);
+  B.nat_to_be_index 2 (SZ.v out_len) 0;
+  B.nat_to_be_index 2 (SZ.v out_len) 1;
+  let pre = Sub.sub buf 0sz n3;
+  with vpre. assert (A.pts_to pre vpre);
+  assert (pure (Seq.index vpre 0 == Seq.index (two_bytes (SZ.v out_len)) 0));
+  assert (pure (Seq.index vpre 1 == Seq.index (two_bytes (SZ.v out_len)) 1));
+  cat4_pointwise vpre (two_bytes (SZ.v out_len)) version vsid vlabel;
+  Seq.lemma_eq_intro (Seq.append (reveal vpre) (reveal vinfo))
+                     (expand_input (SZ.v out_len) vsid vlabel vinfo);
 
-  expand_impl p kt ivt out out_len prk prk_len buf tlen;
+  expand2_impl p (blocks_scalar p) kt ivt out out_len prk prk_len pre n3 info info_len;
+  Sub.unsub_id buf 0 (SZ.v n3) pre;
+  Mem.wipe buf 41sz;
   drop_table vtab;
 }
 
@@ -319,6 +308,7 @@ ensures exists* vout'.
   prefix_bound p (Seq.length vikm);
   let z8 = S8.zero;
   let mut one = [| z8; 1sz |];
+  Mem.track one;
   A.pts_to_len one;
   with vone. assert (A.pts_to one vone);
   let nil = Sub.sub one 0sz 0sz;
@@ -327,4 +317,5 @@ ensures exists* vout'.
   Seq.lemma_eq_elim (reveal vnil) (Seq.empty #S8.t);
   labeled_extract_impl p kt ivt out sid sid_len nil 0sz lbl lbl_len ikm ikm_len;
   Sub.unsub_id one 0 0 nil;
+  Mem.wipe one 1sz;
 }

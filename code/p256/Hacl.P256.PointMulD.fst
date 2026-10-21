@@ -38,6 +38,7 @@ module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -91,7 +92,13 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
                   (eval (vals v2)) (pt vqx vqy vqz)))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 4sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 4sz |];
+  Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 4sz |];
+  Mem.track a5; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   A.pts_to_len a3; A.pts_to_len a4; A.pts_to_len a5;
 
   point_mul_g a0 a1 a2 u1;
@@ -101,6 +108,12 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   point_add ox oy oz a0 a1 a2 a3 a4 a5;
   sum_ok (pt g0 g1 g2) (pt h0 h1 h2) (eval (vals v1))
          (eval (vals v2)) (pt vqx vqy vqz);
+  Mem.wipe a5 4sz;
+  Mem.wipe a4 4sz;
+  Mem.wipe a3 4sz;
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   ()
 }
 

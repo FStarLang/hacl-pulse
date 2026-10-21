@@ -56,6 +56,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module G = FStar.Ghost
 module Classical = FStar.Classical
+module Mem = Hacl.Mem
 
 (** {2 The two derived lengths}
 
@@ -530,6 +531,7 @@ ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
 
   let z0: t = zero #t #w;
   let mut starr = [| z0; 8sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   copy_state starr acc;
@@ -545,6 +547,7 @@ ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
   write_digest_le p out starr;
 
   Sub.unsub_id buf 0 (SZ.v blen) sub;
+  Mem.wipe starr 8sz;
 }
 
 #pop-options

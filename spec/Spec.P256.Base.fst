@@ -34,12 +34,15 @@
     Nothing requires them to be the triple the chain produces: [peq] is
     projective equality, the normaliser decides it on concrete numbers
     just as readily, and an affine representative makes [z] a literal one,
-    which the table build is faster for.
+    which keeps each table's chain of additions decidable by the
+    normaliser.
 
     The six coordinates are [opaque_to_smt], and the numbers here are the
     coordinates themselves, not their Montgomery forms: this module is
     about the curve, and the implementation's representation belongs in
-    {!Hacl.P256.TablesG}, which is where the multiplication by [R] happens.
+    {!Hacl.P256.Win0} .. {!Hacl.P256.Win3}, which is where the
+    multiplication by [R] happens.  {!Spec.P256.Win1} .. {!Spec.P256.Win3}
+    start their chains from these three points.
 
     This is {!Spec.K256.Base} and {!Spec.Ed25519.Base} with a third curve;
     the scalar arithmetic all three share lives in {!Spec.Group.Split4}. *)

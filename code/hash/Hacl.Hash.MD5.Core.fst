@@ -50,6 +50,7 @@ module U32 = FStar.UInt32
 module U64 = FStar.UInt64
 module Cast = FStar.Int.Cast
 module L2 = Spec.SHA2.Lemmas
+module Mem = Hacl.Mem
 
 (** {2 Sizes as machine values} *)
 
@@ -80,6 +81,7 @@ let tail_len (rem: (r: SZ.t { SZ.v r < block_len }))
     Each branch tests the same boundary as [Spec.MD5._f] and [Spec.MD5.g], so
     the postconditions close by unfolding. *)
 
+inline_for_extraction
 fn f_impl (i: SZ.t) (b c d: S32.t)
 requires emp
 returns r: S32.t
@@ -96,6 +98,7 @@ ensures pure (SZ.v i < rounds ==> r == _f (SZ.v i) b c d)
   }
 }
 
+inline_for_extraction
 fn g_impl (i: (j: SZ.t { SZ.v j < rounds }))
 requires emp
 returns r: SZ.t
@@ -140,7 +143,7 @@ ensures A.pts_to wb (words_from_le #S32.t block_words (block_at vb (SZ.v off))) 
     Math.lemma_mult_le_right 4 (SZ.v vi + 1) 16;
     Seq.slice_slice vb (SZ.v off) (SZ.v off + block_len)
                     (SZ.v vi * 4) (SZ.v vi * 4 + 4);
-    let x = load_le #S32.t block (SZ.add off (SZ.mul vi 4sz));
+    let x = load_le4 #S32.t block (SZ.add off (SZ.mul vi 4sz));
     S32.v_extensional x
       (Seq.index (words_from_le #S32.t block_words (block_at vb (SZ.v off))) (SZ.v vi));
     A.((wb.(vi) <- x));
@@ -151,7 +154,118 @@ ensures A.pts_to wb (words_from_le #S32.t block_words (block_at vb (SZ.v off))) 
   Seq.lemma_eq_elim vw (words_from_le #S32.t block_words (block_at vb (SZ.v off)));
 }
 
-(** {2 One block} *)
+(** {2 One block}
+
+    The sixty-four steps are written out rather than looped: [step] is
+    [inline_for_extraction] and [steps16] calls it sixteen times, so every
+    step reaches C with a literal round number.  The round function, the
+    message index, the constant and the rotation then fold to constants, and
+    the rotate is a [rol] by an immediate.  A loop indexed at run time selected
+    all four through tables and branches, and made MD5 1.6x slower than
+    HACL\*'s unrolled C. *)
+
+inline_for_extraction
+fn step (kt: A.array S32.t) (st: A.array rot)
+        (wb: A.array S32.t) (state: A.array S32.t) (i: SZ.t)
+        (#pk: perm) (#vk: erased (Seq.seq S32.t))
+        (#ps: perm) (#vs: erased (Seq.seq rot))
+        (#w: erased (Seq.lseq S32.t block_words))
+        (#vst0: erased (Seq.lseq S32.t state_words))
+requires A.pts_to kt #pk vk ** A.pts_to st #ps vs ** A.pts_to wb w **
+         A.pts_to state (repeati_g (SZ.v i) (shuffle_core w) vst0) **
+         pure (reveal vk == (k_table <: Seq.seq S32.t) /\
+               reveal vs == (s_table <: Seq.seq rot) /\
+               SZ.v i < rounds)
+ensures A.pts_to kt #pk vk ** A.pts_to st #ps vs ** A.pts_to wb w **
+        A.pts_to state (repeati_g (SZ.v i + 1) (shuffle_core w) vst0)
+{
+  A.pts_to_len kt;
+  A.pts_to_len st;
+  A.pts_to_len state;
+  unfold_repeati_g (SZ.v i) (shuffle_core w) vst0;
+  let a = A.(state.(0sz));
+  let b = A.(state.(1sz));
+  let c = A.(state.(2sz));
+  let d = A.(state.(3sz));
+  let fi = f_impl i b c d;
+  let gi = g_impl i;
+  let ki = A.(kt.(i));
+  let sh = A.(st.(i));
+  let wi = A.(wb.(gi));
+  let t = S32.add_mod (S32.add_mod (S32.add_mod a fi) ki) wi;
+  with vsh. assert (A.pts_to state vsh);
+  set4_irrelevant vsh vsh d (S32.add_mod b (S32.rotate_left t sh)) b c;
+  A.((state.(0sz) <- d));
+  A.((state.(1sz) <- S32.add_mod b (S32.rotate_left t sh)));
+  A.((state.(2sz) <- b));
+  A.((state.(3sz) <- c));
+  with vsh2. assert (A.pts_to state vsh2);
+  Seq.lemma_eq_intro vsh2 (repeati_g (SZ.v i + 1) (shuffle_core w) vst0);
+  rewrite each vsh2 as (repeati_g (SZ.v i + 1) (shuffle_core w) vst0);
+}
+
+inline_for_extraction
+fn steps16 (kt: A.array S32.t) (st: A.array rot)
+           (wb: A.array S32.t) (state: A.array S32.t) (base: SZ.t)
+           (#pk: perm) (#vk: erased (Seq.seq S32.t))
+           (#ps: perm) (#vs: erased (Seq.seq rot))
+           (#w: erased (Seq.lseq S32.t block_words))
+           (#vst0: erased (Seq.lseq S32.t state_words))
+requires A.pts_to kt #pk vk ** A.pts_to st #ps vs ** A.pts_to wb w **
+         A.pts_to state (repeati_g (SZ.v base) (shuffle_core w) vst0) **
+         pure (reveal vk == (k_table <: Seq.seq S32.t) /\
+               reveal vs == (s_table <: Seq.seq rot) /\
+               SZ.v base + 16 <= rounds)
+ensures A.pts_to kt #pk vk ** A.pts_to st #ps vs ** A.pts_to wb w **
+        A.pts_to state (repeati_g (SZ.v base + 16) (shuffle_core w) vst0)
+{
+  step kt st wb state base #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 1sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 2sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 3sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 4sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 5sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 6sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 7sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 8sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 9sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 10sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 11sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 12sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 13sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 14sz) #pk #vk #ps #vs #w #vst0;
+  step kt st wb state (SZ.add base 15sz) #pk #vk #ps #vs #w #vst0;
+}
+
+let shuffle_unfold (w: Seq.lseq S32.t block_words) (h: Seq.lseq S32.t state_words)
+  : Lemma (shuffle w h == repeati_g 64 (shuffle_core w) h)
+  = assert_norm (rounds == 64)
+
+inline_for_extraction
+fn shuffle_impl (kt: A.array S32.t) (st: A.array rot)
+                (wb: A.array S32.t) (state: A.array S32.t)
+                (#pk: perm) (#vk: erased (Seq.seq S32.t))
+                (#ps: perm) (#vs: erased (Seq.seq rot))
+                (#w: erased (Seq.lseq S32.t block_words))
+                (#vst0: erased (Seq.lseq S32.t state_words))
+requires A.pts_to kt #pk vk ** A.pts_to st #ps vs ** A.pts_to wb w **
+         A.pts_to state vst0 **
+         pure (reveal vk == (k_table <: Seq.seq S32.t) /\
+               reveal vs == (s_table <: Seq.seq rot))
+ensures A.pts_to kt #pk vk ** A.pts_to st #ps vs ** A.pts_to wb w **
+        A.pts_to state (shuffle w vst0)
+{
+  assert pure (repeati_g 0 (shuffle_core w) vst0 == reveal vst0);
+  rewrite (A.pts_to state vst0)
+       as (A.pts_to state (repeati_g 0 (shuffle_core w) vst0));
+  steps16 kt st wb state 0sz #pk #vk #ps #vs #w #vst0;
+  steps16 kt st wb state 16sz #pk #vk #ps #vs #w #vst0;
+  steps16 kt st wb state 32sz #pk #vk #ps #vs #w #vst0;
+  steps16 kt st wb state 48sz #pk #vk #ps #vs #w #vst0;
+  shuffle_unfold w vst0;
+  with vsh. assert (A.pts_to state vsh);
+  rewrite each vsh as (shuffle w vst0);
+}
 
 let update_block_final (blk: Seq.lseq S8.t block_len)
                        (vst0: Seq.lseq S32.t state_words) (vsh: Seq.seq S32.t) (n: nat)
@@ -198,36 +312,7 @@ ensures exists* vw.
   let b0 = A.(state.(1sz));
   let c0 = A.(state.(2sz));
   let d0 = A.(state.(3sz));
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi rounds_sz)
-  invariant exists* (vi: SZ.t) (vst: Seq.seq S32.t).
-    pts_to i vi ** A.pts_to kt #pk vk ** A.pts_to st #ps vs **
-    A.pts_to wb (words_from_le #S32.t block_words (block_at vb (SZ.v off))) **
-    A.pts_to state vst ** A.pts_to block #pb vb **
-    pure (SZ.v vi <= rounds /\ Seq.length vst == state_words /\
-          vst == repeati_g (SZ.v vi)
-                   (shuffle_core
-                      (words_from_le #S32.t block_words (block_at vb (SZ.v off))))
-                   vst0)
-  decreases (rounds - SZ.v (!i))
-  {
-    let vi = !i;
-    let a = A.(state.(0sz));
-    let b = A.(state.(1sz));
-    let c = A.(state.(2sz));
-    let d = A.(state.(3sz));
-    let fi = f_impl vi b c d;
-    let gi = g_impl vi;
-    let ki = A.(kt.(vi));
-    let sh = A.(st.(vi));
-    let wi = A.(wb.(gi));
-    let t = S32.add_mod (S32.add_mod (S32.add_mod a fi) ki) wi;
-    A.((state.(0sz) <- d));
-    A.((state.(1sz) <- S32.add_mod b (S32.rotate_left t sh)));
-    A.((state.(2sz) <- b));
-    A.((state.(3sz) <- c));
-    i := SZ.add vi 1sz;
-  };
+  shuffle_impl kt st wb state #pk #vk #ps #vs #(words_from_le #S32.t block_words (block_at vb (SZ.v off))) #vst0;
   let a1 = A.(state.(0sz));
   let b1 = A.(state.(1sz));
   let c1 = A.(state.(2sz));
@@ -235,8 +320,8 @@ ensures exists* vw.
   with vsh. assert (A.pts_to state vsh);
   set4_irrelevant vsh vst0
     (S32.add_mod a0 a1) (S32.add_mod b0 b1) (S32.add_mod c0 c1) (S32.add_mod d0 d1);
-  with vi_end. assert (pts_to i vi_end);
-  update_block_final (block_at vb (SZ.v off)) vst0 vsh (SZ.v vi_end);
+  shuffle_unfold (words_from_le #S32.t block_words (block_at vb (SZ.v off))) vst0;
+  update_block_final (block_at vb (SZ.v off)) vst0 vsh rounds;
   A.((state.(0sz) <- S32.add_mod a0 a1));
   A.((state.(1sz) <- S32.add_mod b0 b1));
   A.((state.(2sz) <- S32.add_mod c0 c1));
@@ -440,6 +525,10 @@ ensures exists* vw.
   drop_table stt;
 }
 
+let ntb_exact (n: nat { n == block_len \/ n == 2 * block_len })
+  : Lemma ((n / block_len) * block_len == n)
+  = ()
+
 let tail_blocks_of (pre vin vt: Seq.seq S8.t) (len base_in rem ntail base: nat)
   : Lemma
       (requires
@@ -507,8 +596,10 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
   let ntail = tail_len rem;
   let base = SZ.sub len rem;
   assert (pure (SZ.v base == SZ.v len - SZ.v rem));
+  assert (pure (SZ.v base == Seq.length pre + SZ.v base_in));
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 128sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   len_fits (SZ.v len);
@@ -553,9 +644,11 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t state_words) (vout': Se
     update_block_tbl wb st tarr (SZ.mul vj 64sz);
     j := SZ.add vj 1sz;
   };
+  Mem.wipe tarr 128sz;
   Math.multiple_modulo_lemma 1 block_len;
   Math.multiple_modulo_lemma 2 block_len;
   assert (pure (SZ.v ntail == block_len \/ SZ.v ntail == 2 * block_len));
+  ntb_exact (SZ.v ntail);
   Math.euclidean_division_definition (SZ.v ntail) block_len;
   tail_blocks_exact (SZ.v ntail) (SZ.v ntb);
   assert (pure (SZ.v ntb * block_len == SZ.v ntail));
@@ -645,6 +738,7 @@ ensures exists* vout'.
   let z0 = S32.classify 0ul;
 
   let mut starr = [| z0; 4sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   A.((starr.(0sz) <- S32.classify 0x67452301ul));
@@ -656,6 +750,7 @@ ensures exists* vout'.
   Seq.lemma_eq_elim vst_init (iv <: Seq.seq S32.t);
 
   let mut warr = [| z0; 16sz |];
+  Mem.track warr;
   A.pts_to_len warr;
   A.pts_to_len warr;
 
@@ -664,6 +759,8 @@ ensures exists* vout'.
   Math.euclidean_division_definition (SZ.v len) block_len;
   hash_blocks warr starr input 0sz nfull empty;
   tail_and_finish warr starr out input len nfull (SZ.sub len rem) rem empty;
+  Mem.wipe warr 16sz;
+  Mem.wipe starr 4sz;
   ()
 }
 

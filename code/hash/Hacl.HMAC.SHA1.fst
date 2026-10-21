@@ -43,6 +43,7 @@ module U8 = FStar.UInt8
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module HC = Hacl.HMAC.Core
+module Mem = Hacl.Mem
 
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
@@ -107,14 +108,17 @@ ensures exists* vout'.
   let z8 = S8.classify 0uy;
 
   let mut k0arr = [| z8; 64sz |];
+  Mem.track k0arr;
   A.pts_to_len k0arr;
   A.pts_to_len k0arr;
 
   let mut padarr = [| z8; 64sz |];
+  Mem.track padarr;
   A.pts_to_len padarr;
   A.pts_to_len padarr;
 
   let mut dgarr = [| z8; 20sz |];
+  Mem.track dgarr;
   A.pts_to_len dgarr;
   A.pts_to_len dgarr;
 
@@ -128,6 +132,9 @@ ensures exists* vout'.
   outer_fits ();
   hash_prefixed out padarr dgarr 20sz;
 
+  Mem.wipe dgarr 20sz;
+  Mem.wipe padarr 64sz;
+  Mem.wipe k0arr 64sz;
   ()
 }
 

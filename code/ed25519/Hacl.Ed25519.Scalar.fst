@@ -75,6 +75,7 @@ module Cast = Hacl.Secret.Cast
 module Bytes = Hacl.Impl.Bytes
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -259,7 +260,8 @@ ensures exists* (vo': Seq.seq S64.t).
   qmod_ok (); qmod_m ();
   mmul_plain (vals va) (vals vb);
   let z = S64.zero;
-  let mut t = [| z; 4sz |]; A.pts_to_len t; A.pts_to_len t;
+  let mut t = [| z; 4sz |];
+  Mem.track t; A.pts_to_len t; A.pts_to_len t;
   let ms = qms ();
   let nm = qnm ();
   let r2 = table qr2_arr 4sz;
@@ -268,6 +270,7 @@ ensures exists* (vo': Seq.seq S64.t).
   drop_table ms;
   drop_table nm;
   drop_table r2;
+  Mem.wipe t 4sz;
 }
 
 (** {2 Bytes in}
@@ -600,11 +603,15 @@ ensures exists* (vacc': Seq.seq S64.t).
   qmod_ok ();
   fold_step (vals vacc) (vals vc) (vals vp) (reveal k);
   let z = S64.zero;
-  let mut t = [| z; 4sz |]; A.pts_to_len t;
-  let mut u = [| z; 4sz |]; A.pts_to_len u; A.pts_to_len t; A.pts_to_len u;
+  let mut t = [| z; 4sz |];
+  Mem.track t; A.pts_to_len t;
+  let mut u = [| z; 4sz |];
+  Mem.track u; A.pts_to_len u; A.pts_to_len t; A.pts_to_len u;
   amul t c p ms nm qmu qmod;
   aadd u acc t nm qmod;
   acopy acc u;
+  Mem.wipe u 4sz;
+  Mem.wipe t 4sz;
 }
 
 #pop-options
@@ -645,7 +652,8 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   A.pts_to_len h;
   let z = S64.zero;
-  let mut c = [| z; 4sz |]; A.pts_to_len c; A.pts_to_len c;
+  let mut c = [| z; 4sz |];
+  Mem.track c; A.pts_to_len c; A.pts_to_len c;
   let ms = qms ();
   let nm = qnm ();
 
@@ -681,6 +689,7 @@ ensures exists* (vo': Seq.seq S64.t).
   assert (pure (qv v3 == (qv v2 + le_nat (Seq.slice (reveal vh) 48 64) * pow2 384) % q));
   reduce64_ok (reveal vh) (qv v0) (qv v1) (qv v2) (qv v3);
   assert (pure (qv v3 == le_nat (reveal vh) % q));
+  Mem.wipe c 4sz;
 }
 
 (** Thirty-two little-endian bytes, reduced: the same fold over two
@@ -697,7 +706,8 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   A.pts_to_len b;
   let z = S64.zero;
-  let mut c = [| z; 4sz |]; A.pts_to_len c; A.pts_to_len c;
+  let mut c = [| z; 4sz |];
+  Mem.track c; A.pts_to_len c; A.pts_to_len c;
   let ms = qms ();
   let nm = qnm ();
 
@@ -717,6 +727,7 @@ ensures exists* (vo': Seq.seq S64.t).
   assert (pure (qv v1 == (qv v0 + le_nat (Seq.slice (reveal vb) 16 32) * pow2 128) % q));
   reduce32_ok (reveal vb) (qv v0) (qv v1);
   assert (pure (qv v1 == le_nat (reveal vb) % q));
+  Mem.wipe c 4sz;
 }
 
 #pop-options

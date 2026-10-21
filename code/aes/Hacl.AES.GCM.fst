@@ -58,6 +58,9 @@ module Sub = Hacl.Impl.Sub
 module Alg = Spec.GF128.Algebra
 module Bytes = Hacl.Impl.Bytes
 module Declassify = Hacl.Secret.Declassify
+module Vec = Hacl.Vec128
+module Stitch = Hacl.AES.GCM.Stitch
+module Mem = Hacl.Mem
 
 open Hacl.Secret.Word.Instances
 
@@ -175,9 +178,11 @@ ensures exists* (vh1: Seq.seq S8.t). A.pts_to hb vh1 ** A.pts_to w vw ** pure (
   A.pts_to_len hb;
   let z = S8.zero;
   let mut kb = [| z; 16sz |];
+  Mem.track kb;
   A.pts_to_len kb;
   A.pts_to_len kb;
   let mut ab = [| z; 16sz |];
+  Mem.track ab;
   A.pts_to_len ab;
   A.pts_to_len ab;
 
@@ -213,6 +218,8 @@ ensures exists* (vh1: Seq.seq S8.t). A.pts_to hb vh1 ** A.pts_to w vw ** pure (
   win_eq vf v4 4; win_eq vf v5 5; win_eq vf v6 6; win_eq vf v7 7;
   pows_build (vals vf) (vals v0) (vals v1) (vals v2) (vals v3)
                        (vals v4) (vals v5) (vals v6) (vals v7);
+  Mem.wipe ab 16sz;
+  Mem.wipe kb 16sz;
   ()
 }
 
@@ -273,6 +280,7 @@ ensures exists* (vj1: Seq.seq S8.t).
   A.pts_to_len iv;
   let z = S8.zero;
   let mut lbarr = [| z; 16sz |];
+  Mem.track lbarr;
   A.pts_to_len lbarr;
   A.pts_to_len lbarr;
 
@@ -286,6 +294,7 @@ ensures exists* (vj1: Seq.seq S8.t).
     with vj1. assert A.pts_to jb vj1;
     Seq.lemma_eq_intro (vals vj1)
       (Seq.append (vals viv) (Seq.init 4 (fun i -> (if i = 3 then 1 else 0) <: elem)));
+    Mem.wipe lbarr 16sz;
     ()
   } else {
     Copy.fill jb S8.zero 16sz;
@@ -297,6 +306,7 @@ ensures exists* (vj1: Seq.seq S8.t).
     pad_exact (Seq.append (u64be 0) (u64be (8 * Seq.length viv)));
     ghash_upd_impl jb hb lbarr 16sz;
     j0_fold p.pv (vals vw) (vals viv);
+    Mem.wipe lbarr 16sz;
     ()
   }
 }
@@ -335,9 +345,11 @@ ensures exists* (vt1: Seq.seq S8.t).
 
   let z = S8.zero;
   let mut accarr = [| z; 16sz |];
+  Mem.track accarr;
   A.pts_to_len accarr;
   A.pts_to_len accarr;
   let mut lbarr = [| z; 16sz |];
+  Mem.track lbarr;
   A.pts_to_len lbarr;
   A.pts_to_len lbarr;
 
@@ -357,6 +369,59 @@ ensures exists* (vt1: Seq.seq S8.t).
   whole_slice (vals vacc);
   gadd_at_impl tag accarr 0sz;
   gtag_fold p.pv (vals vw) (vals vj) (vals va) (vals vc);
+  Mem.wipe lbarr 16sz;
+  Mem.wipe accarr 16sz;
+  ()
+}
+
+(** The tag's last two steps, once the associated data and the ciphertext
+    are already in the accumulator: the length block, and the mask.  The
+    stitched encryption path hashes the ciphertext as it writes it, so it
+    comes in here. *)
+
+fn gtag_fin ([@@@FStar.Attributes.monomorphize] p: params)
+            (tag: A.array S8.t) (w: A.array S8.t) (hb: A.array S8.t)
+            (jb: A.array S8.t) (accarr: A.array S8.t) (alen clen: SZ.t)
+            (a c: erased (Seq.seq elem))
+            (#vt0 #vw #vh #vj #vacc: erased (Seq.seq S8.t))
+requires A.pts_to tag vt0 ** A.pts_to w vw ** A.pts_to hb vh **
+         A.pts_to jb vj ** A.pts_to accarr vacc ** pure (
+  Seq.length vt0 == taglen /\ Seq.length vw == xkeylen p.pv /\
+  Seq.length vh == 128 /\ Seq.length vj == blocklen /\ Seq.length vacc == blocklen /\
+  Alg.pows_ok (vals vh) /\ Poly.xtimes (Alg.hblk (vals vh) 0) == hkey p.pv (vals vw) /\
+  aad_ok a /\ Seq.length c <= max_msg /\
+  SZ.v alen == Seq.length a /\ SZ.v clen == Seq.length c /\
+  vals vacc == G.ghash_upd (hkey p.pv (vals vw))
+                 (G.ghash_upd (hkey p.pv (vals vw)) G.zero (pad a)) (pad c))
+ensures exists* (vt1 vacc1: Seq.seq S8.t).
+  A.pts_to tag vt1 ** A.pts_to w vw ** A.pts_to hb vh **
+  A.pts_to jb vj ** A.pts_to accarr vacc1 ** pure (
+  Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\
+  Seq.length vj == blocklen /\ Seq.length vt1 == taglen /\
+  aad_ok a /\ Seq.length c <= max_msg /\
+  vals vt1 == gtag p.pv (vals vw) (vals vj) a c)
+{
+  A.pts_to_len tag;
+  A.pts_to_len accarr;
+  let z = S8.zero;
+  let mut lbarr = [| z; 16sz |];
+  Mem.track lbarr;
+  A.pts_to_len lbarr;
+  A.pts_to_len lbarr;
+
+  bits_fit (Seq.length a);
+  msg_bits_fit (Seq.length c);
+  put_lenblock lbarr alen clen;
+  pad_exact (len_block a c);
+  ghash_upd_impl accarr hb lbarr 16sz;
+
+  Copy.copy_exact tag jb 16sz;
+  cipher_impl p tag w;
+  with vacc1. assert A.pts_to accarr vacc1;
+  whole_slice (vals vacc1);
+  gadd_at_impl tag accarr 0sz;
+  gtag_fold p.pv (vals vw) (vals vj) a c;
+  Mem.wipe lbarr 16sz;
   ()
 }
 
@@ -491,19 +556,43 @@ ensures exists* (vm1 vt1: Seq.seq S8.t).
 
   let z = S8.zero;
   let mut jarr = [| z; 16sz |];
+  Mem.track jarr;
   A.pts_to_len jarr;
   A.pts_to_len jarr;
   let mut carr = [| z; 16sz |];
+  Mem.track carr;
   A.pts_to_len carr;
   A.pts_to_len carr;
 
   j0_impl p jarr ek hk iv iv_len;
   Copy.copy_exact carr jarr 16sz;
   inc32_impl carr;
-  ctr_encrypt_impl p msg msg_len ek carr;
-  gtag_impl p tag ek hk jarr aad aad_len msg msg_len;
-
-  ()
+  if (SZ.lte 128sz msg_len && Vec.supported ())
+  {
+    (* Stitched: each 128 bytes of ciphertext is hashed while the next 128
+       are being encrypted. *)
+    let mut accarr = [| z; 16sz |];
+    Mem.track accarr;
+    A.pts_to_len accarr;
+    with vz. assert A.pts_to accarr vz;
+    zeroed vz;
+    ghash_upd_impl accarr hk aad aad_len;
+    Stitch.ctr_ghash p msg msg_len ek hk carr accarr;
+    with vm1. assert A.pts_to msg vm1;
+    gtag_fin p tag ek hk jarr accarr aad_len msg_len (vals vaad) (vals vm1);
+    Mem.wipe accarr 16sz;
+    Mem.wipe carr 16sz;
+    Mem.wipe jarr 16sz;
+    ()
+  }
+  else
+  {
+    ctr_encrypt_impl p msg msg_len ek carr;
+    gtag_impl p tag ek hk jarr aad aad_len msg msg_len;
+    Mem.wipe carr 16sz;
+    Mem.wipe jarr 16sz;
+    ()
+  }
 }
 
 (** In place on success only: a wrong tag leaves [msg] untouched. *)
@@ -548,12 +637,15 @@ ensures exists* (vm1: Seq.seq S8.t).
 
   let z = S8.zero;
   let mut jarr = [| z; 16sz |];
+  Mem.track jarr;
   A.pts_to_len jarr;
   A.pts_to_len jarr;
   let mut carr = [| z; 16sz |];
+  Mem.track carr;
   A.pts_to_len carr;
   A.pts_to_len carr;
   let mut tarr = [| z; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
 
@@ -565,8 +657,14 @@ ensures exists* (vm1: Seq.seq S8.t).
     Copy.copy_exact carr jarr 16sz;
     inc32_impl carr;
     ctr_encrypt_impl p msg msg_len ek carr;
+    Mem.wipe tarr 16sz;
+    Mem.wipe carr 16sz;
+    Mem.wipe jarr 16sz;
     true
   } else {
+    Mem.wipe tarr 16sz;
+    Mem.wipe carr 16sz;
+    Mem.wipe jarr 16sz;
     false
   }
 }
@@ -606,15 +704,19 @@ ensures exists* (vm1 vt1: Seq.seq S8.t).
 
   let z = S8.zero;
   let mut warr = [| z; p.pxkeylen |];
+  Mem.track warr;
   A.pts_to_len warr;
   A.pts_to_len warr;
   let mut harr = [| z; 128sz |];
+  Mem.track harr;
   A.pts_to_len harr;
   A.pts_to_len harr;
 
   expand_impl p warr harr key;
   encrypt_w p warr harr iv iv_len aad aad_len msg msg_len tag;
 
+  Mem.wipe harr 128sz;
+  Mem.wipe warr p.pxkeylen;
   ()
 }
 
@@ -655,14 +757,19 @@ ensures exists* (vm1: Seq.seq S8.t).
 
   let z = S8.zero;
   let mut warr = [| z; p.pxkeylen |];
+  Mem.track warr;
   A.pts_to_len warr;
   A.pts_to_len warr;
   let mut harr = [| z; 128sz |];
+  Mem.track harr;
   A.pts_to_len harr;
   A.pts_to_len harr;
 
   expand_impl p warr harr key;
-  decrypt_w p warr harr iv iv_len aad aad_len msg msg_len tag
+  let wr = decrypt_w p warr harr iv iv_len aad aad_len msg msg_len tag;
+  Mem.wipe harr 128sz;
+  Mem.wipe warr p.pxkeylen;
+  wr
 }
 
 #pop-options

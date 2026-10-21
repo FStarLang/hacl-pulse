@@ -40,6 +40,7 @@ module SZ = FStar.SizeT
 module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
+module Mem = Hacl.Mem
 
 (** Reset the state to the empty message. *)
 fn sha1_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
@@ -73,8 +74,10 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
 {
   let z = S32.classify 0ul;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   update_impl wsarr acc buf tot data data_len seen;
+  Mem.wipe wsarr 80sz;
 }
 
 (** The digest of everything seen so far.  The state is left usable. *)
@@ -94,6 +97,8 @@ ensures exists* (vout': Seq.seq S8.t).
 {
   let z = S32.classify 0ul;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   digest_impl wsarr acc buf tot out seen;
+  Mem.wipe wsarr 80sz;
 }

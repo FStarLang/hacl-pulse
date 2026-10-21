@@ -38,6 +38,7 @@ open Spec.MLKEM.NTT
 open Hacl.Impl.MLKEM.Zq
 open Hacl.Impl.MLKEM.Poly
 open Hacl.Impl.MLKEM.VecLemmas
+module Dot = Hacl.Impl.MLKEM.Dot
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -271,8 +272,9 @@ ensures exists* v. A.pts_to dst v **
   };
 }
 
-(** [dst <- sum of u_i * v_i], both vectors in the NTT domain.  [tmp] holds
-    one product at a time; the sum is accumulated in [dst]. *)
+(** [dst <- sum of u_i * v_i], both vectors in the NTT domain, a pair of
+    coefficients at a time by {!Hacl.Impl.MLKEM.Dot.dot}.  [tmp] is no longer needed
+    and is left alone; it stays in the signature for the callers' sake. *)
 fn dot_impl (dst u v tmp: A.array zqt) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
             (#vd: erased (Seq.seq zqt)) (#pu #pv: perm)
             (#vu #vv #vt: erased (Seq.seq zqt))
@@ -287,48 +289,7 @@ ensures exists* w c. A.pts_to dst w ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
         Seq.length vu == SZ.v k * n /\ Seq.length vv == SZ.v k * n /\
         as_poly w == dot #(SZ.v k) (as_zqs vu) (as_zqs vv))
 {
-  A.pts_to_len dst;
-  A.pts_to_len u;
-  A.pts_to_len v;
-  A.pts_to_len tmp;
-  HSZ.fits32 ();
-  assert_norm (4 * n < pow2 32);
-  zero_range dst 256sz;
-  with d0. assert (A.pts_to dst d0);
-  as_poly_intro d0 poly_zero;
-  dot_acc_zero #(SZ.v k) (as_zqs vu) (as_zqs vv);
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi k)
-  invariant exists* (vi: SZ.t) (w: Seq.seq zqt) (c: Seq.seq zqt).
-    pts_to i vi ** A.pts_to dst w ** A.pts_to u #pu vu ** A.pts_to v #pv vv **
-    A.pts_to tmp c **
-    pure (SZ.v vi <= SZ.v k /\ 1 <= SZ.v k /\ SZ.v k <= 4 /\
-          Seq.length w == n /\ Seq.length c == n /\
-          Seq.length vu == SZ.v k * n /\ Seq.length vv == SZ.v k * n /\
-          as_poly w == dot_acc #(SZ.v k) (as_zqs vu) (as_zqs vv) (SZ.v vi))
-  decreases (SZ.v k - SZ.v (!i))
-  {
-    let vi = !i;
-    Math.lemma_mult_le_right n (SZ.v vi + 1) (SZ.v k);
-    SZ.fits_u32_implies_fits (SZ.v vi * n + n);
-    SZ.fits_u32_implies_fits (SZ.v vi + 1);
-    let lo = SZ.mul vi 256sz;
-    let hi = SZ.add lo 256sz;
-    as_zqs_at (SZ.v k) vu (SZ.v vi);
-    as_zqs_at (SZ.v k) vv (SZ.v vi);
-    let bu = Sub.sub u lo hi;
-    let bv = Sub.sub v lo hi;
-    multiply tmp bu bv;
-    Sub.unsub_id u (SZ.v lo) (SZ.v hi) bu;
-    Sub.unsub_id v (SZ.v lo) (SZ.v hi) bv;
-    with c. assert (A.pts_to tmp c);
-    with d. assert (A.pts_to dst d);
-    add_inplace dst tmp 256sz;
-    with w1. assert (A.pts_to dst w1);
-    dot_step_done #(SZ.v k) (as_zqs vu) (as_zqs vv) (SZ.v vi) d c w1;
-    i := SZ.add vi 1sz;
-  };
-  dot_acc_full #(SZ.v k) (as_zqs vu) (as_zqs vv);
+  Dot.dot dst u v k
 }
 
 

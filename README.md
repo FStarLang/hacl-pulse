@@ -12,14 +12,14 @@ library uses the feature.  `design/` records what HACL\* does and
 Status: **feature parity with HACL\***, and past it in places -- all four
 FrodoKEM parameter sets are here, HPKE is here in all four modes where
 HACL\* ships only Base and only over ChaCha20-Poly1305, and ML-KEM
-(FIPS 203) is here in all three parameter sets, which HACL\* does not have
-at all.  The one deliberate omission
+(FIPS 203) and ML-DSA (FIPS 204) are here in all three parameter sets
+each, which HACL\* does not have at all.  The one deliberate omission
 is an agile provider in the shape of EverCrypt; see the roadmap below.
 Everything listed there is specified, implemented, verified, extracted and
 tested against the published vectors -- FIPS 180-4, FIPS 202, RFC 4231,
 RFC 5869, RFC 7748, RFC 8032, RFC 7919, RFC 9180, FIPS 186-4, PKCS#1 v2.2,
 the NIST CAVP sets for AES-GCM and HMAC-DRBG, the FrodoKEM known-answer
-tests, the NIST ACVP vectors for ML-KEM, and the NaCl vectors --
+tests, the NIST ACVP vectors for ML-KEM and ML-DSA, and the NaCl vectors --
 thirty-four C test harnesses in `tests/`.
 
 Performance is measured against HACL\* configured for the machine and allowed
@@ -39,8 +39,9 @@ is now *faster* than the reference at 0.76x, secp256k1's is within 1.39x and
 X25519 within 1.26x, now that the first two walk their scalars four bits at
 a time, as Ed25519 now does too, and now that all three of the curves with a
 generator multiply it out of four compiled-in base points rather than one.
-P-256 is the one that gained most from the latter: signing is now within
-1.06x of the reference and key agreement within 1.05x.  Ed25519 and secp256k1 go
+P-256 is the one that gained most from the latter, and it has since had a
+field specialised to its prime as well, which puts every operation at
+0.50x-0.78x of the reference under gcc.  Ed25519 and secp256k1 go
 further still and compile in the whole of their fixed-base windows,
 sixty-four precomputed multiples of the generator apiece: Ed25519 signing and
 key generation are within 1.23x under gcc and 1.37x under clang, and
@@ -66,11 +67,11 @@ is one -- the tarballs ship Pulse -- and so is a checkout of `master` built
 through `stage3`.  Point the build at either:
 
 ```
-make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-09   # unpacked nightly
+make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-18   # unpacked nightly
 make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 ```
 
-The tree tracks `master`: it is verified against the `nightly-2026-10-09`
+The tree tracks `master`: it is verified against the `nightly-2026-10-18`
 build above, and nothing older is supported.  F\* changes the encoding its
 proofs rest on often enough that supporting a past release means carrying
 workarounds for a solver that no longer exists, which is a worse use of the
@@ -80,15 +81,15 @@ effort than following `master` and fixing what breaks.
 
 | directory | contents |
 | --- | --- |
-| `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables |
-| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT, sampling and encoding modules |
-| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/hpke/`) |
-| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim and the 128- and 256-bit vector intrinsics |
+| `lib/` | the secret-integer layer, the `word` type class, generic byte serialization, compile-time tables, wiped scratch memory (`Hacl.Mem`) |
+| `spec/` | pure specifications: `Spec.MD5`, `Spec.SHA1`, `Spec.SHA2`, `Spec.SHA3`, `Spec.Blake2`, `Spec.Chacha20`, `Spec.Salsa20`, `Spec.Poly1305`, `Spec.Poly1305.Vec`, `Spec.Curve25519`, `Spec.Ed25519`, `Spec.P256`, `Spec.K256`, `Spec.AES`, `Spec.GF128`, `Spec.GF128.Algebra`, `Spec.GCM`, `Spec.CarryLess`, `Spec.CLMUL`, `Spec.Chacha20Poly1305`, their constants and lemmas, `Spec.HMAC`, `Spec.HMAC.SHA1`, `Spec.HKDF`, `Spec.HMAC_DRBG`, `Spec.FFDHE`, `Spec.RSAPSS`, `Spec.NaCl`, `Spec.Frodo` and its matrix and parameter modules, `Spec.HPKE`, `Spec.MLKEM` and its NTT (with the ring-isomorphism proof `Spec.MLKEM.NTT.Lemmas`), sampling and encoding modules, `Spec.MLDSA` and its parameter, field, NTT, sampling, rounding and encoding modules, with their lemmas and the sign-then-verify proof `Spec.MLDSA.Correctness` |
+| `code/` | Pulse implementations, one directory per family (`code/hash/`, `code/chacha/`, `code/salsa20/`, `code/poly1305/`, `code/curve25519/`, `code/ed25519/`, `code/field256/`, `code/p256/`, `code/k256/`, `code/drbg/`, `code/aes/`, `code/bignum/`, `code/ffdhe/`, `code/rsapss/`, `code/aead/`, `code/nacl/`, `code/frodo/`, `code/mlkem/`, `code/mldsa/`, `code/hpke/`) |
+| `c/` | handwritten C, and the whole of the trusted computing base on the C side: the platform entropy shim, the 128- and 256-bit vector intrinsics, the 64-bit add-with-carry / subtract-with-borrow used by X25519, and the memory wiping in `Hacl_Mem.h` |
 | `tests/` | C test harnesses |
 | `dist/` | generated C: one `Hacl.c`, one `Hacl.h` |
 | `design/` | the inventory of HACL\* that this library is measured against |
 
-## The four design commitments
+## The five design commitments
 
 ### Secret integers are types, not an index
 
@@ -145,9 +146,55 @@ microarchitecture matters the answer is a C intrinsic behind a narrow,
 axiomatized interface, verified against the same specification as the portable
 code and tested against an independent transcription of the standard: AES-NI,
 `AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
-Intel SHA extensions under SHA-256 and SHA-224, and AVX2 under ChaCha20
-(`lib/Hacl.Vec256.fst`).  Each is selected at run time by
+Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20,
+Salsa20 and Poly1305 (`lib/Hacl.Vec256.fst`) and under the four-way Keccak
+behind the ML-KEM matrix (`lib/Hacl.Vec256.Lane64.fst`), and AVX-512F under ChaCha20
+and Salsa20 (`lib/Hacl.Vec512.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
+
+### Scratch memory is wiped, and its size is ours
+
+Every array the library allocates goes through `lib/Hacl.Mem.fsti`, and is
+zeroed before it is released:
+
+```
+let mut buf = [| z; n |];      let h = Mem.alloc z n;
+Mem.track buf;                 ...
+...                            Mem.free h n;
+Mem.wipe buf n;
+```
+
+`track` produces a ghost resource `must_wipe buf` and only `wipe` consumes
+it; `alloc` produces `must_free h` and only `free` consumes it.  Pulse
+rejects a function that ends holding a resource, so a forgotten wipe is a
+type error ("Leftover resources: Mem.must_wipe buf"), not a review comment.
+The wiping is a `memset` followed by an empty `asm` that takes the buffer
+as a memory input, which stops the compiler deleting it as a dead store
+(`c/Hacl_Mem.h`, trusted).  `free` wipes and then calls `free(3)`; a failed
+`malloc` aborts.
+
+The one exception is `Mem.nowipe`, which releases `must_wipe` without
+wiping.  It is for the temporaries of the hottest leaves -- the Curve25519
+and P-256 field multiplications and squarings, and the Keccak state of
+one-shot SHA-3 -- which gcc otherwise keeps in registers.  Wiping them takes
+their address and pushes every intermediate value through memory: x25519
+becomes 45% slower, P-256 10%, a short SHA-3 twice as slow.  What they leave
+behind is in register spill slots, which no wipe reaches anyway; their
+callers still wipe everything they hold.
+
+The size of a stack array is never chosen by the caller.  Anything whose
+size depends on an argument -- RSA's limbs and PSS buffers, the
+`mod_exp_consttime` window table -- or is merely large -- FrodoKEM's
+matrices -- is on the heap.  HKDF and HPKE, which used to copy `info` onto
+the stack, now stream it; see "HKDF without a buffer the caller sizes".
+
+Two build checks keep it that way (`mk/lint.mk`, both part of `make`).
+`make lint` requires every `let mut x = [| ... |]` to be followed by
+`Mem.track x`, and forbids `Pulse.Lib.Vec`, `Pulse.Lib.Box`, `with_local`,
+`Array.alloc` and `drop_` outside `Hacl.Mem`, and `nowipe` outside the
+functions listed in `mk/memlint.pl`.  `make stack` compiles
+`dist/Hacl.c` with `-fstack-usage` and fails on any frame gcc cannot bound,
+or any frame larger than `STACK_MAX`.
 
 ## How a hash is put together
 
@@ -280,20 +327,24 @@ transcriptions at `S32.t`, in the same way `hash_blocks_ni` already was.
 HMAC-SHA-256 went from 1,136 us to 227 us, which is exactly what hashing
 256 KiB costs.
 
-### HKDF's one scratch buffer
+### HKDF without a buffer the caller sizes
 
-`expand` hashes `T(i-1) || info || i` once per round.  `Hacl.HKDF.Core` lays
-that out in a single buffer
+`expand` hashes `T(i-1) || info || i` once per round.  An earlier version laid
+that out in one stack buffer of `hb + |info| + 1` bytes, which let whoever
+supplied `info` choose the size of our stack frame (issue #1).  Now each round
+is one call to `Hacl.HMAC.Cat.hmac_cat`, which takes the message in four
+pieces and streams them through the incremental hash:
 
 ```
-[ T(i-1) |   info   | i ]
-   hb       |info|    1
+hmac_cat prk  T(i-1)  pre  info  [i]
 ```
 
-writes `info` into it exactly once, and then each round overwrites only the
-leading digest and the trailing counter byte.  Round 1 is the exception --
-`T(0)` is empty -- and is handled by hashing the `info || i` *window* of the
-buffer, using `Hacl.Impl.Sub`.
+so the only scratch is two digests and a counter byte, whatever `info` is.
+`pre` is a second piece of `info`: HPKE's `LabeledExpand` puts a few dozen
+bytes of labels in front of the caller's string, and passing them as their
+own piece means neither side is ever copied.  Plain HKDF passes an empty
+`pre`, as round 1 passes an empty `T(0)` -- a zero-length window of a one-byte
+array, using `Hacl.Impl.Sub`.
 
 The loop invariant never mentions `expand_all` at the round count reached so
 far; it is stated against the *final* count, so that on exit it is literally
@@ -303,28 +354,19 @@ lets a round establish it.  The loop measure is the round counter, not the
 bytes remaining: the last round overshoots the requested length, so
 `len - base` is not a `nat`.
 
-**Expand reaches HMAC the long way round, and that cost it 1.9x.**  Giving
-`Hacl.HMAC.hmac_sha256` the SHA extensions did nothing for HKDF-expand,
-because expand does not call it: it calls `round_one` and `round_step`,
-which call the generic `hmac_impl` directly, and generic code cannot branch
-into an implementation that exists only at thirty-two-bit words.  A
-sixty-four-byte expand is two HMACs of a few dozen bytes, which is eight
-compression blocks, and at 270 ns a scalar block against 55 that accounted
-for the whole of the gap: 3,086 ns measured against a reference's 1,348.
-The three functions are therefore transcribed at `S32.t` with
-`hmac_impl_ni`, and `expand_sha224`/`expand_sha256` choose between the pair.
-Expand now costs 1,635 ns, which is exactly twice the 809 ns that
-`hmac_sha256` costs on the same inputs --- the floor for an algorithm that
-is two HMACs.
-
-That is the third copy of this shape, after `hash_blocks_ni` and
-`hmac_impl_ni`, and the pattern's cost is now plain.  A static
-specialisation hierarchy pays for an implementation choice in duplicated
-proof, where EverCrypt's runtime agility pays for it in indirect calls.
-`Hacl.HMAC.DRBG.Core`, `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and
-`Hacl.Streaming.HMAC` are still on the generic path, and a fourth copy is
-not the answer: threading the block function through the hash core so that
-one generic copy serves both is, and it is roadmap item 18.
+**The block function is an argument.**  Generic code cannot branch into the
+SHA extensions, which exist only at thirty-two-bit words, and expand used to
+be transcribed at `S32.t` for that reason -- a third copy of the shape after
+`hash_blocks_ni` and `hmac_impl_ni`.  Instead, `Hacl.Hash.SHA2.Core.blocks_t`
+is the type of `hash_blocks` without its block-length argument; the
+incremental hash (`update_with`), `hmac_cat` and `expand_impl` take one as a
+`[@@@monomorphize]` parameter; and `expand_sha256` passes
+`Hacl.Hash.SHA2.NI.blocks_ni sha2_256` or `blocks_scalar sha2_256` depending
+on `sha_supported ()`.  Custard specialises each call site into its own C
+function, so there is no indirect call, and there is one proof.
+`Hacl.HMAC.DRBG.Core`, `Hacl.HPKE.Labeled` and `Hacl.Streaming.HMAC` still
+pass `blocks_scalar`; giving them the SHA extensions is now a one-argument
+change each.
 
 ### The incremental hash
 
@@ -434,14 +476,72 @@ correctness argument is an indexwise equality of `Seq`s.
 only in the rate, the domain-separation byte and the output length, so there
 is one copy of the sponge, taking all three as arguments, and six thin
 wrappers.  The state is a 25-lane `A.array S64.t` indexed `x + 5*y`, matching
-the spec's flattening; scratch is 25 lanes for the pi/rho result and 5 for the
-theta parities.
+the spec's flattening, plus a second 25-lane buffer the rounds alternate
+with.
+
+**A round is one pass over the state.**  theta, rho-pi, chi and iota are
+fused, as in the Keccak team's reference code: `fround` reads its 25 input
+lanes once, computes the five column parities and theta's five fold-back
+values in registers, and then for each output row forms the five rho-pi
+lanes as `rotl(a[src] ^ d[col], rho)` and writes chi of them (with the
+round constant on lane 0) straight to the other buffer.  Rounds alternate
+`st -> b` and `b -> st`, two to a loop trip.  The earlier round did theta in
+place, rho-pi into the scratch buffer and chi back -- three read-write sweeps
+of the state per round.  Each register value carries a postcondition naming
+its entry of `rho_pi (theta a)` (`bval`), and each store a prefix invariant
+against `round n a` (`chi_out`); the indices are literals, and
+`Spec.SHA3.rho_pi_src_lit` and `chi_nbr_lit` hand the solver
+`rho_pi_src 7 == 10` and its like as ground facts, because evaluating `% 5`
+and `/ 5` on literals inside a 50-call Pulse context did not finish in
+fifteen minutes and with the facts takes forty seconds.  `Core4` is the same
+round with vector lanes and its own opaque predicates (`b_ok`, `fr_pre`).
+Against the three-pass round, under gcc, SHA3-512 and SHAKE128 are 1.13x
+faster on long inputs and SHA3-256 1.08x, ML-KEM 1.04x and ML-DSA
+1.02x--1.09x (Part 81 of `bench/REPORT.md`); the four-way permutation alone
+went from 1617 to 1176 cycles.
 
 Absorb xors whole message blocks straight out of the caller's buffer, and
 stages only the last, padded, block in a 200-byte stack buffer — 200 rather
 than the rate because the rate is not known at compile time.  Squeeze emits
-`min(rate, remaining)` bytes per permutation, so a SHAKE call shorter than the
-rate does exactly one permutation and a long one does not overrun.
+`min(rate, remaining)` bytes per permutation, and does not permute after the
+last block (`permute_if`), so a SHAKE call shorter than the rate does
+exactly one permutation and a long one does not overrun.  The streaming
+XOFs the ML-KEM and ML-DSA samplers use (`xof_block`) permute on the way in
+instead, for every block but the first, so the block a sampler stops at
+is not followed by a permutation either.  They squeeze with
+`squeeze_block_lanes`, a whole lane (eight constant shifts, which compilers
+merge into one store) at a time and then any bytes of a final partial lane;
+the one-shot sponges keep the byte loop, because inlined next to the
+absorb rounds the lane loop perturbs gcc's register allocation of the
+round loop and costs SHA3-256 six percent.  ML-DSA's `xof_block` is
+`inline_for_extraction`, so each sampler gets a copy with its rate fixed.
+
+**Four permutations at a time, on AVX2.**  `Hacl.Hash.SHA3.Core4.permute4`
+runs Keccak-f[1600] on four independent states at once, one 64-bit lane of
+each per 256-bit register, and proves `w_k == permute v_k` for each.  The
+ML-KEM matrix is `k * k` independent SHAKE128 rejection samplers, so
+`Hacl.Impl.MLKEM.Sample4` runs four of them in lock step: each stream is the
+scalar sampler's state, read block by block with the same `squeeze_block_lanes`
+and fed to the same `block_impl` (whose acceptance test is branch-free:
+every candidate is stored, reduced by `csub` so that it is a valid
+coefficient, and the count advances by the borrow bit of `d - q`; a random
+one-in-five rejection is the worst case for a branch predictor), and only the permutations are shared --
+the one that ends each absorb (`absorb_pre` is `absorb_impl` without it) and
+the one before every squeezed block after the first.  `gen_matrix_impl`
+takes four entries at a time while four remain and the processor has AVX2,
+and one at a time otherwise.  ML-DSA's `ExpandA` is the same idea:
+`Hacl.Impl.MLDSA.Sample4` runs four `RejNTTPoly` streams over the same
+scalar `block128_impl`, borrowing ML-KEM's `shake128_absorb_pre` and
+`permute4_if`, and its `expand_a_impl` takes four of the 16, 30 or 56
+entries at a time (ML-DSA-65's last two go one at a time).  Key generation
+and verification, of which `ExpandA` was half, got 1.24x--1.35x faster and
+signing 1.04x--1.11x (Part 82 of `bench/REPORT.md`).  The noise vectors are the same idea for SHAKE256:
+`Hacl.Impl.MLKEM.PRF4` computes four `PRF_eta(s, b_j)` with one
+`permute4` ending the four 33-byte absorbs and, for `eta = 3`, a second one
+for the four second blocks, and `noise_vec_impl` calls it once per vector
+(the lanes past `k` compute a PRF nobody reads).  The 64-bit lane operations live in their own
+module rather than in `Hacl.Vec256`: adding them there perturbed the solver
+context of the ChaCha20 and Poly1305 vector proofs enough to time them out.
 
 The proof needed three things that the SHA-2 proof did not.  The round steps
 (`theta_c`, `theta`, `rho_pi`, `chi`) are `[@@"opaque_to_smt"]`, because a
@@ -617,9 +717,21 @@ came from.  The byte-level lemma under the exclusive-or is that a register's
 bytes are its eight lanes written little-endian, which is a definition, not an
 axiom.
 
+**Sixteen blocks at a time, on AVX-512F.**  `code/chacha/Hacl.Chacha20.Vec512.fst`
+is the same construction with sixteen lanes.  The rounds and their proof are
+the eight-lane ones with the bounds changed; what AVX-512 adds is `vprold`,
+so each of the four rotations in a quarter-round is one instruction, and
+thirty-two registers, so the state does not spill.  The way out is
+different and simpler: a 16 x 16 transpose (two rounds of unpacks within each
+128-bit group, then two rounds of `vshufi32x4` moving whole groups) leaves
+block *j* whole in register *j*, which is one load, exclusive-or and store of
+sixty-four bytes.  Its proof is split the same way, a predicate for each step
+and a lemma composing them.
+
 `Hacl.Chacha20.encrypt` calls `encrypt_vec` first, which takes whole 512-byte
-chunks when the message has one and the processor has AVX2, and says how many
-bytes it wrote; the scalar loop then starts there, at block counter
+chunks when the message has one and the processor has AVX2 -- after
+`Hacl.Chacha20.Vec512` has taken whole 1024-byte chunks, if the processor
+has AVX-512F -- and says how many bytes it wrote; the scalar loop then starts there, at block counter
 `ctr + n / 64`.  The postcondition of the whole function did not change, so
 ChaCha20-Poly1305 and HPKE got the fast path without a line of their own.  On a Xeon Gold 6140 this took 256 KiB of ChaCha20 from 1.66 to
 0.35 ns/B (4.7x) and ChaCha20-Poly1305 from 2.54 to 1.25 ns/B, under gcc and
@@ -699,6 +811,38 @@ the short one is handled outside it, in a function of its own -- a Pulse `if`
 has to be the last statement of something for its two branches to be checked
 against one written-down postcondition, so the `if` is that function's body
 and the postcondition is itself an `if` on the length.
+
+**Four blocks at a time, on AVX2.**  `code/poly1305/Hacl.Poly1305.Vec256.fst`
+runs four accumulators side by side, one per sixty-four-bit lane, each a
+Horner chain in *r^4* over every fourth block; at the end lane *j* is
+multiplied by the power of *r* its blocks are still owed and the four lanes
+are added.  That this is the specification's one chain in *r* is
+`Spec.Poly1305.Vec` (`horner_init`, `horner_step`, `horner_final`), stated as
+congruences so that the lanes never need reducing.  The arithmetic is the
+scalar field multiplication widened to four lanes -- twenty-five `vpmuludq`s
+and the same two-way carry chain -- with one change: the multiplier is a
+power of *r* that has been through a carry, so its limbs are under 2^27
+rather than 2^26, and `mul_reduce_ok27` is the scalar lemma with that bit.
+Two loads and two `vpunpck{l,h}qdq` turn four blocks into their low and high
+words, but the unpacks work inside each 128-bit half, so the lanes hold blocks
+*0, 2, 1, 3*; rather than spend a permute per group, the final multiplier is
+*r^4, r^2, r^3, r* in that order.
+
+The proof is shaped by what the solver would not do.  The all-lane
+predicates (`vbounded`, `vmul_post`, `vload`, `vinv`) are opaque, the Pulse
+code passes them from lemma to lemma, and every lemma that opens one proves
+it one lane at a time over a total `l64 x i`; the code itself uses the raw
+intrinsics, whose refinements are quantified, and never asks the solver to
+instantiate them.  `absorb_blocks` calls `absorb_vec` first, which takes the
+longest multiple of four blocks when there are at least eight and the
+processor has AVX2, and the scalar loop carries on from there; its
+postcondition did not change, so ChaCha20-Poly1305 got the fast path too.
+`absorb_blocks` is now `inline_for_extraction`: with the dispatch in it
+clang stopped inlining it, and the one-block loop out of line made 64-byte
+MACs 15% slower.  On a Xeon Gold 6140, 256 KiB of Poly1305 went from 0.88 to
+0.20 ns/B under gcc (4.4x) and from 0.69 to 0.24 under clang, and
+ChaCha20-Poly1305 from 1.25 to 0.57; messages under 128 bytes do not reach
+the vector code.
 
 ### ChaCha20-Poly1305, three segments and one accumulator
 
@@ -853,6 +997,50 @@ vectors found it in minutes.  `tests/test_curve25519.c` now covers 5.2, 6.1
 in both directions, the iterated product at 1 and 1000 rounds, a
 non-canonical `u` with the high bit set, and the five small-order points --
 for which `ecdh` returns `false` and the shared secret is all zeros.
+
+### Curve25519 again, four limbs of sixty-four bits
+
+On a processor with BMI2, `Hacl.Curve25519.scalarmult` no longer runs the
+radix-2^51 code above.  It checks `Hacl.Carry64.supported ()` (a cpuid test
+for BMI2) and, if it is set, calls `Hacl.Curve25519.Ladder64.scalarmult64`,
+a second and separately verified implementation over **four limbs of sixty-four
+bits**; otherwise it calls the radix-51 path, now named `scalarmult51`.  Both
+are proved against the same `Spec.Curve25519`, so the dispatch needs no proof
+beyond the two postconditions agreeing.
+
+Full-width limbs need a carry flag, which portable C does not have.
+`Hacl.Carry64` adds exactly two trusted primitives, `addc` and `subb`, each
+stated as one equation over integers (`s + 2^64 c' == a + b + c`, and
+`s - 2^64 c' == a - b - c`, with every carry at most one).  `c/Hacl_Carry64.h`
+realizes them with `__builtin_addcll`/`__builtin_subcll` where the compiler
+has them, `_addcarry_u64`/`_subborrow_u64` otherwise, and `unsigned __int128`
+as a last resort; `tests/test_carry64.c` checks both against `__int128` on edge
+cases and a million random inputs.  Everything else -- the 4x4 schoolbook
+product as rows of `mul_wide` and carry chains, the fold of the high half by
+38, `fadd`/`fsub` with their wrap-around corrections, `freeze`, the addition
+chain for inversion and the ladder -- is Pulse, verified against
+`Spec.Curve25519.Field64`, which relates the four-word representation to the
+field.  The ladder and inversion carry `custard_c_closure_prologue` with
+`target("bmi2")`, so gcc and clang emit `mulx` for the whole call tree without
+the rest of the library being compiled for BMI2.
+
+Two proof-engineering notes.  The closure prologue refuses a closure that
+reaches a global variable, so the shared `S64.zero` became one local
+`let z0 = S64.classify 0uL` per function -- and writing `S64.classify 0uL`
+inline at each use instead made `freeze` time out, though the two are equal
+by definition.  And `ladder`'s implicit final query hung until the body ended
+with an explicit `assert` of its postcondition.
+
+The win depends on the compiler.  Under clang 21 a scalar multiplication goes
+from 54.6 us to 38 us; under gcc 15 it goes from 43 us to 48 us.  The gcc loss
+is not in any one place: `fmul` in isolation is as fast as a hand-written C
+prototype, and the deficit spreads over `fmul` in context, `fadd`/`fsub`,
+the out-of-line squarings in inversion, and the select-based ladder with four
+conditional swaps per step.  No flag or inlining change recovered it.  The
+64-bit path is used whenever BMI2 is present regardless, since it is the
+faster path under clang and HACL\*'s own fastest X25519 has the same shape;
+an in-place squaring for inversion and a swap-state ladder are the obvious
+next steps for gcc.
 
 ### Ed25519, on top of Curve25519's field
 
@@ -1047,15 +1235,36 @@ of the four moduli.  P-256's prime keeps `mu == 1` -- its low limb is
 `2^64 - 1`, so its inverse is still `-1` -- which is a small gift from its
 Solinas shape and the only one this representation collects.
 
+**The field has since left that layer.**  `Hacl.P256.Field64` is a
+multiplier for this prime alone: the product is X25519-64's sixteen-`mulx`
+`mul8`, chained with `adc` through `Hacl.Carry64`, and each of the four
+Montgomery steps uses `mu == 1` and `p + 1 = 2^96 + 2^192 * 0xffffffff00000001`
+to add `u * p` as two shifts and one multiplication, where the generic step
+has four.  Four steps leave a number below `2p`, and one borrow chain and a
+masked select finish it.  Addition and subtraction are one carry chain and a
+masked correction.  Every step's statement is linear in numerals --
+`2^64 * W_(k+1) == W_k + u * p` -- so none needed a lemma beyond the
+carry-chain postconditions.  `Hacl.P256.Field` keeps its interface and calls
+it for `fadd`, `fsub`, `fmul`, `fsqr` and the entry into Montgomery form,
+with three small lemmas connecting `ev4` of four words to `Spec.Mont4`'s
+`mev` of their `vals` (any residue with the right value has the specification's
+limbs, so `mev_mul`, `mev_add` and `mev_sub` carry over).  `fmul` went from
+34 ns to 25 under gcc and from 47 to 18 under clang, and every P-256
+operation got 35-50% faster (`bench/REPORT.md` Part 62).  The scalar field
+stayed on `Hacl.Impl.Mont4` until it got a faster multiplier of its own
+(below).  `mul8` and the two row functions below it lost
+their `target("bmi2")` for this -- none uses BMI2, and inlined into X25519's
+`bmi2` field they compile exactly as before.
+
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
-mentions both takes minutes.  So `code/p256` is twenty-two modules: the on-curve
+mentions both takes minutes.  So `code/p256` is twenty-seven modules: the on-curve
 test and the scalar reduction never appear in the same verification context,
 and `Hacl.P256.Key` (private keys, the scalar field) and
 `Hacl.P256.Key.Public` (public keys, the field) are separate files for no
-other reason.  Two more are the fixed-base window.  `code/k256` is the same
-twenty-two for the same reasons, plus the four modules of its own radix-52
-base field.
+other reason.  Seven more are the fixed-base window and its compiled-in
+tables.  `code/k256` is split the same way for the same reasons, plus the
+modules of its own radix-52 base field.
 
 **`Spec.P256.point_add` and `point_double` are `opaque_to_smt`.**  The
 addition formulas are Renes-Costello-Batina, twelve field multiplications
@@ -1088,15 +1297,63 @@ together against `G`, `2^64 G`, `2^128 G` and `2^192 G`, sixteen rungs of
 four doublings and four additions, 184 point operations rather than 335.
 `Spec.P256.Base` says what the three extra base points are, as a doubling
 chain the normaliser evaluates at typechecking time, and
-`Spec.Group.Smul.dblk_ok` turns that into a statement about `smul`.  Their
-six field constants are **Montgomery forms** -- that is what this field
-runs in -- and they live in `Hacl.P256.TablesG` rather than beside the
-other eight, because a dozen two-hundred-and-fifty-six-bit literals in one
-solver context is enough to stop a file of routine limb lemmas
-terminating.  Everything below the rung is `Hacl.P256.PointWin`'s, whose
-table layer carries a scale for exactly this reason.  ECDH as initiator
-went from 272 us to **165** and signing from 287 to **182**, which is 1.04x
-and 1.08x of HACL\*.
+`Spec.Group.Smul.dblk_ok` turns that into a statement about `smul`.
+Everything below the rung is `Hacl.P256.PointWin`'s, whose table layer
+carries a scale for exactly this reason.  ECDH as initiator went from 272 us
+to **165** and signing from 287 to **182**, which is 1.04x and 1.08x of
+HACL\*.
+
+**The four tables are compiled in.**  They were first built at run time
+from the three extra base points, which was about an eighth of the
+fixed-base operations.  They are now sixty-four precomputed multiples
+`d * 2^{64j} G`, stored as twelve `static const uint64_t [64]` arrays of
+**Montgomery forms** (what this field runs in), with entry 0 the point at
+infinity `(0, R, 0)` and every `z` equal to `R`.  `spec/Spec.P256.Win0` ..
+`Win3` prove each entry on the curve and equal to the previous entry plus
+the scale point with one `assert_norm` apiece, lifted to `smul` by
+`Spec.Group.smul_add_congr`; `code/p256/Hacl.P256.Win0` .. `Win3` hold the
+arrays and `Hacl.P256.WinTable` turns four limb facts into the window's
+`ent`.  All eight are generated, and each takes about a minute.  `win_add`
+takes one permission per coordinate array, as on the other two curves.
+This took ECDH as initiator from 97 us to 69 under gcc and from 77 to 59
+under clang, and signing and verification by similar absolute amounts
+(`bench/REPORT.md` Part 63).
+
+**Inversion is an exponentiation on the specialised field.**  `finv` and
+`fsqrt` were the generic four-limb `mexp`, which multiplies with the general
+Montgomery core, and an eighth of a variable-base ECDH was spent there.
+`Hacl.P256.Exp`, a port of `Hacl.K256.Exp52` to four 64-bit limbs, does the
+same left-to-right square-and-multiply with `Hacl.P256.Field`'s `fmul` and
+`fsqr`; it is about 10 us off every operation under clang and 3-5 us under
+gcc (Part 64).
+
+**The scalar field has a faster multiplier and an addition chain.**  Signing
+needs one inversion modulo the order, and at 19-21 us it was a quarter of
+a signature.  `Hacl.Impl.Mont64` is a four-limb Montgomery multiply for any
+odd modulus, still taking the modulus words and `mu` as data: X25519-64's
+`mul8` for the product, then four reduction steps that each take
+`q = t_k * mu mod 2^64`, add `q m` as four `mul_wide`s in two `adc` chains,
+and drop a word, then one borrow chain and a masked select.  Each step is
+stated as `2^64 * W_(k+1) == W_k + q m` with a bound that says nothing
+carries out of the top word, which is all the four-step argument needs.
+`Hacl.Impl.Mont4F` puts it behind `Hacl.Impl.Mont4.amul`'s contract (less the
+complement table, which the final subtraction no longer uses), so both
+curves' `qmul` changed by one call; it went from 42 ns to 24 under clang and
+from 63 to 33 under gcc.  `qinv` is then a fixed addition chain for `n - 2`
+rather than square-and-multiply: the odd powers `x .. x^15`, blocks of ones
+for the top half, and a four-bit sliding window for the rest, 253 squarings
+and 39 multiplications where the binary method did 255 and 168 (42 against
+195 on secp256k1).  The squarings alternate between two buffers, so none
+copies its input.  The chain is generated, each step stating its exponent
+and `assert_norm` checking the arithmetic; the steps are calls to one
+verified `qstep` -- square `k` times, multiply by a known power -- because
+the same chain written out as 180 inline statements took eight and a half
+minutes to check and this takes a minute and a half.  `qinv` went from 21 us
+to 10 under gcc and from 19 to 7.4 under clang, which is 11-16% off signing
+on both curves and 5-7% off verification (Part 65).  Two things tried on the
+base field were not kept: a dedicated squaring makes `fsqr` 40% faster but
+whole operations only 1-3%, and fiat-crypto's `p256_64.h` multiplier is
+slower than `Hacl.P256.Field64` under both compilers.
 
 **Verification is not constant time and need not be.**
 `point_mul_double_g u1 u2 Q` is two independent multiplications and one
@@ -1139,7 +1396,9 @@ base field, which secp256k1 has since taken its own way.
 constants and the exponents, and `Hacl.K256.Scalar` is the P-256 scalar
 module with those tables underneath, adding not a line to the emitted C --
 the Montgomery layer takes its modulus as an argument, so the two curves
-share every scalar operation and differ only in the table they pass.  The
+share every scalar operation and differ only in the table they pass.  That
+includes the faster `Hacl.Impl.Mont64` multiplier; only the inversion chain,
+which is a function of the order, is each curve's own.  The
 base field went its own way: secp256k1's prime is `2^256 - 2^32 - 977`, which
 is close enough to a power of two that a bit above 2^256 folds back with a
 single multiply by `2^32 + 977`, so `Hacl.K256.Field52` carries five limbs of
@@ -1681,17 +1940,31 @@ on four thousand random inputs.  Perturbing one coefficient of the reference
 makes all 4097 cases fail, which is the check that the test is checking
 something.
 
-`lib/Hacl.Vec256.fst`, under ChaCha20, is the third entry and is kept the
-same way.  Its axioms are smaller -- lane-wise add, exclusive-or and
-rotate, a broadcast, two constants, and the six permutations of an 8 x 8 transpose, each
-stated as which input lane every output lane is -- and "lane" is not an
-axiom but a definition, the little-endian reading of the register's bytes.
-`tests/test_vec256.c` checks each against a scalar transcription on a
-thousand random inputs, every rotation distance and every load
-misalignment, and `tests/test_chacha20_vec.c` runs every message length
-from 0 to 2,100 bytes, at counters up to the last legal block, against an
-independent RFC 8439 block function.  Swapping one permute immediate in
-`c/Hacl_Vec256.h` fails both.
+`lib/Hacl.Vec256.fst`, under ChaCha20 and Poly1305, is the third entry and
+is kept the same way.  Its axioms are smaller -- lane-wise add, exclusive-or
+and rotate, a broadcast, two constants, and the six permutations of an 8 x 8
+transpose, each stated as which input lane every output lane is; and for
+Poly1305 sixty-four-bit add, `vpmuludq`, shifts, a 26-bit mask, a broadcast,
+a set and a store, each stated on natural numbers with the wrap-around
+written out -- and "lane" is not an axiom but a definition, the
+little-endian reading of the register's bytes (a sixty-four-bit lane is two
+thirty-two-bit ones, low first).  `tests/test_vec256.c` checks each against a
+scalar transcription on a thousand random inputs, every rotation and shift
+distance and every load misalignment; `tests/test_chacha20_vec.c` runs every
+message length from 0 to 2,100 bytes, at counters up to the last legal
+block, against an independent RFC 8439 block function, and
+`tests/test_poly1305_vec.c` does the same for Poly1305 against a plain
+bignum reference, with the largest clamped *r* and all-ones messages among
+the inputs.  Swapping one permute immediate in `c/Hacl_Vec256.h` fails both
+ChaCha20 tests.  `lib/Hacl.Vec512.fst` is the fourth, with seventeen axioms
+(lane-wise add, exclusive-or and `vprold`, a broadcast, two constants, the
+four unpacks and four `vshufi32x4` group selections), each checked by
+`tests/test_vec512.c` in the same way, the rotate also at a distance the
+compiler cannot see; the same two ChaCha20 tests exercise it, since every
+length from 1,024 bytes on goes through it on an AVX-512 machine.  Salsa20's
+two vector paths use the same two axiom sets, and `tests/test_salsa20_vec.c`
+runs every length from 0 to 2,100 bytes at seven counters against an
+independent Salsa20 block function.
 
 **The key schedule needed the same treatment, and was worth more than the
 cipher.**  It runs once per message rather than once per block, which is why
@@ -2581,7 +2854,8 @@ For RSA-2048 the constant now costs 32.5 us where the doubling chain cost
 361, an elevenfold improvement, and HACL\*'s own `precomp` takes 95.  It
 matters out of proportion to its size for *verification*, where the exponent
 is 17 bits and everything else is over in a moment: `rsapss-2048-verify`
-drops from 516 us to 198.
+drops from 516 us to 198.  The ladder step now squares with `mont_sqr`
+rather than copying the accumulator into `mont_mul`.
 
 **One carry bit, not a propagated carry.**  The reduction loop clears one
 limb per step by adding a multiple of the modulus.  Each step spills a carry
@@ -2614,7 +2888,11 @@ bits, and one more multiply.  That is five `mont_mul`s per four bits
 instead of eight, so a 2048-bit exponent costs about 2,560 of them rather
 than 4,096 -- 1.6x, and measured at 1.56x on gcc and 1.58x on clang.  The
 variable-time ladder and `mod_inv_prime_vartime` are still bit-at-a-time;
-their exponents are public and they are not on any hot path.
+their exponents are public.  The variable-time ladder does skip the
+exponent's leading zeros: it finds the top set bit, seeds the accumulator
+with `a * R mod n` and squares with `mont_sqr` from there, so `65537`
+costs 16 squarings and one multiply rather than 64 squarings and two
+multiplies (Part 67).
 
 The window closes most, but not all, of the gap to the reference: RSA-PSS
 signing and FFDHE were 1.97x behind HACL* and are now about 1.25x.  What
@@ -2662,10 +2940,11 @@ check, so, like HACL*, we do not claim it.
 temporary is a caller-supplied array: a ladder needs three `nn` words of
 scratch plus one `2*nn` for the products, and `res` serves as a fourth
 while the loop runs.  The one exception is the window table, `16*nn`
-words, which `mod_exp_consttime` takes on its own stack -- 4 KiB for
-RSA-2048, 16 KiB for FFDHE-8192.  Threading it through every caller would
-have changed four public signatures to no purpose, and `Hacl.RSAPSS`
-already stack-allocates at a run-time length.
+words -- 4 KiB for RSA-2048, 16 KiB for FFDHE-8192 -- which
+`mod_exp_consttime` takes from the heap with `Hacl.Mem.alloc` and wipes on
+the way out.  Threading it through every caller would have changed four
+public signatures to no purpose, and a stack array sized by `nn` would let
+the caller choose our frame size; see "Scratch memory" below.
 
 `tests/test_montgomery.c` checks every one of these against Python, which
 inverts the radix with `pow(R, -1, n)` and multiplies out, and compares
@@ -2730,9 +3009,8 @@ an exponentiation of `bits` rungs each of which is a full multiply: a few
 hundredths of a percent, for several kilobytes of table per group and no
 precomputation context in the API.
 
-This is also the one place in the library that allocates.  The scratch is
-seven `nn`-limb arrays and one `2*nn`, on the *stack*, in the per-group
-wrapper -- about 9 KB for FFDHE-8192.  An entry point named for its group
+The scratch is seven `nn`-limb arrays and one `2*nn`, on the *stack*, in
+the per-group wrapper -- about 9 KB for FFDHE-8192.  An entry point named for its group
 knows its size, which is precisely the condition under which a stack array
 is legitimate; the generic layer underneath it still takes every temporary
 from its caller.
@@ -2766,15 +3044,20 @@ free it; every operation then re-derives the bit lengths from the same
 `modBits` that was already passed in.  Here the modulus is `ceil(modBits/8)`
 big-endian bytes -- the form it arrives in, from a certificate or a
 `SubjectPublicKeyInfo` -- and the exponent is however many bytes the caller
-has.  There is no key object, no loader, no allocation and no free.  The
-conversion to limbs happens on the stack inside the call, which is also
-where `R^2 mod n` is computed, exactly as in the Diffie-Hellman groups and
-for the same reason.
+has.  There is no key object, no loader, and nothing for the caller to
+free.  The conversion to limbs happens inside the call, which is also where
+`R^2 mod n` is computed.  Unlike the Diffie-Hellman groups, the size is the
+caller's `modBits`, so that scratch -- and the PSS encoding buffers, whose
+size depends on the salt length -- comes from `Hacl.Mem.alloc` rather than
+the stack, and is wiped before it is freed.
 
 **Nothing is trusted.**  `rsa_exp`, the primitive both directions go
 through, checks at run time that the modulus is odd, that it is greater than
 one, that the base is below it and that the result fits the output width,
-and returns `false` otherwise.  A caller cannot reach Montgomery reduction
+and returns `false` otherwise.  The last check reads the result, so it is
+made only where the result is public: when signing, the output is as wide
+as the modulus, the result is below the modulus, and the fit is proved
+rather than tested.  A caller cannot reach Montgomery reduction
 with an even modulus, which is the one way to make the bignum layer produce
 nonsense rather than an error.  `tests/test_rsapss.c` clears the low bit of
 each modulus and checks that both directions refuse it.
@@ -2805,6 +3088,8 @@ the exponent's whole bit length to the ladder rather than its significant
 bit length, so nothing about a private exponent leaks through a loop bound;
 the constant-time ladder is selected for signing and the variable-time one
 for verification, where the exponent is public and is usually `65537`.
+Only the variable-time ladder looks for the top set bit and skips the
+zeros above it.
 
 **One `if` in `pss_encode_impl` exists only for GCC.**  The scratch buffer
 there is `emLen - hLen - 1` bytes, a difference of caller-supplied sizes,
@@ -2919,6 +3204,22 @@ own a `write_keystream`; it is now `Hacl.Impl.Bytes.store_words_le`, which
 writes any `n` words little-endian, and both ciphers call it, so there is
 one copy of that loop in the generated C rather than two.
 
+**Vector Salsa20.**  The vector backends were ported the same way:
+`Hacl.Salsa20.Vec512` (sixteen blocks, AVX-512F) and `Hacl.Salsa20.Vec256`
+(eight, AVX2) are `Hacl.Chacha20.Vec512` and `Hacl.Chacha20.Vec256` with
+Salsa20's `line`, quarter-round order, column and row rounds, and the counter
+in word 8.  Everything after the rounds -- the transposes that turn lanes
+back into blocks, the exclusive-or and the driver -- is ChaCha20's
+unchanged, because both ciphers serialize the keystream as sixteen
+little-endian words; both modules verified on the first attempt.
+`Hacl.Salsa20.encrypt` calls `encrypt_vec` exactly as ChaCha20 does, so
+XSalsa20, secretbox and box get it too.  Salsa20's rotations (7, 9, 13, 18)
+are none of them whole bytes, so AVX2 needs a shift-shift-or for each where
+ChaCha20 has two byte shuffles; AVX-512's `vprold` does every one in an
+instruction.  On 256 KiB this took Salsa20 from 480 us to 45 us under gcc
+and 43 us under clang (97 us with AVX-512 masked off), and secretbox from
+542 us to 98 us, now mostly Poly1305 (`bench/REPORT.md` Part 61).
+
 HSalsa20 is the piece NaCl needs.  It is twenty rounds on a state whose
 nonce is sixteen bytes wide, with **no feedforward** -- the input is not
 added back -- and its output is eight of the sixteen words, namely 0, 5,
@@ -3008,8 +3309,10 @@ the known-answer tests catch immediately.
 One implementation serves all four parameter sets.  The parameters are a
 record --- `n`, `log q`, the extracted bits, the shared-secret length, the
 error table and the SHAKE choice --- passed as an ordinary argument and
-tagged `[@@@monomorphize]`, and every buffer is a stack allocation whose
-width is computed from it.  `nbar`, the width of the small matrices, is a
+tagged `[@@@monomorphize]`, and every buffer's width is computed from it.
+The matrices are tens of kilobytes at FrodoKEM-1344 (a whole decapsulation
+used to need a 173 KB stack frame), so every buffer sized by `n` comes from
+`Hacl.Mem.alloc` and the rest are on the stack; see "Scratch memory".  `nbar`, the width of the small matrices, is a
 constant rather than a field: it is eight in every parameter set ever
 proposed, and making it one turns `publicmatrixbytes` into `log q * n`
 rather than `log q * n * nbar / 8`, which removes a division the solver
@@ -3064,19 +3367,49 @@ multiplication becomes 128 independent products of linear polynomials
 modulo `X^2 - zeta`.  `Spec.MLKEM.NTT` says exactly
 that and `Hacl.Impl.MLKEM.NTT` implements it in place, with the zeta table
 a 128-entry constant.  Addition and subtraction reduce with a
-conditional-subtract mask and multiplication with a Barrett step in
-sixty-four bits, all branch-free, and the coefficient type is a refinement
+conditional subtraction whose mask is the top bit of the sixteen-bit
+difference `x - q`, added back as `s + (m & q)`, and multiplication with a Barrett step in
+sixty-four bits, or, by a root of unity in the transform, with Shoup's
+trick against a second table of `floor(zeta 2^16 / q)`, all branch-free, and the coefficient type is a refinement
 --- `zqt = x: S16.t { S16.v x < q }` --- so every intermediate carries its
-bound in its type instead of in a lemma.
+bound in its type instead of in a lemma.  The base-case products reduce
+once per output coefficient rather than once per operation: each of
+`a0 b0 + a1 b1 gamma_i` and `a0 b1 + a1 b0` is formed in sixty-four bits,
+below `2^36`, and reduced by a single Barrett step with `m = floor(2^37 / q)`
+(`zq_reduce`), with `gamma_i = zeta^(2 brv(i) + 1)` read from a third
+128-entry table instead of computed as a product.  The matrix-vector
+products do not add up `k` such products: `Hacl.Impl.MLKEM.Dot` sums, for
+each pair, the `k` values of `a0 b0`, `a1 b1` and `a0 b1 + a1 b0` exactly in
+thirty-two bits (at most `8 (q - 1)^2` for `k <= 4`), reduces the `a1 b1`
+sum before it meets `gamma_i`, and reduces each output once
+(`zq_reduce32`), which vectorises and is 3.5x faster than `k` products and
+`k` additions.  The centred binomial
+sampler reads its input a group at a time -- `eta` bytes are four
+coefficients -- and adds up bits with constant shifts, rather than
+locating each bit with a division.  The NTT, inverse NTT, pointwise product, dot product and CBD
+sampler are each extracted twice from the same verified body, once under
+`__attribute__((target("avx2")))` and once without, and a dispatcher with
+the same specification picks one on `Hacl.Vec256.supported`: gcc and clang
+then vectorize the butterflies sixteen coefficients wide instead of eight,
+without a line of new proof.  The vectorizers are why the conditional
+subtraction is shaped the way it is: a mask taken from a thirty-two-bit
+borrow widens every lane to thirty-two bits, and gcc does not vectorize the
+and-or blend of a `select` at all.
 
 The correctness statement is that the implementation computes the
 algorithms of FIPS 203, coefficient for coefficient, including that the NTT
-is the specification's NTT.  What is *not* proved, and is honest to say so,
-is the mathematical fact that the specification's NTT is multiplication in
-the ring: that is a finite-field argument about roots of unity, not a
-memory-safety or refinement argument, and it is future work.  The spec is
-pinned instead by the published vectors, which is the same bar the rest of
-this repository meets.
+is the specification's NTT.  Separately, `Spec.MLKEM.NTT.Lemmas` proves the
+mathematical fact behind it: the specification's NTT is a ring isomorphism
+`R_q ~ prod_i Z_q[X]/(X^2 - gamma_i)`, so `intt (multiply_ntts (ntt f)
+(ntt g))` is the schoolbook product of `f` and `g` modulo `X^256 + 1`, and
+`intt` and `ntt` are mutually inverse.  That is a finite-field argument
+about roots of unity, independent of the implementation; the bit-reversal
+facts about the twiddle tables are checked exhaustively by normalization.
+On top of it, `Spec.MLKEM.Correctness` proves that decapsulation recovers
+the encapsulated key whenever the decryption noise is below `q/4` (see
+[Functional correctness](#functional-correctness)).  The spec is also
+pinned by the published vectors, which is the bar the rest of this
+repository meets.
 
 One implementation serves all three parameter sets.  As with Frodo the
 parameters are a `[@@@monomorphize]` record --- `k`, `eta1`, `eta2`, `du`,
@@ -3120,6 +3453,85 @@ corrupted so that it must not.
 The generator re-validates its reference against all one hundred and eighty
 published keyGen, encapsulation and decapsulation cases before it emits
 anything.
+
+### ML-DSA, where signing is a loop that is allowed to fail
+
+ML-DSA is FIPS 204, the standardised Dilithium, and it is ML-KEM's
+signature-scheme sibling: the same module-lattice idea, a different ring.
+The modulus is `q = 8380417 = 2^23 - 2^13 + 1`, which has a primitive
+512th root of unity (1753), so in `Z_q[X]/(X^256 + 1)` the transform goes
+all the way down: eight layers of butterflies, and polynomial multiplication
+in the NTT domain is 256 independent products of coefficients rather than
+ML-KEM's products of linear polynomials.  There is no ML-DSA in HACL\*
+either; this is new code.
+
+The specification is `Spec.MLDSA` and its modules --- `Params`, `Zq`,
+`NTT`, `Sample`, `Rounding`, `Encode` --- written from the standard's
+algorithm listings, and the implementation is `code/mldsa/`.  The
+correctness statement is the same shape as ML-KEM's: each entry point
+computes the FIPS 204 algorithm byte for byte.
+
+The specification is also proved correct as a signature scheme.
+`Spec.MLDSA.Correctness.sign_verify` states that for every seed, message,
+context and randomness, a signature produced by `sign` under the private
+key from `keygen_internal` is accepted by `verify` under the matching
+public key (and likewise for the `_internal` and `_mu` entry points).  The
+proof rests on lemmas proved along the way: the NTT is a ring isomorphism
+onto `Z_q[X]/(X^256 + 1)` (`Spec.MLDSA.Ring`, `Spec.MLDSA.NTT.Lemmas`); the
+hint recovers the high bits, and high bits are stable under small
+perturbations (`Spec.MLDSA.Rounding.Lemmas`); the key, signature and hint
+encodings round-trip (`Spec.MLDSA.Encode.Lemmas`, `Spec.MLDSA.Hint.Lemmas`);
+and the sampled secrets and challenge are short enough that `c s2` is
+bounded by `beta` (`Spec.MLDSA.Sample.Lemmas`).
+The coefficient type is again a refinement (`x: S32.t { S32.v x < q }`),
+the transform multiplies by its roots with Shoup's trick against a
+precomputed quotient table, and pointwise products use a Montgomery step.
+
+Signing is Fiat-Shamir with aborts: draw a mask `y`, commit to the high bits
+of `A y`, hash to a challenge `c`, form `z = y + c s1`, and throw the
+attempt away if `z`, the low bits of `w - c s2`, `c t0` or the hint leak
+anything about the key.  The standard writes this as an unbounded loop; a
+total specification cannot, so `Spec.MLDSA.Params.max_attempts` bounds it at
+1024 attempts, and `sign` returns `None` (`false` in C) if every one is
+rejected.  The expected number is four to five and running out has
+probability far below `2^-256`, so this is a statement about the proof, not
+about any observable behaviour.  The bound also keeps the 16-bit counter
+`kappa` from wrapping.
+
+The rejection loop is also the constant-time question.  The private key and
+the mask are secret throughout, and each attempt declassifies exactly its
+four verdicts, as section 3.6.3 of FIPS 204 and the reference
+implementation do: whether an attempt is rejected, and by which test,
+reveals nothing the accepted signature does not.  The hint is computed under
+a secret mask; only its population count is declassified for the last test,
+and its positions only once the signature is accepted and they are output.
+Verification handles public data only.
+
+`Hacl.MLDSA44`, `Hacl.MLDSA65` and `Hacl.MLDSA87` instantiate one
+implementation at the three parameter records and export:
+
+| function | FIPS 204 |
+| --- | --- |
+| `keypair(pk, sk, xi)` | `ML-DSA.KeyGen_internal`, from a 32-byte seed |
+| `sign(sg, sk, msg, msg_len, ctx, ctx_len, rnd)` | `ML-DSA.Sign`, hedged, with a context string |
+| `sign_deterministic(sg, sk, msg, msg_len, ctx, ctx_len)` | `ML-DSA.Sign` with `rnd` all zero |
+| `verify(pk, msg, msg_len, ctx, ctx_len, sg)` | `ML-DSA.Verify` |
+| `sign_internal`, `verify_internal` | algorithms 7 and 8 on a formatted message `M'` |
+| `sign_mu`, `verify_mu` | algorithms 7 and 8 on a caller-computed 64-byte `mu` ("external mu") |
+
+A context longer than 255 bytes makes `sign` and `verify` return `false`,
+as the standard requires.  Pre-hashed HashML-DSA is not implemented.  The
+caller supplies randomness, as everywhere else in this library: `xi` for
+key generation and `rnd` for hedged signing.
+
+`tests/test_mldsa.c` anchors each parameter set at the first NIST ACVP
+keyGen seed and checks digests of the keys and of deterministic, hedged and
+internal signatures, that `sign_mu` agrees with `sign_internal`, and that
+verification rejects a flipped bit, a different context, a pure signature
+presented to the internal interface and a modified `mu`.  Beyond the
+checked-in test, the extracted C was run offline against all 480 ACVP
+keyGen, sigGen and sigVer cases that do not use pre-hashing, with no
+failures.
 
 ### HPKE, where the ciphersuite is a record rather than fifteen modules
 
@@ -3177,19 +3589,75 @@ allocation (whose contents are `Seq.create 12 0uy`, reachable by one
 `SMTPat`), a `store_be`, and a loop with a pointwise invariant takes ten
 seconds.
 
+## Functional correctness
+
+Everything above is a refinement proof: the C computes what the `Spec.*`
+function says.  That leaves open whether the specification is the right
+one, and the published test vectors are only part of the answer.  The
+other part is a set of theorems about the specifications themselves, the
+statements a cryptographer would write down first: decryption inverts
+encryption, both parties of a key exchange agree, and an honest signature
+verifies.  Each sits in a `*.Correctness` module next to the
+specification it is about, is stated over exactly the functions the
+implementation's postconditions name, and has no admits and no
+assumptions beyond those listed here.
+
+| scheme | module | theorem | hypotheses |
+| --- | --- | --- | --- |
+| ChaCha20-Poly1305 | `Spec.Chacha20Poly1305.Correctness` | `decrypt_encrypt`: the tag verifies and decryption returns the message | message length bound |
+| AES-GCM (128, 256) | `Spec.GCM.Correctness` | `decrypt_encrypt`: `gcm_decrypt (gcm_encrypt m) == Some m` | the spec's length bounds |
+| NaCl secretbox | `Spec.NaCl.Correctness` | `secretbox_open_secretbox`, `secretbox_open_easy` | message length bound |
+| NaCl box | `Spec.NaCl.Correctness` | `beforenm_agree`; `box_open_box_agree`, `box_open_easy_agree`: the receiver, holding only the sender's public key, opens what the sender sealed | none |
+| X25519 | `Spec.Curve25519.Correctness` | `ecdh_agree`: `ecdh a (pub b) == ecdh b (pub a)`, result and flag | none |
+| P-256, secp256k1 ECDH | `Spec.{P256,K256}.ECDH.Correctness` | `dh_agree`; `dh_initiator_valid`: a generated public key passes validation | both private keys valid |
+| FFDHE (all five groups) | `Spec.FFDHE.Correctness` | `ffdheN_agree`: both shared secrets are equal | both peers' public-key checks pass |
+| Ed25519 | `Spec.Ed25519.Correctness` | `sign_verify`, `sign_expanded_verify`: `verify pub msg (sign sk msg) == true` | none (beyond the spec's message type) |
+| P-256, secp256k1 ECDSA | `Spec.{P256,K256}.ECDSA.Correctness` | `verify_sign` and every hashed front end; for secp256k1 also the low-S signer and verifier | the signer returned `Some` |
+| RSA-PSS | `Spec.RSAPSS.Correctness` | `sign_then_verify`: an honest signature verifies | `n = p q`, `p != q` prime, `e d = 1` mod `p-1` and `q-1`; `2^(modBits-1) <= n`; signing succeeded |
+| HPKE (all modes, both KEMs, all AEADs) | `Spec.HPKE.Correctness` | `encap_decap`, `auth_encap_decap`, `setup_agree`, `context_open_seal`, `open_base_seal_base` | the public keys are those of the private keys; the sender succeeded |
+| ML-KEM (all parameter sets) | `Spec.MLKEM.Correctness` | `mlkem_correct`: `decaps dk (encaps ek m) == k`; `kpke_correct` | decryption noise below `q/4` in every coefficient |
+| FrodoKEM (all parameter sets) | `Spec.Frodo.Correctness` | `kem_correct`: `dec ct sk == ss`; `pke_correct` | every entry of `S'E + E'' - E'S` below `q/2^(B+1)` |
+
+The supporting facts are proved, not assumed, along the way: that the
+P-256 and secp256k1 group orders are prime (Pocklington certificates in
+`Spec.Group.OrderPrimes`), that `n G` is the identity on all three curves
+(by evaluation), that Ed25519 point compression round-trips, that the
+X25519 Montgomery ladder computes the u-coordinate of a scalar multiple on
+the proved Edwards group (`Spec.Curve25519.Montgomery`), RSA inversion
+from Fermat's little theorem and Euclid's lemma
+(`Spec.RSAPSS.Fermat`), the ML-KEM and FrodoKEM byte-encoding round trips,
+and the ML-KEM NTT ring isomorphism (`Spec.MLKEM.NTT.Lemmas`).
+
+Two kinds of statement are deliberately absent.  The lattice KEMs are
+correct only with overwhelming probability, so their theorems take the
+noise bound as a hypothesis and stop there; bounding the probability that
+honestly sampled noise exceeds it (2^-138 to 2^-252 for FrodoKEM, 2^-139
+to 2^-174 for ML-KEM) needs a probability framework, an idealised model of
+the hashes and a numeric tail bound, and is future work.  And the
+Diffie-Hellman theorems for FFDHE assume the peers' public-key checks
+pass rather than proving that an honest key always does, since that needs
+the primality of the RFC 7919 moduli, which this repository establishes
+only by test.
+
 ## Performance
 
-Measured on an AMD EPYC 7662 (Zen 2), gcc 15.2.0 `-O3`, pinned to one core,
-three rounds at two link-time code offsets, all three contenders interleaved
-inside each round, per-benchmark minimum over the runs whose canary says the
-core was healthy (see
-[Measuring on a shared machine](#measuring-on-a-shared-machine)).
+Measured on an AMD EPYC 7V13 (Zen 3; AVX2, ADX, SHA extensions, no AVX-512)
+in a shared virtual machine, gcc 15.2.0 `-O3`, against HACL\* `504c298`,
+pinned to one core, three rounds at two link-time code offsets, all three
+contenders interleaved inside each round, per-benchmark minimum over the
+runs (see [Measuring on a shared machine](#measuring-on-a-shared-machine)).
+The previous table was measured on an Intel Xeon Gold 6140 (Skylake-SP,
+AVX-512, no SHA extensions); ratios that moved between the two tables mostly
+moved with the processor, and the ones that did not are discussed below.
 
 The harness that produces this table lives in [`bench/`](bench/), along with
 [`bench/REPORT.md`](bench/REPORT.md), which records every optimization in this
 repository in the order it happened --- the measurement that motivated it, the
 experiment that confirmed or killed the hypothesis, and the result.  The table
 itself is regenerated by `bench/mktable.py` rather than typed by hand.
+For a comparison with OpenSSL, AWS-LC, libsodium, libjade, Firedancer,
+dalek and, for ML-DSA, libcrux, pq-crystals and mldsa-native, see
+[Against other libraries](#against-other-libraries).
 
 There are two reference columns, because there are two different questions.
 
@@ -3201,7 +3669,7 @@ it is the ratio the table is sorted by and the one in bold.  Where HACL\* has
 no specialised backend for a primitive the two reference columns are the same
 number.
 
-**HACL\*** is HACL\*'s **portable scalar C** -- not its AVX2 or AVX-512
+**HACL\*** is HACL\*'s **portable scalar C** -- not its vector
 variants -- except for AES-GCM, where HACL\* has no portable implementation at
 all and the reference is EverCrypt dispatching to Vale assembly.  This is the
 like-for-like comparison: same algorithm, same instruction set, two extraction
@@ -3215,51 +3683,93 @@ reference**.
 
 | primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| SHA3-256 | 256 KiB | 1.0 ms | 1.8 ms | **0.55x** | 1.8 ms | 0.55x |
-| SHA-512 | 256 KiB | 756 us | 1.4 ms | **0.55x** | 1.4 ms | 0.56x |
-| HMAC-SHA-512 | 256 KiB | 757 us | 1.4 ms | **0.56x** | 1.4 ms | 0.56x |
-| SHAKE128 | 256 KiB | 882 us | 1.5 ms | **0.59x** | 1.5 ms | 0.60x |
-| BLAKE2b | 256 KiB | 382 us | 438 us | **0.87x** | 312 us | 1.22x |
-| RSA-PSS-2048 sign | -- | 4.5 ms | 4.7 ms | **0.95x** | 4.7 ms | 0.95x |
-| FFDHE-2048 | -- | 4.4 ms | 4.6 ms | **0.95x** | 4.6 ms | 0.96x |
-| RSA-2048 modexp | -- | 4.4 ms | 4.5 ms | **0.98x** | 4.5 ms | 0.98x |
-| P-256 ECDSA verify | -- | 436 us | 425 us | **1.03x** | 428 us | 1.02x |
-| SHA-1 | 256 KiB | 1.5 ms | 1.5 ms | **1.03x** | 1.5 ms | 1.04x |
-| P-256 ECDH | -- | 162 us | 155 us | **1.04x** | 156 us | 1.04x |
-| P-256 ECDSA sign | -- | 176 us | 169 us | **1.05x** | 169 us | 1.04x |
-| BLAKE2s | 256 KiB | 605 us | 571 us | **1.06x** | 573 us | 1.06x |
-| HMAC-SHA-256 | 256 KiB | 190 us | 164 us | **1.16x** | 1.1 ms | 0.17x |
-| SHA-256 | 256 KiB | 189 us | 163 us | **1.16x** | 1.1 ms | 0.17x |
-| secp256k1 ECDSA sign | -- | 76 us | 65 us | **1.16x** | 65 us | 1.16x |
-| RSA-PSS-2048 verify | -- | 166 us | 143 us | **1.16x** | 143 us | 1.16x |
-| NaCl secretbox | 256 KiB | 770 us | 643 us | **1.20x** | 644 us | 1.20x |
-| Ed25519 sign | -- | 77 us | 64 us | **1.20x** | 64 us | 1.21x |
-| Salsa20 | 256 KiB | 533 us | 435 us | **1.23x** | 435 us | 1.22x |
-| X25519 | -- | 50 us | 36 us | **1.39x** | 44 us | 1.14x |
-| MD5 | 256 KiB | 626 us | 433 us | **1.44x** | 432 us | 1.45x |
-| AES-128-GCM | 256 KiB | 103 us | 71 us | **1.44x** | 72 us | 1.44x |
-| Poly1305 | 256 KiB | 236 us | 57 us | **4.13x** | 208 us | 1.14x |
-| ChaCha20-Poly1305 | 256 KiB | 761 us | 148 us | **5.13x** | 1.1 ms | 0.72x |
-| ChaCha20 | 256 KiB | 495 us | 93 us | **5.31x** | 852 us | 0.58x |
+| Salsa20 | 256 KiB | 96 us | 393 us | **0.24x** | 390 us | 0.25x |
+| NaCl secretbox | 256 KiB | 142 us | 568 us | **0.25x** | 557 us | 0.26x |
+| RSA-PSS-2048 verify | -- | 51 us | 119 us | **0.43x** | 118 us | 0.43x |
+| P-256 ECDH | -- | 64 us | 137 us | **0.47x** | 138 us | 0.47x |
+| P-256 ECDSA sign | -- | 76 us | 148 us | **0.51x** | 149 us | 0.51x |
+| HMAC-SHA-512 | 256 KiB | 636 us | 1.2 ms | **0.52x** | 1.2 ms | 0.53x |
+| SHAKE128 | 256 KiB | 630 us | 1.2 ms | **0.53x** | 1.1 ms | 0.55x |
+| SHA3-256 | 256 KiB | 765 us | 1.4 ms | **0.54x** | 1.4 ms | 0.54x |
+| SHA-512 | 256 KiB | 650 us | 1.2 ms | **0.54x** | 1.2 ms | 0.54x |
+| P-256 ECDSA verify | -- | 216 us | 376 us | **0.57x** | 378 us | 0.57x |
+| BLAKE2b | 256 KiB | 338 us | 388 us | **0.87x** | 326 us | 1.04x |
+| BLAKE2s | 256 KiB | 524 us | 563 us | **0.93x** | 548 us | 0.96x |
+| RSA-PSS-2048 sign | -- | 3.7 ms | 3.9 ms | **0.95x** | 3.9 ms | 0.95x |
+| Poly1305 | 256 KiB | 44 us | 46 us | **0.95x** | 165 us | 0.27x |
+| FFDHE-2048 | -- | 3.7 ms | 3.8 ms | **0.96x** | 3.8 ms | 0.97x |
+| RSA-2048 modexp | -- | 3.7 ms | 3.8 ms | **0.98x** | 3.8 ms | 0.98x |
+| ChaCha20-Poly1305 | 256 KiB | 138 us | 128 us | **1.08x** | 1.0 ms | 0.14x |
+| SHA-1 | 256 KiB | 1.6 ms | 1.5 ms | **1.08x** | 1.5 ms | 1.10x |
+| AES-128-GCM | 256 KiB | 68 us | 61 us | **1.12x** | 61 us | 1.12x |
+| secp256k1 ECDSA sign | -- | 65 us | 57 us | **1.14x** | 57 us | 1.15x |
+| ChaCha20 | 256 KiB | 93 us | 81 us | **1.15x** | 814 us | 0.11x |
+| SHA-256 | 256 KiB | 185 us | 158 us | **1.17x** | 974 us | 0.19x |
+| HMAC-SHA-256 | 256 KiB | 187 us | 160 us | **1.17x** | 974 us | 0.19x |
+| MD5 | 256 KiB | 504 us | 397 us | **1.27x** | 391 us | 1.29x |
+| X25519 | -- | 48 us | 37 us | **1.28x** | 36 us | 1.33x |
+| Ed25519 sign | -- | 66 us | 51 us | **1.30x** | 50 us | 1.31x |
 
-Against what HACL\* can actually do on this machine, most of the suite is
-within 20% and five primitives are ahead: SHA-3 and SHAKE, where HACL\* has
-no vector sponge; SHA-512 and HMAC-SHA-512, where it has none either; and
-BLAKE2b, where HACL\*'s own AVX2 implementation is *slower* on this machine
-than its own scalar C (439 us against 311), so "best" picks the wrong one.
-Modular exponentiation is level.  Everything from P-256 down to AES-GCM sits
-between 1.03x and 1.44x, which is the cost of a portable scalar
-implementation meeting hand-tuned scalar code.
+Against what HACL\* can actually do on this machine, sixteen rows are ahead
+and every row is within 1.30x.  The furthest ahead are Salsa20 and
+secretbox at 0.24x--0.25x, because HACL\* has no vector Salsa20; RSA
+verification at 0.43x, whose ladder starts at the exponent's top set bit
+(`bench/REPORT.md` Part 67); the three P-256 rows at 0.47x--0.57x; and
+SHA-512, HMAC-SHA-512, SHA-3 and SHAKE at 0.52x--0.54x, where HACL\* has
+no vector SHA-512 and no vector sponge.  P-256 was at 0.64x--0.76x until
+its field-element copy stopped being a loop: gcc vectorized the four-word
+loop into 16-byte loads that missed store forwarding from the multiply's
+8-byte stores, and every point operation copies after nearly every field
+operation (`bench/REPORT.md` Part 72).  The BLAKE2 rows, Poly1305 and the
+modular exponentiations are level or slightly ahead.
 
-The honest ceiling is the bottom three rows.  ChaCha20 at 5.32x, Poly1305 at
-4.14x and ChaCha20-Poly1305 at 5.15x are not implementation defects; they are
-what thirty-two-byte-wide AVX2 lanes are worth on a stream cipher and a
-one-pass MAC, and no amount of work on scalar C will close them.  Closing
-those three needs a vector backend.  ChaCha20 now has one (see
-[ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)):
-on a Xeon Gold 6140 it is 4.7x faster than the row above and the AEAD 2.0x,
-which would put ChaCha20 near 1.1x of HACL\* best; the table has not been
-regenerated on the reference machine yet, and Poly1305 is still scalar.
+The stream-cipher rows lost their lead with the processor.  On the Skylake
+machine ChaCha20 and ChaCha20-Poly1305 were at 0.53x and 0.67x because the
+AVX-512F backend ran sixteen blocks to HACL\*'s eight (Part 60); this
+processor has no AVX-512, so the comparison is now AVX2 against AVX2, at
+1.15x and 1.08x (1.31x and 1.17x until Custard was stopped from compiling
+the vector wipes for the wrong target; `bench/REPORT.md` Part 71).  It does
+have SHA extensions, so SHA-256 and HMAC-SHA-256 are this repository's
+intrinsics against Vale's SHA-EXT assembly, at 1.17x (and 0.19x of
+HACL\*'s portable C).  AES-128-GCM is at 1.12x, MD5 at 1.27x, and X25519
+at 1.28x: under gcc the radix-2^64 field (see
+[Curve25519 again, four limbs of sixty-four bits](#curve25519-again-four-limbs-of-sixty-four-bits))
+is a little slower than the radix-51 code it replaced; under clang it is
+level with HACL\*'s BMI2/ADX assembly.
+
+Ed25519 and secp256k1 signing, at 1.30x and 1.14x, were briefly at 1.71x
+and 1.52x when the tables were first re-measured after secret temporaries
+began to be wiped (issue #1).  Under gcc, a wipe whose length gcc cannot
+see, or of 128 bytes or more, became `rep stosq`, whose start-up cost
+dominates on a forty-byte field element, and the point additions and
+doublings wipe six or seven of those each.  Small constant-length wipes
+are now volatile word stores (`c/Hacl_Mem.h`; `bench/REPORT.md` Part 70),
+which took Ed25519 signing from 85 us to 66 us and secp256k1 signing from
+85 us to 65 us, and P-256 and SHA-512 a few percent with them.  Under clang
+the wipes cost 2--3% either way.
+
+Under clang 21, with HACL\* also built by clang, no row is above 1.32x
+(HMAC-SHA-512) and eleven are ahead.  MD5 (0.92x), BLAKE2 (0.89x--0.90x),
+Poly1305 (0.89x), ChaCha20 (0.94x) and ChaCha20-Poly1305 (0.92x) are ahead;
+X25519 and P-256 are level at 1.00x--1.01x, with P-256 verification at
+1.22x; Ed25519 and secp256k1 signing are at 1.19x and 1.28x.  SHA-3 and
+SHAKE are at 0.75x--0.80x rather than 0.54x--0.56x, and SHA-512 and
+HMAC-SHA-512 at 1.26x--1.32x rather than 0.52x--0.54x, because clang builds HACL\*'s sponge and SHA-512 about twice
+as fast as gcc does.
+
+The rows that were the honest ceiling are not any more.  ChaCha20,
+Poly1305 and ChaCha20-Poly1305 were at 5.31x, 4.13x and 5.13x four
+tables ago, measured on an AMD EPYC 7662: they were what wide vector lanes
+are worth on a stream cipher and a one-pass MAC, and no amount of work on
+scalar C could close them.  All three now have verified vector backends
+(see [ChaCha20, a keystream and nothing else](#chacha20-a-keystream-and-nothing-else)
+and [Poly1305, five limbs of twenty-six bits](#poly1305-five-limbs-of-twenty-six-bits))
+and sit at 1.19x, 0.97x and 1.10x under gcc, and 0.94x, 0.89x and 0.92x
+under clang, against HACL\*'s AVX2 code.
+
+
+The remainder of this section was written against the EPYC 7662 table, which
+has SHA extensions; the numbers in it are from that machine.
 
 Two rows were recently somewhere else.  HMAC-SHA-256 was the worst in the
 table at 6.84x, because the SHA-EXT dispatch existed only in the one-shot
@@ -3274,7 +3784,7 @@ Then both SHA-256 rows moved again, from 227 us to 190, and under clang from
 see [One attribute in the wrong place, and three quarters of the
 time](#one-attribute-in-the-wrong-place-and-three-quarters-of-the-time).
 
-That leaves SHA-256 and HMAC-SHA-256 tied at 1.16x against Vale's SHA-EXT
+That left SHA-256 and HMAC-SHA-256 tied at 1.16x against Vale's SHA-EXT
 assembly, which is this repository's intrinsics against hand-written assembly
 rather than scalar against vector, and is the narrowest of the remaining
 gaps.  Every vectorized primitive still loses at 64 bytes, where the setup
@@ -3334,7 +3844,7 @@ exponent ladder over the *Montgomery* exponent --- squaring doubles it, a
 single modular doubling adds one --- seeded at the topmost limb of the
 modulus rather than at one, which reaches the same value in about a dozen
 squarings and sixty-five doublings: 32.5 us, 11.1x faster, and 2.9x faster
-than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198, and the squaring has since taken it to 166.
+than HACL\*'s own 95 us.  `rsapss-2048-verify` went from 516 us to 198, and the squaring has since taken it to 166; starting the variable-time ladder at the exponent's top bit (Part 67) took it to 64 us under gcc and 60 under clang.
 
 What is left on these rows is the reduction, not the multiply: a 32-limb
 `reduction` costs 1,035 ns to the multiply's 931 and the squaring's 579, so
@@ -3385,7 +3895,8 @@ representation HACL\* and libsecp256k1 use, with the special-prime fold
 of the two field multiplies side by side -- ours and HACL\*'s, each behind a
 call, each fed its own previous output -- puts ours at 29.4 ns against 25.9,
 so the secp256k1 field is within 14% of the reference and is no longer worth
-attention.  P-256's prime admits the same treatment and has not had it yet.
+attention.  P-256's prime has since had the same treatment, in its own
+Montgomery form (see below).
 Third, the scalar multiplication.  Both curves have now had that, on the
 variable-base side: each walks the scalar four bits at a time against a
 sixteen-entry table of small multiples of the input point, built at run time,
@@ -3433,9 +3944,23 @@ ahead of it on one.  Under clang it is ahead on three of the four:
 (**0.91x**), `dh-responder` 241 against 355 (**0.68x**), with signing at
 parity, 172 against 169 (**1.02x**).  That the two compilers disagree about
 which side of 1.0x three of these rows fall on is the right way to read
-them: the remaining difference is no longer algorithmic.  What P-256 has
-still not had is the special-prime field; that is now the only item left on
-its list.
+them: the remaining difference is no longer algorithmic.  P-256 has since
+had the special-prime field too (`Hacl.P256.Field64`, Part 62), which took
+another 35-50% off every row: under gcc ECDH as initiator 176 us to **112**,
+as responder 285 to **180**, signing 192 to **131** and verification 448 to
+**292**; under clang 163 to **88**, 256 to **129**, 185 to **110** and 428
+to **222**.  Compiled-in generator tables and an inversion on that field
+(Parts 63 and 64) then took, in a second harness, ECDH as initiator from 97
+us to **65** under gcc and from 77 to **49** under clang, signing from 119 to
+**86** and 96 to **69**, and verification from 256 to **224** and 194 to
+**166**.  A faster scalar multiplier and an addition-chain inversion (Part
+65) then took signing to **75** and **57** and verification to **213** and
+**154**.  Making the four-word field copy straight-line code instead of a
+loop that gcc vectorized into store-forwarding stalls (Part 72) then took
+every row a quarter faster under gcc and left clang unchanged: ECDH as
+initiator 88 us to **64**, signing 98 to **76** and verification 290 to
+**216**.  The table above includes all five: P-256 is now at 0.47x--0.57x
+of HACL\* under gcc and 0.93x--1.16x under clang.
 
 **`inline` is a global resource.**  The whole library is one translation unit,
 so `FStar.Attributes.CInline` -- Custard's `static inline` request -- is spent
@@ -3791,6 +4316,17 @@ The decoder runs the same register backwards, pulling a byte in whenever
 fewer than `d` bits are left.  There is no division anywhere, and the
 loops are the ones a C programmer would have written.
 
+Written that way, though, the register carries from one coefficient to
+the next across all 256, and the compiler cannot unroll anything.  Eight
+coefficients of `d` bits are exactly `d` bytes, so the register is empty
+at every multiple of eight: both coders run 32 groups (`enc_group`,
+`dec_group`), each starting from an empty register at byte `d g`, and `d`
+is monomorphized from `Codec` down.  With a constant `d` and eight steps
+per group the compilers emit straight-line shifts and masks, and the
+coders are 2--7x faster (Part 80).  Each group is its own function, taking
+`i0` and `o0` with only `d i0 == 8 o0`: with the group index's products
+`8 g` and `g d` in scope, the encoder's unchanged shift timed out.
+
 `Spec.MLKEM.Pack` is the module that makes this legal.  It is pure
 arithmetic --- it mentions neither `q` nor the NTT nor any parameter set
 --- and says that `enc_num`'s bits are `coeff_bit`'s, that its bytes are
@@ -3882,13 +4418,15 @@ rebuilt.
 ### ML-KEM, with no HACL\* to compare against
 
 HACL\* has no ML-KEM, so the table below is absolute rather than relative,
-measured the same way as the rest of this section:
+measured the same way as the rest of this section (gcc; under clang it is
+26/43/66 us for keypair, 29/48/72 for encapsulation and 35/56/84 for
+decapsulation):
 
 | operation | 512 | 768 | 1024 |
 | --- | ---: | ---: | ---: |
-| keypair | 60 us | 97 us | 145 us |
-| encapsulate | 66 us | 104 us | 152 us |
-| decapsulate | 91 us | 138 us | 193 us |
+| keypair | 30 us | 50 us | 78 us |
+| encapsulate | 36 us | 59 us | 89 us |
+| decapsulate | 45 us | 71 us | 104 us |
 
 These rows come from the same `bench.c` as everything else, guarded by
 `BS_HAVE_MLKEM` because there is no HACL\* side to compile them against, and
@@ -3898,13 +4436,15 @@ Decapsulation costs more than encapsulation everywhere because it *is*
 encapsulation, plus a decryption: the Fujisaki-Okamoto transform
 re-encrypts in order to check.  The numbers are a few times what a
 hand-optimised reference implementation of Kyber gets on the same class of
-machine, and the gap is not in the transform: a large share of every
-operation is Keccak, where this library is already ahead of HACL\*'s
-portable C, and the rest is the NTT and the rejection sampler, neither of
-which has been tuned at all --- the NTT is the specification's seven
-layers written out, with a Barrett reduction on every product and no
-lazy-reduction or Montgomery-domain tricks.  That is the obvious place to
-look first if these ever need to be faster.
+machine.  The transform is no longer where the time goes: since Part 68
+it is in-place butterflies whose inner loop has a constant trip count and
+multiplies by the roots with Shoup's trick in sixteen and thirty-two bits,
+which compilers vectorise, and the forward and inverse NTT together fell
+from 42% of the instructions of an ML-KEM-768 run to 11%.  What is left
+is mostly Keccak: the rejection sampler that expands the public matrix
+(SHAKE128, one lane at a time) is now 39% and SHAKE256 15%, then the
+base-case products (11% before the accumulating dot product of Part 79)
+and the binomial sampler.
 
 These numbers used to be half again as large, and the reason they are not
 is *A bit string is a number* below.  There was a specialisation gap here
@@ -3930,6 +4470,188 @@ they are the ones measured at 1.31x on encapsulation above.  The lesson
 is the same one the clone survey teaches, applied to our own hand: a
 specialisation is justified by a measurement, not by the fact that
 something downstream of it used to be slow.
+
+Part 80 put the annotation back, and the measurement is what justifies
+it: once the coders run in groups of eight, a constant `d` lets each group
+unroll, and the specialised coders are 2--7x faster than the generic ones.
+Monomorphizing `d` without the grouping changes almost nothing, which is
+what the earlier measurement saw.  Compression and decompression are
+specialised along with the coders: no change under gcc, while clang's
+`Compress_10` goes from 416 to 171 cycles, its vectoriser needing the
+shift to be a constant.
+
+### ML-DSA, against other implementations
+
+HACL\* has no ML-DSA either, so it is measured against the ML-DSA
+implementations people deploy: the pq-crystals reference C (`ref/`) and its
+AVX2 build (`avx2/`), mldsa-native with its AVX2 arithmetic and Keccak
+backends, AWS-LC (which imports mldsa-native with the arithmetic backend
+only), OpenSSL 3.5's native ML-DSA, and Cryspen's libcrux in Rust with its
+AVX2 backend.  The harness is the "others" one described below, with its
+checks: every contender's public key must equal hacl-pulse's from the same
+32-byte seed, and its signatures hacl-pulse's `sign_deterministic` on the
+same 64 messages, byte for byte -- except AWS-LC, whose EVP interface only
+signs hedged, so its signatures are cross-verified instead.  Signing cycles
+through those 64 messages, because the number of rejection-sampling
+attempts, and so the time, depends on the message.  Printed by
+`bench/mkmldsa.py`:
+
+| operation | hacl-pulse (gcc) | hacl-pulse (clang) | pq-crystals ref | OpenSSL | pq-crystals avx2 | mldsa-native | AWS-LC | libcrux | hacl-pulse ÷ fastest other |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ML-DSA-44 keygen | 114 us | 118 us | 79 us | 106 us | 23 us | **22 us** | 31 us | 23 us | 5.21x |
+| ML-DSA-44 sign | 460 us | 366 us | 386 us | 661 us | **69 us** | 72 us | 90 us | 87 us | 5.30x |
+| ML-DSA-44 verify | 120 us | 114 us | 89 us | 123 us | 25 us | **23 us** | 30 us | 25 us | 4.98x |
+| ML-DSA-65 keygen | 195 us | 198 us | 132 us | 176 us | 39 us | **37 us** | 53 us | 41 us | 5.26x |
+| ML-DSA-65 sign | 707 us | 570 us | 611 us | 1,050 us | **108 us** | 109 us | 150 us | 134 us | 5.29x |
+| ML-DSA-65 verify | 198 us | 193 us | 139 us | 188 us | 41 us | **38 us** | 50 us | 41 us | 5.14x |
+| ML-DSA-87 keygen | 326 us | 339 us | 215 us | 269 us | 65 us | **59 us** | 85 us | 63 us | 5.53x |
+| ML-DSA-87 sign | 927 us | 769 us | 782 us | 1,313 us | 136 us | **135 us** | 172 us | 178 us | 5.68x |
+| ML-DSA-87 verify | 327 us | 342 us | 229 us | 294 us | 64 us | **58 us** | 81 us | 64 us | 5.69x |
+
+hacl-pulse is between 5.0x and 5.7x behind the fastest implementation
+(mldsa-native, or pq-crystals' AVX2 build on signing), and behind every
+AVX2 implementation, including AWS-LC, which leaves Keccak portable.
+Against the portable implementations it is mixed: 1.3x--1.5x behind the
+pq-crystals reference on key generation and verification, slightly ahead
+of it on signing under clang (0.93x--0.98x), and ahead of OpenSSL on
+signing by 1.7x--1.8x.  The profile is still the one that put it there: most of the
+time is Keccak, the shared SHA-3 permutation squeezed one lane at a time
+where the AVX2 implementations run four lanes, then the pointwise products
+and the transforms.  The table predates the four-way Keccak, now used by
+`ExpandA` (Part 82 of `bench/REPORT.md`); the ML-KEM NTT's treatment of
+the transform is the obvious next step.
+
+### Against other libraries
+
+The table above answers how the Pulse pipeline compares with HACL\*'s.  This
+one answers what a user gives up, in speed, by choosing a verified library
+extracted from Pulse over the fast libraries people actually deploy:
+
+- **OpenSSL** 3.5.5, the system `libcrypto`, through EVP with every algorithm
+  pre-fetched and every key loaded outside the timed loop;
+- **AWS-LC** (`ffca127`, October 2026), whose x86-64 X25519 and Ed25519
+  are s2n-bignum's formally verified assembly;
+- **libsodium** 1.0.22-stable;
+- **libjade** (release 2023.05-2), Jasmin implementations, several with
+  machine-checked correctness proofs, shipped as assembly; each row uses
+  the best variant the release has for this CPU;
+- **Firedancer**'s `ballet` (`849c582`), the Solana validator's crypto,
+  built with clang because its makefile rejects gcc 15.2;
+- **dalek** (curve25519-dalek 4.1.3, ed25519-dalek 2.2, x25519-dalek
+  2.0.1), Rust, LTO, `target-cpu=native`;
+- for the ML-DSA rows only, **pq-crystals** dilithium (`d35ba3f`), `ref/` and
+  `avx2/`; **mldsa-native** (`6daba60`), with its x86-64 arithmetic and
+  Keccak backends; and **libcrux-ml-dsa** 0.0.11, Rust, LTO, `simd256`.
+  These have their own table in
+  [ML-DSA, against other implementations](#ml-dsa-against-other-implementations)
+  and no column here.
+
+hacl-pulse appears twice, built by gcc 15.2 and by clang 21.1; the other C
+libraries are built by gcc (Firedancer by clang).  Times are per operation,
+fastest in bold, and the last column is the better hacl-pulse build divided
+by the fastest other library.  Same machine and method as above
+(three interleaved rounds, keeping only runs whose canary is within 6% of
+the best one: this virtual machine's canary wanders by about 8%, and the
+default 2% cut leaves some contenders with no run at all; on this run 5%
+left none of hacl-pulse's gcc build).  The harness is
+[`bench/others.sh`](bench/others.sh), and the table is printed by
+`bench/mkothers.py`.
+
+| primitive | size | hacl-pulse (gcc) | hacl-pulse (clang) | OpenSSL | AWS-LC | libsodium | libjade | Firedancer | dalek | hacl-pulse ÷ fastest other |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| secp256k1 ECDSA sign | -- | **68 us** | 82 us | 402 us | 265 us | -- | -- | -- | -- | 0.26x |
+| BLAKE2s | 256 KiB | 519 us | **512 us** | 537 us | -- | -- | -- | -- | -- | 0.95x |
+| Poly1305 | 256 KiB | 45 us | **36 us** | 37 us | 76 us | 72 us | 37 us | -- | -- | 0.96x |
+| Salsa20 | 256 KiB | 97 us | 98 us | -- | -- | 94 us | **91 us** | -- | -- | 1.07x |
+| NaCl secretbox | 256 KiB | 153 us | 136 us | -- | -- | 168 us | **127 us** | -- | -- | 1.08x |
+| HMAC-SHA-256 | 256 KiB | 191 us | 174 us | 158 us | 158 us | 798 us | -- | **157 us** | -- | 1.11x |
+| SHA-256 | 256 KiB | 189 us | 180 us | 159 us | 159 us | 792 us | 1.0 ms | **158 us** | -- | 1.14x |
+| AES-128-GCM | 256 KiB | 73 us | 66 us | 60 us | 59 us | -- | -- | **56 us** | -- | 1.19x |
+| BLAKE2b | 256 KiB | 366 us | 323 us | 333 us | -- | **272 us** | -- | -- | -- | 1.19x |
+| AES-256-GCM | 256 KiB | 80 us | 76 us | 63 us | **63 us** | 73 us | -- | 63 us | -- | 1.21x |
+| ChaCha20 | 256 KiB | 96 us | 92 us | 76 us | **76 us** | 119 us | 77 us | -- | -- | 1.21x |
+| SHA3-256 | 256 KiB | 760 us | 706 us | 585 us | **574 us** | -- | 714 us | -- | -- | 1.23x |
+| ChaCha20-Poly1305 | 256 KiB | 138 us | 127 us | 112 us | **104 us** | 193 us | -- | -- | -- | 1.23x |
+| MD5 | 256 KiB | 514 us | 440 us | 357 us | **354 us** | -- | -- | -- | -- | 1.24x |
+| SHAKE128 | 256 KiB | 644 us | 625 us | **479 us** | 487 us | -- | 581 us | -- | -- | 1.30x |
+| X25519 | -- | 53 us | 37 us | 36 us | **27 us** | 31 us | 29 us | 27 us | 57 us | 1.38x |
+| RSA-PSS-2048 sign | -- | 3.9 ms | 4.5 ms | **2.1 ms** | 2.1 ms | -- | -- | -- | -- | 1.83x |
+| FFDHE-2048 | -- | 4.0 ms | 4.5 ms | **2.1 ms** | 4.1 ms | -- | -- | -- | -- | 1.90x |
+| SHA-512 | 256 KiB | 637 us | 758 us | 332 us | 468 us | 495 us | 643 us | **322 us** | -- | 1.98x |
+| HMAC-SHA-512 | 256 KiB | 673 us | 756 us | 329 us | 463 us | 501 us | -- | **324 us** | -- | 2.08x |
+| P-256 ECDH | -- | 155 us | 109 us | 50 us | **49 us** | -- | -- | -- | -- | 2.22x |
+| RSA-PSS-2048 verify | -- | 51 us | 60 us | 21 us | **17 us** | -- | -- | -- | -- | 2.98x |
+| Ed25519 verify | -- | 118 us | 128 us | 114 us | 40 us | 52 us | -- | 45 us | **37 us** | 3.15x |
+| P-256 ECDSA verify | -- | 220 us | 166 us | 67 us | **52 us** | -- | -- | 63 us | -- | 3.20x |
+| ML-KEM-768 keygen | -- | 54 us | 43 us | 48 us | **13 us** | -- | -- | -- | -- | 3.24x |
+| ML-KEM-768 decaps | -- | 70 us | 57 us | 51 us | **17 us** | -- | -- | -- | -- | 3.31x |
+| ML-KEM-768 encaps | -- | 63 us | 49 us | 33 us | **14 us** | -- | -- | -- | -- | 3.51x |
+| ML-DSA-65 keygen | -- | 195 us | 198 us | 176 us | **53 us** | -- | -- | -- | -- | 3.70x |
+| ML-DSA-65 sign | -- | 707 us | 570 us | 1.1 ms | **150 us** | -- | -- | -- | -- | 3.80x |
+| ML-DSA-65 verify | -- | 198 us | 193 us | 188 us | **50 us** | -- | -- | -- | -- | 3.84x |
+| P-256 ECDSA sign | -- | 77 us | 61 us | 25 us | **16 us** | -- | -- | -- | -- | 3.80x |
+| Ed25519 sign | -- | 34 us | 40 us | 41 us | 9.1 us | 16 us | -- | **8.7 us** | 18 us | 3.89x |
+| SHA-1 | 256 KiB | 1.6 ms | 884 us | **148 us** | 148 us | -- | -- | 819 us | -- | 6.00x |
+
+A dash means the library does not offer the operation through the API used:
+AWS-LC has BLAKE2b only with a 256-bit output and no BLAKE2s; libsodium has no
+MD5, SHA-1 or SHA-3 and only AES-256-GCM; Firedancer's P-256 is verify-only
+and it has no SHA-3, BLAKE2 or ChaCha20 AEAD; libjade's Kyber is the round-3
+scheme, not ML-KEM, and it has no ML-DSA; dalek is Curve25519 only.
+
+**What makes the comparison fair.**  Each binary links hacl-pulse as well as
+its contender, and before any row is timed the contender's output is
+checked against hacl-pulse's on the same keys, message and nonce -- byte
+for byte where the operation is deterministic, by cross-verification where
+it is not -- and the binary aborts on a mismatch, so no cell can be measuring
+a different key size, output length or variant from its label.  Bulk rows
+are one-shot calls on 256 KiB.  P-256 ECDH here is a variable-base scalar
+multiplication (the main table's is the fixed-base initiator); ECDSA rows
+sign and verify SHA-256 of a 64-byte message.  RSA uses n, e and d only, no
+CRT, for every library, because hacl-pulse's RSA has no CRT; hacl-pulse
+also takes the key as bytes on every call, while OpenSSL and AWS-LC load it
+once.  Ed25519 signs with a pre-expanded key everywhere except Firedancer,
+whose API takes the seed and hashes it on every call.  OpenSSL's and
+AWS-LC's ECDSA and ML-KEM, and AWS-LC's ML-DSA signing, draw from their
+DRBGs where hacl-pulse takes explicit nonces and seeds.
+
+**Reading it.**  hacl-pulse is the fastest library here for three rows.
+secp256k1 is not a real contest: OpenSSL and AWS-LC run it through generic
+curve code, and the library one would actually use, Bitcoin Core's
+libsecp256k1, is not in the comparison.  The others are BLAKE2s and, built
+by clang, Poly1305, each narrowly.  On the previous machine it also led on
+ChaCha20, Salsa20, ChaCha20-Poly1305 and NaCl secretbox with its AVX-512F
+backends (`bench/REPORT.md` Parts 60 and 61); this processor has no
+AVX-512, and on AVX2 those rows are 1.07x--1.23x behind OpenSSL, AWS-LC and
+libjade.  Elsewhere the gaps fall into two groups.
+
+- *Within 1.4x* -- Salsa20, secretbox, SHA-256 and HMAC-SHA-256, both
+  AES-GCMs, BLAKE2b, ChaCha20, SHA3-256, ChaCha20-Poly1305, MD5, SHAKE128
+  and X25519.  Every one of these is a primitive where hacl-pulse already uses
+  the same instruction-set extensions as the leader (AVX2, SHA-NI, AES-NI
+  and PCLMUL, BMI2), and the remaining distance is hand-scheduled
+  assembly: OpenSSL's and AWS-LC's SHA-256, ChaCha20 and Keccak,
+  Firedancer's GCM, libjade's Salsa20, s2n-bignum's X25519.
+- *1.7x--6x* -- RSA, FFDHE, SHA-512, P-256, Ed25519, ML-KEM, ML-DSA and
+  SHA-1.  RSA and FFDHE are portable 64-bit Montgomery multiplication
+  against OpenSSL's MULX/ADX assembly, at 1.8x--1.9x.  SHA-512 is an
+  instruction-set gap: OpenSSL and Firedancer compute its message schedule
+  with AVX2, which neither this library nor HACL\* does; SHA-1 is a wider
+  one, since OpenSSL uses the SHA extensions for it and hacl-pulse does not.
+  P-256 is at 2.2x--3.8x against `nistz256`'s assembly field, its 150 KB
+  of generator multiples and its double-scalar verification.  Ed25519, at
+  3.2x--3.9x, is portable radix-2^51 C against s2n-bignum's assembly.
+  ML-KEM, at 3.2x--3.5x, and ML-DSA-65, at 3.7x--3.8x of AWS-LC (5.1x--5.3x
+  of mldsa-native, which has no column here), are behind AVX2 assembly
+  mostly on Keccak one lane at a time.
+
+Verification does not by itself put a library at the back of a row:
+libjade and the s2n-bignum routines in AWS-LC and Firedancer are verified
+too, and they lead or nearly lead theirs.  The gaps are mostly backends that
+have not been written yet, and this table, rather than the HACL\* one, is
+the better guide to which matter most: a four-way Keccak for ML-KEM and
+ML-DSA, the AVX2 SHA-2 message schedule, and P-256 and RSA's
+multiplication.
 
 ## Proof engineering notes
 
@@ -4524,9 +5246,15 @@ rough order of value:
    are now the numbers themselves rather than multiples of `R`.  The old
    `Hacl.K256.Field` is deleted.  It was worth 313 us to 227 on ECDSA sign and
    291 to 213 on ECDH, and it puts our `fmul` at 29.4 ns against HACL\*'s
-   25.9, so the field is no longer the gap.  P-256's prime admits the same
-   treatment -- `p = 2^256 - 2^224 + 2^192 + 2^96 - 1` reduces by shifted
-   subtractions rather than a multiply -- and has not had it.
+   25.9, so the field is no longer the gap.  P-256's half is **done** too,
+   in its own Montgomery form rather than a fold: `code/p256/Hacl.P256.Field64.fst`
+   reduces with `mu == 1` and `p + 1 = 2^96 + 2^192 * 0xffffffff00000001`, so
+   each of the four steps is two shifts and one multiplication, on top of
+   X25519-64's `mul8`.  `fmul` went from 34 ns to 25 (gcc) and 47 to 18
+   (clang), and every P-256 operation 35-50% faster (Part 62).  The two
+   scalar fields followed with a generic word-by-word Montgomery multiply,
+   `Hacl.Impl.Mont64`, and an addition-chain inversion, 11-16% off signing
+   on both curves (Part 65).
 
 6. **The fixed-base window**, **done on all three curves**.
    `code/ed25519/Hacl.Ed25519.PointMulG.fst` splits the scalar into four
@@ -4565,9 +5293,8 @@ rough order of value:
    **1.04x**, signing from 287 to **182** and 1.69x to **1.08x**, and
    verification from 545 to **449** and 1.27x to **1.05x**, with variable-base
    `dh-responder` unmoved at **0.77x** as the control.  Its six constants are
-   Montgomery forms, since that is the representation P-256's field runs in,
-   and they live in `code/p256/Hacl.P256.TablesG.fst` rather than beside the
-   other eight for the reason given there.  The scalar arithmetic all three
+   Montgomery forms, since that is the representation P-256's field runs in
+   (they have since been replaced by compiled-in tables; see below).  The scalar arithmetic all three
    share is `spec/Spec.Group.Split4.fst`.  The variable-base
    half is **done on all three curves**: `code/k256/Hacl.K256.PointWin.fst`,
    `code/p256/Hacl.P256.PointWin.fst` and
@@ -4657,8 +5384,11 @@ rough order of value:
    arrays in radix 2^52, a hundred and ninety-two field constants), the
    chunking half of `Hacl.Impl.Lit52` and `Hacl.K256.WinTable`; it cost an
    afternoon, verified at every step on the first attempt, and let
-   `Hacl.K256.Tables52G` be deleted.  The same change is available on P-256,
-   at 192 field constants, and has not been made.
+   `Hacl.K256.Tables52G` be deleted.  P-256 has **now had it too**, at 192
+   field constants in Montgomery form (`Hacl.P256.Win0` .. `Win3`,
+   `Hacl.P256.WinTable`), which let `Hacl.P256.TablesG` be deleted and took
+   ECDH as initiator from 97 us to 69 under gcc and 77 to 59 under clang
+   (Part 63).
 7. **Ed25519's group-order arithmetic on the four-limb Montgomery core**,
    **done**.  `Hacl.Ed25519.Scalar` was the last bit-at-a-time arithmetic in
    the repository and the last user of the eight-limb, thirty-two-bit
@@ -4867,35 +5597,31 @@ rough order of value:
     What remains of that row is this repository's intrinsics against Vale's
     hand-written assembly, which is a much smaller thing to chase.
 
-17. **A vector backend.**  ChaCha20 at 5.31x, Poly1305 at 4.18x and
-    ChaCha20-Poly1305 at 5.14x against HACL\* best are the three rows that
-    no further work on scalar C can reach, and together they are most of
-    what is left in the table.  **ChaCha20 is done**: `lib/Hacl.Vec256.fst`
+17. **A vector backend -- done.**  ChaCha20 at 5.31x, Poly1305 at 4.18x
+    and ChaCha20-Poly1305 at 5.14x against HACL\* best were the three rows
+    that no further work on scalar C could reach; they are now 1.09x, 0.97x
+    and 1.04x.  **ChaCha20 is done**: `lib/Hacl.Vec256.fst`
     is the AVX2 counterpart of `Hacl.Vec128`, fifteen axioms each tested by
     `tests/test_vec256.c`, and `Hacl.Chacha20.Vec256` is an eight-lane
     vertical ChaCha20 proved lane by lane against the scalar specification
-    (4.7x on 256 KiB, see `bench/REPORT.md` Part 54).  What remains is
-    Poly1305: four 64-bit lanes of five 26-bit limbs, `vpmuludq` for the
-    products, and a proof that four interleaved Horner chains in *r^4*,
-    combined at the end by *r^4, r^3, r^2, r*, are the specification's one
-    chain in *r*.  The lane-wise field arithmetic should reuse
-    `Hacl.Poly1305.Field`'s limb lemmas the way the ChaCha20 rounds reused
-    the scalar quarter-round; the reordering lemma is new.  An AVX-512
-    ChaCha20 (sixteen lanes) is a smaller follow-up on the same pattern.
+    (4.7x on 256 KiB, see `bench/REPORT.md` Part 54).  **Poly1305 is done
+    too**: `Hacl.Poly1305.Vec256` runs four Horner chains in *r^4*, one per
+    64-bit lane, and `Spec.Poly1305.Vec` proves them the specification's one
+    chain in *r* (4.4x on 256 KiB, Part 55); `lib/Hacl.Vec256.fst` grew to
+    twenty-three axioms.  **AVX-512 ChaCha20 is done** as well:
+    `lib/Hacl.Vec512.fst` (seventeen axioms, `tests/test_vec512.c`) and the
+    sixteen-lane `Hacl.Chacha20.Vec512`, another 1.9x on 256 KiB (Part 60).
+    **Salsa20 has both** (`Hacl.Salsa20.Vec512`, `Hacl.Salsa20.Vec256`,
+    10.6x on 256 KiB, Part 61), ported from ChaCha20's with only the rounds
+    changed.  What remains is AVX-512 Poly1305 (eight lanes), on the same
+    pattern; it is now most of secretbox's time.
 
-18. **One hash core, two block implementations.**  `hash_blocks_ni`,
-    `hmac_impl_ni` and now `expand_impl_ni` are three transcriptions of
-    generic code at `S32.t`, differing from their originals in exactly one
-    call each.  They exist because the `word` typeclass is a statement about
-    *values* and offers no way for code at an abstract `t` to obtain the
-    witness `t == S32.t` that calling the SHA-EXT implementation needs.
-    Three copies is where the pattern stops being free: `Hacl.HMAC.DRBG.Core`,
-    `Hacl.HMAC.Cat`, `Hacl.HPKE.Labeled` and `Hacl.Streaming.HMAC` are all
-    still on the scalar path, and a fourth, fifth and sixth copy is not the
-    answer.  The answer is to make the block function a parameter of
-    `hash_blocks` --- a higher-order stateful argument whose specification is
-    exactly the one `update_block_impl` already has --- so that one generic
-    copy serves both and `inline_for_extraction` plus `monomorphize`
-    specialises it away in C.  That is a refactor of verified code rather
-    than a change, which is why it has not been done yet, but every
-    additional consumer of HMAC makes it more clearly correct.
+18. **One hash core, two block implementations.**  Partly done.
+    `Hacl.Hash.SHA2.Core.blocks_t` is the type of a block function, the
+    incremental hash (`update_with`) and `Hacl.HMAC.Cat.hmac_cat` take one
+    as a `[@@@monomorphize]` argument, and `Hacl.HKDF.Core.expand_impl` is
+    one generic copy that runs on SHA-EXT through it; `expand_impl_ni` is
+    gone.  `hash_blocks_ni` and `hmac_impl_ni` are still transcriptions at
+    `S32.t`, and `Hacl.HMAC.DRBG.Core`, `Hacl.HPKE.Labeled` and
+    `Hacl.Streaming.HMAC` still pass `blocks_scalar`.  Moving the one-shot
+    hash and HMAC onto the same argument would remove the remaining copies.

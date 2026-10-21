@@ -49,6 +49,7 @@ module U64 = FStar.UInt64
 module Math = FStar.Math.Lemmas
 module S64 = Hacl.Secret.UInt64
 module Declassify = Hacl.Secret.Declassify
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -763,7 +764,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   pw_one (num va);
   (* the table: T[d] = a^d in Montgomery form, for d < 16 *)
   let z64 = S64.zero;
-  let mut tbl = [| z64; SZ.mul 16sz nn |];
+  let tbl = Mem.alloc z64 (SZ.mul 16sz nn);
   A.pts_to_len tbl;
   with vtbl. assert (A.pts_to tbl vtbl);
   table_store tbl acc nn 0sz;
@@ -859,6 +860,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   with vf. assert (A.pts_to res vf);
   exp_end (num vf) (num vaccf) (pw (num va) (num vbb)) (wt (SZ.v nn)) (num vn)
           (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
+  Mem.free tbl (SZ.mul 16sz nn);
   ()
 }
 
@@ -909,6 +911,88 @@ let vt_bit1 (sq pr aMv anum bn rr nN mu m0 vi j: nat) (k: nat)
           (ensures pr == (pw anum (bn / pow2 j) * rr) % nN)
   = exp_mul_step sq pr aMv anum (bn / pow2 vi) rr nN mu m0 k;
     pw_cong anum (bn / pow2 vi + bn / pow2 vi + 1) (bn / pow2 j)
+
+#push-options "--z3rlimit 200 --z3refresh"
+
+(** A zero bit at the top of the range lowers the bound by one. *)
+let lead_zero (x j: nat)
+  : Lemma (requires x < pow2 (j + 1) /\ x / pow2 j % 2 == 0)
+          (ensures x < pow2 j)
+  = Math.lemma_div_lt_nat x (j + 1) j;
+    assert_norm (pow2 1 == 2);
+    Math.lemma_div_mod x (pow2 j)
+
+(** A one bit at the top of the range is all that is left above it. *)
+let lead_one (x j: nat)
+  : Lemma (requires x < pow2 (j + 1) /\ x / pow2 j % 2 == 1)
+          (ensures x / pow2 j == 1)
+  = Math.lemma_div_lt_nat x (j + 1) j;
+    assert_norm (pow2 1 == 2)
+
+(** [top_bit bb bbits] is the bit length of a public exponent: the least
+    [k] with [bb < 2^k], found by scanning down from [bbits].  An RSA
+    verification exponent is seventeen bits in a sixty-four-bit word, and
+    every leading zero the ladder walks is a wasted squaring. *)
+fn top_bit (bb: A.array S64.t) (bbits: SZ.t)
+           (#pb: perm) (#vbb: erased (Seq.seq S64.t))
+requires A.pts_to bb #pb vbb **
+  pure (SZ.v bbits <= 64 * Seq.length vbb /\ num vbb < pow2 (SZ.v bbits))
+returns k: SZ.t
+ensures A.pts_to bb #pb vbb **
+  pure (SZ.v k <= SZ.v bbits /\ num vbb < pow2 (SZ.v k) /\
+        (SZ.v k > 0 ==> num vbb / pow2 (SZ.v k - 1) == 1))
+{
+  A.pts_to_len bb;
+  let mut i = bbits;
+  let mut k = bbits;
+  while (let vi = !i; SZ.gt vi 0sz)
+  invariant exists* (vi vk: SZ.t).
+    pts_to i vi ** pts_to k vk ** A.pts_to bb #pb vbb **
+    pure (SZ.v vk <= SZ.v bbits /\ num vbb < pow2 (SZ.v vk) /\
+          (SZ.v vi == SZ.v vk \/
+           (SZ.v vi == 0 /\ SZ.v vk > 0 /\ num vbb / pow2 (SZ.v vk - 1) == 1)))
+  decreases (SZ.v (!i))
+  {
+    let vi = !i;
+    let j = SZ.sub vi 1sz;
+    digit_in_range (SZ.v j) (Seq.length vbb);
+    let msk = get_bit bb j;
+    let bit = Declassify.u64 msk;
+    if (U64.eq bit 0uL) {
+      assert (pure (num vbb / pow2 (SZ.v j) % 2 == 0));
+      lead_zero (num vbb) (SZ.v j);
+      k := j;
+      i := j;
+    } else {
+      assert (pure (num vbb / pow2 (SZ.v j) % 2 == 1));
+      lead_one (num vbb) (SZ.v j);
+      i := 0sz;
+    }
+  };
+  let vk = !k;
+  vk
+}
+
+(** The ladder's starting accumulator: the base itself when the exponent
+    has a top bit, which is the first rung already climbed. *)
+fn seed_acc (acc: A.array S64.t) (aM: A.array S64.t) (nn: SZ.t) (kt: SZ.t)
+            (#vacc #vaM: erased (Seq.seq S64.t))
+requires A.pts_to acc vacc ** A.pts_to aM vaM **
+  pure (Seq.length vacc == SZ.v nn /\ Seq.length vaM == SZ.v nn)
+ensures exists* (v: Seq.seq S64.t).
+  A.pts_to acc v ** A.pts_to aM vaM **
+  pure (Seq.length v == SZ.v nn /\
+        (SZ.v kt > 0 ==> v == reveal vaM) /\
+        (SZ.v kt == 0 ==> v == reveal vacc))
+{
+  if (SZ.gt kt 0sz) {
+    copy acc aM nn;
+  } else {
+    ()
+  }
+}
+
+#pop-options
 
 #push-options "--z3rlimit 200 --z3refresh"
 
@@ -964,8 +1048,18 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
   with vacc1. assert (A.pts_to acc vacc1);
   exp_start (num vaM1) (num vacc1) (num va) (wt (SZ.v nn)) (num vn)
             (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
-  Math.small_div (num vbb) (pow2 (SZ.v bbits));
-  let mut i = bbits;
+  let kt = top_bit bb bbits;
+  seed_acc acc aM nn kt;
+  let i0 : SZ.t = (if SZ.gt kt 0sz then SZ.sub kt 1sz else 0sz);
+  assert_norm (pow2 0 == 1);
+  pw_one (num va);
+  assert (pure (SZ.v kt == 0 ==> num vbb / pow2 (SZ.v i0) == 0));
+  assert (pure (SZ.v kt > 0 ==> num vbb / pow2 (SZ.v i0) == 1));
+  with vacc2. assert (A.pts_to acc vacc2);
+  assert (pure (num vacc2 < num vn /\
+    num vacc2 == (pw (num va) (num vbb / pow2 (SZ.v i0)) * wt (SZ.v nn))
+                 % num vn));
+  let mut i = i0;
   while (let vi = !i; SZ.gt vi 0sz)
   invariant exists* (vi: SZ.t) (v v1 v2 v3 v4: Seq.seq S64.t).
     pts_to i vi ** A.pts_to res v ** A.pts_to a #pa va ** A.pts_to bb #pb vbb **
@@ -986,8 +1080,7 @@ ensures exists* (v v1 v2 v3 v4: Seq.seq S64.t).
     sz_sub1 vi;
     with vacc0. assert (A.pts_to acc vacc0);
     with vaMc. assert (A.pts_to aM vaMc);
-    copy t acc nn;
-    mont_mul res acc t wide nmod nn mu;
+    mont_sqr res acc wide nmod nn mu;
     with vsq. assert (A.pts_to res vsq);
     vt_sq (num vacc0) (num vsq) (num va) (num vbb) (wt (SZ.v nn)) (num vn)
           (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v vi) (SZ.v j) (SZ.v nn);

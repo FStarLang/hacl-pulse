@@ -58,6 +58,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module S8 = Hacl.Secret.UInt8
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** {2 The state invariant}
 
@@ -122,9 +123,11 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
   sizes #t p;
 
   let mut k0arr = [| z8; bl |];
+  Mem.track k0arr;
   A.pts_to_len k0arr;
   A.pts_to_len k0arr;
   let mut dgarr = [| z8; p.nhash_bytes |];
+  Mem.track dgarr;
   A.pts_to_len dgarr;
   A.pts_to_len dgarr;
 
@@ -134,6 +137,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
   fill_xor #t opadb k0arr opad;
 
   let mut ipadarr = [| z8; bl |];
+  Mem.track ipadarr;
   A.pts_to_len ipadarr;
   A.pts_to_len ipadarr;
   fill_xor #t ipadarr k0arr ipad;
@@ -147,6 +151,9 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
   with vtot'. assert (A.pts_to tot vtot');
   assert (pure (Seq.equal (Seq.append (Seq.empty #S8.t) (xor_byte #t vk0 ipad))
                           (Seq.append (xor_byte #t vk0 ipad) (Seq.empty #S8.t))));
+  Mem.wipe ipadarr bl;
+  Mem.wipe dgarr p.nhash_bytes;
+  Mem.wipe k0arr bl;
   ()
 }
 
@@ -235,6 +242,7 @@ ensures exists* (vw: Seq.seq t) (vout': Seq.seq S8.t).
   inner_len #t p (reveal key) (reveal msg);
 
   let mut dgarr = [| z8; p.nhash_bytes |];
+  Mem.track dgarr;
   A.pts_to_len dgarr;
   A.pts_to_len dgarr;
 
@@ -242,6 +250,7 @@ ensures exists* (vw: Seq.seq t) (vout': Seq.seq S8.t).
                                 (reveal msg));
   Hacl.Hash.SHA2.Streaming.digest_impl p kt wsb acc buf tot dgarr seen;
   hash_prefixed p kt ivt out opadb dgarr p.nhash_bytes;
+  Mem.wipe dgarr p.nhash_bytes;
   ()
 }
 

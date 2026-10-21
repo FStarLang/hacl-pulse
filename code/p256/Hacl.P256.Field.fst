@@ -21,9 +21,11 @@
     visible in any statement below, and each operation says exactly what
     [Spec.P256] says it does.
 
-    Every function here is four lines -- fetch the constant tables, call the
-    operation from [Hacl.Impl.Mont4], apply the one lemma that turns the
-    representation-level equation into a numeric one.  The tables are
+    The ring operations and the entry into Montgomery form are
+    {!Hacl.P256.Field64}, which is specialised to this prime; the rest
+    call the generic [Hacl.Impl.Mont4] -- fetch the constant tables, call
+    the operation, apply the one lemma that turns the representation-level
+    equation into a numeric one.  The tables are
     [static const] arrays and the permission on them is never returned,
     which is what [drop_table] records. *)
 module Hacl.P256.Field
@@ -50,6 +52,11 @@ module S128 = Hacl.Secret.UInt128
 module P = Spec.P256
 module MA = Spec.ModArith
 module G = Pulse.Lib.GlobalArray
+module Math = FStar.Math.Lemmas
+module F = Hacl.P256.Field64
+module F64 = Hacl.Curve25519.Field64
+module W = Spec.Curve25519.Field64
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -60,6 +67,51 @@ let felem (v: Seq.seq S64.t) : prop = res fmod (vals v)
 let fmod_m (_: unit) : Lemma (fmod.m == P.prime) = ()
 
 let fev (v: Seq.seq S64.t) : GTot P.felem = mev fmod (vals v)
+
+(** {2 From {!Hacl.P256.Field64} to [Spec.Mont4]}
+
+    {!Hacl.P256.Field64} speaks of four words as [ev4] of numerals; the
+    rest of the library speaks of [eval] of their [vals].  They agree, and
+    an operation that produces any residue with the right value produces
+    the same limbs as the specification's [mmul], [madd] or [msub], so the
+    existing [mev_*] lemmas carry over. *)
+
+#push-options "--fuel 1"
+let eval_ev (s: Seq.seq S64.t)
+  : Lemma (requires Seq.length s == 4) (ensures eval (vals s) == F64.ev s)
+  = let v = vals s in
+    let v1 = Seq.slice v 1 4 in
+    let v2 = Seq.slice v1 1 3 in
+    let v3 = Seq.slice v2 1 2 in
+    let v4 = Seq.slice v3 1 1 in
+    assert_norm (pow2 64 == W.w);
+    eval_empty v4;
+    assert (eval v3 == Seq.index v3 0 + base * eval v4);
+    assert (eval v2 == Seq.index v2 0 + base * eval v3);
+    assert (eval v1 == Seq.index v1 0 + base * eval v2);
+    assert (eval v == Seq.index v 0 + base * eval v1)
+#pop-options
+
+let fmod_pp (_: unit) : Lemma (fmod.m == F.pp /\ pow2 256 == W.w4) =
+  assert_norm (P.prime == F.pp);
+  assert_norm (pow2 256 == W.w4)
+
+let felem_of (s: Seq.seq S64.t)
+  : Lemma (requires Seq.length s == 4 /\ F64.ev s < F.pp)
+          (ensures felem s /\ eval (vals s) == F64.ev s)
+  = eval_ev s; vals_bnd s; fmod_pp ()
+
+let mev_eq_of (x y: Seq.seq nat)
+  : Lemma (requires eval x == eval y) (ensures mev fmod x == mev fmod y) = ()
+
+let mmul_eq (a b z: Seq.seq nat)
+  : Lemma (requires modulus_ok fmod /\ res fmod a /\ res fmod b /\ res fmod z /\
+                    pow2 256 * eval z % fmod.m == eval a * eval b % fmod.m)
+          (ensures eval z == eval (mmul fmod a b))
+  = mmul_ok fmod a b;
+    rcancel fmod (eval z) (eval (mmul fmod a b));
+    Math.small_mod (eval z) fmod.m;
+    Math.small_mod (eval (mmul fmod a b)) fmod.m
 
 (** {2 The ring operations} *)
 
@@ -73,11 +125,15 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (felem vo' /\ fev vo' == P.fadd (fev va) (fev vb))
 {
-  fmod_ok (); fmod_m ();
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len a; A.pts_to_len b; A.pts_to_len out;
+  eval_ev va; eval_ev vb;
   mev_add fmod (vals va) (vals vb);
-  let nm = fnm ();
-  aadd out a b nm fmod;
-  drop_table nm;
+  madd_ok fmod (vals va) (vals vb);
+  F.fadd out a b;
+  with vo'. assert (A.pts_to out vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (madd fmod (vals va) (vals vb));
 }
 
 fn fsub (out a b: A.array S64.t)
@@ -90,11 +146,15 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (felem vo' /\ fev vo' == P.fsub (fev va) (fev vb))
 {
-  fmod_ok (); fmod_m ();
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len a; A.pts_to_len b; A.pts_to_len out;
+  eval_ev va; eval_ev vb;
   mev_sub fmod (vals va) (vals vb);
-  let ms = fms ();
-  asub out a b ms fmod;
-  drop_table ms;
+  msub_ok fmod (vals va) (vals vb);
+  F.fsub out a b;
+  with vo'. assert (A.pts_to out vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (msub fmod (vals va) (vals vb));
 }
 
 fn fneg (out a: A.array S64.t)
@@ -123,18 +183,19 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev vb))
 {
-  fmod_ok (); fmod_m ();
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len a; A.pts_to_len b; A.pts_to_len out;
+  eval_ev va; eval_ev vb;
   mev_mul fmod (vals va) (vals vb);
-  let ms = fms ();
-  let nm = fnm ();
-  amul out a b ms nm fmu fmod;
-  drop_table ms;
-  drop_table nm;
+  F.fmul out a b;
+  with vo'. assert (A.pts_to out vo');
+  felem_of vo';
+  mmul_eq (vals va) (vals vb) (vals vo');
+  mev_eq_of (vals vo') (mmul fmod (vals va) (vals vb));
 }
 
-(** Squaring needs a second reference to its argument, and the multiplier
-    wants the three buffers distinct: the copy is eight moves against two
-    hundred and fifty-six multiplies. *)
+(** Squaring is a product with itself; the copy gives the multiplier a
+    second buffer and the compiler keeps both in registers. *)
 fn fsqr (out a: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -145,9 +206,11 @@ ensures exists* (vo': Seq.seq S64.t).
   pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev va))
 {
   let z = S64.zero;
-  let mut ac = [| z; 4sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 4sz |];
+  Mem.track ac; A.pts_to_len ac; A.pts_to_len ac;
   acopy ac a;
   fmul out a ac;
+  Mem.nowipe ac;
   ()
 }
 
@@ -200,14 +263,18 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va **
   pure (felem vo' /\ fev vo' == eval (vals va))
 {
-  fmod_ok (); fmod_m ();
-  let ms = fms ();
-  let nm = fnm ();
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len a; A.pts_to_len out;
   mev_to fmod (vals va);
   let r2 = fr2 ();
-  amul out a r2 ms nm fmu fmod;
-  drop_table ms;
-  drop_table nm;
+  with pr vr. assert (A.pts_to r2 #pr vr);
+  A.pts_to_len r2;
+  eval_ev va; eval_ev vr;
+  F.fmul out a r2;
+  with vo'. assert (A.pts_to out vo');
+  felem_of vo';
+  mmul_eq (vals va) (vals vr) (vals vo');
+  mev_eq_of (vals vo') (mmul fmod (vals va) (vals vr));
   drop_table r2;
 }
 
@@ -258,9 +325,11 @@ ensures A.pts_to a #pa va ** pure (r == (fev va = P.fzero))
   mev_iszero fmod (vals va);
   mzero_ok ();
   let z = S64.zero;
-  let mut az = [| z; 4sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 4sz |];
+  Mem.track az; A.pts_to_len az; A.pts_to_len az;
   azero az;
   let r = aeq a az;
+  Mem.wipe az 4sz;
   r
 }
 
@@ -332,12 +401,16 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (pow2 256 < 2 * P.prime);
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; let mut asv = [| z128; 4sz |]; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv; A.pts_to_len at; A.pts_to_len asv;
   load_be at b;
   let nm = fnm ();
   let r = abelow at asv nm fmod;
   drop_table nm;
   fto out at;
+  Mem.wipe asv 4sz;
+  Mem.wipe at 4sz;
   r
 }
 
@@ -350,9 +423,11 @@ ensures exists* (vb': Seq.seq S8.t).
   pure (vb' == nat_to_be 32 (fev va))
 {
   let z = S64.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at; A.pts_to_len at;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at; A.pts_to_len at;
   ffrom at a;
   store_be b at;
+  Mem.wipe at 4sz;
   ()
 }
 

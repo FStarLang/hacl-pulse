@@ -60,6 +60,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module Declassify = Hacl.Secret.Declassify
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -356,16 +357,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 32sz |];
+  Mem.track r2;
   let mut g = [| z; 32sz |];
+  Mem.track g;
   let mut e = [| z; 32sz |];
+  Mem.track e;
   let mut res = [| z; 32sz |];
+  Mem.track res;
   let mut aM = [| z; 32sz |];
+  Mem.track aM;
   let mut acc = [| z; 32sz |];
+  Mem.track acc;
   let mut t = [| z; 32sz |];
+  Mem.track t;
   let mut wide = [| z; 64sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 32sz mu;
   secret_to_public_precomp pk sk p r2 32sz mu g e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 64sz;
+  Mem.wipe t 32sz;
+  Mem.wipe acc 32sz;
+  Mem.wipe aM 32sz;
+  Mem.wipe res 32sz;
+  Mem.wipe e 32sz;
+  Mem.wipe g 32sz;
+  Mem.wipe r2 32sz;
 }
 
 (** [ffdhe2048_shared_secret ss sk pk] validates the peer's key and, if it is
@@ -395,16 +412,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe2048_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 32sz |];
+  Mem.track r2;
   let mut a = [| z; 32sz |];
+  Mem.track a;
   let mut e = [| z; 32sz |];
+  Mem.track e;
   let mut res = [| z; 32sz |];
+  Mem.track res;
   let mut aM = [| z; 32sz |];
+  Mem.track aM;
   let mut acc = [| z; 32sz |];
+  Mem.track acc;
   let mut t = [| z; 32sz |];
+  Mem.track t;
   let mut wide = [| z; 64sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 32sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 32sz mu a e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 64sz;
+  Mem.wipe t 32sz;
+  Mem.wipe acc 32sz;
+  Mem.wipe aM 32sz;
+  Mem.wipe res 32sz;
+  Mem.wipe e 32sz;
+  Mem.wipe a 32sz;
+  Mem.wipe r2 32sz;
   ok
 }
 
@@ -440,16 +473,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 48sz |];
+  Mem.track r2;
   let mut g = [| z; 48sz |];
+  Mem.track g;
   let mut e = [| z; 48sz |];
+  Mem.track e;
   let mut res = [| z; 48sz |];
+  Mem.track res;
   let mut aM = [| z; 48sz |];
+  Mem.track aM;
   let mut acc = [| z; 48sz |];
+  Mem.track acc;
   let mut t = [| z; 48sz |];
+  Mem.track t;
   let mut wide = [| z; 96sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 48sz mu;
   secret_to_public_precomp pk sk p r2 48sz mu g e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 96sz;
+  Mem.wipe t 48sz;
+  Mem.wipe acc 48sz;
+  Mem.wipe aM 48sz;
+  Mem.wipe res 48sz;
+  Mem.wipe e 48sz;
+  Mem.wipe g 48sz;
+  Mem.wipe r2 48sz;
 }
 
 (** [ffdhe3072_shared_secret ss sk pk] validates the peer's key and, if it is
@@ -479,16 +528,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe3072_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 48sz |];
+  Mem.track r2;
   let mut a = [| z; 48sz |];
+  Mem.track a;
   let mut e = [| z; 48sz |];
+  Mem.track e;
   let mut res = [| z; 48sz |];
+  Mem.track res;
   let mut aM = [| z; 48sz |];
+  Mem.track aM;
   let mut acc = [| z; 48sz |];
+  Mem.track acc;
   let mut t = [| z; 48sz |];
+  Mem.track t;
   let mut wide = [| z; 96sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 48sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 48sz mu a e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 96sz;
+  Mem.wipe t 48sz;
+  Mem.wipe acc 48sz;
+  Mem.wipe aM 48sz;
+  Mem.wipe res 48sz;
+  Mem.wipe e 48sz;
+  Mem.wipe a 48sz;
+  Mem.wipe r2 48sz;
   ok
 }
 
@@ -524,16 +589,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 64sz |];
+  Mem.track r2;
   let mut g = [| z; 64sz |];
+  Mem.track g;
   let mut e = [| z; 64sz |];
+  Mem.track e;
   let mut res = [| z; 64sz |];
+  Mem.track res;
   let mut aM = [| z; 64sz |];
+  Mem.track aM;
   let mut acc = [| z; 64sz |];
+  Mem.track acc;
   let mut t = [| z; 64sz |];
+  Mem.track t;
   let mut wide = [| z; 128sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 64sz mu;
   secret_to_public_precomp pk sk p r2 64sz mu g e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 128sz;
+  Mem.wipe t 64sz;
+  Mem.wipe acc 64sz;
+  Mem.wipe aM 64sz;
+  Mem.wipe res 64sz;
+  Mem.wipe e 64sz;
+  Mem.wipe g 64sz;
+  Mem.wipe r2 64sz;
 }
 
 (** [ffdhe4096_shared_secret ss sk pk] validates the peer's key and, if it is
@@ -563,16 +644,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe4096_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 64sz |];
+  Mem.track r2;
   let mut a = [| z; 64sz |];
+  Mem.track a;
   let mut e = [| z; 64sz |];
+  Mem.track e;
   let mut res = [| z; 64sz |];
+  Mem.track res;
   let mut aM = [| z; 64sz |];
+  Mem.track aM;
   let mut acc = [| z; 64sz |];
+  Mem.track acc;
   let mut t = [| z; 64sz |];
+  Mem.track t;
   let mut wide = [| z; 128sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 64sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 64sz mu a e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 128sz;
+  Mem.wipe t 64sz;
+  Mem.wipe acc 64sz;
+  Mem.wipe aM 64sz;
+  Mem.wipe res 64sz;
+  Mem.wipe e 64sz;
+  Mem.wipe a 64sz;
+  Mem.wipe r2 64sz;
   ok
 }
 
@@ -608,16 +705,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 96sz |];
+  Mem.track r2;
   let mut g = [| z; 96sz |];
+  Mem.track g;
   let mut e = [| z; 96sz |];
+  Mem.track e;
   let mut res = [| z; 96sz |];
+  Mem.track res;
   let mut aM = [| z; 96sz |];
+  Mem.track aM;
   let mut acc = [| z; 96sz |];
+  Mem.track acc;
   let mut t = [| z; 96sz |];
+  Mem.track t;
   let mut wide = [| z; 192sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 96sz mu;
   secret_to_public_precomp pk sk p r2 96sz mu g e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 192sz;
+  Mem.wipe t 96sz;
+  Mem.wipe acc 96sz;
+  Mem.wipe aM 96sz;
+  Mem.wipe res 96sz;
+  Mem.wipe e 96sz;
+  Mem.wipe g 96sz;
+  Mem.wipe r2 96sz;
 }
 
 (** [ffdhe6144_shared_secret ss sk pk] validates the peer's key and, if it is
@@ -647,16 +760,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe6144_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 96sz |];
+  Mem.track r2;
   let mut a = [| z; 96sz |];
+  Mem.track a;
   let mut e = [| z; 96sz |];
+  Mem.track e;
   let mut res = [| z; 96sz |];
+  Mem.track res;
   let mut aM = [| z; 96sz |];
+  Mem.track aM;
   let mut acc = [| z; 96sz |];
+  Mem.track acc;
   let mut t = [| z; 96sz |];
+  Mem.track t;
   let mut wide = [| z; 192sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 96sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 96sz mu a e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 192sz;
+  Mem.wipe t 96sz;
+  Mem.wipe acc 96sz;
+  Mem.wipe aM 96sz;
+  Mem.wipe res 96sz;
+  Mem.wipe e 96sz;
+  Mem.wipe a 96sz;
+  Mem.wipe r2 96sz;
   ok
 }
 
@@ -692,16 +821,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 128sz |];
+  Mem.track r2;
   let mut g = [| z; 128sz |];
+  Mem.track g;
   let mut e = [| z; 128sz |];
+  Mem.track e;
   let mut res = [| z; 128sz |];
+  Mem.track res;
   let mut aM = [| z; 128sz |];
+  Mem.track aM;
   let mut acc = [| z; 128sz |];
+  Mem.track acc;
   let mut t = [| z; 128sz |];
+  Mem.track t;
   let mut wide = [| z; 256sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 128sz mu;
   secret_to_public_precomp pk sk p r2 128sz mu g e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 256sz;
+  Mem.wipe t 128sz;
+  Mem.wipe acc 128sz;
+  Mem.wipe aM 128sz;
+  Mem.wipe res 128sz;
+  Mem.wipe e 128sz;
+  Mem.wipe g 128sz;
+  Mem.wipe r2 128sz;
 }
 
 (** [ffdhe8192_shared_secret ss sk pk] validates the peer's key and, if it is
@@ -731,16 +876,32 @@ ensures exists* (v: Seq.seq S8.t).
   assert (pure ((S64.v mu * S64.v (Seq.index (G.static_array_elems ffdhe8192_arr) 0) + 1) % base == 0));
   let z = S64.zero;
   let mut r2 = [| z; 128sz |];
+  Mem.track r2;
   let mut a = [| z; 128sz |];
+  Mem.track a;
   let mut e = [| z; 128sz |];
+  Mem.track e;
   let mut res = [| z; 128sz |];
+  Mem.track res;
   let mut aM = [| z; 128sz |];
+  Mem.track aM;
   let mut acc = [| z; 128sz |];
+  Mem.track acc;
   let mut t = [| z; 128sz |];
+  Mem.track t;
   let mut wide = [| z; 256sz |];
+  Mem.track wide;
   precomp r2 acc t wide p 128sz mu;
   let ok = shared_secret_precomp ss sk pk p r2 128sz mu a e res aM acc t wide;
   drop_table p;
+  Mem.wipe wide 256sz;
+  Mem.wipe t 128sz;
+  Mem.wipe acc 128sz;
+  Mem.wipe aM 128sz;
+  Mem.wipe res 128sz;
+  Mem.wipe e 128sz;
+  Mem.wipe a 128sz;
+  Mem.wipe r2 128sz;
   ok
 }
 

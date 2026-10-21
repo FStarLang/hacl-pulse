@@ -46,6 +46,7 @@ module Copy = Hacl.Impl.Copy
 module Vec = Hacl.Vec128
 module Sub = Hacl.Impl.Sub
 module Alg = Spec.GF128.Algebra
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -208,6 +209,7 @@ ensures exists* (va1: Seq.seq S8.t).
   if (SZ.gt rem 0sz) {
     let z = S8.zero;
     let mut tb = [| z; 16sz |];
+    Mem.track tb;
     A.pts_to_len tb;
     A.pts_to_len tb;
     Copy.copy_range tb 0sz data vi rem;
@@ -219,6 +221,7 @@ ensures exists* (va1: Seq.seq S8.t).
     let hb = Sub.sub h 0sz 16sz;
     Hacl.AES.GMul.gmul_add_impl acc hb tb 0sz;
     Sub.unsub_id h 0 16 hb;
+    Mem.wipe tb 16sz;
     } else {
     }
 }

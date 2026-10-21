@@ -67,6 +67,7 @@ module Declassify = Hacl.Secret.Declassify
 module Conv = Hacl.Bignum.Convert
 module Mont = Hacl.Bignum.Montgomery
 module Exp = Hacl.Bignum.Exponentiation
+module Mem = Hacl.Mem
 
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
@@ -101,7 +102,7 @@ ensures exists* (v: Seq.seq S64.t).
   A.pts_to_len b;
   let width = SZ.mul 8sz nn;
   let off = SZ.sub width len;
-  let mut tmp = [| (zero8 <: S8.t); width |];
+  let tmp = Mem.alloc (zero8 <: S8.t) width;
   A.pts_to_len tmp;
   (* The padding is at most three bytes, and the stack allocation already
      starts out zero, so [copy_at] leaving the prefix alone is enough.
@@ -115,6 +116,7 @@ ensures exists* (v: Seq.seq S64.t).
   be_nat_pad vt (SZ.v len);
   Seq.lemma_eq_intro (Seq.slice vt (SZ.v off) (SZ.v width)) (reveal vb);
   Conv.from_bytes_be res nn tmp;
+  Mem.free tmp width;
 }
 
 (** [b <- the low [len] bytes of [a]], which are all of it. *)
@@ -132,7 +134,7 @@ ensures exists* (v: Seq.seq S8.t).
   A.pts_to_len a;
   let width = SZ.mul 8sz nn;
   let off = SZ.sub width len;
-  let mut tmp = [| (zero8 <: S8.t); width |];
+  let tmp = Mem.alloc (zero8 <: S8.t) width;
   A.pts_to_len tmp;
   Conv.to_bytes_be tmp a nn;
   with vt. assert (A.pts_to tmp vt);
@@ -144,6 +146,7 @@ ensures exists* (v: Seq.seq S8.t).
                   Seq.index vb' k == Seq.index vt (SZ.v off + k)));
   Seq.lemma_eq_intro (Seq.slice vt (SZ.v off) (SZ.v width)) vb';
   assert (pure (be_nat vb' == num va));
+  Mem.free tmp width;
 }
 
 (** [res <- 1]. *)
@@ -216,12 +219,12 @@ ensures exists* (v: Seq.seq S64.t).
   A.pts_to_len nmod;
   SZ.fits_lte (SZ.v nn + SZ.v nn) (2 * rad * SZ.v nn);
   let z64 = S64.zero;
-  let mut ebn = [| z64; en |];
-  let mut r2 = [| z64; nn |];
-  let mut aM = [| z64; nn |];
-  let mut accu = [| z64; nn |];
-  let mut tn = [| z64; nn |];
-  let mut wide = [| z64; SZ.add nn nn |];
+  let ebn = Mem.alloc z64 en;
+  let r2 = Mem.alloc z64 nn;
+  let aM = Mem.alloc z64 nn;
+  let accu = Mem.alloc z64 nn;
+  let tn = Mem.alloc z64 nn;
+  let wide = Mem.alloc z64 (SZ.add nn nn);
   A.pts_to_len ebn;
   A.pts_to_len r2;
   A.pts_to_len aM;
@@ -241,8 +244,20 @@ ensures exists* (v: Seq.seq S64.t).
     SZ.fits_lte (16 * SZ.v nn) (2 * rad * SZ.v nn);
     Exp.mul64_mod4 (SZ.v en);
     Exp.mod_exp_consttime res a ebn bbits r2 nmod nn mu aM accu tn wide;
+    Mem.free wide (SZ.add nn nn);
+    Mem.free tn nn;
+    Mem.free accu nn;
+    Mem.free aM nn;
+    Mem.free r2 nn;
+    Mem.free ebn en;
   } else {
     Exp.mod_exp_vartime res a ebn bbits r2 nmod nn mu aM accu tn wide;
+    Mem.free wide (SZ.add nn nn);
+    Mem.free tn nn;
+    Mem.free accu nn;
+    Mem.free aM nn;
+    Mem.free r2 nn;
+    Mem.free ebn en;
   }
 }
 
@@ -325,10 +340,10 @@ ensures exists* (vout': Seq.seq S8.t).
   SZ.fits_lte (8 * SZ.v en) (64 * SZ.v eLen);
   SZ.fits_lte (64 * SZ.v en) (64 * SZ.v eLen);
   let z64 = S64.zero;
-  let mut nbn = [| z64; nn |];
-  let mut mbn = [| z64; nn |];
-  let mut sbn = [| z64; nn |];
-  let mut onebn = [| z64; nn |];
+  let nbn = Mem.alloc z64 nn;
+  let mbn = Mem.alloc z64 nn;
+  let sbn = Mem.alloc z64 nn;
+  let onebn = Mem.alloc z64 nn;
   A.pts_to_len nbn;
   A.pts_to_len mbn;
   A.pts_to_len sbn;
@@ -349,16 +364,20 @@ ensures exists* (vout': Seq.seq S8.t).
   if (odd && gt1 && below) {
     mod_exp_be sbn mbn eb eLen en nbn nn ct
                #_ #_ #_ #_ #_ #_ #(hide (as_modulus0 (reveal vnbn)));
-    (* The result is written at full limb width and the bytes above the
-       output are checked, rather than assumed, to be zero. *)
+    (* The result is written at full limb width, and the bytes above the
+       output must be zero.  When the output is as wide as the modulus they
+       are, because the result is below the modulus: that is the signing
+       path, where the result is secret and is not looked at.  Otherwise
+       -- verification, where it is public -- they are checked. *)
     let width = SZ.mul 8sz nn;
     let off = SZ.sub width outLen;
-    let mut tmp = [| (zero8 <: S8.t); width |];
+    let tmp = Mem.alloc (zero8 <: S8.t) width;
     A.pts_to_len tmp;
     Conv.to_bytes_be tmp sbn nn;
     with vt. assert (A.pts_to tmp vt);
     be_nat_prefix_zero vt (SZ.v outLen);
-    let fits = all_zero tmp off;
+    be_nat_bound vnb;
+    let fits = if (SZ.eq outLen kLen) { true } else { all_zero tmp off };
     if fits {
       be_nat_trunc vt (SZ.v outLen);
       copy_range out 0sz tmp off outLen;
@@ -367,11 +386,25 @@ ensures exists* (vout': Seq.seq S8.t).
       assert (pure (forall (k: nat). k < SZ.v outLen ==>
                       Seq.index vo k == Seq.index vt (SZ.v off + k)));
       Seq.lemma_eq_intro (Seq.slice vt (SZ.v off) (SZ.v width)) vo;
+      Mem.free tmp width;
+      Mem.free onebn nn;
+      Mem.free sbn nn;
+      Mem.free mbn nn;
+      Mem.free nbn nn;
       true
     } else {
+      Mem.free tmp width;
+      Mem.free onebn nn;
+      Mem.free sbn nn;
+      Mem.free mbn nn;
+      Mem.free nbn nn;
       false
     }
   } else {
+    Mem.free onebn nn;
+    Mem.free sbn nn;
+    Mem.free mbn nn;
+    Mem.free nbn nn;
     false
   }
 }
@@ -482,10 +515,12 @@ ensures exists* (vsg': Seq.seq S8.t).
   SZ.fits_u32_implies_fits (SZ.v dLen + 7);
   SZ.fits_u32_implies_fits (64 * SZ.v dLen);
   let emBits = U32.sub modBits 1ul;
-  let mut em = [| (zero8 <: S8.t); emLen |];
+  let em = Mem.alloc (zero8 <: S8.t) emLen;
   A.pts_to_len em;
   pss_encode_impl p kt ivt em emBits emLen salt sLen msg mLen;
-  rsa_exp sgnt kLen em emLen nb kLen db dLen true
+  let wr = rsa_exp sgnt kLen em emLen nb kLen db dLen true;
+  Mem.free em emLen;
+  wr
 }
 
 (** RSASSA-PSS-VERIFY, RFC 8017 section 8.1.2. *)
@@ -535,7 +570,7 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
   SZ.fits_u32_implies_fits (SZ.v eLen + 7);
   SZ.fits_u32_implies_fits (64 * SZ.v eLen);
   let emBits = U32.sub modBits 1ul;
-  let mut em = [| (zero8 <: S8.t); emLen |];
+  let em = Mem.alloc (zero8 <: S8.t) emLen;
   A.pts_to_len em;
   let good = rsa_exp em emLen sgnt kLen nb kLen eb eLen false;
   if good {
@@ -545,15 +580,23 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to nb #pnb vnb **
     verify_intro p (SZ.v sLen) (U32.v emBits) (reveal vmsg)
                  (as_lseq (em_len (U32.v emBits)) (reveal vem))
                  (rsa_pow (be_nat vsg) (be_nat veb) (be_nat vnb)) r;
+    Mem.free em emLen;
     r
   } else {
     verify_reject p (SZ.v sLen) (U32.v emBits) (reveal vmsg)
                   (be_nat vnb) (be_nat vsg) (be_nat veb);
+    Mem.free em emLen;
     false
   }
 }
 
 #pop-options
+
+(* The entry points below run at the default options, and how long their
+   queries take depends on what the solver has seen before them: a change
+   to the body of [rsa_exp] alone was enough to time one out.  A fresh
+   solver makes them independent of everything above. *)
+#restart-solver
 
 (** {2 The entry points}
 

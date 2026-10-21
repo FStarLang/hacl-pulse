@@ -58,13 +58,10 @@ $(BUILD_DIR)/Hacl.o: $(DIST_DIR)/Hacl.c
 # style question.
 HACL_CFLAGS ?= -std=c11 -O3 -Wall -Wextra -Werror
 
-# One exception, and only for the generated translation unit.  Several
-# routines size a stack array from a run time parameter, and gcc's
-# -Wdangling-pointer gets variable length arrays wrong: it reports the array
-# as dead inside a callee that the array is passed to, while it is plainly
-# still in scope.  The handwritten C below is still compiled with the warning
-# on.
-GENERATED_CFLAGS ?= -Wno-dangling-pointer
+# Extra flags for the generated translation unit only.  There are none: it
+# used to need -Wno-dangling-pointer, for stack arrays sized by a run time
+# parameter, but those now live on the heap (see lib/Hacl.Mem.fsti).
+GENERATED_CFLAGS ?=
 
 # Handwritten C.  Everything in c/ is trusted computing base -- currently just
 # the platform entropy shim -- and is compiled with the same flags and linked

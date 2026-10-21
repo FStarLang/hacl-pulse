@@ -61,6 +61,7 @@ module B = Hacl.Spec.Bytes
 module Cast = FStar.Int.Cast
 module Math = FStar.Math.Lemmas
 module Sub = Hacl.Impl.Sub
+module Mem = Hacl.Mem
 
 (** {2 Sizes and small constants} *)
 
@@ -289,12 +290,14 @@ ensures exists* wkey wbn wexp.
   let z8 = S8.zero;
 
   let mut sid = [| z8; 10sz |];
+  Mem.track sid;
   A.pts_to_len sid;
   suite_id_impl cs sid;
   with vsid. assert (A.pts_to sid vsid);
 
   (* psk_id_hash and info_hash *)
   let mut pskh = [| z8; hb |];
+  Mem.track pskh;
   A.pts_to_len pskh;
   let l1 = table label_psk_id_hash_arr 11sz;
   A.pts_to_len l1;
@@ -304,6 +307,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len pskh;
 
   let mut infoh = [| z8; hb |];
+  Mem.track infoh;
   A.pts_to_len infoh;
   let l2 = table label_info_hash_arr 9sz;
   A.pts_to_len l2;
@@ -315,6 +319,7 @@ ensures exists* wkey wbn wexp.
   (* key_schedule_context = mode || psk_id_hash || info_hash *)
   let ks_len = SZ.add 1sz (SZ.add hb hb);
   let mut ks = [| z8; ks_len |];
+  Mem.track ks;
   A.pts_to_len ks;
   assert (pure (SZ.v ks_len == 2 * size_kdf cs + 1));
   ks_bound cs.kdf (SZ.v ks_len);
@@ -331,6 +336,7 @@ ensures exists* wkey wbn wexp.
 
   (* secret = LabeledExtract(shared_secret, "secret", psk) *)
   let mut secret = [| z8; hb |];
+  Mem.track secret;
   A.pts_to_len secret;
   let l3 = table label_secret_arr 6sz;
   A.pts_to_len l3;
@@ -366,6 +372,11 @@ ensures exists* wkey wbn wexp.
   with wbn. assert (A.pts_to base_nonce wbn);
   with wexp. assert (A.pts_to exporter wexp);
   ks_final cs m vsh vinfo vpsk vpid vsid vpskh vinfoh vks vsec wkey wbn wexp;
+  Mem.wipe secret hb;
+  Mem.wipe ks ks_len;
+  Mem.wipe infoh hb;
+  Mem.wipe pskh hb;
+  Mem.wipe sid 10sz;
   ()
 }
 
@@ -489,6 +500,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to bn #pb vbn **
   assert_norm (bytes #S64.t == 8);
   let z8 = S8.zero;
   let mut be = [| z8; 12sz |];
+  Mem.track be;
   A.pts_to_len be;
   store_be #S64.t be 4sz (S64.classify sq);
   with w1. assert (A.pts_to be w1);
@@ -520,6 +532,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to bn #pb vbn **
                               (Seq.index (B.nat_to_be 12 (U64.v sq)) k)));
   nonce_eq (U64.v sq) vbn wo;
   assert (pure (reveal wo == xor_bytes #12 (reveal vbn) (B.nat_to_be 12 (U64.v sq))));
+  Mem.wipe be 12sz;
 }
 
 #pop-options
@@ -591,10 +604,12 @@ ensures exists* wsq wct wtag.
   } else {
     let z8 = S8.zero;
     let mut nonce = [| z8; 12sz |];
+    Mem.track nonce;
     A.pts_to_len nonce;
     compute_nonce_impl nonce base_nonce s;
     seal_impl cs.aead ct tag pt pt_len aad aad_len key nonce;
     A.((sq.(0sz) <- U64.add s 1uL));
+    Mem.wipe nonce 12sz;
     true
   }
 }
@@ -658,13 +673,16 @@ ensures exists* wsq wpt.
   } else {
     let z8 = S8.zero;
     let mut nonce = [| z8; 12sz |];
+    Mem.track nonce;
     A.pts_to_len nonce;
     compute_nonce_impl nonce base_nonce s;
     let r = open_impl cs.aead pt ct ct_len tag aad aad_len key nonce;
     if r {
       A.((sq.(0sz) <- U64.add s 1uL));
+      Mem.wipe nonce 12sz;
       true
     } else {
+      Mem.wipe nonce 12sz;
       false
     }
   }
@@ -719,6 +737,7 @@ ensures exists* wout.
 
   let z8 = S8.zero;
   let mut sid = [| z8; 10sz |];
+  Mem.track sid;
   A.pts_to_len sid;
   suite_id_impl cs sid;
   let l = table label_sec_arr 3sz;
@@ -726,6 +745,7 @@ ensures exists* wout.
   labeled_expand_impl cs.kdf kt ivt out out_len exporter (kdf_len cs) sid 10sz
                       l 3sz exp_ctx exp_ctx_len;
   drop_table l;
+  Mem.wipe sid 10sz;
 }
 
 #pop-options
@@ -810,14 +830,17 @@ ensures exists* wenc wkey wbn wsq wexp.
   A.pts_to_len pkR;
   let z8 = S8.zero;
   let mut shared = [| z8; 32sz |];
+  Mem.track shared;
   A.pts_to_len shared;
   let ok = encap_impl cs.kem shared enc skE pkR;
   if ok {
     key_schedule_impl cs m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
+    Mem.wipe shared 32sz;
     true
   } else {
+    Mem.wipe shared 32sz;
     false
   }
 }
@@ -888,14 +911,17 @@ ensures exists* wkey wbn wsq wexp.
   A.pts_to_len skR;
   let z8 = S8.zero;
   let mut shared = [| z8; 32sz |];
+  Mem.track shared;
   A.pts_to_len shared;
   let ok = decap_impl cs.kem shared enc skR;
   if ok {
     key_schedule_impl cs m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
+    Mem.wipe shared 32sz;
     true
   } else {
+    Mem.wipe shared 32sz;
     false
   }
 }
@@ -977,14 +1003,17 @@ ensures exists* wenc wkey wbn wsq wexp.
   A.pts_to_len pkR;
   let z8 = S8.zero;
   let mut shared = [| z8; 32sz |];
+  Mem.track shared;
   A.pts_to_len shared;
   let ok = auth_encap_impl cs.kem shared enc skE skS pkR;
   if ok {
     key_schedule_impl cs m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
+    Mem.wipe shared 32sz;
     true
   } else {
+    Mem.wipe shared 32sz;
     false
   }
 }
@@ -1061,14 +1090,17 @@ ensures exists* wkey wbn wsq wexp.
   A.pts_to_len pkS;
   let z8 = S8.zero;
   let mut shared = [| z8; 32sz |];
+  Mem.track shared;
   A.pts_to_len shared;
   let ok = auth_decap_impl cs.kem shared enc skR pkS;
   if ok {
     key_schedule_impl cs m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
+    Mem.wipe shared 32sz;
     true
   } else {
+    Mem.wipe shared 32sz;
     false
   }
 }
@@ -1137,12 +1169,14 @@ ensures exists* wenc wkey wbn wsq wexp.
   ks_bound cs.kdf 0;
   let z8 = S8.zero;
   let mut o1 = [| z8; 1sz |];
+  Mem.track o1;
   A.pts_to_len o1;
   let n1 = Sub.sub o1 0sz 0sz;
   with w1. assert (A.pts_to n1 w1);
   A.pts_to_len n1;
   Seq.lemma_eq_elim (reveal w1) (Seq.empty #S8.t);
   let mut o2 = [| z8; 1sz |];
+  Mem.track o2;
   A.pts_to_len o2;
   let n2 = Sub.sub o2 0sz 0sz;
   with w2. assert (A.pts_to n2 w2);
@@ -1152,6 +1186,8 @@ ensures exists* wenc wkey wbn wsq wexp.
                        info info_len n1 0sz n2 0sz;
   Sub.unsub_id o2 0 0 n2;
   Sub.unsub_id o1 0 0 n1;
+  Mem.wipe o2 1sz;
+  Mem.wipe o1 1sz;
   r
 }
 
@@ -1203,12 +1239,14 @@ ensures exists* wkey wbn wsq wexp.
   ks_bound cs.kdf 0;
   let z8 = S8.zero;
   let mut o1 = [| z8; 1sz |];
+  Mem.track o1;
   A.pts_to_len o1;
   let n1 = Sub.sub o1 0sz 0sz;
   with w1. assert (A.pts_to n1 w1);
   A.pts_to_len n1;
   Seq.lemma_eq_elim (reveal w1) (Seq.empty #S8.t);
   let mut o2 = [| z8; 1sz |];
+  Mem.track o2;
   A.pts_to_len o2;
   let n2 = Sub.sub o2 0sz 0sz;
   with w2. assert (A.pts_to n2 w2);
@@ -1218,6 +1256,8 @@ ensures exists* wkey wbn wsq wexp.
                        info info_len n1 0sz n2 0sz;
   Sub.unsub_id o2 0 0 n2;
   Sub.unsub_id o1 0 0 n1;
+  Mem.wipe o2 1sz;
+  Mem.wipe o1 1sz;
   r
 }
 
@@ -1287,18 +1327,30 @@ ensures exists* wenc wct wtag.
   A.pts_to_len tag;
   let z8 = S8.zero;
   let mut key = [| z8; key_len cs.aead |];
+  Mem.track key;
   A.pts_to_len key;
   let mut base_nonce = [| z8; 12sz |];
+  Mem.track base_nonce;
   A.pts_to_len base_nonce;
   let mut exporter = [| z8; kdf_len cs |];
+  Mem.track exporter;
   A.pts_to_len exporter;
   let mut sq = [| 0uL; 1sz |];
+  Mem.track sq;
   A.pts_to_len sq;
   let ok = setup_base_s cs kt ivt enc key base_nonce sq exporter skE pkR info info_len;
   if ok {
     let r = context_seal_impl cs key base_nonce sq exporter aad aad_len pt pt_len ct tag;
+    Mem.wipe sq 1sz;
+    Mem.wipe exporter (kdf_len cs);
+    Mem.wipe base_nonce 12sz;
+    Mem.wipe key (key_len cs.aead);
     r
   } else {
+    Mem.wipe sq 1sz;
+    Mem.wipe exporter (kdf_len cs);
+    Mem.wipe base_nonce 12sz;
+    Mem.wipe key (key_len cs.aead);
     false
   }
 }
@@ -1358,19 +1410,31 @@ ensures exists* wpt.
   A.pts_to_len tag;
   let z8 = S8.zero;
   let mut key = [| z8; key_len cs.aead |];
+  Mem.track key;
   A.pts_to_len key;
   let mut base_nonce = [| z8; 12sz |];
+  Mem.track base_nonce;
   A.pts_to_len base_nonce;
   let mut exporter = [| z8; kdf_len cs |];
+  Mem.track exporter;
   A.pts_to_len exporter;
   let mut sq = [| 0uL; 1sz |];
+  Mem.track sq;
   A.pts_to_len sq;
   let ok = setup_base_r cs kt ivt key base_nonce sq exporter enc skR info info_len;
   if ok {
     let r = context_open_impl cs key base_nonce sq exporter aad aad_len
                               ct ct_len tag pt;
+    Mem.wipe sq 1sz;
+    Mem.wipe exporter (kdf_len cs);
+    Mem.wipe base_nonce 12sz;
+    Mem.wipe key (key_len cs.aead);
     r
   } else {
+    Mem.wipe sq 1sz;
+    Mem.wipe exporter (kdf_len cs);
+    Mem.wipe base_nonce 12sz;
+    Mem.wipe key (key_len cs.aead);
     false
   }
 }

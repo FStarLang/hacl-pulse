@@ -4,6 +4,8 @@
 #   make verify     verify everything
 #   make extract    (re)generate dist/
 #   make test       build and run the C test suite
+#   make lint       check that all scratch memory goes through Hacl.Mem
+#   make stack      check the stack frames of the generated C
 #   make clean
 
 include mk/common.mk
@@ -180,6 +182,16 @@ CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM512., keypair enc dec ek_valid dk_valid
 CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM768., keypair enc dec ek_valid dk_valid)
 CUSTARD_ENTRIES += $(addprefix Hacl.MLKEM1024., keypair enc dec ek_valid dk_valid)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.MLDSA44., \
+  keypair sign sign_deterministic verify \
+  sign_internal verify_internal sign_mu verify_mu)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLDSA65., \
+  keypair sign sign_deterministic verify \
+  sign_internal verify_internal sign_mu verify_mu)
+CUSTARD_ENTRIES += $(addprefix Hacl.MLDSA87., \
+  keypair sign sign_deterministic verify \
+  sign_internal verify_internal sign_mu verify_mu)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.HPKE.Suites., \
   x25519_sha256_chachapoly_setup_base_s x25519_sha256_chachapoly_setup_base_r \
   x25519_sha256_chachapoly_seal x25519_sha256_chachapoly_open \
@@ -202,10 +214,11 @@ include mk/extract.mk
 
 .DEFAULT_GOAL := all
 .PHONY: all
-all: verify extract compile test
+all: lint verify extract compile stack test
 
 include mk/test.mk
 include mk/clones.mk
+include mk/lint.mk
 
 .PHONY: clean
 clean:

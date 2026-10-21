@@ -45,6 +45,7 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module Math = FStar.Math.Lemmas
 module Copy = Hacl.Impl.Copy
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -325,6 +326,7 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
   A.pts_to_len ctr;
   let z = S8.zero;
   let mut ka = [| z; 16sz |];
+  Mem.track ka;
   A.pts_to_len ka;
   A.pts_to_len ka;
 
@@ -477,6 +479,7 @@ ensures exists* (vm1 vc1: Seq.seq S8.t).
   };
   with vj vm. assert pts_to j vj ** A.pts_to msg vm;
   ctr_inv_done p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v n) (SZ.v vj);
+  Mem.wipe ka 16sz;
   ()
 }
 

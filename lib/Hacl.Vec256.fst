@@ -68,6 +68,7 @@ module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
+module S64 = Hacl.Secret.UInt64
 
 (** {2 The type} *)
 
@@ -190,3 +191,58 @@ assume val hi128 (a b: t)
            lane r 2 == lane a 6 /\ lane r 3 == lane a 7 /\
            lane r 4 == lane b 4 /\ lane r 5 == lane b 5 /\
            lane r 6 == lane b 6 /\ lane r 7 == lane b 7 }
+
+(** {2 Four sixty-four-bit lanes}
+
+    Poly1305 runs four interleaved accumulators, one per sixty-four-bit
+    lane, in radix [2^26].  A sixty-four-bit lane is two thirty-two-bit ones,
+    low first, which is a definition; so the unpacks and permutes above are
+    already statements about it.  The arithmetic is stated on natural
+    numbers, with the wrap-around written out, so that the field code can
+    reason about limbs without going through [UInt64]. *)
+
+let lane64 (x: t) (i: nat { i < 4 }) : GTot nat =
+  S32.v (lane x (2 * i)) + pow2 32 * S32.v (lane x (2 * i + 1))
+
+[@@custard_extern "Hacl_Vec256_add64"; custard_c_header "Hacl_Vec256.h"]
+assume val add64 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==> lane64 r i == (lane64 a i + lane64 b i) % pow2 64 }
+
+(** [VPMULUDQ]: the low thirty-two bits of each lane, multiplied out to
+    sixty-four. *)
+[@@custard_extern "Hacl_Vec256_mul32"; custard_c_header "Hacl_Vec256.h"]
+assume val mul32 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             lane64 r i == (lane64 a i % pow2 32) * (lane64 b i % pow2 32) }
+
+[@@custard_extern "Hacl_Vec256_shr64"; custard_c_header "Hacl_Vec256.h"]
+assume val shr64 (a: t) (s: U32.t { 0 < U32.v s /\ U32.v s < 64 })
+  : r: t { forall (i: nat). i < 4 ==> lane64 r i == lane64 a i / pow2 (U32.v s) }
+
+[@@custard_extern "Hacl_Vec256_shl64"; custard_c_header "Hacl_Vec256.h"]
+assume val shl64 (a: t) (s: U32.t { 0 < U32.v s /\ U32.v s < 64 })
+  : r: t { forall (i: nat). i < 4 ==>
+             lane64 r i == (lane64 a i * pow2 (U32.v s)) % pow2 64 }
+
+(** [VPAND] with [2^26 - 1] in every sixty-four-bit lane. *)
+[@@custard_extern "Hacl_Vec256_mask26"; custard_c_header "Hacl_Vec256.h"]
+assume val mask26 (a: t)
+  : r: t { forall (i: nat). i < 4 ==> lane64 r i == lane64 a i % pow2 26 }
+
+[@@custard_extern "Hacl_Vec256_bcast64"; custard_c_header "Hacl_Vec256.h"]
+assume val bcast64 (x: S64.t)
+  : r: t { forall (i: nat). i < 4 ==> lane64 r i == S64.v x }
+
+(** Four words, lane zero first. *)
+[@@custard_extern "Hacl_Vec256_set64"; custard_c_header "Hacl_Vec256.h"]
+assume val set64 (x0 x1 x2 x3: S64.t)
+  : r: t { lane64 r 0 == S64.v x0 /\ lane64 r 1 == S64.v x1 /\
+           lane64 r 2 == S64.v x2 /\ lane64 r 3 == S64.v x3 }
+
+(** The four lanes to four words of memory, unaligned. *)
+[@@custard_extern "Hacl_Vec256_store64"; custard_c_header "Hacl_Vec256.h"]
+assume val store64 (p: A.array S64.t) (x: t) (#v: erased (Seq.seq S64.t))
+  : stt unit (requires A.pts_to p v ** pure (Seq.length v == 4))
+             (ensures fun _ -> exists* (v': Seq.seq S64.t). A.pts_to p v' **
+                pure (Seq.length v' == 4 /\
+                      (forall (i: nat). i < 4 ==> S64.v (Seq.index v' i) == lane64 x i)))

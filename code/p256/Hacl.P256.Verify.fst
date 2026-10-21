@@ -42,6 +42,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
 
@@ -68,13 +69,30 @@ ensures
   pure (res == vfy (qev vm) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; let mut c1 = [| z; 4sz |]; A.pts_to_len c1; let mut c2 = [| z; 4sz |]; A.pts_to_len c2; let mut c3 = [| z; 4sz |]; A.pts_to_len c3; let mut c4 = [| z; 4sz |]; A.pts_to_len c4; let mut c5 = [| z; 4sz |]; A.pts_to_len c5; let mut c6 = [| z; 4sz |]; A.pts_to_len c6; let mut c7 = [| z; 4sz |]; A.pts_to_len c7; let mut c8 = [| z; 4sz |]; A.pts_to_len c8; let mut c9 = [| z; 4sz |]; A.pts_to_len c9; let mut ca = [| z; 4sz |]; A.pts_to_len ca; let mut cb = [| z; 4sz |]; A.pts_to_len cb; let mut cc = [| z; 4sz |]; A.pts_to_len cc; let mut cd = [| z; 4sz |]; A.pts_to_len cd; let mut ce = [| z; 4sz |]; A.pts_to_len ce; let mut cf = [| z; 4sz |]; A.pts_to_len cf; A.pts_to_len c0; A.pts_to_len c1; A.pts_to_len c2;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; let mut c1 = [| z; 4sz |];
+  Mem.track c1; A.pts_to_len c1; let mut c2 = [| z; 4sz |];
+  Mem.track c2; A.pts_to_len c2; let mut c3 = [| z; 4sz |];
+  Mem.track c3; A.pts_to_len c3; let mut c4 = [| z; 4sz |];
+  Mem.track c4; A.pts_to_len c4; let mut c5 = [| z; 4sz |];
+  Mem.track c5; A.pts_to_len c5; let mut c6 = [| z; 4sz |];
+  Mem.track c6; A.pts_to_len c6; let mut c7 = [| z; 4sz |];
+  Mem.track c7; A.pts_to_len c7; let mut c8 = [| z; 4sz |];
+  Mem.track c8; A.pts_to_len c8; let mut c9 = [| z; 4sz |];
+  Mem.track c9; A.pts_to_len c9; let mut ca = [| z; 4sz |];
+  Mem.track ca; A.pts_to_len ca; let mut cb = [| z; 4sz |];
+  Mem.track cb; A.pts_to_len cb; let mut cc = [| z; 4sz |];
+  Mem.track cc; A.pts_to_len cc; let mut cd = [| z; 4sz |];
+  Mem.track cd; A.pts_to_len cd; let mut ce = [| z; 4sz |];
+  Mem.track ce; A.pts_to_len ce; let mut cf = [| z; 4sz |];
+  Mem.track cf; A.pts_to_len cf; A.pts_to_len c0; A.pts_to_len c1; A.pts_to_len c2;
   A.pts_to_len c3; A.pts_to_len c4; A.pts_to_len c5; A.pts_to_len c6;
   A.pts_to_len c7; A.pts_to_len c8; A.pts_to_len c9;
   A.pts_to_len ca; A.pts_to_len cb; A.pts_to_len cc;
   A.pts_to_len cd; A.pts_to_len ce; A.pts_to_len cf;
   let z8 = S8.classify 0uy;
-  let mut d0 = [| z8; 32sz |]; A.pts_to_len d0; A.pts_to_len d0;
+  let mut d0 = [| z8; 32sz |];
+  Mem.track d0; A.pts_to_len d0; A.pts_to_len d0;
 
   let okr = qload c0 sig_r;
   let oks = qload c1 sig_s;
@@ -96,6 +114,23 @@ ensures
       (P.point_mul_double_g (eval (vals w5)) (eval (vals w6)) (pt q0 q1 q2));
     let inf = fis_zero cc;
     if inf {
+      Mem.wipe d0 32sz;
+      Mem.wipe cf 4sz;
+      Mem.wipe ce 4sz;
+      Mem.wipe cd 4sz;
+      Mem.wipe cc 4sz;
+      Mem.wipe cb 4sz;
+      Mem.wipe ca 4sz;
+      Mem.wipe c9 4sz;
+      Mem.wipe c8 4sz;
+      Mem.wipe c7 4sz;
+      Mem.wipe c6 4sz;
+      Mem.wipe c5 4sz;
+      Mem.wipe c4 4sz;
+      Mem.wipe c3 4sz;
+      Mem.wipe c2 4sz;
+      Mem.wipe c1 4sz;
+      Mem.wipe c0 4sz;
       false
     } else {
       to_aff_point cd ce ca cb cc;
@@ -105,9 +140,43 @@ ensures
       be_nat_to_be 32 (fev wax);
       qload_mod cf d0;
       let eq = qeq cf c0;
+      Mem.wipe d0 32sz;
+      Mem.wipe cf 4sz;
+      Mem.wipe ce 4sz;
+      Mem.wipe cd 4sz;
+      Mem.wipe cc 4sz;
+      Mem.wipe cb 4sz;
+      Mem.wipe ca 4sz;
+      Mem.wipe c9 4sz;
+      Mem.wipe c8 4sz;
+      Mem.wipe c7 4sz;
+      Mem.wipe c6 4sz;
+      Mem.wipe c5 4sz;
+      Mem.wipe c4 4sz;
+      Mem.wipe c3 4sz;
+      Mem.wipe c2 4sz;
+      Mem.wipe c1 4sz;
+      Mem.wipe c0 4sz;
       eq
     }
   } else {
+    Mem.wipe d0 32sz;
+    Mem.wipe cf 4sz;
+    Mem.wipe ce 4sz;
+    Mem.wipe cd 4sz;
+    Mem.wipe cc 4sz;
+    Mem.wipe cb 4sz;
+    Mem.wipe ca 4sz;
+    Mem.wipe c9 4sz;
+    Mem.wipe c8 4sz;
+    Mem.wipe c7 4sz;
+    Mem.wipe c6 4sz;
+    Mem.wipe c5 4sz;
+    Mem.wipe c4 4sz;
+    Mem.wipe c3 4sz;
+    Mem.wipe c2 4sz;
+    Mem.wipe c1 4sz;
+    Mem.wipe c0 4sz;
     false
   }
 }

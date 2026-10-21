@@ -51,6 +51,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
+module Mem = Hacl.Mem
 
 (** {2 The two operations that need the round constants}
 
@@ -75,6 +76,7 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
   let z64 = S64.classify 0uL;
 
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   A.pts_to_len barr;
 
@@ -84,6 +86,7 @@ ensures exists* (vst: Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t)
   update_impl st barr rc_tbl buf tot data data_len r seen;
 
   drop_table rc_tbl;
+  Mem.wipe barr 25sz;
   ()
 }
 
@@ -106,6 +109,7 @@ ensures exists* (vout: Seq.seq S8.t).
   let z64 = S64.classify 0uL;
 
   let mut barr = [| z64; 25sz |];
+  Mem.track barr;
   A.pts_to_len barr;
   A.pts_to_len barr;
 
@@ -115,6 +119,7 @@ ensures exists* (vout: Seq.seq S8.t).
   digest_impl st barr rc_tbl buf tot out out_len r suffix seen;
 
   drop_table rc_tbl;
+  Mem.wipe barr 25sz;
   ()
 }
 

@@ -60,6 +60,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module Spec = Spec.Poly1305
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -144,10 +145,17 @@ let pad_block (msg: Seq.seq S8.t) (tmp: Seq.seq S8.t) (off: nat) (blen: nat)
 
 #pop-options
 
-(** {2 The block loop} *)
+(** {2 The block loop}
+
+    Whole multiples of four blocks go to [Hacl.Poly1305.Vec256.absorb_vec]
+    first, when the processor and the length allow; the rest go one block at
+    a time.  Inlined, because once the call to the vector path is in it the
+    C compiler stops inlining it by itself, and the one-block loop is slower
+    out of line. *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
+inline_for_extraction
 fn absorb_blocks (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
                  (e: A.array S64.t) (msg: A.array S8.t) (n: SZ.t)
                  (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))
@@ -169,8 +177,9 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
 {
   A.pts_to_len h;
   A.pts_to_len msg;
-  repeati_g_zero (Spec.bstep vmsg 0 (feval vr)) (reveal acc);
-  let mut i = 0sz;
+  A.pts_to_len e;
+  let k = Hacl.Poly1305.Vec256.absorb_vec h r d msg n #vh #vr #vd #pm #vmsg #acc;
+  let mut i = k;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vh1: Seq.seq S64.t) (vd1: Seq.seq S64.t)
                     (ve1: Seq.seq S64.t).
@@ -273,6 +282,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to_len msg;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
   Hacl.Impl.Copy.copy_range tarr 0sz msg off blen;
@@ -283,6 +293,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   step_cong (feval vh) (reveal acc) (feval ve0) (feval vr);
   fadd h e;
   fmul h r d;
+  Mem.wipe tarr 16sz;
   ()
 }
 
@@ -353,15 +364,19 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len key;
   let z = S64.zero;
   let mut rarr = [| z; 9sz |];
+  Mem.track rarr;
   A.pts_to_len rarr;
   A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];
+  Mem.track harr;
   A.pts_to_len harr;
   A.pts_to_len harr;
   let mut earr = [| z; 5sz |];
+  Mem.track earr;
   A.pts_to_len earr;
   A.pts_to_len earr;
   let mut darr = [| z; 5sz |];
+  Mem.track darr;
   A.pts_to_len darr;
   A.pts_to_len darr;
 
@@ -389,6 +404,10 @@ ensures exists* (vout': Seq.seq S8.t).
   reduce harr;
   with vhf. assert (A.pts_to harr vhf);
   store_tag out harr key;
+  Mem.wipe darr 5sz;
+  Mem.wipe earr 5sz;
+  Mem.wipe harr 5sz;
+  Mem.wipe rarr 9sz;
   ()
 }
 

@@ -49,6 +49,7 @@ module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
 module GA = Pulse.Lib.GlobalArray
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** The block length as a machine value. *)
 let block_len_sz (#t: Type0) {| w: word t |} : n: SZ.t { SZ.v n == block_len #t } =
@@ -269,6 +270,7 @@ ensures A.pts_to out (final p vst) ** A.pts_to st #pst vst
   let z8 = S8.classify 0uy;
   let dlen = SZ.mul 8sz nb;
   let mut darr = [| z8; dlen |];
+  Mem.track darr;
   A.pts_to_len darr;
   A.pts_to_len darr;
 
@@ -311,6 +313,7 @@ ensures A.pts_to out (final p vst) ** A.pts_to st #pst vst
   with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (final p vst);
   Seq.lemma_eq_elim vo (final p vst);
+  Mem.wipe darr dlen;
   ()
 }
 
@@ -538,10 +541,13 @@ ensures exists* (vout': Seq.seq S8.t).
   let z8 = S8.classify 0uy;
 
   let mut harr = [| z0; 8sz |];
+  Mem.track harr;
   A.pts_to_len harr;
   let mut marr = [| z0; 16sz |];
+  Mem.track marr;
   A.pts_to_len marr;
   let mut barr = [| z8; bl |];
+  Mem.track barr;
   A.pts_to_len barr;
   A.pts_to_len harr;
   A.pts_to_len marr;
@@ -572,6 +578,9 @@ ensures exists* (vout': Seq.seq S8.t).
   compress_impl p harr marr ivs lastc true;
   drop_table ivs;
   write_digest_le p out harr;
+  Mem.wipe barr bl;
+  Mem.wipe marr 16sz;
+  Mem.wipe harr 8sz;
 
 }
 

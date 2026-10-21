@@ -46,6 +46,7 @@ module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
 module G = FStar.Ghost
 module GA = Pulse.Lib.GlobalArray
+module Mem = Hacl.Mem
 
 (** {2 The message schedule as a table} *)
 
@@ -527,12 +528,14 @@ ensures exists* (vh': Seq.seq t).
 {
   let z0: t = zero #t #w;
   let mut vv = [| z0; 16sz |];
+  Mem.track vv;
   A.pts_to_len vv;
   let sg = sigma_table ();
   init_vector_impl p vv h ivs ctr last;
   rounds_impl p vv m sg;
   drop_table sg;
   mix_state_impl h vv;
+  Mem.wipe vv 16sz;
 }
 
 #pop-options

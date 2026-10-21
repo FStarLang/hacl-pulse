@@ -84,8 +84,9 @@ module W0 = Hacl.K256.Win0
 module W1 = Hacl.K256.Win1
 module W2 = Hacl.K256.Win2
 module W3 = Hacl.K256.Win3
+module Mem = Hacl.Mem
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --z3refresh"
 
 (** {2 The spec side}
 
@@ -156,7 +157,7 @@ let dig_at (k: nat) (i: nat { i < 16 }) (j: nat { j < 4 })
     [win_add]s put back the four digits, each weighted by its table's
     scale.  That sum is [hi k i]. *)
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 300 --z3refresh"
 
 fn rung (ox oy oz ux uy uz sx sy sz: A.array S64.t)
         (t0x t0y t0z: A.array S64.t)
@@ -243,10 +244,33 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
     is [hi k 16], and after the rung at [i] it is [hi k i]; the last is
     [hi k 0], which is the scalar. *)
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 300 --z3refresh"
 
 let sz_fits (x: nat) : Lemma (requires x < pow2 32) (ensures SZ.fits x)
   = Hacl.SizeT.fits32 (); SZ.fits_u32_implies_fits x
+
+(** Digit [j] of window [i], read straight from the scalar.  Kept out of
+    [win_loop] so that the index arithmetic is checked in a small context. *)
+fn digit_at (ks: A.array S64.t) (i j: SZ.t)
+            (#pk: perm) (#vk: erased (Seq.seq S64.t))
+requires A.pts_to ks #pk vk **
+  pure (Seq.length vk == B4.nl /\ B4.bnd (L4.vals vk) B4.base /\
+        SZ.v i < 16 /\ SZ.v j < 4)
+returns d: S64.t
+ensures A.pts_to ks #pk vk **
+  pure (S64.v d == Split.dig (W.kv vk) (SZ.v j) (SZ.v i))
+{
+  shift_ok (SZ.v i);
+  assert_norm (256 < pow2 32);
+  sz_fits (SZ.v i * 4);
+  sz_fits (SZ.v j * 64);
+  sz_fits (SZ.v i * 4 + 64 * SZ.v j);
+  dig_at (W.kv vk) (SZ.v i) (SZ.v j);
+  let o = SZ.add (SZ.mul i 4sz) (SZ.mul j 64sz);
+  assert (pure (SZ.v o == SZ.v i * 4 + 64 * SZ.v j));
+  Math.lemma_mod_plus (SZ.v i * 4) (16 * SZ.v j) 4;
+  adigit ks o
+}
 
 fn win_loop (ox oy oz ux uy uz sx sy sz: A.array S64.t)
             (t0x t0y t0z: A.array S64.t)
@@ -336,18 +360,10 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   {
     let vi = !i;
     let i2 = SZ.sub vi 1sz;
-    shift_ok (SZ.v i2);
-    sz_fits (SZ.v i2 * 4);
-    let sh = SZ.mul i2 4sz;
-    sz_fits (SZ.v sh + 64);
-    sz_fits (SZ.v sh + 128);
-    sz_fits (SZ.v sh + 192);
-    dig_at (W.kv vk) (SZ.v i2) 0; dig_at (W.kv vk) (SZ.v i2) 1;
-    dig_at (W.kv vk) (SZ.v i2) 2; dig_at (W.kv vk) (SZ.v i2) 3;
-    let d0 = adigit ks sh;
-    let d1 = adigit ks (SZ.add sh 64sz);
-    let d2 = adigit ks (SZ.add sh 128sz);
-    let d3 = adigit ks (SZ.add sh 192sz);
+    let d0 = digit_at ks i2 0sz;
+    let d1 = digit_at ks i2 1sz;
+    let d2 = digit_at ks i2 2sz;
+    let d3 = digit_at ks i2 3sz;
     rung ox oy oz ux uy uz sx sy sz
          t0x t0y t0z t1x t1y t1z t2x t2y t2z t3x t3y t3z
          d0 d1 d2 d3 (hide (W.kv vk)) (hide (SZ.v i2));
@@ -365,7 +381,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
 
 (** {2 The multiplication} *)
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --z3refresh"
 
 (** [point_mul_g_win o ks] is [o := [ks] G], up to [peq]. *)
 fn point_mul_g_win (ox oy oz: A.array S64.t) (ks: A.array S64.t)
@@ -385,12 +401,18 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut ux = [| z; 5sz |]; A.pts_to_len ux;
-  let mut uy = [| z; 5sz |]; A.pts_to_len uy;
-  let mut uz = [| z; 5sz |]; A.pts_to_len uz;
-  let mut sx = [| z; 5sz |]; A.pts_to_len sx;
-  let mut sy = [| z; 5sz |]; A.pts_to_len sy;
-  let mut sz = [| z; 5sz |]; A.pts_to_len sz;
+  let mut ux = [| z; 5sz |];
+  Mem.track ux; A.pts_to_len ux;
+  let mut uy = [| z; 5sz |];
+  Mem.track uy; A.pts_to_len uy;
+  let mut uz = [| z; 5sz |];
+  Mem.track uz; A.pts_to_len uz;
+  let mut sx = [| z; 5sz |];
+  Mem.track sx; A.pts_to_len sx;
+  let mut sy = [| z; 5sz |];
+  Mem.track sy; A.pts_to_len sy;
+  let mut sz = [| z; 5sz |];
+  Mem.track sz; A.pts_to_len sz;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz;
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz;
 
@@ -411,6 +433,13 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 
   win_loop ox oy oz ux uy uz sx sy sz
            t0x t0y t0z t1x t1y t1z t2x t2y t2z t3x t3y t3z ks;
+  with wx wy wz. assert (A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz);
+  Mem.wipe sz 5sz;
+  Mem.wipe sy 5sz;
+  Mem.wipe sx 5sz;
+  Mem.wipe uz 5sz;
+  Mem.wipe uy 5sz;
+  Mem.wipe ux 5sz;
 
   Tbl.drop_table t0x; Tbl.drop_table t0y; Tbl.drop_table t0z;
   Tbl.drop_table t1x; Tbl.drop_table t1y; Tbl.drop_table t1z;

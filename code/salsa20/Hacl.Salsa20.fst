@@ -53,6 +53,7 @@ module S32 = Hacl.Secret.UInt32
 module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** {2 Two facts about the state} *)
 
@@ -121,6 +122,17 @@ let step_ok (ctr0: U32.t) (len: nat) (b n: nat)
       Math.lemma_div_plus b 1 size_block;
       div_lt size_block (b + n) (pow2 32 - U32.v ctr0)
     end
+
+let ctr_step_ok (ctr0: U32.t) (len: nat) (b n: nat) (c: U32.t)
+  : Lemma
+      (requires
+        U32.v c == U32.v ctr0 + b / size_block /\
+        (b + n < len ==>
+          (b + n) / size_block == b / size_block + 1 /\
+          U32.v ctr0 + (b + n) / size_block < pow2 32))
+      (ensures
+        b + n < len ==> U32.v (U32.add_mod c 1ul) == U32.v ctr0 + (b + n) / size_block)
+  = if b + n < len then Math.modulo_lemma (U32.v c + 1) (pow2 32)
 
 (** {2 The initial state}
 
@@ -371,10 +383,13 @@ ensures exists* (vo: Seq.seq S8.t).
   let z8 = S8.classify 0uy;
 
   let mut starr = [| z32; 16sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut ksarr = [| z32; 16sz |];
+  Mem.track ksarr;
   A.pts_to_len ksarr;
   let mut kbarr = [| z8; 64sz |];
+  Mem.track kbarr;
   A.pts_to_len kbarr;
   A.pts_to_len starr;
   A.pts_to_len ksarr;
@@ -383,8 +398,12 @@ ensures exists* (vo: Seq.seq S8.t).
   init_state starr key nonce ctr0;
   let st0 : G.erased state = G.hide (init (reveal vkey) (reveal vnon) ctr0);
 
-  let mut base = 0sz;
-  let mut ctr = ctr0;
+  (* Sixteen or eight blocks at a time while that is possible and the
+     processor allows; the loop below finishes up one block at a time. *)
+  let nb = Hacl.Salsa20.Vec256.encrypt_vec out msg mlen starr ctr0 st0;
+
+  let mut base = nb;
+  let mut ctr = U32.add_mod ctr0 (SZ.sizet_to_uint32 (SZ.div nb 64sz));
 
   while (let b = !base; SZ.lt b mlen)
   invariant exists* (b: SZ.t) (c: U32.t) (vo: Seq.seq S8.t)
@@ -416,15 +435,26 @@ ensures exists* (vo: Seq.seq S8.t).
     xor_chunk out msg kbarr b n st0 ctr0 c (G.hide vs0);
 
     step_ok ctr0 (Seq.length vmsg) (SZ.v b) (SZ.v n);
+    with_counter_agree vs0 st0 c;
+    ctr_step_ok ctr0 (Seq.length vmsg) (SZ.v b) (SZ.v n) c;
 
-    base := SZ.add b n;
-    ctr := U32.add_mod c 1ul;
+    let b' = SZ.add b n;
+    let c' = U32.add_mod c 1ul;
+    assert (pure (SZ.v b' == SZ.v b + SZ.v n));
+    assert (pure (SZ.v b' < Seq.length vmsg ==>
+                  SZ.v b' % size_block == 0 /\
+                  U32.v c' == U32.v ctr0 + SZ.v b' / size_block));
+    base := b';
+    ctr := c';
   };
 
   with vo. assert (A.pts_to out vo);
   Seq.lemma_eq_intro vo (encrypt_bytes st0 ctr0 vmsg);
   Seq.lemma_eq_elim vo (encrypt_bytes st0 ctr0 vmsg);
 
+  Mem.wipe kbarr 64sz;
+  Mem.wipe ksarr 16sz;
+  Mem.wipe starr 16sz;
   ()
 }
 
@@ -481,14 +511,18 @@ ensures exists* (vo: Seq.seq S8.t).
 
   let z32 = S32.zero;
   let mut starr = [| z32; 16sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut ksarr = [| z32; 16sz |];
+  Mem.track ksarr;
   A.pts_to_len ksarr;
   A.pts_to_len starr;
 
   init_state starr key nonce 0ul;
   core_impl ksarr starr 0ul;
   store_words_le #S32.t out ksarr 16sz;
+  Mem.wipe ksarr 16sz;
+  Mem.wipe starr 16sz;
   ()
 }
 
@@ -522,8 +556,10 @@ ensures exists* (vo: Seq.seq S8.t).
 
   let z32 = S32.zero;
   let mut starr = [| z32; 16sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   let mut hw = [| z32; 8sz |];
+  Mem.track hw;
   A.pts_to_len hw;
   A.pts_to_len starr;
 
@@ -545,6 +581,8 @@ ensures exists* (vo: Seq.seq S8.t).
 
   store_words_le #S32.t out hw 8sz;
   assert (pure (Seq.length vkey == 32));
+  Mem.wipe hw 8sz;
+  Mem.wipe starr 16sz;
   ()
 }
 

@@ -63,6 +63,7 @@ module Spec = Spec.NaCl
 module Salsa = Hacl.Salsa20
 module Poly = Hacl.Poly1305
 module Curve = Hacl.Curve25519
+module Mem = Hacl.Mem
 
 (** {2 The key schedule}
 
@@ -97,6 +98,7 @@ ensures exists* (ws: Seq.seq S8.t) (wt: Seq.seq S8.t) (wb: Seq.seq S8.t).
 
   let z8 = S8.classify 0uy;
   let mut hn = [| z8; 16sz |];
+  Mem.track hn;
   A.pts_to_len hn;
 
   copy_range hn 0sz nonce 0sz 16sz;
@@ -111,6 +113,7 @@ ensures exists* (ws: Seq.seq S8.t) (wt: Seq.seq S8.t) (wb: Seq.seq S8.t).
   Seq.lemma_eq_elim wt (S.xnonce_tail vnon);
 
   Salsa.key_block0 b0 subk tn;
+  Mem.wipe hn 16sz;
   ()
 }
 
@@ -255,10 +258,13 @@ ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
   A.pts_to_len m;
   let z8 = S8.classify 0uy;
   let mut subk = [| z8; 32sz |];
+  Mem.track subk;
   A.pts_to_len subk;
   let mut tn = [| z8; 8sz |];
+  Mem.track tn;
   A.pts_to_len tn;
   let mut b0 = [| z8; 64sz |];
+  Mem.track b0;
   A.pts_to_len b0;
   A.pts_to_len subk;
   A.pts_to_len tn;
@@ -266,6 +272,9 @@ ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
   derive subk tn b0 key nonce;
   sb_cipher c m mlen subk tn b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
   sb_tag tag c mlen b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
+  Mem.wipe b0 64sz;
+  Mem.wipe tn 8sz;
+  Mem.wipe subk 32sz;
   ()
 }
 
@@ -295,12 +304,16 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len tag;
   let z8 = S8.classify 0uy;
   let mut subk = [| z8; 32sz |];
+  Mem.track subk;
   A.pts_to_len subk;
   let mut tn = [| z8; 8sz |];
+  Mem.track tn;
   A.pts_to_len tn;
   let mut b0 = [| z8; 64sz |];
+  Mem.track b0;
   A.pts_to_len b0;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len subk;
   A.pts_to_len tn;
@@ -311,8 +324,16 @@ ensures exists* (w: Seq.seq S8.t).
   let ok = bytes_eq tarr tag 16sz;
   if ok {
     sb_cipher m c mlen subk tn b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
+    Mem.wipe tarr 16sz;
+    Mem.wipe b0 64sz;
+    Mem.wipe tn 8sz;
+    Mem.wipe subk 32sz;
     true
   } else {
+    Mem.wipe tarr 16sz;
+    Mem.wipe b0 64sz;
+    Mem.wipe tn 8sz;
+    Mem.wipe subk 32sz;
     false
   }
 }
@@ -353,6 +374,7 @@ ensures exists* (w: Seq.seq S8.t).
   let clen = SZ.add 16sz mlen;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
 
   let cs = Sub.sub c 16sz clen;
@@ -366,6 +388,7 @@ ensures exists* (w: Seq.seq S8.t).
                                    (fst (Spec.secretbox vkey vnon vm)));
   Seq.lemma_eq_elim w (Seq.append (snd (Spec.secretbox vkey vnon vm))
                                   (fst (Spec.secretbox vkey vnon vm)));
+  Mem.wipe tarr 16sz;
   ()
 }
 
@@ -398,6 +421,7 @@ ensures exists* (w: Seq.seq S8.t).
   let mlen = SZ.sub clen 16sz;
   let z8 = S8.classify 0uy;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
 
   let tw = Sub.sub c 0sz 16sz;
@@ -410,6 +434,7 @@ ensures exists* (w: Seq.seq S8.t).
   let cw = Sub.sub c 16sz clen;
   let ok = sb_open_detached m cw tarr mlen nonce key;
   Sub.unsub_id c 16 (SZ.v clen) cw;
+  Mem.wipe tarr 16sz;
   ok
 }
 
@@ -439,8 +464,10 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len k;
   let z8 = S8.classify 0uy;
   let mut s = [| z8; 32sz |];
+  Mem.track s;
   A.pts_to_len s;
   let mut zn = [| z8; 16sz |];
+  Mem.track zn;
   A.pts_to_len zn;
   A.pts_to_len s;
 
@@ -449,6 +476,8 @@ ensures exists* (w: Seq.seq S8.t).
   Seq.lemma_eq_intro zv Spec.zero_nonce;
   Seq.lemma_eq_elim zv Spec.zero_nonce;
   Salsa.hsalsa20 k s zn;
+  Mem.wipe zn 16sz;
+  Mem.wipe s 32sz;
   ok
 }
 
@@ -730,12 +759,15 @@ ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
   A.pts_to_len tag;
   let z8 = S8.classify 0uy;
   let mut kk = [| z8; 32sz |];
+  Mem.track kk;
   A.pts_to_len kk;
   let ok = box_beforenm kk pk sk;
   if ok {
     sb_detached c tag m mlen n kk;
+    Mem.wipe kk 32sz;
     0ul
   } else {
+    Mem.wipe kk 32sz;
     0xfffffffful
   }
 }
@@ -769,12 +801,15 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len c;
   let z8 = S8.classify 0uy;
   let mut kk = [| z8; 32sz |];
+  Mem.track kk;
   A.pts_to_len kk;
   let ok = box_beforenm kk pk sk;
   if ok {
     let ok2 = sb_open_detached m c tag mlen n kk;
+    Mem.wipe kk 32sz;
     status ok2
   } else {
+    Mem.wipe kk 32sz;
     0xfffffffful
   }
 }
@@ -804,12 +839,15 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len c;
   let z8 = S8.classify 0uy;
   let mut kk = [| z8; 32sz |];
+  Mem.track kk;
   A.pts_to_len kk;
   let ok = box_beforenm kk pk sk;
   if ok {
     sb_easy c m mlen n kk;
+    Mem.wipe kk 32sz;
     0ul
   } else {
+    Mem.wipe kk 32sz;
     0xfffffffful
   }
 }
@@ -845,12 +883,15 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len c;
   let z8 = S8.classify 0uy;
   let mut kk = [| z8; 32sz |];
+  Mem.track kk;
   A.pts_to_len kk;
   let ok = box_beforenm kk pk sk;
   if ok {
     let ok2 = sb_open_easy m c clen n kk;
+    Mem.wipe kk 32sz;
     status ok2
   } else {
+    Mem.wipe kk 32sz;
     0xfffffffful
   }
 }

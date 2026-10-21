@@ -16,8 +16,8 @@
 
 (** Inversion and square roots in [F_p].
 
-    Both are [mexp] with a table from [Spec.P256]: [p - 2] by Fermat, and
-    [(p + 1) / 4] because [p] is [3 mod 4].  The square root also squares
+    Both are {!Hacl.P256.Exp.fexp} with a table from [Spec.P256]: [p - 2]
+    by Fermat, and [(p + 1) / 4] because [p] is [3 mod 4].  The square root also squares
     its candidate back and compares, which is what makes [P.fsqrt] an
     [option]. *)
 module Hacl.P256.Inverse
@@ -43,33 +43,10 @@ module U64 = FStar.UInt64
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module MA = Spec.ModArith
+module E = Hacl.P256.Exp
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
-
-(** The exponentiation both entry points perform: [out := a^n], with [n]
-    given as a table of public limbs whose value is known. *)
-inline_for_extraction
-fn fexp (out a: A.array S64.t) (e: A.array U64.t) (n: erased nat)
-        (#vo: erased (Seq.seq S64.t))
-        (#pa: perm) (#va: erased (Seq.seq S64.t))
-        (#pe: perm) (#ve: erased (Seq.seq U64.t))
-requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to e #pe ve **
-  pure (Seq.length vo == nl /\ felem va /\
-        reveal n < pow2 256 /\ pvals ve == limbs n)
-ensures exists* (vo': Seq.seq S64.t).
-  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to e #pe ve **
-  pure (felem vo' /\ fev vo' == MA.exp #P.prime (fev va) n)
-{
-  fmod_ok (); fmod_m ();
-  limbs_ok (reveal n);
-  let r1 = fr1 ();
-  let ms = fms ();
-  let nm = fnm ();
-  mexp out a e r1 ms nm fmu fmod;
-  drop_table r1;
-  drop_table ms;
-  drop_table nm;
-}
 
 (** [out := a^-1].  Zero inverts to zero, as [Spec.ModArith.inv] says. *)
 fn finv (out a: A.array S64.t)
@@ -83,7 +60,8 @@ ensures exists* (vo': Seq.seq S64.t).
 {
   assert_norm (P.prime - 2 < pow2 256);
   let e = finv_e ();
-  fexp out a e (hide (P.prime - 2));
+  limbs_ok (P.prime - 2);
+  E.fexp out a e (hide (P.prime - 2));
   drop_table e;
 }
 
@@ -104,12 +82,15 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm ((P.prime + 1) / 4 < pow2 256);
   assert_norm (P.prime % 4 == 3);
   let e = fsqrt_e ();
-  fexp out a e (hide ((P.prime + 1) / 4));
+  limbs_ok ((P.prime + 1) / 4);
+  E.fexp out a e (hide ((P.prime + 1) / 4));
   drop_table e;
   let z = S64.zero;
-  let mut aq = [| z; 4sz |]; A.pts_to_len aq; A.pts_to_len aq;
+  let mut aq = [| z; 4sz |];
+  Mem.track aq; A.pts_to_len aq; A.pts_to_len aq;
   fsqr aq out;
   let ok = feq aq a;
+  Mem.wipe aq 4sz;
   ok
 }
 

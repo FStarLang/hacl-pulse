@@ -1182,8 +1182,7 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
   A.pts_to_len wide;
   A.pts_to_len nmod;
   modulus_low vn;
-  copy t1 res nn;
-  mont_mul t2 res t1 wide nmod nn mu;
+  mont_sqr t2 res wide nmod nn mu;
   with vsq. assert (A.pts_to t2 vsq);
   exp_sq_step (num vres) (num vsq) 2 (reveal e) (wt (SZ.v nn)) (num vn)
               (S64.v mu) (S64.v (Seq.index vn 0)) (SZ.v nn);
@@ -1198,6 +1197,12 @@ ensures exists* (v v1 v2 v3: Seq.seq S64.t).
 (** [precomp res t1 t2 wide nmod nn mu] is [res = R^2 mod nmod].  [t1] and
     [t2] are [n] limbs of scratch and [wide] is [2n]; [mu] is what
     {!mont_mu} makes of the modulus's bottom limb.
+
+    The modulus must be public.  {!seed} declassifies which of its limbs is
+    the topmost nonzero one and doubles a number of times that depends on
+    it, so the running time reveals the modulus's length in limbs.  That is
+    no loss for an RSA modulus or an FFDHE prime, which are public anyway,
+    but it rules [precomp] out for a secret modulus such as an RSA prime.
 
     The exponent reached after a rung is always [mm / p], for [mm == rad *
     nn] and a [p] that starts at the highest power of two below [mm] and

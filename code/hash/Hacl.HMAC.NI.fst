@@ -62,6 +62,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
+module Mem = Hacl.Mem
 
 #push-options "--z3rlimit 300 --fuel 1 --ifuel 1"
 
@@ -100,12 +101,15 @@ ensures exists* vout'.
   let z8 = S8.classify 0uy;
 
   let mut k0arr = [| z8; 64sz |];
+  Mem.track k0arr;
   A.pts_to_len k0arr;
 
   let mut padarr = [| z8; 64sz |];
+  Mem.track padarr;
   A.pts_to_len padarr;
 
   let mut dgarr = [| z8; p.nhash_bytes |];
+  Mem.track dgarr;
   A.pts_to_len dgarr;
 
   key_block_impl p kt ivt k0arr dgarr key lk;
@@ -118,6 +122,9 @@ ensures exists* vout'.
   sizes #S32.t p;
   hash_prefixed_ni p kt ivt out padarr dgarr p.nhash_bytes;
 
+  Mem.wipe dgarr p.nhash_bytes;
+  Mem.wipe padarr 64sz;
+  Mem.wipe k0arr 64sz;
   ()
 }
 

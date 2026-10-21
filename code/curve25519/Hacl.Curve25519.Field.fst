@@ -71,6 +71,7 @@ module W = Spec.Bignum51.Window
 module W32 = Spec.Bignum256.Window
 module R = Spec.Curve25519.Repack
 module Cols = Spec.Curve25519.Columns
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -1171,6 +1172,7 @@ ensures exists* (va': Seq.seq S64.t).
   A.pts_to_len b;
   let zz = S64.zero;
   let mut u = [| zz; 8sz |];
+  Mem.track u;
   A.pts_to_len u;
   load32 u b;
   with h. assert (A.pts_to u h);
@@ -1199,6 +1201,7 @@ ensures exists* (va': Seq.seq S64.t).
   Math.pow2_lt_compat 256 255;
   load_ok (B32.eval (vals h)) (vals s);
   assert (pure (eval (vals s) == le_nat vb % pow2 255 /\ bnd (vals s) base));
+  Mem.wipe u 8sz;
 }
 
 (** Storing: the same repacking the other way.  The eight offsets into the
@@ -1217,6 +1220,7 @@ ensures exists* (vb': Seq.seq S8.t).
   A.pts_to_len a;
   let zz = S64.zero;
   let mut u = [| zz; 8sz |];
+  Mem.track u;
   A.pts_to_len u;
   let s0 = A.(a.(0sz));
   let s1 = A.(a.(1sz));
@@ -1246,6 +1250,7 @@ ensures exists* (vb': Seq.seq S8.t).
   R.store_windows (vals va) (vals g);
   store_ok (eval (vals va)) (vals g);
   store32 b u;
+  Mem.wipe u 8sz;
 }
 
 #pop-options

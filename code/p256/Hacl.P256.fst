@@ -34,6 +34,7 @@ module SZ = FStar.SizeT
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -75,9 +76,11 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsign (s256 vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   sha256_qelem c0 msg msg_len;
   let r = Hacl.P256.Sign.sign out c0 sk nonce;
+  Mem.wipe c0 4sz;
   r
 }
 
@@ -101,9 +104,11 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsign (s384 vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   sha384_qelem c0 msg msg_len;
   let r = Hacl.P256.Sign.sign out c0 sk nonce;
+  Mem.wipe c0 4sz;
   r
 }
 
@@ -127,9 +132,11 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsign (s512 vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   sha512_qelem c0 msg msg_len;
   let r = Hacl.P256.Sign.sign out c0 sk nonce;
+  Mem.wipe c0 4sz;
   r
 }
 
@@ -151,9 +158,11 @@ ensures exists* (wo: Seq.seq S8.t).
         (r ==> wo == Some?.v (wsign (mqe vb) vsk vn)))
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   msg_qelem c0 msg;
   let r = Hacl.P256.Sign.sign out c0 sk nonce;
+  Mem.wipe c0 4sz;
   r
 }
 
@@ -181,9 +190,11 @@ ensures
   pure (res == wverify (s256 vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   sha256_qelem c0 msg msg_len;
   let res = Hacl.P256.Verify.verify c0 pk sig_r sig_s;
+  Mem.wipe c0 4sz;
   res
 }
 
@@ -206,9 +217,11 @@ ensures
   pure (res == wverify (s384 vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   sha384_qelem c0 msg msg_len;
   let res = Hacl.P256.Verify.verify c0 pk sig_r sig_s;
+  Mem.wipe c0 4sz;
   res
 }
 
@@ -231,9 +244,11 @@ ensures
   pure (res == wverify (s512 vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   sha512_qelem c0 msg msg_len;
   let res = Hacl.P256.Verify.verify c0 pk sig_r sig_s;
+  Mem.wipe c0 4sz;
   res
 }
 
@@ -254,9 +269,11 @@ ensures
   pure (res == wverify (mqe vb) vp vr vs)
 {
   let z = S64.zero;
-  let mut c0 = [| z; 4sz |]; A.pts_to_len c0; A.pts_to_len c0;
+  let mut c0 = [| z; 4sz |];
+  Mem.track c0; A.pts_to_len c0; A.pts_to_len c0;
   msg_qelem c0 msg;
   let res = Hacl.P256.Verify.verify c0 pk sig_r sig_s;
+  Mem.wipe c0 4sz;
   res
 }
 

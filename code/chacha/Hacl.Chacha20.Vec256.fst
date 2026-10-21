@@ -68,6 +68,7 @@ module G = FStar.Ghost
 module V = Hacl.Vec256
 module Sub = Hacl.Impl.Sub
 module Classical = FStar.Classical
+module Mem = Hacl.Mem
 
 (** {2 Looking down a lane} *)
 
@@ -714,11 +715,9 @@ ensures exists* (vo': Seq.seq S8.t) (vv1 vk1 vt1: Seq.seq V.t).
 
 (** {2 The driver} *)
 
-let encrypt_prefix (st0: state) (ctr0: U32.t)
-                   (msg: Seq.seq S8.t { Seq.length msg <= max_len ctr0 })
-                   (vo: Seq.seq S8.t) (n: nat) : prop =
-  Seq.length vo == Seq.length msg /\ n <= Seq.length msg /\
-  (forall (p: nat). p < n ==> Seq.index vo p == Seq.index (encrypt_bytes st0 ctr0 msg) p)
+(** The first [n] bytes of [vo] are the specification's; shared with
+    [Hacl.Chacha20.Vec512], whose prefix this path continues. *)
+let encrypt_prefix = Hacl.Chacha20.Vec512.encrypt_prefix
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -786,19 +785,22 @@ let sz_div64_u32 (b: SZ.t)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-(** Encrypt the longest prefix of [msg] that is a whole number of 512-byte
-    chunks, and say how long it was.  [st] holds the initial state; its
-    counter word is not read. *)
+(** Given that [out] already holds the first [b0] bytes, encrypt on from
+    there in 512-byte chunks for as long as a whole chunk remains, and say
+    where it stopped.  [st] holds the initial state; its counter word is not
+    read. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
   custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
 fn encrypt_blocks8 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                    (st: A.array S32.t) (ctr0: U32.t)
-                   (st0: G.erased state)
+                   (st0: G.erased state) (b0: SZ.t)
                    (#vo: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
                    (#ps: perm)
 requires A.pts_to out vo ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
          pure (Seq.length vo == Seq.length vm /\ Seq.length vm == SZ.v mlen /\
-               Seq.length vm <= max_len ctr0)
+               Seq.length vm <= max_len ctr0 /\
+               SZ.v b0 % 512 == 0 /\ SZ.v b0 <= SZ.v mlen /\
+               encrypt_prefix st0 ctr0 vm vo (SZ.v b0))
 returns n: SZ.t
 ensures exists* (vo': Seq.seq S8.t).
   A.pts_to out vo' ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
@@ -810,9 +812,12 @@ ensures exists* (vo': Seq.seq S8.t).
   A.pts_to_len msg;
   let z = V.zero ();
   let mut vst = [| z; 16sz |];
+  Mem.track vst;
   let mut ks = [| z; 16sz |];
+  Mem.track ks;
   let mut t = [| z; 16sz |];
-  let mut base = 0sz;
+  Mem.track t;
+  let mut base = b0;
   while (let b = !base; SZ.lte 512sz (SZ.sub mlen b))
   invariant exists* (b: SZ.t) (v: Seq.seq S8.t) (vv vk vt: Seq.seq V.t).
     pts_to base b ** A.pts_to out v ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
@@ -833,6 +838,7 @@ ensures exists* (vo': Seq.seq S8.t).
     A.pts_to_len t;
     chunk_vec out msg b st c vst ks t;
     with v'. assert (A.pts_to out v');
+    Math.small_mod (SZ.v b / 64) (pow2 32);
     assert (pure (U32.v (SZ.sizet_to_uint32 (SZ.div b 64sz)) == SZ.v b / 64));
     assert (pure (U32.v c == U32.v ctr0 + SZ.v b / 64));
     assert (pure (U32.v c + 8 <= pow2 32));
@@ -842,6 +848,9 @@ ensures exists* (vo': Seq.seq S8.t).
     base := SZ.add b 512sz;
   };
   let n = !base;
+  Mem.wipe t 16sz;
+  Mem.wipe ks 16sz;
+  Mem.wipe vst 16sz;
   n
 }
 
@@ -850,6 +859,12 @@ ensures exists* (vo': Seq.seq S8.t).
 (** {2 Dispatch} *)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+let mod1024_512 (n: nat)
+  : Lemma (requires n % 1024 == 0) (ensures n % 512 == 0)
+  = Math.euclidean_division_definition n 1024;
+    Math.paren_mul_right (n / 1024) 2 512;
+    Math.cancel_mul_mod (n / 1024 * 2) 512
 
 let blocks8_facts (ctr0: U32.t) (len: nat) (n: nat)
   : Lemma (requires len <= max_len ctr0 /\ n % 512 == 0 /\ n <= len)
@@ -862,11 +877,45 @@ let blocks8_facts (ctr0: U32.t) (len: nat) (n: nat)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-(** The eight-way path when the processor has AVX2, nothing otherwise.
-    Messages shorter than one chunk do not go near it.  Returns how many
-    leading bytes of [out] it wrote, a whole number of blocks; the caller does the rest one block at a time, from block
-    counter [ctr0 + n / 64].  This function itself is compiled for the
-    baseline target, so that the [supported] test runs everywhere. *)
+(** Sixteen blocks at a time when the processor has AVX-512F; nothing
+    otherwise. *)
+inline_for_extraction
+fn encrypt_avx512 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
+                  (st: A.array S32.t) (ctr0: U32.t)
+                  (st0: G.erased state)
+                  (#vo: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
+                  (#ps: perm)
+requires A.pts_to out vo ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
+         pure (Seq.length vo == Seq.length vm /\ Seq.length vm == SZ.v mlen /\
+               Seq.length vm <= max_len ctr0)
+returns n: SZ.t
+ensures exists* (vo': Seq.seq S8.t).
+  A.pts_to out vo' ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
+  pure (Seq.length vm <= max_len ctr0 /\ Seq.length vo' == Seq.length vm /\
+        Seq.length vm == SZ.v mlen /\
+        SZ.v n % 512 == 0 /\ SZ.v n <= SZ.v mlen /\
+        encrypt_prefix st0 ctr0 vm vo' (SZ.v n))
+{
+  A.pts_to_len out;
+  if (SZ.lte 1024sz mlen && Hacl.Vec512.supported ()) {
+    let n = Hacl.Chacha20.Vec512.encrypt_blocks16 out msg mlen st ctr0 st0;
+    mod1024_512 (SZ.v n);
+    with v1. assert (A.pts_to out v1);
+    A.pts_to_len out;
+    n
+  } else {
+    0sz
+  }
+}
+
+(** The vector paths, as far as the processor allows, and nothing on a
+    processor with neither.  Sixteen blocks at a time with AVX-512F, then
+    eight at a time with AVX2 while a whole 512 bytes remain.  Messages
+    shorter than one 512-byte chunk do not go near either.  Returns how many
+    leading bytes of [out] it wrote, a whole number of blocks; the caller does
+    the rest one block at a time, from block counter [ctr0 + n / 64].  This
+    function itself is compiled for the baseline target, so that the
+    [supported] tests run everywhere. *)
 fn encrypt_vec (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                (st: A.array S32.t) (ctr0: U32.t)
                (st0: G.erased state)
@@ -885,12 +934,20 @@ ensures exists* (vo': Seq.seq S8.t).
         (forall (p: nat). p < SZ.v n ==>
            Seq.index vo' p == Seq.index (encrypt_bytes st0 ctr0 vm) p))
 {
-  if (SZ.lte 512sz mlen && V.supported ()) {
-    let n = encrypt_blocks8 out msg mlen st ctr0 st0;
-    blocks8_facts ctr0 (SZ.v mlen) (SZ.v n);
-    n
-  } else {
+  A.pts_to_len out;
+  if (SZ.lte 512sz mlen) {
+    let n1 = encrypt_avx512 out msg mlen st ctr0 st0;
+    with v1. assert (A.pts_to out v1);
     A.pts_to_len out;
+    if (V.supported ()) {
+      let n = encrypt_blocks8 out msg mlen st ctr0 st0 n1;
+      blocks8_facts ctr0 (SZ.v mlen) (SZ.v n);
+      n
+    } else {
+      blocks8_facts ctr0 (SZ.v mlen) (SZ.v n1);
+      n1
+    }
+  } else {
     0sz
   }
 }

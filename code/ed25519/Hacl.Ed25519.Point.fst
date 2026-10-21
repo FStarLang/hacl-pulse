@@ -53,6 +53,7 @@ module E = Spec.Ed25519
 module Loops = Hacl.Spec.Loops
 module Table = Hacl.Impl.Table
 module Tables = Hacl.Ed25519.Tables
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 60"
 
@@ -129,7 +130,14 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len x2; A.pts_to_len y2; A.pts_to_len z2; A.pts_to_len t2;
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut au = [| z; 5sz |]; A.pts_to_len au; let mut av = [| z; 5sz |]; A.pts_to_len av; let mut aa = [| z; 5sz |]; A.pts_to_len aa; let mut ab = [| z; 5sz |]; A.pts_to_len ab; let mut ac = [| z; 5sz |]; A.pts_to_len ac; let mut ae = [| z; 5sz |]; A.pts_to_len ae; let mut aw = [| z128; 9sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len aa;
+  let mut au = [| z; 5sz |];
+  Mem.track au; A.pts_to_len au; let mut av = [| z; 5sz |];
+  Mem.track av; A.pts_to_len av; let mut aa = [| z; 5sz |];
+  Mem.track aa; A.pts_to_len aa; let mut ab = [| z; 5sz |];
+  Mem.track ab; A.pts_to_len ab; let mut ac = [| z; 5sz |];
+  Mem.track ac; A.pts_to_len ac; let mut ae = [| z; 5sz |];
+  Mem.track ae; A.pts_to_len ae; let mut aw = [| z128; 9sz |];
+  Mem.track aw; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len aa;
   A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len ae; A.pts_to_len aw;
 
   (* aa = (y1 - x1) (y2 - x2) *)
@@ -174,6 +182,13 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   assert (pure (pt wx wy wz wt ==
                 E.point_add (pt vx1 vy1 vz1 vt1) (pt vx2 vy2 vz2 vt2)));
 
+  Mem.wipe aw 9sz;
+  Mem.wipe ae 5sz;
+  Mem.wipe ac 5sz;
+  Mem.wipe ab 5sz;
+  Mem.wipe aa 5sz;
+  Mem.wipe av 5sz;
+  Mem.wipe au 5sz;
   ()
 }
 
@@ -207,7 +222,14 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len x1; A.pts_to_len y1; A.pts_to_len z1; A.pts_to_len t1;
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut au = [| z; 5sz |]; A.pts_to_len au; let mut av = [| z; 5sz |]; A.pts_to_len av; let mut ar = [| z; 5sz |]; A.pts_to_len ar; let mut aa = [| z; 5sz |]; A.pts_to_len aa; let mut ab = [| z; 5sz |]; A.pts_to_len ab; let mut ac = [| z; 5sz |]; A.pts_to_len ac; let mut aw = [| z128; 9sz |]; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len ar;
+  let mut au = [| z; 5sz |];
+  Mem.track au; A.pts_to_len au; let mut av = [| z; 5sz |];
+  Mem.track av; A.pts_to_len av; let mut ar = [| z; 5sz |];
+  Mem.track ar; A.pts_to_len ar; let mut aa = [| z; 5sz |];
+  Mem.track aa; A.pts_to_len aa; let mut ab = [| z; 5sz |];
+  Mem.track ab; A.pts_to_len ab; let mut ac = [| z; 5sz |];
+  Mem.track ac; A.pts_to_len ac; let mut aw = [| z128; 9sz |];
+  Mem.track aw; A.pts_to_len aw; A.pts_to_len au; A.pts_to_len av; A.pts_to_len ar;
   A.pts_to_len aa; A.pts_to_len ab; A.pts_to_len ac; A.pts_to_len aw;
 
   (* aa = x1^2, ab = y1^2, ac = 2 z1^2 *)
@@ -244,6 +266,13 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   with wt. assert (A.pts_to ot wt);
   assert (pure (pt wx wy wz wt == E.point_double (pt vx1 vy1 vz1 vt1)));
 
+  Mem.wipe aw 9sz;
+  Mem.wipe ac 5sz;
+  Mem.wipe ab 5sz;
+  Mem.wipe aa 5sz;
+  Mem.wipe ar 5sz;
+  Mem.wipe av 5sz;
+  Mem.wipe au 5sz;
   ()
 }
 

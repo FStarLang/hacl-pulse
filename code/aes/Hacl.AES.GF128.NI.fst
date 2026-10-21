@@ -668,6 +668,207 @@ let gmul8_vec (x1 y1 x2 y2 x3 y3 x4 y4 x5 y5 x6 y6 x7 y7 x8 y8: Vec.t)
     xor_block_bv u (Vec.vxor u2 u3);
     Vec.vxor u (Vec.vxor u2 u3)
 
+(** {2 The same reduction, from sums gathered elsewhere}
+
+    [gmul8_vec] computes its eight Karatsuba triples and adds them up in one
+    place.  The stitched AES-GCM loop in [Hacl.AES.GCM.Stitch] cannot: it
+    computes one triple between each pair of [AESENC] rounds, so that the
+    multiplier and the cipher unit work at the same time, and adds each into
+    three running sums as it goes.  What is left is the part below -- the
+    middle-term assembly and the reduction -- applied to sums it did not see
+    being formed.  The triples are named by {!kp_ll}, {!kp_hh} and
+    {!kp_mf}, which are [kara_parts] one register at a time, and the operands
+    are ghosts: nothing here computes with them. *)
+
+let parts_ok (x y ll hh mf: Vec.t) : prop =
+  Poly.halvesp (CL.pshift1 (Vec.bv x) (Vec.bv y))
+               (CL.bswap (CL.kfold_hi (Vec.bv hh) (CL.kmid (Vec.bv ll) (Vec.bv hh) (Vec.bv mf))))
+               (CL.bswap (CL.kfold_lo (Vec.bv ll) (CL.kmid (Vec.bv ll) (Vec.bv hh) (Vec.bv mf))))
+
+inline_for_extraction
+let kp_ll (x y: Vec.t) : Vec.t = Vec.clmul_ll (Vec.bswap x) (Vec.bswap y)
+
+inline_for_extraction
+let kp_hh (x y: Vec.t) : Vec.t = Vec.clmul_hh (Vec.bswap x) (Vec.bswap y)
+
+inline_for_extraction
+let kp_mf (x y: Vec.t) : Vec.t =
+  let xa = Vec.bswap x in
+  let yb = Vec.bswap y in
+  Vec.clmul_ll (Vec.vxor xa (Vec.shift_right_bytes_8 xa))
+               (Vec.vxor yb (Vec.shift_right_bytes_8 yb))
+
+(** [kara_parts]'s proof, for the three registers taken one at a time. *)
+let kp_ok (x y: Vec.t)
+  : Lemma (parts_ok x y (kp_ll x y) (kp_hh x y) (kp_mf x y))
+  = let xa = Vec.bswap x in
+    let yb = Vec.bswap y in
+    let xs = Vec.shift_right_bytes_8 xa in
+    let ys = Vec.shift_right_bytes_8 yb in
+    let xf = Vec.vxor xa xs in
+    let yf = Vec.vxor yb ys in
+    let ll = Vec.clmul_ll xa yb in
+    let hh = Vec.clmul_hh xa yb in
+    let mf = Vec.clmul_ll xf yf in
+    assert (ll == kp_ll x y);
+    assert (hh == kp_hh x y);
+    assert (mf == kp_mf x y);
+    Classical.forall_intro (xor_bits xa xs);
+    Classical.forall_intro (xor_bits yb ys);
+    CL.fold_lane (Vec.bv xa) (Vec.bv xf);
+    CL.fold_lane (Vec.bv yb) (Vec.bv yf);
+    CL.kmid_isbits (Vec.bv ll) (Vec.bv hh) (Vec.bv mf);
+    Classical.forall_intro (CL.kara_mid_lanes (Vec.bv xa) (Vec.bv yb));
+    CL.kfold_lo_isbits (Vec.bv ll) (kmid_of ll hh mf);
+    CL.kfold_hi_isbits (Vec.bv hh) (kmid_of ll hh mf);
+    CL.lo_of_lanes (Vec.bv x) (Vec.bv y) (Vec.bv ll) (kmid_of ll hh mf)
+                   (CL.kfold_lo (Vec.bv ll) (kmid_of ll hh mf));
+    CL.hi_of_lanes (Vec.bv x) (Vec.bv y) (Vec.bv hh) (kmid_of ll hh mf)
+                   (CL.kfold_hi (Vec.bv hh) (kmid_of ll hh mf));
+    CL.clmul_halves_ns (Vec.bv x) (Vec.bv y)
+                       (CL.kfold_lo (Vec.bv ll) (kmid_of ll hh mf))
+                       (CL.kfold_hi (Vec.bv hh) (kmid_of ll hh mf))
+
+(** Eight exclusive-ors taken left to right, which is the order a loop that
+    adds one term at a time produces, are [sum8]. *)
+let xor_left8 (a b c d e f g h: Vec.t)
+  : Lemma (Vec.bv (Vec.vxor (Vec.vxor (Vec.vxor (Vec.vxor (Vec.vxor (Vec.vxor
+             (Vec.vxor a b) c) d) e) f) g) h) ==
+           Alg.sum8 (Vec.bv a) (Vec.bv b) (Vec.bv c) (Vec.bv d)
+                    (Vec.bv e) (Vec.bv f) (Vec.bv g) (Vec.bv h))
+  = let x2 = Vec.vxor a b in
+    let x3 = Vec.vxor x2 c in
+    let x4 = Vec.vxor x3 d in
+    let x5 = Vec.vxor x4 e in
+    let x6 = Vec.vxor x5 f in
+    let x7 = Vec.vxor x6 g in
+    xor_block_bv a b; xor_block_bv x2 c; xor_block_bv x3 d;
+    xor_block_bv x4 e; xor_block_bv x5 f; xor_block_bv x6 g;
+    xor_block_bv x7 h;
+    let ba = Vec.bv a in let bb = Vec.bv b in let bc = Vec.bv c in
+    let bd = Vec.bv d in let be = Vec.bv e in let bf = Vec.bv f in
+    let bg = Vec.bv g in let bh = Vec.bv h in
+    Alg.gadd_assoc (G.gadd ba bb) bc bd;
+    Alg.gadd_assoc ba bb (G.gadd bc bd);
+    let s4 = Vec.bv (reveal x4) in
+    Alg.gadd_assoc (G.gadd (G.gadd s4 be) bf) bg bh;
+    Alg.gadd_assoc (G.gadd s4 be) bf (G.gadd bg bh);
+    Alg.gadd_assoc s4 be (G.gadd bf (G.gadd bg bh))
+
+inline_for_extraction
+let gmul8_fin (x1 y1 x2 y2 x3 y3 x4 y4 x5 y5 x6 y6 x7 y7 x8 y8: erased Vec.t) (ls hs ms: Vec.t)
+  : Pure Vec.t
+         (requires
+                    Vec.bv (ls) == Alg.sum8 (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_ll (reveal x8) (reveal y8))) /\
+                    Vec.bv (hs) == Alg.sum8 (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) /\
+                    Vec.bv (ms) == Alg.sum8 (Vec.bv (kp_mf (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x8) (reveal y8))))
+         (ensures fun r -> Vec.bv r ==
+            Alg.sum8 (G.gmul (Vec.bv (reveal x1)) (Poly.xtimes (Vec.bv (reveal y1))))
+                     (G.gmul (Vec.bv (reveal x2)) (Poly.xtimes (Vec.bv (reveal y2))))
+                     (G.gmul (Vec.bv (reveal x3)) (Poly.xtimes (Vec.bv (reveal y3))))
+                     (G.gmul (Vec.bv (reveal x4)) (Poly.xtimes (Vec.bv (reveal y4))))
+                     (G.gmul (Vec.bv (reveal x5)) (Poly.xtimes (Vec.bv (reveal y5))))
+                     (G.gmul (Vec.bv (reveal x6)) (Poly.xtimes (Vec.bv (reveal y6))))
+                     (G.gmul (Vec.bv (reveal x7)) (Poly.xtimes (Vec.bv (reveal y7))))
+                     (G.gmul (Vec.bv (reveal x8)) (Poly.xtimes (Vec.bv (reveal y8)))))
+  = let (lo, hi) = kara_fold ls hs ms in
+
+    let p2 = mul_r_vec lo in
+    let p3 = mul_r_vec (snd p2) in
+
+    let u  = Vec.bswap hi in
+    let u2 = Vec.bswap (fst p2) in
+    let u3 = Vec.bswap (fst p3) in
+
+    kp_ok (reveal x1) (reveal y1);
+    kp_ok (reveal x2) (reveal y2);
+    kp_ok (reveal x3) (reveal y3);
+    kp_ok (reveal x4) (reveal y4);
+    kp_ok (reveal x5) (reveal y5);
+    kp_ok (reveal x6) (reveal y6);
+    kp_ok (reveal x7) (reveal y7);
+    kp_ok (reveal x8) (reveal y8);
+    (* ... and both the correction and the assembly commute with it. *)
+    CL.kmid_sum8 (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1))) (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2)))
+                (Vec.bv (kp_mf (reveal x2) (reveal y2))) (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3))) (Vec.bv (kp_ll (reveal x4) (reveal y4)))
+                (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4))) (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5)))
+                (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6))) (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7)))
+                (Vec.bv (kp_mf (reveal x7) (reveal y7))) (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8)));
+    CL.kfold_lo_sum8 (Vec.bv (kp_ll (reveal x1) (reveal y1))) (CL.kmid (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1))))
+                (Vec.bv (kp_ll (reveal x2) (reveal y2))) (CL.kmid (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x2) (reveal y2))))
+                (Vec.bv (kp_ll (reveal x3) (reveal y3))) (CL.kmid (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3))))
+                (Vec.bv (kp_ll (reveal x4) (reveal y4))) (CL.kmid (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4))))
+                (Vec.bv (kp_ll (reveal x5) (reveal y5))) (CL.kmid (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5))))
+                (Vec.bv (kp_ll (reveal x6) (reveal y6))) (CL.kmid (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6))))
+                (Vec.bv (kp_ll (reveal x7) (reveal y7))) (CL.kmid (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x7) (reveal y7))))
+                (Vec.bv (kp_ll (reveal x8) (reveal y8))) (CL.kmid (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8))));
+    CL.kfold_hi_sum8 (Vec.bv (kp_hh (reveal x1) (reveal y1))) (CL.kmid (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1))))
+                (Vec.bv (kp_hh (reveal x2) (reveal y2))) (CL.kmid (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x2) (reveal y2))))
+                (Vec.bv (kp_hh (reveal x3) (reveal y3))) (CL.kmid (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3))))
+                (Vec.bv (kp_hh (reveal x4) (reveal y4))) (CL.kmid (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4))))
+                (Vec.bv (kp_hh (reveal x5) (reveal y5))) (CL.kmid (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5))))
+                (Vec.bv (kp_hh (reveal x6) (reveal y6))) (CL.kmid (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6))))
+                (Vec.bv (kp_hh (reveal x7) (reveal y7))) (CL.kmid (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x7) (reveal y7))))
+                (Vec.bv (kp_hh (reveal x8) (reveal y8))) (CL.kmid (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8))));
+    CL.bswap_sum8
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x1) (reveal y1))) (CL.kmid (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x2) (reveal y2))) (CL.kmid (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x2) (reveal y2)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x3) (reveal y3))) (CL.kmid (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x4) (reveal y4))) (CL.kmid (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x5) (reveal y5))) (CL.kmid (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x6) (reveal y6))) (CL.kmid (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x7) (reveal y7))) (CL.kmid (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x7) (reveal y7)))))
+                (CL.kfold_lo (Vec.bv (kp_ll (reveal x8) (reveal y8))) (CL.kmid (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8)))));
+    CL.bswap_sum8
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x1) (reveal y1))) (CL.kmid (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x2) (reveal y2))) (CL.kmid (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x2) (reveal y2)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x3) (reveal y3))) (CL.kmid (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x4) (reveal y4))) (CL.kmid (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x5) (reveal y5))) (CL.kmid (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x6) (reveal y6))) (CL.kmid (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x7) (reveal y7))) (CL.kmid (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x7) (reveal y7)))))
+                (CL.kfold_hi (Vec.bv (kp_hh (reveal x8) (reveal y8))) (CL.kmid (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8)))));
+
+    Alg.pmod_defer8 (CL.pshift1 (Vec.bv (reveal x1)) (Vec.bv (reveal y1)))
+                    (CL.pshift1 (Vec.bv (reveal x2)) (Vec.bv (reveal y2)))
+                    (CL.pshift1 (Vec.bv (reveal x3)) (Vec.bv (reveal y3)))
+                    (CL.pshift1 (Vec.bv (reveal x4)) (Vec.bv (reveal y4)))
+                    (CL.pshift1 (Vec.bv (reveal x5)) (Vec.bv (reveal y5)))
+                    (CL.pshift1 (Vec.bv (reveal x6)) (Vec.bv (reveal y6)))
+                    (CL.pshift1 (Vec.bv (reveal x7)) (Vec.bv (reveal y7)))
+                    (CL.pshift1 (Vec.bv (reveal x8)) (Vec.bv (reveal y8)))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x1) (reveal y1))) (CL.kmid (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x1) (reveal y1))) (CL.kmid (Vec.bv (kp_ll (reveal x1) (reveal y1))) (Vec.bv (kp_hh (reveal x1) (reveal y1))) (Vec.bv (kp_mf (reveal x1) (reveal y1))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x2) (reveal y2))) (CL.kmid (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x2) (reveal y2))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x2) (reveal y2))) (CL.kmid (Vec.bv (kp_ll (reveal x2) (reveal y2))) (Vec.bv (kp_hh (reveal x2) (reveal y2))) (Vec.bv (kp_mf (reveal x2) (reveal y2))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x3) (reveal y3))) (CL.kmid (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x3) (reveal y3))) (CL.kmid (Vec.bv (kp_ll (reveal x3) (reveal y3))) (Vec.bv (kp_hh (reveal x3) (reveal y3))) (Vec.bv (kp_mf (reveal x3) (reveal y3))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x4) (reveal y4))) (CL.kmid (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x4) (reveal y4))) (CL.kmid (Vec.bv (kp_ll (reveal x4) (reveal y4))) (Vec.bv (kp_hh (reveal x4) (reveal y4))) (Vec.bv (kp_mf (reveal x4) (reveal y4))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x5) (reveal y5))) (CL.kmid (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x5) (reveal y5))) (CL.kmid (Vec.bv (kp_ll (reveal x5) (reveal y5))) (Vec.bv (kp_hh (reveal x5) (reveal y5))) (Vec.bv (kp_mf (reveal x5) (reveal y5))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x6) (reveal y6))) (CL.kmid (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x6) (reveal y6))) (CL.kmid (Vec.bv (kp_ll (reveal x6) (reveal y6))) (Vec.bv (kp_hh (reveal x6) (reveal y6))) (Vec.bv (kp_mf (reveal x6) (reveal y6))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x7) (reveal y7))) (CL.kmid (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x7) (reveal y7))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x7) (reveal y7))) (CL.kmid (Vec.bv (kp_ll (reveal x7) (reveal y7))) (Vec.bv (kp_hh (reveal x7) (reveal y7))) (Vec.bv (kp_mf (reveal x7) (reveal y7))))))
+                    (CL.bswap (CL.kfold_hi (Vec.bv (kp_hh (reveal x8) (reveal y8))) (CL.kmid (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8))))))
+                    (CL.bswap (CL.kfold_lo (Vec.bv (kp_ll (reveal x8) (reveal y8))) (CL.kmid (Vec.bv (kp_ll (reveal x8) (reveal y8))) (Vec.bv (kp_hh (reveal x8) (reveal y8))) (Vec.bv (kp_mf (reveal x8) (reveal y8))))))
+                    (CL.bswap (Vec.bv (fst p2))) (CL.bswap (Vec.bv (snd p2)))
+                    (CL.bswap (Vec.bv (fst p3))) (CL.bswap (Vec.bv (snd p3)));
+    CL.pmodx (Vec.bv (reveal x1)) (Vec.bv (reveal y1));
+    CL.pmodx (Vec.bv (reveal x2)) (Vec.bv (reveal y2));
+    CL.pmodx (Vec.bv (reveal x3)) (Vec.bv (reveal y3));
+    CL.pmodx (Vec.bv (reveal x4)) (Vec.bv (reveal y4));
+    CL.pmodx (Vec.bv (reveal x5)) (Vec.bv (reveal y5));
+    CL.pmodx (Vec.bv (reveal x6)) (Vec.bv (reveal y6));
+    CL.pmodx (Vec.bv (reveal x7)) (Vec.bv (reveal y7));
+    CL.pmodx (Vec.bv (reveal x8)) (Vec.bv (reveal y8));
+
+    xor_block_bv u2 u3;
+    xor_block_bv u (Vec.vxor u2 u3);
+    Vec.vxor u (Vec.vxor u2 u3)
+
+
 (** {2 The driver} *)
 
 (** Refinement subtyping does not cross [erased], so the sixteen-byte window

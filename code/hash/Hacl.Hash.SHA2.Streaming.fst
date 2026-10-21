@@ -49,6 +49,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module G = FStar.Ghost
 module Classical = FStar.Classical
+module Mem = Hacl.Mem
 
 (** {2 The state invariant} *)
 
@@ -108,6 +109,7 @@ ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
 #push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
 fn absorb_blocks (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+                 ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
                  (kt: A.array t) (wsb: A.array t) (acc: A.array t)
                  (input: A.array S8.t) (base_in: SZ.t) (nfull: SZ.t) (nb: SZ.t)
                  (seen: erased (Seq.seq S8.t))
@@ -162,7 +164,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t).
                 repeati_g (SZ.v nb) (update_step p (padded #t (Seq.append pre vsub)))
                   (reveal p.iv)));
 
-  hash_blocks p kt wsb acc sub bl nb nfull pre;
+  blocks kt wsb acc sub nb nfull pre;
 
   absorb_padded p (reveal whole) (SZ.v nb + SZ.v nfull);
   absorb_congr p (reveal whole) (reveal seen) (SZ.v nb + SZ.v nfull);
@@ -217,6 +219,7 @@ ensures exists* (vacc': Seq.seq t) (vtot': Seq.seq SZ.t).
     On entry [buf] already holds block [nb0] of [seen1] in full, and [seen1] is
     [seen] followed by the caller's data. *)
 fn update_full (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+               ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
                (kt: A.array t) (wsb: A.array t) (acc: A.array t)
                (buf: A.array S8.t) (data: A.array S8.t) (dlen: SZ.t)
                (blen: SZ.t) (nb0: SZ.t) (fill: SZ.t)
@@ -254,7 +257,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t).
   Math.distributivity_add_left (SZ.v nb0) 1 (block_len #t);
   assert (pure ((SZ.v nb0 + 1) * block_len #t == Seq.length seen + SZ.v fill));
   assert (pure ((SZ.v nb0 + 1) * block_len #t <= Seq.length seen1));
-  absorb_blocks p kt wsb acc buf 0sz 1sz nb0 seen1;
+  absorb_blocks p blocks kt wsb acc buf 0sz 1sz nb0 seen1;
 
   let restlen = SZ.sub dlen fill;
   let nfull = SZ.div restlen bl;
@@ -269,7 +272,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t).
               (SZ.v nb0 + 1) (SZ.v fill) (SZ.v nfull * block_len #t);
   Math.lemma_mult_le_left (SZ.v nb0 + 1) 1 (block_len #t);
   SZ.fits_lte (SZ.v nb0 + 1) (Seq.length seen1);
-  absorb_blocks p kt wsb acc data fill nfull (SZ.add nb0 1sz) seen1;
+  absorb_blocks p blocks kt wsb acc data fill nfull (SZ.add nb0 1sz) seen1;
 
   tail_agrees (block_len #t) (reveal seen) (reveal vdata)
               (SZ.v nb0 + 1 + SZ.v nfull) (SZ.v dlen - SZ.v tl) (SZ.v tl);
@@ -288,8 +291,9 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t).
 
 #push-options "--z3rlimit 600 --fuel 0 --ifuel 0"
 
-(** Absorb [data]. *)
-fn update_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+(** Absorb [data], with [blocks] for the whole blocks. *)
+fn update_with (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+               ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
                (kt: A.array t) (wsb: A.array t) (acc: A.array t)
                (buf: A.array S8.t) (tot: A.array SZ.t) (data: A.array S8.t) (dlen: SZ.t)
                (seen: erased (Seq.seq S8.t))
@@ -339,7 +343,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
     A.pts_to buf vbuf' ** A.pts_to tot vtot ** A.pts_to data #pd vdata **
     pure (Seq.length vw == (rounds p) /\ acc_ok p vacc' vbuf' (reveal seen1))
   {
-    update_full p kt wsb acc buf data dlen blen nb0 fill seen seen1;
+    update_full p blocks kt wsb acc buf data dlen blen nb0 fill seen seen1;
   }
   else
   {
@@ -354,6 +358,33 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
 }
 
 #pop-options
+
+(** Absorb [data] with the portable block function. *)
+fn update_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+               (kt: A.array t) (wsb: A.array t) (acc: A.array t)
+               (buf: A.array S8.t) (tot: A.array SZ.t) (data: A.array S8.t) (dlen: SZ.t)
+               (seen: erased (Seq.seq S8.t))
+               (#pk: perm) (#vk: erased (Seq.seq t))
+               (#vw0: erased (Seq.seq t)) (#vacc: erased (Seq.seq t))
+               (#vbuf: erased (Seq.seq S8.t)) (#vtot: erased (Seq.seq SZ.t))
+               (#pd: perm) (#vdata: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to wsb vw0 ** A.pts_to acc vacc **
+         A.pts_to buf vbuf ** A.pts_to tot vtot ** A.pts_to data #pd vdata **
+         pure (reveal vk == (reveal p.k <: Seq.seq t) /\ Seq.length vw0 == (rounds p) /\
+               stream_ok p vacc vbuf vtot seen /\
+               Seq.length seen + Seq.length vdata < pow2 61 /\
+               Seq.length seen + Seq.length vdata < max_input #t /\
+               SZ.fits (Seq.length seen + Seq.length vdata))
+         ** pure (SZ.v dlen == Seq.length vdata)
+ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
+                (vtot': Seq.seq SZ.t).
+  A.pts_to kt #pk vk ** A.pts_to wsb vw ** A.pts_to acc vacc' **
+  A.pts_to buf vbuf' ** A.pts_to tot vtot' ** A.pts_to data #pd vdata **
+  pure (Seq.length vw == (rounds p) /\
+        stream_ok p vacc' vbuf' vtot' (Seq.append seen vdata))
+{
+  update_with p (blocks_scalar p) kt wsb acc buf tot data dlen seen
+}
 
 #push-options "--z3rlimit 600 --fuel 0 --ifuel 0"
 
@@ -391,6 +422,7 @@ ensures exists* (vw: Seq.seq t) (vout': Seq.seq S8.t).
 
   let z0: t = zero #t #w;
   let mut starr = [| z0; 8sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   copy8 starr acc;
@@ -406,6 +438,7 @@ ensures exists* (vw: Seq.seq t) (vout': Seq.seq S8.t).
   tail_and_finish p kt wsb starr out sub tlen nb0 0sz blen pre;
 
   Sub.unsub_id buf 0 (SZ.v blen) sub;
+  Mem.wipe starr 8sz;
 }
 
 #pop-options

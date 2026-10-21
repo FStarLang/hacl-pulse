@@ -39,6 +39,7 @@ module Seq = FStar.Seq
 module U8 = FStar.UInt8
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
+module Mem = Hacl.Mem
 
 (** {2 One re-keying}
 
@@ -83,7 +84,8 @@ ensures exists* vkey' vval'.
 
   (** [tarr <- V || c] *)
   let tn = SZ.add hb 1sz;
-  let mut tarr = [| z8; tn |]; A.pts_to_len tarr;
+  let mut tarr = [| z8; tn |];
+  Mem.track tarr; A.pts_to_len tarr;
   A.pts_to_len tarr;
   copy_prefix tarr v hb;
   A.((tarr.(hb) <- S8.classify c));
@@ -91,13 +93,15 @@ ensures exists* vkey' vval'.
   tagged_prefix (reveal vval) c (reveal vtmp);
   tagged_split (reveal vval) c (dcat vd1 vd2 vd3);
 
-  let mut k1arr = [| z8; hb |]; A.pts_to_len k1arr;
+  let mut k1arr = [| z8; hb |];
+  Mem.track k1arr; A.pts_to_len k1arr;
   A.pts_to_len k1arr;
-  hmac_cat p kt ivt k1arr k tarr d1 d2 d3 hb tn n1 n2 n3;
+  hmac_cat p (Hacl.Hash.SHA2.Core.blocks_scalar p) kt ivt k1arr k tarr d1 d2 d3 hb tn n1 n2 n3;
   with vk1. assert (A.pts_to k1arr vk1);
   hm_def p (reveal vkey) (tagged (reveal vval) c (dcat vd1 vd2 vd3));
 
-  let mut v1arr = [| z8; hb |]; A.pts_to_len v1arr;
+  let mut v1arr = [| z8; hb |];
+  Mem.track v1arr; A.pts_to_len v1arr;
   A.pts_to_len v1arr;
   hmac_impl p kt ivt v1arr k1arr hb v hb;
   hm_def p (reveal vk1) (reveal vval);
@@ -105,6 +109,9 @@ ensures exists* vkey' vval'.
   copy_exact k k1arr hb;
   copy_exact v v1arr hb;
 
+  Mem.wipe v1arr hb;
+  Mem.wipe k1arr hb;
+  Mem.wipe tarr tn;
   ()
 }
 

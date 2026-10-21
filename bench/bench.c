@@ -260,6 +260,34 @@ int main(void) {
   }
 #endif
 
+  /* ---------------- ML-DSA ---------------- */
+#ifdef BS_HAVE_MLDSA
+  {
+    static uint8_t dpk[2592], dsk[4896], dsg[4627];
+    uint8_t dxi[32], drnd[32], dmsg[32];
+    fill(dxi, 32, 71);
+    fill(drnd, 32, 72);
+    fill(dmsg, 32, 73);
+#define MLDSA_ROWS(n_)                                                         \
+    do {                                                                       \
+      bs_mldsa##n_##_keypair(dpk, dsk, dxi);                                   \
+      TIME("mldsa" #n_ "-keypair", 0,                                          \
+           { bs_mldsa##n_##_keypair(dpk, dsk, dxi); sink += dpk[0]; });        \
+      TIME("mldsa" #n_ "-sign", 0,                                             \
+           { sink += bs_mldsa##n_##_sign(dsg, dsk, dmsg, 32, drnd); });        \
+      if (!bs_mldsa##n_##_sign(dsg, dsk, dmsg, 32, drnd) ||                    \
+          !bs_mldsa##n_##_verify(dpk, dmsg, 32, dsg))                          \
+        fprintf(stderr, "mldsa" #n_ " self-check failed\n");                  \
+      TIME("mldsa" #n_ "-verify", 0,                                           \
+           { sink += bs_mldsa##n_##_verify(dpk, dmsg, 32, dsg); });            \
+    } while (0)
+    MLDSA_ROWS(44);
+    MLDSA_ROWS(65);
+    MLDSA_ROWS(87);
+#undef MLDSA_ROWS
+  }
+#endif
+
   /* ---------------- HMAC-DRBG ---------------- */
   {
     static bs_drbg d;

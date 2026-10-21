@@ -33,7 +33,7 @@ module S8 = Hacl.Secret.UInt8
 module S16 = Hacl.Secret.UInt16
 module Seq = FStar.Seq
 
-fn encode_poly' (out: A.array S8.t) (f: A.array zqt) (d: SZ.t)
+fn encode_poly (out: A.array S8.t) (f: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
                 (#vo: erased (Seq.seq S8.t)) (#p: perm) (#vf: erased (Seq.seq zqt))
 requires A.pts_to out vo ** A.pts_to f #p vf **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
@@ -46,9 +46,8 @@ ensures exists* (v: Seq.seq S8.t).
   Hacl.Impl.MLKEM.Encode.encode_poly out f d;
 }
 
-let encode_poly = encode_poly'
 
-fn decode_poly' (dst: A.array zqt) (b: A.array S8.t) (d: SZ.t)
+fn decode_poly (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
                 (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
          pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
@@ -61,9 +60,8 @@ ensures exists* (v: Seq.seq zqt).
   Hacl.Impl.MLKEM.Encode.decode_poly dst b d;
 }
 
-let decode_poly = decode_poly'
 
-fn compress_poly' (dst src: A.array zqt) (d: SZ.t)
+fn compress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
                   (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\
@@ -76,9 +74,8 @@ ensures exists* (v: Seq.seq zqt).
   Hacl.Impl.MLKEM.Encode.compress_poly dst src d;
 }
 
-let compress_poly = compress_poly'
 
-fn decompress_poly' (dst src: A.array zqt) (d: SZ.t)
+fn decompress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
                     (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\
@@ -92,4 +89,3 @@ ensures exists* (v: Seq.seq zqt).
   Hacl.Impl.MLKEM.Encode.decompress_poly dst src d;
 }
 
-let decompress_poly = decompress_poly'

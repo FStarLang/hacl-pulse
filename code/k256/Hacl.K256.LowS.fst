@@ -51,6 +51,7 @@ module S64 = Hacl.Secret.UInt64
 module S128 = Hacl.Secret.UInt128
 module K = Spec.K256
 module Math = FStar.Math.Lemmas
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -117,14 +118,23 @@ ensures A.pts_to b #pb vb ** pure (r == isn vb)
   setup ();
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z128; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z128; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
   let ok = load_nz a0 a1 a2 b;
   if ok {
     let qh = qhalf ();
     let r = ageq qh a0 qmod;
     drop_table qh;
+    Mem.wipe a2 4sz;
+    Mem.wipe a1 4sz;
+    Mem.wipe a0 4sz;
     r
   } else {
+    Mem.wipe a2 4sz;
+    Mem.wipe a1 4sz;
+    Mem.wipe a0 4sz;
     false
   }
 }
@@ -206,7 +216,11 @@ ensures exists* (wb: Seq.seq S8.t).
   A.pts_to_len sg;
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z128; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z128; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 4sz |];
+  Mem.track a3; A.pts_to_len a3; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
 
   let ss = Sub.sub sg 32sz 64sz;
   with vss. assert (A.pts_to ss vss);
@@ -228,8 +242,16 @@ ensures exists* (wb: Seq.seq S8.t).
     with wb. assert (A.pts_to sg wb);
     A.pts_to_len sg;
     assert (pure (Seq.equal wb (Seq.append (Seq.slice vb 0 32) vts)));
+    Mem.wipe a3 4sz;
+    Mem.wipe a2 4sz;
+    Mem.wipe a1 4sz;
+    Mem.wipe a0 4sz;
     true
   } else {
+    Mem.wipe a3 4sz;
+    Mem.wipe a2 4sz;
+    Mem.wipe a1 4sz;
+    Mem.wipe a0 4sz;
     false
   }
 }

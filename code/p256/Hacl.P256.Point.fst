@@ -44,6 +44,7 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
 
@@ -72,7 +73,15 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%P.point_add) P.point_add;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; let mut a3 = [| z; 4sz |]; A.pts_to_len a3; let mut a4 = [| z; 4sz |]; A.pts_to_len a4; let mut a5 = [| z; 4sz |]; A.pts_to_len a5; let mut aw = [| z; 4sz |]; A.pts_to_len aw; let mut au = [| z; 4sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 4sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 4sz |];
+  Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 4sz |];
+  Mem.track a5; A.pts_to_len a5; let mut aw = [| z; 4sz |];
+  Mem.track aw; A.pts_to_len aw; let mut au = [| z; 4sz |];
+  Mem.track au; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len aw; A.pts_to_len au;
   let bc = fb ();
   fmul a0 x1 x2;
@@ -143,6 +152,14 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   fadd aw oz a1;
   fcopy oz aw;
   drop_table bc;
+  Mem.wipe au 4sz;
+  Mem.wipe aw 4sz;
+  Mem.wipe a5 4sz;
+  Mem.wipe a4 4sz;
+  Mem.wipe a3 4sz;
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   ()
 }
 
@@ -164,7 +181,13 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   reveal_opaque (`%P.point_double) P.point_double;
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   let zz = S64.zero;
-  let mut a0 = [| zz; 4sz |]; A.pts_to_len a0; let mut a1 = [| zz; 4sz |]; A.pts_to_len a1; let mut a2 = [| zz; 4sz |]; A.pts_to_len a2; let mut a3 = [| zz; 4sz |]; A.pts_to_len a3; let mut aw = [| zz; 4sz |]; A.pts_to_len aw; let mut au = [| zz; 4sz |]; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  let mut a0 = [| zz; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| zz; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 4sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 4sz |];
+  Mem.track a3; A.pts_to_len a3; let mut aw = [| zz; 4sz |];
+  Mem.track aw; A.pts_to_len aw; let mut au = [| zz; 4sz |];
+  Mem.track au; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   A.pts_to_len aw; A.pts_to_len au;
   let bc = fb ();
   fcopy au x;
@@ -235,6 +258,12 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   fadd aw oz au;
   fcopy oz aw;
   drop_table bc;
+  Mem.wipe au 4sz;
+  Mem.wipe aw 4sz;
+  Mem.wipe a3 4sz;
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   ()
 }
 

@@ -52,6 +52,7 @@ module Copy = Hacl.Impl.Copy
 module Bytes = Hacl.Impl.Bytes
 module VC = Hacl.Impl.MLKEM.VecCodec
 module Hash = Hacl.Impl.MLKEM.Hash
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -74,22 +75,28 @@ ensures A.pts_to ekey #pk vek **
   assert (pure (SZ.v k384 == (reveal p).k * (32 * 12) /\ SZ.v kn == SZ.v k * n));
 
   let mut tb = [| (S8.zero <: S8.t); k384 |];
+  Mem.track tb;
   Copy.copy_prefix tb ekey k384;
   with vtb. assert (A.pts_to tb vtb);
   slice_eq vek 0 vtb;
   assert (pure (vtb == Seq.slice vek 0 ((reveal p).k * (32 * 12))));
 
   let mut t = [| (S16.zero <: zqt); kn |];
+  Mem.track t;
   VC.vec_decode_impl t tb 12sz k;
   with vt. assert (A.pts_to t vt);
 
   let mut re = [| (S8.zero <: S8.t); k384 |];
+  Mem.track re;
   VC.vec_encode_impl re t 12sz k;
   with vre. assert (A.pts_to re vre);
   as_ints_widen vt;
   assert (pure (vre == vec_encode_12 (vec_decode 12 (SZ.v k) vtb)));
 
   let res = Bytes.bytes_eq re tb k384;
+  Mem.wipe re k384;
+  Mem.wipe t kn;
+  Mem.wipe tb k384;
   res
 }
 
@@ -111,12 +118,14 @@ ensures A.pts_to dkey #pk vdk **
   assert (pure (SZ.v k384 == dk_pke_len p /\ SZ.v eklen == ek_len p));
 
   let mut ek = [| (S8.zero <: S8.t); eklen |];
+  Mem.track ek;
   Copy.copy_range ek 0sz dkey k384 eklen;
   with vek. assert (A.pts_to ek vek);
   slice_eq vdk (dk_pke_len p) vek;
   assert (pure (vek == Seq.slice vdk (dk_pke_len p) (dk_pke_len p + ek_len p)));
 
   let mut h = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track h;
   let base = SZ.add k384 eklen;
   Copy.copy_range h 0sz dkey base 32sz;
   with vh. assert (A.pts_to h vh);
@@ -125,11 +134,15 @@ ensures A.pts_to dkey #pk vdk **
                                     (dk_pke_len p + ek_len p + 32)));
 
   let mut hd = [| (S8.zero <: S8.t); 32sz |];
+  Mem.track hd;
   Hash.hash_h_impl hd ek eklen;
   with vhd. assert (A.pts_to hd vhd);
   assert (pure (vhd == hash_h vek));
 
   let res = Bytes.bytes_eq hd h 32sz;
+  Mem.wipe hd 32sz;
+  Mem.wipe h 32sz;
+  Mem.wipe ek eklen;
   res
 }
 

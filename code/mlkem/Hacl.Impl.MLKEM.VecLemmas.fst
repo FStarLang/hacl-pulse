@@ -171,19 +171,215 @@ let dot_acc_full (#k: pos) (u v: pvec k)
   : Lemma (dot_acc u v k == dot u v)
   = ()
 
-(** One step of the accumulating loop, in the form the implementation leaves
-    it in: [d] is the old accumulator, [c] the product just computed, and
-    [w] the elementwise sum of the two. *)
-let dot_step_done (#k: pos) (u v: pvec k) (m: nat { m < k })
-                  (d c w: Seq.lseq zqt n)
-  : Lemma (requires
-      as_poly d == dot_acc u v m /\
-      as_poly c == multiply_ntts (vec_at u m) (vec_at v m) /\
-      (forall (t: nat). t < n ==>
-         S16.v (Seq.index w t) == add (S16.v (Seq.index d t)) (S16.v (Seq.index c t))))
-    (ensures as_poly w == dot_acc u v (m + 1))
-  = dot_acc_succ u v m;
-    as_poly_intro w (dot_acc u v (m + 1))
+(** {3 Pair by pair}
+
+    The implementation does not form the [k] products and add them: every
+    base-case product is a sum of products of coefficients, so the [k] of
+    them for one pair are a longer such sum, accumulated exactly and reduced
+    once.  [psum vu vv a b m] is that sum over the first [m] entries, of
+    coefficient [a] of [u] times coefficient [b] of [v]; terms outside the
+    sequences count as zero, which keeps it total. *)
+let rec psum (vu vv: Seq.seq zqt) (a b: nat) (m: nat) : GTot nat (decreases m)
+  = if m = 0 then 0
+    else
+      let j = m - 1 in
+      psum vu vv a b j +
+      (if j * n + a < Seq.length vu && j * n + b < Seq.length vv
+       then S16.v (Seq.index vu (j * n + a)) * S16.v (Seq.index vv (j * n + b))
+       else 0)
+
+let prod_bound (a b: zq) : Lemma (a * b <= (q - 1) * (q - 1))
+  = Math.lemma_mult_le_right b a (q - 1);
+    Math.lemma_mult_le_left (q - 1) b (q - 1)
+
+#push-options "--fuel 1"
+let psum_zero (vu vv: Seq.seq zqt) (a b: nat) : Lemma (psum vu vv a b 0 == 0) = ()
+
+let psum_succ (vu vv: Seq.seq zqt) (a b: nat) (j: nat)
+  : Lemma (requires j * n + a < Seq.length vu /\ j * n + b < Seq.length vv)
+          (ensures psum vu vv a b (j + 1) ==
+                   psum vu vv a b j +
+                   S16.v (Seq.index vu (j * n + a)) * S16.v (Seq.index vv (j * n + b)))
+  = ()
+
+let rec psum_bound (vu vv: Seq.seq zqt) (a b: nat) (m: nat)
+  : Lemma (ensures psum vu vv a b m <= m * ((q - 1) * (q - 1))) (decreases m)
+  = if m > 0 then begin
+      let j = m - 1 in
+      psum_bound vu vv a b j;
+      if j * n + a < Seq.length vu && j * n + b < Seq.length vv then
+        prod_bound (S16.v (Seq.index vu (j * n + a))) (S16.v (Seq.index vv (j * n + b)))
+    end
+#pop-options
+
+(** What the accumulators can reach, for [k <= 4]. *)
+let psum_small (vu vv: Seq.seq zqt) (a b: nat) (m: nat { m <= 4 })
+  : Lemma (psum vu vv a b m <= 4 * ((q - 1) * (q - 1)))
+  = psum_bound vu vv a b m;
+    Math.lemma_mult_le_right ((q - 1) * (q - 1)) m 4
+
+(** All four sums grow by one term per entry, at the two coefficients of
+    pair [i]. *)
+let psum_step (k: pos) (vu vv: Seq.seq zqt) (i: nat { i < 128 }) (j: nat { j < k })
+  : Lemma (requires Seq.length vu == k * n /\ Seq.length vv == k * n)
+          (ensures
+             j * n + 2 * i + 1 < k * n /\
+             (let a0 = S16.v (Seq.index vu (j * n + 2 * i)) in
+              let a1 = S16.v (Seq.index vu (j * n + 2 * i + 1)) in
+              let b0 = S16.v (Seq.index vv (j * n + 2 * i)) in
+              let b1 = S16.v (Seq.index vv (j * n + 2 * i + 1)) in
+              psum vu vv (2 * i) (2 * i) (j + 1) == psum vu vv (2 * i) (2 * i) j + a0 * b0 /\
+              psum vu vv (2 * i + 1) (2 * i + 1) (j + 1) ==
+                psum vu vv (2 * i + 1) (2 * i + 1) j + a1 * b1 /\
+              psum vu vv (2 * i) (2 * i + 1) (j + 1) == psum vu vv (2 * i) (2 * i + 1) j + a0 * b1 /\
+              psum vu vv (2 * i + 1) (2 * i) (j + 1) == psum vu vv (2 * i + 1) (2 * i) j + a1 * b0))
+  = Math.lemma_mult_le_right n (j + 1) k;
+    psum_succ vu vv (2 * i) (2 * i) j;
+    psum_succ vu vv (2 * i + 1) (2 * i + 1) j;
+    psum_succ vu vv (2 * i) (2 * i + 1) j;
+    psum_succ vu vv (2 * i + 1) (2 * i) j
+
+(** Coefficient [t] of entry [j] of a vector, in the flat sequence. *)
+let vec_at_index (k: pos) (s: Seq.seq zqt { Seq.length s == k * n })
+                 (j: nat { j < k }) (t: nat { t < n })
+  : Lemma (j * n + t < k * n /\
+           Seq.index (vec_at #k (as_zqs s) j) t == S16.v (Seq.index s (j * n + t)))
+  = Math.lemma_mult_le_right n (j + 1) k;
+    as_zqs_at k s j;
+    as_poly_index (Seq.slice s (j * n) (j * n + n)) t
+
+let add_mods (x y: nat) : Lemma (add (x % q) (y % q) == (x + y) % q)
+  = Math.lemma_mod_add_distr (x % q) y q;
+    Math.lemma_mod_add_distr y x q
+
+(* The two coefficients of the [i]th base-case product. *)
+let multiply_ntts_pair_spec (f g: poly) (i: nat { i < 128 })
+  : Lemma (Seq.index (multiply_ntts f g) (2 * i) ==
+             add (mul (Seq.index f (2 * i)) (Seq.index g (2 * i)))
+                 (mul (mul (Seq.index f (2 * i + 1)) (Seq.index g (2 * i + 1)))
+                      (gammas i)) /\
+           Seq.index (multiply_ntts f g) (2 * i + 1) ==
+             add (mul (Seq.index f (2 * i)) (Seq.index g (2 * i + 1)))
+                 (mul (Seq.index f (2 * i + 1)) (Seq.index g (2 * i))))
+  = multiply_ntts_index f g (2 * i);
+    multiply_ntts_index f g (2 * i + 1);
+    Math.cancel_mul_div i 2;
+    Math.lemma_div_plus 1 i 2;
+    Math.lemma_mod_plus 1 i 2;
+    Math.lemma_mod_plus 0 i 2;
+    assert ((2 * i) / 2 == i /\ (2 * i) % 2 == 0);
+    assert ((2 * i + 1) / 2 == i /\ (2 * i + 1) % 2 == 1)
+
+(** The [i]th pair of the partial dot product is the partial sums, reduced. *)
+let rec dot_pair (k: pos) (vu vv: Seq.seq zqt) (i: nat { i < 128 }) (m: nat { m <= k })
+  : Lemma (requires Seq.length vu == k * n /\ Seq.length vv == k * n)
+          (ensures
+             Seq.index (dot_acc #k (as_zqs vu) (as_zqs vv) m) (2 * i) ==
+               (psum vu vv (2 * i) (2 * i) m +
+                psum vu vv (2 * i + 1) (2 * i + 1) m * gammas i) % q /\
+             Seq.index (dot_acc #k (as_zqs vu) (as_zqs vv) m) (2 * i + 1) ==
+               (psum vu vv (2 * i) (2 * i + 1) m + psum vu vv (2 * i + 1) (2 * i) m) % q)
+          (decreases m)
+  = let u = as_zqs vu in
+    let v = as_zqs vv in
+    if m = 0 then begin
+      dot_acc_zero #k u v;
+      psum_zero vu vv (2 * i) (2 * i);
+      psum_zero vu vv (2 * i + 1) (2 * i + 1);
+      psum_zero vu vv (2 * i) (2 * i + 1);
+      psum_zero vu vv (2 * i + 1) (2 * i)
+    end else begin
+      let j = m - 1 in
+      dot_pair k vu vv i j;
+      dot_acc_succ #k u v j;
+      psum_step k vu vv i j;
+      vec_at_index k vu j (2 * i);
+      vec_at_index k vu j (2 * i + 1);
+      vec_at_index k vv j (2 * i);
+      vec_at_index k vv j (2 * i + 1);
+      let a0 = S16.v (Seq.index vu (j * n + 2 * i)) in
+      let a1 = S16.v (Seq.index vu (j * n + 2 * i + 1)) in
+      let b0 = S16.v (Seq.index vv (j * n + 2 * i)) in
+      let b1 = S16.v (Seq.index vv (j * n + 2 * i + 1)) in
+      let g = gammas i in
+      multiply_ntts_pair_spec (vec_at #k u j) (vec_at #k v j) i;
+      let p00 = psum vu vv (2 * i) (2 * i) j in
+      let p11 = psum vu vv (2 * i + 1) (2 * i + 1) j in
+      let p01 = psum vu vv (2 * i) (2 * i + 1) j in
+      let p10 = psum vu vv (2 * i + 1) (2 * i) j in
+      (* the even coefficient *)
+      Math.lemma_mod_mul_distr_l (a1 * b1) g q;
+      add_mods (a0 * b0) ((a1 * b1) * g);
+      add_mods (p00 + p11 * g) (a0 * b0 + (a1 * b1) * g);
+      Math.distributivity_add_left p11 (a1 * b1) g;
+      assert ((p00 + p11 * g) + (a0 * b0 + (a1 * b1) * g) ==
+              (p00 + a0 * b0) + (p11 + a1 * b1) * g);
+      (* the odd one *)
+      add_mods (a0 * b1) (a1 * b0);
+      add_mods (p01 + p10) (a0 * b1 + a1 * b0)
+    end
+
+(** What the implementation computes for pair [i]: the [gamma] term needs
+    only its sum reduced, not the product. *)
+let dot_pair_out (k: pos) (vu vv: Seq.seq zqt) (i: nat { i < 128 /\ 2 * i + 1 < n })
+                 (s00 s11 s01 g: nat) (c0 c1: zqt)
+  : Lemma (requires Seq.length vu == k * n /\ Seq.length vv == k * n /\
+                    s00 == psum vu vv (2 * i) (2 * i) k /\
+                    s11 == psum vu vv (2 * i + 1) (2 * i + 1) k /\
+                    s01 == psum vu vv (2 * i) (2 * i + 1) k + psum vu vv (2 * i + 1) (2 * i) k /\
+                    g == gammas i /\
+                    S16.v c0 == (s00 + (s11 % q) * g) % q /\
+                    S16.v c1 == s01 % q)
+          (ensures S16.v c0 == Seq.index (dot #k (as_zqs vu) (as_zqs vv)) (2 * i) /\
+                   S16.v c1 == Seq.index (dot #k (as_zqs vu) (as_zqs vv)) (2 * i + 1))
+  = dot_pair k vu vv i k;
+    dot_acc_full #k (as_zqs vu) (as_zqs vv);
+    Math.lemma_mod_add_distr s00 ((s11 % q) * g) q;
+    Math.lemma_mod_mul_distr_l s11 g q;
+    Math.lemma_mod_add_distr s00 (s11 * g) q
+
+(** The first [m] coefficients of [w] are those of the dot product.  Opaque,
+    as {!Hacl.Impl.MLKEM.NTT.mul_prefix} is, for the same reason. *)
+[@@"opaque_to_smt"]
+let dot_prefix (k: pos) (w vu vv: Seq.seq zqt) (m: nat) : prop =
+  Seq.length vu == k * n /\ Seq.length vv == k * n /\
+  (forall (t: nat). t < m ==>
+     t < n /\ t < Seq.length w /\
+     S16.v (Seq.index w t) == Seq.index (dot #k (as_zqs vu) (as_zqs vv)) t)
+
+let dot_prefix_zero (k: pos) (w vu vv: Seq.seq zqt)
+  : Lemma (requires Seq.length vu == k * n /\ Seq.length vv == k * n)
+          (ensures dot_prefix k w vu vv 0)
+  = reveal_opaque (`%dot_prefix) (dot_prefix k w vu vv 0)
+
+let dot_prefix_full (k: pos) (w vu vv: Seq.seq zqt)
+  : Lemma (requires Seq.length w == n /\ dot_prefix k w vu vv n)
+          (ensures Seq.length vu == k * n /\ Seq.length vv == k * n /\
+                   as_poly w == dot #k (as_zqs vu) (as_zqs vv))
+  = reveal_opaque (`%dot_prefix) (dot_prefix k w vu vv n);
+    as_poly_intro w (dot #k (as_zqs vu) (as_zqs vv))
+
+let dot_prefix_upd (k: pos) (w vu vv: Seq.seq zqt) (i: nat { i < 128 /\ 2 * i + 2 <= n })
+                   (c0 c1: zqt)
+  : Lemma (requires Seq.length w == n /\ Seq.length vu == k * n /\ Seq.length vv == k * n /\
+                    dot_prefix k w vu vv (2 * i) /\
+                    S16.v c0 == Seq.index (dot #k (as_zqs vu) (as_zqs vv)) (2 * i) /\
+                    S16.v c1 == Seq.index (dot #k (as_zqs vu) (as_zqs vv)) (2 * i + 1))
+          (ensures (let w' = Seq.upd (Seq.upd w (2 * i) c0) (2 * i + 1) c1 in
+                    Seq.length w' == n /\ dot_prefix k w' vu vv (2 * i + 2)))
+  = reveal_opaque (`%dot_prefix) (dot_prefix k w vu vv (2 * i));
+    let w0 = Seq.upd w (2 * i) c0 in
+    let w' = Seq.upd w0 (2 * i + 1) c1 in
+    Seq.lemma_index_upd2 w0 (2 * i + 1) c1 (2 * i);
+    Seq.lemma_index_upd1 w (2 * i) c0;
+    Seq.lemma_index_upd1 w0 (2 * i + 1) c1;
+    introduce forall (t: nat). t < 2 * i ==>
+      S16.v (Seq.index w' t) == Seq.index (dot #k (as_zqs vu) (as_zqs vv)) t
+    with introduce _ ==> _
+    with (
+      Seq.lemma_index_upd2 w0 (2 * i + 1) c1 t;
+      Seq.lemma_index_upd2 w (2 * i) c0 t);
+    reveal_opaque (`%dot_prefix) (dot_prefix k w' vu vv (2 * i + 2))
 (** {2 The matrix-vector product} *)
 
 (** A matrix row is a [k * n]-block of the flat matrix, so the view of the

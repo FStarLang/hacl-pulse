@@ -4,14 +4,16 @@
  * F* cannot check.  This test checks each of them, on edge cases and then on
  * pseudo-random inputs, against a scalar transcription of the axiom as
  * written there: lane i is bytes 4i .. 4i+3 little-endian, `add32` adds
- * modulo 2^32 lane by lane, the unpacks and the 128-bit permutes take the
+ * modulo 2^32 lane by lane, a sixty-four-bit lane is two of those, low first, the unpacks and the 128-bit permutes take the
  * lanes the axiom lists.  Every rotation distance from 1 to 31 is tried,
  * not just the four ChaCha20 uses, because the axiom quantifies over all of
  * them.
  *
  * It is skipped, not failed, on a machine without AVX2.  The other half of
- * the evidence is tests/test_chacha20.c and tests/test_chacha20_vec.c, whose
- * long messages go through Hacl.Chacha20.Vec256 on any machine with AVX2.
+ * the evidence is tests/test_chacha20.c, tests/test_chacha20_vec.c,
+ * tests/test_poly1305.c and tests/test_poly1305_vec.c, whose long messages go
+ * through Hacl.Chacha20.Vec256 and Hacl.Poly1305.Vec256 on any machine with
+ * AVX2.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -38,6 +40,10 @@ static void fill(uint8_t *p, size_t n) {
 static uint32_t lane(const uint8_t b[32], int i) {
   return (uint32_t)b[4 * i] | (uint32_t)b[4 * i + 1] << 8 |
          (uint32_t)b[4 * i + 2] << 16 | (uint32_t)b[4 * i + 3] << 24;
+}
+
+static uint64_t lane64(const uint8_t b[32], int i) {
+  return (uint64_t)lane(b, 2 * i) | (uint64_t)lane(b, 2 * i + 1) << 32;
 }
 
 static uint32_t rotl32(uint32_t x, unsigned s) {
@@ -186,6 +192,91 @@ AVX2 static void run(int rounds) {
     snprintf(name, sizeof name, "vec256 %s", perm_names[k]);
     report(name, ok);
   }
+
+  /* The sixty-four-bit lanes: lane i is lanes 2i and 2i+1, low first. */
+  uint64_t w[4];
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    if (n == 0) memset(a, 0xff, 32);
+    Hacl_Vec256_store(r, Hacl_Vec256_add64(Hacl_Vec256_load(a),
+                                           Hacl_Vec256_load(b)));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == lane64(a, i) + lane64(b, i);
+  }
+  report("vec256 add64", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    if (n == 0) { memset(a, 0xff, 32); memset(b, 0xff, 32); }
+    Hacl_Vec256_store(r, Hacl_Vec256_mul32(Hacl_Vec256_load(a),
+                                           Hacl_Vec256_load(b)));
+    for (int i = 0; i < 4; i++)
+      ok &= lane64(r, i) == (uint64_t)(uint32_t)lane64(a, i) * (uint32_t)lane64(b, i);
+  }
+  report("vec256 mul32", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    if (n == 0) memset(a, 0xff, 32);
+    for (unsigned s = 1; s < 64; s++) {
+      Hacl_Vec256_store(r, Hacl_Vec256_shr64(Hacl_Vec256_load(a), s));
+      for (int i = 0; i < 4; i++) ok &= lane64(r, i) == lane64(a, i) >> s;
+      Hacl_Vec256_store(r, Hacl_Vec256_shl64(Hacl_Vec256_load(a), s));
+      for (int i = 0; i < 4; i++) ok &= lane64(r, i) == lane64(a, i) << s;
+    }
+  }
+  report("vec256 shr64 and shl64, every distance", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    if (n == 0) memset(a, 0xff, 32);
+    Hacl_Vec256_store(r, Hacl_Vec256_mask26(Hacl_Vec256_load(a)));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == (lane64(a, i) & 0x3ffffff);
+  }
+  report("vec256 mask26", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    uint64_t x[4];
+    for (int i = 0; i < 4; i++) x[i] = lane64(a, i);
+    Hacl_Vec256_store(r, Hacl_Vec256_bcast64(x[0]));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == x[0];
+    Hacl_Vec256_store(r, Hacl_Vec256_set64(x[0], x[1], x[2], x[3]));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == x[i];
+    Hacl_Vec256_store64(w, Hacl_Vec256_load(a));
+    for (int i = 0; i < 4; i++) ok &= w[i] == x[i];
+  }
+  report("vec256 bcast64, set64 and store64", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    if (n == 0) { memset(a, 0xff, 32); memset(b, 0x5a, 32); }
+    Hacl_Vec256_store(r, Hacl_Vec256_xor64(Hacl_Vec256_load(a), Hacl_Vec256_load(b)));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == (lane64(a, i) ^ lane64(b, i));
+    Hacl_Vec256_store(r, Hacl_Vec256_andnot64(Hacl_Vec256_load(a), Hacl_Vec256_load(b)));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == (~lane64(a, i) & lane64(b, i));
+  }
+  report("vec256 xor64 and andnot64", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    if (n == 0) memset(a, 0xff, 32);
+    for (unsigned s = 1; s < 64; s++) {
+      Hacl_Vec256_store(r, Hacl_Vec256_rotl64(Hacl_Vec256_load(a), s));
+      for (int i = 0; i < 4; i++)
+        ok &= lane64(r, i) == ((lane64(a, i) << s) | (lane64(a, i) >> (64 - s)));
+    }
+  }
+  report("vec256 rotl64, every distance", ok);
 }
 
 #endif

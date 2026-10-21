@@ -70,37 +70,60 @@ module U32 = FStar.UInt32
     wider than [8 + d <= 20] bits, so the shifts and adds are exact and
     the arithmetic is plain. *)
 
+(** Group [g] is coefficients [8 g] to [8 g + 7] and bytes [d g] to
+    [d g + d - 1]: eight coefficients of [d] bits fill [d] bytes exactly,
+    so both registers are empty at every group boundary and each group can
+    start from zero.  With [d] a constant the eight steps of a group then
+    unroll into straight-line shifts and masks.  The group is its own
+    function so that its loop sees [d i0 == 8 o0] and nothing about [g]:
+    the products [8 g] and [g d] in scope are enough to time out the
+    encoder's shift. *)
+let grp_start (d g: nat) : Lemma (d * (8 * g) == 8 * (g * d) /\ (g + 1) * d == g * d + d) = ()
+
+let grp_done (d i0 o0 vi o nb: nat)
+  : Lemma (requires vi == i0 + 8 /\ d * vi == 8 * o + nb /\ nb < 8 /\ d * i0 == 8 * o0)
+          (ensures o == o0 + d /\ nb == 0)
+  = Math.distributivity_add_right d i0 8
+
 #push-options "--z3rlimit 150"
 
-(** [out <- ByteEncode_d f], [32 d] bytes of it. *)
-fn encode_poly (out: A.array S8.t) (f: A.array zqt) (d: SZ.t)
-               (#p: perm) (#vout: erased (Seq.seq S8.t)) (#vf: erased (Seq.seq zqt))
+(** One group of [encode_poly]: bytes [o0] to [o0 + d - 1] from
+    coefficients [i0] to [i0 + 7]. *)
+inline_for_extraction
+fn enc_group (out: A.array S8.t) (f: A.array zqt) (d: SZ.t) (i0 o0: SZ.t)
+             (#p: perm) (#vout: erased (Seq.seq S8.t)) (#vf: erased (Seq.seq zqt))
 requires A.pts_to out vout ** A.pts_to f #p vf **
-         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
-               Seq.length vf == n /\ Seq.length vout == 32 * SZ.v d)
+         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ SZ.v i0 + 8 <= n /\
+               SZ.v d * SZ.v i0 == 8 * SZ.v o0 /\ SZ.v o0 <= 32 * SZ.v d /\
+               Seq.length vf == n /\ Seq.length vout == 32 * SZ.v d /\
+               (forall (k: nat). k < SZ.v o0 ==>
+                  Seq.index vout k == Seq.index (byte_encode (SZ.v d) (as_nats vf)) k))
 ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\
-              v == byte_encode (SZ.v d) (as_nats vf))
+              Seq.length v == 32 * SZ.v d /\ SZ.v o0 + SZ.v d <= 32 * SZ.v d /\
+              (forall (k: nat). k < SZ.v o0 + SZ.v d ==>
+                 Seq.index v k == Seq.index (byte_encode (SZ.v d) (as_nats vf)) k))
 {
   A.pts_to_len out;
-  A.pts_to_len f;
   HSZ.fits32 ();
   assert_norm (32 * 12 < pow2 32);
   assert_norm (pow2 12 == 4096);
   assert_norm (pow2 20 < pow2 64);
+  assert_norm (pow2 0 == 1);
   SZ.fits_u32_implies_fits (32 * SZ.v d);
   let dd = SZ.sizet_to_uint32 d;
-  enc_num_zero (SZ.v d) (as_nats vf);
-  assert_norm (pow2 0 == 1);
+  let iend = SZ.add i0 8sz;
+  enc_acc_bound (SZ.v d) (as_nats vf) (SZ.v i0) (SZ.v o0) 0;
   let mut acc = S64.zero;
   let mut nb = 0sz;
-  let mut o = 0sz;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 256sz)
+  let mut o = o0;
+  let mut i = i0;
+  while (let vi = !i; SZ.lt vi iend)
   invariant exists* (vi vn vo: SZ.t) (va: S64.t) (v: Seq.seq S8.t).
     pts_to i vi ** pts_to nb vn ** pts_to o vo ** pts_to acc va **
     A.pts_to out v ** A.pts_to f #p vf **
-    pure (SZ.v vi <= n /\ SZ.v vn < 8 /\
+    pure (SZ.v vi <= SZ.v iend /\ SZ.v iend == SZ.v i0 + 8 /\ SZ.v iend <= n /\
+          SZ.v vn < 8 /\
           SZ.v d * SZ.v vi == 8 * SZ.v vo + SZ.v vn /\
           SZ.v vo <= 32 * SZ.v d /\
           1 <= SZ.v d /\ SZ.v d <= 12 /\
@@ -163,11 +186,48 @@ ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
     }
   };
   with vie vne voe. assert (pts_to i vie ** pts_to nb vne ** pts_to o voe);
-  assert (pure (256 <= SZ.v vie));
-  assert (pure (SZ.v vie <= 256));
-  assert (pure (SZ.v vie == 256));
-  enc_done (SZ.v d) (SZ.v vie) (SZ.v voe) (SZ.v vne);
+  grp_done (SZ.v d) (SZ.v i0) (SZ.v o0) (SZ.v vie) (SZ.v voe) (SZ.v vne);
   with v. assert (A.pts_to out v);
+  assert (pure (SZ.v voe == SZ.v o0 + SZ.v d));
+  assert (pure (Seq.length v == 32 * SZ.v d));
+  assert (pure (forall (k: nat). k < SZ.v voe ==>
+                 Seq.index v k == Seq.index (byte_encode (SZ.v d) (as_nats vf)) k));
+}
+
+(** [out <- ByteEncode_d f], [32 d] bytes of it. *)
+fn encode_poly (out: A.array S8.t) (f: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+               (#p: perm) (#vout: erased (Seq.seq S8.t)) (#vf: erased (Seq.seq zqt))
+requires A.pts_to out vout ** A.pts_to f #p vf **
+         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
+               Seq.length vf == n /\ Seq.length vout == 32 * SZ.v d)
+ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
+        pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vf == n /\
+              v == byte_encode (SZ.v d) (as_nats vf))
+{
+  A.pts_to_len out;
+  A.pts_to_len f;
+  HSZ.fits32 ();
+  assert_norm (32 * 12 < pow2 32);
+  SZ.fits_u32_implies_fits (32 * SZ.v d);
+  let mut g = 0sz;
+  while (let vg = !g; SZ.lt vg 32sz)
+  invariant exists* (vg: SZ.t) (v: Seq.seq S8.t).
+    pts_to g vg ** A.pts_to out v ** A.pts_to f #p vf **
+    pure (SZ.v vg <= 32 /\ 1 <= SZ.v d /\ SZ.v d <= 12 /\
+          Seq.length vf == n /\ Seq.length v == 32 * SZ.v d /\
+          (forall (k: nat). k < SZ.v vg * SZ.v d ==>
+             Seq.index v k == Seq.index (byte_encode (SZ.v d) (as_nats vf)) k))
+  decreases (32 - SZ.v (!g))
+  {
+    let vg = !g;
+    grp_start (SZ.v d) (SZ.v vg);
+    Math.lemma_mult_le_right (SZ.v d) (SZ.v vg) 32;
+    SZ.fits_u32_implies_fits (SZ.v vg * SZ.v d);
+    enc_group out f d (SZ.mul 8sz vg) (SZ.mul vg d);
+    g := SZ.add vg 1sz;
+  };
+  with vge v. assert (pts_to g vge ** A.pts_to out v);
+  assert (pure (SZ.v vge == 32));
   Seq.lemma_eq_intro v (byte_encode (SZ.v d) (as_nats vf));
   assert (pure (v == byte_encode (SZ.v d) (as_nats vf)));
 }
@@ -205,19 +265,22 @@ ensures A.pts_to b #p vb **
 
 #push-options "--z3rlimit 600"
 
-(** [dst <- ByteDecode_d b].  For [d < 12] the result is below [2^d] and
-    already canonical; only [d = 12] can exceed [q], and it cannot exceed
-    [2q], so the same conditional subtraction serves both and the
-    implementation never has to ask which case it is in. *)
-fn decode_poly (dst: A.array zqt) (b: A.array S8.t) (d: SZ.t)
-               (#p: perm) (#vd: erased (Seq.seq zqt)) (#vb: erased (Seq.seq S8.t))
+(** One group of [decode_poly]: coefficients [i0] to [i0 + 7] from bytes
+    [p0] to [p0 + d - 1]. *)
+inline_for_extraction
+fn dec_group (dst: A.array zqt) (b: A.array S8.t) (d: SZ.t) (i0 p0: SZ.t)
+             (#p: perm) (#vd: erased (Seq.seq zqt)) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
-         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
-               Seq.length vd == n /\ Seq.length vb == 32 * SZ.v d)
+         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ SZ.v i0 + 8 <= n /\
+               8 * SZ.v p0 == SZ.v d * SZ.v i0 /\
+               Seq.length vd == n /\ Seq.length vb == 32 * SZ.v d /\
+               (forall (k: nat). k < SZ.v i0 ==>
+                  S16.v (Seq.index vd k) == Seq.index (byte_decode (SZ.v d) vb) k))
 ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
-        pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length v == n /\
-              Seq.length vb == 32 * SZ.v d /\
-              as_poly v == byte_decode (SZ.v d) vb)
+        pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length vb == 32 * SZ.v d /\
+              Seq.length v == n /\ SZ.v i0 + 8 <= n /\
+              (forall (k: nat). k < SZ.v i0 + 8 ==>
+                 S16.v (Seq.index v k) == Seq.index (byte_decode (SZ.v d) vb) k))
 {
   A.pts_to_len dst;
   A.pts_to_len b;
@@ -226,17 +289,21 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
   assert_norm (pow2 12 == 4096);
   assert_norm (pow2 12 < 2 * q);
   assert_norm (pow2 20 < pow2 64);
+  assert_norm (pow2 0 == 1);
   SZ.fits_u32_implies_fits (32 * SZ.v d);
   let dd = SZ.sizet_to_uint32 d;
+  let iend = SZ.add i0 8sz;
+  Math.lemma_mod_lt (le_nat vb / pow2 (SZ.v d * SZ.v i0)) 1;
   let mut acc = S64.zero;
   let mut nb = 0sz;
-  let mut pos = 0sz;
-  let mut i = 0sz;
-  while (let vi = !i; SZ.lt vi 256sz)
+  let mut pos = p0;
+  let mut i = i0;
+  while (let vi = !i; SZ.lt vi iend)
   invariant exists* (vi vn vp: SZ.t) (va: S64.t) (v: Seq.seq zqt).
     pts_to i vi ** pts_to nb vn ** pts_to pos vp ** pts_to acc va **
     A.pts_to dst v ** A.pts_to b #p vb **
-    pure (SZ.v vi <= n /\ SZ.v vn < 8 /\
+    pure (SZ.v vi <= SZ.v iend /\ SZ.v iend == SZ.v i0 + 8 /\ SZ.v iend <= n /\
+          SZ.v vn < 8 /\
           8 * SZ.v vp == SZ.v d * SZ.v vi + SZ.v vn /\
           1 <= SZ.v d /\ SZ.v d <= 12 /\
           Seq.length v == n /\ Seq.length vb == 32 * SZ.v d /\
@@ -302,9 +369,51 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
   with vie vne vpe vae v.
     assert (pts_to i vie ** pts_to nb vne ** pts_to pos vpe **
             pts_to acc vae ** A.pts_to dst v);
-  assert (pure (256 <= SZ.v vie));
-  assert (pure (SZ.v vie <= 256));
-  assert (pure (SZ.v vie == 256));
+  assert (pure (SZ.v vie == SZ.v i0 + 8));
+  assert (pure (Seq.length v == n));
+}
+
+(** [dst <- ByteDecode_d b].  For [d < 12] the result is below [2^d] and
+    already canonical; only [d = 12] can exceed [q], and it cannot exceed
+    [2q], so the same conditional subtraction serves both and the
+    implementation never has to ask which case it is in. *)
+fn decode_poly (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
+               (#p: perm) (#vd: erased (Seq.seq zqt)) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to dst vd ** A.pts_to b #p vb **
+         pure (1 <= SZ.v d /\ SZ.v d <= 12 /\
+               Seq.length vd == n /\ Seq.length vb == 32 * SZ.v d)
+ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
+        pure (1 <= SZ.v d /\ SZ.v d <= 12 /\ Seq.length v == n /\
+              Seq.length vb == 32 * SZ.v d /\
+              as_poly v == byte_decode (SZ.v d) vb)
+{
+  A.pts_to_len dst;
+  A.pts_to_len b;
+  HSZ.fits32 ();
+  assert_norm (32 * 12 < pow2 32);
+  assert_norm (pow2 12 == 4096);
+  assert_norm (pow2 12 < 2 * q);
+  assert_norm (pow2 20 < pow2 64);
+  SZ.fits_u32_implies_fits (32 * SZ.v d);
+  let mut g = 0sz;
+  while (let vg = !g; SZ.lt vg 32sz)
+  invariant exists* (vg: SZ.t) (v: Seq.seq zqt).
+    pts_to g vg ** A.pts_to dst v ** A.pts_to b #p vb **
+    pure (SZ.v vg <= 32 /\ 1 <= SZ.v d /\ SZ.v d <= 12 /\
+          Seq.length v == n /\ Seq.length vb == 32 * SZ.v d /\
+          (forall (k: nat). k < 8 * SZ.v vg ==>
+             S16.v (Seq.index v k) == Seq.index (byte_decode (SZ.v d) vb) k))
+  decreases (32 - SZ.v (!g))
+  {
+    let vg = !g;
+    grp_start (SZ.v d) (SZ.v vg);
+    Math.lemma_mult_le_right (SZ.v d) (SZ.v vg) 32;
+    SZ.fits_u32_implies_fits (SZ.v vg * SZ.v d);
+    dec_group dst b d (SZ.mul 8sz vg) (SZ.mul vg d);
+    g := SZ.add vg 1sz;
+  };
+  with vge v. assert (pts_to g vge ** A.pts_to dst v);
+  assert (pure (SZ.v vge == 32));
   as_poly_intro v (byte_decode (SZ.v d) vb);
   assert (pure (as_poly v == byte_decode (SZ.v d) vb));
 }
@@ -368,7 +477,7 @@ let decompress_impl (d: SZ.t { 1 <= SZ.v d /\ SZ.v d <= 11 })
 
 (** The two lifted to polynomials. *)
 
-fn compress_poly (dst src: A.array zqt) (d: SZ.t)
+fn compress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
                  (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\ Seq.length vd == n /\ Seq.length vs == n)
@@ -401,7 +510,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to src #p vs **
   assert (pure (as_nats v == poly_compress (SZ.v d) (as_poly vs)));
 }
 
-fn decompress_poly (dst src: A.array zqt) (d: SZ.t)
+fn decompress_poly (dst src: A.array zqt) ([@@@FStar.Attributes.monomorphize] d: SZ.t)
                    (#p: perm) (#vd #vs: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to src #p vs **
          pure (1 <= SZ.v d /\ SZ.v d <= 11 /\ Seq.length vd == n /\ Seq.length vs == n /\

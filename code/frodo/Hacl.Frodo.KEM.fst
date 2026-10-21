@@ -56,6 +56,7 @@ module Decode = Hacl.Frodo.Decode
 module Gen = Hacl.Frodo.Gen
 module Cast = Hacl.Secret.Cast
 module SEM = FStar.IndefiniteDescription
+module Mem = Hacl.Mem
 
 (** {2 Reading a concatenation back}
 
@@ -293,17 +294,20 @@ ensures exists* vpk vsk.
   assert (pure (SZ.v d * SZ.v ents < pow2 32));
 
   let mut z = [| (S8.zero <: S8.t); 16sz |];
+  Mem.track z;
   Copy.copy_range z 0sz coins (SZ.mul 2sz cb) 16sz;
   with vz. assert (A.pts_to z vz);
   slice_eq vcoins (2 * crypto_bytes p) vz;
 
   let mut sa = [| (S8.zero <: S8.t); 16sz |];
+  Mem.track sa;
   shake_p p sa 16sz z 16sz;
   with vsa. assert (A.pts_to sa vsa);
   assert (pure (vsa == shake p (Seq.slice vcoins (2 * crypto_bytes p)
                                               (2 * crypto_bytes p + 16)) 16));
 
   let mut mb = [| (S8.zero <: S8.t); SZ.add 1sz cb |];
+  Mem.track mb;
   A.((mb.(0sz) <- S8.classify 0x5fuy));
   Copy.copy_range mb 1sz coins cb cb;
   with vmb. assert (A.pts_to mb vmb);
@@ -311,11 +315,11 @@ ensures exists* vpk vsk.
   cons_eq (S8.classify 0x5fuy)
           (Seq.slice vcoins (crypto_bytes p) (2 * crypto_bytes p)) vmb;
 
-  let mut r = [| (S8.zero <: S8.t); two_smb |];
+  let r = Mem.alloc (S8.zero <: S8.t) two_smb;
   shake_p p r two_smb mb (SZ.add 1sz cb);
 
-  let mut st = [| (S16.zero <: S16.t); ents |];
-  let mut e = [| (S16.zero <: S16.t); ents |];
+  let st = Mem.alloc (S16.zero <: S16.t) ents;
+  let e = Mem.alloc (S16.zero <: S16.t) ents;
   with vr. assert (A.pts_to r vr);
   slice_eq vr 0 (Seq.slice vr 0 (secretmatrixbytes p));
   slice_eq vr (secretmatrixbytes p)
@@ -332,14 +336,14 @@ ensures exists* vpk vsk.
   assert (pure (ve == F.sample_matrix p (n p) nbar
                         (Seq.slice vr (secretmatrixbytes p) (2 * secretmatrixbytes p))));
 
-  let mut b = [| (S16.zero <: S16.t); ents |];
+  let b = Mem.alloc (S16.zero <: S16.t) ents;
   Gen.mul_t_as p sa st b;
   Mat.add b e ents #(n p) #nbar;
   with vb. assert (A.pts_to b vb);
   assert (pure (vb == M.add (n p) nbar
                         (M.mul_t (n p) (n p) nbar (F.gen_matrix p vsa) vst) ve));
 
-  let mut pb = [| (S8.zero <: S8.t); pmb |];
+  let pb = Mem.alloc (S8.zero <: S8.t) pmb;
   Pack.pack pb b d ents;
   with vpb. assert (A.pts_to pb vpb);
   assert (pure (vpb == F.pack_n p vb));
@@ -350,9 +354,10 @@ ensures exists* vpk vsk.
   copy2_eq vsa vpb vpk0 vpk1 vpk (SZ.v 0sz) (SZ.v 16sz) (SZ.v 16sz) (SZ.v pmb);
   assert (pure (vpk == Seq.append vsa (F.pack_n p vb)));
 
-  let mut stb = [| (S8.zero <: S8.t); smb |];
+  let stb = Mem.alloc (S8.zero <: S8.t) smb;
   Mat.to_bytes stb st ents #nbar #(n p);
   let mut pkh = [| (S8.zero <: S8.t); cb |];
+  Mem.track pkh;
   shake_p p pkh cb pk pkb;
   with vstb. assert (A.pts_to stb vstb);
   with vpkh. assert (A.pts_to pkh vpkh);
@@ -375,6 +380,16 @@ ensures exists* vpk vsk.
                          (Seq.append vpk (Seq.append vstb vpkh))));
   keypair_eq p vcoins vpk vsk;
   assert (pure (vpk == fst (F.keypair p vcoins) /\ vsk == snd (F.keypair p vcoins)));
+  Mem.wipe pkh cb;
+  Mem.free stb smb;
+  Mem.free pb pmb;
+  Mem.free b ents;
+  Mem.free e ents;
+  Mem.free st ents;
+  Mem.free r two_smb;
+  Mem.wipe mb (SZ.add 1sz cb);
+  Mem.wipe sa 16sz;
+  Mem.wipe z 16sz;
 }
 
 
@@ -478,13 +493,14 @@ ensures exists* vct vbp vv.
   assert (pure (SZ.v d * 64 < pow2 32 /\ SZ.v d * (64 / 8) == SZ.v c2));
 
   let mut sa = [| (S8.zero <: S8.t); 16sz |];
+  Mem.track sa;
   Copy.copy_range sa 0sz pk 0sz 16sz;
   A.pts_to_len sa;
   with vsa. assert (A.pts_to sa vsa);
   slice_eq vpk 0 vsa;
   assert (pure (vsa == Seq.slice vpk 0 bytes_seed_a));
 
-  let mut bb = [| (S8.zero <: S8.t); pmb |];
+  let bb = Mem.alloc (S8.zero <: S8.t) pmb;
   Copy.copy_range bb 0sz pk 16sz pmb;
   A.pts_to_len bb;
   with vbb. assert (A.pts_to bb vbb);
@@ -495,7 +511,7 @@ ensures exists* vct vbp vv.
   assert (pure (SZ.v ents % 8 == 0 /\ SZ.v ents / 8 == SZ.v nn));
   assert (pure (Seq.length vbb == SZ.v pmb));
   assert (pure (Seq.length vbb == SZ.v d * (SZ.v ents / 8)));
-  let mut bm = [| (S16.zero <: S16.t); ents |];
+  let bm = Mem.alloc (S16.zero <: S16.t) ents;
   Seq.lemma_create_len (SZ.v ents) (S16.zero <: S16.t);
   assert (pure (SZ.v d <= 16 /\ SZ.v ents <= 8 * 1344));
   Math.lemma_mult_le_right (SZ.v ents) (SZ.v d) 16;
@@ -507,12 +523,13 @@ ensures exists* vct vbp vv.
   assert (pure (vbm == F.unpack_n p vbb));
 
   let mut mbuf = [| (S8.zero <: S8.t); SZ.add 1sz cb |];
+  Mem.track mbuf;
   A.((mbuf.(0sz) <- S8.classify 0x96uy));
   Copy.copy_range mbuf 1sz seed_se 0sz cb;
   with vmbuf. assert (A.pts_to mbuf vmbuf);
   cons_eq (S8.classify 0x96uy) vss vmbuf;
 
-  let mut r = [| (S8.zero <: S8.t); rlen |];
+  let r = Mem.alloc (S8.zero <: S8.t) rlen;
   shake_p p r rlen mbuf (SZ.add 1sz cb);
   with vr. assert (A.pts_to r vr);
   assert (pure (vr == shake p (Seq.cons (S8.classify 0x96uy) vss)
@@ -524,9 +541,10 @@ ensures exists* vct vbp vv.
            (Seq.slice vr (2 * secretmatrixbytes p)
                          (2 * secretmatrixbytes p + 2 * (nbar * nbar)));
 
-  let mut sp = [| (S16.zero <: S16.t); ents |];
-  let mut ep = [| (S16.zero <: S16.t); ents |];
+  let sp = Mem.alloc (S16.zero <: S16.t) ents;
+  let ep = Mem.alloc (S16.zero <: S16.t) ents;
   let mut epp = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track epp;
   (* [sample_matrix] takes its byte buffer at the indexed length [blen] and
      slices three disjoint windows out of it. *)
   A.pts_to_len r;
@@ -563,6 +581,7 @@ ensures exists* vct vbp vv.
   Mat.mul v sp bm 8sz nn 8sz;
   Mat.add v epp 64sz #nbar #nbar;
   let mut enc = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track enc;
   Encode.key_encode p enc mu;
   Mat.add v enc 64sz #nbar #nbar;
   with vvu. assert (A.pts_to v vvu);
@@ -570,8 +589,9 @@ ensures exists* vct vbp vv.
                          (M.add nbar nbar (M.mul nbar (n p) nbar vsp vbm) vepp)
                          (F.key_encode p vmu)));
 
-  let mut c1b = [| (S8.zero <: S8.t); pmb |];
+  let c1b = Mem.alloc (S8.zero <: S8.t) pmb;
   let mut c2b = [| (S8.zero <: S8.t); c2 |];
+  Mem.track c2b;
   Pack.pack c1b bp d ents;
   Pack.pack c2b v d 64sz;
   A.pts_to_len c1b;
@@ -595,6 +615,17 @@ ensures exists* vct vbp vv.
   enc_ct_eq p vmu vpk vss vct vbp vv vsa vr vsp vep vepp vbm vbpu vvu;
   assert (pure (let c, b2, v2 = F.enc_ct p vmu vpk vss in
                 vct == c /\ vbp == b2 /\ vv == v2));
+  Mem.wipe c2b c2;
+  Mem.free c1b pmb;
+  Mem.wipe enc 64sz;
+  Mem.wipe epp 64sz;
+  Mem.free ep ents;
+  Mem.free sp ents;
+  Mem.free r rlen;
+  Mem.wipe mbuf (SZ.add 1sz cb);
+  Mem.free bm ents;
+  Mem.free bb pmb;
+  Mem.wipe sa 16sz;
 }
 
 
@@ -643,12 +674,14 @@ ensures exists* vct vss.
                 SZ.v two_cb == SZ.v cb + SZ.v cb /\ SZ.v kbl == SZ.v ctb + SZ.v cb));
 
   let mut pkh = [| (S8.zero <: S8.t); cb |];
+  Mem.track pkh;
   shake_p p pkh cb pk pkb;
   A.pts_to_len pkh;
   with vpkh. assert (A.pts_to pkh vpkh);
   assert (pure (vpkh == shake p vpk (crypto_bytes p)));
 
   let mut hm = [| (S8.zero <: S8.t); SZ.add cb mub |];
+  Mem.track hm;
   A.pts_to_len hm;
   with vhm0. assert (A.pts_to hm vhm0);
   Copy.copy_at hm 0sz pkh cb;
@@ -658,23 +691,26 @@ ensures exists* vct vss.
   copy2_eq vpkh vmu vhm0 vhm1 vhm (SZ.v 0sz) (SZ.v cb) (SZ.v cb) (SZ.v mub);
 
   let mut sek = [| (S8.zero <: S8.t); two_cb |];
+  Mem.track sek;
   shake_p p sek two_cb hm (SZ.add cb mub);
   A.pts_to_len sek;
   with vsek. assert (A.pts_to sek vsek);
   assert (pure (vsek == shake p (Seq.append vpkh vmu) (2 * crypto_bytes p)));
 
   let mut se = [| (S8.zero <: S8.t); cb |];
+  Mem.track se;
   A.pts_to_len se;
   Copy.copy_range se 0sz sek 0sz cb;
   with vse. assert (A.pts_to se vse);
   slice_eq vsek 0 vse;
 
-  let mut bp = [| (S16.zero <: S16.t); ents |];
+  let bp = Mem.alloc (S16.zero <: S16.t) ents;
   let mut vm = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track vm;
   enc_ct p cdf ct bp vm mu pk se;
   with vct. assert (A.pts_to ct vct);
 
-  let mut kb = [| (S8.zero <: S8.t); kbl |];
+  let kb = Mem.alloc (S8.zero <: S8.t) kbl;
   A.pts_to_len kb;
   with vkb0. assert (A.pts_to kb vkb0);
   Copy.copy_at kb 0sz ct ctb;
@@ -688,6 +724,13 @@ ensures exists* vct vss.
   shake_p p ss cb kb kbl;
   with vss. assert (A.pts_to ss vss);
   assert (pure (vct == fst (F.enc p vmu vpk) /\ vss == snd (F.enc p vmu vpk)));
+  Mem.free kb kbl;
+  Mem.wipe vm 64sz;
+  Mem.free bp ents;
+  Mem.wipe se cb;
+  Mem.wipe sek two_cb;
+  Mem.wipe hm (SZ.add cb mub);
+  Mem.wipe pkh cb;
 }
 
 (** {2 Decapsulation} *)
@@ -1005,12 +1048,14 @@ ensures exists* vss.
 
   (* The four pieces of the secret key. *)
   let mut sv = [| (S8.zero <: S8.t); cb |];
+  Mem.track sv;
   A.pts_to_len sv;
-  let mut pkv = [| (S8.zero <: S8.t); pkb |];
+  let pkv = Mem.alloc (S8.zero <: S8.t) pkb;
   A.pts_to_len pkv;
-  let mut sbytes = [| (S8.zero <: S8.t); smb |];
+  let sbytes = Mem.alloc (S8.zero <: S8.t) smb;
   A.pts_to_len sbytes;
   let mut pkh = [| (S8.zero <: S8.t); cb |];
+  Mem.track pkh;
   A.pts_to_len pkh;
   Copy.copy_range sv 0sz sk 0sz cb;
   Copy.copy_range pkv 0sz sk cb pkb;
@@ -1029,9 +1074,10 @@ ensures exists* vss.
                                  (crypto_bytes p + crypto_publickeybytes p)));
 
   (* The two pieces of the ciphertext. *)
-  let mut c1b = [| (S8.zero <: S8.t); pmb |];
+  let c1b = Mem.alloc (S8.zero <: S8.t) pmb;
   A.pts_to_len c1b;
   let mut c2b = [| (S8.zero <: S8.t); c2 |];
+  Mem.track c2b;
   A.pts_to_len c2b;
   Copy.copy_range c1b 0sz ct 0sz pmb;
   Copy.copy_range c2b 0sz ct pmb c2;
@@ -1040,9 +1086,10 @@ ensures exists* vss.
   slice_eq vct 0 vc1;
   slice_eq vct (ct1bytes p) vc2;
 
-  let mut bpm = [| (S16.zero <: S16.t); ents |];
+  let bpm = Mem.alloc (S16.zero <: S16.t) ents;
   A.pts_to_len bpm;
   let mut cm = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track cm;
   A.pts_to_len cm;
   Pack.unpack bpm c1b d ents;
   Pack.unpack cm c2b d 64sz;
@@ -1053,27 +1100,31 @@ ensures exists* vss.
                   (Seq.slice vct (ct1bytes p) (crypto_ciphertextbytes p))));
 
   (* mu = key_decode (c - bp * S^T). *)
-  let mut st = [| (S16.zero <: S16.t); ents |];
+  let st = Mem.alloc (S16.zero <: S16.t) ents;
   A.pts_to_len st;
   Mat.from_bytes st sbytes ents #nbar #(n p);
   with vst. assert (A.pts_to st vst);
   let mut prod = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track prod;
   A.pts_to_len prod;
   Mat.mul_t prod bpm st 8sz nn 8sz;
   with vprod. assert (A.pts_to prod vprod);
   let mut mdiff = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track mdiff;
   A.pts_to_len mdiff;
   copy16 mdiff cm 64sz;
   Mat.sub mdiff prod 64sz #nbar #nbar;
   with vmdiff. assert (A.pts_to mdiff vmdiff);
   assert (pure (vmdiff == M.sub nbar nbar vcm vprod));
   let mut mu = [| (S8.zero <: S8.t); mub |];
+  Mem.track mu;
   A.pts_to_len mu;
   Decode.key_decode p mu mdiff;
   with vmu. assert (A.pts_to mu vmu);
 
   (* Re-derive the encapsulation randomness from mu and re-encrypt. *)
   let mut hm = [| (S8.zero <: S8.t); hml |];
+  Mem.track hm;
   A.pts_to_len hm;
   with vhm0. assert (A.pts_to hm vhm0);
   Copy.copy_at hm 0sz pkh cb;
@@ -1083,21 +1134,24 @@ ensures exists* vss.
   copy2_eq vpkh vmu vhm0 vhm1 vhm (SZ.v 0sz) (SZ.v cb) (SZ.v cb) (SZ.v mub);
 
   let mut sek = [| (S8.zero <: S8.t); two_cb |];
+  Mem.track sek;
   A.pts_to_len sek;
   shake_p p sek two_cb hm hml;
   with vsek. assert (A.pts_to sek vsek);
   assert (pure (vsek == shake p (Seq.append vpkh vmu) (2 * crypto_bytes p)));
 
   let mut se = [| (S8.zero <: S8.t); cb |];
+  Mem.track se;
   A.pts_to_len se;
   Copy.copy_range se 0sz sek 0sz cb;
   with vse. assert (A.pts_to se vse);
   slice_eq vsek 0 vse;
 
-  let mut ct2 = [| (S8.zero <: S8.t); ctb |];
+  let ct2 = Mem.alloc (S8.zero <: S8.t) ctb;
   A.pts_to_len ct2;
-  let mut bp2 = [| (S16.zero <: S16.t); ents |];
+  let bp2 = Mem.alloc (S16.zero <: S16.t) ents;
   let mut v2 = [| (S16.zero <: S16.t); 64sz |];
+  Mem.track v2;
   enc_ct p cdf ct2 bp2 v2 mu pkv se;
   with vct2. assert (A.pts_to ct2 vct2);
   with vbp2. assert (A.pts_to bp2 vbp2);
@@ -1116,13 +1170,14 @@ ensures exists* vss.
   assert (pure ((S8.v mask == 0 \/ S8.v mask == pow2 8 - 1) /\
                 (S8.v mask == pow2 8 - 1 <==> okb p vbpr vbp2 vcr vv2)));
 
-  let mut kb = [| (S8.zero <: S8.t); kbl |];
+  let kb = Mem.alloc (S8.zero <: S8.t) kbl;
   A.pts_to_len kb;
   with vkb0. assert (A.pts_to kb vkb0);
   Copy.copy_at kb 0sz ct ctb;
   A.pts_to_len kb;
   with vkb1. assert (A.pts_to kb vkb1);
   let mut sk2 = [| (S8.zero <: S8.t); cb |];
+  Mem.track sk2;
   A.pts_to_len sk2;
   Copy.copy_range sk2 0sz sek cb cb;
   with vk2. assert (A.pts_to sk2 vk2);
@@ -1138,6 +1193,26 @@ ensures exists* vss.
   dec_eq p vct vsk vs vpk vsb vpkh vbpm vcm vst vprod vmdiff vmu vsek vse
          vct2 vbp2 vv2 vbpr vcr vkb vss;
   assert (pure (vss == F.dec p vct vsk));
+  Mem.wipe sk2 cb;
+  Mem.free kb kbl;
+  Mem.wipe v2 64sz;
+  Mem.free bp2 ents;
+  Mem.free ct2 ctb;
+  Mem.wipe se cb;
+  Mem.wipe sek two_cb;
+  Mem.wipe hm hml;
+  Mem.wipe mu mub;
+  Mem.wipe mdiff 64sz;
+  Mem.wipe prod 64sz;
+  Mem.free st ents;
+  Mem.wipe cm 64sz;
+  Mem.free bpm ents;
+  Mem.wipe c2b c2;
+  Mem.free c1b pmb;
+  Mem.wipe pkh cb;
+  Mem.free sbytes smb;
+  Mem.free pkv pkb;
+  Mem.wipe sv cb;
 }
 
 #pop-options

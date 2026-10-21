@@ -77,6 +77,7 @@ module Tbl = Hacl.Impl.Table
 module By = Hacl.Spec.Bytes
 module RP = Spec.K256.Repack
 module G = Pulse.Lib.GlobalArray
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
@@ -826,10 +827,12 @@ ensures exists* (vout': Seq.seq S64.t).
   A.pts_to_len out;
   let z = S128.zero;
   let mut t = [| z; 9sz |];
+  Mem.track t;
   A.pts_to_len t;
   mkcols t a b;
   reduce out t;
   fmul_spec_ok (vals va) (vals vb);
+  Mem.wipe t 9sz;
   ()
 }
 
@@ -1161,8 +1164,10 @@ ensures exists* (vo': Seq.seq S64.t).
   assert_norm (base - 1 <= lim);
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut at = [| z; 4sz |]; A.pts_to_len at;
-  let mut asv = [| z128; 4sz |]; A.pts_to_len asv;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at;
+  let mut asv = [| z128; 4sz |];
+  Mem.track asv; A.pts_to_len asv;
   A.pts_to_len at; A.pts_to_len asv;
   IB4.load_be at b;
   let nm = KT.fnm ();
@@ -1173,6 +1178,8 @@ ensures exists* (vo': Seq.seq S64.t).
   load out at;
   with s. assert (A.pts_to out s);
   Math.small_mod (eval (vals s)) prime;
+  Mem.wipe asv 4sz;
+  Mem.wipe at 4sz;
   r
 }
 
@@ -1186,8 +1193,10 @@ ensures exists* (vb': Seq.seq S8.t).
 {
   assert_norm (prime < pow2 256);
   let z = S64.zero;
-  let mut fa = [| z; 5sz |]; A.pts_to_len fa;
-  let mut at = [| z; 4sz |]; A.pts_to_len at;
+  let mut fa = [| z; 5sz |];
+  Mem.track fa; A.pts_to_len fa;
+  let mut at = [| z; 4sz |];
+  Mem.track at; A.pts_to_len at;
   A.pts_to_len fa; A.pts_to_len at;
   freeze fa a;
   with f. assert (A.pts_to fa f);
@@ -1197,6 +1206,8 @@ ensures exists* (vb': Seq.seq S8.t).
   with t. assert (A.pts_to at t);
   vals_l4 t;
   IB4.store_be b at;
+  Mem.wipe at 4sz;
+  Mem.wipe fa 5sz;
   ()
 }
 
@@ -1283,9 +1294,11 @@ ensures exists* (vo': Seq.seq S64.t).
   pure (felem (vals vo') /\ fev (vals vo') == K.fmul (fev (vals va)) (fev (vals va)))
 {
   let z = S64.zero;
-  let mut ac = [| z; 5sz |]; A.pts_to_len ac; A.pts_to_len ac;
+  let mut ac = [| z; 5sz |];
+  Mem.track ac; A.pts_to_len ac; A.pts_to_len ac;
   fcopy ac a;
   fmul out a ac;
+  Mem.wipe ac 5sz;
   ()
 }
 
@@ -1323,8 +1336,10 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
 {
   assert_norm (nl == 5);
   let z = S64.zero;
-  let mut fa = [| z; 5sz |]; A.pts_to_len fa;
-  let mut fb = [| z; 5sz |]; A.pts_to_len fb;
+  let mut fa = [| z; 5sz |];
+  Mem.track fa; A.pts_to_len fa;
+  let mut fb = [| z; 5sz |];
+  Mem.track fb; A.pts_to_len fb;
   A.pts_to_len fa; A.pts_to_len fb;
   freeze fa a;
   freeze fb b;
@@ -1343,6 +1358,8 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
   feq_limbs (vals va) (vals vb)
     (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4)
     (S64.v b0) (S64.v b1) (S64.v b2) (S64.v b3) (S64.v b4);
+  Mem.wipe fb 5sz;
+  Mem.wipe fa 5sz;
   r
 }
 
@@ -1352,9 +1369,11 @@ returns r: bool
 ensures A.pts_to a #pa va ** pure (r == (fev (vals va) = K.fzero))
 {
   let z = S64.zero;
-  let mut az = [| z; 5sz |]; A.pts_to_len az; A.pts_to_len az;
+  let mut az = [| z; 5sz |];
+  Mem.track az; A.pts_to_len az; A.pts_to_len az;
   fzero az;
   let r = feq a az;
+  Mem.wipe az 5sz;
   r
 }
 

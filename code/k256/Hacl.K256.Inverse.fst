@@ -39,6 +39,7 @@ module U64 = FStar.UInt64
 module S64 = Hacl.Secret.UInt64
 module K = Spec.K256
 module MA = Spec.ModArith
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -78,9 +79,11 @@ ensures exists* (vo': Seq.seq S64.t).
   fexp out a e (hide ((K.prime + 1) / 4));
   drop_table e;
   let z = S64.zero;
-  let mut aq = [| z; 5sz |]; A.pts_to_len aq; A.pts_to_len aq;
+  let mut aq = [| z; 5sz |];
+  Mem.track aq; A.pts_to_len aq; A.pts_to_len aq;
   fsqr aq out;
   let ok = feq aq a;
+  Mem.wipe aq 5sz;
   ok
 }
 

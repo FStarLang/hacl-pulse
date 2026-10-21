@@ -25,8 +25,9 @@
     that is 144 permutations per matrix instead of about 36.
 
     So the squeeze phase is opened up.  {!xof_absorb} runs the absorb, and
-    {!xof_block} hands back one block and advances the state, with the
-    number of blocks already taken carried as a ghost.  The specification
+    {!xof_block} hands back block [j], permuting first unless [j] is
+    zero, so that the block a sampler stops at is never followed by a
+    permutation.  The specification
     side of the connection is {!xof_block_byte}: byte [u] of block [j] of
     the squeeze is byte [168 j + u] of the infinite stream that
     {!Spec.MLKEM.Sample.xof_byte} names. *)
@@ -85,6 +86,12 @@ let squeeze_state_succ (j: nat) (s: state)
   : Lemma (squeeze_state (j + 1) s == permute (squeeze_state j s))
   = Loops.unfold_repeati j (fun _ st -> permute st) s
 
+(** The state {!xof_block} expects when asked for block [j]: block [0]'s
+    own, and from then on the previous block's.  Permuting on the way in
+    rather than on the way out means the last block a sampler takes is not
+    followed by a permutation whose result nobody reads. *)
+let xof_prev (j: nat) : nat = if j = 0 then 0 else j - 1
+
 (** {2 The two halves of the sponge, separately} *)
 
 (** [st <- absorb 168 0x1f seed]: the state the squeeze starts from. *)
@@ -106,10 +113,11 @@ ensures exists* (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
   absorb_impl st b rc_tbl seed slen 168sz shake_suffix;
 }
 
-(** [blk <- block j], and the state moves on to block [j + 1]. *)
+(** [blk <- block j]; the state is block [j - 1]'s on the way in and block
+    [j]'s on the way out. *)
 fn xof_block (blk: A.array S8.t) (st: A.array S64.t) (b: A.array S64.t)
              (rc_tbl: A.array S64.t)
-             (j: erased nat) (vsq: erased (Seq.seq S64.t))
+             (j: SZ.t) (vsq: erased (Seq.seq S64.t))
              (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
              (#vblk0: erased (Seq.seq S8.t))
              (#prc: perm) (#vrc: erased (Seq.seq S64.t))
@@ -119,22 +127,21 @@ requires A.pts_to blk vblk0 ** A.pts_to st vst0 ** A.pts_to b vb0 **
                Seq.length vblk0 == 168 /\
                reveal vrc == (rc <: Seq.seq S64.t) /\
                Seq.length vsq == 25 /\
-               reveal vst0 == squeeze_state j vsq)
+               reveal vst0 == squeeze_state (xof_prev (SZ.v j)) vsq)
 ensures exists* (v: Seq.seq S8.t) (vst: Seq.seq S64.t) (vb: Seq.seq S64.t).
   A.pts_to blk v ** A.pts_to st vst ** A.pts_to b vb **
   A.pts_to rc_tbl #prc vrc **
   pure (Seq.length vst == 25 /\ Seq.length vb == 25 /\ Seq.length v == 168 /\
         Seq.length vsq == 25 /\
-        reveal vst == squeeze_state (j + 1) vsq /\
+        reveal vst == squeeze_state (SZ.v j) vsq /\
         (forall (u: nat). u < 168 ==>
-           Seq.index v u == state_byte (squeeze_state j vsq) u))
+           Seq.index v u == state_byte (squeeze_state (SZ.v j) vsq) u))
 {
   A.pts_to_len blk;
   A.pts_to_len st;
-  squeeze_block blk 0sz 168sz st;
-  permute_impl st b rc_tbl;
-  squeeze_state_succ j vsq;
-  assert (pure (squeeze_state (j + 1) vsq == permute (squeeze_state j vsq)));
+  permute_if (SZ.gt j 0sz) st b rc_tbl;
+  squeeze_state_succ (xof_prev (SZ.v j)) vsq;
+  squeeze_block_lanes blk 0sz 168sz st;
 }
 
 #pop-options

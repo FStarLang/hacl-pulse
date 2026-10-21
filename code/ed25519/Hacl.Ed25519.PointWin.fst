@@ -65,6 +65,7 @@ module SM = Spec.Ed25519.Smul
 module B = Hacl.Spec.Bytes
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
@@ -514,14 +515,22 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 {
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz; A.pts_to_len tt;
   let z = S64.zero;
-  let mut cx = [| z; 5sz |]; A.pts_to_len cx;
-  let mut cy = [| z; 5sz |]; A.pts_to_len cy;
-  let mut cz = [| z; 5sz |]; A.pts_to_len cz;
-  let mut ct = [| z; 5sz |]; A.pts_to_len ct;
-  let mut nx = [| z; 5sz |]; A.pts_to_len nx;
-  let mut ny = [| z; 5sz |]; A.pts_to_len ny;
-  let mut nz = [| z; 5sz |]; A.pts_to_len nz;
-  let mut nt = [| z; 5sz |]; A.pts_to_len nt;
+  let mut cx = [| z; 5sz |];
+  Mem.track cx; A.pts_to_len cx;
+  let mut cy = [| z; 5sz |];
+  Mem.track cy; A.pts_to_len cy;
+  let mut cz = [| z; 5sz |];
+  Mem.track cz; A.pts_to_len cz;
+  let mut ct = [| z; 5sz |];
+  Mem.track ct; A.pts_to_len ct;
+  let mut nx = [| z; 5sz |];
+  Mem.track nx; A.pts_to_len nx;
+  let mut ny = [| z; 5sz |];
+  Mem.track ny; A.pts_to_len ny;
+  let mut nz = [| z; 5sz |];
+  Mem.track nz; A.pts_to_len nz;
+  let mut nt = [| z; 5sz |];
+  Mem.track nt; A.pts_to_len nt;
   A.pts_to_len cx; A.pts_to_len cy; A.pts_to_len cz; A.pts_to_len ct;
   A.pts_to_len nx; A.pts_to_len ny; A.pts_to_len nz; A.pts_to_len nt;
 
@@ -593,6 +602,14 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   };
   let vd = !d;
   sz_sixteen vd;
+  Mem.wipe nt 5sz;
+  Mem.wipe nz 5sz;
+  Mem.wipe ny 5sz;
+  Mem.wipe nx 5sz;
+  Mem.wipe ct 5sz;
+  Mem.wipe cz 5sz;
+  Mem.wipe cy 5sz;
+  Mem.wipe cx 5sz;
   ()
 }
 
@@ -808,18 +825,30 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   A.pts_to_len ks;
   oc_intro (pt vqx vqy vqz vqt);
   let z = S64.zero;
-  let mut tx = [| z; 80sz |]; A.pts_to_len tx;
-  let mut ty = [| z; 80sz |]; A.pts_to_len ty;
-  let mut tz = [| z; 80sz |]; A.pts_to_len tz;
-  let mut tt = [| z; 80sz |]; A.pts_to_len tt;
-  let mut ux = [| z; 5sz |]; A.pts_to_len ux;
-  let mut uy = [| z; 5sz |]; A.pts_to_len uy;
-  let mut uz = [| z; 5sz |]; A.pts_to_len uz;
-  let mut ut = [| z; 5sz |]; A.pts_to_len ut;
-  let mut sx = [| z; 5sz |]; A.pts_to_len sx;
-  let mut sy = [| z; 5sz |]; A.pts_to_len sy;
-  let mut sz = [| z; 5sz |]; A.pts_to_len sz;
-  let mut st = [| z; 5sz |]; A.pts_to_len st;
+  let mut tx = [| z; 80sz |];
+  Mem.track tx; A.pts_to_len tx;
+  let mut ty = [| z; 80sz |];
+  Mem.track ty; A.pts_to_len ty;
+  let mut tz = [| z; 80sz |];
+  Mem.track tz; A.pts_to_len tz;
+  let mut tt = [| z; 80sz |];
+  Mem.track tt; A.pts_to_len tt;
+  let mut ux = [| z; 5sz |];
+  Mem.track ux; A.pts_to_len ux;
+  let mut uy = [| z; 5sz |];
+  Mem.track uy; A.pts_to_len uy;
+  let mut uz = [| z; 5sz |];
+  Mem.track uz; A.pts_to_len uz;
+  let mut ut = [| z; 5sz |];
+  Mem.track ut; A.pts_to_len ut;
+  let mut sx = [| z; 5sz |];
+  Mem.track sx; A.pts_to_len sx;
+  let mut sy = [| z; 5sz |];
+  Mem.track sy; A.pts_to_len sy;
+  let mut sz = [| z; 5sz |];
+  Mem.track sz; A.pts_to_len sz;
+  let mut st = [| z; 5sz |];
+  Mem.track st; A.pts_to_len st;
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz; A.pts_to_len tt;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz; A.pts_to_len ut;
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz; A.pts_to_len st;
@@ -897,6 +926,18 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
             A.pts_to oz wz ** A.pts_to ot wt);
   pok_elim wx wy wz wt;
   win_done wx wy wz wt (pt vqx vqy vqz vqt) vk;
+  Mem.wipe st 5sz;
+  Mem.wipe sz 5sz;
+  Mem.wipe sy 5sz;
+  Mem.wipe sx 5sz;
+  Mem.wipe ut 5sz;
+  Mem.wipe uz 5sz;
+  Mem.wipe uy 5sz;
+  Mem.wipe ux 5sz;
+  Mem.wipe tt 80sz;
+  Mem.wipe tz 80sz;
+  Mem.wipe ty 80sz;
+  Mem.wipe tx 80sz;
   ()
 }
 

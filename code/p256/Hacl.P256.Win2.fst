@@ -1,0 +1,416 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+(** The fixed-base window's third table, compiled in.
+
+    Sixteen multiples of [2^128 G], three arrays of sixty-four limbs laid
+    out the way {!Hacl.P256.PointWin.entry} reads them: entry [d] is limbs
+    [4d] through [4d + 3], in Montgomery form.  {!Spec.P256.Win2} says what
+    the sixteen points are and {!Hacl.P256.WinTable} turns a list of limbs
+    into one of them, so what is left here is three [assert_norm]s per
+    entry, each arithmetic on a literal list.  Nothing below mentions the
+    curve. *)
+module Hacl.P256.Win2
+
+open Spec.Bignum4
+open Hacl.Impl.Limb4
+open Hacl.Impl.Lit4
+open Hacl.P256.PointWin
+open Hacl.P256.WinTable
+
+module Seq = FStar.Seq
+module L = FStar.List.Tot
+module G = Pulse.Lib.GlobalArray
+module S64 = Hacl.Secret.UInt64
+module P = Spec.P256
+module W = Spec.P256.Win2
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** {2 The three arrays} *)
+
+let tx_list : list S64.t = [
+  S64.classify 0x0uL; S64.classify 0x0uL; S64.classify 0x0uL; S64.classify 0x0uL;
+  S64.classify 0x62a8c244bfe20925uL; S64.classify 0x91c19ac38fdce867uL; S64.classify 0x5a96a5d5dd387063uL; S64.classify 0x61d587d421d324f6uL;
+  S64.classify 0x23f949feb8a24a20uL; S64.classify 0x17ebfed1f52ca53fuL; S64.classify 0x9b691bbebcfb4853uL; S64.classify 0x5617ff6b6278a05duL;
+  S64.classify 0xc0f734a3b2335834uL; S64.classify 0x9526205a90ef6860uL; S64.classify 0xcb8be71704e2bb0duL; S64.classify 0x2418871e02f383fauL;
+  S64.classify 0xb4480f0441c23fa3uL; S64.classify 0xb4712eb0c1989a2euL; S64.classify 0x3ccbba0f93a29ca7uL; S64.classify 0x6e205c14d619428cuL;
+  S64.classify 0xcc7c4c1c2cf9d7c1uL; S64.classify 0x1320886aee95e5abuL; S64.classify 0xbb7b9056beae170cuL; S64.classify 0xc8a5b250dbc0d662uL;
+  S64.classify 0x7bb4f7aaf0dcbc49uL; S64.classify 0x7de551f970bbb45buL; S64.classify 0xcfd0f3e49f2ca2e5uL; S64.classify 0xece587091f5c76efuL;
+  S64.classify 0x51b90651cbae2f70uL; S64.classify 0xefc4bc0593aaa8ebuL; S64.classify 0x8ecd8689dd1df499uL; S64.classify 0x1aee99a822f367a5uL;
+  S64.classify 0xe3b22c6bc4fe3c39uL; S64.classify 0xba4a81536c7bebdfuL; S64.classify 0xf23ab6b725693459uL; S64.classify 0x53bc377014922b11uL;
+  S64.classify 0x410dc6a90deeaf52uL; S64.classify 0xb003fb024c641c15uL; S64.classify 0x1384978c5bc504c4uL; S64.classify 0x37640487864a6a77uL;
+  S64.classify 0x27c8919240be34e8uL; S64.classify 0xc7162b3791907f35uL; S64.classify 0x90188ec1a956702buL; S64.classify 0xca132f7ddf93769cuL;
+  S64.classify 0xd0942770c24efc8uL; S64.classify 0x349fd04bef737a4uL; S64.classify 0x6d1c9dd2514cdd28uL; S64.classify 0x29c135ff30da9521uL;
+  S64.classify 0x5066efb6d9790ed6uL; S64.classify 0xa77a0cbca6aa793buL; S64.classify 0x1a915f3c223e042euL; S64.classify 0x1c5def0469c5874buL;
+  S64.classify 0x9faaccf5e4652f1duL; S64.classify 0xbd6fdd2ad56157b2uL; S64.classify 0xa4f4fb1f6261ec50uL; S64.classify 0x244e55ad476bcd52uL;
+  S64.classify 0x7915c5242d0a4c23uL; S64.classify 0xeb5d26e46bb3cc52uL; S64.classify 0x369a9116c09e2c92uL; S64.classify 0xc527f92cf182cf8uL;
+  S64.classify 0xfce0176788a2ffe4uL; S64.classify 0xdc506a3528e169a5uL; S64.classify 0xea108617af9c93auL; S64.classify 0x1ed2436103fa0e08uL
+]
+
+[@@"opaque_to_smt"; FStar.Custard.no_specialize]
+let tx_seq : Seq.seq S64.t = Seq.seq_of_list tx_list
+
+let tx_arr : (a: G.static_array S64.t
+                   { G.static_array_elems a == tx_seq /\
+                     Seq.length (G.static_array_elems a) == 64 })
+  = reveal_opaque (`%tx_seq) tx_seq;
+    assert_norm (L.length tx_list == 64);
+    G.mk_static_array tx_list
+
+let ty_list : list S64.t = [
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0xe87673a2a37173eauL; S64.classify 0x2384800853778b65uL; S64.classify 0x10f8441e05bab43euL; S64.classify 0xfa11fe124621efbeuL;
+  S64.classify 0x241b34c5e3c99ebduL; S64.classify 0xfc64242e1784156auL; S64.classify 0x4206482f695d67dfuL; S64.classify 0xb967ce0eee27c011uL;
+  S64.classify 0xd71776814082c157uL; S64.classify 0xcc914ad029c20073uL; S64.classify 0xf186c1ebe587e728uL; S64.classify 0x6fdb3c2261bcd5fduL;
+  S64.classify 0x90db7957b3641686uL; S64.classify 0x432691d45ac8b4euL; S64.classify 0x7a759acf64e0350uL; S64.classify 0x514d89c9c972517uL;
+  S64.classify 0x4ed81432c11d2303uL; S64.classify 0x7da669121f03769fuL; S64.classify 0x3ac7a5fd84539828uL; S64.classify 0x14dada943bccdd02uL;
+  S64.classify 0x32920edd167d79aeuL; S64.classify 0x39df8a2fa7d7ec1uL; S64.classify 0xf46206c0bb30af91uL; S64.classify 0x1ff5e2f522676b59uL;
+  S64.classify 0x95d485b9ae8274c5uL; S64.classify 0x6c14d4457d30b39cuL; S64.classify 0xbafea90bbcc1ef81uL; S64.classify 0x7c5f317aa459a2eduL;
+  S64.classify 0x4645c8ab5afc60dbuL; S64.classify 0xaa02235520b9f2a3uL; S64.classify 0x52a2954cce0fc507uL; S64.classify 0x8c2731bb7ce1c2e7uL;
+  S64.classify 0x5991bc6222a77dauL; S64.classify 0x62260a575e47eb11uL; S64.classify 0xc7af6613f21b432cuL; S64.classify 0x22f3acc9ab4953e9uL;
+  S64.classify 0x3ece44f90e2025b4uL; S64.classify 0x67aaec690c62f14cuL; S64.classify 0xad74141822e3cc11uL; S64.classify 0xcf9b75c37ff9a50euL;
+  S64.classify 0xea6e4508f78b0b6fuL; S64.classify 0x176f5dd2678c143cuL; S64.classify 0x81484184be21e65uL; S64.classify 0x27f7525ce7df38c4uL;
+  S64.classify 0xe83007873b6c1dauL; S64.classify 0x55cf85d2fcd8557auL; S64.classify 0xf7c7c760460f3b1uL; S64.classify 0x87052acb46e58063uL;
+  S64.classify 0x881c9305047d320buL; S64.classify 0x1ca983d56181263fuL; S64.classify 0x354e9a44278fb8eeuL; S64.classify 0xad2dbc0f396e4964uL;
+  S64.classify 0x9e5919382aede0acuL; S64.classify 0xb29222086cc34939uL; S64.classify 0x3c9d896299a34361uL; S64.classify 0x3c81836dc1905fe6uL;
+  S64.classify 0x96eaaa92a3d694e7uL; S64.classify 0xc0f43b4def50bc74uL; S64.classify 0xce6aa58c64114db4uL; S64.classify 0x8218e8ea7c000fd4uL
+]
+
+[@@"opaque_to_smt"; FStar.Custard.no_specialize]
+let ty_seq : Seq.seq S64.t = Seq.seq_of_list ty_list
+
+let ty_arr : (a: G.static_array S64.t
+                   { G.static_array_elems a == ty_seq /\
+                     Seq.length (G.static_array_elems a) == 64 })
+  = reveal_opaque (`%ty_seq) ty_seq;
+    assert_norm (L.length ty_list == 64);
+    G.mk_static_array ty_list
+
+let tz_list : list S64.t = [
+  S64.classify 0x0uL; S64.classify 0x0uL; S64.classify 0x0uL; S64.classify 0x0uL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL;
+  S64.classify 0x1uL; S64.classify 0xffffffff00000000uL; S64.classify 0xffffffffffffffffuL; S64.classify 0xfffffffeuL
+]
+
+[@@"opaque_to_smt"; FStar.Custard.no_specialize]
+let tz_seq : Seq.seq S64.t = Seq.seq_of_list tz_list
+
+let tz_arr : (a: G.static_array S64.t
+                   { G.static_array_elems a == tz_seq /\
+                     Seq.length (G.static_array_elems a) == 64 })
+  = reveal_opaque (`%tz_seq) tz_seq;
+    assert_norm (L.length tz_list == 64);
+    G.mk_static_array tz_list
+
+let shape (_: unit)
+  : Lemma (L.length tx_list == 64 /\ L.length ty_list == 64 /\
+           L.length tz_list == 64)
+  = assert_norm (L.length tx_list == 64);
+    assert_norm (L.length ty_list == 64);
+    assert_norm (L.length tz_list == 64)
+
+(** {2 The sixteen entries} *)
+
+let ent_0 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 0)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 0) == nl /\
+                 lbnd (chunk tx_list 0) /\
+                 leval (chunk tx_list 0) == qx W.e0 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 0) == nl /\
+                 lbnd (chunk ty_list 0) /\
+                 leval (chunk ty_list 0) == qy W.e0 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 0) == nl /\
+                 lbnd (chunk tz_list 0) /\
+                 leval (chunk tz_list 0) == qz W.e0 * pow2 256 % P.prime);
+    W.e0_ok ();
+    ent_lit tx_list ty_list tz_list 0 P.g W.n W.e0
+
+let ent_1 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 1)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 1) == nl /\
+                 lbnd (chunk tx_list 1) /\
+                 leval (chunk tx_list 1) == qx W.e1 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 1) == nl /\
+                 lbnd (chunk ty_list 1) /\
+                 leval (chunk ty_list 1) == qy W.e1 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 1) == nl /\
+                 lbnd (chunk tz_list 1) /\
+                 leval (chunk tz_list 1) == qz W.e1 * pow2 256 % P.prime);
+    W.e1_ok ();
+    ent_lit tx_list ty_list tz_list 1 P.g W.n W.e1
+
+let ent_2 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 2)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 2) == nl /\
+                 lbnd (chunk tx_list 2) /\
+                 leval (chunk tx_list 2) == qx W.e2 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 2) == nl /\
+                 lbnd (chunk ty_list 2) /\
+                 leval (chunk ty_list 2) == qy W.e2 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 2) == nl /\
+                 lbnd (chunk tz_list 2) /\
+                 leval (chunk tz_list 2) == qz W.e2 * pow2 256 % P.prime);
+    W.e2_ok ();
+    ent_lit tx_list ty_list tz_list 2 P.g W.n W.e2
+
+let ent_3 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 3)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 3) == nl /\
+                 lbnd (chunk tx_list 3) /\
+                 leval (chunk tx_list 3) == qx W.e3 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 3) == nl /\
+                 lbnd (chunk ty_list 3) /\
+                 leval (chunk ty_list 3) == qy W.e3 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 3) == nl /\
+                 lbnd (chunk tz_list 3) /\
+                 leval (chunk tz_list 3) == qz W.e3 * pow2 256 % P.prime);
+    W.e3_ok ();
+    ent_lit tx_list ty_list tz_list 3 P.g W.n W.e3
+
+let ent_4 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 4)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 4) == nl /\
+                 lbnd (chunk tx_list 4) /\
+                 leval (chunk tx_list 4) == qx W.e4 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 4) == nl /\
+                 lbnd (chunk ty_list 4) /\
+                 leval (chunk ty_list 4) == qy W.e4 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 4) == nl /\
+                 lbnd (chunk tz_list 4) /\
+                 leval (chunk tz_list 4) == qz W.e4 * pow2 256 % P.prime);
+    W.e4_ok ();
+    ent_lit tx_list ty_list tz_list 4 P.g W.n W.e4
+
+let ent_5 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 5)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 5) == nl /\
+                 lbnd (chunk tx_list 5) /\
+                 leval (chunk tx_list 5) == qx W.e5 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 5) == nl /\
+                 lbnd (chunk ty_list 5) /\
+                 leval (chunk ty_list 5) == qy W.e5 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 5) == nl /\
+                 lbnd (chunk tz_list 5) /\
+                 leval (chunk tz_list 5) == qz W.e5 * pow2 256 % P.prime);
+    W.e5_ok ();
+    ent_lit tx_list ty_list tz_list 5 P.g W.n W.e5
+
+let ent_6 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 6)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 6) == nl /\
+                 lbnd (chunk tx_list 6) /\
+                 leval (chunk tx_list 6) == qx W.e6 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 6) == nl /\
+                 lbnd (chunk ty_list 6) /\
+                 leval (chunk ty_list 6) == qy W.e6 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 6) == nl /\
+                 lbnd (chunk tz_list 6) /\
+                 leval (chunk tz_list 6) == qz W.e6 * pow2 256 % P.prime);
+    W.e6_ok ();
+    ent_lit tx_list ty_list tz_list 6 P.g W.n W.e6
+
+let ent_7 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 7)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 7) == nl /\
+                 lbnd (chunk tx_list 7) /\
+                 leval (chunk tx_list 7) == qx W.e7 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 7) == nl /\
+                 lbnd (chunk ty_list 7) /\
+                 leval (chunk ty_list 7) == qy W.e7 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 7) == nl /\
+                 lbnd (chunk tz_list 7) /\
+                 leval (chunk tz_list 7) == qz W.e7 * pow2 256 % P.prime);
+    W.e7_ok ();
+    ent_lit tx_list ty_list tz_list 7 P.g W.n W.e7
+
+let ent_8 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 8)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 8) == nl /\
+                 lbnd (chunk tx_list 8) /\
+                 leval (chunk tx_list 8) == qx W.e8 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 8) == nl /\
+                 lbnd (chunk ty_list 8) /\
+                 leval (chunk ty_list 8) == qy W.e8 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 8) == nl /\
+                 lbnd (chunk tz_list 8) /\
+                 leval (chunk tz_list 8) == qz W.e8 * pow2 256 % P.prime);
+    W.e8_ok ();
+    ent_lit tx_list ty_list tz_list 8 P.g W.n W.e8
+
+let ent_9 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 9)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 9) == nl /\
+                 lbnd (chunk tx_list 9) /\
+                 leval (chunk tx_list 9) == qx W.e9 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 9) == nl /\
+                 lbnd (chunk ty_list 9) /\
+                 leval (chunk ty_list 9) == qy W.e9 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 9) == nl /\
+                 lbnd (chunk tz_list 9) /\
+                 leval (chunk tz_list 9) == qz W.e9 * pow2 256 % P.prime);
+    W.e9_ok ();
+    ent_lit tx_list ty_list tz_list 9 P.g W.n W.e9
+
+let ent_10 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 10)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 10) == nl /\
+                 lbnd (chunk tx_list 10) /\
+                 leval (chunk tx_list 10) == qx W.e10 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 10) == nl /\
+                 lbnd (chunk ty_list 10) /\
+                 leval (chunk ty_list 10) == qy W.e10 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 10) == nl /\
+                 lbnd (chunk tz_list 10) /\
+                 leval (chunk tz_list 10) == qz W.e10 * pow2 256 % P.prime);
+    W.e10_ok ();
+    ent_lit tx_list ty_list tz_list 10 P.g W.n W.e10
+
+let ent_11 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 11)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 11) == nl /\
+                 lbnd (chunk tx_list 11) /\
+                 leval (chunk tx_list 11) == qx W.e11 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 11) == nl /\
+                 lbnd (chunk ty_list 11) /\
+                 leval (chunk ty_list 11) == qy W.e11 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 11) == nl /\
+                 lbnd (chunk tz_list 11) /\
+                 leval (chunk tz_list 11) == qz W.e11 * pow2 256 % P.prime);
+    W.e11_ok ();
+    ent_lit tx_list ty_list tz_list 11 P.g W.n W.e11
+
+let ent_12 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 12)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 12) == nl /\
+                 lbnd (chunk tx_list 12) /\
+                 leval (chunk tx_list 12) == qx W.e12 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 12) == nl /\
+                 lbnd (chunk ty_list 12) /\
+                 leval (chunk ty_list 12) == qy W.e12 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 12) == nl /\
+                 lbnd (chunk tz_list 12) /\
+                 leval (chunk tz_list 12) == qz W.e12 * pow2 256 % P.prime);
+    W.e12_ok ();
+    ent_lit tx_list ty_list tz_list 12 P.g W.n W.e12
+
+let ent_13 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 13)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 13) == nl /\
+                 lbnd (chunk tx_list 13) /\
+                 leval (chunk tx_list 13) == qx W.e13 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 13) == nl /\
+                 lbnd (chunk ty_list 13) /\
+                 leval (chunk ty_list 13) == qy W.e13 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 13) == nl /\
+                 lbnd (chunk tz_list 13) /\
+                 leval (chunk tz_list 13) == qz W.e13 * pow2 256 % P.prime);
+    W.e13_ok ();
+    ent_lit tx_list ty_list tz_list 13 P.g W.n W.e13
+
+let ent_14 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 14)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 14) == nl /\
+                 lbnd (chunk tx_list 14) /\
+                 leval (chunk tx_list 14) == qx W.e14 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 14) == nl /\
+                 lbnd (chunk ty_list 14) /\
+                 leval (chunk ty_list 14) == qy W.e14 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 14) == nl /\
+                 lbnd (chunk tz_list 14) /\
+                 leval (chunk tz_list 14) == qz W.e14 * pow2 256 % P.prime);
+    W.e14_ok ();
+    ent_lit tx_list ty_list tz_list 14 P.g W.n W.e14
+
+let ent_15 (_: unit)
+  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+               (Seq.seq_of_list tz_list) P.g W.n 15)
+  = shape ();
+    assert_norm (L.length (chunk tx_list 15) == nl /\
+                 lbnd (chunk tx_list 15) /\
+                 leval (chunk tx_list 15) == qx W.e15 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk ty_list 15) == nl /\
+                 lbnd (chunk ty_list 15) /\
+                 leval (chunk ty_list 15) == qy W.e15 * pow2 256 % P.prime);
+    assert_norm (L.length (chunk tz_list 15) == nl /\
+                 lbnd (chunk tz_list 15) /\
+                 leval (chunk tz_list 15) == qz W.e15 * pow2 256 % P.prime);
+    W.e15_ok ();
+    ent_lit tx_list ty_list tz_list 15 P.g W.n W.e15
+
+(** {2 The table} *)
+
+let reveal_seqs (_: unit)
+  : Lemma (tx_seq == Seq.seq_of_list tx_list /\
+           ty_seq == Seq.seq_of_list ty_list /\
+           tz_seq == Seq.seq_of_list tz_list)
+  = reveal_opaque (`%tx_seq) tx_seq;
+    reveal_opaque (`%ty_seq) ty_seq;
+    reveal_opaque (`%tz_seq) tz_seq
+
+let tbl_ok (_: unit)
+  : Lemma (tok tx_seq ty_seq tz_seq P.g (pow2 128) 16)
+  = reveal_seqs ();
+    ent_0 (); ent_1 (); ent_2 (); ent_3 ();
+    ent_4 (); ent_5 (); ent_6 (); ent_7 ();
+    ent_8 (); ent_9 (); ent_10 (); ent_11 ();
+    ent_12 (); ent_13 (); ent_14 (); ent_15 ();
+    tok_all (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
+            (Seq.seq_of_list tz_list) P.g W.n
+
+#pop-options

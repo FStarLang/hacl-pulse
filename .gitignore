@@ -2,3 +2,4 @@ obj/
 .depend
 *.checked
 *.krml
+/dist/

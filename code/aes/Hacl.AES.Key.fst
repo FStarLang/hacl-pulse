@@ -49,6 +49,7 @@ module SW = Hacl.AES.SubWord
 module UInt = FStar.UInt
 module Vec = Hacl.Vec128
 module Sub = Hacl.Impl.Sub
+module Mem = Hacl.Mem
 
 (** This module is arithmetic-heavy, and the default SMT encoding boxes
     every integer operation, which hides the structure of the products from
@@ -1328,6 +1329,7 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
   let mut rc = S8.classify 1uy;
   let z = S8.zero;
   let mut sb = [| z; 16sz |];
+  Mem.track sb;
   A.pts_to_len sb;
   while (let vb = !b; SZ.lt vb p.pxkeylen)
   invariant exists* (vb: SZ.t) (vrc: S8.t) (vw: Seq.seq S8.t) (vsb: Seq.seq S8.t).
@@ -1359,6 +1361,7 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
   with vw. assert A.pts_to w vw;
   ks_done p.pv key vw (SZ.v nb);
   A.pts_to_len w;
+  Mem.wipe sb 16sz;
 }
 
 (** The expanded key, written into a caller-provided slice of [xkeylen]

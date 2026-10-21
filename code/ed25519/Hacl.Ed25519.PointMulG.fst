@@ -86,6 +86,7 @@ module W0 = Hacl.Ed25519.Win0
 module W1 = Hacl.Ed25519.Win1
 module W2 = Hacl.Ed25519.Win2
 module W3 = Hacl.Ed25519.Win3
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -407,14 +408,22 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz; A.pts_to_len ot;
   let z = S64.zero;
-  let mut ux = [| z; 5sz |]; A.pts_to_len ux;
-  let mut uy = [| z; 5sz |]; A.pts_to_len uy;
-  let mut uz = [| z; 5sz |]; A.pts_to_len uz;
-  let mut ut = [| z; 5sz |]; A.pts_to_len ut;
-  let mut sx = [| z; 5sz |]; A.pts_to_len sx;
-  let mut sy = [| z; 5sz |]; A.pts_to_len sy;
-  let mut sz = [| z; 5sz |]; A.pts_to_len sz;
-  let mut st = [| z; 5sz |]; A.pts_to_len st;
+  let mut ux = [| z; 5sz |];
+  Mem.track ux; A.pts_to_len ux;
+  let mut uy = [| z; 5sz |];
+  Mem.track uy; A.pts_to_len uy;
+  let mut uz = [| z; 5sz |];
+  Mem.track uz; A.pts_to_len uz;
+  let mut ut = [| z; 5sz |];
+  Mem.track ut; A.pts_to_len ut;
+  let mut sx = [| z; 5sz |];
+  Mem.track sx; A.pts_to_len sx;
+  let mut sy = [| z; 5sz |];
+  Mem.track sy; A.pts_to_len sy;
+  let mut sz = [| z; 5sz |];
+  Mem.track sz; A.pts_to_len sz;
+  let mut st = [| z; 5sz |];
+  Mem.track st; A.pts_to_len st;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz; A.pts_to_len ut;
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz; A.pts_to_len st;
 
@@ -449,6 +458,14 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
   Table.drop_table t2z; Table.drop_table t2t;
   Table.drop_table t3x; Table.drop_table t3y;
   Table.drop_table t3z; Table.drop_table t3t;
+  Mem.wipe st 5sz;
+  Mem.wipe sz 5sz;
+  Mem.wipe sy 5sz;
+  Mem.wipe sx 5sz;
+  Mem.wipe ut 5sz;
+  Mem.wipe uz 5sz;
+  Mem.wipe uy 5sz;
+  Mem.wipe ux 5sz;
   ()
 }
 

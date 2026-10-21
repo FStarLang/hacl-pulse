@@ -45,6 +45,7 @@ module UInt = FStar.UInt
 module Copy = Hacl.Impl.Copy
 module Poly = Spec.GF128.Poly
 module Math = FStar.Math.Lemmas
+module Mem = Hacl.Mem
 
 (** This module is arithmetic-heavy, and the default SMT encoding boxes
     every integer operation, which hides the structure of the products from
@@ -516,7 +517,9 @@ ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   A.pts_to_len h;
   let z8 = S8.zero;
   let one = S8.classify 1uy;
-  let mut za = [| z8; 16sz |]; A.pts_to_len za; let mut vaa = [| z8; 16sz |]; A.pts_to_len vaa; A.pts_to_len za;
+  let mut za = [| z8; 16sz |];
+  Mem.track za; A.pts_to_len za; let mut vaa = [| z8; 16sz |];
+  Mem.track vaa; A.pts_to_len vaa; A.pts_to_len za;
   A.pts_to_len vaa;
   Copy.copy_exact vaa h 16sz;
   with vz0. assert A.pts_to za vz0;
@@ -556,6 +559,8 @@ ensures exists* (va': Seq.seq S8.t). A.pts_to a va' ** A.pts_to h vh ** pure (
   with vw. assert A.pts_to vaa vw;
   gmul_loop_done (vals va) (vals vz) (vals vw);
   Copy.copy_exact a za 16sz;
+  Mem.wipe vaa 16sz;
+  Mem.wipe za 16sz;
   ()
 }
 

@@ -43,6 +43,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -68,7 +69,10 @@ ensures exists* (wo: Seq.seq S64.t).
 {
   A.pts_to_len out;
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
 
   fsqr a0 x;
   fmul a1 a0 x;
@@ -80,6 +84,9 @@ ensures exists* (wo: Seq.seq S64.t).
   fadd out a0 bs;
   drop_table bs;
 
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   ()
 }
 
@@ -92,12 +99,16 @@ ensures A.pts_to x #px vx ** A.pts_to y #py vy **
   pure (r == P.is_on_curve (fev vx) (fev vy))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z; 4sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 4sz |];
+  Mem.track a1; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
 
   curve_rhs a1 x;
   fsqr a0 y;
   let r = feq a0 a1;
 
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   r
 }
 
@@ -190,10 +201,12 @@ ensures exists* (wx wy: Seq.seq S64.t).
 {
   A.pts_to_len ox; A.pts_to_len oy;
   let z0 = S64.zero;
-  let mut a0 = [| z0; 4sz |]; A.pts_to_len a0; A.pts_to_len a0;
+  let mut a0 = [| z0; 4sz |];
+  Mem.track a0; A.pts_to_len a0; A.pts_to_len a0;
   finv a0 z;
   fmul ox x a0;
   fmul oy y a0;
+  Mem.wipe a0 4sz;
   ()
 }
 
@@ -213,7 +226,9 @@ ensures exists* (wb: Seq.seq S8.t).
 {
   A.pts_to_len b;
   let z0 = S64.zero;
-  let mut a0 = [| z0; 4sz |]; A.pts_to_len a0; let mut a1 = [| z0; 4sz |]; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
+  let mut a0 = [| z0; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z0; 4sz |];
+  Mem.track a1; A.pts_to_len a1; A.pts_to_len a0; A.pts_to_len a1;
   to_aff_point a0 a1 x y z;
   with wax. assert (A.pts_to a0 wax);
   with way. assert (A.pts_to a1 way);
@@ -236,6 +251,8 @@ ensures exists* (wb: Seq.seq S8.t).
   A.pts_to_len b;
   assert (pure (Seq.equal wb (Seq.append vxs vys)));
 
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   ()
 }
 

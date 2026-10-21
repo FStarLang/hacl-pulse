@@ -11,6 +11,11 @@
 #   BENCH_CC    gcc | clang               (default gcc)
 #   BENCH_OUT   output directory          (default /tmp/bench)
 #   HACL_STAR   HACL* checkout to compare (default /tmp/hacl-star)
+#
+# HACL* is rebuilt with BENCH_CC into $HACL_STAR/dist/build-$BENCH_CC (once, then
+# cached), so that a clang run compares clang against clang.  Linking the
+# checkout's own libevercrypt.a, which its Makefile builds with cc, made every
+# clang row compare clang-compiled hacl-pulse against gcc-compiled HACL*.
 set -e
 cd "$(dirname "$0")"
 ROUNDS=${1:-3}
@@ -27,6 +32,16 @@ IREF="-I . -I $H -I $H/internal -I $K/include -I $K/krmllib/dist/minimal"
 [ -f "$R/dist/Hacl.c" ] || { echo "no $R/dist/Hacl.c -- run make extract" >&2; exit 1; }
 mkdir -p "$OUT"
 
+HB=$S/dist/build-$CC
+if [ ! -f "$HB/libevercrypt.a" ]; then
+  rm -rf "$HB"; mkdir -p "$HB"
+  cp -r "$H"/. "$HB"/
+  make -C "$HB" clean >/dev/null 2>&1 || true
+  make -C "$HB" CC="$CC" -j"$(nproc)" libevercrypt.a >"$HB/build.log" 2>&1 \
+    || { echo "HACL* build with $CC failed, see $HB/build.log" >&2; exit 1; }
+fi
+LIB=$HB/libevercrypt.a
+
 # The two link-time code offsets.  Built here so that a fresh checkout works.
 for n in 0 23; do [ -e pad_$n.o ] || ./mkpad.sh $n; done
 
@@ -35,9 +50,9 @@ for n in 0 23; do
   $CC -std=c11 -O3 -DBS_PRECOMP7 -DSHIM='"shim_pulse.h"' -I . -I $R/dist -I $R/c \
       bench.c pad_$n.o $OUT/t_hacl.o -o $OUT/t_pulse_$n
   $CC -std=c11 -O3 -DSHIM='"shim_ref.h"' $IREF \
-      bench.c pad_$n.o $H/libevercrypt.a -o $OUT/t_ref_$n
+      bench.c pad_$n.o $LIB -o $OUT/t_ref_$n
   $CC -std=c11 -O3 -DBS_REF_BEST -DSHIM='"shim_ref.h"' $IREF \
-      bench.c pad_$n.o $H/libevercrypt.a -o $OUT/t_best_$n
+      bench.c pad_$n.o $LIB -o $OUT/t_best_$n
 done
 
 for r in $(seq 1 $ROUNDS); do

@@ -45,7 +45,7 @@
     the narrower widths rest on.
 
     {b Extraction.}  Custard compiles [FStar.UInt128] to C's
-    [unsigned __int128] under [--custard_backend C], which is on by default
+    [unsigned __int128] under [--codegen C], which is on by default
     (the [--custard_int128] option turns it off for a target whose compiler
     lacks the extension).  Everything below is then the machine instruction
     it names, and the abstraction is free, as at 8, 32 and 64 bits.

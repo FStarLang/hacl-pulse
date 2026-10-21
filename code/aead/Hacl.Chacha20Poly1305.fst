@@ -61,6 +61,7 @@ module D = Hacl.Secret.Declassify
 module C = Spec.Chacha20
 module P = Spec.Poly1305
 module Spec = Spec.Chacha20Poly1305
+module Mem = Hacl.Mem
 
 (** {2 The length block}
 
@@ -152,18 +153,23 @@ ensures exists* (vtag': Seq.seq S8.t).
   let z = S64.zero;
   let z8 = S8.classify 0uy;
   let mut rarr = [| z; 9sz |];
+  Mem.track rarr;
   A.pts_to_len rarr;
   A.pts_to_len rarr;
   let mut harr = [| z; 5sz |];
+  Mem.track harr;
   A.pts_to_len harr;
   A.pts_to_len harr;
   let mut earr = [| z; 5sz |];
+  Mem.track earr;
   A.pts_to_len earr;
   A.pts_to_len earr;
   let mut darr = [| z; 5sz |];
+  Mem.track darr;
   A.pts_to_len darr;
   A.pts_to_len darr;
   let mut lbarr = [| z8; 16sz |];
+  Mem.track lbarr;
   A.pts_to_len lbarr;
   A.pts_to_len lbarr;
 
@@ -185,6 +191,11 @@ ensures exists* (vtag': Seq.seq S8.t).
   Spec.mac_input_acc vaad vct (feval vr);
   store_tag tag harr key;
 
+  Mem.wipe lbarr 16sz;
+  Mem.wipe darr 5sz;
+  Mem.wipe earr 5sz;
+  Mem.wipe harr 5sz;
+  Mem.wipe rarr 9sz;
   ()
 }
 
@@ -209,11 +220,13 @@ ensures exists* (vo': Seq.seq S8.t).
   A.pts_to_len otk;
   let z8 = S8.classify 0uy;
   let mut zarr = [| z8; 32sz |];
+  Mem.track zarr;
   A.pts_to_len zarr;
   A.pts_to_len zarr;
   assert (pure (Seq.equal (Seq.create 32 (S8.classify 0uy)) (P.zeros 32)));
   Hacl.Chacha20.encrypt otk zarr 32sz key nonce 0ul;
   Spec.otk_is_encrypt vkey vnon;
+  Mem.wipe zarr 32sz;
   ()
 }
 
@@ -253,6 +266,7 @@ ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
 
   let z8 = S8.classify 0uy;
   let mut karr = [| z8; 32sz |];
+  Mem.track karr;
   A.pts_to_len karr;
   A.pts_to_len karr;
 
@@ -260,6 +274,7 @@ ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
   Hacl.Chacha20.encrypt ct msg mlen key nonce 1ul;
   aead_tag tag aad alen ct mlen karr;
 
+  Mem.wipe karr 32sz;
   ()
 }
 
@@ -306,9 +321,11 @@ ensures exists* (vmsg': Seq.seq S8.t).
 
   let z8 = S8.classify 0uy;
   let mut karr = [| z8; 32sz |];
+  Mem.track karr;
   A.pts_to_len karr;
   A.pts_to_len karr;
   let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
   A.pts_to_len tarr;
   A.pts_to_len tarr;
 
@@ -318,8 +335,12 @@ ensures exists* (vmsg': Seq.seq S8.t).
 
   if ok {
     Hacl.Chacha20.encrypt msg ct clen key nonce 1ul;
+    Mem.wipe tarr 16sz;
+    Mem.wipe karr 32sz;
     true
   } else {
+    Mem.wipe tarr 16sz;
+    Mem.wipe karr 32sz;
     false
   }
 }

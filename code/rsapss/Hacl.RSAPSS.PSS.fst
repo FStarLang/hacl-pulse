@@ -48,6 +48,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module Declassify = Hacl.Secret.Declassify
+module Mem = Hacl.Mem
 
 (** {2 Two small helpers} *)
 
@@ -167,7 +168,7 @@ ensures exists* vout'.
   let hLen = p.nhash_bytes;
   let z8 = S8.classify 0uy;
   let mpLen = SZ.add (SZ.add 8sz hLen) sLen;
-  let mut mp = [| z8; mpLen |];
+  let mp = Mem.alloc z8 mpLen;
   A.pts_to_len mp;
 
   (* [mp = 0^8 | Hash(msg) | salt].  The eight zeroes are the initial value. *)
@@ -184,6 +185,7 @@ ensures exists* vout'.
                   Seq.index vmp (8 + (hash_bytes p) + k) == Seq.index vsalt k));
   m_prime_index p (hash p vmsg) (reveal vsalt) (reveal vmp);
   hash_impl p kt ivt out mp mpLen;
+  Mem.free mp mpLen;
 }
 
 (** [DB] as the encoder writes it: zeroes, then the [0x01] byte, then the
@@ -263,7 +265,7 @@ ensures exists* vem'.
   let dbLen = SZ.sub (SZ.sub emLen hLen) 1sz;
   let z8 = S8.classify 0uy;
 
-  let mut mask = [| z8; dbLen |];
+  let mask = Mem.alloc z8 dbLen;
   A.pts_to_len mask;
 
   (* [H] goes straight into its place in the output and is the MGF1 seed
@@ -300,6 +302,7 @@ ensures exists* vem'.
   with vem4. assert (A.pts_to em vem4);
   pss_encode_pointwise p (Seq.length vsalt) (U32.v emBits) (reveal vsalt) (reveal vmsg)
                        (reveal vh) (reveal vmask) (reveal vem2) (reveal vem4);
+  Mem.free mask dbLen;
   ()
   }
 }
@@ -420,14 +423,14 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to em #pe vem **
   let topbits = Declassify.u8 (S8.logand e0 (S8.lognot tm));
 
   (* Unmask the data block into scratch. *)
-  let mut db = [| z8; dbLen |];
+  let db = Mem.alloc z8 dbLen;
   A.pts_to_len db;
   copy_at db 0sz em dbLen;
   with vdb0. assert (A.pts_to db vdb0);
   assert (pure (Seq.length vdb0 == SZ.v dbLen /\
                 (forall (k: nat). k < SZ.v dbLen ==>
                    Seq.index vdb0 k == Seq.index (Seq.slice (reveal vem) 0 (SZ.v dbLen)) k)));
-  let mut mask = [| z8; dbLen |];
+  let mask = Mem.alloc z8 dbLen;
   A.pts_to_len mask;
 
   let hw = Sub.sub em dbLen (SZ.add dbLen hLen);
@@ -462,6 +465,7 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to em #pe vem **
   let sep = Declassify.u8 (A.(db.(SZ.sub (SZ.sub dbLen sLen) 1sz)));
 
   let mut hp = [| z8; hLen |];
+  Mem.track hp;
   A.pts_to_len hp;
   let sw = Sub.sub db (SZ.sub dbLen sLen) dbLen;
   hash_m_prime p kt ivt hp sw sLen msg mLen
@@ -474,6 +478,9 @@ ensures A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to em #pe vem **
   pss_valid_intro p (SZ.v sLen) (U32.v emBits) (reveal vmsg) (reveal vem)
                   (as_lseq (SZ.v dbLen) (reveal vdb)) (as_lseq (SZ.v hLen) (reveal vhp));
 
+  Mem.wipe hp hLen;
+  Mem.free mask dbLen;
+  Mem.free db dbLen;
   (trailer = 0xbcuy) && (topbits = 0uy) && zeros && (sep = 1uy) && heq
 }
 

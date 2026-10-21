@@ -25,12 +25,11 @@
     through every loop invariant in the transform.
 
     Everything is branch-free.  Addition and subtraction reduce with a
-    conditional subtraction driven by {!Hacl.Secret.UInt16.gte_mask};
-    multiplication reduces with a Barrett step in sixty-four bits.  The
-    obvious optimisation is Montgomery multiplication with the zeta table
-    stored pre-scaled, which is what every fast implementation does; it
-    changes the representation invariant, so it belongs in a later pass and
-    not in the first correct one. *)
+    conditional subtraction driven by a sixteen-bit borrow mask;
+    multiplication reduces with a Barrett step in sixty-four bits, or, when
+    one factor is a tabulated constant, with Shoup's trick in sixteen and
+    thirty-two bits ({!zq_mul_shoup}), which keeps the representation
+    canonical and is what the transform uses. *)
 module Hacl.Impl.MLKEM.Zq
 
 open Spec.MLKEM.Zq
@@ -38,9 +37,11 @@ open Spec.MLKEM.Zq
 module U16 = FStar.UInt16
 module U64 = FStar.UInt64
 module S16 = Hacl.Secret.UInt16
+module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Cast = Hacl.Secret.Cast
 module Math = FStar.Math.Lemmas
+module UInt = FStar.UInt
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
@@ -53,15 +54,43 @@ let qw : w: S16.t { S16.v w == q } = S16.classify 3329us
 (** {2 Conditional subtraction}
 
     The one primitive everything else is built from: [x] is known to be
-    below [2q], and exactly one subtraction brings it below [q].  [select]
-    rather than [logand] because [select] is specified on the mask's two
-    possible values instead of on its bits. *)
-inline_for_extraction
+    below [2q], and exactly one subtraction brings it below [q].
+
+    The mask is computed in sixteen bits: [s = x - q] wraps exactly when
+    [x < q], and then lands at or above [2^16 - q > 2^15], so its top bit
+    is the borrow, and [s + (m & q)] undoes the subtraction when it
+    wrapped.  Both choices are about vectorization.
+    {!Hacl.Secret.UInt16.gte_mask} gives the same mask but takes the
+    borrow from a thirty-two-bit difference, which makes a vectorizer
+    widen every lane to thirty-two bits; and gcc's loop vectorizer gives
+    up entirely on the and-or blend that {!Hacl.Secret.UInt16.select}
+    becomes.  The masked add keeps the AVX2 butterfly layers in sixteen-bit
+    lanes.  Opaque to SMT so that callers see only the refinement. *)
+inline_for_extraction [@@"opaque_to_smt"]
 let csub (x: S16.t { S16.v x < 2 * q }) : r: zqt { S16.v r == S16.v x % q }
-  = let m = S16.gte_mask x qw in
-    let r = S16.select m (S16.sub_mod x qw) x in
-    if S16.v x >= q then Math.small_mod (S16.v x - q) q else Math.small_mod (S16.v x) q;
-    r
+  = assert_norm (pow2 15 == 32768);
+    assert_norm (pow2 16 == 65536);
+    let s = S16.sub_mod x qw in
+    let b = S16.shift_right s 15ul in
+    let m = S16.sub_mod (S16.classify 0us) b in
+    let c = S16.logand m qw in
+    if S16.v x >= q then begin
+      Math.small_mod (S16.v x - q) (pow2 16);
+      Math.small_div (S16.v s) (pow2 15);
+      UInt.logand_commutative #16 0 q;
+      UInt.logand_lemma_1 #16 q;
+      Math.small_mod (S16.v x - q) (pow2 16);
+      Math.small_mod (S16.v x - q) q
+    end else begin
+      Math.lemma_mod_plus (S16.v x - q) 1 (pow2 16);
+      Math.small_mod (S16.v x - q + pow2 16) (pow2 16);
+      UInt.logand_commutative #16 (pow2 16 - 1) q;
+      UInt.logand_lemma_2 #16 q;
+      Math.lemma_mod_plus (S16.v x) 1 (pow2 16);
+      Math.small_mod (S16.v x) (pow2 16);
+      Math.small_mod (S16.v x) q
+    end;
+    S16.add_mod s c
 
 (** {2 Addition and subtraction}
 
@@ -133,6 +162,150 @@ let zq_mul (a b: zqt) : r: zqt { S16.v r == mul (S16.v a) (S16.v b) }
     let x = S64.mul_mod (Cast.u16_to_u64 a) (Cast.u16_to_u64 b) in
     let t = S64.shift_right (S64.mul_mod x (S64.classify 5039uL)) 24ul in
     csub (Cast.u64_to_u16 (S64.sub_mod x (S64.mul_mod t (S64.classify 3329uL))))
+
+(** {2 Multiplication by a known constant}
+
+    When one factor [z] is fixed -- a root of unity out of a table -- its
+    companion [zs = floor(z 2^16 / q)] can be tabulated too, and then
+    [t = (y zs) >> 16] approximates [y z / q] from below by less than two
+    (Shoup's trick).  Everything stays in sixteen and thirty-two bits: the
+    remainder [y z - t q] is below [2q], so computing it modulo [2^16] is
+    exact, and the two products are the high and low halves a vector unit
+    multiplies sixteen lanes at a time. *)
+
+let le_cancel (a b: nat) (p: pos)
+  : Lemma (requires a * p <= b * p) (ensures a <= b)
+  = if a > b then Math.lemma_mult_lt_right p b a
+
+let lt_cancel (a b: nat) (p: pos)
+  : Lemma (requires a * p < b * p) (ensures a < b)
+  = if a >= b then Math.lemma_mult_le_right p b a
+
+let shoup_bound (y z zs: nat)
+  : Lemma (requires y < pow2 16 /\ z < q /\ zs == (z * pow2 16) / q)
+          (ensures (let t = (y * zs) / pow2 16 in
+                    t * q <= y * z /\ y * z - t * q < 2 * q))
+  = let p = pow2 16 in
+    let t = (y * zs) / p in
+    let r1 = (y * zs) % p in
+    Math.lemma_div_mod (z * p) q;
+    Math.lemma_div_mod (y * zs) p;
+    let d = (z * p) % q in
+    assert (z * p == zs * q + d /\ d < q);
+    assert (y * zs == t * p + r1 /\ r1 < p);
+    (* (y z - t q) p = y (z p) - q (t p) = y (zs q + d) - q (y zs - r1) = y d + q r1 *)
+    Math.paren_mul_right y z p;
+    Math.distributivity_add_right y (zs * q) d;
+    Math.paren_mul_right y zs q;
+    Math.paren_mul_right t p q;
+    Math.swap_mul p q;
+    Math.paren_mul_right t q p;
+    Math.distributivity_sub_left (y * z) (t * q) p;
+    assert ((y * z - t * q) * p == y * d + q * r1);
+    Math.lemma_mult_le_right d y p;
+    Math.lemma_mult_lt_left q r1 p;
+    Math.lemma_mult_le_left y d q;
+    Math.lemma_mult_lt_right q y p;
+    assert ((y * z - t * q) * p >= 0);
+    assert ((y * z - t * q) * p < (2 * q) * p);
+    if y * z - t * q < 0 then Math.lemma_mult_lt_right p (y * z - t * q) 0;
+    lt_cancel (y * z - t * q) (2 * q) p
+
+inline_for_extraction
+let zq_mul_shoup (z: zqt) (zs: S16.t { S16.v zs == (S16.v z * pow2 16) / q }) (y: zqt)
+  : r: zqt { S16.v r == mul (S16.v z) (S16.v y) }
+  = assert_norm (pow2 16 * pow2 16 == pow2 32);
+    assert_norm (2 * q < pow2 16);
+    assert_norm (pow2 16 == 65536);
+    Math.lemma_mult_le_right (S16.v zs) (S16.v y) (pow2 16);
+    Math.lemma_mult_lt_left (pow2 16) (S16.v zs) (pow2 16);
+    Math.small_mod (S16.v y * S16.v zs) (pow2 32);
+    shoup_bound (S16.v y) (S16.v z) (S16.v zs);
+    let tw = S32.shift_right (S32.mul_mod (Cast.u16_to_u32 y) (Cast.u16_to_u32 zs)) 16ul in
+    let t = Cast.u32_to_u16 tw in
+    Math.lemma_div_lt_nat (S16.v y * S16.v zs) 32 16;
+    Math.small_mod (S32.v tw) (pow2 16);
+    assert (S16.v t == (S16.v y * S16.v zs) / pow2 16);
+    let r = S16.sub_mod (S16.mul_mod y z) (S16.mul_mod t qw) in
+    Math.lemma_mod_sub_distr ((S16.v y * S16.v z) % pow2 16) (S16.v t * q) (pow2 16);
+    Math.lemma_mod_add_distr (- (S16.v t * q)) (S16.v y * S16.v z) (pow2 16);
+    Math.small_mod (S16.v y * S16.v z - S16.v t * q) (pow2 16);
+    assert (S16.v r == S16.v y * S16.v z - S16.v t * q);
+    Math.lemma_mod_sub (S16.v y * S16.v z) q (S16.v t);
+    Math.swap_mul (S16.v y) (S16.v z);
+    csub r
+
+(** {2 Reducing a wide sum}
+
+    The base-case product of {!Hacl.Impl.MLKEM.NTT} wants
+    [a0 b0 + a1 b1 gamma] modulo [q], a sum below [2^36].  Reducing each
+    product as it is formed costs a Barrett step apiece; reducing the sum
+    once costs one.  [41285357 = floor(2^37 / q)] and
+    [41285357 q = 2^37 - 19]: the shortfall is so small that the quotient
+    estimate is off by at most one over the whole range, and [x 41285357]
+    still fits in sixty-four bits. *)
+
+let barrett37_bound (x: nat { x < pow2 36 })
+  : Lemma (let t = (x * 41285357) / pow2 37 in t * q <= x /\ x - t * q < 2 * q)
+  = let p = pow2 37 in
+    assert_norm (pow2 37 == 137438953472);
+    assert_norm (pow2 36 == 68719476736);
+    let t = (x * 41285357) / p in
+    Math.lemma_div_mod (x * 41285357) p;
+    Math.lemma_mult_le_right q (t * p) (x * 41285357);
+    assert (t * p * q <= x * 41285357 * q);
+    assert (x * 41285357 * q == x * 137438953453);
+    Math.lemma_mult_le_right x 137438953453 137438953472;
+    assert (t * q * p <= x * p);
+    le_cancel (t * q) x p;
+    assert (t * p > x * 41285357 - p);
+    Math.lemma_mult_lt_right q (x * 41285357 - p) (t * p);
+    assert (t * q * p > x * 137438953453 - q * p);
+    assert ((x - t * q) * p < 19 * x + q * p);
+    Math.lemma_mult_lt_left 19 x (pow2 36);
+    assert ((x - t * q) * p < (2 * q) * p);
+    lt_cancel (x - t * q) (2 * q) p
+
+inline_for_extraction
+let zq_reduce (x: S64.t { S64.v x < pow2 36 }) : r: zqt { S16.v r == S64.v x % q }
+  = assert_norm (pow2 36 * 41285357 < pow2 64);
+    assert_norm (2 * q < pow2 16);
+    assert_norm (pow2 36 < pow2 64);
+    barrett37_bound (S64.v x);
+    Math.lemma_mult_lt_right 41285357 (S64.v x) (pow2 36);
+    Math.small_mod (S64.v x * 41285357) (pow2 64);
+    let t = S64.shift_right (S64.mul_mod x (S64.classify 41285357uL)) 37ul in
+    assert (S64.v t == (S64.v x * 41285357) / pow2 37);
+    Math.small_mod (S64.v t * q) (pow2 64);
+    Math.small_mod (S64.v x - S64.v t * q) (pow2 64);
+    let r = S64.sub_mod x (S64.mul_mod t (S64.classify 3329uL)) in
+    assert (S64.v r == S64.v x - S64.v t * q);
+    Math.small_mod (S64.v r) (pow2 16);
+    Math.lemma_mod_sub (S64.v x) q (S64.v t);
+    csub (Cast.u64_to_u16 r)
+
+(** The same reduction of a thirty-two-bit value, with only the quotient
+    estimate formed in sixty-four bits.  The rest stays in thirty-two-bit
+    lanes, which is what lets the accumulating dot product vectorise. *)
+inline_for_extraction
+let zq_reduce32 (x: S32.t) : r: zqt { S16.v r == S32.v x % q }
+  = assert_norm (pow2 32 * 41285357 < pow2 64);
+    assert_norm (pow2 32 < pow2 36);
+    assert_norm (2 * q < pow2 16);
+    barrett37_bound (S32.v x);
+    Math.lemma_mult_lt_right 41285357 (S32.v x) (pow2 32);
+    Math.small_mod (S32.v x * 41285357) (pow2 64);
+    let t64 = S64.shift_right (S64.mul_mod (Cast.u32_to_u64 x) (S64.classify 41285357uL)) 37ul in
+    assert (S64.v t64 == (S32.v x * 41285357) / pow2 37);
+    Math.small_mod (S64.v t64) (pow2 32);
+    let t = Cast.u64_to_u32 t64 in
+    Math.small_mod (S32.v t * q) (pow2 32);
+    Math.small_mod (S32.v x - S32.v t * q) (pow2 32);
+    let r = S32.sub_mod x (S32.mul_mod t (S32.classify 3329ul)) in
+    assert (S32.v r == S32.v x - S32.v t * q);
+    Math.small_mod (S32.v r) (pow2 16);
+    Math.lemma_mod_sub (S32.v x) q (S32.v t);
+    csub (Cast.u32_to_u16 r)
 
 #pop-options
 

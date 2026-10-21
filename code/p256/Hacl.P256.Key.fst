@@ -49,6 +49,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module S128 = Hacl.Secret.UInt128
 module P = Spec.P256
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -74,7 +75,10 @@ ensures exists* (wo: Seq.seq S64.t).
   assert_norm (pow2 256 < 2 * P.order);
   let z = S64.zero;
   let z128 : S128.t = S128.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; let mut a1 = [| z128; 4sz |]; A.pts_to_len a1; let mut a2 = [| z; 4sz |]; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z128; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
 
   load_be out b;
   with wo. assert (A.pts_to out wo);
@@ -87,6 +91,9 @@ ensures exists* (wo: Seq.seq S64.t).
   assert (pure (lo == (be_nat vb < P.order)));
   let nz = aeq out a2;
   assert (pure (nz == (be_nat vb = 0)));
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
   lo && not nz
 }
 
@@ -99,8 +106,10 @@ returns r: bool
 ensures A.pts_to b #pb vb ** pure (r == (0 < be_nat vb && be_nat vb < P.order))
 {
   let z = S64.zero;
-  let mut a0 = [| z; 4sz |]; A.pts_to_len a0; A.pts_to_len a0;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; A.pts_to_len a0;
   let r = load_scalar a0 b;
+  Mem.wipe a0 4sz;
   r
 }
 

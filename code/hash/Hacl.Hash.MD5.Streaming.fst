@@ -45,6 +45,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** {2 The state invariant} *)
 
@@ -360,6 +361,7 @@ ensures exists* (vw: Seq.seq S32.t) (vout': Seq.seq S8.t).
 
   let z0 = S32.classify 0ul;
   let mut starr = [| z0; 4sz |];
+  Mem.track starr;
   A.pts_to_len starr;
   A.pts_to_len starr;
   copy4 starr acc;
@@ -375,6 +377,7 @@ ensures exists* (vw: Seq.seq S32.t) (vout': Seq.seq S8.t).
   tail_and_finish wb starr out sub tlen nb0 0sz blen pre;
 
   Sub.unsub_id buf 0 (SZ.v blen) sub;
+  Mem.wipe starr 4sz;
 }
 
 #pop-options

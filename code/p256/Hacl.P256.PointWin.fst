@@ -59,6 +59,7 @@ module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
 module B4 = Spec.Bignum4
 module L4 = Hacl.Impl.Limb4
+module Mem = Hacl.Mem
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
 
@@ -466,12 +467,18 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 {
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz;
   let z = S64.zero;
-  let mut cx = [| z; 4sz |]; A.pts_to_len cx;
-  let mut cy = [| z; 4sz |]; A.pts_to_len cy;
-  let mut cz = [| z; 4sz |]; A.pts_to_len cz;
-  let mut nx = [| z; 4sz |]; A.pts_to_len nx;
-  let mut ny = [| z; 4sz |]; A.pts_to_len ny;
-  let mut nz = [| z; 4sz |]; A.pts_to_len nz;
+  let mut cx = [| z; 4sz |];
+  Mem.track cx; A.pts_to_len cx;
+  let mut cy = [| z; 4sz |];
+  Mem.track cy; A.pts_to_len cy;
+  let mut cz = [| z; 4sz |];
+  Mem.track cz; A.pts_to_len cz;
+  let mut nx = [| z; 4sz |];
+  Mem.track nx; A.pts_to_len nx;
+  let mut ny = [| z; 4sz |];
+  Mem.track ny; A.pts_to_len ny;
+  let mut nz = [| z; 4sz |];
+  Mem.track nz; A.pts_to_len nz;
   A.pts_to_len cx; A.pts_to_len cy; A.pts_to_len cz;
   A.pts_to_len nx; A.pts_to_len ny; A.pts_to_len nz;
 
@@ -528,6 +535,12 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   };
   let vd = !d;
   sz_sixteen vd;
+  Mem.wipe nz 4sz;
+  Mem.wipe ny 4sz;
+  Mem.wipe nx 4sz;
+  Mem.wipe cz 4sz;
+  Mem.wipe cy 4sz;
+  Mem.wipe cx 4sz;
   ()
 }
 
@@ -628,12 +641,12 @@ fn win_add (ox oy oz ux uy uz sx sy sz: A.array S64.t)
            (#vox #voy #voz: erased (Seq.seq S64.t))
            (#vux #vuy #vuz: erased (Seq.seq S64.t))
            (#vsx #vsy #vsz: erased (Seq.seq S64.t))
-           (#ptb: perm) (#vtx #vty #vtz: erased (Seq.seq S64.t))
+           (#ptx #pty #ptz: perm) (#vtx #vty #vtz: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
   A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
-  A.pts_to tx #ptb vtx ** A.pts_to ty #ptb vty ** A.pts_to tz #ptb vtz **
+  A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty ** A.pts_to tz #ptz vtz **
   pure (Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
         Seq.length vsx == nl /\ Seq.length vsy == nl /\ Seq.length vsz == nl /\
         Seq.length vtx == 64 /\ Seq.length vty == 64 /\ Seq.length vtz == 64 /\
@@ -645,7 +658,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
   A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
-  A.pts_to tx #ptb vtx ** A.pts_to ty #ptb vty ** A.pts_to tz #ptb vtz **
+  A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty ** A.pts_to tz #ptz vtz **
   pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
         Seq.length wsx == nl /\ Seq.length wsy == nl /\ Seq.length wsz == nl /\
         pok wx wy wz /\
@@ -721,15 +734,24 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   kv_bnd vk;
   oc_intro (pt vqx vqy vqz);
   let z = S64.zero;
-  let mut tx = [| z; 64sz |]; A.pts_to_len tx;
-  let mut ty = [| z; 64sz |]; A.pts_to_len ty;
-  let mut tz = [| z; 64sz |]; A.pts_to_len tz;
-  let mut ux = [| z; 4sz |]; A.pts_to_len ux;
-  let mut uy = [| z; 4sz |]; A.pts_to_len uy;
-  let mut uz = [| z; 4sz |]; A.pts_to_len uz;
-  let mut sx = [| z; 4sz |]; A.pts_to_len sx;
-  let mut sy = [| z; 4sz |]; A.pts_to_len sy;
-  let mut sz = [| z; 4sz |]; A.pts_to_len sz;
+  let mut tx = [| z; 64sz |];
+  Mem.track tx; A.pts_to_len tx;
+  let mut ty = [| z; 64sz |];
+  Mem.track ty; A.pts_to_len ty;
+  let mut tz = [| z; 64sz |];
+  Mem.track tz; A.pts_to_len tz;
+  let mut ux = [| z; 4sz |];
+  Mem.track ux; A.pts_to_len ux;
+  let mut uy = [| z; 4sz |];
+  Mem.track uy; A.pts_to_len uy;
+  let mut uz = [| z; 4sz |];
+  Mem.track uz; A.pts_to_len uz;
+  let mut sx = [| z; 4sz |];
+  Mem.track sx; A.pts_to_len sx;
+  let mut sy = [| z; 4sz |];
+  Mem.track sy; A.pts_to_len sy;
+  let mut sz = [| z; 4sz |];
+  Mem.track sz; A.pts_to_len sz;
   A.pts_to_len tx; A.pts_to_len ty; A.pts_to_len tz;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz;
   A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz;
@@ -795,6 +817,15 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   with wx wy wz. assert (A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz);
   pok_elim wx wy wz;
   win_done wx wy wz (pt vqx vqy vqz) (kv vk);
+  Mem.wipe sz 4sz;
+  Mem.wipe sy 4sz;
+  Mem.wipe sx 4sz;
+  Mem.wipe uz 4sz;
+  Mem.wipe uy 4sz;
+  Mem.wipe ux 4sz;
+  Mem.wipe tz 64sz;
+  Mem.wipe ty 64sz;
+  Mem.wipe tx 64sz;
   ()
 }
 

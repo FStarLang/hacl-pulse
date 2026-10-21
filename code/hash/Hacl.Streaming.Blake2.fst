@@ -55,6 +55,7 @@ module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module G = FStar.Ghost
+module Mem = Hacl.Mem
 
 (** The two block lengths, as literals.  [block_len] is [16 * (bits / 8)] and
     the type class does not reduce on its own inside a Pulse context. *)
@@ -103,13 +104,17 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
   let bl = block_len_sz #t #w;
 
   let mut marr = [| z0; 16sz |];
+  Mem.track marr;
   A.pts_to_len marr;
   let mut barr = [| z8; bl |];
+  Mem.track barr;
   A.pts_to_len barr;
   A.pts_to_len marr;
   A.pts_to_len barr;
 
   update_impl p acc marr barr ivs buf tot data data_len key seen;
+  Mem.wipe barr bl;
+  Mem.wipe marr 16sz;
 
 }
 
@@ -138,13 +143,17 @@ ensures exists* (vout': Seq.seq S8.t).
   let bl = block_len_sz #t #w;
 
   let mut marr = [| z0; 16sz |];
+  Mem.track marr;
   A.pts_to_len marr;
   let mut barr = [| z8; bl |];
+  Mem.track barr;
   A.pts_to_len barr;
   A.pts_to_len marr;
   A.pts_to_len barr;
 
   digest_impl p acc marr barr ivs buf tot out key seen;
+  Mem.wipe barr bl;
+  Mem.wipe marr 16sz;
 
 }
 

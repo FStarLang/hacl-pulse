@@ -50,6 +50,7 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module Mem = Hacl.Mem
 
 (** The two block lengths, as literals.  [block_len] is [16 * (bits / 8)] and
     the type class does not reduce on its own inside a Pulse context. *)
@@ -86,11 +87,13 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t)
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   let mut wsarr = [| z; 64sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   init_impl sha2_224 kt ivt wsarr acc buf tot opadb key key_len;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 64sz;
 }
 
 (** Absorb [data].  The ghost [key] and [msg] are the key the state was
@@ -117,10 +120,12 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let z = S32.classify 0ul;
   let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   update_impl sha2_224 kt wsarr acc buf tot data data_len key msg vop;
   drop_table kt;
+  Mem.wipe wsarr 64sz;
 }
 
 (** Write the tag.  [out] must have room for 28 bytes.  The state is not
@@ -150,11 +155,13 @@ ensures exists* (vout': Seq.seq S8.t).
   let kt = table k256_arr 64sz;
   let ivt = table iv224_arr 8sz;
   let mut wsarr = [| z; 64sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   digest_impl sha2_224 kt ivt wsarr acc buf tot opadb out key msg;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 64sz;
 }
 
 (** {2 HMAC-SHA-256} *)
@@ -184,11 +191,13 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t)
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   let mut wsarr = [| z; 64sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   init_impl sha2_256 kt ivt wsarr acc buf tot opadb key key_len;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 64sz;
 }
 
 (** Absorb [data].  The ghost [key] and [msg] are the key the state was
@@ -215,10 +224,12 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let z = S32.classify 0ul;
   let kt = table k256_arr 64sz;
   let mut wsarr = [| z; 64sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   update_impl sha2_256 kt wsarr acc buf tot data data_len key msg vop;
   drop_table kt;
+  Mem.wipe wsarr 64sz;
 }
 
 (** Write the tag.  [out] must have room for 32 bytes.  The state is not
@@ -248,11 +259,13 @@ ensures exists* (vout': Seq.seq S8.t).
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
   let mut wsarr = [| z; 64sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   digest_impl sha2_256 kt ivt wsarr acc buf tot opadb out key msg;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 64sz;
 }
 
 (** {2 HMAC-SHA-384} *)
@@ -282,11 +295,13 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t)
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   init_impl sha2_384 kt ivt wsarr acc buf tot opadb key key_len;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 80sz;
 }
 
 (** Absorb [data].  The ghost [key] and [msg] are the key the state was
@@ -313,10 +328,12 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let z = S64.classify 0uL;
   let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   update_impl sha2_384 kt wsarr acc buf tot data data_len key msg vop;
   drop_table kt;
+  Mem.wipe wsarr 80sz;
 }
 
 (** Write the tag.  [out] must have room for 48 bytes.  The state is not
@@ -346,11 +363,13 @@ ensures exists* (vout': Seq.seq S8.t).
   let kt = table k512_arr 80sz;
   let ivt = table iv384_arr 8sz;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   digest_impl sha2_384 kt ivt wsarr acc buf tot opadb out key msg;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 80sz;
 }
 
 (** {2 HMAC-SHA-512} *)
@@ -380,11 +399,13 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t)
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   init_impl sha2_512 kt ivt wsarr acc buf tot opadb key key_len;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 80sz;
 }
 
 (** Absorb [data].  The ghost [key] and [msg] are the key the state was
@@ -411,10 +432,12 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let z = S64.classify 0uL;
   let kt = table k512_arr 80sz;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   update_impl sha2_512 kt wsarr acc buf tot data data_len key msg vop;
   drop_table kt;
+  Mem.wipe wsarr 80sz;
 }
 
 (** Write the tag.  [out] must have room for 64 bytes.  The state is not
@@ -444,9 +467,11 @@ ensures exists* (vout': Seq.seq S8.t).
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
   let mut wsarr = [| z; 80sz |];
+  Mem.track wsarr;
   A.pts_to_len wsarr;
   A.pts_to_len wsarr;
   digest_impl sha2_512 kt ivt wsarr acc buf tot opadb out key msg;
   drop_table ivt;
   drop_table kt;
+  Mem.wipe wsarr 80sz;
 }

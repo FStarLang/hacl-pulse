@@ -300,3 +300,26 @@ let vec_add (#k: pos) (u v: pvec k) : pvec k
 
 let vec_sub (#k: pos) (u v: pvec k) : pvec k
   = Seq.init (k * n) (fun i -> sub (Seq.index u i) (Seq.index v i))
+
+(** {2 Multiplication in [R_q]}
+
+    Nothing the standard computes multiplies two polynomials directly -- it
+    goes through the NTT -- but the NTT is only meaningful against the
+    product it accelerates, so the product is defined here, schoolbook.
+    [X^256 = -1] in [R_q], so a term whose degree would reach [256] wraps
+    around with its sign flipped.  {!Spec.MLKEM.NTT.Lemmas} proves that
+    [intt (multiply_ntts (ntt f) (ntt g)) == poly_mul f g]. *)
+
+(** [sum m f] is [f 0 + f 1 + ... + f (m - 1)]. *)
+let rec sum (m: nat) (f: nat -> zq) : Tot zq (decreases m)
+  = if m = 0 then 0 else add (sum (m - 1) f) (f (m - 1))
+
+(** The [j]th summand of coefficient [k] of [f * g]: [f_j g_(k-j)], or
+    [-f_j g_(k+256-j)] when the degree wraps. *)
+let poly_mul_at (f g: poly) (k: nat { k < n }) (j: nat) : zq
+  = if j >= n then 0
+    else if j <= k then mul (Seq.index f j) (Seq.index g (k - j))
+    else neg (mul (Seq.index f j) (Seq.index g (k + n - j)))
+
+let poly_mul (f g: poly) : poly
+  = Seq.init n (fun k -> sum n (poly_mul_at f g k))
