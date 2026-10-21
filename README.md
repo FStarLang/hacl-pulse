@@ -4289,6 +4289,17 @@ The decoder runs the same register backwards, pulling a byte in whenever
 fewer than `d` bits are left.  There is no division anywhere, and the
 loops are the ones a C programmer would have written.
 
+Written that way, though, the register carries from one coefficient to
+the next across all 256, and the compiler cannot unroll anything.  Eight
+coefficients of `d` bits are exactly `d` bytes, so the register is empty
+at every multiple of eight: both coders run 32 groups (`enc_group`,
+`dec_group`), each starting from an empty register at byte `d g`, and `d`
+is monomorphized from `Codec` down.  With a constant `d` and eight steps
+per group the compilers emit straight-line shifts and masks, and the
+coders are 2--7x faster (Part 80).  Each group is its own function, taking
+`i0` and `o0` with only `d i0 == 8 o0`: with the group index's products
+`8 g` and `g d` in scope, the encoder's unchanged shift timed out.
+
 `Spec.MLKEM.Pack` is the module that makes this legal.  It is pure
 arithmetic --- it mentions neither `q` nor the NTT nor any parameter set
 --- and says that `enc_num`'s bits are `coeff_bit`'s, that its bytes are
@@ -4432,6 +4443,15 @@ they are the ones measured at 1.31x on encapsulation above.  The lesson
 is the same one the clone survey teaches, applied to our own hand: a
 specialisation is justified by a measurement, not by the fact that
 something downstream of it used to be slow.
+
+Part 80 put the annotation back, and the measurement is what justifies
+it: once the coders run in groups of eight, a constant `d` lets each group
+unroll, and the specialised coders are 2--7x faster than the generic ones.
+Monomorphizing `d` without the grouping changes almost nothing, which is
+what the earlier measurement saw.  Compression and decompression are
+specialised along with the coders: no change under gcc, while clang's
+`Compress_10` goes from 416 to 171 cycles, its vectoriser needing the
+shift to be a constant.
 
 ### ML-DSA, against other implementations
 

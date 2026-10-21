@@ -8930,3 +8930,43 @@ The gain grows with `k`, as it should.  ML-DSA is unchanged (within 0.3%),
 and the other 98 rows have a geometric mean ratio of 1.0005, none
 outside 0.98--1.03.  (This session's machine is about five percent slower
 than Part 78's; compare the columns with each other, not with Part 78.)
+
+## Part 80: ML-KEM's coders in groups of eight
+
+`ByteEncode_d` and `ByteDecode_d` ran one sixty-four-bit shift register
+across all 256 coefficients, with `d` a run-time argument.  The register
+carries from each coefficient to the next, so nothing unrolls; a decode
+of twelve-bit coefficients cost 1372 cycles under gcc.  Eight
+coefficients of `d` bits fill exactly `d` bytes, so the register is empty
+at every multiple of eight.  Each coder is now 32 groups (`enc_group`,
+`dec_group`), each starting from an empty register at byte `d g`, and `d`
+is monomorphized through `Codec`.  The grouping matters more than the
+constant: in a C prototype, a constant `d` alone took gcc's twelve-bit
+decode from 980 to 1396 cycles (slower), and grouping took it to 514.
+
+| cycles, best of 20000 (gcc / clang) | before | after |
+| --- | ---: | ---: |
+| decode d = 12 / 10 / 4 / 1 | 1372 / 710 / 539 / 465, 833 / 931 / 735 / 661 | 318 / 367 / 147 / 171, 343 / 245 / 73 / 73 |
+| encode d = 12 / 10 / 4 / 1 | 1102 / 1053 / 637 / 514, 1249 / 1151 / 759 / 514 | 392 / 367 / 147 / 171, 269 / 269 / 98 / 73 |
+
+The proof reuses the old loop body and invariant unchanged inside each
+group.  The group is a separate `inline_for_extraction` function whose
+precondition relates `i0` and `o0` linearly (`d i0 == 8 o0`): with the
+group index's products `8 g` and `g d` in scope, the encoder's shift
+side condition timed out.  The group's postcondition also needed three
+stepping-stone assertions, and with them the check took 12 s instead of
+timing out after three minutes.
+
+| gcc, best of 20, interleaved, same session | before | after | median |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 14.3 / 16.2 / 20.9 us | 13.1 / 14.7 / 17.5 us | 1.08x--1.19x |
+| ML-KEM-768 keygen / encaps / decaps | 22.4 / 25.2 / 31.4 us | 20.7 / 22.9 / 26.7 us | 1.10x--1.22x |
+| ML-KEM-1024 keygen / encaps / decaps | 31.1 / 35.3 / 43.1 us | 29.5 / 31.7 / 36.2 us | 1.10x--1.23x |
+
+Decapsulation gains the most because it decodes and re-encodes the
+ciphertext as well as encoding it.  The other 107 rows have a geometric
+mean ratio of 1.0002, all within 0.96--1.05; the machine switched
+between two speeds during this run (ML-DSA-44 keygen at 97 and 106 us on
+both sides), so single rows are noisy, while the best-of figures for
+ML-DSA agree to 1%.  ML-KEM-768 is now 20.7 / 22.9 / 26.7 us against
+AWS-LC's 13 / 14 / 17.
