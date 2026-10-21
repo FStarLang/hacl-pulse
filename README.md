@@ -148,7 +148,8 @@ code and tested against an independent transcription of the standard: AES-NI,
 `AESKEYGENASSIST` and `PCLMULQDQ` under AES-GCM (`lib/Hacl.Vec128.fst`), the
 Intel SHA extensions under SHA-256 and SHA-224, AVX2 under ChaCha20,
 Salsa20 and Poly1305 (`lib/Hacl.Vec256.fst`) and under the four-way Keccak
-behind the ML-KEM matrix (`lib/Hacl.Vec256.Lane64.fst`), and AVX-512F under ChaCha20
+behind the ML-KEM matrix (`lib/Hacl.Vec256.Lane64.fst`) and the ML-DSA
+transforms (`lib/Hacl.Vec256.Lane32.fst`), and AVX-512F under ChaCha20
 and Salsa20 (`lib/Hacl.Vec512.fst`).  Each is selected at run time by
 `__builtin_cpu_supports`.  See `design/vale-migration`.
 
@@ -3486,6 +3487,17 @@ bounded by `beta` (`Spec.MLDSA.Sample.Lemmas`).
 The coefficient type is again a refinement (`x: S32.t { S32.v x < q }`),
 the transform multiplies by its roots with Shoup's trick against a
 precomputed quotient table, and pointwise products use a Montgomery step.
+On a processor with AVX2, `Hacl.Impl.MLDSA.Poly` sends the transforms and
+the pointwise product to `Hacl.Impl.MLDSA.NTT.Vec256`, which does the same
+arithmetic eight coefficients at a time against the same specification:
+layers of half-width eight and more pair whole vectors; the last three work
+on groups of sixteen coefficients, shuffled with the 128-bit, 64-bit and
+32-bit unpacks so that each butterfly's ends meet in the same lane, and with
+the roots gathered by a `VPERMD` of eight consecutive table entries.  Its
+new instructions (`VPMULLD`, the high half of a product, `VPMINUD`,
+`VPERMD`, and loads and stores of words at an offset) are in
+`lib/Hacl.Vec256.Lane32.fst`.  Signing got about 2x faster, verification
+1.5x and key generation 1.3x (Part 83 of `bench/REPORT.md`).
 
 Signing is Fiat-Shamir with aborts: draw a mask `y`, commit to the high bits
 of `A y`, hash to a challenge `c`, form `z = y + c s1`, and throw the
@@ -4518,8 +4530,9 @@ signing by 1.7x--1.8x.  The profile is still the one that put it there: most of 
 time is Keccak, the shared SHA-3 permutation squeezed one lane at a time
 where the AVX2 implementations run four lanes, then the pointwise products
 and the transforms.  The table predates the four-way Keccak, now used by
-`ExpandA` (Part 82 of `bench/REPORT.md`); the ML-KEM NTT's treatment of
-the transform is the obvious next step.
+`ExpandA` (Part 82 of `bench/REPORT.md`) and the AVX2 transforms (Part
+83), which together make key generation 1.6x--1.9x, signing 2.0x--2.2x and
+verification 1.9x--2.0x faster than the rows shown.
 
 ### Against other libraries
 

@@ -17,6 +17,7 @@
 #define HACL_VEC256_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -176,6 +177,50 @@ HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_rotl64(Hacl_Vec256_t a, uint32_t s) {
       _mm256_srl_epi64(a, _mm_cvtsi32_si128((int)(64 - s))));
 }
 
+/* Eight words from `p + i`; see `Hacl.Vec256.Lane32`. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_load32(uint32_t *p, size_t i) {
+  return _mm256_loadu_si256((const __m256i *)(const void *)(p + i));
+}
+
+HACL_VEC256 void Hacl_Vec256_store32(uint32_t *p, size_t i, Hacl_Vec256_t x) {
+  _mm256_storeu_si256((__m256i *)(void *)(p + i), x);
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_sub32(Hacl_Vec256_t a,
+                                            Hacl_Vec256_t b) {
+  return _mm256_sub_epi32(a, b);
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_mullo32(Hacl_Vec256_t a,
+                                              Hacl_Vec256_t b) {
+  return _mm256_mullo_epi32(a, b);
+}
+
+/* The even lanes' products, shifted down, blended with the odd lanes',
+ * whose high halves are already in place. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_mulhi32(Hacl_Vec256_t a,
+                                              Hacl_Vec256_t b) {
+  __m256i e = _mm256_srli_epi64(_mm256_mul_epu32(a, b), 32);
+  __m256i o = _mm256_mul_epu32(_mm256_srli_epi64(a, 32),
+                               _mm256_srli_epi64(b, 32));
+  return _mm256_blend_epi32(e, o, 0xAA);
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_minu32(Hacl_Vec256_t a,
+                                             Hacl_Vec256_t b) {
+  return _mm256_min_epu32(a, b);
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_perm32(Hacl_Vec256_t a, uint32_t i0,
+                                             uint32_t i1, uint32_t i2,
+                                             uint32_t i3, uint32_t i4,
+                                             uint32_t i5, uint32_t i6,
+                                             uint32_t i7) {
+  return _mm256_permutevar8x32_epi32(
+      a, _mm256_setr_epi32((int)i0, (int)i1, (int)i2, (int)i3, (int)i4,
+                           (int)i5, (int)i6, (int)i7));
+}
+
 static inline bool Hacl_Vec256_supported(void) {
 #if defined(__GNUC__)
   __builtin_cpu_init();
@@ -237,6 +282,10 @@ HACL_VEC256_STUB2(Hacl_Vec256_add64)
 HACL_VEC256_STUB2(Hacl_Vec256_mul32)
 HACL_VEC256_STUB2(Hacl_Vec256_xor64)
 HACL_VEC256_STUB2(Hacl_Vec256_andnot64)
+HACL_VEC256_STUB2(Hacl_Vec256_sub32)
+HACL_VEC256_STUB2(Hacl_Vec256_mullo32)
+HACL_VEC256_STUB2(Hacl_Vec256_mulhi32)
+HACL_VEC256_STUB2(Hacl_Vec256_minu32)
 #undef HACL_VEC256_STUB2
 static inline Hacl_Vec256_t Hacl_Vec256_shr64(Hacl_Vec256_t a, uint32_t s) {
   (void)s;
@@ -265,6 +314,24 @@ static inline Hacl_Vec256_t Hacl_Vec256_set64(uint64_t x0, uint64_t x1,
 }
 static inline void Hacl_Vec256_store64(uint64_t *p, Hacl_Vec256_t x) {
   memcpy(p, &x, 32);
+}
+static inline Hacl_Vec256_t Hacl_Vec256_load32(uint32_t *p, size_t i) {
+  Hacl_Vec256_t r;
+  memcpy(&r, p + i, 32);
+  return r;
+}
+static inline void Hacl_Vec256_store32(uint32_t *p, size_t i,
+                                       Hacl_Vec256_t x) {
+  memcpy(p + i, &x, 32);
+}
+static inline Hacl_Vec256_t Hacl_Vec256_perm32(Hacl_Vec256_t a, uint32_t i0,
+                                             uint32_t i1, uint32_t i2,
+                                             uint32_t i3, uint32_t i4,
+                                             uint32_t i5, uint32_t i6,
+                                             uint32_t i7) {
+  (void)i0; (void)i1; (void)i2; (void)i3;
+  (void)i4; (void)i5; (void)i6; (void)i7;
+  return a;
 }
 static inline bool Hacl_Vec256_supported(void) { return false; }
 

@@ -277,6 +277,63 @@ AVX2 static void run(int rounds) {
     }
   }
   report("vec256 rotl64, every distance", ok);
+
+  /* Hacl.Vec256.Lane32. */
+  uint32_t wbuf[24], wout[24];
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    for (int i = 0; i < 24; i++) wbuf[i] = next32();
+    size_t at = (size_t)(next32() % 17);
+    memcpy(wout, wbuf, sizeof wout);
+    Hacl_Vec256_store(r, Hacl_Vec256_load32(wbuf, at));
+    for (int i = 0; i < 8; i++) ok &= lane(r, i) == wbuf[at + i];
+    fill(a, 32);
+    Hacl_Vec256_store32(wout, at, Hacl_Vec256_load(a));
+    for (size_t k = 0; k < 24; k++)
+      ok &= wout[k] == (at <= k && k < at + 8 ? lane(a, (int)(k - at)) : wbuf[k]);
+  }
+  report("vec256 load32 and store32", ok);
+
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    if (n == 0) { memset(a, 0xff, 32); memset(b, 0xff, 32); }
+    if (n == 1) { memset(a, 0, 32); memset(b, 0xff, 32); }
+    Hacl_Vec256_t x = Hacl_Vec256_load(a), y = Hacl_Vec256_load(b);
+    uint8_t s[32], lo[32], hi[32], m[32];
+    Hacl_Vec256_store(s, Hacl_Vec256_sub32(x, y));
+    Hacl_Vec256_store(lo, Hacl_Vec256_mullo32(x, y));
+    Hacl_Vec256_store(hi, Hacl_Vec256_mulhi32(x, y));
+    Hacl_Vec256_store(m, Hacl_Vec256_minu32(x, y));
+    for (int i = 0; i < 8; i++) {
+      uint64_t p = (uint64_t)lane(a, i) * lane(b, i);
+      ok &= lane(s, i) == lane(a, i) - lane(b, i);
+      ok &= lane(lo, i) == (uint32_t)p;
+      ok &= lane(hi, i) == (uint32_t)(p >> 32);
+      ok &= lane(m, i) == (lane(a, i) <= lane(b, i) ? lane(a, i) : lane(b, i));
+    }
+  }
+  report("vec256 sub32, mullo32, mulhi32 and minu32", ok);
+
+  /* The index vectors the ML-DSA transforms use, and some others. */
+  static const uint32_t perms[][8] = {
+      {0, 0, 0, 0, 1, 1, 1, 1}, {0, 0, 2, 2, 1, 1, 3, 3},
+      {0, 1, 4, 5, 2, 3, 6, 7}, {1, 1, 1, 1, 0, 0, 0, 0},
+      {3, 3, 1, 1, 2, 2, 0, 0}, {7, 6, 3, 2, 5, 4, 1, 0},
+      {0, 1, 2, 3, 4, 5, 6, 7}, {7, 7, 7, 7, 7, 7, 7, 7}};
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    for (size_t k = 0; k < sizeof perms / sizeof perms[0]; k++) {
+      const uint32_t *p = perms[k];
+      Hacl_Vec256_store(r, Hacl_Vec256_perm32(Hacl_Vec256_load(a), p[0], p[1],
+                                              p[2], p[3], p[4], p[5], p[6],
+                                              p[7]));
+      for (int i = 0; i < 8; i++) ok &= lane(r, i) == lane(a, (int)p[i]);
+    }
+  }
+  report("vec256 perm32", ok);
 }
 
 #endif

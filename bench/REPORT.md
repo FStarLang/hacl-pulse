@@ -9067,3 +9067,49 @@ one-shot squeeze (README, "The sponge"), so the change was reverted.
 One fragile query it exposed downstream is fixed anyway:
 `verify_mu_impl` now asserts `ct_len p <= sig_len p` before slicing
 the signature, which was at 88% of its rlimit.
+
+## Part 83: ML-DSA's transforms and products on AVX2
+
+After Part 82, signing was still mostly the inverse NTT, the NTT and the
+pointwise products (31%, 14% and 16% of ML-DSA-65's profile), all
+scalar.  The new `Hacl.Impl.MLDSA.NTT.Vec256` does each eight
+coefficients at a time, proved against the same `Spec.MLDSA.NTT` as the
+scalar `Hacl.Impl.MLDSA.NTT`, and `Hacl.Impl.MLDSA.Poly` picks it on
+`Vec256.supported ()`.
+
+- **Lanes.**  Coefficients stay canonical in `[0, q)`.  A reduction is
+  `min_u32(x, x - q)` (`VPMINUD`), the Shoup product is `VPMULLD` and a
+  high-half product, and the pointwise Montgomery product ends with a
+  Shoup multiplication by `2^32 mod q`.  The trusted additions
+  (`load_at`/`store_at` at a word offset, `sub32`, `mullo32`, `mulhi32`,
+  `minu32`, `perm32`) are in `lib/Hacl.Vec256.Lane32.fst`, and
+  `tests/test_vec256.c` checks each against scalar C.
+- **Layers of half-width 128 to 8** load the two ends of eight
+  butterflies as two vectors and broadcast the block's root.
+- **Layers of half-width 4, 2 and 1** work on groups of sixteen
+  coefficients.  Before each layer the group's two vectors are shuffled
+  (`VPERM2I128`, `VPUNPCK{L,H}QDQ`, two rounds of `VPUNPCK{L,H}DQ`) so
+  that lane `j` holds the ends of one butterfly, and back afterwards; the
+  roots are one load of eight consecutive table entries and a `VPERMD`.
+  The proof states each layer about the whole polynomial (`grp`), so the
+  three compose without a locality lemma.
+- **Proof engineering.**  Lane quantifiers plus the products in block
+  starts and root indices timed out even linear goals, so `blk`, `root`
+  and `root_inv` are opaque, each butterfly vector and each small layer is
+  a pure function proved in its own context, and loads and stores are
+  wrapped in small `fn`s whose postconditions are a single predicate.
+  The root-index lemmas are split into a generic `perm32` lemma, an
+  arithmetic one, and their combination.  The module checks in about 12
+  minutes.
+
+| gcc, 12 interleaved runs, same session | before | after | min ratio |
+| --- | ---: | ---: | ---: |
+| ML-DSA-44 keygen / sign / verify | 73.2 / 481 / 79.2 us | 53.1 / 245 / 52.8 us | 1.38x / 1.96x / 1.50x |
+| ML-DSA-65 keygen / sign / verify | 120 / 694 / 125 us | 89.9 / 340 / 82.5 us | 1.33x / 2.04x / 1.52x |
+| ML-DSA-87 keygen / sign / verify | 179 / 590 / 196 us | 139 / 308 / 129 us | 1.29x / 1.91x / 1.53x |
+
+"Before" is the same extracted C with the three dispatches turned off.
+The other 107 rows have a geometric-mean ratio of 1.007 (0.93--1.10,
+noise; none of them calls the new code).  The inverse NTT still scales
+by `256^-1` in a separate pass, and ExpandMask and ExpandS are still one
+stream at a time.
