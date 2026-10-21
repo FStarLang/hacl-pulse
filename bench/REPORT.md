@@ -8970,3 +8970,55 @@ between two speeds during this run (ML-DSA-44 keygen at 97 and 106 us on
 both sides), so single rows are noisy, while the best-of figures for
 ML-DSA agree to 1%.  ML-KEM-768 is now 20.7 / 22.9 / 26.7 us against
 AWS-LC's 13 / 14 / 17.
+
+## Part 81: Keccak in one pass per round
+
+Both Keccak-f[1600] implementations, the scalar `Core` and the four-way
+AVX2 `Core4`, did each round as three sweeps of the state: theta in
+place, rho-pi into a scratch buffer, chi back.  A round is now one pass,
+as in the Keccak team's reference code: read the 25 input lanes once,
+compute theta's column values in registers, and for each output row form
+the five rho-pi lanes as `rotl(a[src] ^ d[col], rho)` and write chi of
+them, with iota on lane 0, to the other buffer.  The existing scratch
+buffer becomes the other half of a ping-pong, two rounds per loop trip,
+so `Core.fsti` did not change.
+
+In C prototypes, the fused scalar round made SHA3-256 1.16x faster on
+1184 bytes under gcc and 1.07x under clang.  The four-way permutation
+went from 1617 to 1176 cycles under gcc and from 1543 to 1151 under
+clang.  The extracted scalar round matches the prototype under clang.
+Under gcc, SHA3-256 stays about 8% behind the prototype at every
+placement of the loads.  The difference is the one-shot sponge's
+byte-at-a-time absorb, not the round.
+
+Proof: each rho-pi register value has a postcondition naming its entry
+of `rho_pi (theta a)`, and each store extends a prefix invariant against
+`round n a`.  The first attempt left the solver to evaluate
+`rho_pi_src 7`, `rotc (rho_pi_src 7)` and the chi neighbours' `% 5` and
+`/ 5` on literals inside the 50-call body; one query ran for fifteen
+minutes without finishing.  With `Spec.SHA3.rho_pi_src_lit` and
+`chi_nbr_lit` supplying those as ground facts, proved by normalisation
+like `rotc_lit`, `Core` checks in 40 s at a peak rlimit of 8.  `Core4`
+uses opaque `b_ok` and `fr_pre` predicates with small step lemmas.
+Lane 0, where iota is folded in, needed its per-state lemma split from
+the prefix lemma; together they had polluted the context enough that
+`m < 1 ==> m == 0` failed.
+
+| gcc, 20 interleaved runs, same session | before | after | min ratio |
+| --- | ---: | ---: | ---: |
+| SHA3-256 64 B / 16 KiB / 256 KiB | 493 ns / 51.1 / 814 us | 477 ns / 47.3 / 751 us | 1.03x / 1.08x / 1.08x |
+| SHA3-512 64 B / 16 KiB / 256 KiB | 503 ns / 97.7 / 1559 us | 454 ns / 86.4 / 1379 us | 1.11x / 1.13x / 1.13x |
+| SHAKE128 64 B / 16 KiB / 256 KiB | 548 ns / 43.3 / 686 us | 501 ns / 38.2 / 606 us | 1.09x / 1.13x / 1.13x |
+| ML-KEM-512 keygen / encaps / decaps | 14.6 / 16.2 / 19.4 us | 13.9 / 15.5 / 18.7 us | 1.05x / 1.05x / 1.04x |
+| ML-KEM-768 keygen / encaps / decaps | 22.7 / 25.3 / 29.3 us | 21.8 / 24.3 / 28.3 us | 1.05x / 1.04x / 1.04x |
+| ML-KEM-1024 keygen / encaps / decaps | 32.4 / 35.1 / 39.8 us | 31.2 / 33.7 / 38.5 us | 1.04x / 1.04x / 1.03x |
+| ML-DSA-44 keygen / sign / verify | 107 / 556 / 112 us | 99 / 543 / 106 us | 1.08x / 1.02x / 1.06x |
+| ML-DSA-65 keygen / sign / verify | 175 / 800 / 184 us | 162 / 782 / 173 us | 1.08x / 1.02x / 1.06x |
+| ML-DSA-87 keygen / sign / verify | 295 / 732 / 305 us | 271 / 706 / 285 us | 1.09x / 1.04x / 1.07x |
+
+The ML-KEM rows were recorded while the machine was in its slower
+state, so they are higher than in Part 80; the ratios come from the
+same session.  The other 84 rows have a geometric-mean median ratio of
+1.0005, all within 0.96--1.04.  Why SHA3-256 gains less than SHA3-512
+and SHAKE128 under gcc has not been investigated.
+

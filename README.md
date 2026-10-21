@@ -476,8 +476,29 @@ correctness argument is an indexwise equality of `Seq`s.
 only in the rate, the domain-separation byte and the output length, so there
 is one copy of the sponge, taking all three as arguments, and six thin
 wrappers.  The state is a 25-lane `A.array S64.t` indexed `x + 5*y`, matching
-the spec's flattening; scratch is 25 lanes for the pi/rho result and 5 for the
-theta parities.
+the spec's flattening, plus a second 25-lane buffer the rounds alternate
+with.
+
+**A round is one pass over the state.**  theta, rho-pi, chi and iota are
+fused, as in the Keccak team's reference code: `fround` reads its 25 input
+lanes once, computes the five column parities and theta's five fold-back
+values in registers, and then for each output row forms the five rho-pi
+lanes as `rotl(a[src] ^ d[col], rho)` and writes chi of them (with the
+round constant on lane 0) straight to the other buffer.  Rounds alternate
+`st -> b` and `b -> st`, two to a loop trip.  The earlier round did theta in
+place, rho-pi into the scratch buffer and chi back -- three read-write sweeps
+of the state per round.  Each register value carries a postcondition naming
+its entry of `rho_pi (theta a)` (`bval`), and each store a prefix invariant
+against `round n a` (`chi_out`); the indices are literals, and
+`Spec.SHA3.rho_pi_src_lit` and `chi_nbr_lit` hand the solver
+`rho_pi_src 7 == 10` and its like as ground facts, because evaluating `% 5`
+and `/ 5` on literals inside a 50-call Pulse context did not finish in
+fifteen minutes and with the facts takes forty seconds.  `Core4` is the same
+round with vector lanes and its own opaque predicates (`b_ok`, `fr_pre`).
+Against the three-pass round, under gcc, SHA3-512 and SHAKE128 are 1.13x
+faster on long inputs and SHA3-256 1.08x, ML-KEM 1.04x and ML-DSA
+1.02x--1.09x (Part 81 of `bench/REPORT.md`); the four-way permutation alone
+went from 1617 to 1176 cycles.
 
 Absorb xors whole message blocks straight out of the caller's buffer, and
 stages only the last, padded, block in a 200-byte stack buffer — 200 rather

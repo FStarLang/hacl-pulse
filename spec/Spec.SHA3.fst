@@ -324,6 +324,125 @@ let chi_index (s: state) (i: nat { i < 25 })
                  (S64.logand (S64.lognot (get s ((x + 1) % 5) y))
                              (get s ((x + 2) % 5) y))) i
 
+(** The source lane of each rho-pi output, and the two chi neighbours of
+    each lane, as ground facts: like [rotc_lit], proved here by normalisation
+    so that an unrolled round never asks the solver to evaluate [% 5] and
+    [/ 5] on literals inside a large context. *)
+let rho_pi_src_lit (_: unit)
+  : Lemma (rho_pi_src 0 == 0 /\ rho_pi_src 0 % 5 == 0 /\
+                 rho_pi_src 1 == 6 /\ rho_pi_src 1 % 5 == 1 /\
+                 rho_pi_src 2 == 12 /\ rho_pi_src 2 % 5 == 2 /\
+                 rho_pi_src 3 == 18 /\ rho_pi_src 3 % 5 == 3 /\
+                 rho_pi_src 4 == 24 /\ rho_pi_src 4 % 5 == 4 /\
+                 rho_pi_src 5 == 3 /\ rho_pi_src 5 % 5 == 3 /\
+                 rho_pi_src 6 == 9 /\ rho_pi_src 6 % 5 == 4 /\
+                 rho_pi_src 7 == 10 /\ rho_pi_src 7 % 5 == 0 /\
+                 rho_pi_src 8 == 16 /\ rho_pi_src 8 % 5 == 1 /\
+                 rho_pi_src 9 == 22 /\ rho_pi_src 9 % 5 == 2 /\
+                 rho_pi_src 10 == 1 /\ rho_pi_src 10 % 5 == 1 /\
+                 rho_pi_src 11 == 7 /\ rho_pi_src 11 % 5 == 2 /\
+                 rho_pi_src 12 == 13 /\ rho_pi_src 12 % 5 == 3 /\
+                 rho_pi_src 13 == 19 /\ rho_pi_src 13 % 5 == 4 /\
+                 rho_pi_src 14 == 20 /\ rho_pi_src 14 % 5 == 0 /\
+                 rho_pi_src 15 == 4 /\ rho_pi_src 15 % 5 == 4 /\
+                 rho_pi_src 16 == 5 /\ rho_pi_src 16 % 5 == 0 /\
+                 rho_pi_src 17 == 11 /\ rho_pi_src 17 % 5 == 1 /\
+                 rho_pi_src 18 == 17 /\ rho_pi_src 18 % 5 == 2 /\
+                 rho_pi_src 19 == 23 /\ rho_pi_src 19 % 5 == 3 /\
+                 rho_pi_src 20 == 2 /\ rho_pi_src 20 % 5 == 2 /\
+                 rho_pi_src 21 == 8 /\ rho_pi_src 21 % 5 == 3 /\
+                 rho_pi_src 22 == 14 /\ rho_pi_src 22 % 5 == 4 /\
+                 rho_pi_src 23 == 15 /\ rho_pi_src 23 % 5 == 0 /\
+                 rho_pi_src 24 == 21 /\ rho_pi_src 24 % 5 == 1)
+  = assert_norm (rho_pi_src 0 == 0 /\ rho_pi_src 0 % 5 == 0 /\
+                 rho_pi_src 1 == 6 /\ rho_pi_src 1 % 5 == 1 /\
+                 rho_pi_src 2 == 12 /\ rho_pi_src 2 % 5 == 2 /\
+                 rho_pi_src 3 == 18 /\ rho_pi_src 3 % 5 == 3 /\
+                 rho_pi_src 4 == 24 /\ rho_pi_src 4 % 5 == 4 /\
+                 rho_pi_src 5 == 3 /\ rho_pi_src 5 % 5 == 3 /\
+                 rho_pi_src 6 == 9 /\ rho_pi_src 6 % 5 == 4 /\
+                 rho_pi_src 7 == 10 /\ rho_pi_src 7 % 5 == 0 /\
+                 rho_pi_src 8 == 16 /\ rho_pi_src 8 % 5 == 1 /\
+                 rho_pi_src 9 == 22 /\ rho_pi_src 9 % 5 == 2 /\
+                 rho_pi_src 10 == 1 /\ rho_pi_src 10 % 5 == 1 /\
+                 rho_pi_src 11 == 7 /\ rho_pi_src 11 % 5 == 2 /\
+                 rho_pi_src 12 == 13 /\ rho_pi_src 12 % 5 == 3 /\
+                 rho_pi_src 13 == 19 /\ rho_pi_src 13 % 5 == 4 /\
+                 rho_pi_src 14 == 20 /\ rho_pi_src 14 % 5 == 0 /\
+                 rho_pi_src 15 == 4 /\ rho_pi_src 15 % 5 == 4 /\
+                 rho_pi_src 16 == 5 /\ rho_pi_src 16 % 5 == 0 /\
+                 rho_pi_src 17 == 11 /\ rho_pi_src 17 % 5 == 1 /\
+                 rho_pi_src 18 == 17 /\ rho_pi_src 18 % 5 == 2 /\
+                 rho_pi_src 19 == 23 /\ rho_pi_src 19 % 5 == 3 /\
+                 rho_pi_src 20 == 2 /\ rho_pi_src 20 % 5 == 2 /\
+                 rho_pi_src 21 == 8 /\ rho_pi_src 21 % 5 == 3 /\
+                 rho_pi_src 22 == 14 /\ rho_pi_src 22 % 5 == 4 /\
+                 rho_pi_src 23 == 15 /\ rho_pi_src 23 % 5 == 0 /\
+                 rho_pi_src 24 == 21 /\ rho_pi_src 24 % 5 == 1)
+
+let chi_nbr_lit (_: unit)
+  : Lemma (idx ((0 % 5 + 1) % 5) (0 / 5) == 1 /\ idx ((0 % 5 + 2) % 5) (0 / 5) == 2 /\
+                 idx ((1 % 5 + 1) % 5) (1 / 5) == 2 /\ idx ((1 % 5 + 2) % 5) (1 / 5) == 3 /\
+                 idx ((2 % 5 + 1) % 5) (2 / 5) == 3 /\ idx ((2 % 5 + 2) % 5) (2 / 5) == 4 /\
+                 idx ((3 % 5 + 1) % 5) (3 / 5) == 4 /\ idx ((3 % 5 + 2) % 5) (3 / 5) == 0 /\
+                 idx ((4 % 5 + 1) % 5) (4 / 5) == 0 /\ idx ((4 % 5 + 2) % 5) (4 / 5) == 1 /\
+                 idx ((5 % 5 + 1) % 5) (5 / 5) == 6 /\ idx ((5 % 5 + 2) % 5) (5 / 5) == 7 /\
+                 idx ((6 % 5 + 1) % 5) (6 / 5) == 7 /\ idx ((6 % 5 + 2) % 5) (6 / 5) == 8 /\
+                 idx ((7 % 5 + 1) % 5) (7 / 5) == 8 /\ idx ((7 % 5 + 2) % 5) (7 / 5) == 9 /\
+                 idx ((8 % 5 + 1) % 5) (8 / 5) == 9 /\ idx ((8 % 5 + 2) % 5) (8 / 5) == 5 /\
+                 idx ((9 % 5 + 1) % 5) (9 / 5) == 5 /\ idx ((9 % 5 + 2) % 5) (9 / 5) == 6 /\
+                 idx ((10 % 5 + 1) % 5) (10 / 5) == 11 /\ idx ((10 % 5 + 2) % 5) (10 / 5) == 12 /\
+                 idx ((11 % 5 + 1) % 5) (11 / 5) == 12 /\ idx ((11 % 5 + 2) % 5) (11 / 5) == 13 /\
+                 idx ((12 % 5 + 1) % 5) (12 / 5) == 13 /\ idx ((12 % 5 + 2) % 5) (12 / 5) == 14 /\
+                 idx ((13 % 5 + 1) % 5) (13 / 5) == 14 /\ idx ((13 % 5 + 2) % 5) (13 / 5) == 10 /\
+                 idx ((14 % 5 + 1) % 5) (14 / 5) == 10 /\ idx ((14 % 5 + 2) % 5) (14 / 5) == 11 /\
+                 idx ((15 % 5 + 1) % 5) (15 / 5) == 16 /\ idx ((15 % 5 + 2) % 5) (15 / 5) == 17 /\
+                 idx ((16 % 5 + 1) % 5) (16 / 5) == 17 /\ idx ((16 % 5 + 2) % 5) (16 / 5) == 18 /\
+                 idx ((17 % 5 + 1) % 5) (17 / 5) == 18 /\ idx ((17 % 5 + 2) % 5) (17 / 5) == 19 /\
+                 idx ((18 % 5 + 1) % 5) (18 / 5) == 19 /\ idx ((18 % 5 + 2) % 5) (18 / 5) == 15 /\
+                 idx ((19 % 5 + 1) % 5) (19 / 5) == 15 /\ idx ((19 % 5 + 2) % 5) (19 / 5) == 16 /\
+                 idx ((20 % 5 + 1) % 5) (20 / 5) == 21 /\ idx ((20 % 5 + 2) % 5) (20 / 5) == 22 /\
+                 idx ((21 % 5 + 1) % 5) (21 / 5) == 22 /\ idx ((21 % 5 + 2) % 5) (21 / 5) == 23 /\
+                 idx ((22 % 5 + 1) % 5) (22 / 5) == 23 /\ idx ((22 % 5 + 2) % 5) (22 / 5) == 24 /\
+                 idx ((23 % 5 + 1) % 5) (23 / 5) == 24 /\ idx ((23 % 5 + 2) % 5) (23 / 5) == 20 /\
+                 idx ((24 % 5 + 1) % 5) (24 / 5) == 20 /\ idx ((24 % 5 + 2) % 5) (24 / 5) == 21)
+  = assert_norm (idx ((0 % 5 + 1) % 5) (0 / 5) == 1 /\ idx ((0 % 5 + 2) % 5) (0 / 5) == 2 /\
+                 idx ((1 % 5 + 1) % 5) (1 / 5) == 2 /\ idx ((1 % 5 + 2) % 5) (1 / 5) == 3 /\
+                 idx ((2 % 5 + 1) % 5) (2 / 5) == 3 /\ idx ((2 % 5 + 2) % 5) (2 / 5) == 4 /\
+                 idx ((3 % 5 + 1) % 5) (3 / 5) == 4 /\ idx ((3 % 5 + 2) % 5) (3 / 5) == 0 /\
+                 idx ((4 % 5 + 1) % 5) (4 / 5) == 0 /\ idx ((4 % 5 + 2) % 5) (4 / 5) == 1 /\
+                 idx ((5 % 5 + 1) % 5) (5 / 5) == 6 /\ idx ((5 % 5 + 2) % 5) (5 / 5) == 7 /\
+                 idx ((6 % 5 + 1) % 5) (6 / 5) == 7 /\ idx ((6 % 5 + 2) % 5) (6 / 5) == 8 /\
+                 idx ((7 % 5 + 1) % 5) (7 / 5) == 8 /\ idx ((7 % 5 + 2) % 5) (7 / 5) == 9 /\
+                 idx ((8 % 5 + 1) % 5) (8 / 5) == 9 /\ idx ((8 % 5 + 2) % 5) (8 / 5) == 5 /\
+                 idx ((9 % 5 + 1) % 5) (9 / 5) == 5 /\ idx ((9 % 5 + 2) % 5) (9 / 5) == 6 /\
+                 idx ((10 % 5 + 1) % 5) (10 / 5) == 11 /\ idx ((10 % 5 + 2) % 5) (10 / 5) == 12 /\
+                 idx ((11 % 5 + 1) % 5) (11 / 5) == 12 /\ idx ((11 % 5 + 2) % 5) (11 / 5) == 13 /\
+                 idx ((12 % 5 + 1) % 5) (12 / 5) == 13 /\ idx ((12 % 5 + 2) % 5) (12 / 5) == 14 /\
+                 idx ((13 % 5 + 1) % 5) (13 / 5) == 14 /\ idx ((13 % 5 + 2) % 5) (13 / 5) == 10 /\
+                 idx ((14 % 5 + 1) % 5) (14 / 5) == 10 /\ idx ((14 % 5 + 2) % 5) (14 / 5) == 11 /\
+                 idx ((15 % 5 + 1) % 5) (15 / 5) == 16 /\ idx ((15 % 5 + 2) % 5) (15 / 5) == 17 /\
+                 idx ((16 % 5 + 1) % 5) (16 / 5) == 17 /\ idx ((16 % 5 + 2) % 5) (16 / 5) == 18 /\
+                 idx ((17 % 5 + 1) % 5) (17 / 5) == 18 /\ idx ((17 % 5 + 2) % 5) (17 / 5) == 19 /\
+                 idx ((18 % 5 + 1) % 5) (18 / 5) == 19 /\ idx ((18 % 5 + 2) % 5) (18 / 5) == 15 /\
+                 idx ((19 % 5 + 1) % 5) (19 / 5) == 15 /\ idx ((19 % 5 + 2) % 5) (19 / 5) == 16 /\
+                 idx ((20 % 5 + 1) % 5) (20 / 5) == 21 /\ idx ((20 % 5 + 2) % 5) (20 / 5) == 22 /\
+                 idx ((21 % 5 + 1) % 5) (21 / 5) == 22 /\ idx ((21 % 5 + 2) % 5) (21 / 5) == 23 /\
+                 idx ((22 % 5 + 1) % 5) (22 / 5) == 23 /\ idx ((22 % 5 + 2) % 5) (22 / 5) == 24 /\
+                 idx ((23 % 5 + 1) % 5) (23 / 5) == 24 /\ idx ((23 % 5 + 2) % 5) (23 / 5) == 20 /\
+                 idx ((24 % 5 + 1) % 5) (24 / 5) == 20 /\ idx ((24 % 5 + 2) % 5) (24 / 5) == 21)
+
+(** The lanes of a round other than lane 0 are chi's; lane 0 also has the
+    round constant. *)
+let round_index (s: state) (n: nat { n < 24 }) (i: nat { 0 < i /\ i < 25 })
+  : Lemma (Seq.index (round n s) i == Seq.index (chi (rho_pi (theta s))) i)
+  = ()
+
+let round_index0 (s: state) (n: nat { n < 24 })
+  : Lemma (Seq.index (round n s) 0 ==
+           S64.logxor (Seq.index (chi (rho_pi (theta s))) 0) (Seq.index rc n))
+  = ()
+
 let xor_block_index (r: rate_t) (block: Seq.lseq S8.t r) (s: state) (i: nat { i < 25 })
   : Lemma (Seq.index (xor_block r block s) i ==
            (if i < rate_lanes r
