@@ -165,18 +165,3 @@ val w1_encode_impl (p: erased params) (out: A.array S8.t) (w1: A.array zqt)
       (fun _ -> exists* (v: Seq.seq S8.t). A.pts_to out v ** A.pts_to w1 #pw vw **
         pure (Seq.length vw == p.k * n /\ v == w1_encode p (as_ints vw)))
 
-(** Algorithm 34, [ExpandMask]: [y] for attempt [a], whose counter
-    [kappa = a l] is passed. *)
-val expand_mask_impl (p: erased params) (y: A.array zqt) (rho: A.array S8.t)
-                     ([@@@FStar.Attributes.monomorphize] l: SZ.t)
-                     ([@@@FStar.Attributes.monomorphize] g1bits: SZ.t)
-                     (kappa: SZ.t) (a: erased (x: nat { x < max_attempts }))
-                     (#vy: erased (Seq.seq zqt)) (#pr: perm) (#vr: erased (Seq.seq S8.t))
-  : stt unit
-      (A.pts_to y vy ** A.pts_to rho #pr vr **
-       pure (SZ.v l == p.l /\ SZ.v g1bits == p.gamma1_bits /\
-             SZ.v kappa == a * p.l /\
-             Seq.length vr == 64 /\ Seq.length vy == p.l * n))
-      (fun _ -> exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to rho #pr vr **
-        pure (Seq.length vr == 64 /\ Seq.length v == p.l * n /\
-              as_zqs v == expand_mask p vr a))

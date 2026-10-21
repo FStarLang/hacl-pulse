@@ -9113,3 +9113,47 @@ The other 107 rows have a geometric-mean ratio of 1.007 (0.93--1.10,
 noise; none of them calls the new code).  The inverse NTT still scales
 by `256^-1` in a separate pass, and ExpandMask and ExpandS are still one
 stream at a time.
+
+## Part 84: ExpandMask, four streams at a time
+
+A callgrind profile of ML-DSA-65 after Part 83 put `ExpandMask` at 37.5%
+of signing: each attempt draws `l` mask polynomials, each one
+`SHAKE256(rho'' || u16(kappa + r))` of 576 or 640 bytes, so five Keccak
+permutations, one stream at a time.  The new `Hacl.Impl.MLDSA.Mask4`
+runs four of them over `Hacl.Hash.SHA3.Core4.permute4`.
+
+- **Squeeze.**  `shake4` absorbs the four seeds (`seed_absorb_pre` is
+  the absorb without its last permutation, so that `permute4` does the
+  four), then squeezes four full blocks and a partial fifth, with one
+  `permute4` between blocks.  Each lane's progress is an opaque
+  `lane_ok msg blen m q st w`: `m` bytes of `SHAKE256(msg, blen)` are in
+  `w`, and `st` is the absorbed state after `q` permutations.  The step
+  lemmas are `lane_sq` (a squeezed block, through
+  `Spec.SHA3.squeeze_range_eq`), `lane_adv` (a permutation) and
+  `lane_done`.
+- **Windows.**  `expand_mask_impl` takes four polynomials at a time while
+  at least two are left and the processor has AVX2.  A window of fewer
+  than four slides back to end at `l` and recomputes, and rewrites with
+  the same values, polynomials already done (`prefix_mono`):
+  ML-DSA-44 is one window, ML-DSA-65 one window and one scalar
+  polynomial, ML-DSA-87 two windows, the second recomputing one.
+- **Proof engineering.**  The `ExpandMask` lemmas moved from
+  `Hacl.Impl.MLDSA.Pack` (whose interface hid them) to the new module.
+  Twice a lemma called as a function's last statement did not discharge
+  that function's postcondition until an `assert` restated it.  As in
+  `Hacl.Impl.MLKEM.PRF4`, the message length is passed to
+  `seed_absorb_pre` rather than inlined, or gcc's `-Wtype-limits` rejects
+  the empty whole-block loop.
+
+| gcc, 12 interleaved runs, same session | before | after | min ratio |
+| --- | ---: | ---: | ---: |
+| ML-DSA-44 sign | 248 us | 214 us | 1.16x |
+| ML-DSA-65 sign | 361 us | 323 us | 1.12x |
+| ML-DSA-87 sign | 317 us | 290 us | 1.10x |
+
+"Before" is the same extracted C with the dispatch turned off.  Key
+generation and verification do not call the new code (0.94--1.02,
+noise), and the other 107 rows have a geometric-mean ratio of 0.995.
+The test suite also passes with `Hacl_Vec256_supported` forced false,
+which exercises the scalar path.
+

@@ -58,6 +58,7 @@ module Sub = Hacl.Impl.Sub
 module Copy = Hacl.Impl.Copy
 module M = Spec.MLDSA
 module Mem = Hacl.Mem
+module Mask4 = Hacl.Impl.MLDSA.Mask4
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -287,7 +288,7 @@ ensures exists* (v: Seq.seq S8.t).
   (* y and w = A y *)
   let mut y = [| (S32.zero <: zqt); ln |];
   Mem.track y;
-  expand_mask_impl p y rho l g1bits kappa att;
+  Mask4.expand_mask_impl p y rho l g1bits kappa att;
   with vy. assert (A.pts_to y vy);
   let w = Mem.alloc (S32.zero <: zqt) kn;
   commit_impl p w a y k l;

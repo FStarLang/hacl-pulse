@@ -540,7 +540,14 @@ signing 1.04x--1.11x (Part 82 of `bench/REPORT.md`).  The noise vectors are the 
 `Hacl.Impl.MLKEM.PRF4` computes four `PRF_eta(s, b_j)` with one
 `permute4` ending the four 33-byte absorbs and, for `eta = 3`, a second one
 for the four second blocks, and `noise_vec_impl` calls it once per vector
-(the lanes past `k` compute a PRF nobody reads).  The 64-bit lane operations live in their own
+(the lanes past `k` compute a PRF nobody reads).  ML-DSA's `ExpandMask`
+is four SHAKE256 streams of five blocks each: `Hacl.Impl.MLDSA.Mask4`
+absorbs the four 66-byte seeds, shares every permutation, and tracks each
+lane's squeeze with an opaque `lane_ok` (bytes out, permutations so far);
+its `expand_mask_impl` takes four polynomials at a time while at least two
+are left, sliding the last window back to end at `l` (ML-DSA-87's second
+window recomputes one polynomial), which made signing 1.10x--1.16x faster
+(Part 84).  The 64-bit lane operations live in their own
 module rather than in `Hacl.Vec256`: adding them there perturbed the solver
 context of the ChaCha20 and Poly1305 vector proofs enough to time them out.
 
