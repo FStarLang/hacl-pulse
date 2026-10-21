@@ -8895,3 +8895,38 @@ side effect lands in code this change does not touch: `Hacl.c` is a single
 translation unit, and gcc now clones the SHA-512 block function
 differently, which makes bulk SHA2-512 3.6% faster and HMAC-SHA2-512 3.5%
 slower (108.6 k to 112.3 k cycles on 16 KiB, reproduced in isolation).
+
+## Part 79: an accumulating dot product for ML-KEM
+
+The matrix-vector products `A s`, `A^T r` and `t^T r` each summed `k`
+base-case products, and each product reduced every output coefficient
+with a sixty-four-bit Barrett step before the addition reduced it again.
+Timed on its own (k = 3, best of 20000), the old dot product cost 2744
+cycles under gcc and 1690 under clang.
+
+`Hacl.Impl.MLKEM.Dot` now does what the arithmetic allows: for each pair
+of coefficients it sums the `k` values of `a0 b0`, `a1 b1` and
+`a0 b1 + a1 b0` exactly in thirty-two bits (at most `8 (q - 1)^2`, below
+`2^32` for `k <= 4`), reduces the `a1 b1` sum before it is multiplied by
+`gamma_i`, and reduces each output once with a thirty-two-bit Barrett
+step (`Zq.zq_reduce32`).  The loop has no carried state between pairs and
+vectorises; an AVX2 clone is chosen at run time like the NTT's.  The
+kernel costs 784 cycles under gcc and 465 under clang, 3.5x and 3.6x
+faster.  The proof (`VecLemmas.dot_pair`) is an induction over `k` relating
+the three exact sums to the specification's sum of reduced products.
+
+The module sits behind an interface, `Dot.fsti`, for the same reason
+`Poly.fsti` does: its implementation refers to the zeta tables, and with
+those facts in scope, unrelated queries in `Vec`, `KPKE` and `KEM` timed
+out.
+
+| gcc, best of 20, interleaved, same session | before | after | median |
+| --- | ---: | ---: | ---: |
+| ML-KEM-512 keygen / encaps / decaps | 16.7 / 19.0 / 24.5 us | 15.8 / 17.8 / 22.8 us | 1.05x--1.07x |
+| ML-KEM-768 keygen / encaps / decaps | 26.9 / 30.8 / 38.4 us | 24.5 / 27.7 / 34.4 us | 1.10x--1.11x |
+| ML-KEM-1024 keygen / encaps / decaps | 38.8 / 43.7 / 53.3 us | 34.6 / 38.7 / 47.1 us | 1.12x--1.13x |
+
+The gain grows with `k`, as it should.  ML-DSA is unchanged (within 0.3%),
+and the other 98 rows have a geometric mean ratio of 1.0005, none
+outside 0.98--1.03.  (This session's machine is about five percent slower
+than Part 78's; compare the columns with each other, not with Part 78.)

@@ -3350,10 +3350,16 @@ once per output coefficient rather than once per operation: each of
 `a0 b0 + a1 b1 gamma_i` and `a0 b1 + a1 b0` is formed in sixty-four bits,
 below `2^36`, and reduced by a single Barrett step with `m = floor(2^37 / q)`
 (`zq_reduce`), with `gamma_i = zeta^(2 brv(i) + 1)` read from a third
-128-entry table instead of computed as a product.  The centred binomial
+128-entry table instead of computed as a product.  The matrix-vector
+products do not add up `k` such products: `Hacl.Impl.MLKEM.Dot` sums, for
+each pair, the `k` values of `a0 b0`, `a1 b1` and `a0 b1 + a1 b0` exactly in
+thirty-two bits (at most `8 (q - 1)^2` for `k <= 4`), reduces the `a1 b1`
+sum before it meets `gamma_i`, and reduces each output once
+(`zq_reduce32`), which vectorises and is 3.5x faster than `k` products and
+`k` additions.  The centred binomial
 sampler reads its input a group at a time -- `eta` bytes are four
 coefficients -- and adds up bits with constant shifts, rather than
-locating each bit with a division.  The NTT, inverse NTT, pointwise product and CBD
+locating each bit with a division.  The NTT, inverse NTT, pointwise product, dot product and CBD
 sampler are each extracted twice from the same verified body, once under
 `__attribute__((target("avx2")))` and once without, and a dispatcher with
 the same specification picks one on `Hacl.Vec256.supported`: gcc and clang
@@ -4399,7 +4405,7 @@ which compilers vectorise, and the forward and inverse NTT together fell
 from 42% of the instructions of an ML-KEM-768 run to 11%.  What is left
 is mostly Keccak: the rejection sampler that expands the public matrix
 (SHAKE128, one lane at a time) is now 39% and SHAKE256 15%, then the
-base-case products (11%, still a sixty-four-bit Barrett step per product)
+base-case products (11% before the accumulating dot product of Part 79)
 and the binomial sampler.
 
 These numbers used to be half again as large, and the reason they are not

@@ -284,6 +284,29 @@ let zq_reduce (x: S64.t { S64.v x < pow2 36 }) : r: zqt { S16.v r == S64.v x % q
     Math.lemma_mod_sub (S64.v x) q (S64.v t);
     csub (Cast.u64_to_u16 r)
 
+(** The same reduction of a thirty-two-bit value, with only the quotient
+    estimate formed in sixty-four bits.  The rest stays in thirty-two-bit
+    lanes, which is what lets the accumulating dot product vectorise. *)
+inline_for_extraction
+let zq_reduce32 (x: S32.t) : r: zqt { S16.v r == S32.v x % q }
+  = assert_norm (pow2 32 * 41285357 < pow2 64);
+    assert_norm (pow2 32 < pow2 36);
+    assert_norm (2 * q < pow2 16);
+    barrett37_bound (S32.v x);
+    Math.lemma_mult_lt_right 41285357 (S32.v x) (pow2 32);
+    Math.small_mod (S32.v x * 41285357) (pow2 64);
+    let t64 = S64.shift_right (S64.mul_mod (Cast.u32_to_u64 x) (S64.classify 41285357uL)) 37ul in
+    assert (S64.v t64 == (S32.v x * 41285357) / pow2 37);
+    Math.small_mod (S64.v t64) (pow2 32);
+    let t = Cast.u64_to_u32 t64 in
+    Math.small_mod (S32.v t * q) (pow2 32);
+    Math.small_mod (S32.v x - S32.v t * q) (pow2 32);
+    let r = S32.sub_mod x (S32.mul_mod t (S32.classify 3329ul)) in
+    assert (S32.v r == S32.v x - S32.v t * q);
+    Math.small_mod (S32.v r) (pow2 16);
+    Math.lemma_mod_sub (S32.v x) q (S32.v t);
+    csub (Cast.u32_to_u16 r)
+
 #pop-options
 
 (** {2 Division by q}
