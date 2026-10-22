@@ -183,6 +183,7 @@ ensures exists* v. A.pts_to out v ** A.pts_to f #p vf **
     let x = A.(f.(vi));
     let c = if signed then zq_sub b x else x;
     src_index signed (S32.v b) vf (SZ.v vi);
+    assert (pure (S32.v c == Seq.index (src signed (S32.v b) vf) (SZ.v vi)));
     S64.logand_mask_low (Cast.u32_to_u64 c) dd;
     let cm = S64.logand (Cast.u32_to_u64 c) (S64.mask_low dd);
     assert (pure (S64.v cm == Seq.index (src signed (S32.v b) vf) (SZ.v vi) % pow2 (SZ.v d)));
