@@ -9157,3 +9157,50 @@ noise), and the other 107 rows have a geometric-mean ratio of 0.995.
 The test suite also passes with `Hacl_Vec256_supported` forced false,
 which exercises the scalar path.
 
+
+## Part 85: ExpandS, four streams at a time and without the acceptance branch
+
+ML-DSA key generation spent about a quarter of its time in `ExpandS`:
+`l + k` polynomials, each `RejBoundedPoly(rho' || u16(r))`, two or three
+SHAKE256 blocks, one stream at a time.
+
+- **Four streams.**  `Hacl.Impl.MLDSA.Bounded4` is `Mask4` for
+  `RejBoundedPoly`: `seed_absorb_pre` absorbs the four 66-byte seeds,
+  `permute4_if` shares every permutation, and each lane feeds the scalar
+  `block256_bounded_impl` until all four have 256 coefficients or eight
+  blocks have gone by (`bstream_ok`, opaque, tracks a lane: bytes
+  squeezed, permutations so far, the partial polynomial).  Its
+  `expand_s_part_impl` uses the same sliding windows as `ExpandMask`.
+- **That alone did almost nothing.**  Timed in isolation `ExpandS` went
+  from 14.5 to 13.1 us (ML-DSA-44) and not at all for ML-DSA-65, whose
+  35 us is about three times what its 22 blocks of Keccak and 11 x 256
+  coefficients ought to cost.  The instruction count fitted the expected
+  time, so the cycles were stalls: the acceptance test, `if (c < 256 &&
+  ok)`, is a branch on a random nibble, rejected with probability 1/16
+  for `eta = 2` and 7/16 for `eta = 4` -- the worst case for a predictor.
+- **Branch-free acceptance.**  `push_bit_impl` stores every nibble's
+  coefficient at `dst[c]` while `c < 256` and adds `inc`, the top bit of
+  the (declassified) `lt_mask`, to the count; a rejected value lies past
+  the count, where `push_post` already said nothing, and is overwritten by
+  the next store.  The uniform sampler, which rejects one candidate in a
+  thousand, keeps the branch.  This is ML-KEM's Part 78 fix.  Stating the
+  shift's value inline in `half_impl` slowed `Hacl.Impl.MLDSA.Sample` from
+  5.4 to 7 minutes; as a separate `mask_bit` lemma it costs nothing.  The
+  first placement of `push_bit_impl`, before the uniform sampler, also
+  timed out an unrelated loop-exit assertion there.
+
+`bench.c` calls `keypair` on the same `xi` every time, so the predictor
+learns the acceptance pattern and the branch costs nothing there: the
+interleaved A/B (3 rounds, 12 runs) shows key generation at 1.01--1.06x,
+everything else at a geometric mean of 0.996.  With a fresh seed per call,
+as in real use (best of 30 x 100 calls, `xi[0]` or `rho'[0]` varied):
+
+| gcc, fresh seeds | ExpandS before | after | ratio | keygen before | after | ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ML-DSA-44 | 12.2 us | 10.4 us | 1.16x | 48.6 us | 46.4 us | 1.05x |
+| ML-DSA-65 | 29.7 us | 14.0 us | 2.13x | 95.6 us | 80.2 us | 1.19x |
+| ML-DSA-87 | 24.7 us | 17.5 us | 1.41x | 129.0 us | 123.4 us | 1.05x |
+
+"Before" is the previous commit's sampler (four-way dispatch off, branchy
+acceptance).  The test suite also passes with `Hacl_Vec256_supported`
+forced false.

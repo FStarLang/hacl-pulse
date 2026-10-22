@@ -307,6 +307,39 @@ let coeff_impl (eta: SZ.t { SZ.v eta == 2 \/ SZ.v eta == 4 }) (z: S32.t { S32.v 
       zq_sub (S32.classify 4ul) z
     end
 
+(** {!push_impl} without the branch on [ok], for bounded sampling, which
+    rejects a random 1/16 (eta = 2) or 7/16 (eta = 4) of its nibbles: as a
+    branch the test is mispredicted often enough to dominate the sampler.
+    Whenever there is room [x] is stored at [dst[c]], and the count moves
+    on by [inc], one exactly when [ok].  A rejected [x] lies past the
+    count, which {!push_post} says nothing about, and is overwritten by the
+    next store.  Only the [c < n] test, which fails once, is a branch. *)
+let mask_bit (m: U32.t)
+  : Lemma (requires U32.v m == 0 \/ U32.v m == pow2 32 - 1)
+          (ensures U32.v (U32.shift_right m 31ul) == (if U32.v m = 0 then 0 else 1))
+  = assert_norm (pow2 32 - 1 == 4294967295);
+    assert_norm (pow2 31 == 2147483648)
+
+inline_for_extraction
+fn push_bit_impl (dst: A.array zqt) (c: SZ.t) (ok: erased bool) (inc: U32.t) (x: zqt)
+                 (#v0: erased (Seq.seq zqt))
+requires A.pts_to dst v0 **
+         pure (Seq.length v0 == n /\ SZ.v c <= n /\
+               U32.v inc == (if reveal ok then 1 else 0))
+returns c': SZ.t
+ensures exists* v. A.pts_to dst v ** pure (push_post v0 v (SZ.v c) (SZ.v c') ok (S32.v x))
+{
+  A.pts_to_len dst;
+  HSZ.fits32 ();
+  SZ.fits_u32_implies_fits 257;
+  if (SZ.lt c 256sz) {
+    A.((dst.(c) <- x));
+    SZ.add c (SZ.uint32_to_sizet inc)
+  } else {
+    c
+  }
+}
+
 (** One nibble: accepted if it is in range, which is the one bit that is
     declassified. *)
 inline_for_extraction
@@ -323,10 +356,11 @@ ensures exists* v. A.pts_to dst v **
 {
   let bound = (if SZ.eq eta 2sz then 15ul else 9ul);
   let m = S32.lt_mask z (S32.classify bound);
-  let ok = not (U32.eq (Declassify.u32 m) 0ul);
-  assert (pure (ok == coeff_ok (SZ.v eta) (S32.v z)));
+  let mb = Declassify.u32 m;
+  let inc = U32.shift_right mb 31ul;
+  mask_bit mb;
   let x = coeff_impl eta z;
-  push_impl dst c ok x
+  push_bit_impl dst c (hide (coeff_ok (SZ.v eta) (S32.v z))) inc x
 }
 
 let nibbles (z: nat { z < 256 })

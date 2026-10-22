@@ -42,6 +42,7 @@ module S8 = Hacl.Secret.UInt8
 module Seq = FStar.Seq
 module S = Hacl.Impl.MLDSA.Sample
 module S4 = Hacl.Impl.MLDSA.Sample4
+module B4 = Hacl.Impl.MLDSA.Bounded4
 
 (** Algorithm 30, [RejNTTPoly]: a polynomial in the NTT domain from a
     SHAKE128 seed (thirty-four bytes in ExpandA). *)
@@ -117,5 +118,5 @@ ensures exists* w1 w2. A.pts_to s1 w1 ** A.pts_to s2 w2 ** A.pts_to rho #pr vr *
   pure (Seq.length vr == 64 /\ Seq.length w1 == p.l * n /\ Seq.length w2 == p.k * n /\
         as_zqs w1 == expand_s1 p vr /\ as_zqs w2 == expand_s2 p vr)
 {
-  S.expand_s_impl p s1 s2 rho k l eta;
+  B4.expand_s_impl p s1 s2 rho k l eta;
 }

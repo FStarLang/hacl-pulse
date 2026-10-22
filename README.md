@@ -547,7 +547,14 @@ lane's squeeze with an opaque `lane_ok` (bytes out, permutations so far);
 its `expand_mask_impl` takes four polynomials at a time while at least two
 are left, sliding the last window back to end at `l` (ML-DSA-87's second
 window recomputes one polynomial), which made signing 1.10x--1.16x faster
-(Part 84).  The 64-bit lane operations live in their own
+(Part 84).  `ExpandS` is the same again: `Hacl.Impl.MLDSA.Bounded4` runs
+four `RejBoundedPoly` streams over the scalar `block256_bounded_impl`, with
+the same windows.  Most of its time, though, was not Keccak but the
+acceptance branch, which rejects a random 1/16 (`eta = 2`) or 7/16
+(`eta = 4`) of the nibbles; `push_bit_impl` now stores every nibble and
+advances the count by the top bit of the `lt_mask`, as ML-KEM's sampler
+does.  Together they made `ExpandS` 1.16x--2.13x and key generation
+1.05x--1.19x faster on fresh seeds (Part 85).  The 64-bit lane operations live in their own
 module rather than in `Hacl.Vec256`: adding them there perturbed the solver
 context of the ChaCha20 and Poly1305 vector proofs enough to time them out.
 
