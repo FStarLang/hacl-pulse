@@ -260,7 +260,7 @@ let xtimes_bit (v: block) (i: nat { i < 128 })
     [Spec.CLMUL.gmulx_three] such a multiplier computes [x] times the field
     product, so storing [xdiv h] in place of the hash key once, at setup,
     makes every later multiplication come out exact.  See the GHASH section
-    of the README. *)
+    of design/notes.md. *)
 
 let shl_byte (a: block) (i: nat { i < blocklen }) : elem =
   let carry : elem = if i = blocklen - 1 then 0 else Seq.index a (i + 1) / 128 in

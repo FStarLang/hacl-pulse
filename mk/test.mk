@@ -29,9 +29,13 @@ endef
 
 $(foreach t,$(TEST_NAMES),$(eval $(call hacl_test,$(t))))
 
+# Tests built but not run by `make test`, e.g. TEST_NORUN=test_consttime on
+# a shared machine whose timing noise the constant-time audit would flag.
+TEST_NORUN ?=
+
 .PHONY: test
 test: $(TEST_BINS)
-	$(Q)for t in $(TEST_BINS); do                                          \
+	$(Q)for t in $(filter-out $(addprefix $(BUILD_DIR)/tests/,$(TEST_NORUN)),$(TEST_BINS)); do                                          \
 	  printf '  %-14s %s\n' RUN "$$(basename $$t)";                        \
 	  $$t || exit 1;                                                       \
 	done

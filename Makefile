@@ -153,7 +153,7 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Bignum.Base., \
 
 # Exported for tests/test_consttime.c, which times each of them once per
 # value of the secret they branch on.  See "The compiler is allowed to undo
-# a constant-time algorithm" in README.md.
+# a constant-time algorithm" in design/notes.md.
 CUSTARD_ENTRIES += Hacl.Impl.Select.eq_mask_bytes
 CUSTARD_ENTRIES += Hacl.AES.Core.sbox_impl
 

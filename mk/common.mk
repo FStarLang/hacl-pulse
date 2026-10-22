@@ -48,6 +48,15 @@ FSTAR_EXE ?= $(shell which fstar.exe 2>/dev/null)
 # `make clean` should not need a compiler to delete a directory.
 NEEDS_FSTAR := $(filter-out clean distclean,$(or $(MAKECMDGOALS),all))
 
+# DIST_ONLY=1 builds and tests the C already in $(DIST_DIR) without F*:
+# dist/Hacl.c becomes a source file rather than a target, so nothing is
+# verified or re-extracted.  For compilers and machines F* does not run on,
+# such as CI's clang and arm64 jobs, which test the dist/ the verify job
+# produced.  Only the C targets (compile, stack, test, cross) make sense.
+ifneq ($(DIST_ONLY),)
+NEEDS_FSTAR :=
+endif
+
 ifneq ($(NEEDS_FSTAR),)
   ifeq ($(FSTAR_EXE),)
 $(error No F* found. Set FSTAR_EXE to an fstar.exe with Pulse and Custard, or FSTAR_ROOT to a release tree or a stage3 checkout.)

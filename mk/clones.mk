@@ -83,7 +83,7 @@ clones-update: $(CLONES_OBJ)
 
 # What gcc *would* specialise if the unit were small enough.  Everything here
 # that is not in the baseline is a speedup we are currently losing to the
-# size of the translation unit; see README, "inline is a global resource".
+# size of the translation unit; see design/notes.md, "inline is a global resource".
 .PHONY: clones-available
 clones-available: $(DIST_DIR)/Hacl.c
 	$(Q)mkdir -p $(BUILD_DIR)/clones

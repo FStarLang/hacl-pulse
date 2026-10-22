@@ -1,4 +1,4 @@
-"""Regenerate the README performance table from a benchmark output directory.
+"""Regenerate the design notes' performance table from a benchmark output directory.
 
 Usage: python3 mktable.py <bench-dir>
 
