@@ -220,7 +220,8 @@ let sacc (msg: Seq.seq S8.t) (r acc: nat) (n: nat) : GTot nat =
 let one_step (msg: Seq.seq S8.t) (r acc: nat) (n: nat)
   : Lemma (requires 16 * n + 16 <= Seq.length msg)
           (ensures sacc msg r acc (n + 1) == ((sacc msg r acc n + bv msg n) * r) % prime)
-  = unfold_repeati_g n (Spec.bstep msg 0 r) acc
+  = unfold_repeati_g n (Spec.bstep msg 0 r) acc;
+    assert (Spec.block16 msg (0 + 16 * n) == Seq.slice msg (16 * n) (16 * n + 16))
 
 let step_mod (x y r: int)
   : Lemma (((x % prime + y) * r) % prime == ((x + y) * r) % prime)
@@ -249,12 +250,16 @@ let four_steps (msg: Seq.seq S8.t) (r acc: nat) (n: nat)
     let b2 = bv msg (n + 2) in
     let b3 = bv msg (n + 3) in
     one_step msg r acc n;
+    assert (sacc msg r acc (n + 1) == ((s + b0) * r) % prime);
     one_step msg r acc (n + 1);
-    one_step msg r acc (n + 2);
-    one_step msg r acc (n + 3);
     step_mod ((s + b0) * r) b1 r;
+    assert (sacc msg r acc (n + 2) == (((s + b0) * r + b1) * r) % prime);
+    one_step msg r acc (n + 2);
     step_mod (((s + b0) * r + b1) * r) b2 r;
+    assert (sacc msg r acc (n + 3) == ((((s + b0) * r + b1) * r + b2) * r) % prime);
+    one_step msg r acc (n + 3);
     step_mod ((((s + b0) * r + b1) * r + b2) * r) b3 r;
+    assert (sacc msg r acc (n + 4) == (((((s + b0) * r + b1) * r + b2) * r + b3) * r) % prime);
     horner_ring s b0 b1 b2 b3 r
 
 #pop-options

@@ -544,6 +544,8 @@ let curve_eq_gen (x2 y2 v dd: nat) (n: pos)
     M.lemma_mod_plus (y2 - 1) 1 n;
     cross x2 y2 v dd n;
     M.lemma_mod_mul_distr_l (y2 + n - x2) v n;
+    M.distributivity_add_left (y2 - x2) n v;
+    M.swap_mul n v;
     assert ((y2 + n - x2) * v == (y2 - x2) * v + v * n);
     M.lemma_mod_plus ((y2 - x2) * v) v n;
     M.lemma_mod_mul_distr_r dd (x2 * y2) n;

@@ -124,10 +124,13 @@ let eval_win2 (s: Seq.seq nat) (j: nat { j <= Seq.length s }) (off: nat) (w: nat
           (ensures win (eval s) (rad * j + off) w ==
                    (vat s j / pow2 off + pow2 (rad - off) * vat s (j + 1)) % pow2 w)
   = eval_win s j off w;
-    Math.pow2_plus w (2 * rad - off - w);
-    Math.paren_mul_right (pow2 w) (pow2 (2 * rad - off - w)) (vat s (j + 2));
+    let k = 2 * rad - off - w in
+    Math.pow2_plus w k;
+    assert (pow2 (2 * rad - off) == pow2 w * pow2 k);
+    Math.paren_mul_right (pow2 w) (pow2 k) (vat s (j + 2));
+    Math.swap_mul (pow2 w) (pow2 k * vat s (j + 2));
     Math.lemma_mod_plus (vat s j / pow2 off + pow2 (rad - off) * vat s (j + 1))
-                        (pow2 (2 * rad - off - w) * vat s (j + 2)) (pow2 w)
+                        (pow2 k * vat s (j + 2)) (pow2 w)
 
 (** The last step of [eval_windows], in a small context. *)
 private let eval_windows_head (v: nat) (s: Seq.seq nat)

@@ -329,6 +329,8 @@ let sk_decode_encode (p: params) (rho key: Seq.lseq S8.t 32) (tr: Seq.lseq S8.t 
   = assert_norm (pow2 12 == 4096);
     sk_layout p;
     let e = eta_bits p in
+    Math.nat_times_nat_is_nat p.l (32 * e);
+    Math.nat_times_nat_is_nat p.k (32 * e);
     let s1b = vec_bit_pack p.eta e p.l s1 in
     let s2b = vec_bit_pack p.eta e p.k s2 in
     let t0b = vec_bit_pack (pow2 12) 13 p.k t0 in
