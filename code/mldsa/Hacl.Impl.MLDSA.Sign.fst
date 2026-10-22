@@ -19,11 +19,23 @@
     [mu].
 
     Constant time.  The private key and the mask [y] are secret.  Each
-    attempt declassifies exactly its four rejection verdicts, as FIPS 204
-    section 3.6.3 and the reference implementation do: whether an attempt
-    is rejected, and which test rejected it, depends only on values that
-    the accepted signature, or the public key, does not reveal anything
-    more about.  The hint is computed under a secret mask and only its
+    attempt declassifies its four rejection verdicts (one bit each: the
+    norm checks never reveal which coefficient failed) and, through
+    {!Hacl.Impl.MLDSA.Sample.sample_in_ball_impl}, its challenge, also when
+    the attempt is then rejected.  FIPS 204 does not address this (its
+    section 3.6.3 only requires intermediates to be destroyed); the
+    argument is section 5.5 of the round-3 Dilithium specification, which
+    the reference implementation and mldsa-native follow and which permits
+    more than this (which polynomial, even which coefficient, failed).  For
+    the [z] test it is exact: [y] is uniform on 2 gamma1 values and
+    [|| c s1 || <= beta], so, given [c], the verdict is independent of
+    [s1]; the [r0] test relies on [LowBits(w)] being close to uniform, as
+    the scheme's own proof does; the [c t0] and hint tests involve only
+    [t0], which the security analysis treats as public.  What does break
+    the key is the rejected challenge together with the rejected response
+    [z] (ePrint 2025/214, from power traces of the NTT); [z] is computed
+    here without secret-dependent branches or addresses and never
+    declassified.  The hint is computed under a secret mask and only its
     population count is declassified, for the last test; once that test
     passes the hint is part of the signature. *)
 module Hacl.Impl.MLDSA.Sign

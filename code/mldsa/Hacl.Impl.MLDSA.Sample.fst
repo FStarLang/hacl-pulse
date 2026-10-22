@@ -31,8 +31,11 @@
     - for [RejBoundedPoly] only the one-bit accept/reject outcome of each
       nibble is declassified; the coefficient itself is computed without a
       branch;
-    - for [SampleInBall] the challenge is public once the signature is,
-      so the positions and the sign bits are declassified. *)
+    - for [SampleInBall] the positions and the sign bits are declassified.
+      The challenge is public once the signature is, but signing also
+      samples the challenges of attempts it then rejects, which no
+      signature reveals; that they leak is safe for the reasons given in
+      {!Hacl.Impl.MLDSA.Sign}, as in the reference implementation. *)
 module Hacl.Impl.MLDSA.Sample
 
 #lang-pulse
