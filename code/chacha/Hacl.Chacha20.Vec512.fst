@@ -898,7 +898,7 @@ let chunk_ctr (ctr0: U32.t) (len: nat) (b: nat)
     1024-byte chunks, and say how long it was.  [st] holds the initial
     state; its counter word is not read. *)
 [@@CPrologue "__attribute__((target(\"avx512f\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx512f\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx512f\")))"]
 fn encrypt_blocks16 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                     (st: A.array S32.t) (ctr0: U32.t)
                     (st0: G.erased state)

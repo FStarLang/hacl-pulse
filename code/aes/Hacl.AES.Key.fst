@@ -1179,7 +1179,7 @@ let ks_round_vec (k t: Vec.t)
     r
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))"]
 inline_for_extraction
 fn ks_block_ni ([@@@FStar.Attributes.monomorphize] p: params)
                (w: A.array S8.t) (b: SZ.t) (rc: S8.t)
@@ -1258,7 +1258,7 @@ ensures exists* (vw1: Seq.seq S8.t). A.pts_to w vw1 ** pure (
     carried in a register exactly as the scalar loop carries it. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))"]
 fn ks_loop_ni ([@@@FStar.Attributes.monomorphize] p: params)
               (w: A.array S8.t)
               (#key: erased (Seq.lseq elem (keylen p.pv)))

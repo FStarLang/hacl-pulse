@@ -1070,7 +1070,7 @@ ensures exists* (ve': Seq.seq S64.t) (vb': Seq.seq S64.t).
     four lanes at a time, and say how many blocks that was.  [d] is
     scratch. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx2\")))"]
 fn absorb4 (h: A.array S64.t) (r: A.array S64.t) (d: A.array S64.t)
            (msg: A.array S8.t) (n: SZ.t)
            (#vh: erased (Seq.seq S64.t)) (#vr: erased (Seq.seq S64.t))

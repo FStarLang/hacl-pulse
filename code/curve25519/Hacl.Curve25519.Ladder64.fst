@@ -240,7 +240,7 @@ let ladder_exit (x1: C.elem) (k: Seq.lseq S8.t 32) (vi: SZ.t) (a b c d: C.elem)
   = ()
 
 [@@ CPrologue "__attribute__((target(\"bmi2\")))";
-   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))" ""]
+   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))"]
 fn ladder (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
            (x1: A.array S64.t)
           (ks: A.array S8.t)

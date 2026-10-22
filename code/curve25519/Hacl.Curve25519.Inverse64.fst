@@ -81,7 +81,7 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t).
 
 (** [a := a^(2^n)], by [n] squarings. *)
 [@@ CPrologue "__attribute__((target(\"bmi2\")))";
-   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))" ""]
+   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))"]
 fn fpow2_ip (a c1 c2: A.array S64.t) (n: SZ.t)
             (#va: erased (Seq.seq S64.t))
             (#vc1: erased (Seq.seq S64.t)) (#vc2: erased (Seq.seq S64.t))

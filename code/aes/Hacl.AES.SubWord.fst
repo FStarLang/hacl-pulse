@@ -83,7 +83,7 @@ let subword_index (a: Vec.t) (i: nat { i < 4 })
     left there, which is why the postcondition says nothing about them. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))"]
 fn subword_ni (s: A.array S8.t) (x0 x1 x2 x3: S8.t)
               (#vs: erased (Seq.seq S8.t))
 requires A.pts_to s vs ** pure (Seq.length vs == blocklen)

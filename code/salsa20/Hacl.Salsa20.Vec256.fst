@@ -751,7 +751,7 @@ let chunk_ctr (ctr0: U32.t) (len: nat) (b: nat)
     where it stopped.  [st] holds the initial state; its counter word is not
     read. *)
 [@@CPrologue "__attribute__((target(\"avx2\")))";
-  custard_c_closure_prologue "__attribute__((target(\"avx2\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"avx2\")))"]
 fn encrypt_blocks8 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                    (st: A.array S32.t) (ctr0: U32.t)
                    (st0: G.erased state) (b0: SZ.t)

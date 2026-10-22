@@ -41,7 +41,7 @@
     Exactly as for [Hacl.Vec128]: [supported ()] is the only function that
     may be called from ordinary code, and everything else must be reached
     from a function carrying [CPrologue avx2_target] and
-    [custard_c_closure_prologue avx2_target ""].
+    [custard_c_closure_prologue avx2_target].
 
     {2 The value of a vector}
 

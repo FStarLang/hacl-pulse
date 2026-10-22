@@ -49,7 +49,7 @@
     to be reached from a function marked
 
     {[
-      [@@CPrologue vec_target; custard_c_closure_prologue vec_target ""]
+      [@@CPrologue vec_target; custard_c_closure_prologue vec_target]
     ]}
 
     which puts [__attribute__((target("aes,pclmul,ssse3,sse4.1")))] on that

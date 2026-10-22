@@ -444,7 +444,7 @@ ensures A.pts_to kt #pk vk ** A.pts_to wsb vw **
 #push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
 
 [@@CPrologue "__attribute__((target(\"ssse3,sse4.1,sha\")))";
-  custard_c_closure_prologue "__attribute__((target(\"ssse3,sse4.1,sha\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"ssse3,sse4.1,sha\")))"]
 fn update_block_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
                    (kt: A.array S32.t) (wsb: A.array S32.t) (st: A.array S32.t)
                    (block: A.array S8.t) (off: SZ.t)
