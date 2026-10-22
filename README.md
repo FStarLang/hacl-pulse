@@ -68,6 +68,11 @@ You also need GNU make, a C11 compiler (gcc or clang) and Perl.
 | `make CC=clang` | build with clang instead of gcc |
 | `make DIST_ONLY=1 test` | build and test an existing `dist/` without F\* |
 
+Extraction also writes the Custard unit interface `obj/build/Hacl.cui`. A
+downstream Custard project can extract against it with
+`--custard_link <path>/obj/build/Hacl.cui` and
+`--custard_monomorphize_types true`, then link with `dist/Hacl.c`.
+
 Verification takes about half an hour on 24 cores, and most of that is the
 ML-KEM NTT. The C is compiled with `-std=c11 -O3 -Wall -Wextra -Werror`.
 
