@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -125,3 +126,21 @@ jobs:
           sudo apt-get install -y -q gcc-aarch64-linux-gnu qemu-user
       - name: Cross-compile and test
         run: make DIST_ONLY=1 cross
+
+  # The one check for branch protection and the merge queue to require: it
+  # passes only if every job above succeeded or was skipped (arm64 is skipped
+  # while the repository is private).
+  ci:
+    name: CI
+    if: always()
+    needs: [verify, clang, arm64, cross]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success|skipped) ;; *) exit 1 ;; esac
+          done
