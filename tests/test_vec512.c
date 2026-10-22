@@ -18,6 +18,8 @@
 
 #include "Hacl_Vec512.h"
 
+#if defined(__x86_64__)
+
 static int failures = 0;
 
 static uint64_t prng = 0x9e3779b97f4a7c15ULL;
@@ -51,7 +53,6 @@ static void report(const char *name, bool ok) {
   }
 }
 
-#if defined(__x86_64__) || defined(__i386__)
 
 #define AVX512 __attribute__((target("avx512f")))
 
@@ -196,16 +197,13 @@ AVX512 static void run(int rounds) {
   }
 }
 
-#endif
 
 int main(void) {
   if (!Hacl_Vec512_supported()) {
     printf("  skip vec512: no AVX-512F on this machine\n");
     return 0;
   }
-#if defined(__x86_64__) || defined(__i386__)
   run(1000);
-#endif
   if (failures) {
     printf("%d vec512 check(s) failed\n", failures);
     return 1;
@@ -213,3 +211,12 @@ int main(void) {
   printf("all vec512 axioms agree with a scalar transcription\n");
   return 0;
 }
+
+#else
+
+int main(void) {
+  printf("  skip vec512: not x86-64\n");
+  return 0;
+}
+
+#endif

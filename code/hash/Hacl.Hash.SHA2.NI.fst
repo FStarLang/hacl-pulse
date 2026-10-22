@@ -444,7 +444,8 @@ ensures A.pts_to kt #pk vk ** A.pts_to wsb vw **
 #push-options "--z3rlimit 100 --fuel 0 --ifuel 1"
 
 [@@CPrologue "__attribute__((target(\"ssse3,sse4.1,sha\")))";
-  custard_c_closure_prologue "__attribute__((target(\"ssse3,sse4.1,sha\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"ssse3,sse4.1,sha\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn update_block_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
                    (kt: A.array S32.t) (wsb: A.array S32.t) (st: A.array S32.t)
                    (block: A.array S8.t) (off: SZ.t)
@@ -580,6 +581,8 @@ ensures exists* (vw: Seq.seq S32.t) (vst: Seq.lseq S32.t 8).
 
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn hash_impl_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t)
                 (kt: A.array S32.t) (ivt: A.array S32.t) (out: A.array S8.t)
                 (input: A.array S8.t) (len: SZ.t)
@@ -604,7 +607,7 @@ ensures exists* vout'.
   A.pts_to_len input;
   let nfull = SZ.div len 64sz;
   let rem = SZ.rem len 64sz;
-  let z0: S32.t = zero #S32.t;
+  let z0: S32.t = S32.zero;
 
   let mut starr = [| z0; 8sz |];
   Mem.track starr;
@@ -692,7 +695,7 @@ ensures exists* vout'.
   let len = SZ.add 64sz lin;
   let nfull = SZ.div lin 64sz;
   let rem = SZ.rem lin 64sz;
-  let z0: S32.t = zero #S32.t;
+  let z0: S32.t = S32.zero;
 
   let mut starr = [| z0; 8sz |];
   Mem.track starr;

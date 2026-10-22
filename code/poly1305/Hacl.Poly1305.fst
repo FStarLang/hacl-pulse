@@ -178,7 +178,23 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t) (ve': Seq.seq S64.t).
   A.pts_to_len h;
   A.pts_to_len msg;
   A.pts_to_len e;
-  let k = Hacl.Poly1305.Vec256.absorb_vec h r d msg n #vh #vr #vd #pm #vmsg #acc;
+  let mut kr = 0sz;
+  if (Hacl.X64.x86_64)
+  ensures exists* (k: SZ.t) (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
+    pts_to kr k ** A.pts_to h vh' ** A.pts_to r vr ** A.pts_to d vd' **
+    A.pts_to e ve ** A.pts_to msg #pm vmsg **
+    pure (Seq.length vh' == 5 /\ Seq.length vd' == 5 /\ bounded vh' 27 /\
+          SZ.v k <= SZ.v n /\
+          feval vh' % prime == Spec.blocks_acc vmsg 0 (SZ.v k) (feval vr) (reveal acc))
+  {
+    let k = Hacl.Poly1305.Vec256.absorb_vec h r d msg n #vh #vr #vd #pm #vmsg #acc;
+    kr := k;
+  } else {
+    A.pts_to_len d;
+    repeati_g_zero (Spec.bstep vmsg 0 (feval vr)) (reveal acc);
+    assert (pure (Spec.blocks_acc vmsg 0 0 (feval vr) (reveal acc) == reveal acc));
+  };
+  let k = !kr;
   let mut i = k;
   while (let vi = !i; SZ.lt vi n)
   invariant exists* (vi: SZ.t) (vh1: Seq.seq S64.t) (vd1: Seq.seq S64.t)

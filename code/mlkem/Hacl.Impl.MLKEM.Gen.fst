@@ -218,7 +218,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v ** A.pts_to src vs **
 
 (** Matrix entries [c .. c + 4), sampled together.  Uses AVX2: the caller
     checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn gen_entries4 (dst: A.array zqt) (rho: A.array S8.t) (tr: bool) (k: SZ.t) (vc: SZ.t)
                 (#vd: erased (Seq.seq zqt)) (#p: perm) (#vr: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to rho #p vr **
@@ -334,11 +335,32 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #p vr **
     with v0. assert (A.pts_to dst v0);
     assert (pure (gen_prefix (SZ.v k) vr tr v0 (SZ.v vc)));
     SZ.fits_u32_implies_fits (SZ.v vc + 4);
-    if (SZ.lte (SZ.add vc 4sz) kk && V.supported ()) {
-      gen_entries4 dst rho tr k vc;
-      with v1. assert (A.pts_to dst v1);
-      gen_prefix_len (SZ.v k) vr tr v1 (SZ.v vc + 4);
-      c := SZ.add vc 4sz;
+    if (Hacl.X64.x86_64) {
+      if (SZ.lte (SZ.add vc 4sz) kk && V.supported ()) {
+        gen_entries4 dst rho tr k vc;
+        with v1. assert (A.pts_to dst v1);
+        gen_prefix_len (SZ.v k) vr tr v1 (SZ.v vc + 4);
+        c := SZ.add vc 4sz;
+      } else {
+        Math.lemma_mult_le_right n (SZ.v vc + 1) (SZ.v k * SZ.v k);
+        Math.distributivity_add_left (SZ.v vc) 1 n;
+        Math.lemma_mult_le_right (SZ.v k) (SZ.v k) 4;
+        Math.lemma_mult_le_left 4 (SZ.v k) 4;
+        Math.lemma_mult_le_right n (SZ.v k * SZ.v k) 16;
+        SZ.fits_u32_implies_fits (SZ.v vc * n + n);
+        let lo = SZ.mul vc 256sz;
+        let hi = SZ.add lo 256sz;
+        set_seed sd tr k vc vr;
+        with vsd. assert (A.pts_to sd vsd);
+        let blk = Sub.sub dst lo hi;
+        sample_ntt_impl blk sd 34sz;
+        with b1. assert (A.pts_to blk b1);
+        Sub.unsub dst (SZ.v lo) (SZ.v hi) blk;
+        with w1. assert (A.pts_to dst w1);
+        gen_prefix_len (SZ.v k) vr tr v0 (SZ.v vc);
+        gen_prefix_step (SZ.v k) vr tr (SZ.v vc) v0 w1 b1 vsd;
+        c := SZ.add vc 1sz;
+      }
     } else {
       Math.lemma_mult_le_right n (SZ.v vc + 1) (SZ.v k * SZ.v k);
       Math.distributivity_add_left (SZ.v vc) 1 n;
@@ -431,6 +453,12 @@ let lane_byte (start: U8.t) (j: nat { j < 4 }) (k: nat)
           (ensures j < k ==> U8.v (U8.add_mod start (U8.uint_to_t j)) == U8.v start + j)
   = if j < k then Math.small_mod (U8.v start + j) 256
 
+let noise_entry_skip (i k: nat)
+  : Lemma (requires ~(i < k))
+          (ensures (if i + 1 < k then i + 1 else k) == k /\
+                   (if i < k then i else k) == k)
+  = ()
+
 (** Entry [i] of the noise vector from a PRF output [p] already computed,
     when [i < k]; nothing otherwise.  The four calls in {!noise_vec4_impl}
     each extend the prefix of [dst] that is known to be right by one entry,
@@ -480,6 +508,7 @@ ensures exists* (w: Seq.seq zqt). A.pts_to dst w ** A.pts_to p vp **
     assert (pure (as_poly b1 == sample_poly_cbd (SZ.v eta) vs (U8.uint_to_t (U8.v start + SZ.v i))));
     noise_entry_step (SZ.v k) (SZ.v eta) vs (U8.v start) (SZ.v i) vd w1 b1;
   } else {
+    noise_entry_skip (SZ.v i) (SZ.v k);
     ()
   }
 }
@@ -487,6 +516,8 @@ ensures exists* (w: Seq.seq zqt). A.pts_to dst w ** A.pts_to p vp **
 (** {!noise_vec_impl} over {!Sampler.prf4_impl}: the [k <= 4] PRFs are
     one four-way call, whatever lanes [k] leaves over computing a PRF
     nobody reads. *)
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn noise_vec4_impl (dst: A.array zqt) (s: A.array S8.t) (start: U8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t) ([@@@FStar.Attributes.monomorphize] k: SZ.t)
                    (#vd: erased (Seq.seq zqt)) (#p: perm) (#vs: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to s #p vs **
@@ -546,7 +577,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to s #p vs **
         Seq.length v == SZ.v k * n /\
         as_zqs v == noise_vec (SZ.v k) (SZ.v eta) vs (U8.v start))
 {
-  if (V.supported ()) { noise_vec4_impl dst s start eta k } else { noise_vec_impl_ dst s start eta k }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { noise_vec4_impl dst s start eta k } else { noise_vec_impl_ dst s start eta k }
+  } else { noise_vec_impl_ dst s start eta k }
 }
 
 #pop-options

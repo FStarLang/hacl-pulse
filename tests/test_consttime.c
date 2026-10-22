@@ -7,7 +7,7 @@
  * compiler is free to turn a masked select back into a branch.  It has
  * done exactly that once already -- see test_launder.c and the section
  * "The compiler is allowed to undo a constant-time algorithm" in
- * README.md -- so the question has to be asked of each one, empirically,
+ * design/notes.md -- so the question has to be asked of each one, empirically,
  * against the compiler that is actually being used.
  *
  * The method is the same throughout: run the shipped function once per

@@ -1663,7 +1663,8 @@ ensures exists* v. A.pts_to f v **
 (** {2 The transforms} *)
 
 (** [f <- NTT(f)], in place.  Uses AVX2. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ntt_inplace (f: A.array zqt) (#vf: erased (Seq.seq zqt))
 requires A.pts_to f vf ** pure (Seq.length vf == n)
 ensures exists* v. A.pts_to f v **
@@ -1690,7 +1691,8 @@ ensures exists* v. A.pts_to f v **
 }
 
 (** [f <- NTT^-1(f)], in place.  Uses AVX2. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn intt_inplace (f: A.array zqt) (#vf: erased (Seq.seq zqt))
 requires A.pts_to f vf ** pure (Seq.length vf == n)
 ensures exists* v. A.pts_to f v **
@@ -1717,7 +1719,8 @@ ensures exists* v. A.pts_to f v **
 }
 
 (** [dst <- a * b], coefficient by coefficient.  Uses AVX2. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn multiply (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
          pure (Seq.length vd == n /\ Seq.length va == n /\ Seq.length vb == n)

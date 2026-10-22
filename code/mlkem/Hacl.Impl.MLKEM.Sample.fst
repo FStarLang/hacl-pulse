@@ -559,7 +559,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
 
 (** The same, extracted a second time with [target("avx2")] so that the C
     compiler can vectorise it with wider vectors; chosen at run time. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn cbd_impl_avx2 (dst: A.array zqt) (b: A.array S8.t) ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
             (#vd: erased (Seq.seq zqt)) (#p: perm) (#vb: erased (Seq.seq S8.t))
 requires A.pts_to dst vd ** A.pts_to b #p vb **
@@ -583,7 +584,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to b #p vb **
         Seq.length vb == 64 * SZ.v eta /\
         as_poly v == sample_cbd (SZ.v eta) vb)
 {
-  if (V.supported ()) { cbd_impl_avx2 dst b eta } else { cbd_impl_ dst b eta }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { cbd_impl_avx2 dst b eta } else { cbd_impl_ dst b eta }
+  } else { cbd_impl_ dst b eta }
 }
 
 (** {2 The pseudorandom function}

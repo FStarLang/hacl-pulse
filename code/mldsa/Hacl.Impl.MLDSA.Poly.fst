@@ -34,7 +34,9 @@ requires A.pts_to f vf ** pure (Seq.length vf == n)
 ensures exists* v. A.pts_to f v **
         pure (Seq.length vf == n /\ Seq.length v == n /\ as_poly v == ntt (as_poly vf))
 {
-  if (V.supported ()) { NV.ntt_inplace f } else { N.ntt_inplace f }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { NV.ntt_inplace f } else { N.ntt_inplace f }
+  } else { N.ntt_inplace f }
 }
 
 fn intt_inplace (f: A.array zqt) (#vf: erased (Seq.seq zqt))
@@ -42,7 +44,9 @@ requires A.pts_to f vf ** pure (Seq.length vf == n)
 ensures exists* v. A.pts_to f v **
         pure (Seq.length vf == n /\ Seq.length v == n /\ as_poly v == intt (as_poly vf))
 {
-  if (V.supported ()) { NV.intt_inplace f } else { N.intt_inplace f }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { NV.intt_inplace f } else { N.intt_inplace f }
+  } else { N.intt_inplace f }
 }
 
 fn multiply (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
@@ -52,5 +56,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
         pure (Seq.length v == n /\ Seq.length va == n /\ Seq.length vb == n /\
               as_poly v == poly_mul (as_poly va) (as_poly vb))
 {
-  if (V.supported ()) { NV.multiply dst a b } else { N.multiply dst a b }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { NV.multiply dst a b } else { N.multiply dst a b }
+  } else { N.multiply dst a b }
 }

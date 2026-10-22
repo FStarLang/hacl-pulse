@@ -71,10 +71,9 @@ ensures exists* vout'.
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
   sha2_224_facts ();
-  let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
-  if ni
+  if (Hacl.X64.x86_64)
   ensures exists* (vout': Seq.seq S8.t).
     A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
     A.pts_to out vout' ** A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
@@ -82,7 +81,12 @@ ensures exists* vout'.
           block_len #S32.t + Seq.length vmsg < max_input #S32.t /\
           vout' == hmac sha2_224 vkey vmsg)
   {
-    hmac_impl_ni sha2_224 kt ivt out key key_len msg msg_len;
+    if (Vec.sha_supported ())
+    {
+      hmac_impl_ni sha2_224 kt ivt out key key_len msg msg_len;
+    } else {
+      hmac_impl sha2_224 kt ivt out key key_len msg msg_len;
+    }
   } else {
     hmac_impl sha2_224 kt ivt out key key_len msg msg_len;
   };
@@ -113,10 +117,9 @@ ensures exists* vout'.
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
   sha2_256_facts ();
-  let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
-  if ni
+  if (Hacl.X64.x86_64)
   ensures exists* (vout': Seq.seq S8.t).
     A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
     A.pts_to out vout' ** A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
@@ -124,7 +127,12 @@ ensures exists* vout'.
           block_len #S32.t + Seq.length vmsg < max_input #S32.t /\
           vout' == hmac sha2_256 vkey vmsg)
   {
-    hmac_impl_ni sha2_256 kt ivt out key key_len msg msg_len;
+    if (Vec.sha_supported ())
+    {
+      hmac_impl_ni sha2_256 kt ivt out key key_len msg msg_len;
+    } else {
+      hmac_impl sha2_256 kt ivt out key key_len msg msg_len;
+    }
   } else {
     hmac_impl sha2_256 kt ivt out key key_len msg msg_len;
   };

@@ -64,7 +64,8 @@ module Mem = Hacl.Mem
 
 #push-options "--z3rlimit 200"
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn add_and_double (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
                    (x1: A.array S64.t)
                   (#vx2: erased (Seq.seq S64.t)) (#vz2: erased (Seq.seq S64.t))
@@ -133,7 +134,8 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
 
 #push-options "--fuel 1 --ifuel 1 --z3rlimit 300"
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ladder_one (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
                (x1: A.array S64.t)
               (ks: A.array S8.t) (n: SZ.t { SZ.v n < 256 })
@@ -240,7 +242,8 @@ let ladder_exit (x1: C.elem) (k: Seq.lseq S8.t 32) (vi: SZ.t) (a b c d: C.elem)
   = ()
 
 [@@ CPrologue "__attribute__((target(\"bmi2\")))";
-   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))" ""]
+   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))";
+   custard_c_closure_guard "defined(__x86_64__)"]
 fn ladder (x2 z2 x3 z3 t0 t1 t2 t3 t4 t5: A.array S64.t)
            (x1: A.array S64.t)
           (ks: A.array S8.t)
@@ -331,7 +334,8 @@ ensures exists* (wx2: Seq.seq S64.t) (wz2: Seq.seq S64.t)
 
 (** {2 Clamping} *)
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn clamp (ks: A.array S8.t) (k: A.array S8.t)
          (#vs: erased (Seq.seq S8.t)) (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))
 requires A.pts_to ks vs ** A.pts_to k #pk vk **
@@ -355,7 +359,8 @@ ensures exists* (vs': Seq.seq S8.t).
 
 #push-options "--z3rlimit 300"
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn scalarmult64 (out k u: A.array S8.t)
                 (#vout: erased (Seq.seq S8.t))
                 (#pk: perm) (#vk: erased (Seq.lseq S8.t 32))

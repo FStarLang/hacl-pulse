@@ -62,6 +62,39 @@ ensures exists* vout'.
   Hacl.HMAC.hmac_sha224 out salt salt_len ikm ikm_len;
 }
 
+(** [expand_impl] over the SHA instructions.  A function of its own so
+    that it can carry the x86-64 guard, which then covers every
+    [blocks_ni] instance it reaches. *)
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
+fn expand_ni ([@@@FStar.Attributes.monomorphize] p: params S32.t { Spec.SHANI.is_sha256 p })
+             (kt: A.array S32.t) (ivt: A.array S32.t) (out: A.array S8.t) (len: SZ.t)
+             (prk: A.array S8.t) (plen: SZ.t) (info: A.array S8.t) (ilen: SZ.t)
+             (#pk: perm) (#vk: erased (Seq.seq S32.t))
+             (#pi: perm) (#vi: erased (Seq.seq S32.t))
+             (#vout: erased (Seq.seq S8.t))
+             (#pp: perm) (#vprk: erased (Seq.seq S8.t))
+             (#pf: perm) (#vinfo: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+         pure (reveal vk == (reveal p.k <: Seq.seq S32.t) /\ reveal vi == (reveal p.iv <: Seq.seq S32.t) /\
+               Seq.length vprk < pow2 61 /\ prk_ok p vprk /\ info_ok p vinfo /\
+               block_len #S32.t + (hash_bytes p) + Seq.length vinfo + 1 < pow2 61 /\
+               SZ.fits (block_len #S32.t + (hash_bytes p) + Seq.length vinfo + 1) /\
+               Seq.length vout <= 255 * (hash_bytes p) /\
+               SZ.v len == Seq.length vout /\ SZ.v ilen == Seq.length vinfo)
+         ** pure (SZ.v plen == Seq.length vprk)
+ensures exists* vout'.
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+  pure (prk_ok p vprk /\ info_ok p vinfo /\
+        Seq.length vout' == Seq.length vout /\
+        Seq.length vout' <= 255 * (hash_bytes p) /\
+        vout' == expand p vprk vinfo (Seq.length vout'))
+{
+  expand_impl p (Hacl.Hash.SHA2.NI.blocks_ni p) kt ivt out len prk plen info ilen
+}
+
 (** HKDF-Expand with sha224.  [out] may be up to 255*28 = 7140 bytes. *)
 fn expand_sha224 (out: A.array S8.t) (out_len: SZ.t) (prk: A.array S8.t) (prk_len: SZ.t) (info: A.array S8.t) (info_len: SZ.t)
     (#vout: erased (Seq.seq S8.t)) (#pp: perm) (#vprk: erased (Seq.seq S8.t))
@@ -88,10 +121,9 @@ ensures exists* vout'.
   let ivt = table iv224_arr 8sz;
   max_input_bound ();
   sha2_224_facts ();
-  let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
-  if ni
+  if (Hacl.X64.x86_64)
   ensures exists* (vout': Seq.seq S8.t).
     A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
     A.pts_to out vout' ** A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
@@ -100,7 +132,12 @@ ensures exists* vout'.
           Seq.length vout' <= 255 * (hash_bytes sha2_224) /\
           vout' == expand sha2_224 vprk vinfo (Seq.length vout'))
   {
-    expand_impl sha2_224 (Hacl.Hash.SHA2.NI.blocks_ni sha2_224) kt ivt out out_len prk prk_len info info_len;
+    if (Vec.sha_supported ())
+    {
+      expand_ni sha2_224 kt ivt out out_len prk prk_len info info_len;
+    } else {
+      expand_impl sha2_224 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_224) kt ivt out out_len prk prk_len info info_len;
+    }
   } else {
     expand_impl sha2_224 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_224) kt ivt out out_len prk prk_len info info_len;
   };
@@ -153,10 +190,9 @@ ensures exists* vout'.
   let ivt = table iv256_arr 8sz;
   max_input_bound ();
   sha2_256_facts ();
-  let ni = Vec.sha_supported ();
   with pk vkt. assert (A.pts_to kt #pk vkt);
   with pi vivt. assert (A.pts_to ivt #pi vivt);
-  if ni
+  if (Hacl.X64.x86_64)
   ensures exists* (vout': Seq.seq S8.t).
     A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
     A.pts_to out vout' ** A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
@@ -165,7 +201,12 @@ ensures exists* vout'.
           Seq.length vout' <= 255 * (hash_bytes sha2_256) /\
           vout' == expand sha2_256 vprk vinfo (Seq.length vout'))
   {
-    expand_impl sha2_256 (Hacl.Hash.SHA2.NI.blocks_ni sha2_256) kt ivt out out_len prk prk_len info info_len;
+    if (Vec.sha_supported ())
+    {
+      expand_ni sha2_256 kt ivt out out_len prk prk_len info info_len;
+    } else {
+      expand_impl sha2_256 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_256) kt ivt out out_len prk prk_len info info_len;
+    }
   } else {
     expand_impl sha2_256 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_256) kt ivt out out_len prk prk_len info info_len;
   };

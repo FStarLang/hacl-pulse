@@ -182,7 +182,9 @@ let lane_done (msg: Seq.seq S8.t) (blen: nat) (q: nat)
   = reveal_opaque (`%lane_ok) (lane_ok msg blen blen q vst w);
     Seq.lemma_eq_intro (Seq.slice w 0 blen) (SHA3.shake256 msg blen)
 
-(** Squeezes bytes [136 q, 136 q + cnt) of a lane. *)
+(** Squeezes bytes [136 q, 136 q + cnt) of a lane.  Reached only from the
+    x86-64 [shake4], so guarded like it. *)
+[@@custard_c_closure_guard "defined(__x86_64__)"]
 fn sq_lane (out: A.array S8.t) (q: SZ.t) (cnt: SZ.t) (st: A.array S64.t)
            (msg: erased (Seq.seq S8.t)) (blen: erased nat)
            (#vst: erased (Seq.seq S64.t)) (#w: erased (Seq.seq S8.t))
@@ -213,7 +215,8 @@ ensures exists* (w': Seq.seq S8.t). A.pts_to out w' ** A.pts_to st vst **
     {!Hacl.Impl.MLKEM.PRF4.prf_absorb_pre}: inlined as a constant, the
     whole-block loop of the absorb becomes [while (i < 0)], which gcc's
     [-Wtype-limits] rejects. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn seed_absorb_pre (st: A.array S64.t) (b: A.array S64.t) (rc_tbl: A.array S64.t)
                    (rho: A.array S8.t) (x: SZ.t) (mlen: SZ.t)
                    (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
@@ -262,7 +265,8 @@ let lane_msg (vr: Seq.seq S8.t) (x: SZ.t { SZ.v x < pow2 16 }) : GTot (Seq.seq S
 
 (** [o_j[0, blen) <- SHAKE256(rho || u16(x_j), blen)] for [j < 4], for
     the [blen] of ExpandMask.  The caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn shake4 (o0 o1 o2 o3: A.array S8.t) (rho: A.array S8.t)
           (x0 x1 x2 x3: SZ.t) (blen: SZ.t)
           (#vo0 #vo1 #vo2 #vo3: erased (Seq.seq S8.t))
@@ -557,7 +561,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to o vo **
 
 (** Polynomials [s .. s + 4) of the mask, sampled together.  Uses AVX2:
     the caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn mask4 (p: erased params) (y: A.array zqt) (rho: A.array S8.t)
          (g1bits: SZ.t) (kappa: SZ.t) (s: SZ.t)
          (a: erased (x: nat { x < max_attempts }))
@@ -640,15 +645,20 @@ ensures exists* (v: Seq.seq zqt). A.pts_to y v ** A.pts_to rho #pr vr **
   decreases (SZ.v l - SZ.v (!c))
   {
     let vc = !c;
-    if (SZ.lte (SZ.add vc 2sz) l && SZ.gte l 4sz && V.supported ()) {
-      let s = (if SZ.lte (SZ.add vc 4sz) l then vc else SZ.sub l 4sz);
-      with v. assert (A.pts_to y v);
-      Math.lemma_mult_le_right n (SZ.v s) (SZ.v vc);
-      prefix_mono v (expand_mask p vr a) (SZ.v vc * n) (SZ.v s * n);
-      mask4 p y rho g1bits kappa s a;
-      with v'. assert (A.pts_to y v');
-      assert (pure (SZ.v s + 4 >= SZ.v vc + 1));
-      c := SZ.add s 4sz;
+    if (Hacl.X64.x86_64) {
+      if (SZ.lte (SZ.add vc 2sz) l && SZ.gte l 4sz && V.supported ()) {
+        let s = (if SZ.lte (SZ.add vc 4sz) l then vc else SZ.sub l 4sz);
+        with v. assert (A.pts_to y v);
+        Math.lemma_mult_le_right n (SZ.v s) (SZ.v vc);
+        prefix_mono v (expand_mask p vr a) (SZ.v vc * n) (SZ.v s * n);
+        mask4 p y rho g1bits kappa s a;
+        with v'. assert (A.pts_to y v');
+        assert (pure (SZ.v s + 4 >= SZ.v vc + 1));
+        c := SZ.add s 4sz;
+      } else {
+        mask_one p y rho g1bits kappa vc a;
+        c := SZ.add vc 1sz;
+      }
     } else {
       mask_one p y rho g1bits kappa vc a;
       c := SZ.add vc 1sz;

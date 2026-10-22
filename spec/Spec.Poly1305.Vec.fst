@@ -238,6 +238,13 @@ let horner_ring (s b0 b1 b2 b3 r: int)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+(** The last step of [four_steps], apart from the [sacc] facts that keep Z3
+    from finding it in place. *)
+let horner_ring_mod (a s b0 b1 b2 b3 r: int)
+  : Lemma (requires a == (((((s + b0) * r + b1) * r + b2) * r + b3) * r) % prime)
+          (ensures a == horner4 r (s + b0) b1 b2 b3 % prime)
+  = horner_ring s b0 b1 b2 b3 r
+
 let four_steps (msg: Seq.seq S8.t) (r acc: nat) (n: nat)
   : Lemma (requires 16 * n + 64 <= Seq.length msg)
           (ensures sacc msg r acc (n + 4) ==
@@ -248,14 +255,22 @@ let four_steps (msg: Seq.seq S8.t) (r acc: nat) (n: nat)
     let b1 = bv msg (n + 1) in
     let b2 = bv msg (n + 2) in
     let b3 = bv msg (n + 3) in
+    let x1 = (s + b0) * r in
+    let x2 = (x1 + b1) * r in
+    let x3 = (x2 + b2) * r in
+    let x4 = (x3 + b3) * r in
     one_step msg r acc n;
+    assert (sacc msg r acc (n + 1) == x1 % prime);
     one_step msg r acc (n + 1);
+    step_mod x1 b1 r;
+    assert (sacc msg r acc (n + 2) == x2 % prime);
     one_step msg r acc (n + 2);
+    step_mod x2 b2 r;
+    assert (sacc msg r acc (n + 3) == x3 % prime);
     one_step msg r acc (n + 3);
-    step_mod ((s + b0) * r) b1 r;
-    step_mod (((s + b0) * r + b1) * r) b2 r;
-    step_mod ((((s + b0) * r + b1) * r + b2) * r) b3 r;
-    horner_ring s b0 b1 b2 b3 r
+    step_mod x3 b3 r;
+    assert (sacc msg r acc (n + 4) == x4 % prime);
+    horner_ring_mod (sacc msg r acc (n + 4)) s b0 b1 b2 b3 r
 
 #pop-options
 

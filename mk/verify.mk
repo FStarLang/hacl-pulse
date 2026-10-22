@@ -10,7 +10,7 @@
 	$(Q)mkdir -p $(CACHE_DIR) $(BUILD_DIR)
 	$(Q)$(FSTAR) --dep full $(FSTAR_FILES) --output_deps_to $@
 
-ifeq ($(filter clean distclean,$(MAKECMDGOALS)),)
+ifeq ($(filter clean distclean,$(MAKECMDGOALS))$(DIST_ONLY),)
 include .depend
 endif
 

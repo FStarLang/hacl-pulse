@@ -37,6 +37,7 @@ CUSTARD_FLAGS += --custard_norm_budget 100000000
 # file, and the dependency graph of a target Custard invented is not in
 # .depend, so the library depends on every .checked file.  Re-extracting the
 # world when any module changes is cheap next to verifying it.
+ifeq ($(DIST_ONLY),)
 $(DIST_DIR)/Hacl.c: $(CACHE_DIR)/$(C_ROOT).fst.checked $(ALL_CHECKED_FILES)
 	$(call msg, "EXTRACT", "$(C_ROOT)")
 	$(Q)mkdir -p $(DIST_DIR)
@@ -46,6 +47,7 @@ $(DIST_DIR)/Hacl.c: $(CACHE_DIR)/$(C_ROOT).fst.checked $(ALL_CHECKED_FILES)
 # Custard writes the header from the same invocation that writes the source.
 $(DIST_DIR)/Hacl.h: $(DIST_DIR)/Hacl.c
 	@true
+endif
 
 $(BUILD_DIR)/Hacl.o: $(DIST_DIR)/Hacl.c
 	$(call msg, "CC", "Hacl")

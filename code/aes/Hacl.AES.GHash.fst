@@ -157,12 +157,10 @@ ensures exists* (va1: Seq.seq S8.t).
      per block, and the accumulator stays in a register across the lot.  What
      it leaves behind is the loop invariant below at [i = nblk], so the
      portable loop that follows simply finds nothing to do. *)
-  let rem0 = SZ.rem n 16sz;
-  let nblk = SZ.sub n rem0;
   Math.euclidean_division_definition (SZ.v n) blocklen;
   Math.multiple_division_lemma (G.nblocks (vals vd)) blocklen;
   nblocks_whole (vals vd);
-  if Vec.supported ()
+  if (Hacl.X64.x86_64)
   ensures exists* (vi: SZ.t) (va: Seq.seq S8.t).
     pts_to i vi ** A.pts_to acc va ** A.pts_to h vh ** A.pts_to data #pd vd **
     pure (SZ.v vi <= SZ.v n /\ SZ.v vi % blocklen == 0 /\
@@ -171,8 +169,15 @@ ensures exists* (va1: Seq.seq S8.t).
           vals va == G.ghash_from (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
                                   (whole (vals vd)) (SZ.v vi / blocklen))
   {
-    Hacl.AES.GF128.NI.ghash_loop_ni acc h data nblk;
-    i := nblk;
+    if Vec.supported ()
+    {
+      let rem0 = SZ.rem n 16sz;
+      let nblk = SZ.sub n rem0;
+      Hacl.AES.GF128.NI.ghash_loop_ni acc h data nblk;
+      i := nblk;
+    } else {
+      ()
+    }
   } else {
     ()
   };

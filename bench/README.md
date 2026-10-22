@@ -1,6 +1,7 @@
 # The benchmark harness
 
-Every performance number in the top-level `README.md` was produced by the
+Every performance number in `../design/notes.md` (and the
+summary in the top-level `README.md`) was produced by the
 scripts in this directory, and `REPORT.md` here is the running record of how
 each of them moved and why.
 
@@ -23,7 +24,7 @@ One benchmark body, `bench.c`, is compiled three times against two shims:
 | `best` | `shim_ref.h` with `-DBS_REF_BEST` | HACL\* at its best: EverCrypt's runtime dispatch onto Vale assembly, AVX2 and the SHA/AES instruction extensions |
 
 `best` is the column that matters. It is what a user actually gets from HACL\*
-today, so it is what the top-level README leads with. `ref` is kept as a
+today, so it is what the performance tables lead with. `ref` is kept as a
 secondary column because it isolates *compiled-code* quality from *instruction
 selection*: when hacl-pulse loses to `best` but beats `ref`, the gap is a
 backend we have not written yet rather than code we generated badly.
@@ -107,7 +108,7 @@ Output is one CSV per contender per offset per round, named
 | `d46.py` | the same, without the threshold — every row, for when you want the whole picture |
 | `gap.py DIR` | rank every benchmark by hacl-pulse / HACL\*-portable |
 | `gapbest.py DIR` | rank every benchmark by hacl-pulse / HACL\*-best. **This is the ranking that chooses what to work on next.** |
-| `mktable.py DIR` | regenerate the markdown performance table in the top-level `README.md`, so those numbers are never typed by hand |
+| `mktable.py DIR` | regenerate the markdown performance table in `design/notes.md`, so those numbers are never typed by hand |
 | `mkkem.py DIR` | the same for the ML-KEM table, which is absolute rather than relative because HACL\* has no ML-KEM to compare against |
 | `mkothers.py DIR [TOL]` | the other-libraries table, from an `others.sh` run; runs whose canary is more than `TOL` (default 0.02) above the best are dropped first |
 | `mkmldsa.py DIR [TOL]` | the ML-DSA table (44/65/87, every ML-DSA contender), from the same `others.sh` run, with the same filter |
@@ -118,7 +119,7 @@ result can be attributed to the right dispatch decision later.
 
 ## Other libraries
 
-`others.sh [rounds]` produces the second table in the top-level README:
+`others.sh [rounds]` produces the other-libraries table in `design/notes.md`:
 hacl-pulse against libraries other than HACL\*.  It is a separate harness
 because the contenders differ in what they offer and in how they are called,
 so it has its own driver, `others/others.c`, compiled once per library against
@@ -154,8 +155,8 @@ The first run fetches and builds each library at its pinned revision into
 `$OTHERS` (default `/tmp/others`, about 1 GB, mostly the AWS-LC and Firedancer trees) and needs
 cmake, ninja, Go (AWS-LC), autotools, clang and a Rust toolchain; later runs
 reuse it.  Three rounds take about forty minutes.  The rows, and why some
-cells are empty, are discussed under *Against other libraries* in the
-top-level README.
+cells are empty, are discussed under *Against other libraries* in
+`design/notes.md`.
 
 ## The probe tools
 

@@ -1,5 +1,9 @@
 # HACL\* / ValeCrypt / EverCrypt — design documentation
 
+_The design, proofs and performance of hacl-pulse itself are in
+[`notes.md`](notes.md). The rest of this directory is the inventory of
+HACL\* that hacl-pulse is measured against._
+
 This directory documents the design of the cryptographic library in this
 repository, with two goals:
 

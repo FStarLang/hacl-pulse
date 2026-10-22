@@ -1,4 +1,4 @@
-"""Print the README's ML-DSA table from an others.sh output dir.
+"""Print the design notes' ML-DSA table from an others.sh output dir.
 
 Usage: python3 mkmldsa.py <bench-dir> [canary tolerance, default 0.02]
 

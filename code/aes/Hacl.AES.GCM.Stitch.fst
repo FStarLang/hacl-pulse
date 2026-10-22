@@ -520,7 +520,8 @@ let assemble (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block) (h a0: G.blo
     a handful of hypotheses rather than everything the turn knows. *)
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn load_rk ([@@@FStar.Attributes.monomorphize] p: params)
            (w: A.array S8.t) (i: SZ.t)
@@ -545,7 +546,8 @@ ensures A.pts_to w vw ** pure (
 }
 
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn load16 (msg: A.array S8.t) (a: SZ.t) (#vm: erased (Seq.seq S8.t))
 requires A.pts_to msg vm ** pure (SZ.v a + 16 <= Seq.length vm /\ SZ.fits (Seq.length vm))
@@ -566,7 +568,8 @@ ensures A.pts_to msg vm ** pure (
 
 (** One [AESENC] round on all eight states. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn round8 ([@@@FStar.Attributes.monomorphize] p: params)
           (w: A.array S8.t) (i: SZ.t)
@@ -612,7 +615,8 @@ ensures exists* (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
 
 (** One Karatsuba triple, added into the three running sums. *)
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn gpart (rl rh rm: ref Vec.t) (x yb ym: Vec.t) (#l0 #h0 #m0: erased Vec.t)
 requires pts_to rl l0 ** pts_to rh h0 ** pts_to rm m0
@@ -633,7 +637,8 @@ ensures pts_to rl (Vec.vxor l0 (kq_ll x yb)) **
     the message. *)
 #push-options "--z3rlimit 400"
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn aes_fin ([@@@FStar.Attributes.monomorphize] p: params)
            (msg: A.array S8.t) (j: SZ.t) (w: A.array S8.t)
@@ -773,7 +778,8 @@ ensures exists* (vm': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
 
 #push-options "--z3rlimit 400"
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn stitch8 ([@@@FStar.Attributes.monomorphize] p: params)
            (msg: A.array S8.t) (j: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
@@ -939,7 +945,8 @@ let jblk_128 () : Lemma (jblk 128 == 4 + 4) = assert_norm (jblk 128 == 4 + 4)
 
 #push-options "--z3rlimit 400"
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
-  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))" ""]
+  custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ctr_ghash_ni ([@@@FStar.Attributes.monomorphize] p: params)
                 (msg: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
                 (ctr: A.array S8.t) (acc: A.array S8.t)
@@ -1082,6 +1089,8 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
     [Hacl.AES.GCM] wants between the associated data and the length block. *)
 
 #push-options "--z3rlimit 400"
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ctr_ghash ([@@@FStar.Attributes.monomorphize] p: params)
              (msg: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
              (ctr: A.array S8.t) (acc: A.array S8.t)

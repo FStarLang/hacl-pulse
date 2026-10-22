@@ -41,7 +41,8 @@ module Mem = Hacl.Mem
 
 
 (** [a := a * a]. *)
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fsqr_ip (a c1 c2: A.array S64.t)
            (#va: erased (Seq.seq S64.t))
            (#vc1: erased (Seq.seq S64.t)) (#vc2: erased (Seq.seq S64.t))
@@ -63,7 +64,8 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
 }
 
 (** [a := a * b]. *)
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn fmul_ip (a b c1: A.array S64.t)
            (#va: erased (Seq.seq S64.t))
            (#pb: perm) (#vb: erased (Seq.seq S64.t))
@@ -81,7 +83,8 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t).
 
 (** [a := a^(2^n)], by [n] squarings. *)
 [@@ CPrologue "__attribute__((target(\"bmi2\")))";
-   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))" ""]
+   custard_c_closure_prologue "__attribute__((target(\"bmi2\")))";
+   custard_c_closure_guard "defined(__x86_64__)"]
 fn fpow2_ip (a c1 c2: A.array S64.t) (n: SZ.t)
             (#va: erased (Seq.seq S64.t))
             (#vc1: erased (Seq.seq S64.t)) (#vc2: erased (Seq.seq S64.t))
@@ -132,7 +135,8 @@ ensures exists* (va': Seq.seq S64.t) (vc1': Seq.seq S64.t)
 
 #push-options "--z3rlimit 200"
 
-[@@ CPrologue "__attribute__((target(\"bmi2\")))"]
+[@@ CPrologue "__attribute__((target(\"bmi2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn finv (out a: A.array S64.t)
         (#vout: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))

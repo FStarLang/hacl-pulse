@@ -20,9 +20,10 @@
  *
  * `adc` and `sbb` are in the x86-64 baseline, so nothing here needs a
  * `target`.  The X25519 code that uses these is compiled for BMI2, for
- * `mulx`, and `Hacl_Carry64_supported` is the run-time check that picks it.
- * Elsewhere the bodies fall back to `__int128`, which is correct but is not
- * what anyone should be calling: `supported` is false there.
+ * `mulx`, and `Hacl_Carry64_supported` is the run-time check that picks it;
+ * that code, and the check, are compiled only under `#if defined(__x86_64__)`
+ * (see lib/Hacl.X64.fst).  Elsewhere the bodies fall back to `__int128`,
+ * which is correct, and is what the portable P-256 field code gets there.
  *
  * The carry in `c` must be 0 or 1.  The verified callers guarantee it --
  * it is a precondition of the `assume val`s -- but the three bodies do not

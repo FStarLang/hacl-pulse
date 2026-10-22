@@ -189,7 +189,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v **
 
 (** [d_i <- RejBoundedPoly_eta(rho' || u16(x_i))] for [i < 4].  Uses
     AVX2: the caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn rej_bounded4_impl (d0 d1 d2 d3: A.array zqt) (rho: A.array S8.t)
                      (x0 x1 x2 x3: SZ.t)
                      ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
@@ -481,7 +482,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v ** A.pts_to rho #pr vr **
 
 (** Polynomials [s .. s + 4) of the vector, sampled together.  Uses
     AVX2: the caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn s_four (p: erased params) (second: erased bool) (dst: A.array zqt) (rho: A.array S8.t)
           (s: SZ.t) (off: SZ.t)
           ([@@@FStar.Attributes.monomorphize] eta: SZ.t)
@@ -564,13 +566,18 @@ ensures exists* v. A.pts_to dst v ** A.pts_to rho #pr vr **
   {
     let vc = !c;
     s_bounds p second;
-    if (SZ.lte (SZ.add vc 2sz) cnt && SZ.gte cnt 4sz && V.supported ()) {
-      let s = (if SZ.lte (SZ.add vc 4sz) cnt then vc else SZ.sub cnt 4sz);
-      with v. assert (A.pts_to dst v);
-      Math.lemma_mult_le_right n (SZ.v s) (SZ.v vc);
-      prefix_mono v (s_target p vr second) (SZ.v vc * n) (SZ.v s * n);
-      s_four p second dst rho s off eta;
-      c := SZ.add s 4sz;
+    if (Hacl.X64.x86_64) {
+      if (SZ.lte (SZ.add vc 2sz) cnt && SZ.gte cnt 4sz && V.supported ()) {
+        let s = (if SZ.lte (SZ.add vc 4sz) cnt then vc else SZ.sub cnt 4sz);
+        with v. assert (A.pts_to dst v);
+        Math.lemma_mult_le_right n (SZ.v s) (SZ.v vc);
+        prefix_mono v (s_target p vr second) (SZ.v vc * n) (SZ.v s * n);
+        s_four p second dst rho s off eta;
+        c := SZ.add s 4sz;
+      } else {
+        s_one p second dst rho vc off eta;
+        c := SZ.add vc 1sz;
+      }
     } else {
       s_one p second dst rho vc off eta;
       c := SZ.add vc 1sz;

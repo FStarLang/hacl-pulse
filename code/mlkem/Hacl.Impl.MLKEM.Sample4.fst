@@ -213,7 +213,8 @@ ensures exists* (v: Seq.seq zqt). A.pts_to dst v **
 
 (** All but the absorb's last permutation, for SHAKE128; not inlined, so
     that the four calls below share one copy. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn shake128_absorb_pre (st: A.array S64.t) (b: A.array S64.t) (rc_tbl: A.array S64.t)
                        (seed: A.array S8.t) (slen: SZ.t)
                        (#vst0: erased (Seq.seq S64.t)) (#vb0: erased (Seq.seq S64.t))
@@ -263,7 +264,8 @@ ensures exists* (w0 w1 w2 w3: Seq.seq S64.t).
 
 (** [d_i <- SampleNTT s_i] for four seeds of the same length.  Uses AVX2:
     the caller checks {!Hacl.Vec256.supported}. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn sample_ntt4_impl (d0 d1 d2 d3: A.array zqt) (s0 s1 s2 s3: A.array S8.t) (slen: SZ.t)
                     (#vd0 #vd1 #vd2 #vd3: erased (Seq.seq zqt))
                     (#p0 #p1 #p2 #p3: perm)

@@ -438,7 +438,6 @@ ensures exists* v. A.pts_to f v **
 
 (** [f <- NTT(f)], in place.  The scratch buffer is no longer used; it
     stays in the signature so the callers do not change. *)
-inline_for_extraction
 fn ntt_inplace_ (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
 requires A.pts_to f vf ** A.pts_to tmp vt **
          pure (Seq.length vf == n /\ Seq.length vt == n)
@@ -486,7 +485,6 @@ let scale_step (w v: Seq.seq zqt) (i: nat) (x: zqt)
 
 (** [f <- NTT^-1(f)].  The layers run the other way and the whole thing is
     scaled by [128^-1] at the end. *)
-inline_for_extraction
 fn intt_inplace_ (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
 requires A.pts_to f vf ** A.pts_to tmp vt **
          pure (Seq.length vf == n /\ Seq.length vt == n)
@@ -551,7 +549,8 @@ ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
     thirty-two-byte vectors instead of sixteen.  Nothing in them mentions a
     vector; the choice is made at run time, by [Hacl.Vec256.supported]. *)
 
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn ntt_inplace_avx2 (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
 requires A.pts_to f vf ** A.pts_to tmp vt **
          pure (Seq.length vf == n /\ Seq.length vt == n)
@@ -569,10 +568,13 @@ ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
         pure (Seq.length vf == n /\ Seq.length v == n /\ Seq.length w == n /\
               as_poly v == ntt (as_poly vf))
 {
-  if (V.supported ()) { ntt_inplace_avx2 f tmp } else { ntt_inplace_ f tmp }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { ntt_inplace_avx2 f tmp } else { ntt_inplace_ f tmp }
+  } else { ntt_inplace_ f tmp }
 }
 
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn intt_inplace_avx2 (f tmp: A.array zqt) (#vf #vt: erased (Seq.seq zqt))
 requires A.pts_to f vf ** A.pts_to tmp vt **
          pure (Seq.length vf == n /\ Seq.length vt == n)
@@ -590,7 +592,9 @@ ensures exists* v w. A.pts_to f v ** A.pts_to tmp w **
         pure (Seq.length vf == n /\ Seq.length v == n /\ Seq.length w == n /\
               as_poly v == intt (as_poly vf))
 {
-  if (V.supported ()) { intt_inplace_avx2 f tmp } else { intt_inplace_ f tmp }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { intt_inplace_avx2 f tmp } else { intt_inplace_ f tmp }
+  } else { intt_inplace_ f tmp }
 }
 
 (** {2 The pointwise product}
@@ -836,7 +840,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   assert (pure (as_poly v == multiply_ntts (as_poly va) (as_poly vb)));
 }
 
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn multiply_avx2 (dst a b: A.array zqt) (#pa #pb: perm) (#vd #va #vb: erased (Seq.seq zqt))
 requires A.pts_to dst vd ** A.pts_to a #pa va ** A.pts_to b #pb vb **
          pure (Seq.length vd == n /\ Seq.length va == n /\ Seq.length vb == n)
@@ -854,7 +859,9 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
         pure (Seq.length v == n /\ Seq.length va == n /\ Seq.length vb == n /\
               as_poly v == multiply_ntts (as_poly va) (as_poly vb))
 {
-  if (V.supported ()) { multiply_avx2 dst a b } else { multiply_ dst a b }
+  if (Hacl.X64.x86_64) {
+    if (V.supported ()) { multiply_avx2 dst a b } else { multiply_ dst a b }
+  } else { multiply_ dst a b }
 }
 
 

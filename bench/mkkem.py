@@ -1,10 +1,10 @@
-"""Regenerate the README's ML-KEM table from a benchmark output directory.
+"""Regenerate the design notes' ML-KEM table from a benchmark output directory.
 
 Usage: python3 mkkem.py <bench-dir>
 
 HACL* has no ML-KEM, so unlike mktable.py this table is absolute: one column
 per parameter set, one row per operation, hacl-pulse only.  Reduction is by
-minimum over every run, for the reason given in README.md: interference can
+minimum over every run, for the reason given in design/notes.md: interference can
 only ever make a measurement slower.
 """
 import csv, glob, os, sys

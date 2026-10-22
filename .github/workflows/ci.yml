@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # The F* nightly the tree is verified against; see README.md.
+  FSTAR_NIGHTLY: nightly-2026-10-21
+
+jobs:
+  verify:
+    name: Verify, extract, test (gcc, x86-64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install F*
+        run: |
+          curl -fsSL "https://github.com/FStarLang/FStar-nightly/releases/download/$FSTAR_NIGHTLY/fstar-Linux-x86_64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "FSTAR_ROOT=$RUNNER_TEMP/fstar" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/fstar/bin/fstar.exe" --version
+
+      # .checked files are validated by digest, so a stale cache only costs
+      # re-verification of what changed, never a wrong result.
+      - name: Restore F* cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: obj/cache
+          key: fstar-${{ env.FSTAR_NIGHTLY }}-${{ hashFiles('lib/**/*.fst*', 'spec/**/*.fst*', 'code/**/*.fst*', 'mk/common.mk') }}
+          restore-keys: fstar-${{ env.FSTAR_NIGHTLY }}-
+
+      - name: Lint
+        run: make lint
+
+      - name: Verify
+        timeout-minutes: 330
+        run: make -j"$(nproc)" verify
+
+      # Saved even when verification fails or times out, so the next run
+      # resumes rather than starting over.
+      - name: Save F* cache
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: obj/cache
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Extract
+        run: make -j"$(nproc)" extract
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+      - name: Compile, check stack usage, test
+        run: make -j"$(nproc)" compile stack test TEST_NORUN=test_consttime
+
+      # A timing measurement on a shared runner: reported, not enforced.
+      - name: Constant-time audit (advisory)
+        continue-on-error: true
+        run: obj/build/tests/test_consttime
+
+  # The jobs below test the C that `verify` extracted; DIST_ONLY=1 builds
+  # dist/ as it is, without F*.
+
+  clang:
+    name: Test (clang, x86-64)
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Compile and test
+        run: make -j"$(nproc)" DIST_ONLY=1 CC=clang compile test TEST_NORUN=test_consttime
+
+  arm64:
+    name: Test (gcc, arm64)
+    needs: verify
+    # GitHub's arm64 Linux runners are free only for public repositories.
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Compile and test
+        run: make -j"$(nproc)" DIST_ONLY=1 compile test TEST_NORUN=test_consttime
+
+  cross:
+    name: Test (gcc, aarch64 under qemu)
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q gcc-aarch64-linux-gnu qemu-user
+      - name: Cross-compile and test
+        run: make DIST_ONLY=1 cross

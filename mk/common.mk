@@ -29,7 +29,7 @@ DIST_DIR  ?= $(HACL_ROOT)/dist
 #
 # Point FSTAR_EXE at the binary, or FSTAR_ROOT at either kind of tree:
 #
-#   make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-18   # unpacked nightly
+#   make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-21   # unpacked nightly
 #   make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
 #
 # A nightly has bin/fstar.exe; a checkout has stage3/out/bin/fstar.exe, and
@@ -47,6 +47,15 @@ FSTAR_EXE ?= $(shell which fstar.exe 2>/dev/null)
 
 # `make clean` should not need a compiler to delete a directory.
 NEEDS_FSTAR := $(filter-out clean distclean,$(or $(MAKECMDGOALS),all))
+
+# DIST_ONLY=1 builds and tests the C already in $(DIST_DIR) without F*:
+# dist/Hacl.c becomes a source file rather than a target, so nothing is
+# verified or re-extracted.  For compilers and machines F* does not run on,
+# such as CI's clang and arm64 jobs, which test the dist/ the verify job
+# produced.  Only the C targets (compile, stack, test, cross) make sense.
+ifneq ($(DIST_ONLY),)
+NEEDS_FSTAR :=
+endif
 
 ifneq ($(NEEDS_FSTAR),)
   ifeq ($(FSTAR_EXE),)

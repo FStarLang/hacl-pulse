@@ -1,4 +1,4 @@
-"""Regenerate the README's other-libraries table from an others.sh output dir.
+"""Regenerate the design notes' other-libraries table from an others.sh output dir.
 
 Usage: python3 mkothers.py <bench-dir> [canary tolerance, default 0.02]
 

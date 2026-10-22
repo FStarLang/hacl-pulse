@@ -379,6 +379,8 @@ ensures exists* (vt1: Seq.seq S8.t).
     stitched encryption path hashes the ciphertext as it writes it, so it
     comes in here. *)
 
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn gtag_fin ([@@@FStar.Attributes.monomorphize] p: params)
             (tag: A.array S8.t) (w: A.array S8.t) (hb: A.array S8.t)
             (jb: A.array S8.t) (accarr: A.array S8.t) (alen clen: SZ.t)
@@ -567,23 +569,34 @@ ensures exists* (vm1 vt1: Seq.seq S8.t).
   j0_impl p jarr ek hk iv iv_len;
   Copy.copy_exact carr jarr 16sz;
   inc32_impl carr;
-  if (SZ.lte 128sz msg_len && Vec.supported ())
+  if (Hacl.X64.x86_64)
   {
-    (* Stitched: each 128 bytes of ciphertext is hashed while the next 128
-       are being encrypted. *)
-    let mut accarr = [| z; 16sz |];
-    Mem.track accarr;
-    A.pts_to_len accarr;
-    with vz. assert A.pts_to accarr vz;
-    zeroed vz;
-    ghash_upd_impl accarr hk aad aad_len;
-    Stitch.ctr_ghash p msg msg_len ek hk carr accarr;
-    with vm1. assert A.pts_to msg vm1;
-    gtag_fin p tag ek hk jarr accarr aad_len msg_len (vals vaad) (vals vm1);
-    Mem.wipe accarr 16sz;
-    Mem.wipe carr 16sz;
-    Mem.wipe jarr 16sz;
-    ()
+    if (SZ.lte 128sz msg_len && Vec.supported ())
+    {
+      (* Stitched: each 128 bytes of ciphertext is hashed while the next 128
+         are being encrypted. *)
+      let mut accarr = [| z; 16sz |];
+      Mem.track accarr;
+      A.pts_to_len accarr;
+      with vz. assert A.pts_to accarr vz;
+      zeroed vz;
+      ghash_upd_impl accarr hk aad aad_len;
+      Stitch.ctr_ghash p msg msg_len ek hk carr accarr;
+      with vm1. assert A.pts_to msg vm1;
+      gtag_fin p tag ek hk jarr accarr aad_len msg_len (vals vaad) (vals vm1);
+      Mem.wipe accarr 16sz;
+      Mem.wipe carr 16sz;
+      Mem.wipe jarr 16sz;
+      ()
+    }
+    else
+    {
+      ctr_encrypt_impl p msg msg_len ek carr;
+      gtag_impl p tag ek hk jarr aad aad_len msg msg_len;
+      Mem.wipe carr 16sz;
+      Mem.wipe jarr 16sz;
+      ()
+    }
   }
   else
   {

@@ -22,6 +22,8 @@
 
 #include "Hacl_Vec256.h"
 
+#if defined(__x86_64__)
+
 static int failures = 0;
 
 static uint64_t prng = 0x9e3779b97f4a7c15ULL;
@@ -59,7 +61,6 @@ static void report(const char *name, bool ok) {
   }
 }
 
-#if defined(__x86_64__) || defined(__i386__)
 
 #define AVX2 __attribute__((target("avx2")))
 
@@ -336,16 +337,13 @@ AVX2 static void run(int rounds) {
   report("vec256 perm32", ok);
 }
 
-#endif
 
 int main(void) {
   if (!Hacl_Vec256_supported()) {
     printf("  skip vec256: no AVX2 on this machine\n");
     return 0;
   }
-#if defined(__x86_64__) || defined(__i386__)
   run(1000);
-#endif
   if (failures) {
     printf("%d vec256 check(s) failed\n", failures);
     return 1;
@@ -353,3 +351,12 @@ int main(void) {
   printf("all vec256 axioms agree with a scalar transcription\n");
   return 0;
 }
+
+#else
+
+int main(void) {
+  printf("  skip vec256: not x86-64\n");
+  return 0;
+}
+
+#endif

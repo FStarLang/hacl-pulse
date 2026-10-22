@@ -53,7 +53,8 @@ ensures exists* v. A.pts_to dst v ** A.pts_to seed #ps vs **
 }
 
 (** [SampleNTT] of four seeds at once. *)
-[@@CPrologue "__attribute__((target(\"avx2\")))"]
+[@@CPrologue "__attribute__((target(\"avx2\")))";
+  custard_c_closure_guard "defined(__x86_64__)"]
 fn sample_ntt4_impl (d0 d1 d2 d3: A.array zqt) (s0 s1 s2 s3: A.array S8.t) (slen: SZ.t)
                     (#vd0 #vd1 #vd2 #vd3: erased (Seq.seq zqt))
                     (#p0 #p1 #p2 #p3: perm)
