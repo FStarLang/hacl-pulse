@@ -35,6 +35,9 @@
 #if defined(__x86_64__)
 
 #include <immintrin.h>
+#if defined(__GNUC__)
+#include <cpuid.h>
+#endif
 
 typedef __m128i Hacl_Vec128_t;
 
@@ -259,9 +262,12 @@ HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha256msg2(Hacl_Vec128_t a,
 
 static inline bool Hacl_Vec128_sha_supported(void) {
 #if defined(__GNUC__)
+  /* SHA is CPUID.(EAX=7,ECX=0):EBX bit 29, read directly because clang
+     before 19 rejects "sha" as a __builtin_cpu_supports feature. */
+  unsigned int a, b, c, d;
   __builtin_cpu_init();
-  return __builtin_cpu_supports("sha") && __builtin_cpu_supports("sse4.1") &&
-         __builtin_cpu_supports("ssse3");
+  return __get_cpuid_count(7, 0, &a, &b, &c, &d) && (b & (1u << 29)) &&
+         __builtin_cpu_supports("sse4.1") && __builtin_cpu_supports("ssse3");
 #else
   return false;
 #endif
