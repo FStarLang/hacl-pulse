@@ -135,7 +135,9 @@ let stream_bytes (vk: Seq.seq S8.t) (vst: Seq.seq S64.t) (vs: Seq.seq S8.t) (j: 
                        Seq.index vk k == SHA3.state_byte vst (k - 0)))
           (ensures forall (u: nat). u < 168 ==>
                      Seq.index vk u == shake128_byte vs (3 * (j * 56) + u))
-  = assert (3 * (j * 56) == j * 168);
+  = Math.swap_mul 3 (j * 56);
+    Math.paren_mul_right j 56 3;
+    assert (3 * (j * 56) == j * 168);
     block128_bytes vs j;
     introduce forall (u: nat). u < 168 ==> Seq.index vk u == shake128_byte vs (3 * (j * 56) + u)
     with introduce _ ==> _

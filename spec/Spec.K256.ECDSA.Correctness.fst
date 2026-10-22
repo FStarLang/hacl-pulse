@@ -196,6 +196,8 @@ let neg_point_x (k: nat)
     peq_trans (point_mul_g (order - k)) (SM.smul (order - k) g) np;
     peq_to_aff_point (point_mul_g (order - k)) np
 
+#restart-solver
+
 (** With [n - s] in place of [s], the verifier recovers [n - k]. *)
 let low_s_scalars (m: qelem) (d k: qelem)
   : Lemma (requires 0 < k /\

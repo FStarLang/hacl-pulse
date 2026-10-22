@@ -147,6 +147,7 @@ requires A.pts_to acc vacc ** A.pts_to mw vm0 **
                reveal vi == G.reveal p.iv /\
                SZ.v base + SZ.v nblk * block_len #t <= Seq.length vin /\
                (SZ.v n0 + SZ.v nblk) * block_len #t <= Seq.length s /\
+               SZ.v n0 * block_len #t + SZ.v nblk * block_len #t <= Seq.length s /\
                Seq.length s < pow2 64 /\ SZ.fits (Seq.length s) /\
                SZ.v ctr0 == SZ.v n0 * block_len #t /\
                reveal vacc == sabsorb p h0 s (SZ.v n0) /\

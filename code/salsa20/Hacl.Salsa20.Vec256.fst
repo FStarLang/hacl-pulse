@@ -590,7 +590,9 @@ let chunk_inv (s0: state) (c: U32.t { U32.v c + 8 <= pow2 32 })
         then S8.logxor (Seq.index vm p) (chunk_ks s0 c (p - off))
         else Seq.index vo p))
 
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+(* The quadratic patterns of [S8.v_extensional] are not needed here, and
+   can starve the solver of the plain arithmetic this proof is made of. *)
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --using_facts_from '* -Hacl.Secret.UInt8.v_extensional'"
 
 let chunk_step (s0: state) (c: U32.t { U32.v c + 8 <= pow2 32 })
                (vo vm v v': Seq.seq S8.t) (off: nat) (n: nat { n < 16 }) (x: V.t)
@@ -623,6 +625,12 @@ let chunk_step (s0: state) (c: U32.t { U32.v c + 8 <= pow2 32 })
     Classical.forall_intro aux
 
 #pop-options
+
+let ob_fits (off vi len: nat)
+  : Lemma (requires vi < 16 /\ off + 512 <= len /\ SZ.fits len)
+          (ensures SZ.fits (32 * vi) /\ SZ.fits (off + 32 * vi))
+  = SZ.fits_lte (32 * vi) len;
+    SZ.fits_lte (off + 32 * vi) len
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -667,6 +675,7 @@ ensures exists* (vo': Seq.seq S8.t) (vv1 vk1 vt1: Seq.seq V.t).
   {
     let vi = !i;
     let x = A.(t.(vi));
+    ob_fits (SZ.v off) (SZ.v vi) (Seq.length vm);
     let ob = SZ.add off (SZ.mul 32sz vi);
     with v. assert (A.pts_to out v);
     Classical.forall_intro (chunk_byte s0 c vk x (SZ.v vi));

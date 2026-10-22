@@ -186,6 +186,14 @@ ensures exists* (va': Seq.seq S64.t) (vc': Seq.seq S64.t).
   }
 }
 
+(** Squaring [x^(2^k)] gives [x^(2^(k+1))]. *)
+let sqr_pow2_step (x: P.qelem) (k: nat) (y z: P.qelem)
+  : Lemma (requires y == MA.exp #P.order x (pow2 k) /\ z == P.qmul y y)
+          (ensures z == MA.exp #P.order x (pow2 (k + 1)))
+  = MA.exp_two y;
+    MA.exp_mul x (pow2 k) 2;
+    Math.pow2_double_mult k
+
 (** [a := a^(2^n)], by [n] squarings.  They alternate between [a] and
     [c], so no squaring needs a copy of its input. *)
 fn qpow2_ip (a c: A.array S64.t) (n: SZ.t)
@@ -213,13 +221,9 @@ ensures exists* (va': Seq.seq S64.t) (vc': Seq.seq S64.t).
     with u. assert (A.pts_to c u);
     qsqr a c;
     with v'. assert (A.pts_to a v');
-    MA.exp_two (qev v);
-    MA.exp_two (qev u);
-    MA.exp_mul (qev va) (pow2 (SZ.v vi)) 2;
-    Math.pow2_double_mult (SZ.v vi);
+    sqr_pow2_step (qev va) (SZ.v vi) (qev v) (qev u);
     assert (pure (qev u == MA.exp #P.order (qev va) (pow2 (SZ.v vi + 1))));
-    MA.exp_mul (qev va) (pow2 (SZ.v vi + 1)) 2;
-    Math.pow2_double_mult (SZ.v vi + 1);
+    sqr_pow2_step (qev va) (SZ.v vi + 1) (qev u) (qev v');
     assert (pure (qev v' == MA.exp #P.order (qev va) (pow2 (SZ.v vi + 2))));
     i := SZ.add vi 2sz;
   };

@@ -505,6 +505,15 @@ ensures exists* (vu': Seq.seq V.t). A.pts_to u vu' ** A.pts_to ks vk **
   A.((u.(SZ.add o 3sz) <- b3));
 }
 
+(** The postcondition of [transpose_b], named so that its well-formedness
+    is checked once here rather than at every call. *)
+let tb_post (vt vu vt': Seq.seq V.t) (m: nat) : prop =
+  Seq.length vt == 16 /\ Seq.length vu == 16 /\ m < 4 /\
+  Seq.length vt' == 16 /\
+  (forall (g: nat). g < 4 ==> qb_ok vu g (Seq.index vt' (4 * g + m)) m) /\
+  (forall (g k: nat). g < 4 /\ k < 4 /\ k <> m ==>
+     Seq.index vt' (4 * g + k) == Seq.index vt (4 * g + k))
+
 (** The second step, for position [m]: [t.(4g + m)] gets [qb_ok vu g _ m]. *)
 inline_for_extraction
 fn transpose_b (t: A.array V.t) (u: A.array V.t) (m: SZ.t)
@@ -512,11 +521,7 @@ fn transpose_b (t: A.array V.t) (u: A.array V.t) (m: SZ.t)
 requires A.pts_to t vt ** A.pts_to u vu **
          pure (Seq.length vt == 16 /\ Seq.length vu == 16 /\ SZ.v m < 4)
 ensures exists* (vt': Seq.seq V.t). A.pts_to t vt' ** A.pts_to u vu **
-  pure (Seq.length vt == 16 /\ Seq.length vu == 16 /\ SZ.v m < 4 /\
-        Seq.length vt' == 16 /\
-        (forall (g: nat). g < 4 ==> qb_ok vu g (Seq.index vt' (4 * g + SZ.v m)) (SZ.v m)) /\
-        (forall (g k: nat). g < 4 /\ k < 4 /\ k <> SZ.v m ==>
-           Seq.index vt' (4 * g + k) == Seq.index vt (4 * g + k)))
+  pure (tb_post vt vu vt' (SZ.v m))
 {
   A.pts_to_len t;
   A.pts_to_len u;
@@ -594,7 +599,28 @@ let qa_collect (vk: vstate) (u0 u1 u2 u3 u4: vstate)
       (ensures qa_all vk u4)
   = let aux (q m: nat)
       : Lemma (q < 4 /\ m < 4 ==> qa_ok vk q (Seq.index u4 (4 * q + m)) m)
-      = ()
+      = if q < 4 && m < 4 then begin
+          let i = 4 * q + m in
+          if q = 0 then begin
+            assert (qa_ok vk 0 (Seq.index u1 m) m);
+            assert (i == m);
+            assert (Seq.index u2 i == Seq.index u1 i);
+            assert (Seq.index u3 i == Seq.index u2 i);
+            assert (Seq.index u4 i == Seq.index u3 i)
+          end else if q = 1 then begin
+            assert (qa_ok vk 1 (Seq.index u2 (4 + m)) m);
+            assert (i == 4 + m);
+            assert (Seq.index u3 i == Seq.index u2 i);
+            assert (Seq.index u4 i == Seq.index u3 i)
+          end else if q = 2 then begin
+            assert (qa_ok vk 2 (Seq.index u3 (8 + m)) m);
+            assert (i == 8 + m);
+            assert (Seq.index u4 i == Seq.index u3 i)
+          end else begin
+            assert (qa_ok vk 3 (Seq.index u4 (12 + m)) m);
+            assert (i == 12 + m)
+          end
+        end
     in
     Classical.forall_intro_2 aux
 
@@ -616,7 +642,28 @@ let qb_collect (vu: vstate) (t0 t1 t2 t3 t4: vstate)
       (ensures qb_all vu t4)
   = let aux (g m: nat)
       : Lemma (g < 4 /\ m < 4 ==> qb_ok vu g (Seq.index t4 (4 * g + m)) m)
-      = ()
+      = if g < 4 && m < 4 then begin
+          let i = 4 * g + m in
+          if m = 0 then begin
+            assert (qb_ok vu g (Seq.index t1 (4 * g)) 0);
+            assert (i == 4 * g);
+            assert (Seq.index t2 i == Seq.index t1 i);
+            assert (Seq.index t3 i == Seq.index t2 i);
+            assert (Seq.index t4 i == Seq.index t3 i)
+          end else if m = 1 then begin
+            assert (qb_ok vu g (Seq.index t2 (4 * g + 1)) 1);
+            assert (i == 4 * g + 1);
+            assert (Seq.index t3 i == Seq.index t2 i);
+            assert (Seq.index t4 i == Seq.index t3 i)
+          end else if m = 2 then begin
+            assert (qb_ok vu g (Seq.index t3 (4 * g + 2)) 2);
+            assert (i == 4 * g + 2);
+            assert (Seq.index t4 i == Seq.index t3 i)
+          end else begin
+            assert (qb_ok vu g (Seq.index t4 (4 * g + 3)) 3);
+            assert (i == 4 * g + 3)
+          end
+        end
     in
     Classical.forall_intro_2 aux
 
@@ -940,6 +987,7 @@ ensures exists* (vo': Seq.seq S8.t).
     let b = !base;
     with v. assert (A.pts_to out v);
     chunk_ctr ctr0 (SZ.v mlen) (SZ.v b);
+    Math.small_mod (SZ.v b / 64) (pow2 32);
     let c = U32.add ctr0 (SZ.sizet_to_uint32 (SZ.div b 64sz));
     A.pts_to_len vst;
     A.pts_to_len ks;

@@ -201,6 +201,8 @@ let stream_bit_byte (b: Seq.seq S8.t) (i: nat { i < Seq.length b }) (j: nat { j 
   : Lemma (stream_bit b (8 * i + j) == (S8.v (Seq.index b i) / pow2 j) % 2)
   = coeff_pos 8 i j
 
+#restart-solver
+
 let byte_encode_decode_at (d: pos { d < 12 }) (b: Seq.lseq S8.t (32 * d)) (i: nat { i < 32 * d })
   : Lemma (Seq.index (byte_encode d (widen (byte_decode d b))) i == Seq.index b i)
   = let f = widen (byte_decode d b) in

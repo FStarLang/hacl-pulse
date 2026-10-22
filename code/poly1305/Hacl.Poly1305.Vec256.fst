@@ -1066,6 +1066,12 @@ ensures exists* (ve': Seq.seq S64.t) (vb': Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+let fits16 (g n len: nat)
+  : Lemma (requires g + 4 <= n /\ 16 * n <= len /\ SZ.fits len)
+          (ensures SZ.fits (16 * g) /\ 16 * g + 64 <= len)
+  = Math.lemma_mult_le_right 16 (g + 4) n;
+    SZ.fits_lte (16 * g) len
+
 (** Absorb the longest prefix of [n] blocks that is a multiple of four,
     four lanes at a time, and say how many blocks that was.  [d] is
     scratch. *)
@@ -1176,6 +1182,7 @@ ensures exists* (vh': Seq.seq S64.t) (vd': Seq.seq S64.t).
     vfmul a q4 t;
     with va1. assert (A.pts_to a va1);
     Math.lemma_mult_le_right 16 (SZ.v g + 4) (SZ.v n);
+    fits16 (SZ.v g) (SZ.v n) (Seq.length vmsg);
     let o = SZ.mul 16sz g;
     load4 m msg o c (SZ.v g);
     with vm1. assert (A.pts_to m vm1);

@@ -479,6 +479,7 @@ ensures exists* (w: Seq.seq zqt). A.pts_to dst w ** A.pts_to p vp **
     Sub.unsub_id p 0 (SZ.v el) pb;
     assert (pure (as_poly b1 == sample_poly_cbd (SZ.v eta) vs (U8.uint_to_t (U8.v start + SZ.v i))));
     noise_entry_step (SZ.v k) (SZ.v eta) vs (U8.v start) (SZ.v i) vd w1 b1;
+    assert (pure ((if SZ.v i + 1 < SZ.v k then SZ.v i + 1 else SZ.v k) == SZ.v i + 1));
   } else {
     ()
   }

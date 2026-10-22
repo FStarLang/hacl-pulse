@@ -56,7 +56,7 @@ let e0_ok (_: unit)
 let e1 : proj_point = Base.q3
 
 let e1_ok (_: unit)
-  : Lemma (on_curve e1 /\ peq e1 (SM.smul (1 * n) g))
+  : Lemma (on_curve e1 /\ peq e1 (SM.smul (1 * n) g) /\ peq e1 (SM.smul n g))
   = Base.q3_ok ()
 
 (** {2 The chain} *)
