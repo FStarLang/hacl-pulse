@@ -13,7 +13,12 @@
  * The method is the same throughout: run the shipped function once per
  * value of the secret it selects on, take the minimum over several
  * repetitions, and fail if the fastest and slowest values differ by more
- * than a threshold.  A masked select is flat to a few percent.  A branch
+ * than a threshold.  The repetitions are the outer loop and the values the
+ * inner one, so that a stretch of interference -- another tenant, a clock
+ * change -- slows one sample of every value rather than every sample of
+ * one value, and the minimum discards it.  Timing each value's
+ * repetitions back to back made the x25519 row fail on whichever scalar
+ * happened to be running during a 60 ms stall, on CI as well as here.  A masked select is flat to a few percent.  A branch
  * on the secret is not.
  *
  * The thresholds are deliberately loose.  This is a timing test on a
@@ -78,16 +83,15 @@ static void audit_table_select(void) {
     tbl[i] = s;
   }
   double ns[16];
-  for (int d = 0; d < 16; d++) {
-    double best = 1e30;
-    for (int r = 0; r < REPS; r++) {
+  for (int d = 0; d < 16; d++) ns[d] = 1e30;
+  for (int r = 0; r < REPS; r++) {
+    for (int d = 0; d < 16; d++) {
       double t0 = now_ns();
       for (long k = 0; k < 200000; k++)
         Hacl_Bignum_Base_table_select(res, tbl, 4, (uint64_t)d);
       double dt = (now_ns() - t0) / 200000.0;
-      if (dt < best) best = dt;
+      if (dt < ns[d]) ns[d] = dt;
     }
-    ns[d] = best;
   }
   verdict("table_select n=4", 16, ns, 75.0);
 }
@@ -106,16 +110,16 @@ static void audit_x25519(void) {
   double ns[6];
   memset(base, 0, sizeof base);
   base[0] = 9;
-  for (int v = 0; v < 6; v++) {
-    memset(scalar, patterns[v], sizeof scalar);
-    double best = 1e30;
-    for (int r = 0; r < REPS; r++) {
+  for (int v = 0; v < 6; v++) ns[v] = 1e30;
+  /* Short batches, many rounds: a batch is about a millisecond. */
+  for (int r = 0; r < 5 * REPS; r++) {
+    for (int v = 0; v < 6; v++) {
+      memset(scalar, patterns[v], sizeof scalar);
       double t0 = now_ns();
-      for (long k = 0; k < 200; k++) Hacl_Curve25519_scalarmult(out, scalar, base);
-      double dt = (now_ns() - t0) / 200.0;
-      if (dt < best) best = dt;
+      for (long k = 0; k < 20; k++) Hacl_Curve25519_scalarmult(out, scalar, base);
+      double dt = (now_ns() - t0) / 20.0;
+      if (dt < ns[v]) ns[v] = dt;
     }
-    ns[v] = best;
   }
   verdict("x25519 (by scalar)", 6, ns, 10.0);
 }
@@ -129,27 +133,26 @@ static void audit_bignum_compare(void) {
   uint64_t a[32], b[32];
   double eq[9], lt[9];
   for (int i = 0; i < 32; i++) a[i] = 0x5555555555555555ULL;
-  for (int p = 0; p < 9; p++) {
-    memcpy(b, a, sizeof a);
-    if (p < 8) b[p * 4] = a[p * 4] ^ 1ULL;
-    double beq = 1e30, blt = 1e30;
-    for (int r = 0; r < REPS; r++) {
+  for (int p = 0; p < 9; p++) eq[p] = lt[p] = 1e30;
+  for (int r = 0; r < REPS; r++) {
+    for (int p = 0; p < 9; p++) {
+      memcpy(b, a, sizeof a);
+      if (p < 8) b[p * 4] = a[p * 4] ^ 1ULL;
       double t0 = now_ns();
       for (long k = 0; k < 200000; k++) {
         uint64_t v = Hacl_Bignum_Base_eq_mask(a, b, 32);
         __asm__ volatile("" :: "r"(v));
       }
       double dt = (now_ns() - t0) / 200000.0;
-      if (dt < beq) beq = dt;
+      if (dt < eq[p]) eq[p] = dt;
       t0 = now_ns();
       for (long k = 0; k < 200000; k++) {
         uint64_t v = Hacl_Bignum_Base_lt_mask(a, b, 32);
         __asm__ volatile("" :: "r"(v));
       }
       dt = (now_ns() - t0) / 200000.0;
-      if (dt < blt) blt = dt;
+      if (dt < lt[p]) lt[p] = dt;
     }
-    eq[p] = beq; lt[p] = blt;
   }
   verdict("bn eq_mask", 9, eq, 20.0);
   verdict("bn lt_mask", 9, lt, 20.0);
@@ -164,20 +167,19 @@ static void audit_mlkem_compare(void) {
   static uint8_t a[1088], b[1088];
   double ns[9];
   for (int i = 0; i < 1088; i++) a[i] = (uint8_t)i;
-  for (int p = 0; p < 9; p++) {
-    memcpy(b, a, sizeof a);
-    if (p < 8) b[p * 136] = (uint8_t)(a[p * 136] ^ 1u);
-    double best = 1e30;
-    for (int r = 0; r < REPS; r++) {
+  for (int p = 0; p < 9; p++) ns[p] = 1e30;
+  for (int r = 0; r < REPS; r++) {
+    for (int p = 0; p < 9; p++) {
+      memcpy(b, a, sizeof a);
+      if (p < 8) b[p * 136] = (uint8_t)(a[p * 136] ^ 1u);
       double t0 = now_ns();
       for (long k = 0; k < 20000; k++) {
         uint8_t v = Hacl_Impl_Select_eq_mask_bytes(a, b, 1088);
         __asm__ volatile("" :: "r"(v));
       }
       double dt = (now_ns() - t0) / 20000.0;
-      if (dt < best) best = dt;
+      if (dt < ns[p]) ns[p] = dt;
     }
-    ns[p] = best;
   }
   verdict("mlkem eq_mask_bytes", 9, ns, 20.0);
 }
@@ -191,18 +193,17 @@ static void audit_mlkem_compare(void) {
    condition that invites a compiler to enumerate them. */
 static void audit_aes_sbox(void) {
   double ns[256];
-  for (int v = 0; v < 256; v++) {
-    double best = 1e30;
-    for (int r = 0; r < REPS; r++) {
+  for (int v = 0; v < 256; v++) ns[v] = 1e30;
+  for (int r = 0; r < REPS; r++) {
+    for (int v = 0; v < 256; v++) {
       double t0 = now_ns();
       for (long k = 0; k < 100000; k++) {
         uint8_t y = Hacl_AES_Core_sbox_impl((uint8_t)v);
         __asm__ volatile("" :: "r"(y));
       }
       double dt = (now_ns() - t0) / 100000.0;
-      if (dt < best) best = dt;
+      if (dt < ns[v]) ns[v] = dt;
     }
-    ns[v] = best;
   }
   verdict("aes sbox", 256, ns, 20.0);
 }
