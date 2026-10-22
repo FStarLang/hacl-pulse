@@ -329,6 +329,59 @@ static void ref_msg2(uint8_t out[16], const uint8_t a[16], const uint8_t b[16]) 
   setlane(out, 2, r2); setlane(out, 3, r3);
 }
 
+/* The SHA-1 instructions, against FIPS 180-4 section 6.1.2 and the
+ * pseudocode of the Intel SDM.  The earliest state and message word is in
+ * the high lane. */
+
+static uint32_t rol(uint32_t x, int n) {
+  return (uint32_t)(x << n) | (x >> (32 - n));
+}
+
+static uint32_t sha1_f(int q, uint32_t b, uint32_t c, uint32_t d) {
+  return q == 0 ? ch(b, c, d) : q == 2 ? maj(b, c, d) : b ^ c ^ d;
+}
+
+static const uint32_t sha1_k[4] = {0x5a827999u, 0x6ed9eba1u, 0x8f1bbcdcu,
+                                   0xca62c1d6u};
+
+/* Four rounds of quarter q with e = 0: the first message word already has
+   e added in, which is the instruction's contract. */
+static void ref_sha1rnds4(uint8_t out[16], const uint8_t abcd[16],
+                          const uint8_t w[16], int q) {
+  uint32_t h[5] = {lane(abcd, 3), lane(abcd, 2), lane(abcd, 1), lane(abcd, 0),
+                   0};
+  for (int i = 0; i < 4; i++) {
+    uint32_t t = rol(h[0], 5) + sha1_f(q, h[1], h[2], h[3]) + h[4] +
+                 sha1_k[q] + lane(w, 3 - i);
+    h[4] = h[3]; h[3] = h[2]; h[2] = rol(h[1], 30); h[1] = h[0]; h[0] = t;
+  }
+  for (int i = 0; i < 4; i++) setlane(out, 3 - i, h[i]);
+}
+
+static void ref_sha1nexte(uint8_t out[16], const uint8_t a[16],
+                          const uint8_t b[16]) {
+  memcpy(out, b, 16);
+  setlane(out, 3, rol(lane(a, 3), 30) + lane(b, 3));
+}
+
+static void ref_sha1msg1(uint8_t out[16], const uint8_t a[16],
+                         const uint8_t b[16]) {
+  setlane(out, 3, lane(a, 1) ^ lane(a, 3));
+  setlane(out, 2, lane(a, 0) ^ lane(a, 2));
+  setlane(out, 1, lane(b, 3) ^ lane(a, 1));
+  setlane(out, 0, lane(b, 2) ^ lane(a, 0));
+}
+
+static void ref_sha1msg2(uint8_t out[16], const uint8_t a[16],
+                         const uint8_t b[16]) {
+  uint32_t w16 = rol(lane(a, 3) ^ lane(b, 2), 1);
+  uint32_t w17 = rol(lane(a, 2) ^ lane(b, 1), 1);
+  uint32_t w18 = rol(lane(a, 1) ^ lane(b, 0), 1);
+  uint32_t w19 = rol(lane(a, 0) ^ w16, 1);
+  setlane(out, 3, w16); setlane(out, 2, w17);
+  setlane(out, 1, w18); setlane(out, 0, w19);
+}
+
 /* Lane permutations, each written as the list of source lanes. */
 static void ref_perm(uint8_t out[16], const uint8_t a[16], const uint8_t b[16],
                      const int src[4], const int from_b[4]) {
@@ -413,6 +466,43 @@ TEST_SHA static int one_sha(const uint8_t a[16], const uint8_t b[16],
                       Hacl_Vec128_sha256rnds2(vb, va, va));
   ref_rnds2(expected, b, a, a);
   r |= quiet(what, got, expected);
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_xor32(va, vb));
+  for (int i = 0; i < 4; i++) setlane(expected, i, lane(a, i) ^ lane(b, i));
+  r |= quiet(what, got, expected);
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got,
+                      Hacl_Vec128_high_lane(lane(b, 1)));
+  memset(expected, 0, 16);
+  setlane(expected, 3, lane(b, 1));
+  r |= quiet(what, got, expected);
+  if (Hacl_Vec128_get_high_lane(va) != lane(a, 3)) {
+    printf("FAIL %s: get_high_lane\n", what);
+    r = 1;
+  }
+
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_sha1nexte(va, vb));
+  ref_sha1nexte(expected, a, b);
+  r |= quiet(what, got, expected);
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_sha1msg1(va, vb));
+  ref_sha1msg1(expected, a, b);
+  r |= quiet(what, got, expected);
+  Hacl_Vec128_store32((uint32_t *)(void *)got, Hacl_Vec128_sha1msg2(va, vb));
+  ref_sha1msg2(expected, a, b);
+  r |= quiet(what, got, expected);
+
+#define RNDS4(q)                                                             \
+  do {                                                                       \
+    Hacl_Vec128_store32((uint32_t *)(void *)got,                             \
+                        Hacl_Vec128_sha1rnds4_##q(va, vb));                  \
+    ref_sha1rnds4(expected, a, b, q);                                        \
+    r |= quiet(what, got, expected);                                         \
+  } while (0)
+  RNDS4(0);
+  RNDS4(1);
+  RNDS4(2);
+  RNDS4(3);
+#undef RNDS4
   return r;
 }
 

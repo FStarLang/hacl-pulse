@@ -260,6 +260,61 @@ HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha256msg2(Hacl_Vec128_t a,
   return _mm_sha256msg2_epu32(a, b);
 }
 
+/* {2 SHA-1}
+ *
+ * The same feature bit as SHA-256.  The SHA-1 instructions keep the state
+ * and the message words with the earliest one in the high lane, the reverse
+ * of SHA-256's packing. */
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_xor32(Hacl_Vec128_t a,
+                                                Hacl_Vec128_t b) {
+  return _mm_xor_si128(a, b);
+}
+
+/* x in the high lane and zero in the other three. */
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_high_lane(uint32_t x) {
+  return _mm_set_epi32((int)x, 0, 0, 0);
+}
+
+HACL_VEC128_SHA uint32_t Hacl_Vec128_get_high_lane(Hacl_Vec128_t a) {
+  return (uint32_t)_mm_extract_epi32(a, 3);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1rnds4_0(Hacl_Vec128_t abcd,
+                                                      Hacl_Vec128_t w) {
+  return _mm_sha1rnds4_epu32(abcd, w, 0);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1rnds4_1(Hacl_Vec128_t abcd,
+                                                      Hacl_Vec128_t w) {
+  return _mm_sha1rnds4_epu32(abcd, w, 1);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1rnds4_2(Hacl_Vec128_t abcd,
+                                                      Hacl_Vec128_t w) {
+  return _mm_sha1rnds4_epu32(abcd, w, 2);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1rnds4_3(Hacl_Vec128_t abcd,
+                                                      Hacl_Vec128_t w) {
+  return _mm_sha1rnds4_epu32(abcd, w, 3);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1nexte(Hacl_Vec128_t a,
+                                                    Hacl_Vec128_t b) {
+  return _mm_sha1nexte_epu32(a, b);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1msg1(Hacl_Vec128_t a,
+                                                   Hacl_Vec128_t b) {
+  return _mm_sha1msg1_epu32(a, b);
+}
+
+HACL_VEC128_SHA Hacl_Vec128_t Hacl_Vec128_sha1msg2(Hacl_Vec128_t a,
+                                                   Hacl_Vec128_t b) {
+  return _mm_sha1msg2_epu32(a, b);
+}
+
 static inline bool Hacl_Vec128_sha_supported(void) {
 #if defined(__GNUC__)
   /* SHA is CPUID.(EAX=7,ECX=0):EBX bit 29, read directly because clang
