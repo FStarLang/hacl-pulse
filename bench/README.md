@@ -109,7 +109,7 @@ Output is one CSV per contender per offset per round, named
 | `gap.py DIR` | rank every benchmark by hacl-pulse / HACL\*-portable |
 | `gapbest.py DIR` | rank every benchmark by hacl-pulse / HACL\*-best. **This is the ranking that chooses what to work on next.** |
 | `mktable.py DIR` | regenerate the markdown performance table in `design/notes.md`, so those numbers are never typed by hand |
-| `mkkem.py DIR` | the same for the ML-KEM table, which is absolute rather than relative because HACL\* has no ML-KEM to compare against |
+| `mkkem.py DIR` | the same for the ML-KEM and ML-DSA tables, which are absolute rather than relative because HACL\* has neither to compare against |
 | `mkothers.py DIR [TOL]` | the other-libraries table, from an `others.sh` run; runs whose canary is more than `TOL` (default 0.02) above the best are dropped first |
 | `mkmldsa.py DIR [TOL]` | the ML-DSA table (44/65/87, every ML-DSA contender), from the same `others.sh` run, with the same filter |
 

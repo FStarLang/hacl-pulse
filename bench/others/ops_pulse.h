@@ -114,14 +114,23 @@ static inline int bo_ffdhe_ss(uint8_t *ss) { return Hacl_FFDHE_ffdhe2048_shared_
 static uint8_t pl_kem_ek[1184], pl_kem_dk[2400], pl_kem_ek2[1184], pl_kem_dk2[2400];
 #define BO_MLKEM768
 static inline void bo_mlkem768_setup(uint8_t *ek, uint8_t *dk) { memcpy(pl_kem_ek, ek, 1184); memcpy(pl_kem_dk, dk, 2400); }
+/* OpenSSL and AWS-LC draw fresh randomness for every key pair and every
+   encapsulation, so these take a fresh seed each call too: a fixed one lets
+   the branch predictor learn the rejection sampling (REPORT.md Part 85). */
+static uint64_t pl_kem_ctr;
+static inline void pl_kem_seed(uint8_t *x, uint8_t b) {
+  uint64_t c = ++pl_kem_ctr * 0x9e3779b97f4a7c15ULL;
+  memset(x, b, 32);
+  memcpy(x, &c, 8);
+}
 static inline void bo_mlkem768_keygen(void) {
   uint8_t d[32], z[32];
-  memset(d, 1, 32); memset(z, 2, 32);
+  pl_kem_seed(d, 1); pl_kem_seed(z, 2);
   Hacl_MLKEM768_keypair(pl_kem_ek2, pl_kem_dk2, d, z);
 }
 static inline void bo_mlkem768_enc(uint8_t *ct, uint8_t *ss) {
   uint8_t m[32];
-  memset(m, 3, 32);
+  pl_kem_seed(m, 3);
   Hacl_MLKEM768_enc(ct, ss, pl_kem_ek, m);
 }
 static inline void bo_mlkem768_dec(uint8_t *ss, uint8_t *ct) { Hacl_MLKEM768_dec(ss, ct, pl_kem_dk); }

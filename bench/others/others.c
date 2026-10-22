@@ -346,22 +346,34 @@ int main(void) {
   /* ---------------- ML-KEM-768 ---------------- */
 #ifdef BO_MLKEM768
   {
-    static uint8_t ek[1184], dk[2400], ct[1088], rct[1088];
+    /* Key generation and encapsulation take fresh randomness in every
+     * library; decapsulation cycles through NCT ciphertexts, each first
+     * checked against hacl-pulse. */
+#define NCT 64
+    static uint8_t ek[1184], dk[2400], ct[1088], rct[NCT][1088];
     uint8_t d[32], z[32], m[32], ss[32], rss[32];
-    fill(d, 32, 61); fill(z, 32, 62); fill(m, 32, 63);
+    uint64_t k = 0;
+    fill(d, 32, 61); fill(z, 32, 62);
     Hacl_MLKEM768_keypair(ek, dk, d, z);
-    Hacl_MLKEM768_enc(rct, rss, ek, m);
     bo_mlkem768_setup(ek, dk);
-    bo_mlkem768_dec(ss, rct); same("ml-kem-768 decapsulate", ss, rss, 32);
+    for (int j = 0; j < NCT; j++) {
+      fill(m, 32, 630 + j);
+      Hacl_MLKEM768_enc(rct[j], rss, ek, m);
+      bo_mlkem768_dec(ss, rct[j]); same("ml-kem-768 decapsulate", ss, rss, 32);
+    }
     bo_mlkem768_enc(ct, ss); Hacl_MLKEM768_dec(rss, ct, dk); same("ml-kem-768 encapsulate", ss, rss, 32);
     TIME("mlkem768-keypair", 0, { bo_mlkem768_keygen(); sink += 1; });
     TIME("mlkem768-encapsulate", 0, { bo_mlkem768_enc(ct, ss); sink += ss[0]; });
-    TIME("mlkem768-decapsulate", 0, { bo_mlkem768_dec(ss, rct); sink += ss[0]; });
+    TIME_MIN("mlkem768-decapsulate", 0, NCT,
+             { bo_mlkem768_dec(ss, rct[k % NCT]); k++; sink += ss[0]; });
+#undef NCT
   }
 #endif
 
   /* ---------------- ML-DSA ----------------
-   * Key generation from a 32-byte seed (pk compared with hacl-pulse's).
+   * Key generation from NMSG different 32-byte seeds in turn (the first pk
+   * compared with hacl-pulse's): with one seed the branch predictor learns
+   * the rejection sampling, REPORT.md Part 85.
    * Signing is FIPS 204 ML-DSA.Sign with an empty context, over NMSG
    * different 32-byte messages in turn (the number of rejection-loop
    * iterations varies per message, so every library signs the same set, an
@@ -373,11 +385,12 @@ int main(void) {
 #define MLDSA_ROWS(P_, PK_, SK_, SG_)                                          \
   do {                                                                         \
     static uint8_t pk[PK_], sk[SK_], kpk[PK_], sg[SG_], rsg[NMSG][SG_];        \
-    uint8_t xi[32];                                                            \
+    static uint8_t xi[NMSG][32];                                               \
+    uint8_t *xi0 = xi[0];                                                      \
     uint64_t k = 0;                                                            \
-    fill(xi, 32, 70 + P_);                                                     \
-    Hacl_MLDSA##P_##_keypair(pk, sk, xi);                                      \
-    bo_mldsa##P_##_keygen(kpk, xi);                                            \
+    fill(&xi[0][0], sizeof xi, 70 + P_);                                       \
+    Hacl_MLDSA##P_##_keypair(pk, sk, xi0);                                     \
+    bo_mldsa##P_##_keygen(kpk, xi0);                                           \
     same("ml-dsa-" #P_ " keypair", kpk, pk, PK_);                              \
     bo_mldsa##P_##_setup(pk, sk);                                              \
     for (int j = 0; j < NMSG; j++) {                                           \
@@ -395,7 +408,8 @@ int main(void) {
     rsg[0][40] ^= 1;                                                           \
     if (bo_mldsa##P_##_verify(msg, 32, rsg[0])) fail("ml-dsa-" #P_ " verify (forged)"); \
     rsg[0][40] ^= 1;                                                           \
-    TIME("mldsa" #P_ "-keypair", 0, { bo_mldsa##P_##_keygen(kpk, xi); sink += kpk[0]; }); \
+    TIME_MIN("mldsa" #P_ "-keypair", 0, NMSG,                                  \
+             { bo_mldsa##P_##_keygen(kpk, xi[k % NMSG]); k++; sink += kpk[0]; }); \
     TIME_MIN("mldsa" #P_ "-sign", 0, NMSG,                                     \
              { sink += bo_mldsa##P_##_sign(sg, msg + (k % NMSG), 32); k++; }); \
     TIME_MIN("mldsa" #P_ "-verify", 0, NMSG,                                   \

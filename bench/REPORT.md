@@ -9204,3 +9204,40 @@ as in real use (best of 30 x 100 calls, `xi[0]` or `rho'[0]` varied):
 "Before" is the previous commit's sampler (four-way dispatch off, branchy
 acceptance).  The test suite also passes with `Hacl_Vec256_supported`
 forced false.
+
+## Part 86: Rejection samplers timed over many inputs
+
+Part 85 found that `bench.c` timed ML-DSA key generation on one seed, so
+the branch predictor learnt `ExpandS`'s acceptance pattern and the table
+showed none of the cost that a real caller, with a new seed every time,
+pays.  The same is true of every rejection sampler measured on a fixed
+input: ML-KEM's matrix sampler (`rho`), ML-DSA's `ExpandA`, `ExpandS`,
+`ExpandMask` and `SampleInBall`, and the number of signing attempts.  Both
+harnesses now cycle through 64 inputs, keeping the minimum-over-runs
+reduction.  `TIME_MIN` starts each batch at 64 calls and only doubles it,
+so every timed batch calls each input equally often:
+
+- `bench.c`: ML-KEM key generation over 64 `(d, z)` seeds, encapsulation
+  over 64 messages `m`, decapsulation over the 64 resulting ciphertexts;
+  ML-DSA key generation over 64 `xi`, signing over 64 messages, and
+  verification over the 64 resulting signatures.  Each output goes to its
+  own buffer, so the next call's inputs do not depend on the last.
+- `others/others.c`: every library's ML-DSA key generation over 64 seeds
+  (the first public key still checked against hacl-pulse's), and ML-KEM-768
+  decapsulation over 64 ciphertexts made by hacl-pulse, each checked
+  first.  OpenSSL and AWS-LC already drew fresh randomness for ML-KEM key
+  generation and encapsulation; hacl-pulse's shim now derives a fresh seed
+  per call from a counter (`ops_pulse.h`), so all three do the same work.
+
+The README tables were regenerated from these runs (gcc 15.2 and clang
+21.1, three rounds each, `table.sh`; `others.sh 3`, read at a 6% canary
+tolerance because the machine's canary wandered by 8%: at 2% 55 of 72
+runs were dropped and the pq-crystals reference had none left).  The
+machine was about 8% slower on both sides than for the previous table, so
+the HACL\* ratios moved by a few hundredths and the absolute numbers rose.
+The other-library tables are the first since the four-way Keccak and the
+AVX2 transforms: ML-DSA is now 1.8x--2.1x behind the fastest
+implementation (mldsa-native or pq-crystals' AVX2), from 5.0x--5.7x, and
+ML-KEM-768 1.4x--1.5x behind AWS-LC, from 3.2x--3.5x.
+
+`mkkem.py` now also prints the ML-DSA absolute table from `bench.c`'s rows.

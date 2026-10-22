@@ -52,9 +52,13 @@ static void report(const char *name, size_t bytes, double secs) {
   fflush(stdout);
 }
 
-#define TIME(name_, bytes_, body_)                                             \
+#define TIME(name_, bytes_, body_) TIME_MIN(name_, bytes_, 1, body_)
+
+/* min_ is a power of two; every iteration count is then a multiple of it, so
+   a body that cycles through min_ inputs runs each of them equally often. */
+#define TIME_MIN(name_, bytes_, min_, body_)                                   \
   do {                                                                         \
-    uint64_t iters = 1;                                                        \
+    uint64_t iters = (min_);                                                   \
     double t = 0;                                                              \
     for (;;) {                                                                 \
       t = now_sec();                                                           \
@@ -234,24 +238,38 @@ int main(void) {
     TIME("ffdhe2048-shared-secret", 0, { sink += bs_ffdhe2048_ss(ss, sk_a, pk_b); });
   }
 
-  /* ---------------- ML-KEM ---------------- */
+  /* ---------------- ML-KEM and ML-DSA ----------------
+   * Every operation cycles through NPQ different inputs: key generation
+   * through NPQ seeds, encapsulation through NPQ messages, decapsulation
+   * through NPQ ciphertexts, signing and verification through NPQ messages
+   * (and their signatures).  With one fixed input the branch predictor learns
+   * the outcome of every rejection-sampling test across the timing loop, and
+   * a sampler whose acceptance test is a branch looks several times faster
+   * than it is on fresh input (REPORT.md Part 85). */
+#define NPQ 64
 #ifdef BS_HAVE_MLKEM
   {
-    static uint8_t kek[1568], kdk[3168], kct[1568], kss[32];
-    uint8_t kd[32], kz[32], km[32];
-    fill(kd, 32, 61);
+    static uint8_t kek[1568], kdk[3168], kct[1568], kss[32], kcts[NPQ][1568];
+    static uint8_t kek2[1568], kdk2[3168];
+    static uint8_t kd[NPQ][32], kz[32], km[NPQ][32];
+    uint64_t k = 0;
+    fill(&kd[0][0], sizeof kd, 61);
     fill(kz, 32, 62);
-    fill(km, 32, 63);
+    fill(&km[0][0], sizeof km, 63);
 #define MLKEM_ROWS(bits_)                                                      \
     do {                                                                       \
-      bs_mlkem##bits_##_keypair(kek, kdk, kd, kz);                             \
-      TIME("mlkem" #bits_ "-keypair", 0,                                       \
-           { bs_mlkem##bits_##_keypair(kek, kdk, kd, kz); sink += kek[0]; });  \
-      TIME("mlkem" #bits_ "-encapsulate", 0,                                   \
-           { bs_mlkem##bits_##_enc(kct, kss, kek, km); sink += kss[0]; });     \
-      bs_mlkem##bits_##_enc(kct, kss, kek, km);                                \
-      TIME("mlkem" #bits_ "-decapsulate", 0,                                   \
-           { bs_mlkem##bits_##_dec(kss, kct, kdk); sink += kss[0]; });         \
+      bs_mlkem##bits_##_keypair(kek, kdk, kd[0], kz);                          \
+      for (int j = 0; j < NPQ; j++)                                            \
+        bs_mlkem##bits_##_enc(kcts[j], kss, kek, km[j]);                       \
+      TIME_MIN("mlkem" #bits_ "-keypair", 0, NPQ,                              \
+           { bs_mlkem##bits_##_keypair(kek2, kdk2, kd[k % NPQ], kz); k++;      \
+             sink += kek2[0]; });                                               \
+      TIME_MIN("mlkem" #bits_ "-encapsulate", 0, NPQ,                          \
+           { bs_mlkem##bits_##_enc(kct, kss, kek, km[k % NPQ]); k++;           \
+             sink += kss[0]; });                                               \
+      TIME_MIN("mlkem" #bits_ "-decapsulate", 0, NPQ,                          \
+           { bs_mlkem##bits_##_dec(kss, kcts[k % NPQ], kdk); k++;              \
+             sink += kss[0]; });                                               \
     } while (0)
     MLKEM_ROWS(512);
     MLKEM_ROWS(768);
@@ -260,26 +278,29 @@ int main(void) {
   }
 #endif
 
-  /* ---------------- ML-DSA ---------------- */
 #ifdef BS_HAVE_MLDSA
   {
-    static uint8_t dpk[2592], dsk[4896], dsg[4627];
-    uint8_t dxi[32], drnd[32], dmsg[32];
-    fill(dxi, 32, 71);
+    static uint8_t dpk[2592], dsk[4896], dsg[4627], dsgs[NPQ][4627], dpk2[2592], dsk2[4896];
+    static uint8_t dxi[NPQ][32], drnd[32];
+    uint64_t k = 0;
+    fill(&dxi[0][0], sizeof dxi, 71);
     fill(drnd, 32, 72);
-    fill(dmsg, 32, 73);
 #define MLDSA_ROWS(n_)                                                         \
     do {                                                                       \
-      bs_mldsa##n_##_keypair(dpk, dsk, dxi);                                   \
-      TIME("mldsa" #n_ "-keypair", 0,                                          \
-           { bs_mldsa##n_##_keypair(dpk, dsk, dxi); sink += dpk[0]; });        \
-      TIME("mldsa" #n_ "-sign", 0,                                             \
-           { sink += bs_mldsa##n_##_sign(dsg, dsk, dmsg, 32, drnd); });        \
-      if (!bs_mldsa##n_##_sign(dsg, dsk, dmsg, 32, drnd) ||                    \
-          !bs_mldsa##n_##_verify(dpk, dmsg, 32, dsg))                          \
-        fprintf(stderr, "mldsa" #n_ " self-check failed\n");                  \
-      TIME("mldsa" #n_ "-verify", 0,                                           \
-           { sink += bs_mldsa##n_##_verify(dpk, dmsg, 32, dsg); });            \
+      bs_mldsa##n_##_keypair(dpk, dsk, dxi[0]);                                \
+      for (int j = 0; j < NPQ; j++)                                            \
+        if (!bs_mldsa##n_##_sign(dsgs[j], dsk, msg + j, 32, drnd) ||           \
+            !bs_mldsa##n_##_verify(dpk, msg + j, 32, dsgs[j]))                 \
+          fprintf(stderr, "mldsa" #n_ " self-check failed\n");                \
+      TIME_MIN("mldsa" #n_ "-keypair", 0, NPQ,                                 \
+           { bs_mldsa##n_##_keypair(dpk2, dsk2, dxi[k % NPQ]); k++;            \
+             sink += dpk2[0]; });                                              \
+      TIME_MIN("mldsa" #n_ "-sign", 0, NPQ,                                    \
+           { sink += bs_mldsa##n_##_sign(dsg, dsk, msg + (k % NPQ), 32, drnd); \
+             k++; });                                                          \
+      TIME_MIN("mldsa" #n_ "-verify", 0, NPQ,                                  \
+           { sink += bs_mldsa##n_##_verify(dpk, msg + (k % NPQ), 32,           \
+                                           dsgs[k % NPQ]); k++; });            \
     } while (0)
     MLDSA_ROWS(44);
     MLDSA_ROWS(65);
@@ -287,6 +308,7 @@ int main(void) {
 #undef MLDSA_ROWS
   }
 #endif
+#undef NPQ
 
   /* ---------------- HMAC-DRBG ---------------- */
   {
