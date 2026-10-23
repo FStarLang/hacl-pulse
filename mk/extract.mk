@@ -33,16 +33,24 @@ CUSTARD_FLAGS += --custard_monomorphize_types true
 # reduction steps is not enough.
 CUSTARD_FLAGS += --custard_norm_budget 100000000
 
+# Extract as a named unit, which also writes its unit interface,
+# $(BUILD_DIR)/Hacl.cui (Custard puts it in --odir).  A downstream Custard
+# project extracts against it with `--custard_link <path>/obj/build/Hacl.cui`
+# (a path: it is not looked up on --include) plus the same
+# --custard_monomorphize_types, and links against dist/Hacl.c rather than
+# compiling its own copy of whatever it uses from here.
+CUSTARD_FLAGS += --custard_unit Hacl
+
 # Whole-program extraction reads far more than the root module's own .checked
 # file, and the dependency graph of a target Custard invented is not in
 # .depend, so the library depends on every .checked file.  Re-extracting the
 # world when any module changes is cheap next to verifying it.
 ifeq ($(DIST_ONLY),)
-$(DIST_DIR)/Hacl.c: $(CACHE_DIR)/$(C_ROOT).fst.checked $(ALL_CHECKED_FILES)
+$(DIST_DIR)/Hacl.c $(BUILD_DIR)/Hacl.cui &: $(CACHE_DIR)/$(C_ROOT).fst.checked $(ALL_CHECKED_FILES)
 	$(call msg, "EXTRACT", "$(C_ROOT)")
 	$(Q)mkdir -p $(DIST_DIR)
 	$(Q)$(FSTAR) $< $(CUSTARD_FLAGS)                                       \
-	  $(foreach e,$(CUSTARD_ENTRIES),--custard_entry $(e)) -o $@
+	  $(foreach e,$(CUSTARD_ENTRIES),--custard_entry $(e)) -o $(DIST_DIR)/Hacl.c
 
 # Custard writes the header from the same invocation that writes the source.
 $(DIST_DIR)/Hacl.h: $(DIST_DIR)/Hacl.c
@@ -81,5 +89,5 @@ C_HEADERS = $(DIST_DIR)/Hacl.h
 C_OBJECTS = $(BUILD_DIR)/Hacl.o
 
 .PHONY: extract compile
-extract: $(C_FILES)
+extract: $(C_FILES)$(if $(DIST_ONLY),, $(BUILD_DIR)/Hacl.cui)
 compile: $(C_OBJECTS) $(HAND_OBJS)
