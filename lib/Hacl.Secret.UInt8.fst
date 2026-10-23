@@ -17,6 +17,7 @@
 module Hacl.Secret.UInt8
 
 module U8 = FStar.UInt8
+module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module U64 = FStar.UInt64
 module Cast = FStar.Int.Cast
@@ -145,3 +146,8 @@ let select mask x y =
   UInt.logor_lemma_1 #8 (v r);
   UInt.logor_commutative #8 (v l) (v r);
   U8.logor l r
+
+let classify_seq s = s
+let classify_seq_index s i = ()
+let classify_seq_slice s i j = ()
+let classify_seq_append s1 s2 = ()
