@@ -32,8 +32,12 @@ module Hacl.Vec256.Lane64
 #lang-pulse
 
 open FStar.Attributes
+open Pulse.Lib.Pervasives
 open Hacl.Vec256
 
+module A = Pulse.Lib.Array
+module SZ = FStar.SizeT
+module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module S64 = Hacl.Secret.UInt64
 let lane_s (x: t) (i: nat { i < 4 }) : GTot S64.t =
@@ -60,3 +64,61 @@ assume val andnot64 (a b: t)
 [@@custard_extern "Hacl_Vec256_rotl64"; custard_c_header "Hacl_Vec256.h"]
 assume val rotl64 (a: t) (s: U32.t { 0 < U32.v s /\ U32.v s < 64 })
   : r: t { forall (i: nat). i < 4 ==> lane_s r i == S64.rotate_left (lane_s a i) s }
+
+(** {2 For the SHA-512 message schedule} *)
+
+(** [add64] and [shr64], which [Hacl.Vec256] states on natural numbers,
+    restated on the words. *)
+let add64_s (a b: t) (i: nat { i < 4 })
+  : Lemma (lane_s (add64 a b) i == S64.add_mod (lane_s a i) (lane_s b i))
+  = S64.v_extensional (lane_s (add64 a b) i) (S64.add_mod (lane_s a i) (lane_s b i))
+
+let shr64_s (a: t) (s: U32.t { 0 < U32.v s /\ U32.v s < 64 }) (i: nat { i < 4 })
+  : Lemma (lane_s (shr64 a s) i == S64.shift_right (lane_s a i) s)
+  = S64.v_extensional (lane_s (shr64 a s) i) (S64.shift_right (lane_s a i) s)
+
+[@@custard_extern "Hacl_Vec256_rotr64"; custard_c_header "Hacl_Vec256.h"]
+assume val rotr64 (a: t) (s: U32.t { 0 < U32.v s /\ U32.v s < 64 })
+  : r: t { forall (i: nat). i < 4 ==> lane_s r i == S64.rotate_right (lane_s a i) s }
+
+(** Words [i .. i + 3] of an array. *)
+[@@custard_extern "Hacl_Vec256_load64"; custard_c_header "Hacl_Vec256.h"]
+assume val load64_at (p: A.array S64.t) (i: SZ.t)
+                     (#pm: perm) (#v: erased (Seq.seq S64.t))
+  : stt t (requires A.pts_to p #pm v ** pure (SZ.v i + 4 <= Seq.length v))
+          (ensures fun r -> A.pts_to p #pm v **
+             pure (SZ.v i + 4 <= Seq.length v /\
+                   (forall (j: nat). j < 4 ==> lane_s r j == Seq.index v (SZ.v i + j))))
+
+(** The four lanes to words [i .. i + 3]; the rest are unchanged. *)
+[@@custard_extern "Hacl_Vec256_store64_at"; custard_c_header "Hacl_Vec256.h"]
+assume val store64_at (p: A.array S64.t) (i: SZ.t) (x: t) (#v: erased (Seq.seq S64.t))
+  : stt unit (requires A.pts_to p v ** pure (SZ.v i + 4 <= Seq.length v))
+             (ensures fun _ -> exists* (v': Seq.seq S64.t). A.pts_to p v' **
+                pure (Seq.length v' == Seq.length v /\
+                      (forall (k: nat). k < Seq.length v ==>
+                         Seq.index v' k == (if SZ.v i <= k && k < SZ.v i + 4
+                                            then lane_s x (k - SZ.v i)
+                                            else Seq.index v k))))
+
+(** Lanes 1, 2, 3 of [lo] and lane 0 of [hi]. *)
+[@@custard_extern "Hacl_Vec256_window64"; custard_c_header "Hacl_Vec256.h"]
+assume val window64 (lo hi: t)
+  : r: t { lane_s r 0 == lane_s lo 1 /\ lane_s r 1 == lane_s lo 2 /\
+           lane_s r 2 == lane_s lo 3 /\ lane_s r 3 == lane_s hi 0 }
+
+(** Lanes 2, 3 moved to 0, 1.  The other two are zero, which nothing needs. *)
+[@@custard_extern "Hacl_Vec256_hi_to_lo64"; custard_c_header "Hacl_Vec256.h"]
+assume val hi_to_lo64 (a: t)
+  : r: t { lane_s r 0 == lane_s a 2 /\ lane_s r 1 == lane_s a 3 }
+
+(** Lanes 0, 1 moved to 2, 3.  The other two are zero, which nothing needs. *)
+[@@custard_extern "Hacl_Vec256_lo_to_hi64"; custard_c_header "Hacl_Vec256.h"]
+assume val lo_to_hi64 (a: t)
+  : r: t { lane_s r 2 == lane_s a 0 /\ lane_s r 3 == lane_s a 1 }
+
+(** Lanes 0, 1 of [lo] and 2, 3 of [hi]. *)
+[@@custard_extern "Hacl_Vec256_blend_lohi64"; custard_c_header "Hacl_Vec256.h"]
+assume val blend_lohi64 (lo hi: t)
+  : r: t { lane_s r 0 == lane_s lo 0 /\ lane_s r 1 == lane_s lo 1 /\
+           lane_s r 2 == lane_s hi 2 /\ lane_s r 3 == lane_s hi 3 }

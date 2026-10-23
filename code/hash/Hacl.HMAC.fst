@@ -34,6 +34,7 @@ open Hacl.Hash.SHA2.Tables
 open Hacl.Impl.Table
 open Hacl.HMAC.Core
 open Hacl.HMAC.NI
+open Hacl.HMAC.AVX2
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -42,6 +43,7 @@ module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Vec = Hacl.Vec128
+module V256 = Hacl.Vec256
 
 (* SHA-224 and SHA-256 are the two that have an implementation on the SHA
    instructions; the dispatch is the same shape as the one in
@@ -168,7 +170,25 @@ ensures exists* vout'.
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
   sha2_384_facts ();
-  hmac_impl sha2_384 kt ivt out key key_len msg msg_len;
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if (Hacl.X64.x86_64)
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
+    pure (Seq.length vkey < max_input #S64.t /\
+          block_len #S64.t + Seq.length vmsg < max_input #S64.t /\
+          vout' == hmac sha2_384 vkey vmsg)
+  {
+    if (V256.supported ())
+    {
+      hmac_impl_avx2 sha2_384 kt ivt out key key_len msg msg_len;
+    } else {
+      hmac_impl sha2_384 kt ivt out key key_len msg msg_len;
+    }
+  } else {
+    hmac_impl sha2_384 kt ivt out key key_len msg msg_len;
+  };
   drop_table ivt;
   drop_table kt;
 }
@@ -196,7 +216,25 @@ ensures exists* vout'.
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
   sha2_512_facts ();
-  hmac_impl sha2_512 kt ivt out key key_len msg msg_len;
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if (Hacl.X64.x86_64)
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to key #pkey vkey ** A.pts_to msg #pmsg vmsg **
+    pure (Seq.length vkey < max_input #S64.t /\
+          block_len #S64.t + Seq.length vmsg < max_input #S64.t /\
+          vout' == hmac sha2_512 vkey vmsg)
+  {
+    if (V256.supported ())
+    {
+      hmac_impl_avx2 sha2_512 kt ivt out key key_len msg msg_len;
+    } else {
+      hmac_impl sha2_512 kt ivt out key key_len msg msg_len;
+    }
+  } else {
+    hmac_impl sha2_512 kt ivt out key key_len msg msg_len;
+  };
   drop_table ivt;
   drop_table kt;
 }

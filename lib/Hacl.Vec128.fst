@@ -87,6 +87,7 @@ module U32 = FStar.UInt32
 module CL = Spec.CLMUL
 module S32 = Hacl.Secret.UInt32
 module SHANI = Spec.SHANI
+module SHA1NI = Spec.SHA1NI
 module CLess = Spec.CarryLess
 
 (** {2 The type} *)
@@ -447,3 +448,48 @@ assume val sha256msg1 (a b: t)
 assume val sha256msg2 (a b: t)
   : r: t { forall (i: nat). i < 4 ==>
              SHANI.lane (vv r) i == SHANI.msg2 (vv a) (vv b) i }
+
+(** {2 SHA-1}
+
+    The same feature bit and the same target as SHA-256.  The axioms are
+    stated with [Spec.SHA1NI]; the instructions keep the earliest word in
+    the high lane. *)
+
+[@@custard_extern "Hacl_Vec128_xor32"; custard_c_header "Hacl_Vec128.h"]
+assume val xor32 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==>
+             SHANI.lane (vv r) i == S32.logxor (SHANI.lane (vv a) i) (SHANI.lane (vv b) i) }
+
+(** A word into the high lane, zero in the rest; and back out. *)
+[@@custard_extern "Hacl_Vec128_high_lane"; custard_c_header "Hacl_Vec128.h"]
+assume val high_lane (x: S32.t)
+  : r: t { SHANI.lane (vv r) 3 == x /\ SHANI.lane (vv r) 2 == S32.zero /\
+           SHANI.lane (vv r) 1 == S32.zero /\ SHANI.lane (vv r) 0 == S32.zero }
+
+[@@custard_extern "Hacl_Vec128_get_high_lane"; custard_c_header "Hacl_Vec128.h"]
+assume val get_high_lane (a: t) : r: S32.t { r == SHANI.lane (vv a) 3 }
+
+(** [SHA1RNDS4], one binding per immediate. *)
+[@@custard_extern "Hacl_Vec128_sha1rnds4_0"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1rnds4_0 (abcd w: t) : r: t { SHA1NI.rnds4_out 0 (vv abcd) (vv w) (vv r) }
+
+[@@custard_extern "Hacl_Vec128_sha1rnds4_1"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1rnds4_1 (abcd w: t) : r: t { SHA1NI.rnds4_out 1 (vv abcd) (vv w) (vv r) }
+
+[@@custard_extern "Hacl_Vec128_sha1rnds4_2"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1rnds4_2 (abcd w: t) : r: t { SHA1NI.rnds4_out 2 (vv abcd) (vv w) (vv r) }
+
+[@@custard_extern "Hacl_Vec128_sha1rnds4_3"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1rnds4_3 (abcd w: t) : r: t { SHA1NI.rnds4_out 3 (vv abcd) (vv w) (vv r) }
+
+[@@custard_extern "Hacl_Vec128_sha1nexte"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1nexte (a b: t)
+  : r: t { forall (i: nat). i < 4 ==> SHANI.lane (vv r) i == SHA1NI.nexte (vv a) (vv b) i }
+
+[@@custard_extern "Hacl_Vec128_sha1msg1"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1msg1 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==> SHANI.lane (vv r) i == SHA1NI.msg1 (vv a) (vv b) i }
+
+[@@custard_extern "Hacl_Vec128_sha1msg2"; custard_c_header "Hacl_Vec128.h"]
+assume val sha1msg2 (a b: t)
+  : r: t { forall (i: nat). i < 4 ==> SHANI.lane (vv r) i == SHA1NI.msg2 (vv a) (vv b) i }

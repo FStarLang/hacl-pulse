@@ -48,6 +48,8 @@ module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Vec = Hacl.Vec128
 module NI = Hacl.Hash.SHA2.NI
+module V256 = Hacl.Vec256
+module AVX2 = Hacl.Hash.SHA2.AVX2
 
 (** [Spec.SHA2.max_input] is [2^61] for the thirty-two bit family and [2^125]
     for the sixty-four bit one, so the [2^61] the callers promise is enough for
@@ -73,12 +75,14 @@ let sha2_256_facts (_: unit)
   = ()
 
 let sha2_384_facts (_: unit)
-  : Lemma (sha2_384.k == k512 /\ sha2_384.iv == iv384 /\ SZ.v sha2_384.nhash_bytes == 48)
-  = ()
+  : Lemma (AVX2.is_sha512 sha2_384 /\
+           sha2_384.k == k512 /\ sha2_384.iv == iv384 /\ SZ.v sha2_384.nhash_bytes == 48)
+  = assert_norm (AVX2.is_sha512 sha2_384)
 
 let sha2_512_facts (_: unit)
-  : Lemma (sha2_512.k == k512 /\ sha2_512.iv == iv512 /\ SZ.v sha2_512.nhash_bytes == 64)
-  = ()
+  : Lemma (AVX2.is_sha512 sha2_512 /\
+           sha2_512.k == k512 /\ sha2_512.iv == iv512 /\ SZ.v sha2_512.nhash_bytes == 64)
+  = assert_norm (AVX2.is_sha512 sha2_512)
 #pop-options
 
 (** {2 The four algorithms}
@@ -181,7 +185,23 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let ivt = table iv384_arr 8sz;
   max_input_bound ();
   sha2_384_facts ();
-  hash_impl sha2_384 kt ivt out input input_len;
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if (Hacl.X64.x86_64)
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to input #pin vin **
+    pure (Seq.length vin < max_input #S64.t /\ vout' == hash sha2_384 vin)
+  {
+    if (V256.supported ())
+    {
+      AVX2.hash_impl_avx2 sha2_384 kt ivt out input input_len;
+    } else {
+      hash_impl sha2_384 kt ivt out input input_len;
+    }
+  } else {
+    hash_impl sha2_384 kt ivt out input input_len;
+  };
   drop_table kt;
   drop_table ivt;
 }
@@ -201,7 +221,23 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to input #pin vin **
   let ivt = table iv512_arr 8sz;
   max_input_bound ();
   sha2_512_facts ();
-  hash_impl sha2_512 kt ivt out input input_len;
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if (Hacl.X64.x86_64)
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to input #pin vin **
+    pure (Seq.length vin < max_input #S64.t /\ vout' == hash sha2_512 vin)
+  {
+    if (V256.supported ())
+    {
+      AVX2.hash_impl_avx2 sha2_512 kt ivt out input input_len;
+    } else {
+      hash_impl sha2_512 kt ivt out input input_len;
+    }
+  } else {
+    hash_impl sha2_512 kt ivt out input input_len;
+  };
   drop_table kt;
   drop_table ivt;
 }

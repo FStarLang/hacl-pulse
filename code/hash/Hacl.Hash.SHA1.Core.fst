@@ -169,7 +169,7 @@ ensures A.pts_to wsb (ws (words_from_be #S32.t block_words (block_at vb (SZ.v of
 
 (** {2 One block} *)
 
-(** The final step of [update_block_impl]: adding the shuffled state back
+(** The final step of [update_block_scalar]: adding the shuffled state back
     into the initial one, written as the five array updates it is. *)
 let update_block_final (blk: Seq.lseq S8.t block_len)
                        (vst0: Seq.lseq S32.t state_words) (vsh: Seq.seq S32.t) (n: nat)
@@ -191,7 +191,7 @@ let update_block_final (blk: Seq.lseq S8.t block_len)
       (S32.add_mod (Seq.index vst0 3) (Seq.index vsh 3))
       (S32.add_mod (Seq.index vst0 4) (Seq.index vsh 4))
 
-fn update_block_impl (wsb: A.array S32.t) (st: A.array S32.t)
+fn update_block_scalar (wsb: A.array S32.t) (st: A.array S32.t)
                      (block: A.array S8.t) (off: SZ.t)
                      (#vw0: erased (Seq.seq S32.t))
                      (#vst0: erased (Seq.lseq S32.t state_words))
@@ -261,6 +261,32 @@ ensures exists* vw.
 }
 
 #pop-options
+
+(** The block function every caller uses: the SHA extensions where the CPU
+    has them ([Hacl.Hash.SHA1.NI]), the scalar rounds above otherwise. *)
+fn update_block_impl (wsb: A.array S32.t) (st: A.array S32.t)
+                     (block: A.array S8.t) (off: SZ.t)
+                     (#vw0: erased (Seq.seq S32.t))
+                     (#vst0: erased (Seq.lseq S32.t state_words))
+                     (#pb: perm) (#vb: erased (Seq.seq S8.t))
+requires A.pts_to wsb vw0 ** A.pts_to st vst0 ** A.pts_to block #pb vb **
+         pure (Seq.length vw0 == rounds /\ SZ.v off + block_len <= Seq.length vb)
+ensures exists* vw.
+  A.pts_to wsb vw ** A.pts_to st (update_block (block_at vb (SZ.v off)) vst0) **
+  A.pts_to block #pb vb ** pure (Seq.length vw == rounds)
+{
+  if (Hacl.X64.x86_64)
+  {
+    if (Hacl.Vec128.sha_supported ())
+    {
+      Hacl.Hash.SHA1.NI.update_block_ni wsb st block off;
+    } else {
+      update_block_scalar wsb st block off;
+    }
+  } else {
+    update_block_scalar wsb st block off;
+  }
+}
 
 (** {2 The digest}
 

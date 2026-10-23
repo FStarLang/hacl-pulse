@@ -2779,6 +2779,55 @@ axioms are checked in `tests/test_vec128.c` against a fresh transcription of
 FIPS 180-4 on every single-bit input and on a thousand random ones, the same
 way the AES ones are.
 
+### SHA-512 on AVX2, where the schedule runs beside the rounds
+
+x86 has no SHA-512 instructions short of AVX-512's SHA512 extension, which
+this processor lacks, so the fast implementations (OpenSSL's, Firedancer's)
+vectorize only the message schedule and leave the rounds scalar.
+`code/hash/Hacl.Hash.SHA2.AVX2.fst` does the same.  The sixteen-word window
+`w[t..t+15]` lives in four YMM registers of four 64-bit lanes each; a
+`group` runs four scalar rounds on `w[t..t+3] + K[t..t+3]` and, in the same
+basic block, computes `w[t+16..t+19]` in the vector unit.  The two chains
+are independent, so the out-of-order core overlaps them, and the schedule
+costs almost nothing.  The state is eight locals rather than an array, so
+the C compiler keeps it in registers; `W + K` goes through one 32-byte store
+to `wsb` and four scalar loads that hit store forwarding.
+
+The vector step is the awkward part.  `sigma1` of the new words needs words
+that are themselves being computed, so `next4` does it in two halves: the
+low two lanes from `w[t+14..t+15]`, then the high two from the low two just
+produced.  `window64` (an `alignr` across the register pair) supplies
+`w[t+1..t+4]` and `w[t+9..t+12]`; `hi_to_lo64`, `lo_to_hi64` and
+`blend_lohi64` move the halves.  Each of the seven new intrinsics is an
+axiom in `Hacl.Vec256.Lane64` checked by `tests/test_vec256.c`.
+
+**What the registers hold is one opaque predicate per register.**
+`reg p b j x` says that lane `i` of `x` is `ws_at b (j + i)`; `holds` is
+four of them at `t`, `t+4`, `t+8`, `t+12`.  Stated as one quantified
+proposition over sixteen indices it made queries fail unpredictably; as four opaque
+facts that are revealed only inside the lemmas that need them, each lemma
+is small.  Past round 64 there is nothing left to schedule, and `next4_ok`
+says the new register holds the schedule only where `t + 16 < 80`; that
+needs `t % 4 == 0` so the boundary falls on a register.
+
+**Index arithmetic goes in its own lemmas.**  In a context holding the
+lane axioms -- whose `SMTPat`s mention `% pow2 64` -- Z3 timed out on
+`t + 16 + k - 7 == t + k + 9`, and would not identify `ws_at b i` with
+`ws_at b j` for `i` and `j` arithmetically equal.  Every such step is now a
+two-line lemma with no vector facts in scope (`ws_idx`, `idx_a`, `idx_b`,
+`ws_step4`, `reg_idx`) that states its result as `base + i`, so the call
+sites match syntactically.  The lane-movement axioms, at a symbolic lane,
+also need the case split written out.
+
+The block function carries `__attribute__((target("avx2")))` behind
+`defined(__x86_64__)`, and `sha384`/`sha512`, `hmac_sha384`/`hmac_sha512`
+and HKDF's `expand_sha384`/`expand_sha512` choose it on
+`Hacl_Vec256_supported()`, with the same per-hash copies of the drivers as
+SHA-NI (`Hacl.HMAC.AVX2`, `expand_avx2`).  Streaming, HMAC-DRBG and HPKE
+stay on the portable block, as they do for SHA-256.  SHA-512 over 256 KiB
+went from 630 us to 472 us under gcc and from 771 us to 432 us under clang
+(`bench/REPORT.md` Part 87).
+
 ### The generic bignum, where the length is a run-time value
 
 Everything above works at a fixed width.  RSA and finite-field
@@ -3198,6 +3247,21 @@ unfolding rather than by a case split the solver has to invent.
 Every module in the chain -- compression function, driver, streaming
 layer, HMAC -- verified on the first attempt, which is the payoff for
 having shaped `Spec.SHA1` on `Spec.SHA2` deliberately.
+
+**SHA-1 on the SHA extensions.**  `SHA1RNDS4` does four rounds,
+`SHA1MSG1`/`SHA1MSG2` four schedule slots, and `SHA1NEXTE` supplies the
+fifth state word, which never has a register of its own: after four
+rounds it is `ROTL^30` of the `a` that went in, so `SHA1NEXTE` recomputes
+it from the previous `ABCD` and adds it to the next message word.
+`spec/Spec.SHA1NI.fst` states each instruction in `Spec.SHA1`'s terms, as
+`Spec.SHANI` does for SHA-256, and the axioms in `Hacl.Vec128` are tested
+in `tests/test_vec128.c` against a scalar transcription.
+`Hacl.Hash.SHA1.NI` has the same three-loop shape as SHA-256's NI block
+(load, schedule into `wsb`, rounds).  Unlike SHA-256, the dispatch is
+inside `Hacl.Hash.SHA1.Core.update_block_impl`, since SHA-1's core is not
+generic in the word type, so every SHA-1 caller -- one-shot, streaming and
+HMAC -- uses it.  SHA-1 over 256 KiB went from 1.62 ms to 165 us, against
+AWS-LC's 146 us (`bench/REPORT.md` Part 87).
 
 ### MD5, and where the reuse runs out
 
@@ -3751,15 +3815,16 @@ reference**.
 
 | primitive | size | hacl-pulse | HACL\* best | ratio | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SHA-1 | 256 KiB | 184 us | 1.6 ms | **0.11x** | 1.6 ms | 0.11x |
 | Salsa20 | 256 KiB | 105 us | 433 us | **0.24x** | 433 us | 0.24x |
 | NaCl secretbox | 256 KiB | 156 us | 616 us | **0.25x** | 616 us | 0.25x |
+| SHA-512 | 256 KiB | 519 us | 1.3 ms | **0.39x** | 1.3 ms | 0.39x |
+| HMAC-SHA-512 | 256 KiB | 526 us | 1.3 ms | **0.39x** | 1.3 ms | 0.39x |
 | RSA-PSS-2048 verify | -- | 56 us | 130 us | **0.43x** | 130 us | 0.43x |
 | P-256 ECDH | -- | 71 us | 151 us | **0.47x** | 151 us | 0.47x |
 | SHAKE128 | 256 KiB | 606 us | 1.3 ms | **0.48x** | 1.3 ms | 0.48x |
 | SHA3-256 | 256 KiB | 751 us | 1.5 ms | **0.49x** | 1.5 ms | 0.49x |
 | P-256 ECDSA sign | -- | 83 us | 164 us | **0.51x** | 164 us | 0.51x |
-| SHA-512 | 256 KiB | 692 us | 1.3 ms | **0.52x** | 1.3 ms | 0.52x |
-| HMAC-SHA-512 | 256 KiB | 720 us | 1.3 ms | **0.54x** | 1.3 ms | 0.54x |
 | P-256 ECDSA verify | -- | 237 us | 414 us | **0.57x** | 414 us | 0.57x |
 | BLAKE2b | 256 KiB | 369 us | 428 us | **0.86x** | 358 us | 1.03x |
 | BLAKE2s | 256 KiB | 577 us | 615 us | **0.94x** | 610 us | 0.95x |
@@ -3767,7 +3832,6 @@ reference**.
 | RSA-PSS-2048 sign | -- | 4.1 ms | 4.3 ms | **0.96x** | 4.3 ms | 0.96x |
 | Poly1305 | 256 KiB | 49 us | 51 us | **0.96x** | 182 us | 0.27x |
 | RSA-2048 modexp | -- | 4.1 ms | 4.2 ms | **0.98x** | 4.1 ms | 0.99x |
-| SHA-1 | 256 KiB | 1.8 ms | 1.6 ms | **1.09x** | 1.6 ms | 1.10x |
 | ChaCha20-Poly1305 | 256 KiB | 152 us | 139 us | **1.10x** | 1.1 ms | 0.14x |
 | secp256k1 ECDSA sign | -- | 69 us | 63 us | **1.11x** | 63 us | 1.11x |
 | AES-128-GCM | 256 KiB | 77 us | 67 us | **1.15x** | 67 us | 1.15x |
@@ -3785,13 +3849,16 @@ hundredths at most; the prose below quotes the earlier measurement where it
 gives a ratio, and a few have shifted (SHAKE128 and SHA3-256 to 0.48x--0.49x,
 secp256k1 signing to 1.11x, MD5 to 1.29x, X25519 to 1.32x).
 
-Against what HACL\* can actually do on this machine, sixteen rows are ahead
+Against what HACL\* can actually do on this machine, seventeen rows are ahead
 and every row is within 1.30x.  The furthest ahead are Salsa20 and
 secretbox at 0.24x--0.25x, because HACL\* has no vector Salsa20; RSA
 verification at 0.43x, whose ladder starts at the exponent's top set bit
-(`bench/REPORT.md` Part 67); the three P-256 rows at 0.47x--0.57x; and
-SHA-512, HMAC-SHA-512, SHA-3 and SHAKE at 0.52x--0.54x, where HACL\* has
-no vector SHA-512 and no vector sponge.  P-256 was at 0.64x--0.76x until
+(`bench/REPORT.md` Part 67); the three P-256 rows at 0.47x--0.57x;
+SHA-3 and SHAKE at 0.48x--0.49x, where HACL\* has no vector sponge; and
+SHA-1 at 0.11x and SHA-512 and HMAC-SHA-512 at 0.39x, where HACL\* has
+neither a SHA-extensions SHA-1 nor a vector SHA-512 message schedule
+(`bench/REPORT.md` Part 87; those three rows are the Part 86 numbers scaled
+by Part 87's before-and-after measurement).  P-256 was at 0.64x--0.76x until
 its field-element copy stopped being a loop: gcc vectorized the four-word
 loop into 16-byte loads that missed store forwarding from the multiply's
 8-byte stores, and every point operation copies after nearly every field
@@ -3829,8 +3896,10 @@ Poly1305 (0.89x), ChaCha20 (0.94x) and ChaCha20-Poly1305 (0.92x) are ahead;
 X25519 and P-256 are level at 1.00x--1.01x, with P-256 verification at
 1.22x; Ed25519 and secp256k1 signing are at 1.19x and 1.28x.  SHA-3 and
 SHAKE are at 0.75x--0.80x rather than 0.54x--0.56x, and SHA-512 and
-HMAC-SHA-512 at 1.26x--1.32x rather than 0.52x--0.54x, because clang builds HACL\*'s sponge and SHA-512 about twice
-as fast as gcc does.
+HMAC-SHA-512 were at 1.26x--1.32x rather than 0.52x--0.54x, because clang builds HACL\*'s sponge and SHA-512 about twice
+as fast as gcc does.  That was before Part 87: clang's SHA-512 and
+HMAC-SHA-512 went from 771 us and 777 us to 432 us and 430 us with the AVX2
+message schedule, which puts them at about 0.71x--0.73x.
 
 The rows that were the honest ceiling are not any more.  ChaCha20,
 Poly1305 and ChaCha20-Poly1305 were at 5.31x, 4.13x and 5.13x four
@@ -4646,6 +4715,7 @@ left none of hacl-pulse's gcc build).  The harness is
 | BLAKE2b | 256 KiB | 333 us | 299 us | 331 us | -- | **273 us** | -- | -- | -- | 1.10x |
 | SHA-256 | 256 KiB | 185 us | 173 us | 160 us | 158 us | 797 us | 996 us | **156 us** | -- | 1.11x |
 | HMAC-SHA-256 | 256 KiB | 184 us | 175 us | 158 us | 159 us | 796 us | -- | **156 us** | -- | 1.13x |
+| SHA-1 | 256 KiB | 165 us | 169 us | 149 us | **146 us** | -- | -- | 808 us | -- | 1.13x |
 | SHA3-256 | 256 KiB | 680 us | 672 us | **576 us** | 581 us | -- | 714 us | -- | -- | 1.17x |
 | AES-256-GCM | 256 KiB | 79 us | 74 us | 63 us | **63 us** | 73 us | -- | 63 us | -- | 1.18x |
 | SHAKE128 | 256 KiB | 546 us | 560 us | 475 us | **463 us** | -- | 580 us | -- | -- | 1.18x |
@@ -4655,6 +4725,8 @@ left none of hacl-pulse's gcc build).  The harness is
 | ChaCha20-Poly1305 | 256 KiB | 136 us | 133 us | 113 us | **104 us** | 193 us | -- | -- | -- | 1.28x |
 | ML-DSA-65 keygen | -- | 83 us | 70 us | 188 us | **53 us** | -- | -- | -- | -- | 1.32x |
 | ML-DSA-65 sign | -- | 275 us | 215 us | 1.1 ms | **160 us** | -- | -- | -- | -- | 1.34x |
+| HMAC-SHA-512 | 256 KiB | 481 us | 430 us | 330 us | 464 us | 498 us | -- | **321 us** | -- | 1.34x |
+| SHA-512 | 256 KiB | 472 us | 432 us | 330 us | 467 us | 498 us | 636 us | **321 us** | -- | 1.35x |
 | ML-DSA-65 verify | -- | 84 us | 67 us | 188 us | **49 us** | -- | -- | -- | -- | 1.36x |
 | X25519 | -- | 48 us | 36 us | 35 us | 27 us | 31 us | 29 us | **26 us** | 56 us | 1.38x |
 | ML-KEM-768 keygen | -- | 20 us | 19 us | 48 us | **13 us** | -- | -- | -- | -- | 1.44x |
@@ -4662,15 +4734,12 @@ left none of hacl-pulse's gcc build).  The harness is
 | ML-KEM-768 encaps | -- | 23 us | 22 us | 34 us | **14 us** | -- | -- | -- | -- | 1.53x |
 | FFDHE-2048 | -- | 3.7 ms | 4.5 ms | **2.2 ms** | 4.0 ms | -- | -- | -- | -- | 1.68x |
 | RSA-PSS-2048 sign | -- | 3.7 ms | 4.5 ms | 2.2 ms | **2.1 ms** | -- | -- | -- | -- | 1.71x |
-| SHA-512 | 256 KiB | 623 us | 800 us | 330 us | 467 us | 498 us | 636 us | **321 us** | -- | 1.94x |
-| HMAC-SHA-512 | 256 KiB | 656 us | 784 us | 330 us | 464 us | 498 us | -- | **321 us** | -- | 2.04x |
 | P-256 ECDH | -- | 149 us | 111 us | 50 us | **48 us** | -- | -- | -- | -- | 2.31x |
 | Ed25519 verify | -- | 108 us | 126 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.91x |
 | RSA-PSS-2048 verify | -- | 51 us | 59 us | 22 us | **17 us** | -- | -- | -- | -- | 2.99x |
 | P-256 ECDSA verify | -- | 211 us | 162 us | 67 us | **54 us** | -- | -- | 62 us | -- | 3.00x |
 | P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.85x |
 | Ed25519 sign | -- | 34 us | 40 us | 41 us | 8.9 us | 16 us | -- | **8.7 us** | 18 us | 3.87x |
-| SHA-1 | 256 KiB | 1.6 ms | 900 us | 149 us | **146 us** | -- | -- | 808 us | -- | 6.17x |
 
 A dash means the library does not offer the operation through the API used:
 AWS-LC has BLAKE2b only with a 256-bit output and no BLAKE2s; libsodium has no
@@ -4705,14 +4774,17 @@ backends (`bench/REPORT.md` Parts 60 and 61); this processor has no
 AVX-512, and on AVX2 those rows are 1.05x--1.28x behind OpenSSL, AWS-LC and
 libjade.  Elsewhere the gaps fall into two groups.
 
-- *Within 1.4x* -- Salsa20, secretbox, SHA-256 and HMAC-SHA-256, both
-  AES-GCMs, BLAKE2b, ChaCha20, SHA3-256, ChaCha20-Poly1305, MD5, SHAKE128,
-  ML-DSA-65 and X25519.  Every one of these is a primitive where hacl-pulse already uses
+- *Within 1.4x* -- Salsa20, secretbox, SHA-1, SHA-256 and HMAC-SHA-256,
+  both AES-GCMs, BLAKE2b, ChaCha20, SHA3-256, ChaCha20-Poly1305, MD5,
+  SHAKE128, ML-DSA-65, SHA-512 and HMAC-SHA-512, and X25519.  Every one of
+  these is a primitive where hacl-pulse already uses
   the same instruction-set extensions as the leader (AVX2, SHA-NI, AES-NI
   and PCLMUL, BMI2), and the remaining distance is hand-scheduled
-  assembly: OpenSSL's and AWS-LC's SHA-256, ChaCha20 and Keccak,
-  Firedancer's GCM, libjade's Salsa20, s2n-bignum's X25519.
-- *1.4x--6x* -- ML-KEM, RSA, FFDHE, SHA-512, P-256, Ed25519 and SHA-1.
+  assembly: OpenSSL's and AWS-LC's SHA-1, SHA-256, ChaCha20 and Keccak,
+  Firedancer's GCM and SHA-512, libjade's Salsa20, s2n-bignum's X25519.
+  SHA-1 was at 6.2x and SHA-512 at 1.9x--2.0x until Part 87 gave them a
+  SHA-extensions block and an AVX2 message schedule.
+- *1.4x--4x* -- ML-KEM, RSA, FFDHE, P-256 and Ed25519.
   ML-KEM-768, at 1.4x--1.5x of AWS-LC, already runs its matrix sampler and
   noise PRF four streams at a time and its transforms on AVX2; what is
   left is AWS-LC's hand-written x86-64 backend.  ML-DSA-65 was at 3.7x--3.8x
@@ -4725,10 +4797,7 @@ libjade.  Elsewhere the gaps fall into two groups.
   verification through 64 inputs, so no row reflects a branch predictor
   that has learnt one input's rejections.
   RSA and FFDHE are portable 64-bit Montgomery multiplication against
-  OpenSSL's MULX/ADX assembly, at 1.7x.  SHA-512 is an instruction-set
-  gap: OpenSSL and Firedancer compute its message schedule with AVX2,
-  which neither this library nor HACL\* does; SHA-1 is a wider one, since
-  OpenSSL uses the SHA extensions for it and hacl-pulse does not.  P-256
+  OpenSSL's MULX/ADX assembly, at 1.7x.  P-256
   is at 2.3x--3.9x against `nistz256`'s assembly field, its 150 KB of
   generator multiples and its double-scalar verification.  Ed25519, at
   2.9x--3.9x, is portable radix-2^51 C against s2n-bignum's assembly.
@@ -4737,8 +4806,8 @@ Verification does not by itself put a library at the back of a row:
 libjade and the s2n-bignum routines in AWS-LC and Firedancer are verified
 too, and they lead or nearly lead theirs.  The gaps are mostly backends that
 have not been written yet, and this table, rather than the HACL\* one, is
-the better guide to which matter most: the AVX2 SHA-2 message schedule,
-P-256 and RSA's multiplication, and Ed25519's field.
+the better guide to which matter most: P-256 and RSA's multiplication, and
+Ed25519's field.
 
 ## Proof engineering notes
 

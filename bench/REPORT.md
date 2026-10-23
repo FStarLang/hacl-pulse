@@ -9241,3 +9241,53 @@ implementation (mldsa-native or pq-crystals' AVX2), from 5.0x--5.7x, and
 ML-KEM-768 1.4x--1.5x behind AWS-LC, from 3.2x--3.5x.
 
 `mkkem.py` now also prints the ML-DSA absolute table from `bench.c`'s rows.
+
+## Part 87: SHA-1 on the SHA extensions, SHA-512's schedule on AVX2
+
+The other-library table had two rows that were instruction-set gaps rather
+than scheduling ones: SHA-1 at 6.2x of AWS-LC, which uses `SHA1RNDS4`, and
+SHA-512 at 1.9x--2.0x of Firedancer and OpenSSL, which compute the message
+schedule with AVX2.
+
+**SHA-1** (`7877dcd`).  `Spec.SHA1NI` relates `SHA1RNDS4`, `SHA1NEXTE`,
+`SHA1MSG1` and `SHA1MSG2` to `Spec.SHA1`, and `Hacl.Hash.SHA1.NI` is one
+block on them, dispatched from `Hacl.Hash.SHA1.Core.update_block_impl` when
+the CPU has the SHA extensions.
+
+**SHA-384/512.**  A C prototype tried several shapes; the fastest keeps
+the sixteen-word window in four YMM registers, computes the next four words
+with AVX2 while four scalar rounds run, and holds the state in locals
+(about 1850 us/MB under gcc, against about 2400 us/MB before and 1450 us/MB
+for OpenSSL).  `Hacl.Hash.SHA2.AVX2` is that shape, verified;
+`sha384`/`sha512`, `hmac_sha384`/`hmac_sha512` and `expand_sha384`/
+`expand_sha512` dispatch to it on `Hacl_Vec256_supported()`.
+
+Before and after (`ab.sh`, gcc 15.2, two rounds, minimum per row; the
+"before" for SHA-1 is the commit before `7877dcd`, and for SHA-512 the
+commit after it):
+
+| bench | size | before | after | speedup |
+| --- | ---: | ---: | ---: | ---: |
+| sha1 | 64 B | 850 ns | 135 ns | 6.3x |
+| sha1 | 256 KiB | 1.62 ms | 165 us | 9.8x |
+| sha2-512 | 1 KiB | 2951 ns | 2313 ns | 1.28x |
+| sha2-512 | 256 KiB | 630 us | 472 us | 1.33x |
+| hmac-sha2-512 | 64 B | 1596 ns | 1344 ns | 1.19x |
+| hmac-sha2-512 | 256 KiB | 658 us | 481 us | 1.37x |
+
+One-block SHA-512 (64 B) is unchanged, at 440--447 ns, and no other row
+moved by more than 2%.  Under clang (a direct timing loop, best of 15),
+SHA-512 and HMAC-SHA-512 over 256 KiB went from 771 us and 777 us to 432 us
+and 430 us, and SHA-1 is 169 us.
+
+The README's other-library table now has SHA-1 at 1.13x of AWS-LC and
+SHA-512 / HMAC-SHA-512 at 1.34x--1.35x of Firedancer; those rows are this
+part's numbers, and the other columns are Part 86's.  In the HACL\* table
+the three rows are Part 86's hacl-pulse numbers scaled by the speedups
+above (SHA-1 0.11x, SHA-512 and HMAC-SHA-512 0.39x).  The test suite passes
+under gcc and clang, and with the six new `Hacl_Vec256_supported()` dispatch
+sites forced false.
+
+A `target("avx2,bmi2")` attribute helped gcc's prototype further (about
+1710 us/MB), using `rorx` for the rotations; it is not used here because
+`Hacl_Vec256_supported()` checks only AVX2.
