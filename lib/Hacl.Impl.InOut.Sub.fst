@@ -108,8 +108,13 @@ ensures inout os is pi 0 (Seq.slice vo i j) (Seq.slice vi i j) **
     rewrite in_mask out inp pi i j vo vi f s m
          as pure (f == 1.0R /\ s == Sub.opt vo /\ suffix_eq i vo vi /\
                   (forall (k: nat). m k <==> ~(i <= k /\ k < j)));
-    (* The input's window is the output's, already lent out: nothing in it. *)
-    drop_ (A.pts_to_mask is #f (Seq.slice s i j) (fun k -> m (k + i)));
+    (* The input's window is the output's, already lent out: nothing in it.
+       Give the empty window back to [inp]. *)
+    rewrite A.pts_to_mask is #f (Seq.slice s i j) (fun k -> m (k + i))
+         as A.pts_to_mask (A.gsub inp i j) #f (Seq.slice s i j) (fun k -> m (k + i));
+    A.return_sub inp;
+    with v' mk. assert (A.pts_to_mask inp #f v' mk);
+    A.mask_vext inp s;
     A.mask_mext inp (fun k -> ~(i <= k /\ k < j));
     rewrite A.pts_to_mask inp #f s (fun k -> ~(i <= k /\ k < j))
          as A.pts_to_mask out #1.0R (Sub.opt vo) (fun k -> ~(i <= k /\ k < j));

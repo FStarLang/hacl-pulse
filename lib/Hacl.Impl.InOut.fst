@@ -111,7 +111,9 @@ ghost fn intro_disjoint (#t: Type0) (out inp: A.array t) (#pi: perm) (#vo #vi: e
       A.pts_to_perm_bound out;
       unreachable ()
     } else {
-      drop_ (A.pts_to out #pi vi);
+      (* Both halves describe the same empty array: merge them back to one. *)
+      A.gather out;
+      rescale_empty out #(1.0R +. pi) 1.0R;
       rewrite pure (suffix_eq 0 vo vi) as inout_case out inp pi 0 vo vi;
       fold (inout out inp pi 0 vo vi)
     }
