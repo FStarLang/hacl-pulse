@@ -48,13 +48,14 @@ module C = Spec.Curve25519
 module E = Spec.Ed25519
 module Sc = Spec.Ed25519.Scalar
 module P = Hacl.Ed25519.Point
-module W = Hacl.Ed25519.PointWin
 module GR = Spec.Ed25519.Group
 module Smul = Spec.Ed25519.Smul
 module Table = Hacl.Impl.Table
 module Sub = Hacl.Impl.Sub
 module Tables = Hacl.Ed25519.Tables
-module MG = Hacl.Ed25519.PointMulG
+module MC = Hacl.Ed25519.PointMulComb
+module Straus = Hacl.Ed25519.Straus
+module SST = Spec.Ed25519.Straus
 module Scalar = Hacl.Ed25519.Scalar
 module Limb = Hacl.Impl.Limb
 module B4 = Spec.Bignum4
@@ -68,10 +69,9 @@ module Mem = Hacl.Mem
 
 (** {2 The base point}
 
-    A fixed-base window: {!Hacl.Ed25519.PointMulG} splits the scalar into
-    four sixty-four-bit pieces and walks them together against four
-    compiled-in base points, which is sixteen rungs rather than
-    sixty-four. *)
+    A fixed-base comb: {!Hacl.Ed25519.PointMulComb} recodes the scalar
+    into sixty-four signed radix-sixteen digits and adds each one from a
+    compiled-in table of affine multiples, with four doublings in all. *)
 
 fn point_mul_g (ox oy oz ot: A.array S64.t) (ks: A.array S8.t)
                (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
@@ -88,7 +88,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   pure (P.pt_ok wx wy wz wt /\ GR.on_curve (P.pt wx wy wz wt) /\
         E.point_equal (P.pt wx wy wz wt) (E.point_mul_g vk))
 {
-  MG.point_mul_g_win ox oy oz ot ks;
+  MC.point_mul_g_comb ox oy oz ot ks;
 }
 
 (** {2 Compressing a multiple of the base point}
@@ -584,6 +584,46 @@ let verify_char (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
     GR.point_add_on_curve rp ka';
     Smul.point_equal_congr sb sb' (E.point_add rp ka) (E.point_add rp ka')
 
+(** [-A] in registers: [x] and [t] negated, [y] and [z] shared. *)
+let neg_ok (ax ay az at nx nt: Seq.seq S64.t)
+  : Lemma (requires P.pt_ok ax ay az at /\ GR.on_curve (P.pt ax ay az at) /\
+                    felem (vals nx) /\ felem (vals nt) /\
+                    fev (vals nx) == C.fsub 0 (fev (vals ax)) /\
+                    fev (vals nt) == C.fsub 0 (fev (vals at)))
+          (ensures P.pt_ok nx ay az nt /\
+                   P.pt nx ay az nt == E.point_negate (P.pt ax ay az at) /\
+                   GR.on_curve (P.pt nx ay az nt))
+  = GR.point_negate_on_curve (P.pt ax ay az at)
+
+(** The same decision, reached through Straus's [[k](-A) + [S]B]. *)
+let verify_char2 (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
+                 (sg: Seq.lseq S8.t 64) (aa rp: E.ext_point)
+                 (s: nat { s < E.q }) (k: nat { k < E.q })
+                 (qq: E.ext_point) (bs bk: Seq.seq S8.t) (res: bool)
+  : Lemma (requires
+             E.point_decompress pub == Some aa /\
+             E.point_decompress (Seq.slice sg 0 32) == Some rp /\
+             s == le_nat (Seq.slice sg 32 64) /\
+             k == E.sig_k (Seq.slice sg 0 32) pub msg /\
+             bs == E.scalar_bytes s /\ bk == E.scalar_bytes k /\
+             Seq.length bs == 32 /\ Seq.length bk == 32 /\
+             SST.st qq (E.point_negate aa) (le_nat bk) (le_nat bs) /\
+             res == E.point_equal qq rp)
+          (ensures E.verify pub msg sg == res)
+  = SST.le_scalar s;
+    SST.le_scalar k;
+    GR.decompress_on_curve pub aa;
+    GR.decompress_on_curve (Seq.slice sg 0 32) rp;
+    SST.st_cong qq (E.point_negate aa) (le_nat bk) (le_nat bs) k s;
+    SST.st_verify qq aa rp k s;
+    let sb = E.point_mul_g (E.scalar_bytes s) in
+    let ka = E.point_mul (E.scalar_bytes k) aa in
+    Smul.point_mul_g_on_curve (E.scalar_bytes s);
+    Smul.point_mul_on_curve (E.scalar_bytes k) aa;
+    GR.point_equal_refl sb;
+    GR.point_equal_refl ka;
+    verify_char pub msg sg aa rp s k sb ka res
+
 let verify_false (pub: Seq.lseq S8.t 32) (msg: Seq.seq S8.t { E.msg_ok msg })
                  (sg: Seq.lseq S8.t 64)
   : Lemma (requires E.point_decompress pub == None \/
@@ -699,24 +739,27 @@ ensures A.pts_to pub #ppub vpub ** A.pts_to msg #pm vm ** A.pts_to sg #psg vsg *
     hash3 c5 c1 pub msg mlen;
     Scalar.reduce64 f5 c5;
     Scalar.store_le c4 f5;
-    point_mul_g e4 e5 e6 e7 c3;
-    GR.decompress_on_curve vpub (P.pt vax vay vaz vat);
-    W.point_mul_win d9 e1 e2 e3 d1 d2 d3 d4 c4;
-    GR.decompress_on_curve (Seq.slice vsg 0 32) (P.pt vrx vry vrz vrt);
-    P.point_add e8 e9 f1 f2 d5 d6 d7 d8 d9 e1 e2 e3;
+    with vc3. assert (A.pts_to c3 vc3);
+    with vc4. assert (A.pts_to c4 vc4);
     with vacc. assert (A.pts_to f5 vacc);
-    with vbx. assert (A.pts_to e4 vbx);
-    with vby. assert (A.pts_to e5 vby);
-    with vbz. assert (A.pts_to e6 vbz);
-    with vbt. assert (A.pts_to e7 vbt);
-    with vkx. assert (A.pts_to d9 vkx);
-    with vky. assert (A.pts_to e1 vky);
-    with vkz. assert (A.pts_to e2 vkz);
-    with vkt. assert (A.pts_to e3 vkt);
-    let r = point_equal e4 e5 e6 e7 e8 e9 f1 f2;
-    verify_char vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
-                (le_nat vs0) (B4.eval (L4.vals vacc))
-                (P.pt vbx vby vbz vbt) (P.pt vkx vky vkz vkt) r;
+    GR.decompress_on_curve vpub (P.pt vax vay vaz vat);
+    GR.decompress_on_curve (Seq.slice vsg 0 32) (P.pt vrx vry vrz vrt);
+    (* [-A], sharing [y] and [z] with [A]. *)
+    P.set_small e1 0uL;
+    fsub d9 e1 d1;
+    fsub e2 e1 d4;
+    with vnx. assert (A.pts_to d9 vnx);
+    with vnt. assert (A.pts_to e2 vnt);
+    neg_ok vax vay vaz vat vnx vnt;
+    Straus.point_mul_double e4 e5 e6 e7 d9 d2 d3 e2 c4 c3;
+    with vqx. assert (A.pts_to e4 vqx);
+    with vqy. assert (A.pts_to e5 vqy);
+    with vqz. assert (A.pts_to e6 vqz);
+    with vqt. assert (A.pts_to e7 vqt);
+    let r = point_equal e4 e5 e6 e7 d5 d6 d7 d8;
+    verify_char2 vpub vm vsg (P.pt vax vay vaz vat) (P.pt vrx vry vrz vrt)
+                 (le_nat vs0) (B4.eval (L4.vals vacc))
+                 (P.pt vqx vqy vqz vqt) vc3 vc4 r;
     Mem.wipe f5 4sz;
     Mem.wipe f4 4sz;
     Mem.wipe f3 4sz;

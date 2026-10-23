@@ -26,6 +26,7 @@ F* re-checks all of it with the verified polynomial normalizer in
 | `Spec.K256.GroupAssoc{1,2,3}` | `python3 p256/gen.py k256/assocN.py ../Spec.K256.GroupAssocN.fst` |
 | `Spec.Ed25519.GroupChecks` | `python3 ed25519/gen.py ed25519/checks.py ../Spec.Ed25519.GroupChecks.fst` |
 | `Spec.Ed25519.GroupAssoc{1,2}` | `python3 ed25519/gen.py ed25519/assocN.py ../Spec.Ed25519.GroupAssocN.fst` |
+| `Spec.Ed25519.Comb{B,T0..7,Table}`, `Hacl.Ed25519.CombData{,0..7}` | `python3 ed25519/comb.py ../..` (the fixed-base comb's tables) |
 
 `gen.py` executes the spec file it is given. That file sets `MOD`,
 `CHECKS` and, optionally, `CURVE`/`BL`/`CNAME`. `gen.py` then emits one

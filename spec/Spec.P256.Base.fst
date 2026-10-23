@@ -44,8 +44,8 @@
     multiplication by [R] happens.  {!Spec.P256.Win1} .. {!Spec.P256.Win3}
     start their chains from these three points.
 
-    This is {!Spec.K256.Base} and {!Spec.Ed25519.Base} with a third curve;
-    the scalar arithmetic all three share lives in {!Spec.Group.Split4}. *)
+    This is {!Spec.K256.Base} with a different curve; the scalar
+    arithmetic the two share lives in {!Spec.Group.Split4}. *)
 module Spec.P256.Base
 
 module G = Spec.Group.Smul

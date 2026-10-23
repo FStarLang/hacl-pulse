@@ -202,3 +202,48 @@ let entry_felem (l: list S64.t) (d: nat) (x: nat)
     lit_felem (chunk l d) x
 
 #pop-options
+
+(** {2 Cutting at any offset}
+
+    The same cut for a table of any length and entries of any width: the
+    comb's tables are one list of four thousand limbs, cut first into
+    fifteen-limb entries and then into five-limb coordinates. *)
+
+let lslice (#a: Type) (l: list a) (o n: nat) : list a = ltake n (ldrop o l)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+let lslice_ok (l: list S64.t) (o n: nat)
+  : Lemma (requires o + n <= L.length l)
+          (ensures L.length (lslice l o n) == n /\
+                   Seq.slice (Seq.seq_of_list l) o (o + n) ==
+                   Seq.seq_of_list (lslice l o n))
+  = ldrop_len o l;
+    ltake_len n (ldrop o l);
+    let s : Seq.seq S64.t = Seq.seq_of_list l in
+    let sl = Seq.slice s o (o + n) in
+    let se : Seq.seq S64.t = Seq.seq_of_list (lslice l o n) in
+    let aux (k: nat { k < n }) : Lemma (Seq.index sl k == Seq.index se k)
+      = ltake_index n (ldrop o l) k;
+        ldrop_index o l k;
+        Seq.lemma_seq_of_list_index l (o + k);
+        Seq.lemma_seq_of_list_index (lslice l o n) k in
+    Classical.forall_intro aux;
+    Seq.lemma_eq_intro sl se
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
+
+(** A five-limb cut at any offset is a field element with the value the
+    literal list says. *)
+let lslice_felem (l: list S64.t) (o: nat) (x: nat)
+  : Lemma (requires o + 5 <= L.length l /\
+                    L.length (lslice l o 5) == F.nl /\ lbnd (lslice l o 5) /\
+                    leval (lslice l o 5) == x /\ x < C.prime)
+          (ensures F.felem (vals (Seq.slice (Seq.seq_of_list l) o (o + 5))) /\
+                   F.fev (vals (Seq.slice (Seq.seq_of_list l) o (o + 5))) == x)
+  = lslice_ok l o 5;
+    lit_felem (lslice l o 5) x
+
+#pop-options

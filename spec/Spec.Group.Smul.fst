@@ -325,3 +325,238 @@ let rec dblk_ok (#a: Type) (g: grp a) (n: nat) (m: nat) (p q: a)
     end
 
 #pop-options
+
+(** {2 Two bases}
+
+    A double-scalar multiplication [[m]P + [n]R] shares one doubling chain
+    between the two scalars: every rung doubles the accumulator once and
+    adds a table entry from either side.  [lin2] is what the accumulator
+    denotes, and the three lemmas after it are the three things a rung
+    does to it.  Like everything above, none of them needs inverses. *)
+
+#push-options "--fuel 1 --ifuel 0 --z3rlimit 50"
+
+let lin2 (#a: Type) (g: grp a) (m n: nat) (p r: a) : a =
+  g.add (smul g m p) (smul g n r)
+
+let lin2_ok (#a: Type) (g: grp a) (m n: nat) (p r: a)
+  : Lemma (requires g.ok p /\ g.ok r) (ensures g.ok (lin2 g m n p r))
+  = smul_ok g m p; smul_ok g n r; g.ok_add (smul g m p) (smul g n r)
+
+(** [x + (y + z)] is [y + (x + z)]. *)
+let add_lcomm (#a: Type) (g: grp a) (x y z: a)
+  : Lemma (requires g.ok x /\ g.ok y /\ g.ok z)
+          (ensures g.eqv (g.add x (g.add y z)) (g.add y (g.add x z)))
+  = g.ok_add x y; g.ok_add y x; g.ok_add y z; g.ok_add x z;
+    g.ok_add (g.add x y) z; g.ok_add (g.add y x) z;
+    g.ok_add x (g.add y z); g.ok_add y (g.add x z);
+    g.add_assoc x y z;
+    g.eqv_sym (g.add (g.add x y) z) (g.add x (g.add y z));
+    g.add_comm x y;
+    g.eqv_refl z;
+    g.add_congr (g.add x y) (g.add y x) z z;
+    g.add_assoc y x z;
+    g.eqv_trans (g.add x (g.add y z)) (g.add (g.add x y) z) (g.add (g.add y x) z);
+    g.eqv_trans (g.add x (g.add y z)) (g.add (g.add y x) z) (g.add y (g.add x z))
+
+(** [(x + y) + (z + w)] is [(x + z) + (y + w)]. *)
+let add_swap (#a: Type) (g: grp a) (x y z w: a)
+  : Lemma (requires g.ok x /\ g.ok y /\ g.ok z /\ g.ok w)
+          (ensures g.eqv (g.add (g.add x y) (g.add z w))
+                         (g.add (g.add x z) (g.add y w)))
+  = g.ok_add x y; g.ok_add z w; g.ok_add x z; g.ok_add y w;
+    g.ok_add y (g.add z w); g.ok_add z (g.add y w);
+    g.ok_add (g.add x y) (g.add z w); g.ok_add (g.add x z) (g.add y w);
+    g.ok_add x (g.add y (g.add z w)); g.ok_add x (g.add z (g.add y w));
+    g.add_assoc x y (g.add z w);
+    add_lcomm g y z w;
+    g.eqv_refl x;
+    g.add_congr x x (g.add y (g.add z w)) (g.add z (g.add y w));
+    g.add_assoc x z (g.add y w);
+    g.eqv_sym (g.add (g.add x z) (g.add y w)) (g.add x (g.add z (g.add y w)));
+    g.eqv_trans (g.add (g.add x y) (g.add z w)) (g.add x (g.add y (g.add z w)))
+                (g.add x (g.add z (g.add y w)));
+    g.eqv_trans (g.add (g.add x y) (g.add z w)) (g.add x (g.add z (g.add y w)))
+                (g.add (g.add x z) (g.add y w))
+
+(** The empty combination is the identity. *)
+let lin2_zero (#a: Type) (g: grp a) (p r: a)
+  : Lemma (requires g.ok p /\ g.ok r)
+          (ensures g.ok g.zero /\ g.eqv g.zero (lin2 g 0 0 p r))
+  = g.ok_zero ();
+    g.ok_add g.zero g.zero;
+    g.add_id g.zero;
+    g.eqv_sym (g.add g.zero g.zero) g.zero
+
+let lin2_dbl (#a: Type) (g: grp a) (m n: nat) (p r q: a)
+  : Lemma (requires g.ok p /\ g.ok r /\ g.ok q /\ g.eqv q (lin2 g m n p r))
+          (ensures g.ok (g.dbl q) /\ g.eqv (g.dbl q) (lin2 g (2 * m) (2 * n) p r))
+  = let mp = smul g m p in
+    let nr = smul g n r in
+    let l = g.add mp nr in
+    smul_ok g m p; smul_ok g n r; smul_ok g (m + m) p; smul_ok g (n + n) r;
+    lin2_ok g m n p r; lin2_ok g (m + m) (n + n) p r;
+    g.ok_dbl q; g.ok_add q q; g.ok_add l l;
+    g.ok_add mp mp; g.ok_add nr nr; g.ok_add (g.add mp mp) (g.add nr nr);
+    g.dbl_is_add q;
+    g.add_congr q l q l;
+    add_swap g mp nr mp nr;
+    smul_add g m m p; smul_add g n n r;
+    g.eqv_sym (smul g (m + m) p) (g.add mp mp);
+    g.eqv_sym (smul g (n + n) r) (g.add nr nr);
+    g.add_congr (g.add mp mp) (smul g (m + m) p) (g.add nr nr) (smul g (n + n) r);
+    g.eqv_trans (g.dbl q) (g.add q q) (g.add l l);
+    g.eqv_trans (g.dbl q) (g.add l l) (g.add (g.add mp mp) (g.add nr nr));
+    g.eqv_trans (g.dbl q) (g.add (g.add mp mp) (g.add nr nr))
+                (lin2 g (m + m) (n + n) p r)
+
+(** Adding a multiple of the first base. *)
+let lin2_addl (#a: Type) (g: grp a) (m n d: nat) (p r q e: a)
+  : Lemma (requires g.ok p /\ g.ok r /\ g.ok q /\ g.ok e /\
+                    g.eqv q (lin2 g m n p r) /\ g.eqv e (smul g d p))
+          (ensures g.ok (g.add q e) /\ g.eqv (g.add q e) (lin2 g (m + d) n p r))
+  = let mp = smul g m p in
+    let nr = smul g n r in
+    let dp = smul g d p in
+    let l = g.add mp nr in
+    smul_ok g m p; smul_ok g n r; smul_ok g d p; smul_ok g (m + d) p;
+    lin2_ok g m n p r; lin2_ok g (m + d) n p r;
+    g.ok_add q e; g.ok_add l dp; g.ok_add nr dp; g.ok_add dp nr;
+    g.ok_add mp (g.add nr dp); g.ok_add mp (g.add dp nr); g.ok_add mp dp;
+    g.ok_add (g.add mp dp) nr;
+    g.add_congr q l e dp;
+    g.add_assoc mp nr dp;
+    g.add_comm nr dp;
+    g.eqv_refl mp;
+    g.add_congr mp mp (g.add nr dp) (g.add dp nr);
+    g.add_assoc mp dp nr;
+    g.eqv_sym (g.add (g.add mp dp) nr) (g.add mp (g.add dp nr));
+    smul_add g m d p;
+    g.eqv_sym (smul g (m + d) p) (g.add mp dp);
+    g.eqv_refl nr;
+    g.add_congr (g.add mp dp) (smul g (m + d) p) nr nr;
+    g.eqv_trans (g.add q e) (g.add l dp) (g.add mp (g.add nr dp));
+    g.eqv_trans (g.add q e) (g.add mp (g.add nr dp)) (g.add mp (g.add dp nr));
+    g.eqv_trans (g.add q e) (g.add mp (g.add dp nr)) (g.add (g.add mp dp) nr);
+    g.eqv_trans (g.add q e) (g.add (g.add mp dp) nr) (lin2 g (m + d) n p r)
+
+(** Adding a multiple of the second. *)
+let lin2_addr (#a: Type) (g: grp a) (m n d: nat) (p r q e: a)
+  : Lemma (requires g.ok p /\ g.ok r /\ g.ok q /\ g.ok e /\
+                    g.eqv q (lin2 g m n p r) /\ g.eqv e (smul g d r))
+          (ensures g.ok (g.add q e) /\ g.eqv (g.add q e) (lin2 g m (n + d) p r))
+  = let mp = smul g m p in
+    let nr = smul g n r in
+    let dr = smul g d r in
+    let l = g.add mp nr in
+    smul_ok g m p; smul_ok g n r; smul_ok g d r; smul_ok g (n + d) r;
+    lin2_ok g m n p r; lin2_ok g m (n + d) p r;
+    g.ok_add q e; g.ok_add l dr; g.ok_add nr dr;
+    g.ok_add mp (g.add nr dr);
+    g.add_congr q l e dr;
+    g.add_assoc mp nr dr;
+    smul_add g n d r;
+    g.eqv_sym (smul g (n + d) r) (g.add nr dr);
+    g.eqv_refl mp;
+    g.add_congr mp mp (g.add nr dr) (smul g (n + d) r);
+    g.eqv_trans (g.add q e) (g.add l dr) (g.add mp (g.add nr dr));
+    g.eqv_trans (g.add q e) (g.add mp (g.add nr dr)) (lin2 g m (n + d) p r)
+
+(** The multiple distributes over the sum of two points. *)
+let rec smul_distr (#a: Type) (g: grp a) (n: nat) (p r: a)
+  : Lemma (requires g.ok p /\ g.ok r)
+          (ensures g.eqv (smul g n (g.add p r)) (g.add (smul g n p) (smul g n r)))
+          (decreases n)
+  = g.ok_add p r;
+    smul_ok g n (g.add p r); smul_ok g n p; smul_ok g n r;
+    g.ok_add (smul g n p) (smul g n r);
+    if n = 0 then begin
+      g.ok_zero ();
+      g.add_id g.zero;
+      g.eqv_sym (g.add g.zero g.zero) g.zero
+    end else begin
+      let pr = g.add p r in
+      let a1 = smul g (n - 1) p in
+      let b1 = smul g (n - 1) r in
+      smul_distr g (n - 1) p r;
+      smul_ok g (n - 1) pr; smul_ok g (n - 1) p; smul_ok g (n - 1) r;
+      g.ok_add a1 b1; g.ok_add pr (smul g (n - 1) pr); g.ok_add pr (g.add a1 b1);
+      g.eqv_refl pr;
+      g.add_congr pr pr (smul g (n - 1) pr) (g.add a1 b1);
+      add_swap g p r a1 b1;
+      g.eqv_trans (smul g n pr) (g.add pr (g.add a1 b1))
+                  (g.add (smul g n p) (smul g n r))
+    end
+
+(** Every multiple of the identity is the identity. *)
+let rec smul_of_zero (#a: Type) (g: grp a) (n: nat)
+  : Lemma (ensures g.ok (smul g n g.zero) /\ g.eqv (smul g n g.zero) g.zero)
+          (decreases n)
+  = g.ok_zero ();
+    smul_ok g n g.zero;
+    if n = 0 then g.eqv_refl g.zero
+    else begin
+      smul_of_zero g (n - 1);
+      smul_ok g (n - 1) g.zero;
+      g.add_id (smul g (n - 1) g.zero);
+      g.eqv_trans (smul g n g.zero) (smul g (n - 1) g.zero) g.zero
+    end
+
+#pop-options
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
+
+(** Moving a term across an equation, which is where inverses come in --
+    as a hypothesis about two particular points rather than as an axiom of
+    the record: [u + v] is the identity.  Then [u + s = x] exactly when
+    [s = x + v]. *)
+let cancel (#a: Type) (g: grp a) (u v s x: a)
+  : Lemma (requires g.ok u /\ g.ok v /\ g.ok s /\ g.ok x /\
+                    g.eqv (g.add u v) g.zero)
+          (ensures g.eqv (g.add u s) x <==> g.eqv s (g.add x v))
+  = g.ok_zero ();
+    g.ok_add u v; g.ok_add v u; g.ok_add u s; g.ok_add x v; g.ok_add v x;
+    g.ok_add g.zero s; g.ok_add (g.add u v) s; g.ok_add (g.add v u) s;
+    g.ok_add v (g.add u s);
+    g.ok_add u (g.add x v); g.ok_add (g.add x v) u; g.ok_add x (g.add v u);
+    g.ok_add x (g.add u v); g.ok_add x g.zero; g.ok_add g.zero x;
+    let fwd () : Lemma (requires g.eqv (g.add u s) x) (ensures g.eqv s (g.add x v)) =
+      g.add_id s;
+      g.eqv_sym (g.add g.zero s) s;
+      g.eqv_sym (g.add u v) g.zero;
+      g.eqv_refl s;
+      g.add_congr g.zero (g.add u v) s s;
+      g.add_comm u v;
+      g.add_congr (g.add u v) (g.add v u) s s;
+      g.add_assoc v u s;
+      g.eqv_refl v;
+      g.add_congr v v (g.add u s) x;
+      g.add_comm v x;
+      g.eqv_trans s (g.add g.zero s) (g.add (g.add u v) s);
+      g.eqv_trans s (g.add (g.add u v) s) (g.add (g.add v u) s);
+      g.eqv_trans s (g.add (g.add v u) s) (g.add v (g.add u s));
+      g.eqv_trans s (g.add v (g.add u s)) (g.add v x);
+      g.eqv_trans s (g.add v x) (g.add x v)
+    in
+    let bwd () : Lemma (requires g.eqv s (g.add x v)) (ensures g.eqv (g.add u s) x) =
+      g.eqv_refl u;
+      g.add_congr u u s (g.add x v);
+      g.add_comm u (g.add x v);
+      g.add_assoc x v u;
+      g.eqv_refl x;
+      g.add_comm v u;
+      g.add_congr x x (g.add v u) (g.add u v);
+      g.add_congr x x (g.add u v) g.zero;
+      g.add_comm x g.zero;
+      g.add_id x;
+      g.eqv_trans (g.add u s) (g.add u (g.add x v)) (g.add (g.add x v) u);
+      g.eqv_trans (g.add u s) (g.add (g.add x v) u) (g.add x (g.add v u));
+      g.eqv_trans (g.add u s) (g.add x (g.add v u)) (g.add x (g.add u v));
+      g.eqv_trans (g.add u s) (g.add x (g.add u v)) (g.add x g.zero);
+      g.eqv_trans (g.add u s) (g.add x g.zero) (g.add g.zero x);
+      g.eqv_trans (g.add u s) (g.add g.zero x) x
+    in
+    FStar.Classical.move_requires fwd ();
+    FStar.Classical.move_requires bwd ()
+
+#pop-options

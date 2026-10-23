@@ -31,10 +31,7 @@
     opaque, and this file is the only place that has to open it; the four
     table files then mention neither the curve nor the field, only [leval]
     on a list of literals, which the normaliser settles without the solver
-    seeing a single two-hundred-and-fifty-six-bit number.
-
-    This is {!Hacl.Ed25519.WinTable} on a different curve; the missing
-    fourth coordinate is the only difference. *)
+    seeing a single two-hundred-and-fifty-six-bit number. *)
 module Hacl.K256.WinTable
 
 open Spec.Bignum52

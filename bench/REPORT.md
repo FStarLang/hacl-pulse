@@ -9316,3 +9316,94 @@ HPKE's time is the Diffie-Hellman.  The test suite passes under gcc and
 clang, and with every `Hacl_Vec128_sha_supported()` and
 `Hacl_Vec256_supported()` dispatch forced false.
 
+
+## Part 89: Ed25519's fixed-base multiplication as a signed comb
+
+The four-way window (Part 36's compiled-in tables) still did sixty-four
+doublings and sixty-four additions per multiplication by `G`, and Ed25519
+signing was at 3.87x of Firedancer.  `Hacl.Ed25519.PointMulComb` replaces
+it with ref10's comb: the scalar, reduced mod `q`, is recoded into sixty-four
+signed radix-16 digits in `[-8, 8]`; the odd digits are added from thirty-two
+tables of `d 256^j G` (`d = 0 .. 8`), the sum is doubled four times, and the
+even digits are added from the same tables.  Sixty-four mixed additions (seven
+multiplications each, against Niels-form entries with `z = 1`) and four
+doublings.
+
+The tables are 4320 limbs, about 34 KB of `.rodata`, generated with their
+proofs by `spec/group-gen/ed25519/comb.py` (`Spec.Ed25519.CombB`,
+`CombT0` .. `CombT7`, `Hacl.Ed25519.CombData0` .. `7`).  Selection scans all
+nine entries of a table with laundered `eq_mask` masks; a negative digit is a
+`cswap` of the first two coordinates and a masked negation of the third.
+`Hacl.Ed25519.PointMulG`, `Win0` .. `Win3`, `WinTable` and
+`Spec.Ed25519.Base`/`Win0` .. `Win3` are gone.
+
+Before (`432b7f7`) and after (`ab.sh`, gcc 15.2, two rounds, minimum per row;
+clang 21.1 from a direct timing loop, best of 15; `sign` is
+`Hacl_Ed25519_sign`, which multiplies by `G` twice, and `sign_expanded`
+starts from expanded keys):
+
+| bench | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 31.6 us | 14.9 us | 37.3 us | 18.9 us |
+| sign (64 B) | 64.8 us | 31.1 us | 78.1 us | 39.1 us |
+| sign_expanded (64 B) | 33.4 us | 16.7 us | 40.9 us | 20.1 us |
+| verify (64 B) | 107.1 us | 88.1 us | 122.7 us | 103.8 us |
+
+No other row moved by more than 4.3%, in either direction, which is this
+machine's noise on code that did not change.  In the README's other-library
+table, Ed25519 signing (expanded keys) goes from 3.87x of Firedancer to **1.92x**
+and verification from 2.91x of dalek to **2.38x**; in the HACL\* table,
+signing is Part 86's 73 us scaled by the ratio above, 35 us, **0.63x** of
+HACL\*.  The test suite passes under gcc and clang, as do `make lint`,
+`make stack`, `make cross` and `test_consttime`.  Every public Ed25519 entry
+point hashes before it reaches the comb, so the timing audit cannot choose
+digit patterns; instead the gcc and clang object code was checked: the only
+conditional branches in the comb are loop bounds and the stack protector.
+
+Verification still runs its variable-base multiplication as a four-bit
+window with sixty-four doublings; a variable-time wNAF or Straus double-scalar
+multiplication, which ref10 and dalek use, is the remaining gap.
+
+## Part 90: Ed25519 verification as a variable-time double-scalar multiplication
+
+Verification computed `[S]G` with Part 89's comb and `[k]A` with the
+four-bit window (sixty-four doublings, sixty-four constant-time table
+scans and additions), added `R`, and compared.  Under callgrind that was
+about 926k instructions, 629k of them in the window.  Since every input to
+`verify` is public, `Hacl.Ed25519.Straus` now computes
+`Q = [k](-A) + [S]G` in variable time and compares `Q` with `R`: one shared
+chain of 256 doublings; `k` recoded by a width-5 sliding window against a
+table of the sixteen odd multiples of `-A`; `S` recoded by a width-3 sliding
+window against comb table 0 (`1G .. 8G`, Niels form, already in `.rodata`).
+Zero digits are skipped outright and table entries are read by index.
+`Hacl.Ed25519.PointWin` keeps only the representation layer that the comb
+and Straus share; `point_mul_win` and its rung are gone.
+
+The proof adds two-base lemmas to `Spec.Group.Smul` and a new
+`Spec.Ed25519.Straus` (`st q na a b`: `q` is equivalent to
+`[a] na + [b] G`; `st_verify` turns `st Q (-A) k S` into the specification's
+`[S]G == R + [k]A`).
+
+Before (`be48cf7`) and after, gcc 15.2 from `ab.sh` (two rounds, minimum per
+row) and both compilers from a direct timing loop (best of 15 x 2000 calls,
+three runs, best shown):
+
+| bench | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| verify (64 B), `ab.sh` | 90.2 us | 79.0 us | -- | -- |
+| verify (64 B), loop | 89.7 us | 78.7 us | 103.3 us | 88.4 us |
+
+12% under gcc and 14% under clang; keygen and sign (unchanged code) moved
+by under 4%.  In the README's other-library table, verification goes from
+2.38x of dalek to **2.08x**.  The README's HACL\* table (`table.sh`, gcc,
+two rounds) gains an Ed25519 verify row, **1.23x** of HACL\* (79 us against
+64 us), and its signing row, until now Part 86's figure scaled by Part 89's
+ratio, is measured directly: 32 us against 50 us, **0.65x**.  The test suite (RFC 8032 vectors, every
+single-bit tampering of the signature, a wrong message, and `S + q`) passes under gcc and clang, as do `make lint`, `make stack` and
+`make cross`.
+
+What remains: the 256 doublings carry `T`, which only the doubling that
+precedes an addition needs; decompression of `A` and `R` is two
+square-root exponentiations (about 137k instructions); and a larger table
+for `G` (width 5 or more, a dedicated odd-multiple table) would cut the
+`S` additions roughly in half.

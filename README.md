@@ -105,6 +105,7 @@ hacl-pulse is faster**.
 | SHA3-256 | 256 KiB | 751 us | 1.5 ms | 0.49x |
 | P-256 ECDSA sign | -- | 83 us | 164 us | 0.51x |
 | P-256 ECDSA verify | -- | 237 us | 414 us | 0.57x |
+| Ed25519 sign | -- | 32 us | 50 us | 0.65x |
 | BLAKE2b | 256 KiB | 369 us | 428 us | 0.86x |
 | BLAKE2s | 256 KiB | 577 us | 615 us | 0.94x |
 | FFDHE-2048 | -- | 4.1 ms | 4.2 ms | 0.96x |
@@ -117,8 +118,8 @@ hacl-pulse is faster**.
 | HMAC-SHA-256 | 256 KiB | 205 us | 174 us | 1.18x |
 | ChaCha20 | 256 KiB | 103 us | 88 us | 1.18x |
 | SHA-256 | 256 KiB | 204 us | 173 us | 1.18x |
+| Ed25519 verify | -- | 79 us | 64 us | 1.23x |
 | MD5 | 256 KiB | 557 us | 432 us | 1.29x |
-| Ed25519 sign | -- | 73 us | 56 us | 1.31x |
 | X25519 | -- | 53 us | 40 us | 1.32x |
 
 ### ML-KEM and ML-DSA
@@ -192,12 +193,12 @@ column is the better hacl-pulse build divided by the fastest other library:
 | ML-KEM-768 encaps | -- | 23 us | 22 us | 34 us | **14 us** | -- | -- | -- | -- | 1.53x |
 | FFDHE-2048 | -- | 3.7 ms | 4.5 ms | **2.2 ms** | 4.0 ms | -- | -- | -- | -- | 1.68x |
 | RSA-PSS-2048 sign | -- | 3.7 ms | 4.5 ms | 2.2 ms | **2.1 ms** | -- | -- | -- | -- | 1.71x |
+| Ed25519 sign | -- | 17 us | 20 us | 41 us | 8.9 us | 16 us | -- | **8.7 us** | 18 us | 1.92x |
+| Ed25519 verify | -- | 77 us | 89 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.08x |
 | P-256 ECDH | -- | 149 us | 111 us | 50 us | **48 us** | -- | -- | -- | -- | 2.31x |
-| Ed25519 verify | -- | 108 us | 126 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.91x |
 | RSA-PSS-2048 verify | -- | 51 us | 59 us | 22 us | **17 us** | -- | -- | -- | -- | 2.99x |
 | P-256 ECDSA verify | -- | 211 us | 162 us | 67 us | **54 us** | -- | -- | 62 us | -- | 3.00x |
 | P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.85x |
-| Ed25519 sign | -- | 34 us | 40 us | 41 us | 8.9 us | 16 us | -- | **8.7 us** | 18 us | 3.87x |
 
 A dash means the library does not offer the operation through the API used.
 OpenSSL's and AWS-LC's ML-KEM and ECDSA draw from their DRBGs. The
