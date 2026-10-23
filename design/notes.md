@@ -1141,49 +1141,38 @@ which is the affine equation solved for `x`.  The three places that compress
 a multiple of the generator are one function, `point_mul_g_compress`, so the
 congruence argument is made once.
 
-**The generator has its own window.**  Signing and key generation multiply a
-point that is known at compile time, and `Hacl.Ed25519.PointMulG` preprocesses
-it: the scalar splits into four sixty-four-bit pieces and
+**The generator has its own comb.**  Signing and key generation multiply a
+point that is known at compile time, and `Hacl.Ed25519.PointMulComb`
+preprocesses it the way ref10 does.  The scalar, reduced mod `q`, is
+recoded into sixty-four signed radix-16 digits `e_i` in `[-8, 8]`
+(`Spec.Ed25519.Comb.recode_ok`), and
 
 ```
-k G = k0 G + k1 (2^64 G) + k2 (2^128 G) + k3 (2^192 G)
+k G = sum_i e_i 16^i G = 16 (sum_{i odd} e_i 16^{i-1} G) + sum_{i even} e_i 16^i G
 ```
 
-lets the four pieces share one doubling chain, so sixteen rungs of four
-doublings and four additions replace sixty-four rungs of four and one.  A
-hundred and twenty-eight point operations against three hundred and
-thirty-five.
+so with thirty-two tables, table `j` holding `d 256^j G` for `d = 1 .. 8`,
+the odd digits are thirty-two mixed additions, then four doublings, then the
+even digits are thirty-two more.  Sixty-four additions and four doublings
+against the four-way window's sixty-four additions and sixty-four doublings.
+The tables (`Hacl.Ed25519.CombData`, 4320 limbs, about 34 KB of `.rodata`)
+are in Niels form `(y+x, y-x, 2 d x y)` with `z = 1`, so an addition costs
+seven multiplications; a negative digit swaps the first two coordinates and
+negates the third, a `cswap` and a masked `fsub`.  Selection scans all nine
+entries (zero is the identity, `(1, 1, 0)`) with laundered `eq_mask` masks,
+three coordinates per pass.
 
-The four sixteen-entry tables are *compiled in*.  They were being built on
-entry -- sixty point additions, a third of the work -- from three extra base
-points stated as doubling chains in `Spec.Ed25519.Base`.  Now all sixty-four
-multiples are constants: `Spec.Ed25519.Win0` .. `Win3` name the points and
-prove each is the multiple it claims to be, and `Hacl.Ed25519.Win0` .. `Win3`
-hold the limbs, sixteen `static const uint64_t [80]` arrays, two hundred and
-fifty-six field constants and about ten kilobytes of `.rodata`.
-
-Saying what such a constant *is* is the difficulty: `[2^64] G` is
-two-to-the-sixty-fourth additions and cannot be unfolded, so
-`Spec.Ed25519.Base` states the three scale points as doubling *chains*
-(`Spec.Group.Smul.dblk`), which the normaliser evaluates on concrete field
-elements at typechecking time -- sixty-four doublings in about a second --
-and `dblk_ok` converts into a statement about `smul`.  Each table then climbs
-from there one addition at a time, entry `d` proved equal to `e_{d-1} + e_1`
-by `assert_norm` and lifted to `smul (d n) g` by `Spec.Group.smul_add_congr`.
-Every entry is stored *affine*, `(x, y, 1, x y)`, which is what makes both
-the chain equation and the curve equation decidable by `assert_norm`, so no
-SMT query ever sees a point; a projective quadruple would carry whatever
-denominators the previous addition left, and by the fifteenth entry the
-numbers stop being ones the normaliser can compare.  The coordinates are
-`opaque_to_smt` for the same reason, and so are the four flat eighty-limb
-sequences, so that sixteen tables' worth of literals never enter the caller's
-context.  `Hacl.Impl.Lit51` cuts a list the way `entry` slices the
-sequence, so one `assert_norm` per entry-coordinate settles five limbs at
-once, and `Hacl.Ed25519.WinTable` turns four such facts into the `ent` the
-window wants.  `Hacl.Ed25519.PointWin`'s table layer carries a scale so that
-both windows can share it: entry `d` of the `j`-th table has to be described
-as the `d 2^{64j}`-th multiple of `G`, not the `d`-th multiple of `2^{64j}
-G`, because it is `G` that the answer is a multiple of.
+The tables are proved the way the other curves' windows are (below), at a larger scale.
+`spec/group-gen/ed25519/comb.py` emits `Spec.Ed25519.CombB`, which proves
+the thirty-two base points `256^j G` by chains of eight doublings, and
+`Spec.Ed25519.CombT0` .. `CombT7`, four tables each, which climb from each
+base point one addition at a time by `assert_norm` on affine coordinates;
+`Hacl.Ed25519.CombData0` .. `7` settle the Niels limbs against those points,
+`Hacl.Ed25519.CombDataOk` collects them, and `Hacl.Ed25519.CombEnt` is the
+per-entry contract the implementation sees.  The verified implementation keeps every quantified
+fact -- the table, the digits, the curve -- behind an `opaque_to_smt`
+predicate with an intro and an elim lemma, because with any of them in a
+Pulse context even `8 * j >= 0` times out.
 
 **Failure is public.**  Decompression can fail, and a signature can be
 invalid; neither fact is secret, so both are ordinary `bool`s rather than
@@ -1453,10 +1442,10 @@ sixty-four-bit pieces and walks them together against `G`, `2^64 G`,
 `2^128 G` and `2^192 G`, sixteen rungs of four doublings and four
 additions, 184 point operations rather than 335.  Everything below the rung is
 `Hacl.K256.PointWin`'s, whose table layer carries a scale for exactly this
-reason; the scalar arithmetic is `Spec.Group.Split4`, shared with Ed25519.
+reason; the scalar arithmetic is `Spec.Group.Split4`, shared with P-256.
 
-The four sixteen-entry tables are *compiled in*, as Ed25519's are, and by the
-same construction.  They were being built on entry -- sixty point additions
+The four sixteen-entry tables are *compiled in*, as Ed25519's were before its
+comb, and by the same construction.  They were being built on entry -- sixty point additions
 out of a hundred and eighty-four -- from three extra base points stated as
 doubling chains in `Spec.K256.Base`, which the normaliser evaluates at
 typechecking time and `Spec.Group.Smul.dblk_ok` converts into a statement
@@ -3844,6 +3833,7 @@ reference**.
 | SHA3-256 | 256 KiB | 751 us | 1.5 ms | **0.49x** | 1.5 ms | 0.49x |
 | P-256 ECDSA sign | -- | 83 us | 164 us | **0.51x** | 164 us | 0.51x |
 | P-256 ECDSA verify | -- | 237 us | 414 us | **0.57x** | 414 us | 0.57x |
+| Ed25519 sign | -- | 35 us | 56 us | **0.63x** | 56 us | 0.63x |
 | BLAKE2b | 256 KiB | 369 us | 428 us | **0.86x** | 358 us | 1.03x |
 | BLAKE2s | 256 KiB | 577 us | 615 us | **0.94x** | 610 us | 0.95x |
 | FFDHE-2048 | -- | 4.1 ms | 4.2 ms | **0.96x** | 4.2 ms | 0.96x |
@@ -3857,7 +3847,6 @@ reference**.
 | ChaCha20 | 256 KiB | 103 us | 88 us | **1.18x** | 909 us | 0.11x |
 | SHA-256 | 256 KiB | 204 us | 173 us | **1.18x** | 1.1 ms | 0.19x |
 | MD5 | 256 KiB | 557 us | 432 us | **1.29x** | 431 us | 1.29x |
-| Ed25519 sign | -- | 73 us | 56 us | **1.31x** | 56 us | 1.32x |
 | X25519 | -- | 53 us | 40 us | **1.32x** | 40 us | 1.34x |
 
 This table was re-measured after the master merge of October 2026 (`bench/REPORT.md`
@@ -3865,10 +3854,14 @@ Part 86).  The machine had become about 8% slower on both sides since the
 previous table, so the absolute numbers rose while the ratios moved by a few
 hundredths at most; the prose below quotes the earlier measurement where it
 gives a ratio, and a few have shifted (SHAKE128 and SHA3-256 to 0.48x--0.49x,
-secp256k1 signing to 1.11x, MD5 to 1.29x, X25519 to 1.32x).
+secp256k1 signing to 1.11x, MD5 to 1.29x, X25519 to 1.32x).  The Ed25519
+signing row is the Part 86 number scaled by `bench/REPORT.md` Part 89's
+before-and-after measurement of the signed comb.
 
-Against what HACL\* can actually do on this machine, seventeen rows are ahead
-and every row is within 1.30x.  The furthest ahead are Salsa20 and
+Against what HACL\* can actually do on this machine, eighteen rows are ahead
+and every row is within 1.32x.  Ed25519 signing is at 0.63x since its
+fixed-base multiplication became a signed comb over eight compiled-in
+tables (`bench/REPORT.md` Part 89).  The furthest ahead are Salsa20 and
 secretbox at 0.24x--0.25x, because HACL\* has no vector Salsa20; RSA
 verification at 0.43x, whose ladder starts at the exponent's top set bit
 (`bench/REPORT.md` Part 67); the three P-256 rows at 0.47x--0.57x;
@@ -3897,7 +3890,7 @@ at 1.28x: under gcc the radix-2^64 field (see
 is a little slower than the radix-51 code it replaced; under clang it is
 level with HACL\*'s BMI2/ADX assembly.
 
-Ed25519 and secp256k1 signing, at 1.30x and 1.14x, were briefly at 1.71x
+Ed25519 and secp256k1 signing, at 1.30x and 1.14x before the comb, were briefly at 1.71x
 and 1.52x when the tables were first re-measured after secret temporaries
 began to be wiped (issue #1).  Under gcc, a wipe whose length gcc cannot
 see, or of 128 bytes or more, became `rep stosq`, whose start-up cost
@@ -3912,7 +3905,8 @@ Under clang 21, with HACL\* also built by clang, no row is above 1.32x
 (HMAC-SHA-512) and eleven are ahead.  MD5 (0.92x), BLAKE2 (0.89x--0.90x),
 Poly1305 (0.89x), ChaCha20 (0.94x) and ChaCha20-Poly1305 (0.92x) are ahead;
 X25519 and P-256 are level at 1.00x--1.01x, with P-256 verification at
-1.22x; Ed25519 and secp256k1 signing are at 1.19x and 1.28x.  SHA-3 and
+1.22x; Ed25519 and secp256k1 signing are at 1.19x and 1.28x (Ed25519's
+before the comb, which halved signing under clang as well).  SHA-3 and
 SHAKE are at 0.75x--0.80x rather than 0.54x--0.56x, and SHA-512 and
 HMAC-SHA-512 were at 1.26x--1.32x rather than 0.52x--0.54x, because clang builds HACL\*'s sponge and SHA-512 about twice
 as fast as gcc does.  That was before Part 87: clang's SHA-512 and
@@ -5455,6 +5449,15 @@ rough order of value:
    `code/ed25519/Hacl.Ed25519.Win0` .. `Win3` hold the limbs;
    `Hacl.Impl.Lit51` cuts a literal list the way `entry` slices the sequence;
    and `Hacl.Ed25519.WinTable` turns four limb facts into the window's `ent`.
+   **Ed25519 has since replaced the window with a signed radix-16 comb**,
+   `code/ed25519/Hacl.Ed25519.PointMulComb.fst` over thirty-two compiled-in
+   Niels tables (see "The generator has its own comb"), and the window's
+   modules above are gone: sixty-four mixed additions and four doublings
+   instead of sixty-four of each, key generation from 31.6 us to **14.9**
+   and signing from 64.8 to **31.1** (gcc, `Hacl_Ed25519_sign`, which
+   multiplies by the generator twice), verification from 107.1 to **88.1**;
+   under clang 37.3 to **18.9**, 78.1 to **39.1** and 122.7 to **103.8**
+   (`bench/REPORT.md` Part 89).  The price is 34 KB of `.rodata`.
    secp256k1 has had the same fixed-base split, in
    `code/k256/Hacl.K256.PointMulG.fst`, with six field constants rather than
    nine because a projective point has three coordinates where an extended
