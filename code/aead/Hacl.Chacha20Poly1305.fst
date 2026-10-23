@@ -62,6 +62,7 @@ module C = Spec.Chacha20
 module P = Spec.Poly1305
 module Spec = Spec.Chacha20Poly1305
 module Mem = Hacl.Mem
+module IO = Hacl.Impl.InOut
 
 (** {2 The length block}
 
@@ -224,7 +225,7 @@ ensures exists* (vo': Seq.seq S8.t).
   A.pts_to_len zarr;
   A.pts_to_len zarr;
   assert (pure (Seq.equal (Seq.create 32 (S8.classify 0uy)) (P.zeros 32)));
-  Hacl.Chacha20.encrypt otk zarr 32sz key nonce 0ul;
+  Hacl.Chacha20.encrypt_disjoint otk zarr 32sz key nonce 0ul;
   Spec.otk_is_encrypt vkey vnon;
   Mem.wipe zarr 32sz;
   ()
@@ -234,7 +235,155 @@ ensures exists* (vo': Seq.seq S8.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
 
+(** The C entry point.
+
+      void Hacl_Chacha20Poly1305_encrypt(uint8_t *ct, uint8_t *tag,
+                                         uint8_t *msg, size_t mlen,
+                                         uint8_t *aad, size_t alen,
+                                         uint8_t *key, uint8_t *nonce);
+
+    [ct] and [msg] are [mlen] bytes and are either the same buffer
+    (encryption in place) or do not overlap at all
+    ({!Hacl.Impl.InOut.inout}).  The tag is computed over [ct] after it is
+    written. *)
 fn encrypt (ct: A.array S8.t) (tag: A.array S8.t)
+           (msg: A.array S8.t) (mlen: SZ.t) (aad: A.array S8.t) (alen: SZ.t)
+           (key: A.array S8.t) (nonce: A.array S8.t)
+           (#vct: erased (Seq.seq S8.t)) (#vtag: erased (Seq.seq S8.t))
+           (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
+           (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+           (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+           (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires IO.inout ct msg pm 0 vct vmsg ** A.pts_to tag vtag **
+         A.pts_to aad #pa vaad ** A.pts_to key #pk vkey **
+         A.pts_to nonce #pn vnon **
+         pure (Seq.length vct == Seq.length vmsg /\ Seq.length vtag == 16 /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+               Seq.length vmsg <= C.max_len 1ul)
+         ** pure (SZ.v mlen == Seq.length vmsg)
+         ** pure (SZ.v alen == Seq.length vaad)
+ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
+  IO.inout ct msg pm (SZ.v mlen) vct' vmsg ** A.pts_to tag vtag' **
+  A.pts_to aad #pa vaad ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+        Seq.length vmsg <= C.max_len 1ul /\
+        Seq.length vct' == Seq.length vmsg /\ Seq.length vtag' == 16 /\
+        (vct', vtag') == Spec.encrypt vkey vnon vaad vmsg)
+{
+  A.pts_to_len tag;
+  A.pts_to_len key;
+  A.pts_to_len nonce;
+
+  let z8 = S8.classify 0uy;
+  let mut karr = [| z8; 32sz |];
+  Mem.track karr;
+  A.pts_to_len karr;
+  A.pts_to_len karr;
+
+  derive_otk karr key nonce;
+  Hacl.Chacha20.encrypt ct msg mlen key nonce 1ul;
+  with vc. assert (IO.inout ct msg pm (SZ.v mlen) vc vmsg);
+  unfold IO.inout;
+  A.pts_to_len ct;
+  aead_tag tag aad alen ct mlen karr;
+  fold (IO.inout ct msg pm (SZ.v mlen) vc vmsg);
+
+  Mem.wipe karr 32sz;
+  ()
+}
+
+#pop-options
+
+(** {2 Decryption}
+
+    Nothing is written to [msg] unless the tag is right.
+
+      bool Hacl_Chacha20Poly1305_decrypt(uint8_t *msg, uint8_t *ct, size_t clen,
+                                         uint8_t *tag,
+                                         uint8_t *aad, size_t alen,
+                                         uint8_t *key, uint8_t *nonce);
+
+    [msg] and [ct] are [clen] bytes and are either the same buffer
+    (decryption in place) or do not overlap at all
+    ({!Hacl.Impl.InOut.inout}).  The tag is checked against [ct] before
+    anything is written. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+fn decrypt (msg: A.array S8.t) (ct: A.array S8.t) (clen: SZ.t) (tag: A.array S8.t)
+           (aad: A.array S8.t) (alen: SZ.t) (key: A.array S8.t) (nonce: A.array S8.t)
+           (#vmsg: erased (Seq.seq S8.t))
+           (#pc: perm) (#vct: erased (Seq.seq S8.t))
+           (#pt: perm) (#vtag: erased (Seq.seq S8.t))
+           (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+           (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+           (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires IO.inout msg ct pc 0 vmsg vct ** A.pts_to tag #pt vtag **
+         A.pts_to aad #pa vaad ** A.pts_to key #pk vkey **
+         A.pts_to nonce #pn vnon **
+         pure (Seq.length vmsg == Seq.length vct /\ Seq.length vtag == 16 /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+               Seq.length vct <= C.max_len 1ul)
+         ** pure (SZ.v clen == Seq.length vct)
+         ** pure (SZ.v alen == Seq.length vaad)
+returns res: bool
+ensures exists* (vmsg': Seq.seq S8.t).
+  IO.inout msg ct pc (if res then SZ.v clen else 0) vmsg' vct **
+  A.pts_to tag #pt vtag **
+  A.pts_to aad #pa vaad ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+        Seq.length vtag == 16 /\
+        Seq.length vct <= C.max_len 1ul /\
+        Seq.length vmsg' == Seq.length vct /\
+        (res <==> Spec.decrypt_ok vkey vnon vaad vct vtag) /\
+        (if res then vmsg' == Spec.decrypted vkey vnon vct else vmsg' == vmsg))
+{
+  A.pts_to_len tag;
+  A.pts_to_len key;
+  A.pts_to_len nonce;
+
+  let z8 = S8.classify 0uy;
+  let mut karr = [| z8; 32sz |];
+  Mem.track karr;
+  A.pts_to_len karr;
+  A.pts_to_len karr;
+  let mut tarr = [| z8; 16sz |];
+  Mem.track tarr;
+  A.pts_to_len tarr;
+  A.pts_to_len tarr;
+
+  derive_otk karr key nonce;
+  IO.borrow_in msg ct;
+  with q vc. assert (A.pts_to ct #q vc);
+  A.pts_to_len ct;
+  assert (pure (Seq.equal vc vct));
+  aead_tag tarr aad alen ct clen karr;
+  IO.return_in msg ct;
+  let ok = bytes_eq tarr tag 16sz;
+
+  if ok {
+    Hacl.Chacha20.encrypt msg ct clen key nonce 1ul;
+    Mem.wipe tarr 16sz;
+    Mem.wipe karr 32sz;
+    true
+  } else {
+    Mem.wipe tarr 16sz;
+    Mem.wipe karr 32sz;
+    false
+  }
+}
+
+#pop-options
+
+(** {2 For Pulse callers}
+
+    The two ways of meeting the [inout] preconditions: separate arrays, or
+    one array encrypted or decrypted in place. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
+
+inline_for_extraction noextract
+fn encrypt_disjoint (ct: A.array S8.t) (tag: A.array S8.t)
            (msg: A.array S8.t) (mlen: SZ.t) (aad: A.array S8.t) (alen: SZ.t)
            (key: A.array S8.t) (nonce: A.array S8.t)
            (#vct: erased (Seq.seq S8.t)) (#vtag: erased (Seq.seq S8.t))
@@ -258,35 +407,42 @@ ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
         Seq.length vct' == Seq.length vmsg /\ Seq.length vtag' == 16 /\
         (vct', vtag') == Spec.encrypt vkey vnon vaad vmsg)
 {
-  A.pts_to_len ct;
-  A.pts_to_len tag;
-  A.pts_to_len msg;
-  A.pts_to_len key;
-  A.pts_to_len nonce;
-
-  let z8 = S8.classify 0uy;
-  let mut karr = [| z8; 32sz |];
-  Mem.track karr;
-  A.pts_to_len karr;
-  A.pts_to_len karr;
-
-  derive_otk karr key nonce;
-  Hacl.Chacha20.encrypt ct msg mlen key nonce 1ul;
-  aead_tag tag aad alen ct mlen karr;
-
-  Mem.wipe karr 32sz;
-  ()
+  IO.intro_disjoint ct msg;
+  encrypt ct tag msg mlen aad alen key nonce;
+  IO.elim_disjoint ct msg;
 }
 
-#pop-options
+inline_for_extraction noextract
+fn encrypt_inplace (buf: A.array S8.t) (tag: A.array S8.t) (mlen: SZ.t)
+           (aad: A.array S8.t) (alen: SZ.t)
+           (key: A.array S8.t) (nonce: A.array S8.t)
+           (#vbuf: erased (Seq.seq S8.t)) (#vtag: erased (Seq.seq S8.t))
+           (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+           (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+           (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires A.pts_to buf vbuf ** A.pts_to tag vtag **
+         A.pts_to aad #pa vaad ** A.pts_to key #pk vkey **
+         A.pts_to nonce #pn vnon **
+         pure (Seq.length vtag == 16 /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+               Seq.length vbuf <= C.max_len 1ul)
+         ** pure (SZ.v mlen == Seq.length vbuf)
+         ** pure (SZ.v alen == Seq.length vaad)
+ensures exists* (vct': Seq.seq S8.t) (vtag': Seq.seq S8.t).
+  A.pts_to buf vct' ** A.pts_to tag vtag' **
+  A.pts_to aad #pa vaad ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+        Seq.length vbuf <= C.max_len 1ul /\
+        Seq.length vct' == Seq.length vbuf /\ Seq.length vtag' == 16 /\
+        (vct', vtag') == Spec.encrypt vkey vnon vaad vbuf)
+{
+  IO.intro_inplace buf;
+  encrypt buf tag buf mlen aad alen key nonce;
+  IO.elim_inplace buf;
+}
 
-(** {2 Decryption}
-
-    Nothing is written to [msg] unless the tag is right. *)
-
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 60"
-
-fn decrypt (msg: A.array S8.t) (ct: A.array S8.t) (clen: SZ.t) (tag: A.array S8.t)
+inline_for_extraction noextract
+fn decrypt_disjoint (msg: A.array S8.t) (ct: A.array S8.t) (clen: SZ.t) (tag: A.array S8.t)
            (aad: A.array S8.t) (alen: SZ.t) (key: A.array S8.t) (nonce: A.array S8.t)
            (#vmsg: erased (Seq.seq S8.t))
            (#pc: perm) (#vct: erased (Seq.seq S8.t))
@@ -313,36 +469,43 @@ ensures exists* (vmsg': Seq.seq S8.t).
         (res <==> Spec.decrypt_ok vkey vnon vaad vct vtag) /\
         (if res then vmsg' == Spec.decrypted vkey vnon vct else vmsg' == vmsg))
 {
-  A.pts_to_len msg;
-  A.pts_to_len ct;
-  A.pts_to_len tag;
-  A.pts_to_len key;
-  A.pts_to_len nonce;
+  IO.intro_disjoint msg ct;
+  let res = decrypt msg ct clen tag aad alen key nonce;
+  IO.elim_disjoint msg ct;
+  res
+}
 
-  let z8 = S8.classify 0uy;
-  let mut karr = [| z8; 32sz |];
-  Mem.track karr;
-  A.pts_to_len karr;
-  A.pts_to_len karr;
-  let mut tarr = [| z8; 16sz |];
-  Mem.track tarr;
-  A.pts_to_len tarr;
-  A.pts_to_len tarr;
-
-  derive_otk karr key nonce;
-  aead_tag tarr aad alen ct clen karr;
-  let ok = bytes_eq tarr tag 16sz;
-
-  if ok {
-    Hacl.Chacha20.encrypt msg ct clen key nonce 1ul;
-    Mem.wipe tarr 16sz;
-    Mem.wipe karr 32sz;
-    true
-  } else {
-    Mem.wipe tarr 16sz;
-    Mem.wipe karr 32sz;
-    false
-  }
+inline_for_extraction noextract
+fn decrypt_inplace (buf: A.array S8.t) (clen: SZ.t) (tag: A.array S8.t)
+           (aad: A.array S8.t) (alen: SZ.t) (key: A.array S8.t) (nonce: A.array S8.t)
+           (#vct: erased (Seq.seq S8.t))
+           (#pt: perm) (#vtag: erased (Seq.seq S8.t))
+           (#pa: perm) (#vaad: erased (Seq.seq S8.t))
+           (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+           (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires A.pts_to buf vct ** A.pts_to tag #pt vtag **
+         A.pts_to aad #pa vaad ** A.pts_to key #pk vkey **
+         A.pts_to nonce #pn vnon **
+         pure (Seq.length vtag == 16 /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+               Seq.length vct <= C.max_len 1ul)
+         ** pure (SZ.v clen == Seq.length vct)
+         ** pure (SZ.v alen == Seq.length vaad)
+returns res: bool
+ensures exists* (vmsg': Seq.seq S8.t).
+  A.pts_to buf vmsg' ** A.pts_to tag #pt vtag **
+  A.pts_to aad #pa vaad ** A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 12 /\
+        Seq.length vtag == 16 /\
+        Seq.length vct <= C.max_len 1ul /\
+        Seq.length vmsg' == Seq.length vct /\
+        (res <==> Spec.decrypt_ok vkey vnon vaad vct vtag) /\
+        (if res then vmsg' == Spec.decrypted vkey vnon vct else vmsg' == vct))
+{
+  IO.intro_inplace buf;
+  let res = decrypt buf buf clen tag aad alen key nonce;
+  IO.elim_inplace buf;
+  res
 }
 
 #pop-options

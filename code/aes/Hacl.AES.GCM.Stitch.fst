@@ -66,21 +66,21 @@ module GCM = Spec.GCM
 module NI = Hacl.AES.NI
 module GN = Hacl.AES.GF128.NI
 module CL = Spec.CLMUL
+module IO = Hacl.Impl.InOut
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
 (** {2 The pure side} *)
 
 (** Counter mode's loop invariant, as [Hacl.AES.CTR] states it: the first
-    [j] bytes are encrypted and the rest untouched. *)
+    [j] bytes of the output [m] are the encryption of those of the input
+    [m0]. *)
 [@@"opaque_to_smt"]
 let ctr_inv_k (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
               (m0 m: Seq.seq elem) (j: nat) : prop =
   Seq.length m == Seq.length m0 /\
-  (forall (k: nat). k < Seq.length m0 ==>
-     Seq.index m k ==
-       (if k < j then Seq.index m0 k ^^ ctr_keystream v w b (Seq.length m0) k
-        else Seq.index m0 k))
+  (forall (k: nat). k < Seq.length m0 /\ k < j ==>
+     Seq.index m k == Seq.index m0 k ^^ ctr_keystream v w b (Seq.length m0) k)
 
 let ctr_inv (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
             (m0 m: Seq.seq elem) (j: nat) : prop =
@@ -90,11 +90,19 @@ let ctr_inv_def (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
                 (m0 m: Seq.seq elem) (j: nat)
   : Lemma (ctr_inv v w b m0 m j <==>
            (Seq.length m == Seq.length m0 /\ j <= Seq.length m0 /\
-            (forall (k: nat). k < Seq.length m0 ==>
-               Seq.index m k ==
-                 (if k < j then Seq.index m0 k ^^ ctr_keystream v w b (Seq.length m0) k
-                  else Seq.index m0 k))))
+            (forall (k: nat). k < Seq.length m0 /\ k < j ==>
+               Seq.index m k == Seq.index m0 k ^^ ctr_keystream v w b (Seq.length m0) k)))
   = reveal_opaque (`%ctr_inv_k) (ctr_inv_k v w b m0 m j)
+
+(** The same invariant, in [Hacl.AES.CTR]'s own terms, for handing the rest
+    of the message to {!Hacl.AES.CTR.ctr_encrypt_from}. *)
+let ctr_inv_ctr (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
+                (m0 m: Seq.seq elem) (j: nat)
+  : Lemma (requires ctr_inv v w b m0 m j)
+          (ensures Hacl.AES.CTR.ctr_inv v w b m0 m (Seq.length m0) j)
+  = ctr_inv_def v w b m0 m j;
+    reveal_opaque (`%Hacl.AES.CTR.ctr_inv)
+                  (Hacl.AES.CTR.ctr_inv v w b m0 m (Seq.length m0) j)
 
 let ctr_inv_cong (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
                  (m0 m: Seq.seq elem) (j j': nat)
@@ -122,16 +130,14 @@ let ctr1_step (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block)
       (forall (k: nat). k < Seq.length m ==>
          Seq.index m' k ==
            (if j <= k && k < j + blocklen
-            then Seq.index m k ^^ Seq.index ks (k - j)
+            then Seq.index m0 k ^^ Seq.index ks (k - j)
             else Seq.index m k)))
     (ensures ctr_inv v w b m0 m' (j + blocklen))
   = ctr_inv_def v w b m0 m j;
-    let aux (k: nat { k < Seq.length m0 })
+    let aux (k: nat { k < Seq.length m0 /\ k < j + blocklen })
       : Lemma (Seq.index m' k ==
-                 (if k < j + blocklen
-                  then Seq.index m0 k ^^ ctr_keystream v w b (Seq.length m0) k
-                  else Seq.index m0 k))
-      = if j <= k && k < j + blocklen
+                 Seq.index m0 k ^^ ctr_keystream v w b (Seq.length m0) k)
+      = if j <= k
         then ks_index v w b (Seq.length m0) j bi (k - j)
         else ()
     in
@@ -295,18 +301,17 @@ let gh_chunk (hv: Seq.seq elem) (a0: G.block) (cc m: Seq.seq elem) (j: nat)
 #pop-options
 
 (** The last 128 bytes, hashed on their own once the loop is done. *)
-let gh_last (hh a0: G.block) (cc: Seq.seq elem) (n: nat) (a r: G.block)
+let gh_last (hh a0: G.block) (cc: Seq.seq elem) (l: nat) (a r: G.block)
             (vd: Seq.seq elem)
-  : Lemma (requires 128 <= n /\ n == Seq.length cc /\ n % 16 == 0 /\
-                    vd == Seq.slice cc (n - 128) n /\
-                    a == gh_prefix hh a0 cc (n - 128) /\
+  : Lemma (requires 128 <= l /\ l <= Seq.length cc /\ l % 16 == 0 /\
+                    vd == Seq.slice cc (l - 128) l /\
+                    a == gh_prefix hh a0 cc (l - 128) /\
                     Seq.length (Seq.slice vd 0 128) % 16 == 0 /\
                     r == G.ghash_from hh a (Seq.slice vd 0 128) (128 / 16))
-          (ensures Seq.length cc % 16 == 0 /\ r == G.ghash_upd hh a0 cc)
-  = Math.lemma_mod_sub n 16 8;
+          (ensures r == gh_prefix hh a0 cc l)
+  = Math.lemma_mod_sub l 16 8;
     Seq.lemma_eq_intro (Seq.slice vd 0 128) vd;
-    gh_extend hh a0 cc (n - 128) n;
-    Seq.lemma_eq_intro (Seq.slice cc 0 n) cc
+    gh_extend hh a0 cc (l - 128) l
 
 (** Index arithmetic, out of the Pulse context. *)
 let j_facts (j: nat)
@@ -475,40 +480,19 @@ let start_ok (v: variant) (w: Seq.lseq elem (xkeylen v)) (k c: Vec.t)
           (ensures rounds v w (Vec.bv (Vec.vxor c k)) 1 == cipher v w (Vec.bv c))
   = cipher_start v w (Vec.bv c)
 
-(** The pieces of the result, put back together. *)
-#push-options "--z3rlimit 200"
-let assemble (v: variant) (w: Seq.lseq elem (xkeylen v)) (b: block) (h a0: G.block)
-             (m0 mA mB mC m1: Seq.seq S8.t) (lim: nat)
-  : Lemma (requires
-      lim <= Seq.length m0 /\ lim % 16 == 0 /\
-      Seq.length mA == lim /\ Seq.length mB == Seq.length m0 /\
-      Seq.length mC == Seq.length m0 - lim /\ Seq.length m1 == Seq.length m0 /\
-      vals mA == ctr_encrypt v w b (vals (Seq.slice m0 0 lim)) /\
-      (forall (k: nat). k < Seq.length mB ==>
-         Seq.index mB k == (if 0 <= k && k < lim then Seq.index mA (k - 0)
-                            else Seq.index m0 k)) /\
-      vals mC == ctr_encrypt v w (counter_block b (lim / 16))
-                             (vals (Seq.slice mB lim (Seq.length m0))) /\
-      (forall (k: nat). k < Seq.length m1 ==>
-         Seq.index m1 k == (if lim <= k && k < Seq.length m0
-                            then Seq.index mC (k - lim)
-                            else Seq.index mB k)))
-    (ensures Seq.length (vals mA) % 16 == 0 /\
-             vals m1 == ctr_encrypt v w b (vals m0) /\
-             G.ghash_upd h (G.ghash_upd h a0 (vals mA)) (GCM.pad (vals mC)) ==
-               G.ghash_upd h a0 (GCM.pad (vals m1)))
-  = let n = Seq.length m0 in
-    vals_slice m0 0 lim;
-    vals_slice mB lim n;
-    vals_slice m0 lim n;
-    Seq.lemma_eq_intro (Seq.slice (vals mB) lim n) (Seq.slice (vals m0) lim n);
-    let c1 = vals mA in
-    let c2 = vals mC in
-    Seq.lemma_eq_intro (vals m1) (Seq.append c1 c2);
-    ctr_split v w b (vals m0) lim;
+(** The pieces of the result, put back together: the stitched loop's
+    GHASH of the first [lim] bytes of ciphertext, then the padded rest. *)
+let assemble (h a0: G.block) (c: Seq.seq elem) (lim: nat) (a1: G.block)
+  : Lemma (requires lim <= Seq.length c /\ lim % 16 == 0 /\
+                    a1 == gh_prefix h a0 c lim)
+          (ensures G.ghash_upd h a1 (GCM.pad (Seq.slice c lim (Seq.length c))) ==
+                   G.ghash_upd h a0 (GCM.pad c))
+  = let n = Seq.length c in
+    let c1 = Seq.slice c 0 lim in
+    let c2 = Seq.slice c lim n in
+    Seq.lemma_eq_intro (Seq.append c1 c2) c;
     pad_append c1 c2;
     G.ghash_upd_append h a0 c1 (GCM.pad c2)
-#pop-options
 
 
 (** {2 Registers}
@@ -641,19 +625,19 @@ ensures pts_to rl (Vec.vxor l0 (kq_ll x yb)) **
   custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn aes_fin ([@@@FStar.Attributes.monomorphize] p: params)
-           (msg: A.array S8.t) (j: SZ.t) (w: A.array S8.t)
+           (out inp: A.array S8.t) (j: SZ.t) (w: A.array S8.t)
            (r0 r1 r2 r3 r4 r5 r6 r7: ref Vec.t)
-           (m0: erased (Seq.seq elem)) (b0: erased block) (bi: erased nat)
+           (b0: erased block) (bi: erased nat)
            (c0 c1 c2 c3 c4 c5 c6 c7: erased Vec.t)
-           (#vm #vw: erased (Seq.seq S8.t))
+           (#pi: perm) (#pos: erased nat) (#vo #vi #vw: erased (Seq.seq S8.t))
            (#u0 #u1 #u2 #u3 #u4 #u5 #u6 #u7: erased Vec.t)
-requires A.pts_to msg vm ** A.pts_to w vw **
+requires IO.inout out inp pi pos vo vi ** A.pts_to w vw **
          pts_to r0 u0 ** pts_to r1 u1 ** pts_to r2 u2 ** pts_to r3 u3 **
          pts_to r4 u4 ** pts_to r5 u5 ** pts_to r6 u6 ** pts_to r7 u7 **
   pure (Seq.length vw == xkeylen p.pv /\
-        SZ.v j == 16 * bi /\ SZ.v j + 128 <= Seq.length m0 /\
-        SZ.fits (Seq.length m0) /\
-        ctr_inv p.pv (vals vw) b0 m0 (vals vm) (SZ.v j) /\
+        pos == SZ.v j /\ Seq.length vo == Seq.length vi /\
+        SZ.v j == 16 * bi /\ SZ.v j + 128 <= Seq.length vi /\
+        ctr_inv p.pv (vals vw) b0 (vals vi) (vals vo) (SZ.v j) /\
         Vec.bv c0 == counter_block b0 (bi + 0) /\
         Vec.bv c1 == counter_block b0 (bi + 1) /\
         Vec.bv c2 == counter_block b0 (bi + 2) /\
@@ -670,14 +654,15 @@ requires A.pts_to msg vm ** A.pts_to w vw **
         rounds p.pv (vals vw) (Vec.bv u5) 10 == cipher p.pv (vals vw) (Vec.bv c5) /\
         rounds p.pv (vals vw) (Vec.bv u6) 10 == cipher p.pv (vals vw) (Vec.bv c6) /\
         rounds p.pv (vals vw) (Vec.bv u7) 10 == cipher p.pv (vals vw) (Vec.bv c7))
-ensures exists* (vm': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
-  A.pts_to msg vm' ** A.pts_to w vw **
+ensures exists* (vo': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
+  IO.inout out inp pi (pos + 128) vo' vi ** A.pts_to w vw **
   pts_to r0 n0 ** pts_to r1 n1 ** pts_to r2 n2 ** pts_to r3 n3 **
   pts_to r4 n4 ** pts_to r5 n5 ** pts_to r6 n6 ** pts_to r7 n7 **
   pure (Seq.length vw == xkeylen p.pv /\
-        ctr_inv p.pv (vals vw) b0 m0 (vals vm') (SZ.v j + 128))
+        Seq.length vo' == Seq.length vo /\
+        ctr_inv p.pv (vals vw) b0 (vals vi) (vals vo') (SZ.v j + 128))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   let mut i = 10sz;
   while (let vi = !i; SZ.lt vi p.pnr)
   invariant exists* (vi: SZ.t) (v0 v1 v2 v3 v4 v5 v6 v7: Vec.t).
@@ -726,7 +711,7 @@ ensures exists* (vm': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
   let e7 = Vec.aesenclast v7 kl;
   fin_eq p.pv (vals vw) (Vec.bv v7) (Vec.bv c7) (Vec.bv e7) (Vec.bv kl) b0 (bi + 7);
 
-  SZ.fits_lte (SZ.v j + 128) (Seq.length m0);
+  SZ.fits_lte (SZ.v j + 128) (Seq.length vi);
   let j1 = SZ.add j 16sz;
   let j2 = SZ.add j 32sz;
   let j3 = SZ.add j 48sz;
@@ -740,31 +725,35 @@ ensures exists* (vm': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
                 SZ.v j5 == 16 * (bi + 5) /\ SZ.v j6 == 16 * (bi + 6) /\
                 SZ.v j7 == 16 * (bi + 7)));
 
-  NI.xor_at_ni msg j e0;
-  with vmA. assert A.pts_to msg vmA;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vm) (vals vmA) (SZ.v j) (bi + 0) (Vec.bv e0);
-  NI.xor_at_ni msg j1 e1;
-  with vmB. assert A.pts_to msg vmB;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmA) (vals vmB) (SZ.v j1) (bi + 1) (Vec.bv e1);
-  NI.xor_at_ni msg j2 e2;
-  with vmC. assert A.pts_to msg vmC;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmB) (vals vmC) (SZ.v j2) (bi + 2) (Vec.bv e2);
-  NI.xor_at_ni msg j3 e3;
-  with vmD. assert A.pts_to msg vmD;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmC) (vals vmD) (SZ.v j3) (bi + 3) (Vec.bv e3);
-  NI.xor_at_ni msg j4 e4;
-  with vmE. assert A.pts_to msg vmE;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmD) (vals vmE) (SZ.v j4) (bi + 4) (Vec.bv e4);
-  NI.xor_at_ni msg j5 e5;
-  with vmF. assert A.pts_to msg vmF;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmE) (vals vmF) (SZ.v j5) (bi + 5) (Vec.bv e5);
-  NI.xor_at_ni msg j6 e6;
-  with vmG. assert A.pts_to msg vmG;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmF) (vals vmG) (SZ.v j6) (bi + 6) (Vec.bv e6);
-  NI.xor_at_ni msg j7 e7;
-  with vmH. assert A.pts_to msg vmH;
-  ctr1_step p.pv (vals vw) b0 m0 (vals vmG) (vals vmH) (SZ.v j7) (bi + 7) (Vec.bv e7);
-  ctr_inv_cong p.pv (vals vw) b0 m0 (vals vmH) (SZ.v j7 + 16) (SZ.v j + 128);
+  NI.xor_at_ni out inp j e0;
+  with vmA. assert IO.inout out inp pi (pos + 16) vmA vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vo) (vals vmA) (SZ.v j) (bi + 0) (Vec.bv e0);
+  NI.xor_at_ni out inp j1 e1;
+  with vmB. assert IO.inout out inp pi (pos + 16 + 16) vmB vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmA) (vals vmB) (SZ.v j1) (bi + 1) (Vec.bv e1);
+  NI.xor_at_ni out inp j2 e2;
+  with vmC. assert IO.inout out inp pi (pos + 16 + 16 + 16) vmC vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmB) (vals vmC) (SZ.v j2) (bi + 2) (Vec.bv e2);
+  NI.xor_at_ni out inp j3 e3;
+  with vmD. assert IO.inout out inp pi (pos + 16 + 16 + 16 + 16) vmD vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmC) (vals vmD) (SZ.v j3) (bi + 3) (Vec.bv e3);
+  rewrite IO.inout out inp pi (pos + 16 + 16 + 16 + 16) vmD vi
+       as IO.inout out inp pi (SZ.v j4) vmD vi;
+  NI.xor_at_ni out inp j4 e4;
+  with vmE. assert IO.inout out inp pi (SZ.v j4 + 16) vmE vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmD) (vals vmE) (SZ.v j4) (bi + 4) (Vec.bv e4);
+  NI.xor_at_ni out inp j5 e5;
+  with vmF. assert IO.inout out inp pi (SZ.v j4 + 16 + 16) vmF vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmE) (vals vmF) (SZ.v j5) (bi + 5) (Vec.bv e5);
+  NI.xor_at_ni out inp j6 e6;
+  with vmG. assert IO.inout out inp pi (SZ.v j4 + 16 + 16 + 16) vmG vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmF) (vals vmG) (SZ.v j6) (bi + 6) (Vec.bv e6);
+  NI.xor_at_ni out inp j7 e7;
+  with vmH. assert IO.inout out inp pi (SZ.v j4 + 16 + 16 + 16 + 16) vmH vi;
+  ctr1_step p.pv (vals vw) b0 (vals vi) (vals vmG) (vals vmH) (SZ.v j7) (bi + 7) (Vec.bv e7);
+  ctr_inv_cong p.pv (vals vw) b0 (vals vi) (vals vmH) (SZ.v j7 + 16) (SZ.v j + 128);
+  rewrite IO.inout out inp pi (SZ.v j4 + 16 + 16 + 16 + 16) vmH vi
+       as IO.inout out inp pi (pos + 128) vmH vi;
   ()
 }
 #pop-options
@@ -782,35 +771,36 @@ ensures exists* (vm': Seq.seq S8.t) (n0 n1 n2 n3 n4 n5 n6 n7: Vec.t).
   custard_c_closure_guard "defined(__x86_64__)"]
 inline_for_extraction
 fn stitch8 ([@@@FStar.Attributes.monomorphize] p: params)
-           (msg: A.array S8.t) (j: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
+           (out inp: A.array S8.t) (j: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
            (rc: ref Vec.t) (ra: ref Vec.t)
-           (m0: erased (Seq.seq elem)) (b0: erased block) (a0: erased G.block)
+           (b0: erased block) (a0: erased G.block)
            (y y2 y3 y4 y5 y6 y7 y8: erased Vec.t)
            (yb1 ym1 yb2 ym2 yb3 ym3 yb4 ym4 yb5 ym5 yb6 ym6 yb7 ym7 yb8 ym8: Vec.t)
-           (#vm #vw #vh: erased (Seq.seq S8.t)) (#vc #va: erased Vec.t)
-requires A.pts_to msg vm ** A.pts_to w vw ** A.pts_to hk vh **
+           (#pi: perm) (#pos: erased nat) (#vo #vi #vw #vh: erased (Seq.seq S8.t)) (#vc #va: erased Vec.t)
+requires IO.inout out inp pi pos vo vi ** A.pts_to w vw ** A.pts_to hk vh **
          pts_to rc vc ** pts_to ra va ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\ Alg.pows_ok (vals vh) /\
   pw_ok y yb1 ym1 (Alg.hblk (vals vh) 0) /\ pw_ok y2 yb2 ym2 (Alg.hblk (vals vh) 1) /\
   pw_ok y3 yb3 ym3 (Alg.hblk (vals vh) 2) /\ pw_ok y4 yb4 ym4 (Alg.hblk (vals vh) 3) /\
   pw_ok y5 yb5 ym5 (Alg.hblk (vals vh) 4) /\ pw_ok y6 yb6 ym6 (Alg.hblk (vals vh) 5) /\
   pw_ok y7 yb7 ym7 (Alg.hblk (vals vh) 6) /\ pw_ok y8 yb8 ym8 (Alg.hblk (vals vh) 7) /\
-  SZ.v j % 128 == 0 /\ 128 <= SZ.v j /\ SZ.v j + 128 <= Seq.length m0 /\
-  SZ.fits (Seq.length m0) /\
+  pos == SZ.v j /\ Seq.length vo == Seq.length vi /\
+  SZ.v j % 128 == 0 /\ 128 <= SZ.v j /\ SZ.v j + 128 <= Seq.length vi /\
   Vec.bv vc == counter_block b0 (SZ.v j / 16) /\
-  ctr_inv p.pv (vals vw) b0 m0 (vals vm) (SZ.v j) /\
+  ctr_inv p.pv (vals vw) b0 (vals vi) (vals vo) (SZ.v j) /\
   Vec.bv va == gh_prefix (Poly.xtimes (Alg.hblk (vals vh) 0)) a0
-                         (ctr_encrypt p.pv (vals vw) b0 m0) (SZ.v j - 128))
-ensures exists* (vm': Seq.seq S8.t) (vc' va': Vec.t).
-  A.pts_to msg vm' ** A.pts_to w vw ** A.pts_to hk vh **
+                         (ctr_encrypt p.pv (vals vw) b0 (vals vi)) (SZ.v j - 128))
+ensures exists* (vo': Seq.seq S8.t) (vc' va': Vec.t).
+  IO.inout out inp pi (pos + 128) vo' vi ** A.pts_to w vw ** A.pts_to hk vh **
   pts_to rc vc' ** pts_to ra va' ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\
   Vec.bv vc' == counter_block b0 ((SZ.v j + 128) / 16) /\
-  ctr_inv p.pv (vals vw) b0 m0 (vals vm') (SZ.v j + 128) /\
+  Seq.length vo' == Seq.length vo /\
+  ctr_inv p.pv (vals vw) b0 (vals vi) (vals vo') (SZ.v j + 128) /\
   Vec.bv va' == gh_prefix (Poly.xtimes (Alg.hblk (vals vh) 0)) a0
-                          (ctr_encrypt p.pv (vals vw) b0 m0) (SZ.v j))
+                          (ctr_encrypt p.pv (vals vw) b0 (vals vi)) (SZ.v j))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   A.pts_to_len w;
   A.pts_to_len hk;
   vals_len vh;
@@ -861,47 +851,52 @@ ensures exists* (vm': Seq.seq S8.t) (vc' va': Vec.t).
 
   (* Rounds one to eight, each followed by one block's GHASH product. *)
   round8 p w 1sz s0 s1 s2 s3 s4 s5 s6 s7;
+  (* The ciphertext the previous turn wrote is below the boundary, in
+     [out], which is ours to read. *)
+  unfold IO.inout;
+  A.pts_to_len out;
   let a = !ra;
-  let d0 = load16 msg (SZ.sub j 128sz);
+  let d0 = load16 out (SZ.sub j 128sz);
   let x1 = Vec.vxor a d0;
   let mut ll = kq_ll x1 yb8;
   let mut hh = kq_hh x1 yb8;
   let mut mf = kq_mf x1 ym8;
 
   round8 p w 2sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d1 = load16 msg (SZ.sub j 112sz);
+  let d1 = load16 out (SZ.sub j 112sz);
   gpart ll hh mf d1 yb7 ym7;
 
   round8 p w 3sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d2 = load16 msg (SZ.sub j 96sz);
+  let d2 = load16 out (SZ.sub j 96sz);
   gpart ll hh mf d2 yb6 ym6;
 
   round8 p w 4sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d3 = load16 msg (SZ.sub j 80sz);
+  let d3 = load16 out (SZ.sub j 80sz);
   gpart ll hh mf d3 yb5 ym5;
 
   round8 p w 5sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d4 = load16 msg (SZ.sub j 64sz);
+  let d4 = load16 out (SZ.sub j 64sz);
   gpart ll hh mf d4 yb4 ym4;
 
   round8 p w 6sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d5 = load16 msg (SZ.sub j 48sz);
+  let d5 = load16 out (SZ.sub j 48sz);
   gpart ll hh mf d5 yb3 ym3;
 
   round8 p w 7sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d6 = load16 msg (SZ.sub j 32sz);
+  let d6 = load16 out (SZ.sub j 32sz);
   gpart ll hh mf d6 yb2 ym2;
 
   round8 p w 8sz s0 s1 s2 s3 s4 s5 s6 s7;
-  let d7 = load16 msg (SZ.sub j 16sz);
+  let d7 = load16 out (SZ.sub j 16sz);
   gpart ll hh mf d7 yb1 ym1;
 
   round8 p w 9sz s0 s1 s2 s3 s4 s5 s6 s7;
+  fold (IO.inout out inp pi pos vo vi);
 
   (* The GHASH side's facts, gathered before the message changes. *)
-  ctr_slice p.pv (vals vw) b0 m0 (vals vm) (SZ.v j) (SZ.v j - 128) (SZ.v j);
+  ctr_slice p.pv (vals vw) b0 (vals vi) (vals vo) (SZ.v j) (SZ.v j - 128) (SZ.v j);
 
-  aes_fin p msg j w s0 s1 s2 s3 s4 s5 s6 s7 m0 b0 (SZ.v j / 16)
+  aes_fin p out inp j w s0 s1 s2 s3 s4 s5 s6 s7 b0 (SZ.v j / 16)
           c0 c1 c2 c3 c4 c5 c6 c7;
 
   (* The reduction. *)
@@ -923,7 +918,7 @@ ensures exists* (vm': Seq.seq S8.t) (vc' va': Vec.t).
   kq_ok d6 y2 yb2 ym2 (Alg.hblk (vals vh) 1);
   kq_ok d7 y yb1 ym1 (Alg.hblk (vals vh) 0);
   let r = GN.gmul8_fin x1 y8 d1 y7 d2 y6 d3 y5 d4 y4 d5 y3 d6 y2 d7 y ls hs ms;
-  gh_chunk (vals vh) a0 (ctr_encrypt p.pv (vals vw) b0 m0) (vals vm) (SZ.v j)
+  gh_chunk (vals vh) a0 (ctr_encrypt p.pv (vals vw) b0 (vals vi)) (vals vo) (SZ.v j)
            a d0 d1 d2 d3 d4 d5 d6 d7 y y2 y3 y4 y5 y6 y7 y8 r;
   ra := r;
 }
@@ -937,60 +932,72 @@ let jblk_spec (j: nat) : Lemma (jblk j == j / 16) = ()
 
 let jblk_128 () : Lemma (jblk 128 == 4 + 4) = assert_norm (jblk 128 == 4 + 4)
 
+let last_slice (vo: Seq.seq S8.t) (nm lim: nat)
+  : Lemma (requires 128 <= lim /\ lim <= Seq.length vo /\ nm == lim - 128)
+          (ensures vals (Seq.slice vo nm lim) == Seq.slice (vals vo) nm lim /\
+                   Seq.length (Seq.slice vo nm lim) == 128)
+  = vals_slice vo nm lim
+
 
 (** {2 The loop}
 
-    [n] is a positive multiple of 128.  The ciphertext is written in place;
-    [ctr] comes back advanced past it and [acc] with it hashed in. *)
+    The first [lim] bytes, a positive multiple of 128, of a message of any
+    length at least that.  The ciphertext is written to [out], which is the
+    same array as [inp] or disjoint from it; [ctr] comes back advanced past
+    it and [acc] with it hashed in. *)
 
 #push-options "--z3rlimit 400"
 [@@CPrologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
   custard_c_closure_prologue "__attribute__((target(\"aes,pclmul,ssse3,sse4.1\")))";
   custard_c_closure_guard "defined(__x86_64__)"]
 fn ctr_ghash_ni ([@@@FStar.Attributes.monomorphize] p: params)
-                (msg: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
+                (out inp: A.array S8.t) (lim: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
                 (ctr: A.array S8.t) (acc: A.array S8.t)
-                (#vm0 #vw #vh #vc0 #va0: erased (Seq.seq S8.t))
-requires A.pts_to msg vm0 ** A.pts_to w vw ** A.pts_to hk vh **
+                (#pi: perm) (#vo0 #vm0 #vw #vh #vc0 #va0: erased (Seq.seq S8.t))
+requires IO.inout out inp pi 0 vo0 vm0 ** A.pts_to w vw ** A.pts_to hk vh **
          A.pts_to ctr vc0 ** A.pts_to acc va0 ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\ Alg.pows_ok (vals vh) /\
   Seq.length vc0 == blocklen /\ Seq.length va0 == blocklen /\
-  SZ.v n == Seq.length vm0 /\ SZ.v n % 128 == 0 /\ 128 <= SZ.v n)
-ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
-  A.pts_to msg vm1 ** A.pts_to w vw ** A.pts_to hk vh **
+  Seq.length vo0 == Seq.length vm0 /\
+  SZ.v lim <= Seq.length vm0 /\ SZ.v lim % 128 == 0 /\ 128 <= SZ.v lim)
+ensures exists* (vo1 vc1 va1: Seq.seq S8.t).
+  IO.inout out inp pi (SZ.v lim) vo1 vm0 ** A.pts_to w vw ** A.pts_to hk vh **
   A.pts_to ctr vc1 ** A.pts_to acc va1 ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\
   Seq.length vc0 == blocklen /\ Seq.length va0 == blocklen /\
   Seq.length vc1 == blocklen /\ Seq.length va1 == blocklen /\
-  Seq.length vm1 == Seq.length vm0 /\ Seq.length vm1 % 16 == 0 /\
-  vals vm1 == ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0) /\
-  vals vc1 == counter_block (vals vc0) (SZ.v n / 16) /\
-  vals va1 == G.ghash_upd (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vm1))
+  Seq.length vo1 == Seq.length vm0 /\
+  ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vo1) (SZ.v lim) /\
+  vals vc1 == counter_block (vals vc0) (SZ.v lim / 16) /\
+  vals va1 == gh_prefix (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
+                        (ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0)) (SZ.v lim))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   A.pts_to_len w;
   A.pts_to_len hk;
   A.pts_to_len ctr;
   A.pts_to_len acc;
   vals_len vh;
-  j_facts (SZ.v n);
-  assert (pure (SZ.v n / 16 >= 0));
+  j_facts (SZ.v lim);
+  assert (pure (SZ.v lim / 16 >= 0));
   counter_block_zero (vals vc0);
 
   (* The first 128 bytes: counter mode only, there being nothing yet to
      hash. *)
-  NI.ctr_block4_ni p msg 0sz w ctr;
-  with vmA. assert A.pts_to msg vmA;
-  ctr4_step p.pv (vals vw) (vals vc0) (vals vm0) (vals vm0) (vals vmA)
-            (SZ.v n) 0 0 (vals vc0);
+  NI.ctr_block4_ni p out inp 0sz w ctr;
+  with vmA. assert IO.inout out inp pi (0 + 4 * blocklen) vmA vm0;
+  ctr4_step p.pv (vals vw) (vals vc0) (vals vm0) (vals vo0) (vals vmA)
+            (Seq.length vm0) 0 0 (vals vc0);
   with vcA. assert A.pts_to ctr vcA;
-  NI.ctr_block4_ni p msg 64sz w ctr;
-  with vmB. assert A.pts_to msg vmB;
+  NI.ctr_block4_ni p out inp 64sz w ctr;
+  with vmB. assert IO.inout out inp pi (0 + 4 * blocklen + 4 * blocklen) vmB vm0;
   ctr4_step p.pv (vals vw) (vals vc0) (vals vm0) (vals vmA) (vals vmB)
-            (SZ.v n) 64 4 (vals vcA);
+            (Seq.length vm0) 64 4 (vals vcA);
   counter_block_add (vals vc0) 4 4;
   jblk_128 ();
   ctr_inv_def p.pv (vals vw) (vals vc0) (vals vm0) (vals vmB) 128;
+  rewrite IO.inout out inp pi (0 + 4 * blocklen + 4 * blocklen) vmB vm0
+       as IO.inout out inp pi 128 vmB vm0;
   with vcB. assert A.pts_to ctr vcB;
 
   let cv = Vec.load ctr #(NI.as_blk vcB);
@@ -1022,30 +1029,32 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
   let mut ra = av;
   let mut j = 128sz;
 
-  while (let vj = !j; SZ.lt vj n)
-  invariant exists* (vj: SZ.t) (vm: Seq.seq S8.t) (vc va: Vec.t).
-    pts_to j vj ** A.pts_to msg vm ** A.pts_to w vw ** A.pts_to hk vh **
+  while (let vj = !j; SZ.lt vj lim)
+  invariant exists* (vj: SZ.t) (q: nat) (vo: Seq.seq S8.t) (vc va: Vec.t).
+    pts_to j vj ** IO.inout out inp pi q vo vm0 ** A.pts_to w vw ** A.pts_to hk vh **
     A.pts_to ctr vcB ** A.pts_to acc va0 ** pts_to rc vc ** pts_to ra va **
-    pure (128 <= SZ.v vj /\ SZ.v vj <= SZ.v n /\ SZ.v vj % 128 == 0 /\
+    pure (q == SZ.v vj /\
+          128 <= SZ.v vj /\ SZ.v vj <= SZ.v lim /\ SZ.v vj % 128 == 0 /\
           Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\
           Alg.pows_ok (vals vh) /\ Seq.length vcB == blocklen /\
           pw_ok y yb1 ym1 (Alg.hblk (vals vh) 0) /\ pw_ok y2 yb2 ym2 (Alg.hblk (vals vh) 1) /\
           pw_ok y3 yb3 ym3 (Alg.hblk (vals vh) 2) /\ pw_ok y4 yb4 ym4 (Alg.hblk (vals vh) 3) /\
           pw_ok y5 yb5 ym5 (Alg.hblk (vals vh) 4) /\ pw_ok y6 yb6 ym6 (Alg.hblk (vals vh) 5) /\
           pw_ok y7 yb7 ym7 (Alg.hblk (vals vh) 6) /\ pw_ok y8 yb8 ym8 (Alg.hblk (vals vh) 7) /\
-          Seq.length va0 == blocklen /\ SZ.v n == Seq.length vm0 /\
+          Seq.length va0 == blocklen /\ SZ.v lim <= Seq.length vm0 /\
+          Seq.length vo == Seq.length vm0 /\
           Vec.bv vc == counter_block (vals vc0) (jblk (SZ.v vj)) /\
-          ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vm) (SZ.v vj) /\
+          ctr_inv p.pv (vals vw) (vals vc0) (vals vm0) (vals vo) (SZ.v vj) /\
           Vec.bv va == gh_prefix (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
                                  (ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0))
                                  (SZ.v vj - 128))
-  decreases (SZ.v n - SZ.v (!j))
+  decreases (SZ.v lim - SZ.v (!j))
   {
     let vj = !j;
-    step_bounds (SZ.v vj) (SZ.v n);
+    step_bounds (SZ.v vj) (SZ.v lim);
     j_facts (SZ.v vj);
     jblk_spec (SZ.v vj);
-    stitch8 p msg vj w hk rc ra (vals vm0) (vals vc0) (vals va0)
+    stitch8 p out inp vj w hk rc ra (vals vc0) (vals va0)
             y y2 y3 y4 y5 y6 y7 y8
             yb1 ym1 yb2 ym2 yb3 ym3 yb4 ym4 yb5 ym5 yb6 ym6 yb7 ym7 yb8 ym8;
     let nj = SZ.add vj 128sz;
@@ -1055,9 +1064,14 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
   };
 
   (* The last 128 bytes: GHASH only. *)
-  jblk_spec (SZ.v n);
-  with vm. assert A.pts_to msg vm;
-  ctr_fin p.pv (vals vw) (vals vc0) (vals vm0) (vals vm);
+  jblk_spec (SZ.v lim);
+  let vjf = !j;
+  assert (pure (SZ.v vjf <= SZ.v lim));
+  assert (pure (SZ.v vjf >= SZ.v lim));
+  assert (pure (SZ.v vjf == SZ.v lim));
+  with (q: nat) (vo: Seq.seq S8.t). assert IO.inout out inp pi q vo vm0;
+  assert (pure (q == SZ.v lim));
+  rewrite IO.inout out inp pi q vo vm0 as IO.inout out inp pi (SZ.v lim) vo vm0;
   let vc = !rc;
   let va = !ra;
   Vec.store ctr vc #(NI.as_blk vcB);
@@ -1067,13 +1081,19 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
   pw_y y3 yb3 ym3 (Alg.hblk (vals vh) 2); pw_y y4 yb4 ym4 (Alg.hblk (vals vh) 3);
   pw_y y5 yb5 ym5 (Alg.hblk (vals vh) 4); pw_y y6 yb6 ym6 (Alg.hblk (vals vh) 5);
   pw_y y7 yb7 ym7 (Alg.hblk (vals vh) 6); pw_y y8 yb8 ym8 (Alg.hblk (vals vh) 7);
-  let nm = SZ.sub n 128sz;
-  let db = Sub.sub msg nm n;
-  vals_slice vm (SZ.v nm) (SZ.v n);
+  let nm = SZ.sub lim 128sz;
+  ctr_slice p.pv (vals vw) (vals vc0) (vals vm0) (vals vo) (SZ.v lim) (SZ.v nm) (SZ.v lim);
+  unfold IO.inout;
+  A.pts_to_len out;
+  let db = Sub.sub out nm lim;
+  assert (pure (128 <= SZ.v lim /\ SZ.v lim <= Seq.length vo /\ SZ.v nm == SZ.v lim - 128));
+  last_slice vo (SZ.v nm) (SZ.v lim);
   let r = GN.ghash_loop8_ni va y y2 y3 y4 y5 y6 y7 y8 db 128sz 128sz;
-  Sub.unsub_id msg (SZ.v nm) (SZ.v n) db;
-  gh_last (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vm) (SZ.v n)
-          (Vec.bv va) (Vec.bv r) (vals (Seq.slice vm (SZ.v nm) (SZ.v n)));
+  Sub.unsub_id out (SZ.v nm) (SZ.v lim) db;
+  fold (IO.inout out inp pi (SZ.v lim) vo vm0);
+  gh_last (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
+          (ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0)) (SZ.v lim)
+          (Vec.bv va) (Vec.bv r) (vals (Seq.slice vo (SZ.v nm) (SZ.v lim)));
   Vec.store acc r #(NI.as_blk va0);
   vals_len (Vec.vv r);
   ()
@@ -1086,53 +1106,57 @@ ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
     The largest multiple of 128 bytes goes through the stitched loop; the
     rest, fewer than 128 bytes, through the two-pass path.  The accumulator
     comes back with the whole padded ciphertext hashed in, which is what
-    [Hacl.AES.GCM] wants between the associated data and the length block. *)
+    [Hacl.AES.GCM] wants between the associated data and the length block.
+    [out] is the same array as [inp] or disjoint from it. *)
 
 #push-options "--z3rlimit 400"
 [@@custard_c_closure_prologue "";
   custard_c_closure_guard "defined(__x86_64__)"]
 fn ctr_ghash ([@@@FStar.Attributes.monomorphize] p: params)
-             (msg: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
+             (out inp: A.array S8.t) (n: SZ.t) (w: A.array S8.t) (hk: A.array S8.t)
              (ctr: A.array S8.t) (acc: A.array S8.t)
-             (#vm0 #vw #vh #vc0 #va0: erased (Seq.seq S8.t))
-requires A.pts_to msg vm0 ** A.pts_to w vw ** A.pts_to hk vh **
+             (#pi: perm) (#vo0 #vm0 #vw #vh #vc0 #va0: erased (Seq.seq S8.t))
+requires IO.inout out inp pi 0 vo0 vm0 ** A.pts_to w vw ** A.pts_to hk vh **
          A.pts_to ctr vc0 ** A.pts_to acc va0 ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\ Alg.pows_ok (vals vh) /\
   Seq.length vc0 == blocklen /\ Seq.length va0 == blocklen /\
+  Seq.length vo0 == Seq.length vm0 /\
   SZ.v n == Seq.length vm0 /\ 128 <= SZ.v n /\ SZ.fits (SZ.v n + blocklen))
-ensures exists* (vm1 vc1 va1: Seq.seq S8.t).
-  A.pts_to msg vm1 ** A.pts_to w vw ** A.pts_to hk vh **
+ensures exists* (vo1 vc1 va1: Seq.seq S8.t).
+  IO.inout out inp pi (SZ.v n) vo1 vm0 ** A.pts_to w vw ** A.pts_to hk vh **
   A.pts_to ctr vc1 ** A.pts_to acc va1 ** pure (
   Seq.length vw == xkeylen p.pv /\ Seq.length vh == 128 /\
   Seq.length vc0 == blocklen /\ Seq.length va0 == blocklen /\
   Seq.length vc1 == blocklen /\ Seq.length va1 == blocklen /\
-  Seq.length vm1 == Seq.length vm0 /\
-  vals vm1 == ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0) /\
+  Seq.length vo1 == Seq.length vm0 /\
+  vals vo1 == ctr_encrypt p.pv (vals vw) (vals vc0) (vals vm0) /\
   vals va1 == G.ghash_upd (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
-                          (GCM.pad (vals vm1)))
+                          (GCM.pad (vals vo1)))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   lim_facts (SZ.v n);
   let lim = SZ.sub n (SZ.rem n 128sz);
 
-  let mb = Sub.sub msg 0sz lim;
-  ctr_ghash_ni p mb lim w hk ctr acc;
-  with vmA. assert A.pts_to mb vmA;
+  ctr_ghash_ni p out inp lim w hk ctr acc;
   with vaA. assert A.pts_to acc vaA;
-  Sub.unsub msg 0 (SZ.v lim) mb;
-  with vmB. assert A.pts_to msg vmB;
+  with voA. assert IO.inout out inp pi (SZ.v lim) voA vm0;
+  ctr_inv_ctr p.pv (vals vw) (vals vc0) (vals vm0) (vals voA) (SZ.v lim);
+
+  ctr_encrypt_from p out inp n w ctr lim (vals vc0);
+  with vo1. assert IO.inout out inp pi (SZ.v n) vo1 vm0;
 
   let tl = SZ.sub n lim;
-  let tb = Sub.sub msg lim n;
-  ctr_encrypt_impl p tb tl w ctr;
-  with vmC. assert A.pts_to tb vmC;
+  unfold IO.inout;
+  A.pts_to_len out;
+  let tb = Sub.sub out lim n;
   Hacl.AES.GHash.ghash_upd_impl acc hk tb tl;
-  Sub.unsub msg (SZ.v lim) (SZ.v n) tb;
-  with vm1. assert A.pts_to msg vm1;
-  assemble p.pv (vals vw) (vals vc0) (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0)
-           vm0 vmA vmB vmC vm1 (SZ.v lim);
+  Sub.unsub_id out (SZ.v lim) (SZ.v n) tb;
+  fold (IO.inout out inp pi (SZ.v n) vo1 vm0);
+  vals_slice vo1 (SZ.v lim) (SZ.v n);
+  assemble (Poly.xtimes (Alg.hblk (vals vh) 0)) (vals va0) (vals vo1) (SZ.v lim) (vals vaA);
   ()
 }
 #pop-options
+
 
 #pop-options

@@ -45,7 +45,7 @@ static inline void bs_chachapoly_enc(uint8_t *c, uint8_t *t, uint8_t *m, size_t 
 static inline int bs_chachapoly_dec(uint8_t *m, uint8_t *c, size_t n, uint8_t *t, uint8_t *a, size_t al, uint8_t *k, uint8_t *v) { return Hacl_Chacha20Poly1305_decrypt(m, c, n, t, a, al, k, v); }
 static inline void bs_secretbox_easy(uint8_t *c, uint8_t *m, size_t n, uint8_t *v, uint8_t *k) { Hacl_NaCl_crypto_secretbox_easy(c, m, n, v, k); }
 
-/* ---- AES-GCM (in place on the message buffer) ---- */
+/* ---- AES-GCM ---- */
 /* The reference side encrypts against an EverCrypt_AEAD handle built once by
    bs_aes128gcm_setup, so this side uses the expanded-key entry points, which
    are the same thing: the round keys and the GHASH subkey, built once. */
@@ -55,18 +55,15 @@ static inline void bs_aes128gcm_setup(uint8_t *k) { Hacl_AES_GCM_aes128_expand(b
 static inline void bs_aes256gcm_setup(uint8_t *k) { Hacl_AES_GCM_aes256_expand(bs_gcm256_ek, bs_gcm256_hk, k); }
 static inline void bs_aes128gcm_enc(uint8_t *ct, uint8_t *t, uint8_t *m, size_t n, uint8_t *a, size_t al, uint8_t *k, uint8_t *iv) {
   (void)k;
-  if (ct != m) memcpy(ct, m, n);
-  Hacl_AES_GCM_aes128_encrypt_expanded(t, ct, n, bs_gcm128_ek, bs_gcm128_hk, iv, 12, a, al);
+  Hacl_AES_GCM_aes128_encrypt_expanded(ct, t, m, n, bs_gcm128_ek, bs_gcm128_hk, iv, 12, a, al);
 }
 static inline void bs_aes256gcm_enc(uint8_t *ct, uint8_t *t, uint8_t *m, size_t n, uint8_t *a, size_t al, uint8_t *k, uint8_t *iv) {
   (void)k;
-  if (ct != m) memcpy(ct, m, n);
-  Hacl_AES_GCM_aes256_encrypt_expanded(t, ct, n, bs_gcm256_ek, bs_gcm256_hk, iv, 12, a, al);
+  Hacl_AES_GCM_aes256_encrypt_expanded(ct, t, m, n, bs_gcm256_ek, bs_gcm256_hk, iv, 12, a, al);
 }
 static inline int bs_aes128gcm_dec(uint8_t *m, uint8_t *ct, size_t n, uint8_t *t, uint8_t *a, size_t al, uint8_t *k, uint8_t *iv) {
   (void)k;
-  if (m != ct) memcpy(m, ct, n);
-  return Hacl_AES_GCM_aes128_decrypt_expanded(m, n, t, bs_gcm128_ek, bs_gcm128_hk, iv, 12, a, al);
+  return Hacl_AES_GCM_aes128_decrypt_expanded(m, ct, n, t, bs_gcm128_ek, bs_gcm128_hk, iv, 12, a, al);
 }
 
 /* ---- Curve25519 / Ed25519 ---- */
