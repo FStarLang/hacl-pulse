@@ -53,6 +53,7 @@ ROWS = [
     ("NaCl secretbox",       "256 KiB", "nacl-secretbox-easy", "262144"),
     ("Salsa20",              "256 KiB", "salsa20", "262144"),
     ("Ed25519 sign",         "--",      "ed25519-sign-64B", "0"),
+    ("Ed25519 verify",       "--",      "ed25519-verify-64B", "0"),
     ("BLAKE2b",              "256 KiB", "blake2b", "262144"),
     ("AES-128-GCM",          "256 KiB", "aes128-gcm-enc", "262144"),
     ("MD5",                  "256 KiB", "md5", "262144"),

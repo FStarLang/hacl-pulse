@@ -105,7 +105,7 @@ hacl-pulse is faster**.
 | SHA3-256 | 256 KiB | 751 us | 1.5 ms | 0.49x |
 | P-256 ECDSA sign | -- | 83 us | 164 us | 0.51x |
 | P-256 ECDSA verify | -- | 237 us | 414 us | 0.57x |
-| Ed25519 sign | -- | 35 us | 56 us | 0.63x |
+| Ed25519 sign | -- | 32 us | 50 us | 0.65x |
 | BLAKE2b | 256 KiB | 369 us | 428 us | 0.86x |
 | BLAKE2s | 256 KiB | 577 us | 615 us | 0.94x |
 | FFDHE-2048 | -- | 4.1 ms | 4.2 ms | 0.96x |
@@ -118,6 +118,7 @@ hacl-pulse is faster**.
 | HMAC-SHA-256 | 256 KiB | 205 us | 174 us | 1.18x |
 | ChaCha20 | 256 KiB | 103 us | 88 us | 1.18x |
 | SHA-256 | 256 KiB | 204 us | 173 us | 1.18x |
+| Ed25519 verify | -- | 79 us | 64 us | 1.23x |
 | MD5 | 256 KiB | 557 us | 432 us | 1.29x |
 | X25519 | -- | 53 us | 40 us | 1.32x |
 

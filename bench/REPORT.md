@@ -9395,7 +9395,10 @@ three runs, best shown):
 
 12% under gcc and 14% under clang; keygen and sign (unchanged code) moved
 by under 4%.  In the README's other-library table, verification goes from
-2.38x of dalek to **2.08x**.  The test suite (RFC 8032 vectors, every
+2.38x of dalek to **2.08x**.  The README's HACL\* table (`table.sh`, gcc,
+two rounds) gains an Ed25519 verify row, **1.23x** of HACL\* (79 us against
+64 us), and its signing row, until now Part 86's figure scaled by Part 89's
+ratio, is measured directly: 32 us against 50 us, **0.65x**.  The test suite (RFC 8032 vectors, every
 single-bit tampering of the signature, a wrong message, and `S + q`) passes under gcc and clang, as do `make lint`, `make stack` and
 `make cross`.
 
