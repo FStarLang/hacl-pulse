@@ -55,6 +55,7 @@ module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
 module Mem = Hacl.Mem
+module D = Hacl.Hash.SHA2.Dispatch
 
 (** The two block lengths, as literals.  [block_len] is [16 * (bits / 8)] and
     the type class does not reduce on its own inside a Pulse context. *)
@@ -106,7 +107,8 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let mut wsarr = [| z; 64sz |];
   Mem.track wsarr;
   A.pts_to_len wsarr;
-  update_impl sha2_224 kt wsarr acc buf tot data data_len seen;
+  sha2_224_facts ();
+  update_with sha2_224 (D.blocks_dispatch32 sha2_224) kt wsarr acc buf tot data data_len seen;
   drop_table kt;
   Mem.wipe wsarr 64sz;
 }
@@ -179,7 +181,8 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let mut wsarr = [| z; 64sz |];
   Mem.track wsarr;
   A.pts_to_len wsarr;
-  update_impl sha2_256 kt wsarr acc buf tot data data_len seen;
+  sha2_256_facts ();
+  update_with sha2_256 (D.blocks_dispatch32 sha2_256) kt wsarr acc buf tot data data_len seen;
   drop_table kt;
   Mem.wipe wsarr 64sz;
 }
@@ -257,7 +260,8 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let mut wsarr = [| z; 80sz |];
   Mem.track wsarr;
   A.pts_to_len wsarr;
-  update_impl sha2_384 kt wsarr acc buf tot data data_len seen;
+  sha2_384_facts ();
+  update_with sha2_384 (D.blocks_dispatch64 sha2_384) kt wsarr acc buf tot data data_len seen;
   drop_table kt;
   Mem.wipe wsarr 80sz;
 }
@@ -330,7 +334,8 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   let mut wsarr = [| z; 80sz |];
   Mem.track wsarr;
   A.pts_to_len wsarr;
-  update_impl sha2_512 kt wsarr acc buf tot data data_len seen;
+  sha2_512_facts ();
+  update_with sha2_512 (D.blocks_dispatch64 sha2_512) kt wsarr acc buf tot data data_len seen;
   drop_table kt;
   Mem.wipe wsarr 80sz;
 }

@@ -53,6 +53,7 @@ module Sub = Hacl.Impl.Sub
 val setup_base_s (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 (kt: A.array t) (ivt: A.array t)
                 (enc: A.array S8.t)
                 (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -101,6 +102,7 @@ val setup_base_s (#t: Type0) {| w: word t |}
 val setup_base_r (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 (kt: A.array t) (ivt: A.array t)
                 (key: A.array S8.t) (base_nonce: A.array S8.t)
                 (sq: A.array U64.t) (exporter: A.array S8.t)
@@ -145,6 +147,7 @@ val setup_base_r (#t: Type0) {| w: word t |}
 val seal_base (#t: Type0) {| w: word t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
+             ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
              (kt: A.array t) (ivt: A.array t)
              (enc: A.array S8.t) (ct: A.array S8.t) (tag: A.array S8.t)
              (skE: A.array S8.t) (pkR: A.array S8.t)
@@ -195,6 +198,7 @@ val seal_base (#t: Type0) {| w: word t |}
 val open_base (#t: Type0) {| w: word t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
+             ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
              (kt: A.array t) (ivt: A.array t)
              (pt: A.array S8.t)
              (enc: A.array S8.t) (skR: A.array S8.t)

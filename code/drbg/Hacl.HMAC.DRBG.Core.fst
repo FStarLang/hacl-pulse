@@ -50,6 +50,7 @@ module Mem = Hacl.Mem
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn rekey (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
          (kt: A.array t) (ivt: A.array t)
          (k: A.array S8.t) (v: A.array S8.t)
          (d1: A.array S8.t) (n1: SZ.t) (d2: A.array S8.t) (n2: SZ.t)
@@ -96,14 +97,14 @@ ensures exists* vkey' vval'.
   let mut k1arr = [| z8; hb |];
   Mem.track k1arr; A.pts_to_len k1arr;
   A.pts_to_len k1arr;
-  hmac_cat p (Hacl.Hash.SHA2.Core.blocks_scalar p) kt ivt k1arr k tarr d1 d2 d3 hb tn n1 n2 n3;
+  hmac_cat p blocks kt ivt k1arr k tarr d1 d2 d3 hb tn n1 n2 n3;
   with vk1. assert (A.pts_to k1arr vk1);
   hm_def p (reveal vkey) (tagged (reveal vval) c (dcat vd1 vd2 vd3));
 
   let mut v1arr = [| z8; hb |];
   Mem.track v1arr; A.pts_to_len v1arr;
   A.pts_to_len v1arr;
-  hmac_impl p kt ivt v1arr k1arr hb v hb;
+  hmac_one p blocks kt ivt v1arr k1arr hb v hb;
   hm_def p (reveal vk1) (reveal vval);
 
   copy_exact k k1arr hb;
@@ -163,6 +164,7 @@ let upd_branch (#t: Type0) {| w: word t |} (p: params t)
 #push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
 fn update (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
           (kt: A.array t) (ivt: A.array t)
           (k: A.array S8.t) (v: A.array S8.t)
           (d1: A.array S8.t) (n1: SZ.t) (d2: A.array S8.t) (n2: SZ.t) (d3: A.array S8.t) (n3: SZ.t)
@@ -190,9 +192,9 @@ ensures exists* vkey' vval'.
   A.pts_to_len d1; A.pts_to_len d2; A.pts_to_len d3;
   outer_fits #t p;
   upd_branch p (reveal vkey) (reveal vval) (reveal vd1) (reveal vd2) (reveal vd3) n1 n2 n3;
-  rekey p kt ivt k v d1 n1 d2 n2 d3 n3 0x00uy;
+  rekey p blocks kt ivt k v d1 n1 d2 n2 d3 n3 0x00uy;
   if (SZ.gt n1 0sz || SZ.gt n2 0sz || SZ.gt n3 0sz) {
-    rekey p kt ivt k v d1 n1 d2 n2 d3 n3 0x01uy;
+    rekey p blocks kt ivt k v d1 n1 d2 n2 d3 n3 0x01uy;
     ()
   } else {
     ()

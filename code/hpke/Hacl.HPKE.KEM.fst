@@ -57,6 +57,7 @@ module PE = Hacl.P256.Ecdh
 module PS = Hacl.P256.Sec1
 module B = Hacl.Spec.Bytes
 module Mem = Hacl.Mem
+module D = Hacl.Hash.SHA2.Dispatch
 
 (** The wire length of a public key, as a machine value. *)
 let pk_len ([@@@FStar.Attributes.monomorphize] k: kem_alg)
@@ -220,12 +221,14 @@ ensures exists* wo. A.pts_to out wo ** A.pts_to dho #pd vdho ** A.pts_to ctx #pc
 
   let lab1 = table label_eae_prk_arr 7sz;
   A.pts_to_len lab1;
-  labeled_extract_nosalt sha2_256 kt ivt prk sid 5sz lab1 7sz dho dho_len;
+  Hacl.Hash.SHA2.sha2_256_facts ();
+  labeled_extract_nosalt sha2_256 (D.blocks_dispatch32 sha2_256) kt ivt prk sid 5sz lab1 7sz dho dho_len;
   drop_table lab1;
 
   let lab2 = table label_shared_secret_arr 13sz;
   A.pts_to_len lab2;
-  labeled_expand_impl sha2_256 kt ivt out 32sz prk 32sz sid 5sz lab2 13sz ctx ctx_len;
+  Hacl.Hash.SHA2.sha2_256_facts ();
+  labeled_expand_impl sha2_256 (D.blocks_dispatch32 sha2_256) kt ivt out 32sz prk 32sz sid 5sz lab2 13sz ctx ctx_len;
   drop_table lab2;
 
   drop_table ivt;
