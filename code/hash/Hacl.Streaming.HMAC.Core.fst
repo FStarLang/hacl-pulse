@@ -89,7 +89,7 @@ let inner_len (#t: Type0) {| word t |} (p: params t)
     Derive [K0], absorb [K0 ^ ipad] into a fresh inner hash and save
     [K0 ^ opad].  This is the only function that looks at the key. *)
 
-fn init_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn init_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (kt: A.array t) (ivt: A.array t) (wsb: A.array t)
              (acc: A.array t) (buf: A.array S8.t) (tot: A.array SZ.t)
              (opadb: A.array S8.t) (key: A.array S8.t) (lk: SZ.t)
@@ -211,7 +211,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
     Finish the inner hash into scratch, then hash [K0 ^ opad || inner].  The
     state is untouched, so a caller may digest and keep absorbing. *)
 
-fn digest_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn digest_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: A.array t) (ivt: A.array t) (wsb: A.array t)
                (acc: A.array t) (buf: A.array S8.t) (tot: A.array SZ.t)
                (opadb: A.array S8.t) (out: A.array S8.t)

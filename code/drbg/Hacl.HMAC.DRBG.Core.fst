@@ -49,7 +49,7 @@ module Mem = Hacl.Mem
 
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
-fn rekey (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn rekey (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
          (kt: A.array t) (ivt: A.array t)
          (k: A.array S8.t) (v: A.array S8.t)
@@ -163,7 +163,7 @@ let upd_branch (#t: Type0) {| w: word t |} (p: params t)
 
 #push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
-fn update (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn update (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
           (kt: A.array t) (ivt: A.array t)
           (k: A.array S8.t) (v: A.array S8.t)

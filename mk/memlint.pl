@@ -10,6 +10,9 @@
 #      obligation to wipe), except where a module is explicitly allowed to.
 #   4. Mem.nowipe (release without wiping) only in the hot leaves listed
 #      in %nowipe_ok, whose temporaries the C compiler keeps in registers.
+#   5. No way around the abstract Hacl.Zeroable, which says which element
+#      types Mem.wipe may zero: no `friend Hacl.Zeroable`, and an assumed
+#      zeroable instance only in the vector modules in %zeroable_assume_ok.
 use strict; use warnings;
 
 my %drop_ok = map { $_ => 1 } qw(lib/Hacl.Mem.fst lib/Hacl.Impl.Table.fst);
@@ -21,6 +24,8 @@ my %nowipe_ok = map { $_ => 1 } qw(
   code/p256/Hacl.P256.Field.fst:fsqr
   code/hash/Hacl.Hash.SHA3.fst:keccak_impl
 );
+my %zeroable_assume_ok = map { $_ => 1 }
+  qw(lib/Hacl.Vec128.fst lib/Hacl.Vec256.fst lib/Hacl.Vec512.fst);
 my $bad = 0;
 sub fail { my ($f, $s, $pos, $msg) = @_;
   my $line = 1 + (substr($s, 0, $pos) =~ tr/\n//);
@@ -34,6 +39,14 @@ for my $f (@ARGV) {
     my ($n, $p, $e) = ($1, $-[0], $+[0]);
     fail($f, $s, $p, "local array '$n' is not followed by 'Mem.track $n;'")
       unless substr($code, $e) =~ /\A\s*Mem\.track\s+\Q$n\E\s*;/;
+  }
+  (my $rel0 = $f) =~ s{^.*?((?:lib|code|tests)/)}{$1};
+  while ($code =~ /\bfriend\s+Hacl\.Zeroable\b/g) {
+    fail($f, $s, $-[0], "'friend Hacl.Zeroable' would allow unsound zeroable instances");
+  }
+  while ($code =~ /\bassume\s+val\s+[\w']+\s*:[^=]*?\bzeroable\b/sg) {
+    fail($f, $s, $-[0], "assumed zeroable instance; only the vector modules may assume one")
+      unless $zeroable_assume_ok{$rel0};
   }
   next if $is_mem;
   while ($code =~ /\b(Pulse\.Lib\.Vec|Pulse\.Lib\.Box|with_local|(?:A|Array|Pulse\.Lib\.Array)\.alloc|(?:A|Array|Pulse\.Lib\.Array)\.free)\b/g) {

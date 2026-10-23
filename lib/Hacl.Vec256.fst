@@ -113,6 +113,10 @@ assume val store (p: A.array S8.t) (x: t) (#v: erased (Seq.lseq S8.t 32))
 [@@custard_extern "Hacl_Vec256_zero"; custard_c_header "Hacl_Vec256.h"]
 assume val zero (_: unit) : r: t { forall (i: nat). i < 8 ==> lane r i == S32.zero }
 
+(** Trusted, like [zero]: all-zero bytes are a vector. *)
+[@@FStar.Tactics.Typeclasses.tcinstance]
+assume val zeroable_t : Hacl.Zeroable.zeroable t
+
 (** The same word in all eight lanes: [VPBROADCASTD]. *)
 [@@custard_extern "Hacl_Vec256_bcast"; custard_c_header "Hacl_Vec256.h"]
 assume val bcast (x: S32.t) : r: t { forall (i: nat). i < 8 ==> lane r i == x }

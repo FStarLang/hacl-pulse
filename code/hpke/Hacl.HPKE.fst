@@ -223,7 +223,7 @@ let ks_final (#t: Type0) {| word t |} (cs: ciphersuite t { ~(ExportOnly? cs.aead
 
 #push-options "--z3rlimit 400 --fuel 0 --ifuel 0 --using_facts_from '* -Spec.HPKE.key_schedule -Spec.HPKE.labeled -Spec.HPKE.suite_id -Spec.HPKE.two_bytes -Spec.HKDF -Spec.HMAC'"
 
-fn key_schedule_impl (#t: Type0) {| w: word t |}
+fn key_schedule_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                         { ~(ExportOnly? cs.aead) })
                      ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -547,7 +547,7 @@ ensures exists* vout'. A.pts_to out vout' ** A.pts_to bn #pb vbn **
 
 #push-options "--z3rlimit 300 --fuel 0 --ifuel 0"
 
-fn context_seal_impl (#t: Type0) {| w: word t |}
+fn context_seal_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                         { ~(ExportOnly? cs.aead) })
                      (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -615,7 +615,7 @@ ensures exists* wsq wct wtag.
   }
 }
 
-fn context_open_impl (#t: Type0) {| w: word t |}
+fn context_open_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                         { ~(ExportOnly? cs.aead) })
                      (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -698,7 +698,7 @@ ensures exists* wsq wpt.
 
 #push-options "--z3rlimit 300 --fuel 0 --ifuel 0"
 
-fn context_export_impl (#t: Type0) {| w: word t |}
+fn context_export_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                        ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t)
                        ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                        (kt: A.array t) (ivt: A.array t)
@@ -761,7 +761,7 @@ ensures exists* wout.
 
 #push-options "--z3rlimit 400 --fuel 0 --ifuel 0 --using_facts_from '* -Spec.HPKE.key_schedule -Spec.HPKE.labeled -Spec.HPKE.ks -Spec.HPKE.cat2_pointwise -Spec.HPKE.cat3_pointwise -Spec.HPKE.cat4_pointwise -Spec.HPKE.cat5_pointwise -Spec.HPKE.suite_id'"
 
-fn setup_s_impl (#t: Type0) {| w: word t |}
+fn setup_s_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -848,7 +848,7 @@ ensures exists* wenc wkey wbn wsq wexp.
   }
 }
 
-fn setup_r_impl (#t: Type0) {| w: word t |}
+fn setup_r_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -930,7 +930,7 @@ ensures exists* wkey wbn wsq wexp.
   }
 }
 
-fn setup_auth_s_impl (#t: Type0) {| w: word t |}
+fn setup_auth_s_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -1023,7 +1023,7 @@ ensures exists* wenc wkey wbn wsq wexp.
   }
 }
 
-fn setup_auth_r_impl (#t: Type0) {| w: word t |}
+fn setup_auth_r_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -1123,7 +1123,7 @@ ensures exists* wkey wbn wsq wexp.
 
 #push-options "--z3rlimit 400 --fuel 0 --ifuel 0"
 
-fn setup_base_s (#t: Type0) {| w: word t |}
+fn setup_base_s (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -1198,7 +1198,7 @@ ensures exists* wenc wkey wbn wsq wexp.
   r
 }
 
-fn setup_base_r (#t: Type0) {| w: word t |}
+fn setup_base_r (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -1279,7 +1279,7 @@ ensures exists* wkey wbn wsq wexp.
 
 #push-options "--z3rlimit 400 --fuel 2 --ifuel 2"
 
-fn seal_base (#t: Type0) {| w: word t |}
+fn seal_base (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
              ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -1364,7 +1364,7 @@ ensures exists* wenc wct wtag.
   }
 }
 
-fn open_base (#t: Type0) {| w: word t |}
+fn open_base (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
              ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)

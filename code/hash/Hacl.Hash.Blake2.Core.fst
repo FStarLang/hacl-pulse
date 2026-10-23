@@ -509,7 +509,7 @@ ensures exists* (vh': Seq.seq t). A.pts_to h vh' ** A.pts_to vv #pv v4 **
     three, and clang did not, which is why it was inlined before the rounds
     were unrolled.  Custard monomorphizes on [p], so the eight copies have
     the round count and the rotations as constants already. *)
-fn compress_impl (#t: Type0) {| w: word t |}
+fn compress_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
                  (h: A.array t) (m: A.array t) (ivs: A.array t)
                  (ctr: SZ.t) (last: bool)

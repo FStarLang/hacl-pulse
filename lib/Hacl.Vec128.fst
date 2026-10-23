@@ -140,6 +140,10 @@ assume val store (p: A.array S8.t) (x: t) (#v: erased (Seq.lseq S8.t 16))
 [@@custard_extern "Hacl_Vec128_zero"; custard_c_header "Hacl_Vec128.h"]
 assume val zero (_: unit) : r: t { vv r == Seq.create 16 S8.zero }
 
+(** Trusted, like [zero]: all-zero bytes are a vector. *)
+[@@FStar.Tactics.Typeclasses.tcinstance]
+assume val zeroable_t : Hacl.Zeroable.zeroable t
+
 [@@custard_extern "Hacl_Vec128_xor"; custard_c_header "Hacl_Vec128.h"]
 assume val vxor (a b: t) : r: t { bv r == xor_block (bv a) (bv b) }
 

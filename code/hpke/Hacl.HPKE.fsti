@@ -50,7 +50,7 @@ module Cast = FStar.Int.Cast
 module Math = FStar.Math.Lemmas
 module Sub = Hacl.Impl.Sub
 
-val setup_base_s (#t: Type0) {| w: word t |}
+val setup_base_s (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -99,7 +99,7 @@ val setup_base_s (#t: Type0) {| w: word t |}
                     wenc == e1 /\ wkey == c1.ckey /\ wbn == c1.cbase_nonce /\
                     wexp == c1.cexporter /\ U64.v (Seq.index wsq 0) == 0))))
 
-val setup_base_r (#t: Type0) {| w: word t |}
+val setup_base_r (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
                 ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -144,7 +144,7 @@ val setup_base_r (#t: Type0) {| w: word t |}
                     wkey == c1.ckey /\ wbn == c1.cbase_nonce /\
                     wexp == c1.cexporter /\ U64.v (Seq.index wsq 0) == 0))))
 
-val seal_base (#t: Type0) {| w: word t |}
+val seal_base (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
              ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
@@ -195,7 +195,7 @@ val seal_base (#t: Type0) {| w: word t |}
             (r ==> (let (e1, c1, t1) = Some?.v (seal_base cs vskE vpkR vinfo vaad vpt) in
                     wenc == e1 /\ wct == c1 /\ wtag == t1))))
 
-val open_base (#t: Type0) {| w: word t |}
+val open_base (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
              ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)

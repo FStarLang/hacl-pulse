@@ -46,6 +46,9 @@ module KZ = Spec.MLKEM.Zq
 (** A coefficient in canonical form. *)
 let zqt = x: S32.t { S32.v x < q }
 
+instance zeroable_zqt : Hacl.Zeroable.zeroable zqt =
+  Hacl.Zeroable.zeroable_refine #_ #Hacl.Zeroable.zeroable_s32 (fun x -> S32.v x < q) ()
+
 inline_for_extraction
 let qw : w: S32.t { S32.v w == q } = S32.classify 8380417ul
 

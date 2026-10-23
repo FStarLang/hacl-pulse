@@ -19,6 +19,7 @@ module Hacl.Mem
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Hacl.Zeroable
 
 module A = Pulse.Lib.Array
 module V = Pulse.Lib.Vec
@@ -33,11 +34,11 @@ ghost fn track (#t: Type0) (a: A.array t)
 }
 
 [@@custard_extern "Hacl_Mem_wipe"; custard_c_header "Hacl_Mem.h"]
-assume val memzero (#t: Type0) (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
+assume val memzero (#t: Type0) {| zeroable t |} (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
   : stt unit (requires A.pts_to a s ** pure (SZ.v n == A.length a))
              (ensures fun _ -> exists* s'. A.pts_to a s')
 
-fn wipe (#t: Type0) (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
+fn wipe (#t: Type0) {| zeroable t |} (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
   requires A.pts_to a s ** must_wipe a ** pure (SZ.v n == A.length a)
   ensures exists* s'. A.pts_to a s'
 {
@@ -50,6 +51,22 @@ ghost fn nowipe (#t: Type0) (a: A.array t)
 {
   unfold (must_wipe a)
 }
+
+(* FStarLang/hacl-pulse#9: wiping must not let a proof read back a value
+   of a type that all-zero bytes do not represent. *)
+type one = x: FStar.UInt8.t { FStar.UInt8.v x == 1 }
+
+[@@expect_failure]
+fn wipe_refined (a: A.array one) (#s: erased (Seq.seq one))
+  requires A.pts_to a s ** must_wipe a ** pure (A.length a == 1)
+  ensures exists* s'. A.pts_to a s'
+{
+  wipe a 1sz
+}
+
+[@@expect_failure]
+let zeroable_one : zeroable one =
+  zeroable_refine (fun x -> FStar.UInt8.v x == 1) ()
 
 (** [a] is the array view of a whole [Vec], i.e. of a [malloc] result. *)
 let must_free #t a =

@@ -93,7 +93,7 @@ ensures exists* vp'. A.pts_to pad vp' ** A.pts_to k0 #pk vk0 **
 
 (** [k0 <- K0].  [k0] must arrive zeroed; [dg] is scratch, used only when the
     key is longer than a block and must itself be hashed. *)
-fn key_block_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn key_block_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                   (kt: A.array t) (ivt: A.array t)
                   (k0: A.array S8.t) (dg: A.array S8.t) (key: A.array S8.t) (lk: SZ.t)
                   (#pk: perm) (#vk: erased (Seq.seq t))
@@ -140,7 +140,7 @@ ensures exists* (vk0': Seq.seq S8.t) (vdg': Seq.seq S8.t).
 
 (** {2 HMAC} *)
 
-fn hmac_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn hmac_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
              (key: A.array S8.t) (lk: SZ.t) (msg: A.array S8.t) (lm: SZ.t)
              (#pk: perm) (#vk: erased (Seq.seq t))

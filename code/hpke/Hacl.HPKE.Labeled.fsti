@@ -46,7 +46,7 @@ val prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
                    block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < pow2 61 /\
                    block_len #t + hash_bytes p + 9 + 16 + 16 + n + 1 < max_input #t)
 
-val labeled_extract_impl (#t: Type0) {| w: word t |}
+val labeled_extract_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                         ([@@@FStar.Attributes.monomorphize] p: params t)
                         ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                         (kt: A.array t) (ivt: A.array t)
@@ -83,7 +83,7 @@ val labeled_extract_impl (#t: Type0) {| w: word t |}
             Seq.length vlabel <= 16 /\ Seq.length vikm < pow2 32 /\ fits p (Seq.length vikm) /\
             vout' == labeled_extract p vsid vsalt vlabel vikm))
 
-val labeled_expand_impl (#t: Type0) {| w: word t |}
+val labeled_expand_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                        ([@@@FStar.Attributes.monomorphize] p: params t)
                        ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                        (kt: A.array t) (ivt: A.array t)
@@ -125,7 +125,7 @@ val labeled_expand_impl (#t: Type0) {| w: word t |}
             Seq.length vout' < 65536 /\ Seq.length vout' <= 255 * hash_bytes p /\
             vout' == labeled_expand p vsid vprk vlabel vinfo (Seq.length vout')))
 
-val labeled_extract_nosalt (#t: Type0) {| w: word t |}
+val labeled_extract_nosalt (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                           ([@@@FStar.Attributes.monomorphize] p: params t)
                           ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                           (kt: A.array t) (ivt: A.array t)
