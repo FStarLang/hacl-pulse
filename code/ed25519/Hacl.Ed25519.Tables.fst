@@ -2,9 +2,9 @@
 
     The curve constants -- [d], [2d], a square root of [-1] and the base
     point -- and the six four-limb tables that the group order needs for
-    Montgomery arithmetic.  (The fixed-base window's own constants, the
-    sixty-four precomputed multiples of the generator, live in
-    {!Hacl.Ed25519.Win0} .. {!Hacl.Ed25519.Win3}.)  Their own module
+    Montgomery arithmetic.  (The fixed-base comb's own constants, the
+    precomputed multiples of the generator, live in
+    {!Hacl.Ed25519.CombData}.)  Their own module
     because each one is checked against the specification a limb at a time,
     which has no business sitting in the middle of a Pulse function, and
     because a [static_array] is a definition: two modules declaring it would
@@ -24,7 +24,6 @@ module Limb = Hacl.Impl.Limb
 module C = Spec.Curve25519
 module Math = FStar.Math.Lemmas
 module Sc = Spec.Ed25519.Scalar
-module Base = Spec.Ed25519.Base
 module B4 = Spec.Bignum4
 module L4 = Hacl.Impl.Limb4
 module Lit4 = Hacl.Impl.Lit4

@@ -48,8 +48,8 @@
     answer is a multiple of and there is no route from one reading to the
     other that does not go through [smul]'s associativity.
 
-    This is {!Hacl.Ed25519.PointMulG} on a different curve; the scalar
-    arithmetic the two share is {!Spec.Group.Split4}. *)
+    The scalar arithmetic it shares with {!Hacl.P256.PointMulG} is
+    {!Spec.Group.Split4}. *)
 module Hacl.K256.PointMulG
 
 #lang-pulse

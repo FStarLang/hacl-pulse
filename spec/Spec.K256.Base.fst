@@ -42,8 +42,8 @@
     sharing one context is enough to make the routine limb-extraction
     lemmas in {!Hacl.K256.Tables52} time out.
 
-    This is {!Spec.Ed25519.Base} with a different curve; the scalar
-    arithmetic the two share lives in {!Spec.Group.Split4}. *)
+    The scalar arithmetic it shares with {!Spec.P256.Base} lives in
+    {!Spec.Group.Split4}. *)
 module Spec.K256.Base
 
 module G = Spec.Group.Smul

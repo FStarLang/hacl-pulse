@@ -54,7 +54,7 @@ module Smul = Spec.Ed25519.Smul
 module Table = Hacl.Impl.Table
 module Sub = Hacl.Impl.Sub
 module Tables = Hacl.Ed25519.Tables
-module MG = Hacl.Ed25519.PointMulG
+module MC = Hacl.Ed25519.PointMulComb
 module Scalar = Hacl.Ed25519.Scalar
 module Limb = Hacl.Impl.Limb
 module B4 = Spec.Bignum4
@@ -68,10 +68,9 @@ module Mem = Hacl.Mem
 
 (** {2 The base point}
 
-    A fixed-base window: {!Hacl.Ed25519.PointMulG} splits the scalar into
-    four sixty-four-bit pieces and walks them together against four
-    compiled-in base points, which is sixteen rungs rather than
-    sixty-four. *)
+    A fixed-base comb: {!Hacl.Ed25519.PointMulComb} recodes the scalar
+    into sixty-four signed radix-sixteen digits and adds each one from a
+    compiled-in table of affine multiples, with four doublings in all. *)
 
 fn point_mul_g (ox oy oz ot: A.array S64.t) (ks: A.array S8.t)
                (#vox: erased (Seq.seq S64.t)) (#voy: erased (Seq.seq S64.t))
@@ -88,7 +87,7 @@ ensures exists* (wx: Seq.seq S64.t) (wy: Seq.seq S64.t)
   pure (P.pt_ok wx wy wz wt /\ GR.on_curve (P.pt wx wy wz wt) /\
         E.point_equal (P.pt wx wy wz wt) (E.point_mul_g vk))
 {
-  MG.point_mul_g_win ox oy oz ot ks;
+  MC.point_mul_g_comb ox oy oz ot ks;
 }
 
 (** {2 Compressing a multiple of the base point}

@@ -46,9 +46,8 @@
     answer is a multiple of and there is no route from one reading to the
     other that does not go through [smul]'s associativity.
 
-    This is {!Hacl.Ed25519.PointMulG} and {!Hacl.K256.PointMulG} on a
-    third curve; the scalar arithmetic all three share is
-    {!Spec.Group.Split4}.  P-256's only peculiarity is that its invariants
+    This is {!Hacl.K256.PointMulG} on a different curve; the scalar
+    arithmetic the two share is {!Spec.Group.Split4}.  P-256's only peculiarity is that its invariants
     are stated over the limb *sequences* rather than over the points they
     read as, because the projection out of a sequence carries the
     Montgomery constants; that convention is {!Hacl.P256.PointWin}'s and

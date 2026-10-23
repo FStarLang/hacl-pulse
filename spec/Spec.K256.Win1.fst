@@ -35,9 +35,7 @@
     The coordinates are [opaque_to_smt] for the reason {!Spec.K256.Base}'s
     are: everything said about them is settled by the normaliser, and
     twenty-eight two-hundred-and-fifty-six-bit literals in one solver
-    context is not a context anything else terminates in.
-
-    This is {!Spec.Ed25519.Win0} on a different curve. *)
+    context is not a context anything else terminates in. *)
 module Spec.K256.Win1
 
 module G = Spec.Group.Smul
