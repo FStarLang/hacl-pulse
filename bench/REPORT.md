@@ -9363,3 +9363,44 @@ conditional branches in the comb are loop bounds and the stack protector.
 Verification still runs its variable-base multiplication as a four-bit
 window with sixty-four doublings; a variable-time wNAF or Straus double-scalar
 multiplication, which ref10 and dalek use, is the remaining gap.
+
+## Part 90: Ed25519 verification as a variable-time double-scalar multiplication
+
+Verification computed `[S]G` with Part 89's comb and `[k]A` with the
+four-bit window (sixty-four doublings, sixty-four constant-time table
+scans and additions), added `R`, and compared.  Under callgrind that was
+about 926k instructions, 629k of them in the window.  Since every input to
+`verify` is public, `Hacl.Ed25519.Straus` now computes
+`Q = [k](-A) + [S]G` in variable time and compares `Q` with `R`: one shared
+chain of 256 doublings; `k` recoded by a width-5 sliding window against a
+table of the sixteen odd multiples of `-A`; `S` recoded by a width-3 sliding
+window against comb table 0 (`1G .. 8G`, Niels form, already in `.rodata`).
+Zero digits are skipped outright and table entries are read by index.
+`Hacl.Ed25519.PointWin` keeps only the representation layer that the comb
+and Straus share; `point_mul_win` and its rung are gone.
+
+The proof adds two-base lemmas to `Spec.Group.Smul` and a new
+`Spec.Ed25519.Straus` (`st q na a b`: `q` is equivalent to
+`[a] na + [b] G`; `st_verify` turns `st Q (-A) k S` into the specification's
+`[S]G == R + [k]A`).
+
+Before (`be48cf7`) and after, gcc 15.2 from `ab.sh` (two rounds, minimum per
+row) and both compilers from a direct timing loop (best of 15 x 2000 calls,
+three runs, best shown):
+
+| bench | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| verify (64 B), `ab.sh` | 90.2 us | 79.0 us | -- | -- |
+| verify (64 B), loop | 89.7 us | 78.7 us | 103.3 us | 88.4 us |
+
+12% under gcc and 14% under clang; keygen and sign (unchanged code) moved
+by under 4%.  In the README's other-library table, verification goes from
+2.38x of dalek to **2.08x**.  The test suite (RFC 8032 vectors, every
+single-bit tampering of the signature, a wrong message, and `S + q`) passes under gcc and clang, as do `make lint`, `make stack` and
+`make cross`.
+
+What remains: the 256 doublings carry `T`, which only the doubling that
+precedes an addition needs; decompression of `A` and `R` is two
+square-root exponentiations (about 137k instructions); and a larger table
+for `G` (width 5 or more, a dedicated odd-multiple table) would cut the
+`S` additions roughly in half.

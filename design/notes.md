@@ -1125,9 +1125,11 @@ takes four permissions rather than one, and the fixed-base window's sixteen
 read-only arrays are read where they lie instead of being copied into owned
 buffers first.
 
-**The scalar multiplication is windowed, and that changes what the callers
-can assume.**  `Hacl.Ed25519.PointWin` walks the scalar four bits at a time
-against a sixteen-entry table of multiples of the input point, so it returns
+**The scalar multiplications are reordered, and that changes what the callers
+can assume.**  Neither the comb below nor verification's double-scalar
+multiplication walks the scalar the way the specification's ladder does
+(the variable-base four-bit window in `Hacl.Ed25519.PointWin`, whose
+representation predicates both still use, did the same), so each returns
 a point *equivalent* to the one the specification names rather than the same
 quadruple.  Every consumer of a multiple therefore has to be shown blind to
 the difference: compression is, because it normalises through `Z^-1`
@@ -1173,6 +1175,32 @@ per-entry contract the implementation sees.  The verified implementation keeps e
 fact -- the table, the digits, the curve -- behind an `opaque_to_smt`
 predicate with an intro and an elim lemma, because with any of them in a
 Pulse context even `8 * j >= 0` times out.
+
+**Verification multiplies by two scalars at once, in variable time.**
+Everything `verify` handles is public -- the key, the message, the
+signature, and therefore `k = H(R || A || M)` and `S` -- so it may branch
+on scalar bits, which ref10 and dalek both do.  `Hacl.Ed25519.Straus`
+computes `Q = [k](-A) + [S]G` and compares it with `R`, rather than
+`[S]G` and `R + [k]A` separately: one chain of 256 doublings shared by
+both scalars instead of a comb for `[S]G` plus a four-bit window for
+`[k]A` with sixty-four doublings and sixty-four additions of its own.  Each
+scalar is recoded by a sliding window (`slide`) into digits that are zero
+or odd: width five for `k`, against a run-time table of the sixteen odd
+multiples `-A, -3A, .., -31A`, and width three for `S`, against comb table
+0, whose entries `1G .. 8G` are already there in Niels form.  A zero digit
+costs nothing, so a rung is a doubling plus, about one time in six and one
+time in four, an addition.  `-A` is two `fsub`s from zero; `y` and `z` are
+shared with `A`.
+
+The proof is stated over `Spec.Ed25519.Straus.st q na a b` -- `q` is
+equivalent to `[a] na + [b] G` -- which the loop maintains with `a` and `b`
+the partial digit sums from the top (`hsum`); `dsum_bits` closes the gap
+from digit sums to the scalars' bytes, and `st_verify` turns the final `st`
+into the specification's comparison `[S]G == R + [k]A` via
+`Spec.Group.Smul`'s two-base lemmas (`lin2`, `cancel`).  As with the comb,
+every quantified fact -- the digit bounds, the table, the curve -- lives
+behind an opaque predicate, and each rung's three steps (`s_dbl`, `s_adda`,
+`s_addb`) are separate functions whose contracts mention only `st`.
 
 **Failure is public.**  Decompression can fail, and a signature can be
 invalid; neither fact is secret, so both are ordinary `bool`s rather than
@@ -5706,9 +5734,9 @@ rough order of value:
     variable-base ECDH, and neither is small: the scalar splitting needs
     its own correctness proof, and the joint table needs the
     constant-time lookup to range over sixteen combined points rather
-    than sixteen multiples of one.  Ed25519 verification, at **1.98x**,
-    wants the Shamir half of this for the same reason, and has no
-    endomorphism to go with it.
+    than sixteen multiples of one.  Ed25519 verification has
+    since taken the Shamir half (`Hacl.Ed25519.Straus`, variable time,
+    since all its inputs are public); it has no endomorphism to go with it.
 
 13. ~~**Karatsuba in the bulk GHASH multiplier**~~ --- done; see
     *Karatsuba, and what a group of blocks may put off* above.  The entry

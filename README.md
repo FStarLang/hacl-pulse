@@ -188,8 +188,8 @@ column is the better hacl-pulse build divided by the fastest other library:
 | FFDHE-2048 | -- | 3.7 ms | 4.5 ms | **2.2 ms** | 4.0 ms | -- | -- | -- | -- | 1.68x |
 | RSA-PSS-2048 sign | -- | 3.7 ms | 4.5 ms | 2.2 ms | **2.1 ms** | -- | -- | -- | -- | 1.71x |
 | Ed25519 sign | -- | 17 us | 20 us | 41 us | 8.9 us | 16 us | -- | **8.7 us** | 18 us | 1.92x |
+| Ed25519 verify | -- | 77 us | 89 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.08x |
 | P-256 ECDH | -- | 149 us | 111 us | 50 us | **48 us** | -- | -- | -- | -- | 2.31x |
-| Ed25519 verify | -- | 88 us | 104 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.38x |
 | RSA-PSS-2048 verify | -- | 51 us | 59 us | 22 us | **17 us** | -- | -- | -- | -- | 2.99x |
 | P-256 ECDSA verify | -- | 211 us | 162 us | 67 us | **54 us** | -- | -- | 62 us | -- | 3.00x |
 | P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.85x |
