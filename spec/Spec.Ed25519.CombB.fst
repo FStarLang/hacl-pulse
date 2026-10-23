@@ -1,0 +1,941 @@
+(*
+   Copyright 2026 Microsoft Research
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*)
+
+(** The comb's thirty-two base points [256^j G], affine, each proved by
+    the normaliser to be eight doublings of the one before.  Generated
+    by [spec/group-gen/ed25519/comb.py]; see {!Spec.Ed25519.CombTable}. *)
+module Spec.Ed25519.CombB
+
+module G = Spec.Group.Smul
+module SM = Spec.Ed25519.Smul
+
+open Spec.Curve25519
+open Spec.Ed25519
+open Spec.Ed25519.Group
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 50"
+
+let n0 : nat = pow2 0
+
+let b0 : ext_point = g
+
+let b0_ok (_: unit) : Lemma (on_curve b0 /\ point_equal b0 (SM.smul n0 g))
+  = g_on_curve ();
+    assert_norm (pow2 0 == 1);
+    SM.smul_one g;
+    SM.smul_ok 1 g;
+    point_equal_sym (SM.smul 1 g) g
+
+let n1 : nat = pow2 8
+
+[@@"opaque_to_smt"]
+let b1x : elem =
+  assert_norm (42740085206947573681423002599456489563927820004573071834350074001818321593686 < prime);
+  42740085206947573681423002599456489563927820004573071834350074001818321593686
+
+[@@"opaque_to_smt"]
+let b1y : elem =
+  assert_norm (6935684722522267618220753829624209639984359598320562595061366101608187623111 < prime);
+  6935684722522267618220753829624209639984359598320562595061366101608187623111
+
+[@@"opaque_to_smt"]
+let b1t : elem =
+  assert_norm (45190082622104628312424241671176328100266152815574825809524629283795790963326 < prime);
+  45190082622104628312424241671176328100266152815574825809524629283795790963326
+
+let b1 : ext_point = (b1x, b1y, one, b1t)
+
+let b1_ok (_: unit) : Lemma (on_curve b1 /\ point_equal b1 (SM.smul n1 g))
+  = assert_norm (on_curve b1);
+    assert_norm (point_equal b1 (G.dblk SM.eg 8 b0));
+    b0_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n0 g b0;
+    FStar.Math.Lemmas.pow2_plus 8 0;
+    SM.smul_ok n1 g;
+    point_equal_trans b1 (G.dblk SM.eg 8 b0) (SM.smul n1 g)
+
+let n2 : nat = pow2 16
+
+[@@"opaque_to_smt"]
+let b2x : elem =
+  assert_norm (42474966419402231471674152001358115696747244471432888578155981280875302200677 < prime);
+  42474966419402231471674152001358115696747244471432888578155981280875302200677
+
+[@@"opaque_to_smt"]
+let b2y : elem =
+  assert_norm (20182938281251249849712136486927848134532420155649429100890386875073412000822 < prime);
+  20182938281251249849712136486927848134532420155649429100890386875073412000822
+
+[@@"opaque_to_smt"]
+let b2t : elem =
+  assert_norm (13664361721323129802210938873361597552783530985243995323016058555419267517089 < prime);
+  13664361721323129802210938873361597552783530985243995323016058555419267517089
+
+let b2 : ext_point = (b2x, b2y, one, b2t)
+
+let b2_ok (_: unit) : Lemma (on_curve b2 /\ point_equal b2 (SM.smul n2 g))
+  = assert_norm (on_curve b2);
+    assert_norm (point_equal b2 (G.dblk SM.eg 8 b1));
+    b1_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n1 g b1;
+    FStar.Math.Lemmas.pow2_plus 8 8;
+    SM.smul_ok n2 g;
+    point_equal_trans b2 (G.dblk SM.eg 8 b1) (SM.smul n2 g)
+
+let n3 : nat = pow2 24
+
+[@@"opaque_to_smt"]
+let b3x : elem =
+  assert_norm (4953187230743962930662113245944254306680232166954327932822645132912059759223 < prime);
+  4953187230743962930662113245944254306680232166954327932822645132912059759223
+
+[@@"opaque_to_smt"]
+let b3y : elem =
+  assert_norm (14955570584878506545981286824704959560776362796341363640094685063311756888261 < prime);
+  14955570584878506545981286824704959560776362796341363640094685063311756888261
+
+[@@"opaque_to_smt"]
+let b3t : elem =
+  assert_norm (35904166375489452817137140598001589045575754508954150922190349373018797885359 < prime);
+  35904166375489452817137140598001589045575754508954150922190349373018797885359
+
+let b3 : ext_point = (b3x, b3y, one, b3t)
+
+let b3_ok (_: unit) : Lemma (on_curve b3 /\ point_equal b3 (SM.smul n3 g))
+  = assert_norm (on_curve b3);
+    assert_norm (point_equal b3 (G.dblk SM.eg 8 b2));
+    b2_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n2 g b2;
+    FStar.Math.Lemmas.pow2_plus 8 16;
+    SM.smul_ok n3 g;
+    point_equal_trans b3 (G.dblk SM.eg 8 b2) (SM.smul n3 g)
+
+let n4 : nat = pow2 32
+
+[@@"opaque_to_smt"]
+let b4x : elem =
+  assert_norm (34881215023217925273427507880129132732978197777830040111026122875038460546235 < prime);
+  34881215023217925273427507880129132732978197777830040111026122875038460546235
+
+[@@"opaque_to_smt"]
+let b4y : elem =
+  assert_norm (49417579777138232809020590461442191010157021293872759678974198530760482863386 < prime);
+  49417579777138232809020590461442191010157021293872759678974198530760482863386
+
+[@@"opaque_to_smt"]
+let b4t : elem =
+  assert_norm (55450006886699097850473134521998543461614749775831529049808198832293454998897 < prime);
+  55450006886699097850473134521998543461614749775831529049808198832293454998897
+
+let b4 : ext_point = (b4x, b4y, one, b4t)
+
+let b4_ok (_: unit) : Lemma (on_curve b4 /\ point_equal b4 (SM.smul n4 g))
+  = assert_norm (on_curve b4);
+    assert_norm (point_equal b4 (G.dblk SM.eg 8 b3));
+    b3_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n3 g b3;
+    FStar.Math.Lemmas.pow2_plus 8 24;
+    SM.smul_ok n4 g;
+    point_equal_trans b4 (G.dblk SM.eg 8 b3) (SM.smul n4 g)
+
+let n5 : nat = pow2 40
+
+[@@"opaque_to_smt"]
+let b5x : elem =
+  assert_norm (6975916580616431138430993573433071747917420592434172169347774209021880766693 < prime);
+  6975916580616431138430993573433071747917420592434172169347774209021880766693
+
+[@@"opaque_to_smt"]
+let b5y : elem =
+  assert_norm (27729946105412964655112236315850267932468036882545041507320998583854342562650 < prime);
+  27729946105412964655112236315850267932468036882545041507320998583854342562650
+
+[@@"opaque_to_smt"]
+let b5t : elem =
+  assert_norm (18408639415301046201686838874843235575286973466641218752632030265278046338872 < prime);
+  18408639415301046201686838874843235575286973466641218752632030265278046338872
+
+let b5 : ext_point = (b5x, b5y, one, b5t)
+
+let b5_ok (_: unit) : Lemma (on_curve b5 /\ point_equal b5 (SM.smul n5 g))
+  = assert_norm (on_curve b5);
+    assert_norm (point_equal b5 (G.dblk SM.eg 8 b4));
+    b4_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n4 g b4;
+    FStar.Math.Lemmas.pow2_plus 8 32;
+    SM.smul_ok n5 g;
+    point_equal_trans b5 (G.dblk SM.eg 8 b4) (SM.smul n5 g)
+
+let n6 : nat = pow2 48
+
+[@@"opaque_to_smt"]
+let b6x : elem =
+  assert_norm (37386868568128681599499830859763869162133292900805977973436494315455022169426 < prime);
+  37386868568128681599499830859763869162133292900805977973436494315455022169426
+
+[@@"opaque_to_smt"]
+let b6y : elem =
+  assert_norm (36563616321823734465666870349235432940379598201907262626645125270466793116054 < prime);
+  36563616321823734465666870349235432940379598201907262626645125270466793116054
+
+[@@"opaque_to_smt"]
+let b6t : elem =
+  assert_norm (56583979703411916882932154846613088400979015318514747688785230390140028694546 < prime);
+  56583979703411916882932154846613088400979015318514747688785230390140028694546
+
+let b6 : ext_point = (b6x, b6y, one, b6t)
+
+let b6_ok (_: unit) : Lemma (on_curve b6 /\ point_equal b6 (SM.smul n6 g))
+  = assert_norm (on_curve b6);
+    assert_norm (point_equal b6 (G.dblk SM.eg 8 b5));
+    b5_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n5 g b5;
+    FStar.Math.Lemmas.pow2_plus 8 40;
+    SM.smul_ok n6 g;
+    point_equal_trans b6 (G.dblk SM.eg 8 b5) (SM.smul n6 g)
+
+let n7 : nat = pow2 56
+
+[@@"opaque_to_smt"]
+let b7x : elem =
+  assert_norm (51502639449004291622700088031154688719483163480862436225495097465744471100900 < prime);
+  51502639449004291622700088031154688719483163480862436225495097465744471100900
+
+[@@"opaque_to_smt"]
+let b7y : elem =
+  assert_norm (25964330211653062987717188781243886463821901684982951650673786718455132103697 < prime);
+  25964330211653062987717188781243886463821901684982951650673786718455132103697
+
+[@@"opaque_to_smt"]
+let b7t : elem =
+  assert_norm (38317642312210954027635398252908819991782675198528889188269792595252970193743 < prime);
+  38317642312210954027635398252908819991782675198528889188269792595252970193743
+
+let b7 : ext_point = (b7x, b7y, one, b7t)
+
+let b7_ok (_: unit) : Lemma (on_curve b7 /\ point_equal b7 (SM.smul n7 g))
+  = assert_norm (on_curve b7);
+    assert_norm (point_equal b7 (G.dblk SM.eg 8 b6));
+    b6_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n6 g b6;
+    FStar.Math.Lemmas.pow2_plus 8 48;
+    SM.smul_ok n7 g;
+    point_equal_trans b7 (G.dblk SM.eg 8 b6) (SM.smul n7 g)
+
+let n8 : nat = pow2 64
+
+[@@"opaque_to_smt"]
+let b8x : elem =
+  assert_norm (44388040078108422381599858079345000847427885062711346041771517276226329616898 < prime);
+  44388040078108422381599858079345000847427885062711346041771517276226329616898
+
+[@@"opaque_to_smt"]
+let b8y : elem =
+  assert_norm (1423604317745427322790381226394774763053130405907994130724317794966956167955 < prime);
+  1423604317745427322790381226394774763053130405907994130724317794966956167955
+
+[@@"opaque_to_smt"]
+let b8t : elem =
+  assert_norm (44572319132873595455842987266297020623526171197071652062676750099116673206361 < prime);
+  44572319132873595455842987266297020623526171197071652062676750099116673206361
+
+let b8 : ext_point = (b8x, b8y, one, b8t)
+
+let b8_ok (_: unit) : Lemma (on_curve b8 /\ point_equal b8 (SM.smul n8 g))
+  = assert_norm (on_curve b8);
+    assert_norm (point_equal b8 (G.dblk SM.eg 8 b7));
+    b7_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n7 g b7;
+    FStar.Math.Lemmas.pow2_plus 8 56;
+    SM.smul_ok n8 g;
+    point_equal_trans b8 (G.dblk SM.eg 8 b7) (SM.smul n8 g)
+
+let n9 : nat = pow2 72
+
+[@@"opaque_to_smt"]
+let b9x : elem =
+  assert_norm (14209203893922473311723595664823042609383238336090280855951284872268697714335 < prime);
+  14209203893922473311723595664823042609383238336090280855951284872268697714335
+
+[@@"opaque_to_smt"]
+let b9y : elem =
+  assert_norm (54096248485646036580969450637608332943982160324686939405543494070853926149657 < prime);
+  54096248485646036580969450637608332943982160324686939405543494070853926149657
+
+[@@"opaque_to_smt"]
+let b9t : elem =
+  assert_norm (4975509444067247565308788967192026903932001450383679535544650631823633154885 < prime);
+  4975509444067247565308788967192026903932001450383679535544650631823633154885
+
+let b9 : ext_point = (b9x, b9y, one, b9t)
+
+let b9_ok (_: unit) : Lemma (on_curve b9 /\ point_equal b9 (SM.smul n9 g))
+  = assert_norm (on_curve b9);
+    assert_norm (point_equal b9 (G.dblk SM.eg 8 b8));
+    b8_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n8 g b8;
+    FStar.Math.Lemmas.pow2_plus 8 64;
+    SM.smul_ok n9 g;
+    point_equal_trans b9 (G.dblk SM.eg 8 b8) (SM.smul n9 g)
+
+let n10 : nat = pow2 80
+
+[@@"opaque_to_smt"]
+let b10x : elem =
+  assert_norm (43672721813094808158322153823698981319419680095264823938511427045013292716276 < prime);
+  43672721813094808158322153823698981319419680095264823938511427045013292716276
+
+[@@"opaque_to_smt"]
+let b10y : elem =
+  assert_norm (26774469600843634339468622105851699981555180542412972644232493480876266571002 < prime);
+  26774469600843634339468622105851699981555180542412972644232493480876266571002
+
+[@@"opaque_to_smt"]
+let b10t : elem =
+  assert_norm (29692651458458722651386678943218269027918203595633553304967606314881341146280 < prime);
+  29692651458458722651386678943218269027918203595633553304967606314881341146280
+
+let b10 : ext_point = (b10x, b10y, one, b10t)
+
+let b10_ok (_: unit) : Lemma (on_curve b10 /\ point_equal b10 (SM.smul n10 g))
+  = assert_norm (on_curve b10);
+    assert_norm (point_equal b10 (G.dblk SM.eg 8 b9));
+    b9_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n9 g b9;
+    FStar.Math.Lemmas.pow2_plus 8 72;
+    SM.smul_ok n10 g;
+    point_equal_trans b10 (G.dblk SM.eg 8 b9) (SM.smul n10 g)
+
+let n11 : nat = pow2 88
+
+[@@"opaque_to_smt"]
+let b11x : elem =
+  assert_norm (47877216812782924174466763867175181383956969618415943364604849026510454529253 < prime);
+  47877216812782924174466763867175181383956969618415943364604849026510454529253
+
+[@@"opaque_to_smt"]
+let b11y : elem =
+  assert_norm (28112003636980376946454994616205437214785284325558286572284790568403397987982 < prime);
+  28112003636980376946454994616205437214785284325558286572284790568403397987982
+
+[@@"opaque_to_smt"]
+let b11t : elem =
+  assert_norm (39953339698486268802200929093615089845653556727898565227043544080495690841023 < prime);
+  39953339698486268802200929093615089845653556727898565227043544080495690841023
+
+let b11 : ext_point = (b11x, b11y, one, b11t)
+
+let b11_ok (_: unit) : Lemma (on_curve b11 /\ point_equal b11 (SM.smul n11 g))
+  = assert_norm (on_curve b11);
+    assert_norm (point_equal b11 (G.dblk SM.eg 8 b10));
+    b10_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n10 g b10;
+    FStar.Math.Lemmas.pow2_plus 8 80;
+    SM.smul_ok n11 g;
+    point_equal_trans b11 (G.dblk SM.eg 8 b10) (SM.smul n11 g)
+
+let n12 : nat = pow2 96
+
+[@@"opaque_to_smt"]
+let b12x : elem =
+  assert_norm (37070215148198071430799085968753265750032279687669442199535644547659159008720 < prime);
+  37070215148198071430799085968753265750032279687669442199535644547659159008720
+
+[@@"opaque_to_smt"]
+let b12y : elem =
+  assert_norm (24277510719184982406390712670096807578634110983235809048632298767886642985665 < prime);
+  24277510719184982406390712670096807578634110983235809048632298767886642985665
+
+[@@"opaque_to_smt"]
+let b12t : elem =
+  assert_norm (35111111540984543632653740550983724599536402332749403350774988695760688040209 < prime);
+  35111111540984543632653740550983724599536402332749403350774988695760688040209
+
+let b12 : ext_point = (b12x, b12y, one, b12t)
+
+let b12_ok (_: unit) : Lemma (on_curve b12 /\ point_equal b12 (SM.smul n12 g))
+  = assert_norm (on_curve b12);
+    assert_norm (point_equal b12 (G.dblk SM.eg 8 b11));
+    b11_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n11 g b11;
+    FStar.Math.Lemmas.pow2_plus 8 88;
+    SM.smul_ok n12 g;
+    point_equal_trans b12 (G.dblk SM.eg 8 b11) (SM.smul n12 g)
+
+let n13 : nat = pow2 104
+
+[@@"opaque_to_smt"]
+let b13x : elem =
+  assert_norm (11371879162373812903597632893053130771100210169456679508604354695621139343631 < prime);
+  11371879162373812903597632893053130771100210169456679508604354695621139343631
+
+[@@"opaque_to_smt"]
+let b13y : elem =
+  assert_norm (5678923034335803499854193512949185707312411812586470592763075824256665264606 < prime);
+  5678923034335803499854193512949185707312411812586470592763075824256665264606
+
+[@@"opaque_to_smt"]
+let b13t : elem =
+  assert_norm (38107070727229784885304399761175946507407664445189676240769926092787827351429 < prime);
+  38107070727229784885304399761175946507407664445189676240769926092787827351429
+
+let b13 : ext_point = (b13x, b13y, one, b13t)
+
+let b13_ok (_: unit) : Lemma (on_curve b13 /\ point_equal b13 (SM.smul n13 g))
+  = assert_norm (on_curve b13);
+    assert_norm (point_equal b13 (G.dblk SM.eg 8 b12));
+    b12_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n12 g b12;
+    FStar.Math.Lemmas.pow2_plus 8 96;
+    SM.smul_ok n13 g;
+    point_equal_trans b13 (G.dblk SM.eg 8 b12) (SM.smul n13 g)
+
+let n14 : nat = pow2 112
+
+[@@"opaque_to_smt"]
+let b14x : elem =
+  assert_norm (30407400204072033917609480172618297228059702465168718418817308450301417256315 < prime);
+  30407400204072033917609480172618297228059702465168718418817308450301417256315
+
+[@@"opaque_to_smt"]
+let b14y : elem =
+  assert_norm (49315877793598952090227901245738270288685983126601288875006392048674637302542 < prime);
+  49315877793598952090227901245738270288685983126601288875006392048674637302542
+
+[@@"opaque_to_smt"]
+let b14t : elem =
+  assert_norm (35187445115013480584449630665796615226086542422399353313325934559210743563421 < prime);
+  35187445115013480584449630665796615226086542422399353313325934559210743563421
+
+let b14 : ext_point = (b14x, b14y, one, b14t)
+
+let b14_ok (_: unit) : Lemma (on_curve b14 /\ point_equal b14 (SM.smul n14 g))
+  = assert_norm (on_curve b14);
+    assert_norm (point_equal b14 (G.dblk SM.eg 8 b13));
+    b13_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n13 g b13;
+    FStar.Math.Lemmas.pow2_plus 8 104;
+    SM.smul_ok n14 g;
+    point_equal_trans b14 (G.dblk SM.eg 8 b13) (SM.smul n14 g)
+
+let n15 : nat = pow2 120
+
+[@@"opaque_to_smt"]
+let b15x : elem =
+  assert_norm (35118750000941396177384144572236461584765045922296921590426241445782749078564 < prime);
+  35118750000941396177384144572236461584765045922296921590426241445782749078564
+
+[@@"opaque_to_smt"]
+let b15y : elem =
+  assert_norm (22276559719444846469370701617737789620267379936674566170770241509797286014565 < prime);
+  22276559719444846469370701617737789620267379936674566170770241509797286014565
+
+[@@"opaque_to_smt"]
+let b15t : elem =
+  assert_norm (7409144969870103820524925611972696916688721049115307139576546451753046568819 < prime);
+  7409144969870103820524925611972696916688721049115307139576546451753046568819
+
+let b15 : ext_point = (b15x, b15y, one, b15t)
+
+let b15_ok (_: unit) : Lemma (on_curve b15 /\ point_equal b15 (SM.smul n15 g))
+  = assert_norm (on_curve b15);
+    assert_norm (point_equal b15 (G.dblk SM.eg 8 b14));
+    b14_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n14 g b14;
+    FStar.Math.Lemmas.pow2_plus 8 112;
+    SM.smul_ok n15 g;
+    point_equal_trans b15 (G.dblk SM.eg 8 b14) (SM.smul n15 g)
+
+let n16 : nat = pow2 128
+
+[@@"opaque_to_smt"]
+let b16x : elem =
+  assert_norm (34445898214599204196824587830670445739267303633182408050117152659121903233060 < prime);
+  34445898214599204196824587830670445739267303633182408050117152659121903233060
+
+[@@"opaque_to_smt"]
+let b16y : elem =
+  assert_norm (43048524062920118298805915568484795959327268000798232147099016825120495085163 < prime);
+  43048524062920118298805915568484795959327268000798232147099016825120495085163
+
+[@@"opaque_to_smt"]
+let b16t : elem =
+  assert_norm (2546723617105803217066704043024384113612712956060210350476893017486688072586 < prime);
+  2546723617105803217066704043024384113612712956060210350476893017486688072586
+
+let b16 : ext_point = (b16x, b16y, one, b16t)
+
+let b16_ok (_: unit) : Lemma (on_curve b16 /\ point_equal b16 (SM.smul n16 g))
+  = assert_norm (on_curve b16);
+    assert_norm (point_equal b16 (G.dblk SM.eg 8 b15));
+    b15_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n15 g b15;
+    FStar.Math.Lemmas.pow2_plus 8 120;
+    SM.smul_ok n16 g;
+    point_equal_trans b16 (G.dblk SM.eg 8 b15) (SM.smul n16 g)
+
+let n17 : nat = pow2 136
+
+[@@"opaque_to_smt"]
+let b17x : elem =
+  assert_norm (55883912999791610874099966987147290610183948615152237875979579790630856352726 < prime);
+  55883912999791610874099966987147290610183948615152237875979579790630856352726
+
+[@@"opaque_to_smt"]
+let b17y : elem =
+  assert_norm (12787813360355090873089222731288484058890848842071756283908784376987452902533 < prime);
+  12787813360355090873089222731288484058890848842071756283908784376987452902533
+
+[@@"opaque_to_smt"]
+let b17t : elem =
+  assert_norm (37215819195597225906733077543471374188317177722219007369409545129793948129206 < prime);
+  37215819195597225906733077543471374188317177722219007369409545129793948129206
+
+let b17 : ext_point = (b17x, b17y, one, b17t)
+
+let b17_ok (_: unit) : Lemma (on_curve b17 /\ point_equal b17 (SM.smul n17 g))
+  = assert_norm (on_curve b17);
+    assert_norm (point_equal b17 (G.dblk SM.eg 8 b16));
+    b16_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n16 g b16;
+    FStar.Math.Lemmas.pow2_plus 8 128;
+    SM.smul_ok n17 g;
+    point_equal_trans b17 (G.dblk SM.eg 8 b16) (SM.smul n17 g)
+
+let n18 : nat = pow2 144
+
+[@@"opaque_to_smt"]
+let b18x : elem =
+  assert_norm (19600378045657556875289925355351315605889147312093060723319760395067636662161 < prime);
+  19600378045657556875289925355351315605889147312093060723319760395067636662161
+
+[@@"opaque_to_smt"]
+let b18y : elem =
+  assert_norm (55917308400816340940408390548223513438205960913829150880571547126642528177519 < prime);
+  55917308400816340940408390548223513438205960913829150880571547126642528177519
+
+[@@"opaque_to_smt"]
+let b18t : elem =
+  assert_norm (39899686957124757334732424715163183046072775688984097252014070424513489767468 < prime);
+  39899686957124757334732424715163183046072775688984097252014070424513489767468
+
+let b18 : ext_point = (b18x, b18y, one, b18t)
+
+let b18_ok (_: unit) : Lemma (on_curve b18 /\ point_equal b18 (SM.smul n18 g))
+  = assert_norm (on_curve b18);
+    assert_norm (point_equal b18 (G.dblk SM.eg 8 b17));
+    b17_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n17 g b17;
+    FStar.Math.Lemmas.pow2_plus 8 136;
+    SM.smul_ok n18 g;
+    point_equal_trans b18 (G.dblk SM.eg 8 b17) (SM.smul n18 g)
+
+let n19 : nat = pow2 152
+
+[@@"opaque_to_smt"]
+let b19x : elem =
+  assert_norm (13048931295659041501322229995873503013594860839855087692129062737859493222938 < prime);
+  13048931295659041501322229995873503013594860839855087692129062737859493222938
+
+[@@"opaque_to_smt"]
+let b19y : elem =
+  assert_norm (55356056475575935623708835593923975823491973524220303008437518991732678646755 < prime);
+  55356056475575935623708835593923975823491973524220303008437518991732678646755
+
+[@@"opaque_to_smt"]
+let b19t : elem =
+  assert_norm (49963983796323580263993243533601747270429038215005018188137038993379644188496 < prime);
+  49963983796323580263993243533601747270429038215005018188137038993379644188496
+
+let b19 : ext_point = (b19x, b19y, one, b19t)
+
+let b19_ok (_: unit) : Lemma (on_curve b19 /\ point_equal b19 (SM.smul n19 g))
+  = assert_norm (on_curve b19);
+    assert_norm (point_equal b19 (G.dblk SM.eg 8 b18));
+    b18_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n18 g b18;
+    FStar.Math.Lemmas.pow2_plus 8 144;
+    SM.smul_ok n19 g;
+    point_equal_trans b19 (G.dblk SM.eg 8 b18) (SM.smul n19 g)
+
+let n20 : nat = pow2 160
+
+[@@"opaque_to_smt"]
+let b20x : elem =
+  assert_norm (38102973455857383083217578484408556833622354043481013391311736024976869900337 < prime);
+  38102973455857383083217578484408556833622354043481013391311736024976869900337
+
+[@@"opaque_to_smt"]
+let b20y : elem =
+  assert_norm (1514172559578212496981391342935391411386520649276975744812625577312668741408 < prime);
+  1514172559578212496981391342935391411386520649276975744812625577312668741408
+
+[@@"opaque_to_smt"]
+let b20t : elem =
+  assert_norm (1968866686843775686290887716911932262809511996620402674886445561697688625696 < prime);
+  1968866686843775686290887716911932262809511996620402674886445561697688625696
+
+let b20 : ext_point = (b20x, b20y, one, b20t)
+
+let b20_ok (_: unit) : Lemma (on_curve b20 /\ point_equal b20 (SM.smul n20 g))
+  = assert_norm (on_curve b20);
+    assert_norm (point_equal b20 (G.dblk SM.eg 8 b19));
+    b19_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n19 g b19;
+    FStar.Math.Lemmas.pow2_plus 8 152;
+    SM.smul_ok n20 g;
+    point_equal_trans b20 (G.dblk SM.eg 8 b19) (SM.smul n20 g)
+
+let n21 : nat = pow2 168
+
+[@@"opaque_to_smt"]
+let b21x : elem =
+  assert_norm (57435379460912946376016399473592937666208110907957819293947071147026428093578 < prime);
+  57435379460912946376016399473592937666208110907957819293947071147026428093578
+
+[@@"opaque_to_smt"]
+let b21y : elem =
+  assert_norm (7182409611272236782881027545209618023531837096266053376665803045542815763674 < prime);
+  7182409611272236782881027545209618023531837096266053376665803045542815763674
+
+[@@"opaque_to_smt"]
+let b21t : elem =
+  assert_norm (30529205466975385714812549513861014452090337118143516453664072507857742619136 < prime);
+  30529205466975385714812549513861014452090337118143516453664072507857742619136
+
+let b21 : ext_point = (b21x, b21y, one, b21t)
+
+let b21_ok (_: unit) : Lemma (on_curve b21 /\ point_equal b21 (SM.smul n21 g))
+  = assert_norm (on_curve b21);
+    assert_norm (point_equal b21 (G.dblk SM.eg 8 b20));
+    b20_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n20 g b20;
+    FStar.Math.Lemmas.pow2_plus 8 160;
+    SM.smul_ok n21 g;
+    point_equal_trans b21 (G.dblk SM.eg 8 b20) (SM.smul n21 g)
+
+let n22 : nat = pow2 176
+
+[@@"opaque_to_smt"]
+let b22x : elem =
+  assert_norm (2051620019948060320139165007224790046062957563684725660075865905766801927018 < prime);
+  2051620019948060320139165007224790046062957563684725660075865905766801927018
+
+[@@"opaque_to_smt"]
+let b22y : elem =
+  assert_norm (26634626972702021852271593881089056221016381869788669620902290400855180194096 < prime);
+  26634626972702021852271593881089056221016381869788669620902290400855180194096
+
+[@@"opaque_to_smt"]
+let b22t : elem =
+  assert_norm (19894888738178213129913547526001517380443060205018269077878681434722593234648 < prime);
+  19894888738178213129913547526001517380443060205018269077878681434722593234648
+
+let b22 : ext_point = (b22x, b22y, one, b22t)
+
+let b22_ok (_: unit) : Lemma (on_curve b22 /\ point_equal b22 (SM.smul n22 g))
+  = assert_norm (on_curve b22);
+    assert_norm (point_equal b22 (G.dblk SM.eg 8 b21));
+    b21_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n21 g b21;
+    FStar.Math.Lemmas.pow2_plus 8 168;
+    SM.smul_ok n22 g;
+    point_equal_trans b22 (G.dblk SM.eg 8 b21) (SM.smul n22 g)
+
+let n23 : nat = pow2 184
+
+[@@"opaque_to_smt"]
+let b23x : elem =
+  assert_norm (6619991358524042425167715374215849263046545656201214435076171013124526605093 < prime);
+  6619991358524042425167715374215849263046545656201214435076171013124526605093
+
+[@@"opaque_to_smt"]
+let b23y : elem =
+  assert_norm (26917309066133303918329708278348164207184189035529132635850906972016457089819 < prime);
+  26917309066133303918329708278348164207184189035529132635850906972016457089819
+
+[@@"opaque_to_smt"]
+let b23t : elem =
+  assert_norm (27530807659849847188101740647952712239550753242740479481937681435443989417878 < prime);
+  27530807659849847188101740647952712239550753242740479481937681435443989417878
+
+let b23 : ext_point = (b23x, b23y, one, b23t)
+
+let b23_ok (_: unit) : Lemma (on_curve b23 /\ point_equal b23 (SM.smul n23 g))
+  = assert_norm (on_curve b23);
+    assert_norm (point_equal b23 (G.dblk SM.eg 8 b22));
+    b22_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n22 g b22;
+    FStar.Math.Lemmas.pow2_plus 8 176;
+    SM.smul_ok n23 g;
+    point_equal_trans b23 (G.dblk SM.eg 8 b22) (SM.smul n23 g)
+
+let n24 : nat = pow2 192
+
+[@@"opaque_to_smt"]
+let b24x : elem =
+  assert_norm (12565258097955692523285632157940150666933275725759344066053586092157591802509 < prime);
+  12565258097955692523285632157940150666933275725759344066053586092157591802509
+
+[@@"opaque_to_smt"]
+let b24y : elem =
+  assert_norm (44257820073692905562487031197842487206011716534849741297988353661581996935219 < prime);
+  44257820073692905562487031197842487206011716534849741297988353661581996935219
+
+[@@"opaque_to_smt"]
+let b24t : elem =
+  assert_norm (11852089489538718050497412370591090809284399797098271593925664457585805673159 < prime);
+  11852089489538718050497412370591090809284399797098271593925664457585805673159
+
+let b24 : ext_point = (b24x, b24y, one, b24t)
+
+let b24_ok (_: unit) : Lemma (on_curve b24 /\ point_equal b24 (SM.smul n24 g))
+  = assert_norm (on_curve b24);
+    assert_norm (point_equal b24 (G.dblk SM.eg 8 b23));
+    b23_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n23 g b23;
+    FStar.Math.Lemmas.pow2_plus 8 184;
+    SM.smul_ok n24 g;
+    point_equal_trans b24 (G.dblk SM.eg 8 b23) (SM.smul n24 g)
+
+let n25 : nat = pow2 200
+
+[@@"opaque_to_smt"]
+let b25x : elem =
+  assert_norm (42790859572217979019765045101599520864945215556069219979855244263031107341291 < prime);
+  42790859572217979019765045101599520864945215556069219979855244263031107341291
+
+[@@"opaque_to_smt"]
+let b25y : elem =
+  assert_norm (36352885112432934246239472487536406048567025584781430504388550720719917751211 < prime);
+  36352885112432934246239472487536406048567025584781430504388550720719917751211
+
+[@@"opaque_to_smt"]
+let b25t : elem =
+  assert_norm (34411454693318473194917641548200099393007202594856093974381551392238794648136 < prime);
+  34411454693318473194917641548200099393007202594856093974381551392238794648136
+
+let b25 : ext_point = (b25x, b25y, one, b25t)
+
+let b25_ok (_: unit) : Lemma (on_curve b25 /\ point_equal b25 (SM.smul n25 g))
+  = assert_norm (on_curve b25);
+    assert_norm (point_equal b25 (G.dblk SM.eg 8 b24));
+    b24_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n24 g b24;
+    FStar.Math.Lemmas.pow2_plus 8 192;
+    SM.smul_ok n25 g;
+    point_equal_trans b25 (G.dblk SM.eg 8 b24) (SM.smul n25 g)
+
+let n26 : nat = pow2 208
+
+[@@"opaque_to_smt"]
+let b26x : elem =
+  assert_norm (23139927176256150527684160377093795868379875726157297905712336211350061316827 < prime);
+  23139927176256150527684160377093795868379875726157297905712336211350061316827
+
+[@@"opaque_to_smt"]
+let b26y : elem =
+  assert_norm (19787356133392787962174279663620312865334398103860028544644614368198408192057 < prime);
+  19787356133392787962174279663620312865334398103860028544644614368198408192057
+
+[@@"opaque_to_smt"]
+let b26t : elem =
+  assert_norm (37492465648051618533825547835386104286162333036525561762972543216307660676529 < prime);
+  37492465648051618533825547835386104286162333036525561762972543216307660676529
+
+let b26 : ext_point = (b26x, b26y, one, b26t)
+
+let b26_ok (_: unit) : Lemma (on_curve b26 /\ point_equal b26 (SM.smul n26 g))
+  = assert_norm (on_curve b26);
+    assert_norm (point_equal b26 (G.dblk SM.eg 8 b25));
+    b25_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n25 g b25;
+    FStar.Math.Lemmas.pow2_plus 8 200;
+    SM.smul_ok n26 g;
+    point_equal_trans b26 (G.dblk SM.eg 8 b25) (SM.smul n26 g)
+
+let n27 : nat = pow2 216
+
+[@@"opaque_to_smt"]
+let b27x : elem =
+  assert_norm (7443719846974079666748089904485291504428968724490373092275150647989319087692 < prime);
+  7443719846974079666748089904485291504428968724490373092275150647989319087692
+
+[@@"opaque_to_smt"]
+let b27y : elem =
+  assert_norm (18820240084665614733582602265075526958985974540311071192454258305129583587362 < prime);
+  18820240084665614733582602265075526958985974540311071192454258305129583587362
+
+[@@"opaque_to_smt"]
+let b27t : elem =
+  assert_norm (51927089703120089390827029690929960398159411892872994731820667504885558299135 < prime);
+  51927089703120089390827029690929960398159411892872994731820667504885558299135
+
+let b27 : ext_point = (b27x, b27y, one, b27t)
+
+let b27_ok (_: unit) : Lemma (on_curve b27 /\ point_equal b27 (SM.smul n27 g))
+  = assert_norm (on_curve b27);
+    assert_norm (point_equal b27 (G.dblk SM.eg 8 b26));
+    b26_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n26 g b26;
+    FStar.Math.Lemmas.pow2_plus 8 208;
+    SM.smul_ok n27 g;
+    point_equal_trans b27 (G.dblk SM.eg 8 b26) (SM.smul n27 g)
+
+let n28 : nat = pow2 224
+
+[@@"opaque_to_smt"]
+let b28x : elem =
+  assert_norm (53304469795825273299854714085922658079948122322668647297293394441464881470527 < prime);
+  53304469795825273299854714085922658079948122322668647297293394441464881470527
+
+[@@"opaque_to_smt"]
+let b28y : elem =
+  assert_norm (47685002571541626611705376599527786833846649618814369018069081206399572486957 < prime);
+  47685002571541626611705376599527786833846649618814369018069081206399572486957
+
+[@@"opaque_to_smt"]
+let b28t : elem =
+  assert_norm (47247652363584691408596820277011469711095476638227716151186967762488710644228 < prime);
+  47247652363584691408596820277011469711095476638227716151186967762488710644228
+
+let b28 : ext_point = (b28x, b28y, one, b28t)
+
+let b28_ok (_: unit) : Lemma (on_curve b28 /\ point_equal b28 (SM.smul n28 g))
+  = assert_norm (on_curve b28);
+    assert_norm (point_equal b28 (G.dblk SM.eg 8 b27));
+    b27_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n27 g b27;
+    FStar.Math.Lemmas.pow2_plus 8 216;
+    SM.smul_ok n28 g;
+    point_equal_trans b28 (G.dblk SM.eg 8 b27) (SM.smul n28 g)
+
+let n29 : nat = pow2 232
+
+[@@"opaque_to_smt"]
+let b29x : elem =
+  assert_norm (52950684007977523901779353208387991814777872260199194074012000906152749035015 < prime);
+  52950684007977523901779353208387991814777872260199194074012000906152749035015
+
+[@@"opaque_to_smt"]
+let b29y : elem =
+  assert_norm (43559760554699348651880759040523650653531354814484772470659734117943798594773 < prime);
+  43559760554699348651880759040523650653531354814484772470659734117943798594773
+
+[@@"opaque_to_smt"]
+let b29t : elem =
+  assert_norm (27049330572775041533432068825505239039963816317940535506022702151290148666415 < prime);
+  27049330572775041533432068825505239039963816317940535506022702151290148666415
+
+let b29 : ext_point = (b29x, b29y, one, b29t)
+
+let b29_ok (_: unit) : Lemma (on_curve b29 /\ point_equal b29 (SM.smul n29 g))
+  = assert_norm (on_curve b29);
+    assert_norm (point_equal b29 (G.dblk SM.eg 8 b28));
+    b28_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n28 g b28;
+    FStar.Math.Lemmas.pow2_plus 8 224;
+    SM.smul_ok n29 g;
+    point_equal_trans b29 (G.dblk SM.eg 8 b28) (SM.smul n29 g)
+
+let n30 : nat = pow2 240
+
+[@@"opaque_to_smt"]
+let b30x : elem =
+  assert_norm (18426840258637972718670195488655680988537170743174575101534676457073619584903 < prime);
+  18426840258637972718670195488655680988537170743174575101534676457073619584903
+
+[@@"opaque_to_smt"]
+let b30y : elem =
+  assert_norm (38527585858109498490175714924437073855189699226237652996406428558470468189180 < prime);
+  38527585858109498490175714924437073855189699226237652996406428558470468189180
+
+[@@"opaque_to_smt"]
+let b30t : elem =
+  assert_norm (49192919210657974925942560458328182177623017430917591554969689234155051080676 < prime);
+  49192919210657974925942560458328182177623017430917591554969689234155051080676
+
+let b30 : ext_point = (b30x, b30y, one, b30t)
+
+let b30_ok (_: unit) : Lemma (on_curve b30 /\ point_equal b30 (SM.smul n30 g))
+  = assert_norm (on_curve b30);
+    assert_norm (point_equal b30 (G.dblk SM.eg 8 b29));
+    b29_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n29 g b29;
+    FStar.Math.Lemmas.pow2_plus 8 232;
+    SM.smul_ok n30 g;
+    point_equal_trans b30 (G.dblk SM.eg 8 b29) (SM.smul n30 g)
+
+let n31 : nat = pow2 248
+
+[@@"opaque_to_smt"]
+let b31x : elem =
+  assert_norm (39889996776461429953017745748202868941628445010936749699607514235758480168479 < prime);
+  39889996776461429953017745748202868941628445010936749699607514235758480168479
+
+[@@"opaque_to_smt"]
+let b31y : elem =
+  assert_norm (46963357182225939507199438676569248839185976608832841466490839922106986386462 < prime);
+  46963357182225939507199438676569248839185976608832841466490839922106986386462
+
+[@@"opaque_to_smt"]
+let b31t : elem =
+  assert_norm (56449159845156832713850161799398571731738147939289379270626210887147816372235 < prime);
+  56449159845156832713850161799398571731738147939289379270626210887147816372235
+
+let b31 : ext_point = (b31x, b31y, one, b31t)
+
+let b31_ok (_: unit) : Lemma (on_curve b31 /\ point_equal b31 (SM.smul n31 g))
+  = assert_norm (on_curve b31);
+    assert_norm (point_equal b31 (G.dblk SM.eg 8 b30));
+    b30_ok ();
+    g_on_curve ();
+    G.dblk_ok SM.eg 8 n30 g b30;
+    FStar.Math.Lemmas.pow2_plus 8 240;
+    SM.smul_ok n31 g;
+    point_equal_trans b31 (G.dblk SM.eg 8 b30) (SM.smul n31 g)
+
+#pop-options
