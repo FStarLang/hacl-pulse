@@ -279,6 +279,53 @@ AVX2 static void run(int rounds) {
   }
   report("vec256 rotl64, every distance", ok);
 
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    for (unsigned s = 1; s < 64; s++) {
+      Hacl_Vec256_store(r, Hacl_Vec256_rotr64(Hacl_Vec256_load(a), s));
+      for (int i = 0; i < 4; i++)
+        ok &= lane64(r, i) == ((lane64(a, i) >> s) | (lane64(a, i) << (64 - s)));
+    }
+  }
+  report("vec256 rotr64, every distance", ok);
+
+  /* The SHA-512 schedule's lane moves. */
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill(a, 32);
+    fill(b, 32);
+    Hacl_Vec256_t va = Hacl_Vec256_load(a), vb = Hacl_Vec256_load(b);
+    Hacl_Vec256_store(r, Hacl_Vec256_window64(va, vb));
+    for (int i = 0; i < 3; i++) ok &= lane64(r, i) == lane64(a, i + 1);
+    ok &= lane64(r, 3) == lane64(b, 0);
+    Hacl_Vec256_store(r, Hacl_Vec256_hi_to_lo64(va));
+    ok &= lane64(r, 0) == lane64(a, 2) && lane64(r, 1) == lane64(a, 3) &&
+          lane64(r, 2) == 0 && lane64(r, 3) == 0;
+    Hacl_Vec256_store(r, Hacl_Vec256_lo_to_hi64(va));
+    ok &= lane64(r, 2) == lane64(a, 0) && lane64(r, 3) == lane64(a, 1) &&
+          lane64(r, 0) == 0 && lane64(r, 1) == 0;
+    Hacl_Vec256_store(r, Hacl_Vec256_blend_lohi64(va, vb));
+    ok &= lane64(r, 0) == lane64(a, 0) && lane64(r, 1) == lane64(a, 1) &&
+          lane64(r, 2) == lane64(b, 2) && lane64(r, 3) == lane64(b, 3);
+  }
+  report("vec256 window64, hi_to_lo64, lo_to_hi64 and blend_lohi64", ok);
+
+  uint64_t qbuf[12], qout[12];
+  ok = true;
+  for (int n = 0; n < rounds; n++) {
+    fill((uint8_t *)qbuf, sizeof qbuf);
+    size_t at = (size_t)(next32() % 9);
+    memcpy(qout, qbuf, sizeof qout);
+    Hacl_Vec256_store(r, Hacl_Vec256_load64(qbuf, at));
+    for (int i = 0; i < 4; i++) ok &= lane64(r, i) == qbuf[at + i];
+    fill(a, 32);
+    Hacl_Vec256_store64_at(qout, at, Hacl_Vec256_load(a));
+    for (size_t k = 0; k < 12; k++)
+      ok &= qout[k] == (at <= k && k < at + 4 ? lane64(a, (int)(k - at)) : qbuf[k]);
+  }
+  report("vec256 load64 and store64_at", ok);
+
   /* Hacl.Vec256.Lane32. */
   uint32_t wbuf[24], wout[24];
   ok = true;

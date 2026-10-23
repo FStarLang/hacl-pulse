@@ -191,6 +191,43 @@ HACL_VEC256 void Hacl_Vec256_store32(uint32_t *p, size_t i, Hacl_Vec256_t x) {
   _mm256_storeu_si256((__m256i *)(void *)(p + i), x);
 }
 
+/* Four 64-bit words from `p + i`, and back; see `Hacl.Vec256.Lane64`. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_load64(uint64_t *p, size_t i) {
+  return _mm256_loadu_si256((const __m256i *)(const void *)(p + i));
+}
+
+HACL_VEC256 void Hacl_Vec256_store64_at(uint64_t *p, size_t i,
+                                        Hacl_Vec256_t x) {
+  _mm256_storeu_si256((__m256i *)(void *)(p + i), x);
+}
+
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_rotr64(Hacl_Vec256_t a, uint32_t s) {
+  return Hacl_Vec256_rotl64(a, 64 - s);
+}
+
+/* Lanes 1, 2, 3 of `lo`, then lane 0 of `hi`: the four-word window one word
+ * along from `lo`, as the SHA-512 message schedule reads it. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_window64(Hacl_Vec256_t lo,
+                                               Hacl_Vec256_t hi) {
+  return _mm256_alignr_epi8(_mm256_permute2x128_si256(lo, hi, 0x21), lo, 8);
+}
+
+/* Lanes 2, 3 of `a` moved down to 0, 1; the top half zero. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_hi_to_lo64(Hacl_Vec256_t a) {
+  return _mm256_permute2x128_si256(a, a, 0x81);
+}
+
+/* Lanes 0, 1 of `a` moved up to 2, 3; the bottom half zero. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_lo_to_hi64(Hacl_Vec256_t a) {
+  return _mm256_permute2x128_si256(a, a, 0x08);
+}
+
+/* Lanes 0, 1 of `lo` and 2, 3 of `hi`. */
+HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_blend_lohi64(Hacl_Vec256_t lo,
+                                                   Hacl_Vec256_t hi) {
+  return _mm256_blend_epi32(lo, hi, 0xf0);
+}
+
 HACL_VEC256 Hacl_Vec256_t Hacl_Vec256_sub32(Hacl_Vec256_t a,
                                             Hacl_Vec256_t b) {
   return _mm256_sub_epi32(a, b);

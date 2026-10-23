@@ -35,6 +35,7 @@ open Hacl.Impl.Table
 open Hacl.HKDF.Core
 
 module Vec = Hacl.Vec128
+module V256 = Hacl.Vec256
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -229,6 +230,39 @@ let expand_lengths_s64 (p: params S64.t) (vprk vinfo vout: Seq.seq S8.t)
           (ensures prk_ok p vprk /\ info_ok p vinfo)
   = s64_sizes ()
 
+(** [expand_impl] over [Hacl.Hash.SHA2.AVX2].  A function of its own so
+    that it can carry the x86-64 guard, which then covers every
+    [blocks_avx2] instance it reaches. *)
+[@@custard_c_closure_prologue "";
+  custard_c_closure_guard "defined(__x86_64__)"]
+fn expand_avx2 ([@@@FStar.Attributes.monomorphize] p: params S64.t { Hacl.Hash.SHA2.AVX2.is_sha512 p })
+             (kt: A.array S64.t) (ivt: A.array S64.t) (out: A.array S8.t) (len: SZ.t)
+             (prk: A.array S8.t) (plen: SZ.t) (info: A.array S8.t) (ilen: SZ.t)
+             (#pk: perm) (#vk: erased (Seq.seq S64.t))
+             (#pi: perm) (#vi: erased (Seq.seq S64.t))
+             (#vout: erased (Seq.seq S8.t))
+             (#pp: perm) (#vprk: erased (Seq.seq S8.t))
+             (#pf: perm) (#vinfo: erased (Seq.seq S8.t))
+requires A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout **
+         A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+         pure (reveal vk == (reveal p.k <: Seq.seq S64.t) /\ reveal vi == (reveal p.iv <: Seq.seq S64.t) /\
+               Seq.length vprk < pow2 61 /\ prk_ok p vprk /\ info_ok p vinfo /\
+               block_len #S64.t + (hash_bytes p) + Seq.length vinfo + 1 < pow2 61 /\
+               SZ.fits (block_len #S64.t + (hash_bytes p) + Seq.length vinfo + 1) /\
+               Seq.length vout <= 255 * (hash_bytes p) /\
+               SZ.v len == Seq.length vout /\ SZ.v ilen == Seq.length vinfo)
+         ** pure (SZ.v plen == Seq.length vprk)
+ensures exists* vout'.
+  A.pts_to kt #pk vk ** A.pts_to ivt #pi vi ** A.pts_to out vout' **
+  A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+  pure (prk_ok p vprk /\ info_ok p vinfo /\
+        Seq.length vout' == Seq.length vout /\
+        Seq.length vout' <= 255 * (hash_bytes p) /\
+        vout' == expand p vprk vinfo (Seq.length vout'))
+{
+  expand_impl p (Hacl.Hash.SHA2.AVX2.blocks_avx2 p) kt ivt out len prk plen info ilen
+}
+
 (** HKDF-Extract with sha384.  [out] must have room for 48 bytes. *)
 (* The eighty-entry [k512] is enough bigger than the sixty-four-entry [k256]
    that relating the array to [params512_with]'s [k] field is best done
@@ -282,7 +316,26 @@ ensures exists* vout'.
   max_input_bound ();
   sha2_384_facts ();
   expand_lengths_s64 sha2_384 vprk vinfo vout;
-  expand_impl sha2_384 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_384) kt ivt out out_len prk prk_len info info_len;
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if (Hacl.X64.x86_64)
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+    pure (prk_ok sha2_384 vprk /\ info_ok sha2_384 vinfo /\
+          Seq.length vout' == Seq.length vout /\
+          Seq.length vout' <= 255 * (hash_bytes sha2_384) /\
+          vout' == expand sha2_384 vprk vinfo (Seq.length vout'))
+  {
+    if (V256.supported ())
+    {
+      expand_avx2 sha2_384 kt ivt out out_len prk prk_len info info_len;
+    } else {
+      expand_impl sha2_384 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_384) kt ivt out out_len prk prk_len info info_len;
+    }
+  } else {
+    expand_impl sha2_384 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_384) kt ivt out out_len prk prk_len info info_len;
+  };
   drop_table ivt;
   drop_table kt;
 }
@@ -335,7 +388,26 @@ ensures exists* vout'.
   max_input_bound ();
   sha2_512_facts ();
   expand_lengths_s64 sha2_512 vprk vinfo vout;
-  expand_impl sha2_512 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_512) kt ivt out out_len prk prk_len info info_len;
+  with pk vkt. assert (A.pts_to kt #pk vkt);
+  with pi vivt. assert (A.pts_to ivt #pi vivt);
+  if (Hacl.X64.x86_64)
+  ensures exists* (vout': Seq.seq S8.t).
+    A.pts_to kt #pk vkt ** A.pts_to ivt #pi vivt **
+    A.pts_to out vout' ** A.pts_to prk #pp vprk ** A.pts_to info #pf vinfo **
+    pure (prk_ok sha2_512 vprk /\ info_ok sha2_512 vinfo /\
+          Seq.length vout' == Seq.length vout /\
+          Seq.length vout' <= 255 * (hash_bytes sha2_512) /\
+          vout' == expand sha2_512 vprk vinfo (Seq.length vout'))
+  {
+    if (V256.supported ())
+    {
+      expand_avx2 sha2_512 kt ivt out out_len prk prk_len info info_len;
+    } else {
+      expand_impl sha2_512 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_512) kt ivt out out_len prk prk_len info info_len;
+    }
+  } else {
+    expand_impl sha2_512 (Hacl.Hash.SHA2.Core.blocks_scalar sha2_512) kt ivt out out_len prk prk_len info info_len;
+  };
   drop_table ivt;
   drop_table kt;
 }
