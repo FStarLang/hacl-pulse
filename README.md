@@ -89,15 +89,16 @@ hacl-pulse is faster**.
 
 | primitive | size | hacl-pulse | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: |
+| SHA-1 | 256 KiB | 184 us | 1.6 ms | 0.11x |
 | Salsa20 | 256 KiB | 105 us | 433 us | 0.24x |
 | NaCl secretbox | 256 KiB | 156 us | 616 us | 0.25x |
+| SHA-512 | 256 KiB | 519 us | 1.3 ms | 0.39x |
+| HMAC-SHA-512 | 256 KiB | 526 us | 1.3 ms | 0.39x |
 | RSA-PSS-2048 verify | -- | 56 us | 130 us | 0.43x |
 | P-256 ECDH | -- | 71 us | 151 us | 0.47x |
 | SHAKE128 | 256 KiB | 606 us | 1.3 ms | 0.48x |
 | SHA3-256 | 256 KiB | 751 us | 1.5 ms | 0.49x |
 | P-256 ECDSA sign | -- | 83 us | 164 us | 0.51x |
-| SHA-512 | 256 KiB | 692 us | 1.3 ms | 0.52x |
-| HMAC-SHA-512 | 256 KiB | 720 us | 1.3 ms | 0.54x |
 | P-256 ECDSA verify | -- | 237 us | 414 us | 0.57x |
 | BLAKE2b | 256 KiB | 369 us | 428 us | 0.86x |
 | BLAKE2s | 256 KiB | 577 us | 615 us | 0.94x |
@@ -105,7 +106,6 @@ hacl-pulse is faster**.
 | RSA-PSS-2048 sign | -- | 4.1 ms | 4.3 ms | 0.96x |
 | Poly1305 | 256 KiB | 49 us | 51 us | 0.96x |
 | RSA-2048 modexp | -- | 4.1 ms | 4.2 ms | 0.98x |
-| SHA-1 | 256 KiB | 1.8 ms | 1.6 ms | 1.09x |
 | ChaCha20-Poly1305 | 256 KiB | 152 us | 139 us | 1.10x |
 | secp256k1 ECDSA sign | -- | 69 us | 63 us | 1.11x |
 | AES-128-GCM | 256 KiB | 77 us | 67 us | 1.15x |
@@ -168,6 +168,7 @@ column is the better hacl-pulse build divided by the fastest other library:
 | BLAKE2b | 256 KiB | 333 us | 299 us | 331 us | -- | **273 us** | -- | -- | -- | 1.10x |
 | SHA-256 | 256 KiB | 185 us | 173 us | 160 us | 158 us | 797 us | 996 us | **156 us** | -- | 1.11x |
 | HMAC-SHA-256 | 256 KiB | 184 us | 175 us | 158 us | 159 us | 796 us | -- | **156 us** | -- | 1.13x |
+| SHA-1 | 256 KiB | 165 us | 169 us | 149 us | **146 us** | -- | -- | 808 us | -- | 1.13x |
 | SHA3-256 | 256 KiB | 680 us | 672 us | **576 us** | 581 us | -- | 714 us | -- | -- | 1.17x |
 | AES-256-GCM | 256 KiB | 79 us | 74 us | 63 us | **63 us** | 73 us | -- | 63 us | -- | 1.18x |
 | SHAKE128 | 256 KiB | 546 us | 560 us | 475 us | **463 us** | -- | 580 us | -- | -- | 1.18x |
@@ -177,6 +178,8 @@ column is the better hacl-pulse build divided by the fastest other library:
 | ChaCha20-Poly1305 | 256 KiB | 136 us | 133 us | 113 us | **104 us** | 193 us | -- | -- | -- | 1.28x |
 | ML-DSA-65 keygen | -- | 83 us | 70 us | 188 us | **53 us** | -- | -- | -- | -- | 1.32x |
 | ML-DSA-65 sign | -- | 275 us | 215 us | 1.1 ms | **160 us** | -- | -- | -- | -- | 1.34x |
+| HMAC-SHA-512 | 256 KiB | 481 us | 430 us | 330 us | 464 us | 498 us | -- | **321 us** | -- | 1.34x |
+| SHA-512 | 256 KiB | 472 us | 432 us | 330 us | 467 us | 498 us | 636 us | **321 us** | -- | 1.35x |
 | ML-DSA-65 verify | -- | 84 us | 67 us | 188 us | **49 us** | -- | -- | -- | -- | 1.36x |
 | X25519 | -- | 48 us | 36 us | 35 us | 27 us | 31 us | 29 us | **26 us** | 56 us | 1.38x |
 | ML-KEM-768 keygen | -- | 20 us | 19 us | 48 us | **13 us** | -- | -- | -- | -- | 1.44x |
@@ -184,15 +187,12 @@ column is the better hacl-pulse build divided by the fastest other library:
 | ML-KEM-768 encaps | -- | 23 us | 22 us | 34 us | **14 us** | -- | -- | -- | -- | 1.53x |
 | FFDHE-2048 | -- | 3.7 ms | 4.5 ms | **2.2 ms** | 4.0 ms | -- | -- | -- | -- | 1.68x |
 | RSA-PSS-2048 sign | -- | 3.7 ms | 4.5 ms | 2.2 ms | **2.1 ms** | -- | -- | -- | -- | 1.71x |
-| SHA-512 | 256 KiB | 623 us | 800 us | 330 us | 467 us | 498 us | 636 us | **321 us** | -- | 1.94x |
-| HMAC-SHA-512 | 256 KiB | 656 us | 784 us | 330 us | 464 us | 498 us | -- | **321 us** | -- | 2.04x |
 | P-256 ECDH | -- | 149 us | 111 us | 50 us | **48 us** | -- | -- | -- | -- | 2.31x |
 | Ed25519 verify | -- | 108 us | 126 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.91x |
 | RSA-PSS-2048 verify | -- | 51 us | 59 us | 22 us | **17 us** | -- | -- | -- | -- | 2.99x |
 | P-256 ECDSA verify | -- | 211 us | 162 us | 67 us | **54 us** | -- | -- | 62 us | -- | 3.00x |
 | P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.85x |
 | Ed25519 sign | -- | 34 us | 40 us | 41 us | 8.9 us | 16 us | -- | **8.7 us** | 18 us | 3.87x |
-| SHA-1 | 256 KiB | 1.6 ms | 900 us | 149 us | **146 us** | -- | -- | 808 us | -- | 6.17x |
 
 A dash means the library does not offer the operation through the API used.
 OpenSSL's and AWS-LC's ML-KEM and ECDSA draw from their DRBGs. The
