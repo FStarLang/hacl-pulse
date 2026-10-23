@@ -226,6 +226,7 @@ let ks_final (#t: Type0) {| word t |} (cs: ciphersuite t { ~(ExportOnly? cs.aead
 fn key_schedule_impl (#t: Type0) {| w: word t |}
                      ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                         { ~(ExportOnly? cs.aead) })
+                     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                      ([@@@FStar.Attributes.monomorphize] m: mode)
                      (kt: A.array t) (ivt: A.array t)
                      (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -301,7 +302,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len pskh;
   let l1 = table label_psk_id_hash_arr 11sz;
   A.pts_to_len l1;
-  labeled_extract_nosalt cs.kdf kt ivt pskh sid 10sz l1 11sz psk_id psk_id_len;
+  labeled_extract_nosalt cs.kdf blocks kt ivt pskh sid 10sz l1 11sz psk_id psk_id_len;
   drop_table l1;
   with vpskh. assert (A.pts_to pskh vpskh);
   A.pts_to_len pskh;
@@ -311,7 +312,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len infoh;
   let l2 = table label_info_hash_arr 9sz;
   A.pts_to_len l2;
-  labeled_extract_nosalt cs.kdf kt ivt infoh sid 10sz l2 9sz info info_len;
+  labeled_extract_nosalt cs.kdf blocks kt ivt infoh sid 10sz l2 9sz info info_len;
   drop_table l2;
   with vinfoh. assert (A.pts_to infoh vinfoh);
   A.pts_to_len infoh;
@@ -340,7 +341,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len secret;
   let l3 = table label_secret_arr 6sz;
   A.pts_to_len l3;
-  labeled_extract_impl cs.kdf kt ivt secret sid 10sz shared 32sz l3 6sz psk psk_len;
+  labeled_extract_impl cs.kdf blocks kt ivt secret sid 10sz shared 32sz l3 6sz psk psk_len;
   drop_table l3;
   with vsec. assert (A.pts_to secret vsec);
   A.pts_to_len secret;
@@ -349,7 +350,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len l4;
   with pl4 vl4. assert (A.pts_to l4 #pl4 vl4);
   expand_fits cs.kdf (Seq.length vsid) (Seq.length vl4) (Seq.length vks) (SZ.v ks_len);
-  labeled_expand_impl cs.kdf kt ivt key (key_len cs.aead) secret hb sid 10sz
+  labeled_expand_impl cs.kdf blocks kt ivt key (key_len cs.aead) secret hb sid 10sz
                       l4 3sz ks ks_len;
   drop_table l4;
 
@@ -357,7 +358,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len l5;
   with pl5 vl5. assert (A.pts_to l5 #pl5 vl5);
   expand_fits cs.kdf (Seq.length vsid) (Seq.length vl5) (Seq.length vks) (SZ.v ks_len);
-  labeled_expand_impl cs.kdf kt ivt base_nonce 12sz secret hb sid 10sz
+  labeled_expand_impl cs.kdf blocks kt ivt base_nonce 12sz secret hb sid 10sz
                       l5 10sz ks ks_len;
   drop_table l5;
 
@@ -365,7 +366,7 @@ ensures exists* wkey wbn wexp.
   A.pts_to_len l6;
   with pl6 vl6. assert (A.pts_to l6 #pl6 vl6);
   expand_fits cs.kdf (Seq.length vsid) (Seq.length vl6) (Seq.length vks) (SZ.v ks_len);
-  labeled_expand_impl cs.kdf kt ivt exporter hb secret hb sid 10sz
+  labeled_expand_impl cs.kdf blocks kt ivt exporter hb secret hb sid 10sz
                       l6 3sz ks ks_len;
   drop_table l6;
   with wkey. assert (A.pts_to key wkey);
@@ -699,6 +700,7 @@ ensures exists* wsq wpt.
 
 fn context_export_impl (#t: Type0) {| w: word t |}
                        ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t)
+                       ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                        (kt: A.array t) (ivt: A.array t)
                        (out: A.array S8.t) (out_len: SZ.t)
                        (exporter: A.array S8.t)
@@ -742,7 +744,7 @@ ensures exists* wout.
   suite_id_impl cs sid;
   let l = table label_sec_arr 3sz;
   A.pts_to_len l;
-  labeled_expand_impl cs.kdf kt ivt out out_len exporter (kdf_len cs) sid 10sz
+  labeled_expand_impl cs.kdf blocks kt ivt out out_len exporter (kdf_len cs) sid 10sz
                       l 3sz exp_ctx exp_ctx_len;
   drop_table l;
   Mem.wipe sid 10sz;
@@ -762,6 +764,7 @@ ensures exists* wout.
 fn setup_s_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 ([@@@FStar.Attributes.monomorphize] m: mode { ~(uses_auth m) })
                 (kt: A.array t) (ivt: A.array t)
                 (enc: A.array S8.t)
@@ -834,7 +837,7 @@ ensures exists* wenc wkey wbn wsq wexp.
   A.pts_to_len shared;
   let ok = encap_impl cs.kem shared enc skE pkR;
   if ok {
-    key_schedule_impl cs m kt ivt key base_nonce exporter shared
+    key_schedule_impl cs blocks m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
     Mem.wipe shared 32sz;
@@ -848,6 +851,7 @@ ensures exists* wenc wkey wbn wsq wexp.
 fn setup_r_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 ([@@@FStar.Attributes.monomorphize] m: mode { ~(uses_auth m) })
                 (kt: A.array t) (ivt: A.array t)
                 (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -915,7 +919,7 @@ ensures exists* wkey wbn wsq wexp.
   A.pts_to_len shared;
   let ok = decap_impl cs.kem shared enc skR;
   if ok {
-    key_schedule_impl cs m kt ivt key base_nonce exporter shared
+    key_schedule_impl cs blocks m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
     Mem.wipe shared 32sz;
@@ -929,6 +933,7 @@ ensures exists* wkey wbn wsq wexp.
 fn setup_auth_s_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 ([@@@FStar.Attributes.monomorphize] m: mode { uses_auth m })
                 (kt: A.array t) (ivt: A.array t)
                 (enc: A.array S8.t)
@@ -1007,7 +1012,7 @@ ensures exists* wenc wkey wbn wsq wexp.
   A.pts_to_len shared;
   let ok = auth_encap_impl cs.kem shared enc skE skS pkR;
   if ok {
-    key_schedule_impl cs m kt ivt key base_nonce exporter shared
+    key_schedule_impl cs blocks m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
     Mem.wipe shared 32sz;
@@ -1021,6 +1026,7 @@ ensures exists* wenc wkey wbn wsq wexp.
 fn setup_auth_r_impl (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 ([@@@FStar.Attributes.monomorphize] m: mode { uses_auth m })
                 (kt: A.array t) (ivt: A.array t)
                 (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -1094,7 +1100,7 @@ ensures exists* wkey wbn wsq wexp.
   A.pts_to_len shared;
   let ok = auth_decap_impl cs.kem shared enc skR pkS;
   if ok {
-    key_schedule_impl cs m kt ivt key base_nonce exporter shared
+    key_schedule_impl cs blocks m kt ivt key base_nonce exporter shared
                       info info_len psk psk_len psk_id psk_id_len;
     A.((sq.(0sz) <- 0uL));
     Mem.wipe shared 32sz;
@@ -1120,6 +1126,7 @@ ensures exists* wkey wbn wsq wexp.
 fn setup_base_s (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 (kt: A.array t) (ivt: A.array t)
                 (enc: A.array S8.t)
                 (key: A.array S8.t) (base_nonce: A.array S8.t)
@@ -1182,7 +1189,7 @@ ensures exists* wenc wkey wbn wsq wexp.
   with w2. assert (A.pts_to n2 w2);
   A.pts_to_len n2;
   Seq.lemma_eq_elim (reveal w2) (Seq.empty #S8.t);
-  let r = setup_s_impl cs Base kt ivt enc key base_nonce sq exporter skE pkR
+  let r = setup_s_impl cs blocks Base kt ivt enc key base_nonce sq exporter skE pkR
                        info info_len n1 0sz n2 0sz;
   Sub.unsub_id o2 0 0 n2;
   Sub.unsub_id o1 0 0 n1;
@@ -1194,6 +1201,7 @@ ensures exists* wenc wkey wbn wsq wexp.
 fn setup_base_r (#t: Type0) {| w: word t |}
                 ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                    { ~(ExportOnly? cs.aead) })
+                ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
                 (kt: A.array t) (ivt: A.array t)
                 (key: A.array S8.t) (base_nonce: A.array S8.t)
                 (sq: A.array U64.t) (exporter: A.array S8.t)
@@ -1252,7 +1260,7 @@ ensures exists* wkey wbn wsq wexp.
   with w2. assert (A.pts_to n2 w2);
   A.pts_to_len n2;
   Seq.lemma_eq_elim (reveal w2) (Seq.empty #S8.t);
-  let r = setup_r_impl cs Base kt ivt key base_nonce sq exporter enc skR
+  let r = setup_r_impl cs blocks Base kt ivt key base_nonce sq exporter enc skR
                        info info_len n1 0sz n2 0sz;
   Sub.unsub_id o2 0 0 n2;
   Sub.unsub_id o1 0 0 n1;
@@ -1274,6 +1282,7 @@ ensures exists* wkey wbn wsq wexp.
 fn seal_base (#t: Type0) {| w: word t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
+             ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
              (kt: A.array t) (ivt: A.array t)
              (enc: A.array S8.t) (ct: A.array S8.t) (tag: A.array S8.t)
              (skE: A.array S8.t) (pkR: A.array S8.t)
@@ -1338,7 +1347,7 @@ ensures exists* wenc wct wtag.
   let mut sq = [| 0uL; 1sz |];
   Mem.track sq;
   A.pts_to_len sq;
-  let ok = setup_base_s cs kt ivt enc key base_nonce sq exporter skE pkR info info_len;
+  let ok = setup_base_s cs blocks kt ivt enc key base_nonce sq exporter skE pkR info info_len;
   if ok {
     let r = context_seal_impl cs key base_nonce sq exporter aad aad_len pt pt_len ct tag;
     Mem.wipe sq 1sz;
@@ -1358,6 +1367,7 @@ ensures exists* wenc wct wtag.
 fn open_base (#t: Type0) {| w: word t |}
              ([@@@FStar.Attributes.monomorphize] cs: ciphersuite t
                 { ~(ExportOnly? cs.aead) })
+             ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t cs.kdf)
              (kt: A.array t) (ivt: A.array t)
              (pt: A.array S8.t)
              (enc: A.array S8.t) (skR: A.array S8.t)
@@ -1421,7 +1431,7 @@ ensures exists* wpt.
   let mut sq = [| 0uL; 1sz |];
   Mem.track sq;
   A.pts_to_len sq;
-  let ok = setup_base_r cs kt ivt key base_nonce sq exporter enc skR info info_len;
+  let ok = setup_base_r cs blocks kt ivt key base_nonce sq exporter enc skR info info_len;
   if ok {
     let r = context_open_impl cs key base_nonce sq exporter aad aad_len
                               ct ct_len tag pt;

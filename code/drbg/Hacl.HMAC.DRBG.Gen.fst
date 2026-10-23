@@ -34,6 +34,7 @@ open Spec.HMAC
 open Spec.HMAC_DRBG
 open Hacl.Impl.Copy
 open Hacl.HMAC.Core
+open Hacl.HMAC.Cat
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -59,6 +60,7 @@ unfold let inv (#t: Type0) {| word t |} (p: params t)
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn gen_full (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (v1: A.array S8.t) (out: A.array S8.t)
             (ix: SZ.t) (vval: erased (Seq.seq S8.t))
@@ -83,7 +85,7 @@ ensures exists* vcur' vv1 vout'.
   let hb = p.nhash_bytes;
   outer_fits #t p;
   sizes #t p;
-  hmac_impl p kt ivt v1 k hb v hb;
+  hmac_one p blocks kt ivt v1 k hb v hb;
   hm_def p (reveal vkey) (reveal vcur);
   with vv1. assert (A.pts_to v1 vv1);
   copy_exact v v1 hb;
@@ -110,6 +112,7 @@ ensures exists* vcur' vv1 vout'.
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn gen_tail (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (v1: A.array S8.t) (out: A.array S8.t) (n: SZ.t)
             (ix: SZ.t) (vval: erased (Seq.seq S8.t))
@@ -137,7 +140,7 @@ ensures exists* vcur' vv1 vout'.
   let rem = SZ.sub n ix;
   outer_fits #t p;
   sizes #t p;
-  hmac_impl p kt ivt v1 k hb v hb;
+  hmac_one p blocks kt ivt v1 k hb v hb;
   hm_def p (reveal vkey) (reveal vcur);
   with vv1. assert (A.pts_to v1 vv1);
   copy_exact v v1 hb;
@@ -164,6 +167,7 @@ ensures exists* vcur' vv1 vout'.
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
 fn gen_loop (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (out: A.array S8.t) (n: SZ.t)
             (#pk: perm) (#vk: erased (Seq.seq t))
@@ -204,10 +208,10 @@ ensures exists* vval' vout'.
     let ix = !i;
     let rem = SZ.sub n ix;
     if (SZ.gt rem hb) {
-      gen_full p kt ivt k v v1arr out ix vval;
+      gen_full p blocks kt ivt k v v1arr out ix vval;
       i := SZ.add ix hb;
     } else {
-      gen_tail p kt ivt k v v1arr out n ix vval;
+      gen_tail p blocks kt ivt k v v1arr out n ix vval;
       i := n;
     }
   };

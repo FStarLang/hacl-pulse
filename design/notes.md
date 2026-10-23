@@ -2823,10 +2823,28 @@ The block function carries `__attribute__((target("avx2")))` behind
 `defined(__x86_64__)`, and `sha384`/`sha512`, `hmac_sha384`/`hmac_sha512`
 and HKDF's `expand_sha384`/`expand_sha512` choose it on
 `Hacl_Vec256_supported()`, with the same per-hash copies of the drivers as
-SHA-NI (`Hacl.HMAC.AVX2`, `expand_avx2`).  Streaming, HMAC-DRBG and HPKE
-stay on the portable block, as they do for SHA-256.  SHA-512 over 256 KiB
-went from 630 us to 472 us under gcc and from 771 us to 432 us under clang
+SHA-NI (`Hacl.HMAC.AVX2`, `expand_avx2`).  SHA-512 over 256 KiB went from
+630 us to 472 us under gcc and from 771 us to 432 us under clang
 (`bench/REPORT.md` Part 87).
+
+**Everything else takes the block function as an argument.**  The
+streaming hashes, streaming HMAC, HMAC-DRBG and HPKE are generic in
+`params t` and were written against `blocks_scalar p`.  Rather than copy
+each of them per instruction set, they now take a
+`[@@@monomorphize] blocks: blocks_t p`, and the concrete instantiations pass
+`Hacl.Hash.SHA2.Dispatch.blocks_dispatch32` or `blocks_dispatch64`.  Those
+two have type `blocks_t p` themselves: under `is_sha256 p` (resp.
+`is_sha512 p`) they branch on `Hacl.X64.x86_64` and the CPU flag and call
+the accelerated function through a `defined(__x86_64__)`-guarded wrapper,
+otherwise `blocks_scalar`.  Custard monomorphizes on the argument, so the
+C has one copy of each driver per hash, as before, with the check inside
+the multi-block call rather than once per message.  The DRBG needed a
+one-shot HMAC over an arbitrary `blocks` (`Hacl.HMAC.Cat.hmac_one`); HPKE
+threads `blocks` from `Hacl.HPKE.Suites` through the key schedule into
+`labeled_extract`/`labeled_expand`, whose HKDF already took one.  Hashing a
+long key and the final padding blocks stay portable: they are at most two
+blocks.  Streaming SHA-256 in 1 KiB chunks went from 1.42 ms to 193 us per
+256 KiB, and HMAC-DRBG instantiate-and-generate from 57 us to 34 us (Part 88).
 
 ### The generic bignum, where the length is a run-time value
 

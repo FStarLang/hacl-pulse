@@ -53,6 +53,7 @@ module U64 = FStar.UInt64
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module D = Hacl.Hash.SHA2.Dispatch
 
 (** The three KDFs RFC 9180 registers, at the refined type
     {!Spec.HPKE.ciphersuite} wants.  The refinement is what makes
@@ -86,6 +87,15 @@ let p256_sha256_chachapoly : (c: ciphersuite S32.t { ~(ExportOnly? c.aead) /\ si
 inline_for_extraction
 let x25519_sha256_aes128gcm : (c: ciphersuite S32.t { ~(ExportOnly? c.aead) /\ size_kdf c == 32 }) =
   { kem = DH_X25519; kdf = sha256; aead = Seal_AES128_GCM }
+
+(** What the run-time choice of block function asks of each suite's KDF. *)
+let suite_facts (_: unit)
+  : Lemma (Spec.SHANI.is_sha256 x25519_sha256_chachapoly.kdf /\
+           Spec.SHANI.is_sha256 p256_sha256_chachapoly.kdf /\
+           Spec.SHANI.is_sha256 x25519_sha256_aes128gcm.kdf /\
+           Hacl.Hash.SHA2.AVX2.is_sha512 x25519_sha512_chachapoly.kdf)
+  = Hacl.Hash.SHA2.sha2_256_facts ();
+    Hacl.Hash.SHA2.sha2_512_facts ()
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
@@ -146,7 +156,8 @@ ensures exists* wenc wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = setup_base_s x25519_sha256_chachapoly kt ivt enc key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_s x25519_sha256_chachapoly (D.blocks_dispatch32 x25519_sha256_chachapoly.kdf) kt ivt enc key base_nonce sq exporter
                         skE pkR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -198,7 +209,8 @@ ensures exists* wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = setup_base_r x25519_sha256_chachapoly kt ivt key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_r x25519_sha256_chachapoly (D.blocks_dispatch32 x25519_sha256_chachapoly.kdf) kt ivt key base_nonce sq exporter
                         enc skR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -258,7 +270,8 @@ ensures exists* wenc wct wtag.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = seal_base x25519_sha256_chachapoly kt ivt enc ct tag skE pkR
+  suite_facts ();
+  let r = seal_base x25519_sha256_chachapoly (D.blocks_dispatch32 x25519_sha256_chachapoly.kdf) kt ivt enc ct tag skE pkR
                     info info_len aad aad_len pt pt_len;
   drop_table ivt;
   drop_table kt;
@@ -313,7 +326,8 @@ ensures exists* wpt.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = open_base x25519_sha256_chachapoly kt ivt pt enc skR
+  suite_facts ();
+  let r = open_base x25519_sha256_chachapoly (D.blocks_dispatch32 x25519_sha256_chachapoly.kdf) kt ivt pt enc skR
                     info info_len aad aad_len ct ct_len tag;
   drop_table ivt;
   drop_table kt;
@@ -377,7 +391,8 @@ ensures exists* wenc wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 577;
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
-  let r = setup_base_s x25519_sha512_chachapoly kt ivt enc key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_s x25519_sha512_chachapoly (D.blocks_dispatch64 x25519_sha512_chachapoly.kdf) kt ivt enc key base_nonce sq exporter
                         skE pkR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -429,7 +444,8 @@ ensures exists* wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 577;
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
-  let r = setup_base_r x25519_sha512_chachapoly kt ivt key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_r x25519_sha512_chachapoly (D.blocks_dispatch64 x25519_sha512_chachapoly.kdf) kt ivt key base_nonce sq exporter
                         enc skR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -489,7 +505,8 @@ ensures exists* wenc wct wtag.
   SZ.fits_u32_implies_fits 577;
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
-  let r = seal_base x25519_sha512_chachapoly kt ivt enc ct tag skE pkR
+  suite_facts ();
+  let r = seal_base x25519_sha512_chachapoly (D.blocks_dispatch64 x25519_sha512_chachapoly.kdf) kt ivt enc ct tag skE pkR
                     info info_len aad aad_len pt pt_len;
   drop_table ivt;
   drop_table kt;
@@ -544,7 +561,8 @@ ensures exists* wpt.
   SZ.fits_u32_implies_fits 577;
   let kt = table k512_arr 80sz;
   let ivt = table iv512_arr 8sz;
-  let r = open_base x25519_sha512_chachapoly kt ivt pt enc skR
+  suite_facts ();
+  let r = open_base x25519_sha512_chachapoly (D.blocks_dispatch64 x25519_sha512_chachapoly.kdf) kt ivt pt enc skR
                     info info_len aad aad_len ct ct_len tag;
   drop_table ivt;
   drop_table kt;
@@ -608,7 +626,8 @@ ensures exists* wenc wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = setup_base_s p256_sha256_chachapoly kt ivt enc key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_s p256_sha256_chachapoly (D.blocks_dispatch32 p256_sha256_chachapoly.kdf) kt ivt enc key base_nonce sq exporter
                         skE pkR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -660,7 +679,8 @@ ensures exists* wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = setup_base_r p256_sha256_chachapoly kt ivt key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_r p256_sha256_chachapoly (D.blocks_dispatch32 p256_sha256_chachapoly.kdf) kt ivt key base_nonce sq exporter
                         enc skR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -720,7 +740,8 @@ ensures exists* wenc wct wtag.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = seal_base p256_sha256_chachapoly kt ivt enc ct tag skE pkR
+  suite_facts ();
+  let r = seal_base p256_sha256_chachapoly (D.blocks_dispatch32 p256_sha256_chachapoly.kdf) kt ivt enc ct tag skE pkR
                     info info_len aad aad_len pt pt_len;
   drop_table ivt;
   drop_table kt;
@@ -775,7 +796,8 @@ ensures exists* wpt.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = open_base p256_sha256_chachapoly kt ivt pt enc skR
+  suite_facts ();
+  let r = open_base p256_sha256_chachapoly (D.blocks_dispatch32 p256_sha256_chachapoly.kdf) kt ivt pt enc skR
                     info info_len aad aad_len ct ct_len tag;
   drop_table ivt;
   drop_table kt;
@@ -839,7 +861,8 @@ ensures exists* wenc wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = setup_base_s x25519_sha256_aes128gcm kt ivt enc key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_s x25519_sha256_aes128gcm (D.blocks_dispatch32 x25519_sha256_aes128gcm.kdf) kt ivt enc key base_nonce sq exporter
                         skE pkR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -891,7 +914,8 @@ ensures exists* wkey wbn wsq wexp.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = setup_base_r x25519_sha256_aes128gcm kt ivt key base_nonce sq exporter
+  suite_facts ();
+  let r = setup_base_r x25519_sha256_aes128gcm (D.blocks_dispatch32 x25519_sha256_aes128gcm.kdf) kt ivt key base_nonce sq exporter
                         enc skR info info_len;
   drop_table ivt;
   drop_table kt;
@@ -951,7 +975,8 @@ ensures exists* wenc wct wtag.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = seal_base x25519_sha256_aes128gcm kt ivt enc ct tag skE pkR
+  suite_facts ();
+  let r = seal_base x25519_sha256_aes128gcm (D.blocks_dispatch32 x25519_sha256_aes128gcm.kdf) kt ivt enc ct tag skE pkR
                     info info_len aad aad_len pt pt_len;
   drop_table ivt;
   drop_table kt;
@@ -1006,7 +1031,8 @@ ensures exists* wpt.
   SZ.fits_u32_implies_fits 513;
   let kt = table k256_arr 64sz;
   let ivt = table iv256_arr 8sz;
-  let r = open_base x25519_sha256_aes128gcm kt ivt pt enc skR
+  suite_facts ();
+  let r = open_base x25519_sha256_aes128gcm (D.blocks_dispatch32 x25519_sha256_aes128gcm.kdf) kt ivt pt enc skR
                     info info_len aad aad_len ct ct_len tag;
   drop_table ivt;
   drop_table kt;

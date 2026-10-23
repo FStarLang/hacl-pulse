@@ -163,9 +163,11 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
 
 (** {2 Absorb}
 
-    The inner hash's [update], with the invariant rephrased. *)
+    The inner hash's [update], with the invariant rephrased, over the block
+    function [blocks]. *)
 
 fn update_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+               ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
                (kt: A.array t) (wsb: A.array t) (acc: A.array t)
                (buf: A.array S8.t) (tot: A.array SZ.t)
                (data: A.array S8.t) (dlen: SZ.t)
@@ -194,7 +196,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
   let seen = G.hide (Seq.append (xor_byte #t (key_block p (reveal key)) ipad)
                                 (reveal msg));
   inner_len #t p (reveal key) (reveal msg);
-  Hacl.Hash.SHA2.Streaming.update_impl p kt wsb acc buf tot data dlen seen;
+  update_with p blocks kt wsb acc buf tot data dlen seen;
   Seq.append_assoc (xor_byte #t (key_block p (reveal key)) ipad)
                    (reveal msg) (reveal vdata);
   ()

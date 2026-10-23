@@ -54,6 +54,7 @@ unfold let ctr_ok (vctr: Seq.seq SZ.t) (c: nat) : prop =
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
 fn instantiate (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                (kt: A.array t) (ivt: A.array t)
                (k: A.array S8.t) (v: A.array S8.t) (ctr: A.array SZ.t)
                (entropy: A.array S8.t) (elen: SZ.t) (nonce: A.array S8.t) (nlen: SZ.t)
@@ -88,7 +89,7 @@ ensures exists* vkey' vval' vctr'.
   fill k (S8.classify 0x00uy) hb;
   fill v (S8.classify 0x01uy) hb;
   A.((ctr.(0sz) <- 1sz));
-  Hacl.HMAC.DRBG.Core.update p kt ivt k v entropy elen nonce nlen personal plen;
+  Hacl.HMAC.DRBG.Core.update p blocks kt ivt k v entropy elen nonce nlen personal plen;
 }
 
 #pop-options
@@ -98,6 +99,7 @@ ensures exists* vkey' vval' vctr'.
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
 fn reseed (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
           (kt: A.array t) (ivt: A.array t)
           (k: A.array S8.t) (v: A.array S8.t) (ctr: A.array SZ.t)
           (entropy: A.array S8.t) (elen: SZ.t) (additional: A.array S8.t) (alen: SZ.t)
@@ -129,7 +131,7 @@ ensures exists* vkey' vval' vctr'.
   A.pts_to_len earr;
   with vempty. assert (A.pts_to earr vempty);
   assert (pure (Seq.equal (dcat ve va vempty) (Seq.append ve va)));
-  Hacl.HMAC.DRBG.Core.update p kt ivt k v entropy elen additional alen earr 0sz;
+  Hacl.HMAC.DRBG.Core.update p blocks kt ivt k v entropy elen additional alen earr 0sz;
   A.((ctr.(0sz) <- 1sz));
   Mem.wipe earr 0sz;
   ()
@@ -144,6 +146,7 @@ ensures exists* vkey' vval' vctr'.
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
 fn maybe_update (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                 (kt: A.array t) (ivt: A.array t)
                 (k: A.array S8.t) (v: A.array S8.t)
                 (additional: A.array S8.t) (n: SZ.t) (e1: A.array S8.t) (e2: A.array S8.t)
@@ -173,7 +176,7 @@ ensures exists* vkey' vval'.
   A.pts_to_len additional; A.pts_to_len e1; A.pts_to_len e2;
   assert (pure (Seq.equal (dcat va v1 v2) va));
   if (SZ.gt n 0sz) {
-    Hacl.HMAC.DRBG.Core.update p kt ivt k v additional n e1 0sz e2 0sz;
+    Hacl.HMAC.DRBG.Core.update p blocks kt ivt k v additional n e1 0sz e2 0sz;
   } else {
     ()
   }
@@ -184,6 +187,7 @@ ensures exists* vkey' vval'.
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
 fn generate (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+    ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (ctr: A.array SZ.t)
             (out: A.array S8.t) (n: SZ.t) (additional: A.array S8.t) (alen: SZ.t)
@@ -231,9 +235,9 @@ ensures exists* vkey' vval' vctr' vout'.
     with ve2. assert (A.pts_to e2a ve2);
     assert (pure (Seq.equal (dcat va ve1 ve2) va));
     gene_def p (reveal vkey) (reveal vval) (SZ.v c) (SZ.v n) (reveal va);
-    maybe_update p kt ivt k v additional alen e1a e2a;
-    gen_loop p kt ivt k v out n;
-    Hacl.HMAC.DRBG.Core.update p kt ivt k v additional alen e1a 0sz e2a 0sz;
+    maybe_update p blocks kt ivt k v additional alen e1a e2a;
+    gen_loop p blocks kt ivt k v out n;
+    Hacl.HMAC.DRBG.Core.update p blocks kt ivt k v additional alen e1a 0sz e2a 0sz;
     A.((ctr.(0sz) <- SZ.add c 1sz));
     with vctr'. assert (A.pts_to ctr vctr');
     assert (pure (ctr_val vctr' == SZ.v c + 1));

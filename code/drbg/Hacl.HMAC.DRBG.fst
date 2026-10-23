@@ -53,6 +53,7 @@ module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module D = Hacl.Hash.SHA2.Dispatch
 
 let bounds (_: unit)
   : Lemma (pow2 61 <= max_input #S32.t /\ pow2 61 <= max_input #S64.t)
@@ -131,7 +132,8 @@ ensures exists* vkey' vval' vctr'.
   let ivt = table iv256_arr 8sz;
   sha2_256_facts ();
   data_bound32 sha2_256 (seed_material ve vn vp);
-  instantiate sha2_256 kt ivt k v ctr entropy elen nonce nlen personal plen;
+  sha2_256_facts ();
+  instantiate sha2_256 (D.blocks_dispatch32 sha2_256) kt ivt k v ctr entropy elen nonce nlen personal plen;
   drop_table ivt;
   drop_table kt;
 }
@@ -163,7 +165,8 @@ ensures exists* vkey' vval' vctr'.
   let ivt = table iv256_arr 8sz;
   sha2_256_facts ();
   data_bound32 sha2_256 (Seq.append ve va);
-  reseed sha2_256 kt ivt k v ctr entropy elen additional alen;
+  sha2_256_facts ();
+  reseed sha2_256 (D.blocks_dispatch32 sha2_256) kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
 }
@@ -203,7 +206,8 @@ ensures exists* vkey' vval' vctr' vout'.
   let ivt = table iv256_arr 8sz;
   sha2_256_facts ();
   data_bound32 sha2_256 va;
-  let r = generate sha2_256 kt ivt k v ctr out olen additional alen;
+  sha2_256_facts ();
+  let r = generate sha2_256 (D.blocks_dispatch32 sha2_256) kt ivt k v ctr out olen additional alen;
   drop_table ivt;
   drop_table kt;
   r
@@ -243,7 +247,8 @@ ensures exists* vkey' vval' vctr'.
   let ivt = table iv384_arr 8sz;
   sha2_384_facts ();
   data_bound64 sha2_384 (seed_material ve vn vp);
-  instantiate sha2_384 kt ivt k v ctr entropy elen nonce nlen personal plen;
+  sha2_384_facts ();
+  instantiate sha2_384 (D.blocks_dispatch64 sha2_384) kt ivt k v ctr entropy elen nonce nlen personal plen;
   drop_table ivt;
   drop_table kt;
 }
@@ -275,7 +280,8 @@ ensures exists* vkey' vval' vctr'.
   let ivt = table iv384_arr 8sz;
   sha2_384_facts ();
   reseed_bound64 sha2_384 ve va;
-  reseed sha2_384 kt ivt k v ctr entropy elen additional alen;
+  sha2_384_facts ();
+  reseed sha2_384 (D.blocks_dispatch64 sha2_384) kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
 }
@@ -315,7 +321,8 @@ ensures exists* vkey' vval' vctr' vout'.
   let ivt = table iv384_arr 8sz;
   sha2_384_facts ();
   data_bound64 sha2_384 va;
-  let r = generate sha2_384 kt ivt k v ctr out olen additional alen;
+  sha2_384_facts ();
+  let r = generate sha2_384 (D.blocks_dispatch64 sha2_384) kt ivt k v ctr out olen additional alen;
   drop_table ivt;
   drop_table kt;
   r
@@ -355,7 +362,8 @@ ensures exists* vkey' vval' vctr'.
   let ivt = table iv512_arr 8sz;
   sha2_512_facts ();
   data_bound64 sha2_512 (seed_material ve vn vp);
-  instantiate sha2_512 kt ivt k v ctr entropy elen nonce nlen personal plen;
+  sha2_512_facts ();
+  instantiate sha2_512 (D.blocks_dispatch64 sha2_512) kt ivt k v ctr entropy elen nonce nlen personal plen;
   drop_table ivt;
   drop_table kt;
 }
@@ -387,7 +395,8 @@ ensures exists* vkey' vval' vctr'.
   let ivt = table iv512_arr 8sz;
   sha2_512_facts ();
   reseed_bound64 sha2_512 ve va;
-  reseed sha2_512 kt ivt k v ctr entropy elen additional alen;
+  sha2_512_facts ();
+  reseed sha2_512 (D.blocks_dispatch64 sha2_512) kt ivt k v ctr entropy elen additional alen;
   drop_table ivt;
   drop_table kt;
 }
@@ -427,7 +436,8 @@ ensures exists* vkey' vval' vctr' vout'.
   let ivt = table iv512_arr 8sz;
   sha2_512_facts ();
   data_bound64 sha2_512 va;
-  let r = generate sha2_512 kt ivt k v ctr out olen additional alen;
+  sha2_512_facts ();
+  let r = generate sha2_512 (D.blocks_dispatch64 sha2_512) kt ivt k v ctr out olen additional alen;
   drop_table ivt;
   drop_table kt;
   r

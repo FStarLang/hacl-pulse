@@ -9291,3 +9291,28 @@ sites forced false.
 A `target("avx2,bmi2")` attribute helped gcc's prototype further (about
 1710 us/MB), using `rorx` for the rotations; it is not used here because
 `Hacl_Vec256_supported()` checks only AVX2.
+
+## Part 88: The accelerated blocks behind streaming, HMAC-DRBG and HPKE
+
+Part 87 left the streaming hashes, streaming HMAC, HMAC-DRBG and HPKE on the
+portable SHA-2 block function: they are generic in the hash parameters and
+called `blocks_scalar` directly.  They now take the block function as a
+monomorphized argument, and their instantiations pass
+`Hacl.Hash.SHA2.Dispatch.blocks_dispatch32`/`64`, which choose SHA-NI
+(SHA-224/256) or AVX2 (SHA-384/512) at run time (`design/notes.md`, "SHA-512
+on AVX2").
+
+Before (`d71fdf2`) and after (`ab.sh`, gcc 15.2, two rounds, minimum per row):
+
+| bench | before | after | speedup |
+| --- | ---: | ---: | ---: |
+| sha2-256-stream-1KiB-chunks (256 KiB) | 1419 us | 193 us | 7.3x |
+| sha2-256-stream-64B-chunks (16 KiB) | 93.5 us | 19.3 us | 4.9x |
+| hmac-drbg-sha2-256-instantiate+gen-1KiB | 57.0 us | 34.4 us | 1.66x |
+
+Streaming SHA-256 is now within 6% of the one-shot hash (183 us) over the same
+input.  No other row moved by more than 3%; the bench has no HPKE row, and
+HPKE's time is the Diffie-Hellman.  The test suite passes under gcc and
+clang, and with every `Hacl_Vec128_sha_supported()` and
+`Hacl_Vec256_supported()` dispatch forced false.
+

@@ -48,6 +48,7 @@ val prefix_bound (#t: Type0) {| word t |} (p: params t) (n: nat)
 
 val labeled_extract_impl (#t: Type0) {| w: word t |}
                         ([@@@FStar.Attributes.monomorphize] p: params t)
+                        ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                         (kt: A.array t) (ivt: A.array t)
                         (out: A.array S8.t)
                         (sid: A.array S8.t) (sid_len: SZ.t)
@@ -84,6 +85,7 @@ val labeled_extract_impl (#t: Type0) {| w: word t |}
 
 val labeled_expand_impl (#t: Type0) {| w: word t |}
                        ([@@@FStar.Attributes.monomorphize] p: params t)
+                       ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                        (kt: A.array t) (ivt: A.array t)
                        (out: A.array S8.t) (out_len: SZ.t)
                        (prk: A.array S8.t) (prk_len: SZ.t)
@@ -125,6 +127,7 @@ val labeled_expand_impl (#t: Type0) {| w: word t |}
 
 val labeled_extract_nosalt (#t: Type0) {| w: word t |}
                           ([@@@FStar.Attributes.monomorphize] p: params t)
+                          ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                           (kt: A.array t) (ivt: A.array t)
                           (out: A.array S8.t)
                           (sid: A.array S8.t) (sid_len: SZ.t)

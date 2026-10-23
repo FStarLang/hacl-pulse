@@ -115,6 +115,7 @@ let extract_assoc (s l m: Seq.seq S8.t)
 
 fn labeled_extract_impl (#t: Type0) {| w: word t |}
                         ([@@@FStar.Attributes.monomorphize] p: params t)
+                        ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                         (kt: A.array t) (ivt: A.array t)
                         (out: A.array S8.t)
                         (sid: A.array S8.t) (sid_len: SZ.t)
@@ -158,7 +159,7 @@ ensures exists* vout'.
   let vtab = table version_arr 7sz;
   A.pts_to_len vtab;
 
-  hmac_cat p (blocks_scalar p) kt ivt out salt vtab sid lbl ikm salt_len 7sz sid_len lbl_len ikm_len;
+  hmac_cat p blocks kt ivt out salt vtab sid lbl ikm salt_len 7sz sid_len lbl_len ikm_len;
   extract_assoc vsid vlabel vikm;
   drop_table vtab;
 }
@@ -167,6 +168,7 @@ ensures exists* vout'.
 
 fn labeled_expand_impl (#t: Type0) {| w: word t |}
                        ([@@@FStar.Attributes.monomorphize] p: params t)
+                       ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                        (kt: A.array t) (ivt: A.array t)
                        (out: A.array S8.t) (out_len: SZ.t)
                        (prk: A.array S8.t) (prk_len: SZ.t)
@@ -257,7 +259,7 @@ ensures exists* vout'.
   Seq.lemma_eq_intro (Seq.append (reveal vpre) (reveal vinfo))
                      (expand_input (SZ.v out_len) vsid vlabel vinfo);
 
-  expand2_impl p (blocks_scalar p) kt ivt out out_len prk prk_len pre n3 info info_len;
+  expand2_impl p blocks kt ivt out out_len prk prk_len pre n3 info info_len;
   Sub.unsub_id buf 0 (SZ.v n3) pre;
   Mem.wipe buf 41sz;
   drop_table vtab;
@@ -277,6 +279,7 @@ module Sub = Hacl.Impl.Sub
 
 fn labeled_extract_nosalt (#t: Type0) {| w: word t |}
                           ([@@@FStar.Attributes.monomorphize] p: params t)
+                          ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                           (kt: A.array t) (ivt: A.array t)
                           (out: A.array S8.t)
                           (sid: A.array S8.t) (sid_len: SZ.t)
@@ -315,7 +318,7 @@ ensures exists* vout'.
   with vnil. assert (A.pts_to nil vnil);
   A.pts_to_len nil;
   Seq.lemma_eq_elim (reveal vnil) (Seq.empty #S8.t);
-  labeled_extract_impl p kt ivt out sid sid_len nil 0sz lbl lbl_len ikm ikm_len;
+  labeled_extract_impl p blocks kt ivt out sid sid_len nil 0sz lbl lbl_len ikm ikm_len;
   Sub.unsub_id one 0 0 nil;
   Mem.wipe one 1sz;
 }
