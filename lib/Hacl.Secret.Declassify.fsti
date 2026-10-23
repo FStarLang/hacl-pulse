@@ -28,6 +28,13 @@
     in the clear. *)
 module Hacl.Secret.Declassify
 
+#lang-pulse
+
+open Pulse.Lib.Pervasives
+
+module A = Pulse.Lib.Array
+module Seq = FStar.Seq
+module SA = Hacl.Secret.Array
 module U8 = FStar.UInt8
 module U32 = FStar.UInt32
 module U64 = FStar.UInt64
@@ -47,3 +54,37 @@ val bool_of_mask (mask: S8.t)
   : Pure bool
       (requires S8.v mask == 0 \/ S8.v mask == pow2 8 - 1)
       (ensures fun b -> b <==> S8.v mask == pow2 8 - 1)
+
+(** {2 Sequences and buffers}
+
+    The inverse of [S8.classify_seq] and [Hacl.Secret.Array.to_secret], for
+    clients that keep their data in public-byte buffers and lend them to the
+    library through [Hacl.Secret.Array.secret].  Apply them only to bytes
+    that are public by design -- a MAC, a ciphertext, a public key -- or to
+    the caller's own data being handed back. *)
+
+val u8_seq (s: Seq.seq S8.t) : r: Seq.seq U8.t { Seq.length r == Seq.length s }
+
+val u8_seq_index (s: Seq.seq S8.t) (i: nat { i < Seq.length s })
+  : Lemma (Seq.index (u8_seq s) i == u8 (Seq.index s i))
+          [SMTPat (Seq.index (u8_seq s) i)]
+
+val u8_seq_slice (s: Seq.seq S8.t) (i: nat) (j: nat { i <= j /\ j <= Seq.length s })
+  : Lemma (Seq.slice (u8_seq s) i j == u8_seq (Seq.slice s i j))
+          [SMTPat (Seq.slice (u8_seq s) i j)]
+
+val u8_seq_append (s1 s2: Seq.seq S8.t)
+  : Lemma (u8_seq (Seq.append s1 s2) == Seq.append (u8_seq s1) (u8_seq s2))
+          [SMTPat (u8_seq (Seq.append s1 s2))]
+
+val u8_seq_classify_seq (s: Seq.seq U8.t)
+  : Lemma (u8_seq (S8.classify_seq s) == s) [SMTPat (u8_seq (S8.classify_seq s))]
+
+val classify_seq_u8_seq (s: Seq.seq S8.t)
+  : Lemma (S8.classify_seq (u8_seq s) == s) [SMTPat (S8.classify_seq (u8_seq s))]
+
+(** Give back a buffer lent with [Hacl.Secret.Array.to_secret], its contents
+    now readable as public bytes. *)
+ghost fn of_secret (a: A.array U8.t) (#p: perm) (#s: erased (Seq.seq S8.t))
+  requires A.pts_to (SA.secret a) #p s
+  ensures A.pts_to a #p (u8_seq s)

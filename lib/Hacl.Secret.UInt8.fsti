@@ -22,6 +22,7 @@
 module Hacl.Secret.UInt8
 
 module U8 = FStar.UInt8
+module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module UInt = FStar.UInt
 
@@ -83,3 +84,24 @@ val select (mask x y: t)
   : Pure t
       (requires v mask == 0 \/ v mask == pow2 8 - 1)
       (ensures fun r -> r == (if v mask = 0 then y else x))
+
+(** {2 Sequences}
+
+    Classifying a sequence of public bytes, for clients whose data and specs
+    are stated over [Seq.seq U8.t].  It is the identity at run time; see
+    [Hacl.Secret.Array] for the same thing on buffers, and
+    [Hacl.Secret.Declassify.u8_seq] for the way back. *)
+
+val classify_seq (s: Seq.seq U8.t) : r: Seq.seq t { Seq.length r == Seq.length s }
+
+val classify_seq_index (s: Seq.seq U8.t) (i: nat { i < Seq.length s })
+  : Lemma (Seq.index (classify_seq s) i == classify (Seq.index s i))
+          [SMTPat (Seq.index (classify_seq s) i)]
+
+val classify_seq_slice (s: Seq.seq U8.t) (i: nat) (j: nat { i <= j /\ j <= Seq.length s })
+  : Lemma (Seq.slice (classify_seq s) i j == classify_seq (Seq.slice s i j))
+          [SMTPat (Seq.slice (classify_seq s) i j)]
+
+val classify_seq_append (s1 s2: Seq.seq U8.t)
+  : Lemma (classify_seq (Seq.append s1 s2) == Seq.append (classify_seq s1) (classify_seq s2))
+          [SMTPat (classify_seq (Seq.append s1 s2))]
