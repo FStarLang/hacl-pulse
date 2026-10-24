@@ -756,6 +756,44 @@ ChaCha20-Poly1305 and HPKE got the fast path without a line of their own.  On a 
 0.35 ns/B (4.7x) and ChaCha20-Poly1305 from 2.54 to 1.25 ns/B, under gcc and
 clang alike; messages under 512 bytes do not reach the vector code at all.
 
+**In place or not, one function.**  `Hacl_Chacha20_encrypt(out, msg, ...)`
+accepts `out == msg` as well as disjoint buffers -- HACL\*'s `eq_or_disjoint`
+-- and the proof says so.  Its precondition is not two `pts_to`s but
+`Hacl.Impl.InOut.inout out msg pm pos vo vi`: `out` holds `vo`, and the input
+`vi` is still available from position `pos` on, either in `msg` (a separate
+array, case `out =!= msg`) or in the not-yet-overwritten suffix of `out`
+itself (case `out == msg`).  The case split is on a proposition that no code
+tests -- it is resolved ghostly with the strong excluded middle -- so it costs
+nothing in C.  Every write is at the boundary `pos`, which then moves up;
+reads are at or past it, through `read_in`, or through `borrow_in`/`return_in`
+for a whole-vector load.  ChaCha20 never looks back, so the 64-byte AVX-512
+and 32-byte AVX2 load-xor-store steps and the scalar byte loop all fit the
+discipline unchanged.  Pulse callers do not see `inout`: `encrypt_disjoint`
+takes the two arrays (an aliased pair would need twice the full permission,
+so they can only coincide when empty, and an empty array's `pts_to` can be
+had at any fraction), and `encrypt_inplace` takes one.
+
+The same predicate runs through everything built on a stream cipher.
+Salsa20's three paths are ChaCha20's with a different core.
+ChaCha20-Poly1305 and secretbox's detached functions MAC the ciphertext,
+which sits in the output when encrypting and in the input when decrypting;
+decryption borrows the whole input with `borrow_in` to compute the tag
+before writing anything.  Secretbox hands the message from byte thirty-two
+on to Salsa20, and `Hacl.Impl.InOut.Sub` cuts that window out of an `inout`
+pair and puts it back (`sub_in`, `unsub_inout`).  AES-GCM, which used to
+be in place only, now takes a separate `out` first, like everything else,
+and it too may be `msg`.  The cipher reads the ciphertext back from `out`
+for GHASH.  HPKE passes its two buffers straight through instead of
+copying the message into the ciphertext first.  `tests/test_inplace.c`
+checks that in place and out of place agree for ChaCha20-Poly1305,
+secretbox and box; the ChaCha20, Salsa20 and GCM tests run both ways
+themselves.
+
+One extraction trap.  An implicit like `#pos: nat` on a `fn` that is not
+`inline_for_extraction` is a real argument in C, and Custard rejects it
+because `nat` has no C type.  The boundary must be `#pos: erased nat`
+there.
+
 ### Poly1305, five limbs of twenty-six bits
 
 A field element modulo 2^130 - 5 is five 64-bit words holding twenty-six bits
@@ -1898,19 +1936,20 @@ times.  Nothing proportional to the input is ever allocated.
 returns `option`, not a plaintext and a boolean, and the implementation
 matches: the tag is computed over the ciphertext *before* anything is
 decrypted, and the counter-mode pass runs only if it verifies.  A caller that
-ignores the return value still never sees forged plaintext, because the buffer
-still holds the ciphertext it passed in.  The comparison itself folds sixteen
+ignores the return value still never sees forged plaintext, because the output
+buffer is left exactly as it was (and in place, that is the ciphertext).  The comparison itself folds sixteen
 `eq_mask`s with `logand` and declassifies one bit at the end -- no early exit,
 nothing that depends on where the first difference is.
 
-    void Hacl_AES_GCM_Ptr_aes128_encrypt(uint8_t *tag, uint8_t *msg, size_t msg_len,
-                                         uint8_t *key, uint8_t *iv, size_t iv_len,
-                                         uint8_t *aad, size_t aad_len);
-    bool Hacl_AES_GCM_Ptr_aes128_decrypt(uint8_t *msg, size_t msg_len, uint8_t *tag,
-                                         uint8_t *key, uint8_t *iv, size_t iv_len,
-                                         uint8_t *aad, size_t aad_len);
+    void Hacl_AES_GCM_aes128_encrypt(uint8_t *out, uint8_t *tag, uint8_t *msg,
+                                     size_t msg_len, uint8_t *key, uint8_t *iv,
+                                     size_t iv_len, uint8_t *aad, size_t aad_len);
+    bool Hacl_AES_GCM_aes128_decrypt(uint8_t *out, uint8_t *msg, size_t msg_len,
+                                     uint8_t *tag, uint8_t *key, uint8_t *iv,
+                                     size_t iv_len, uint8_t *aad, size_t aad_len);
 
-and the same pair for `aes256`.  Both are in place on `msg`.  The nonce may be
+and the same pair for `aes256`.  `out` is either `msg` itself (in place) or
+must not overlap it; the first version was in place only.  The nonce may be
 any non-empty length: twelve bytes is the fast path every protocol uses, and
 the general case -- a GHASH of the padded nonce -- is implemented because
 leaving it out would make this library unable to decrypt what another
@@ -3429,12 +3468,12 @@ is required to check.  All thirteen entry points are exported: four
 `crypto_secretbox_*`, `crypto_box_beforenm`, four `*_afternm`, and four
 full `crypto_box_*` that do the agreement themselves.
 
-Two deliberate deviations, both documented in the module header.  The names
+One deliberate deviation, documented in the module header.  The names
 are NaCl's, because a compatibility layer whose names do not match is not
 one -- so `Hacl_NaCl_crypto_secretbox_easy`, not a HACL\*-style spelling.
-And **`c` and `m` may not alias**: HACL\* permits it, separation logic
-forbids it, and every other input/output pair in this library is disjoint
-already.  Lengths are `size_t` rather than HACL\*'s `uint32_t`, which makes
+As in HACL\*, the detached functions let `c` and `m` be the same buffer
+(see the ChaCha20 section).  The combined ones do not, because the tag
+comes first in `c`, so the two cannot coincide exactly.  Lengths are `size_t` rather than HACL\*'s `uint32_t`, which makes
 `2^38 - 32` -- the largest message XSalsa20 can cover after the
 thirty-two-byte prefix -- a real precondition rather than a vacuous one.
 

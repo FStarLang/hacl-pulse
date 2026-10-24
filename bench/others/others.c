@@ -210,8 +210,7 @@ int main(void) {
   {
     static uint8_t ek[176], hk[128];
     Hacl_AES_GCM_aes128_expand(ek, hk, key16);
-    memcpy(RC, msg, CK);
-    Hacl_AES_GCM_aes128_encrypt_expanded(RT, RC, CK, ek, hk, nonce12, 12, msg, 16);
+    Hacl_AES_GCM_aes128_encrypt_expanded(RC, RT, msg, CK, ek, hk, nonce12, 12, msg, 16);
     bo_aes128gcm_setup(key16);
     bo_aes128gcm_enc(C, T, msg, CK, msg, 16, nonce12);
     same("aes128-gcm ciphertext", C, RC, CK); same("aes128-gcm tag", T, RT, 16);
@@ -222,8 +221,7 @@ int main(void) {
   {
     static uint8_t ek[240], hk[128];
     Hacl_AES_GCM_aes256_expand(ek, hk, key32);
-    memcpy(RC, msg, CK);
-    Hacl_AES_GCM_aes256_encrypt_expanded(RT, RC, CK, ek, hk, nonce12, 12, msg, 16);
+    Hacl_AES_GCM_aes256_encrypt_expanded(RC, RT, msg, CK, ek, hk, nonce12, 12, msg, 16);
     bo_aes256gcm_setup(key32);
     bo_aes256gcm_enc(C, T, msg, CK, msg, 16, nonce12);
     same("aes256-gcm ciphertext", C, RC, CK); same("aes256-gcm tag", T, RT, 16);

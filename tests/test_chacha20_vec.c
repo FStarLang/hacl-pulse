@@ -8,7 +8,9 @@
  * function written here, at counters 0 and 1, and at counters close enough
  * to 2^32 that the last legal block falls inside or just after a chunk.
  * It also checks that the input is left alone and nothing past the end of
- * the output is written.
+ * the output is written, and then does it all again in place, with the
+ * output buffer the same as the input -- the other half of the aliasing
+ * contract, and the case the vector loads and stores could get wrong.
  *
  * On a machine without AVX2 this exercises the scalar path only, and still
  * passes.
@@ -99,6 +101,12 @@ int main(void) {
       bool ok = memcmp(got, want, len) == 0 && memcmp(msg, copy, MAX) == 0;
       for (size_t i = len; i < len + 64 && i < sizeof got; i++)
         ok &= got[i] == 0xc3;
+      memset(got, 0xc3, sizeof got);
+      memcpy(got, msg, len);
+      Hacl_Chacha20_encrypt(got, got, len, key, nonce, ctr);
+      ok &= memcmp(got, want, len) == 0;
+      for (size_t i = len; i < len + 64 && i < sizeof got; i++)
+        ok &= got[i] == 0xc3;
       if (!ok) {
         if (bad < 5) printf("  FAIL ctr=%u len=%zu\n", ctr, len);
         bad++;
@@ -108,7 +116,7 @@ int main(void) {
       printf("  FAIL ctr=%u: %d length(s) of 0..%zu wrong\n", ctr, bad, lim);
       failures++;
     } else {
-      printf("  ok   ctr=%u, every length 0..%zu\n", ctr, lim);
+      printf("  ok   ctr=%u, every length 0..%zu, separate and in place\n", ctr, lim);
     }
   }
 

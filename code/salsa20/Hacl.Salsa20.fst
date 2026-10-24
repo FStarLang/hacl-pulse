@@ -54,6 +54,7 @@ module A = Pulse.Lib.Array
 module U32 = FStar.UInt32
 module G = FStar.Ghost
 module Mem = Hacl.Mem
+module IO = Hacl.Impl.InOut
 
 (** {2 Two facts about the state} *)
 
@@ -297,7 +298,7 @@ fn xor_chunk (out: A.array S8.t) (msg: A.array S8.t) (kb: A.array S8.t)
              (#vout: erased (Seq.seq S8.t))
              (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
              (#pb: perm) (#vkb: erased (Seq.seq S8.t))
-requires A.pts_to out vout ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
+requires IO.inout out msg pm (SZ.v b) vout vmsg ** A.pts_to kb #pb vkb **
          pure (Seq.length vout == Seq.length vmsg /\ Seq.length vkb == 64 /\
                Seq.length vs == 16 /\
                Seq.length vmsg <= max_len ctr0 /\
@@ -310,20 +311,19 @@ requires A.pts_to out vout ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
                (forall (p: nat). p < SZ.v b ==>
                   Seq.index vout p == Seq.index (encrypt_bytes st0 ctr0 vmsg) p))
 ensures exists* (vo: Seq.seq S8.t).
-  A.pts_to out vo ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
+  IO.inout out msg pm (SZ.v b + SZ.v n) vo vmsg ** A.pts_to kb #pb vkb **
   pure (Seq.length vmsg <= max_len ctr0 /\ Seq.length vo == Seq.length vmsg /\
         SZ.v b + SZ.v n <= Seq.length vmsg /\
         (forall (p: nat). p < SZ.v b + SZ.v n ==>
            Seq.index vo p == Seq.index (encrypt_bytes st0 ctr0 vmsg) p))
 {
-  A.pts_to_len out;
-  A.pts_to_len msg;
+  IO.inout_len out msg;
   A.pts_to_len kb;
   let mut k = 0sz;
   while (let vk = !k; SZ.lt vk n)
-  invariant exists* (vk: SZ.t) (vo: Seq.seq S8.t).
-    pts_to k vk ** A.pts_to out vo ** A.pts_to msg #pm vmsg ** A.pts_to kb #pb vkb **
-    pure (SZ.v vk <= SZ.v n /\ Seq.length vmsg <= max_len ctr0 /\
+  invariant exists* (vk: SZ.t) (vo: Seq.seq S8.t) (pos: nat).
+    pts_to k vk ** IO.inout out msg pm pos vo vmsg ** A.pts_to kb #pb vkb **
+    pure (SZ.v vk <= SZ.v n /\ Seq.length vmsg <= max_len ctr0 /\ pos == SZ.v b + SZ.v vk /\
           Seq.length vo == Seq.length vmsg /\
           SZ.v b + SZ.v n <= Seq.length vmsg /\
           (forall (p: nat). p < SZ.v b + SZ.v vk ==>
@@ -331,12 +331,17 @@ ensures exists* (vo: Seq.seq S8.t).
   decreases (SZ.v n - SZ.v (!k))
   {
     let vk = !k;
-    let x = A.(msg.(SZ.add b vk));
+    let i = SZ.add b vk;
+    with (pos: nat) vo. assert (IO.inout out msg pm pos vo vmsg);
+    rewrite IO.inout out msg pm pos vo vmsg as IO.inout out msg pm (SZ.v i) vo vmsg;
+    let x = IO.read_in out msg i;
     let y = A.(kb.(vk));
     out_byte (reveal st0) ctr0 (reveal vmsg) (reveal vs) c (SZ.v b) (SZ.v vk);
-    A.((out.(SZ.add b vk) <- S8.logxor x y));
+    IO.write_out out msg i (S8.logxor x y);
     k := SZ.add vk 1sz;
-  }
+  };
+  with (pos: nat) vo. assert (IO.inout out msg pm pos vo vmsg);
+  rewrite IO.inout out msg pm pos vo vmsg as IO.inout out msg pm (SZ.v b + SZ.v n) vo vmsg;
 }
 
 #pop-options
@@ -351,7 +356,10 @@ ensures exists* (vo: Seq.seq S8.t).
                                  uint8_t *msg, size_t mlen,
                                  uint8_t *key, uint8_t *nonce, uint32_t ctr);
 
-    [out] and [msg] must not overlap, [key] is 32 bytes and [nonce] is 8.
+    [out] and [msg] are either the same buffer (encryption in place) or do
+    not overlap at all; that is what {!Hacl.Impl.InOut.inout} says.  Pulse
+    callers use {!encrypt_disjoint} or {!encrypt_inplace}.  [key] is 32 bytes
+    and [nonce] is 8.
     The message length is bounded by [(2^32 - ctr) * 64], which is what it
     takes for the 32-bit block counter not to wrap; on any real platform the
     bound is only reachable with [ctr] very close to [2^32]. *)
@@ -361,21 +369,19 @@ fn encrypt (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                  (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
                  (#pk: perm) (#vkey: erased (Seq.seq S8.t))
                  (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires A.pts_to out vout ** A.pts_to msg #pm vmsg **
+requires IO.inout out msg pm 0 vout vmsg **
          A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
          pure (Seq.length vout == Seq.length vmsg /\
                Seq.length vmsg == SZ.v mlen /\
                Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
                Seq.length vmsg <= max_len ctr0)
 ensures exists* (vo: Seq.seq S8.t).
-  A.pts_to out vo ** A.pts_to msg #pm vmsg **
+  IO.inout out msg pm (SZ.v mlen) vo vmsg **
   A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
         Seq.length vmsg <= max_len ctr0 /\
         vo == salsa20 vkey vnon ctr0 vmsg)
 {
-  A.pts_to_len out;
-  A.pts_to_len msg;
   A.pts_to_len key;
   A.pts_to_len nonce;
 
@@ -403,7 +409,7 @@ ensures exists* (vo: Seq.seq S8.t).
   let mut nbr = 0sz;
   if (Hacl.X64.x86_64)
   ensures exists* (n: SZ.t) (vo': Seq.seq S8.t).
-    pts_to nbr n ** A.pts_to out vo' ** A.pts_to msg #pm vmsg **
+    pts_to nbr n ** IO.inout out msg pm (SZ.v n) vo' vmsg **
     A.pts_to starr (G.reveal st0) **
     A.pts_to ksarr (Seq.create 16 z32) ** A.pts_to kbarr (Seq.create 64 z8) **
     A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
@@ -417,7 +423,7 @@ ensures exists* (vo: Seq.seq S8.t).
     let n = Hacl.Salsa20.Vec256.encrypt_vec out msg mlen starr ctr0 st0;
     nbr := n;
   } else {
-    ()
+    rewrite IO.inout out msg pm 0 vout vmsg as IO.inout out msg pm (SZ.v 0sz) vout vmsg;
   };
   let nb = !nbr;
 
@@ -425,15 +431,15 @@ ensures exists* (vo: Seq.seq S8.t).
   let mut ctr = U32.add_mod ctr0 (SZ.sizet_to_uint32 (SZ.div nb 64sz));
 
   while (let b = !base; SZ.lt b mlen)
-  invariant exists* (b: SZ.t) (c: U32.t) (vo: Seq.seq S8.t)
+  invariant exists* (b: SZ.t) (c: U32.t) (vo: Seq.seq S8.t) (pos: nat)
                     (vs: Seq.seq S32.t) (vk: Seq.seq S32.t) (vkb: Seq.seq S8.t).
     pts_to base b ** pts_to ctr c **
-    A.pts_to out vo ** A.pts_to msg #pm vmsg **
+    IO.inout out msg pm pos vo vmsg **
     A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
     A.pts_to starr vs ** A.pts_to ksarr vk ** A.pts_to kbarr vkb **
     pure (Seq.length vmsg <= max_len ctr0 /\ Seq.length vo == Seq.length vmsg /\
           Seq.length vs == 16 /\ Seq.length vk == 16 /\ Seq.length vkb == 64 /\
-          SZ.v b <= Seq.length vmsg /\
+          SZ.v b <= Seq.length vmsg /\ pos == SZ.v b /\
           (SZ.v b < Seq.length vmsg ==>
              SZ.v b % size_block == 0 /\
              U32.v c == U32.v ctr0 + SZ.v b / size_block) /\
@@ -448,6 +454,8 @@ ensures exists* (vo: Seq.seq S8.t).
     let n = szmin 64sz (SZ.sub mlen b);
 
     with vs0. assert (A.pts_to starr vs0);
+    with (pos: nat) vo. assert (IO.inout out msg pm pos vo vmsg);
+    rewrite IO.inout out msg pm pos vo vmsg as IO.inout out msg pm (SZ.v b) vo vmsg;
     core_impl ksarr starr c;
     store_words_le #S32.t kbarr ksarr 16sz;
 
@@ -467,7 +475,8 @@ ensures exists* (vo: Seq.seq S8.t).
     ctr := c';
   };
 
-  with vo. assert (A.pts_to out vo);
+  with (pos: nat) vo. assert (IO.inout out msg pm pos vo vmsg);
+  rewrite IO.inout out msg pm pos vo vmsg as IO.inout out msg pm (SZ.v mlen) vo vmsg;
   Seq.lemma_eq_intro vo (encrypt_bytes st0 ctr0 vmsg);
   Seq.lemma_eq_elim vo (encrypt_bytes st0 ctr0 vmsg);
 
@@ -487,14 +496,14 @@ fn decrypt (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
            (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
            (#pk: perm) (#vkey: erased (Seq.seq S8.t))
            (#pn: perm) (#vnon: erased (Seq.seq S8.t))
-requires A.pts_to out vout ** A.pts_to msg #pm vmsg **
+requires IO.inout out msg pm 0 vout vmsg **
          A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
          pure (Seq.length vout == Seq.length vmsg /\
                Seq.length vmsg == SZ.v mlen /\
                Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
                Seq.length vmsg <= max_len ctr0)
 ensures exists* (vo: Seq.seq S8.t).
-  A.pts_to out vo ** A.pts_to msg #pm vmsg **
+  IO.inout out msg pm (SZ.v mlen) vo vmsg **
   A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
         Seq.length vmsg <= max_len ctr0 /\
@@ -606,3 +615,56 @@ ensures exists* (vo: Seq.seq S8.t).
 }
 
 #pop-options
+
+(** {2 For Pulse callers}
+
+    The two ways of meeting {!encrypt}'s [inout]: separate arrays, or one
+    array overwritten with its own encryption. *)
+
+inline_for_extraction noextract
+fn encrypt_disjoint (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
+                    (key: A.array S8.t) (nonce: A.array S8.t) (ctr0: U32.t)
+                    (#vout: erased (Seq.seq S8.t))
+                    (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
+                    (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+                    (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to msg #pm vmsg **
+         A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+         pure (Seq.length vout == Seq.length vmsg /\
+               Seq.length vmsg == SZ.v mlen /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
+               Seq.length vmsg <= max_len ctr0)
+ensures exists* (vo: Seq.seq S8.t).
+  A.pts_to out vo ** A.pts_to msg #pm vmsg **
+  A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
+        Seq.length vmsg <= max_len ctr0 /\
+        vo == salsa20 vkey vnon ctr0 vmsg)
+{
+  IO.intro_disjoint out msg;
+  encrypt out msg mlen key nonce ctr0;
+  IO.elim_disjoint out msg;
+}
+
+inline_for_extraction noextract
+fn encrypt_inplace (buf: A.array S8.t) (mlen: SZ.t)
+                   (key: A.array S8.t) (nonce: A.array S8.t) (ctr0: U32.t)
+                   (#vbuf: erased (Seq.seq S8.t))
+                   (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+                   (#pn: perm) (#vnon: erased (Seq.seq S8.t))
+requires A.pts_to buf vbuf **
+         A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+         pure (Seq.length vbuf == SZ.v mlen /\
+               Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
+               Seq.length vbuf <= max_len ctr0)
+ensures exists* (vo: Seq.seq S8.t).
+  A.pts_to buf vo **
+  A.pts_to key #pk vkey ** A.pts_to nonce #pn vnon **
+  pure (Seq.length vkey == 32 /\ Seq.length vnon == 8 /\
+        Seq.length vbuf <= max_len ctr0 /\
+        vo == salsa20 vkey vnon ctr0 vbuf)
+{
+  IO.intro_inplace buf;
+  encrypt buf buf mlen key nonce ctr0;
+  IO.elim_inplace buf;
+}

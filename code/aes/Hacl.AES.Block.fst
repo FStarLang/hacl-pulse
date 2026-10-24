@@ -47,6 +47,7 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module Vec = Hacl.Vec128
 module Copy = Hacl.Impl.Copy
+module IO = Hacl.Impl.InOut
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
@@ -82,83 +83,89 @@ ensures exists* (v1: Seq.seq S8.t). A.pts_to st v1 ** A.pts_to w vw ** pure (
     which the fast path ignores.  Only a caller with a whole block left may
     use this. *)
 
-fn xor_at (msg: A.array S8.t) (idx: SZ.t) (ka: A.array S8.t)
-          (#vm: erased (Seq.seq S8.t)) (#pk: perm) (#vk: erased (Seq.seq S8.t))
-requires A.pts_to msg vm ** A.pts_to ka #pk vk ** pure (
-  Seq.length vk == blocklen /\ SZ.v idx + blocklen <= Seq.length vm)
-ensures exists* (vm': Seq.seq S8.t).
-  A.pts_to msg vm' ** A.pts_to ka #pk vk ** pure (
-  Seq.length vk == blocklen /\ SZ.v idx + blocklen <= Seq.length vm /\
-  Seq.length vm' == Seq.length vm /\
-  (forall (k: nat). k < Seq.length vm ==>
-     Seq.index (vals vm') k ==
+fn xor_at (out inp: A.array S8.t) (idx: SZ.t) (ka: A.array S8.t)
+          (#pi: perm) (#pos: erased nat) (#vo #vi: erased (Seq.seq S8.t))
+          (#pk: perm) (#vk: erased (Seq.seq S8.t))
+requires IO.inout out inp pi pos vo vi ** A.pts_to ka #pk vk ** pure (
+  Seq.length vk == blocklen /\ pos == SZ.v idx /\
+  Seq.length vo == Seq.length vi /\ SZ.v idx + blocklen <= Seq.length vi)
+ensures exists* (vo': Seq.seq S8.t).
+  IO.inout out inp pi (pos + blocklen) vo' vi ** A.pts_to ka #pk vk ** pure (
+  Seq.length vk == blocklen /\ SZ.v idx + blocklen <= Seq.length vi /\
+  Seq.length vo' == Seq.length vo /\
+  (forall (k: nat). k < Seq.length vo ==>
+     Seq.index (vals vo') k ==
        (if SZ.v idx <= k && k < SZ.v idx + blocklen
-        then Seq.index (vals vm) k ^^ Seq.index (vals vk) (k - SZ.v idx)
-        else Seq.index (vals vm) k)))
+        then Seq.index (vals vi) k ^^ Seq.index (vals vk) (k - SZ.v idx)
+        else Seq.index (vals vo) k)))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   A.pts_to_len ka;
   let mut t = 0sz;
   while (let vt = !t; SZ.lt vt 16sz)
-  invariant exists* (vt: SZ.t) (vm1: Seq.seq S8.t).
-    pts_to t vt ** A.pts_to msg vm1 ** A.pts_to ka #pk vk **
-    pure (SZ.v vt <= blocklen /\ Seq.length vk == blocklen /\
-          SZ.v idx + blocklen <= Seq.length vm /\
-          Seq.length vm1 == Seq.length vm /\
-          (forall (k: nat). k < Seq.length vm ==>
-             Seq.index (vals vm1) k ==
+  invariant exists* (vt: SZ.t) (p1: nat) (vo1: Seq.seq S8.t).
+    pts_to t vt ** IO.inout out inp pi p1 vo1 vi ** A.pts_to ka #pk vk **
+    pure (SZ.v vt <= blocklen /\ p1 == SZ.v idx + SZ.v vt /\
+          Seq.length vk == blocklen /\
+          SZ.v idx + blocklen <= Seq.length vi /\
+          Seq.length vo1 == Seq.length vo /\
+          (forall (k: nat). k < Seq.length vo ==>
+             Seq.index (vals vo1) k ==
                (if SZ.v idx <= k && k < SZ.v idx + SZ.v vt
-                then Seq.index (vals vm) k ^^ Seq.index (vals vk) (k - SZ.v idx)
-                else Seq.index (vals vm) k)))
+                then Seq.index (vals vi) k ^^ Seq.index (vals vk) (k - SZ.v idx)
+                else Seq.index (vals vo) k)))
   decreases (blocklen - SZ.v (!t))
   {
     let vt = !t;
     let i = SZ.add idx vt;
-    let a = A.(msg.(i));
+    let a = IO.read_in out inp i;
     let b = A.(ka.(vt));
     let y = bxor a b;
-    with vm1. assert A.pts_to msg vm1;
-    vals_upd vm1 (SZ.v i) y;
-    A.((msg.(i) <- y));
+    with (p1: nat) (vo1: Seq.seq S8.t). assert IO.inout out inp pi p1 vo1 vi;
+    vals_upd vo1 (SZ.v i) y;
+    IO.write_out out inp i y;
     t := SZ.add vt 1sz;
   };
+  with (p1: nat) (vo1: Seq.seq S8.t). assert IO.inout out inp pi p1 vo1 vi;
+  rewrite IO.inout out inp pi p1 vo1 vi as IO.inout out inp pi (pos + blocklen) vo1 vi;
   ()
 }
 
 fn ctr_block_impl ([@@@FStar.Attributes.monomorphize] p: params)
-                  (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
+                  (out inp: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
                   (ctr: A.array S8.t) (ka: A.array S8.t)
-                  (#vm #vw #vc #vk: erased (Seq.seq S8.t))
-requires A.pts_to msg vm ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
+                  (#pi: perm) (#pos: erased nat) (#vo #vi: erased (Seq.seq S8.t))
+                  (#vw #vc #vk: erased (Seq.seq S8.t))
+requires IO.inout out inp pi pos vo vi ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
   pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
-        Seq.length vk == blocklen /\ SZ.v idx + blocklen <= Seq.length vm)
-ensures exists* (vm' vk': Seq.seq S8.t).
-  A.pts_to msg vm' ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk' **
+        Seq.length vk == blocklen /\ pos == SZ.v idx /\
+        Seq.length vo == Seq.length vi /\ SZ.v idx + blocklen <= Seq.length vi)
+ensures exists* (vo' vk': Seq.seq S8.t).
+  IO.inout out inp pi (pos + blocklen) vo' vi ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk' **
   pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
-        Seq.length vk' == blocklen /\ SZ.v idx + blocklen <= Seq.length vm /\
-        Seq.length vm' == Seq.length vm /\
-        (forall (k: nat). k < Seq.length vm ==>
-           Seq.index (vals vm') k ==
+        Seq.length vk' == blocklen /\ SZ.v idx + blocklen <= Seq.length vi /\
+        Seq.length vo' == Seq.length vo /\
+        (forall (k: nat). k < Seq.length vo ==>
+           Seq.index (vals vo') k ==
              (if SZ.v idx <= k && k < SZ.v idx + blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (vals vc)) (k - SZ.v idx)
-              else Seq.index (vals vm) k)))
+              else Seq.index (vals vo) k)))
 {
-  A.pts_to_len msg;
   A.pts_to_len ctr;
   A.pts_to_len ka;
   if (Hacl.X64.x86_64) {
     if Vec.supported () {
-      Hacl.AES.NI.ctr_block_ni p msg idx w ctr;
+      Hacl.AES.NI.ctr_block_ni p out inp idx w ctr;
     } else {
       Copy.copy_exact ka ctr 16sz;
       Hacl.AES.Cipher.cipher_portable p ka w;
-      xor_at msg idx ka;
+      xor_at out inp idx ka;
     }
   } else {
     Copy.copy_exact ka ctr 16sz;
     Hacl.AES.Cipher.cipher_portable p ka w;
-    xor_at msg idx ka;
+    xor_at out inp idx ka;
   }
 }
 
@@ -176,41 +183,43 @@ ensures exists* (vm' vk': Seq.seq S8.t).
 (** The portable branch of {!ctr_block4_impl}: four single blocks. *)
 inline_for_extraction
 fn ctr_block4_portable ([@@@FStar.Attributes.monomorphize] p: params)
-                   (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
+                   (out inp: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
                    (ctr: A.array S8.t) (ka: A.array S8.t)
-                   (#vm #vw #vc #vk: erased (Seq.seq S8.t))
-requires A.pts_to msg vm ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
+                   (#pi: perm) (#pos: erased nat) (#vo #vi: erased (Seq.seq S8.t))
+                   (#vw #vc #vk: erased (Seq.seq S8.t))
+requires IO.inout out inp pi pos vo vi ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
   pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
-        Seq.length vk == blocklen /\ SZ.fits (SZ.v idx + 4 * blocklen) /\
-        SZ.v idx + 4 * blocklen <= Seq.length vm)
-ensures exists* (vm' vc' vk': Seq.seq S8.t).
-  A.pts_to msg vm' ** A.pts_to w vw ** A.pts_to ctr vc' ** A.pts_to ka vk' **
+        Seq.length vk == blocklen /\ pos == SZ.v idx /\
+        Seq.length vo == Seq.length vi /\ SZ.fits (SZ.v idx + 4 * blocklen) /\
+        SZ.v idx + 4 * blocklen <= Seq.length vi)
+ensures exists* (vo' vc' vk': Seq.seq S8.t).
+  IO.inout out inp pi (pos + 4 * blocklen) vo' vi ** A.pts_to w vw ** A.pts_to ctr vc' ** A.pts_to ka vk' **
   pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
         Seq.length vc' == blocklen /\ Seq.length vk' == blocklen /\
-        SZ.v idx + 4 * blocklen <= Seq.length vm /\
-        Seq.length vm' == Seq.length vm /\
+        SZ.v idx + 4 * blocklen <= Seq.length vi /\
+        Seq.length vo' == Seq.length vo /\
         vals vc' == counter_block (vals vc) 4 /\
-        (forall (k: nat). k < Seq.length vm ==>
-           Seq.index (vals vm') k ==
+        (forall (k: nat). k < Seq.length vo ==>
+           Seq.index (vals vo') k ==
              (if SZ.v idx <= k && k < SZ.v idx + blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 0))
                              (k - SZ.v idx)
               else if SZ.v idx + blocklen <= k && k < SZ.v idx + 2 * blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 1))
                              (k - SZ.v idx - blocklen)
               else if SZ.v idx + 2 * blocklen <= k && k < SZ.v idx + 3 * blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 2))
                              (k - SZ.v idx - 2 * blocklen)
               else if SZ.v idx + 3 * blocklen <= k && k < SZ.v idx + 4 * blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 3))
                              (k - SZ.v idx - 3 * blocklen)
-              else Seq.index (vals vm) k)))
+              else Seq.index (vals vo) k)))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   A.pts_to_len ctr;
   A.pts_to_len ka;
   counter_unfold (vals vc);
@@ -218,103 +227,107 @@ ensures exists* (vm' vc' vk': Seq.seq S8.t).
   let i2 = SZ.add idx 32sz;
   let i3 = SZ.add idx 48sz;
 
-  ctr_block_impl p msg idx w ctr ka;
-  with vmA. assert A.pts_to msg vmA;
-  assert (pure (Seq.length vmA == Seq.length vm /\
-    (forall (k: nat). k < Seq.length vm ==>
+  ctr_block_impl p out inp idx w ctr ka;
+  with vmA. assert IO.inout out inp pi (pos + blocklen) vmA vi;
+  assert (pure (Seq.length vmA == Seq.length vo /\
+    (forall (k: nat). k < Seq.length vo ==>
        Seq.index (vals vmA) k ==
          (if SZ.v idx <= k && k < SZ.v idx + blocklen
-          then Seq.index (vals vm) k ^^
+          then Seq.index (vals vi) k ^^
                Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 0))
                          (k - SZ.v idx)
-          else Seq.index (vals vm) k))));
+          else Seq.index (vals vo) k))));
   inc32_impl ctr;
 
-  ctr_block_impl p msg i1 w ctr ka;
-  with vmB. assert A.pts_to msg vmB;
-  assert (pure (Seq.length vmB == Seq.length vm /\
-    (forall (k: nat). k < Seq.length vm ==>
+  ctr_block_impl p out inp i1 w ctr ka;
+  with vmB. assert IO.inout out inp pi (pos + blocklen + blocklen) vmB vi;
+  assert (pure (Seq.length vmB == Seq.length vo /\
+    (forall (k: nat). k < Seq.length vo ==>
        Seq.index (vals vmB) k ==
          (if SZ.v i1 <= k && k < SZ.v i1 + blocklen
-          then Seq.index (vals vmA) k ^^
+          then Seq.index (vals vi) k ^^
                Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 1))
                          (k - SZ.v i1)
           else Seq.index (vals vmA) k))));
   inc32_impl ctr;
 
-  ctr_block_impl p msg i2 w ctr ka;
-  with vmC. assert A.pts_to msg vmC;
-  assert (pure (Seq.length vmC == Seq.length vm /\
-    (forall (k: nat). k < Seq.length vm ==>
+  ctr_block_impl p out inp i2 w ctr ka;
+  with vmC. assert IO.inout out inp pi (pos + blocklen + blocklen + blocklen) vmC vi;
+  assert (pure (Seq.length vmC == Seq.length vo /\
+    (forall (k: nat). k < Seq.length vo ==>
        Seq.index (vals vmC) k ==
          (if SZ.v i2 <= k && k < SZ.v i2 + blocklen
-          then Seq.index (vals vmB) k ^^
+          then Seq.index (vals vi) k ^^
                Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 2))
                          (k - SZ.v i2)
           else Seq.index (vals vmB) k))));
   inc32_impl ctr;
 
-  ctr_block_impl p msg i3 w ctr ka;
-  with vmD. assert A.pts_to msg vmD;
-  assert (pure (Seq.length vmD == Seq.length vm /\
-    (forall (k: nat). k < Seq.length vm ==>
+  ctr_block_impl p out inp i3 w ctr ka;
+  with vmD. assert IO.inout out inp pi (pos + blocklen + blocklen + blocklen + blocklen) vmD vi;
+  assert (pure (Seq.length vmD == Seq.length vo /\
+    (forall (k: nat). k < Seq.length vo ==>
        Seq.index (vals vmD) k ==
          (if SZ.v i3 <= k && k < SZ.v i3 + blocklen
-          then Seq.index (vals vmC) k ^^
+          then Seq.index (vals vi) k ^^
                Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 3))
                          (k - SZ.v i3)
           else Seq.index (vals vmC) k))));
   inc32_impl ctr;
+  rewrite IO.inout out inp pi (pos + blocklen + blocklen + blocklen + blocklen) vmD vi
+       as IO.inout out inp pi (pos + 4 * blocklen) vmD vi;
   ()
 }
 
 fn ctr_block4_impl ([@@@FStar.Attributes.monomorphize] p: params)
-                   (msg: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
+                   (out inp: A.array S8.t) (idx: SZ.t) (w: A.array S8.t)
                    (ctr: A.array S8.t) (ka: A.array S8.t)
-                   (#vm #vw #vc #vk: erased (Seq.seq S8.t))
-requires A.pts_to msg vm ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
+                   (#pi: perm) (#pos: erased nat) (#vo #vi: erased (Seq.seq S8.t))
+                   (#vw #vc #vk: erased (Seq.seq S8.t))
+requires IO.inout out inp pi pos vo vi ** A.pts_to w vw ** A.pts_to ctr vc ** A.pts_to ka vk **
   pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
-        Seq.length vk == blocklen /\ SZ.fits (SZ.v idx + 4 * blocklen) /\
-        SZ.v idx + 4 * blocklen <= Seq.length vm)
-ensures exists* (vm' vc' vk': Seq.seq S8.t).
-  A.pts_to msg vm' ** A.pts_to w vw ** A.pts_to ctr vc' ** A.pts_to ka vk' **
+        Seq.length vk == blocklen /\ pos == SZ.v idx /\
+        Seq.length vo == Seq.length vi /\ SZ.fits (SZ.v idx + 4 * blocklen) /\
+        SZ.v idx + 4 * blocklen <= Seq.length vi)
+ensures exists* (vo' vc' vk': Seq.seq S8.t).
+  IO.inout out inp pi (pos + 4 * blocklen) vo' vi ** A.pts_to w vw ** A.pts_to ctr vc' ** A.pts_to ka vk' **
   pure (Seq.length vw == xkeylen p.pv /\ Seq.length vc == blocklen /\
         Seq.length vc' == blocklen /\ Seq.length vk' == blocklen /\
-        SZ.v idx + 4 * blocklen <= Seq.length vm /\
-        Seq.length vm' == Seq.length vm /\
+        SZ.v idx + 4 * blocklen <= Seq.length vi /\
+        Seq.length vo' == Seq.length vo /\
         vals vc' == counter_block (vals vc) 4 /\
-        (forall (k: nat). k < Seq.length vm ==>
-           Seq.index (vals vm') k ==
+        (forall (k: nat). k < Seq.length vo ==>
+           Seq.index (vals vo') k ==
              (if SZ.v idx <= k && k < SZ.v idx + blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 0))
                              (k - SZ.v idx)
               else if SZ.v idx + blocklen <= k && k < SZ.v idx + 2 * blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 1))
                              (k - SZ.v idx - blocklen)
               else if SZ.v idx + 2 * blocklen <= k && k < SZ.v idx + 3 * blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 2))
                              (k - SZ.v idx - 2 * blocklen)
               else if SZ.v idx + 3 * blocklen <= k && k < SZ.v idx + 4 * blocklen
-              then Seq.index (vals vm) k ^^
+              then Seq.index (vals vi) k ^^
                    Seq.index (cipher p.pv (vals vw) (counter_block (vals vc) 3))
                              (k - SZ.v idx - 3 * blocklen)
-              else Seq.index (vals vm) k)))
+              else Seq.index (vals vo) k)))
 {
-  A.pts_to_len msg;
+  IO.inout_len out inp;
   A.pts_to_len ctr;
   A.pts_to_len ka;
   counter_unfold (vals vc);
   if (Hacl.X64.x86_64) {
     if Vec.supported () {
-      Hacl.AES.NI.ctr_block4_ni p msg idx w ctr;
+      Hacl.AES.NI.ctr_block4_ni p out inp idx w ctr;
     } else {
-      ctr_block4_portable p msg idx w ctr ka;
+      ctr_block4_portable p out inp idx w ctr ka;
     }
   } else {
-    ctr_block4_portable p msg idx w ctr ka;
+    ctr_block4_portable p out inp idx w ctr ka;
   }
 }
 

@@ -38,20 +38,16 @@ static inline void bo_chachapoly(uint8_t *c, uint8_t *t, uint8_t *m, size_t n, u
 #define BO_SECRETBOX
 static inline void bo_secretbox(uint8_t *c, uint8_t *m, size_t n, uint8_t *v, uint8_t *k) { Hacl_NaCl_crypto_secretbox_easy(c, m, n, v, k); }
 
-/* hacl-pulse's GCM encrypts in place, so the message is copied into the
-   output first, as in bench/shim_pulse.h. */
 static uint8_t pl_gcm128_ek[176], pl_gcm128_hk[128], pl_gcm256_ek[240], pl_gcm256_hk[128];
 #define BO_AES128GCM
 static inline void bo_aes128gcm_setup(uint8_t *k) { Hacl_AES_GCM_aes128_expand(pl_gcm128_ek, pl_gcm128_hk, k); }
 static inline void bo_aes128gcm_enc(uint8_t *c, uint8_t *t, uint8_t *m, size_t n, uint8_t *a, size_t al, uint8_t *iv) {
-  memcpy(c, m, n);
-  Hacl_AES_GCM_aes128_encrypt_expanded(t, c, n, pl_gcm128_ek, pl_gcm128_hk, iv, 12, a, al);
+  Hacl_AES_GCM_aes128_encrypt_expanded(c, t, m, n, pl_gcm128_ek, pl_gcm128_hk, iv, 12, a, al);
 }
 #define BO_AES256GCM
 static inline void bo_aes256gcm_setup(uint8_t *k) { Hacl_AES_GCM_aes256_expand(pl_gcm256_ek, pl_gcm256_hk, k); }
 static inline void bo_aes256gcm_enc(uint8_t *c, uint8_t *t, uint8_t *m, size_t n, uint8_t *a, size_t al, uint8_t *iv) {
-  memcpy(c, m, n);
-  Hacl_AES_GCM_aes256_encrypt_expanded(t, c, n, pl_gcm256_ek, pl_gcm256_hk, iv, 12, a, al);
+  Hacl_AES_GCM_aes256_encrypt_expanded(c, t, m, n, pl_gcm256_ek, pl_gcm256_hk, iv, 12, a, al);
 }
 
 #define BO_X25519

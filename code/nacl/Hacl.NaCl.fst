@@ -34,9 +34,11 @@
     [crypto_secretbox_easy] and friends -- because a compatibility layer whose
     names do not match is not one.
 
-    Unlike HACL*, the ciphertext and the message may not be the same buffer:
-    every function in this library takes its inputs and outputs disjoint, and
-    secretbox is not worth an exception. *)
+    As in HACL*, the detached functions take the ciphertext and the message
+    either as the same buffer (in place) or as buffers that do not overlap
+    at all ({!Hacl.Impl.InOut.inout}).  The combined ("easy") ones put the
+    tag in front of the ciphertext, so the two can never be exactly the same
+    buffer; there they must not overlap. *)
 module Hacl.NaCl
 
 #lang-pulse
@@ -64,6 +66,8 @@ module Salsa = Hacl.Salsa20
 module Poly = Hacl.Poly1305
 module Curve = Hacl.Curve25519
 module Mem = Hacl.Mem
+module IO = Hacl.Impl.InOut
+module IOS = Hacl.Impl.InOut.Sub
 
 (** {2 The key schedule}
 
@@ -170,7 +174,7 @@ fn sb_cipher (c: A.array S8.t) (m: A.array S8.t) (mlen: SZ.t)
              (#ps: perm) (#vsub: erased (Seq.seq S8.t))
              (#pt: perm) (#vtn: erased (Seq.seq S8.t))
              (#pb: perm) (#vb0: erased (Seq.seq S8.t))
-requires A.pts_to c vc ** A.pts_to m #pm vm ** A.pts_to subk #ps vsub **
+requires IO.inout c m pm 0 vc vm ** A.pts_to subk #ps vsub **
          A.pts_to tn #pt vtn ** A.pts_to b0 #pb vb0 **
          pure (Seq.length vc == SZ.v mlen /\ Seq.length vm == SZ.v mlen /\
                Seq.length vm <= Spec.max_len /\
@@ -178,22 +182,22 @@ requires A.pts_to c vc ** A.pts_to m #pm vm ** A.pts_to subk #ps vsub **
                reveal vsub == S.xkey gk gn /\ reveal vtn == S.xnonce_tail gn /\
                reveal vb0 == S.key_block0 (S.xkey gk gn) (S.xnonce_tail gn))
 ensures exists* (w: Seq.seq S8.t).
-  A.pts_to c w ** A.pts_to m #pm vm ** A.pts_to subk #ps vsub **
+  IO.inout c m pm (SZ.v mlen) w vm ** A.pts_to subk #ps vsub **
   A.pts_to tn #pt vtn ** A.pts_to b0 #pb vb0 **
   pure (Seq.length vm <= Spec.max_len /\ Seq.length w == SZ.v mlen /\
         w == Spec.cipher gk gn vm)
 {
-  A.pts_to_len c;
-  A.pts_to_len m;
   A.pts_to_len subk;
   A.pts_to_len tn;
   A.pts_to_len b0;
+  IO.inout_len c m;
 
   let n0 = szmin mlen 32sz;
   let mut i = 0sz;
+  rewrite IO.inout c m pm 0 vc vm as IO.inout c m pm (SZ.v 0sz) vc vm;
   while (let vi = !i; SZ.lt vi n0)
   invariant exists* (vi: SZ.t) (w: Seq.seq S8.t).
-    pts_to i vi ** A.pts_to c w ** A.pts_to m #pm vm ** A.pts_to subk #ps vsub **
+    pts_to i vi ** IO.inout c m pm (SZ.v vi) w vm ** A.pts_to subk #ps vsub **
     A.pts_to tn #pt vtn ** A.pts_to b0 #pb vb0 **
     pure (SZ.v vi <= SZ.v n0 /\ Seq.length w == SZ.v mlen /\
           Seq.length vm <= Spec.max_len /\
@@ -202,27 +206,34 @@ ensures exists* (w: Seq.seq S8.t).
   decreases (SZ.v n0 - SZ.v (!i))
   {
     let vi = !i;
-    let x = A.(m.(vi));
+    let x = IO.read_in c m vi;
     let y = A.(b0.(SZ.add 32sz vi));
     Spec.cipher_head gk gn vm (SZ.v vi);
-    A.((c.(vi) <- S8.logxor x y));
+    IO.write_out c m vi (S8.logxor x y);
     i := SZ.add vi 1sz;
+    with (w: Seq.seq S8.t). assert (IO.inout c m pm (SZ.v vi + 1) w vm);
+    rewrite IO.inout c m pm (SZ.v vi + 1) w vm as IO.inout c m pm (SZ.v (SZ.add vi 1sz)) w vm;
   };
+  with (vi: SZ.t) (w: Seq.seq S8.t). assert (pts_to i vi ** IO.inout c m pm (SZ.v vi) w vm);
 
   if (SZ.gt mlen 32sz) {
+    rewrite IO.inout c m pm (SZ.v vi) w vm as IO.inout c m pm 32 w vm;
+    unfold IO.inout;
+    A.pts_to_len c;
     let cs = Sub.sub c 32sz mlen;
-    let ms = Sub.sub m 32sz mlen;
-    with vc1. assert (Sub.rest c 1.0R 32 (SZ.v mlen) vc1);
+    let ms = IOS.sub_in c m cs 32sz mlen;
     Salsa.encrypt cs ms (SZ.sub mlen 32sz) subk tn 1ul;
+    with (ws: Seq.seq S8.t). assert (IO.inout cs ms pm (SZ.v (SZ.sub mlen 32sz)) ws (Seq.slice vm 32 (SZ.v mlen)));
+    rewrite IO.inout cs ms pm (SZ.v (SZ.sub mlen 32sz)) ws (Seq.slice vm 32 (SZ.v mlen))
+         as IO.inout cs ms pm (SZ.v mlen - 32) ws (Seq.slice vm 32 (SZ.v mlen));
     Spec.cipher_tail gk gn vm;
-    Sub.unsub_id m 32 (SZ.v mlen) ms;
-    Sub.unsub c 32 (SZ.v mlen) cs;
-    with w. assert (A.pts_to c w);
-    Seq.lemma_eq_intro w (Spec.cipher gk gn vm);
-    Seq.lemma_eq_elim w (Spec.cipher gk gn vm);
+    IOS.unsub_inout c m cs ms 32 (SZ.v mlen);
+    with (w': Seq.seq S8.t). assert (IO.inout c m pm (SZ.v mlen) w' vm);
+    Seq.lemma_eq_intro w' (Spec.cipher gk gn vm);
+    Seq.lemma_eq_elim w' (Spec.cipher gk gn vm);
     ()
   } else {
-    with w. assert (A.pts_to c w);
+    rewrite IO.inout c m pm (SZ.v vi) w vm as IO.inout c m pm (SZ.v mlen) w vm;
     Seq.lemma_eq_intro w (Spec.cipher gk gn vm);
     Seq.lemma_eq_elim w (Spec.cipher gk gn vm);
     ()
@@ -241,21 +252,19 @@ fn sb_detached (c: A.array S8.t) (tag: A.array S8.t) (m: A.array S8.t) (mlen: SZ
                (#pm: perm) (#vm: erased (Seq.seq S8.t))
                (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires A.pts_to c vc ** A.pts_to tag vtag ** A.pts_to m #pm vm **
+requires IO.inout c m pm 0 vc vm ** A.pts_to tag vtag **
          A.pts_to nonce #pn vnon ** A.pts_to key #pk vkey **
          pure (Seq.length vc == SZ.v mlen /\ Seq.length vtag == 16 /\
                Seq.length vm == SZ.v mlen /\ Seq.length vm <= Spec.max_len /\
                Seq.length vnon == 24 /\ Seq.length vkey == 32)
 ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
-  A.pts_to c w ** A.pts_to tag wt ** A.pts_to m #pm vm **
+  IO.inout c m pm (SZ.v mlen) w vm ** A.pts_to tag wt **
   A.pts_to nonce #pn vnon ** A.pts_to key #pk vkey **
   pure (Seq.length vm <= Spec.max_len /\ Seq.length vnon == 24 /\ Seq.length vkey == 32 /\
         Seq.length w == SZ.v mlen /\ Seq.length wt == 16 /\
         w == fst (Spec.secretbox vkey vnon vm) /\
         wt == snd (Spec.secretbox vkey vnon vm))
 {
-  A.pts_to_len c;
-  A.pts_to_len m;
   let z8 = S8.classify 0uy;
   let mut subk = [| z8; 32sz |];
   Mem.track subk;
@@ -271,7 +280,10 @@ ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
 
   derive subk tn b0 key nonce;
   sb_cipher c m mlen subk tn b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
+  with w. assert (IO.inout c m pm (SZ.v mlen) w vm);
+  unfold IO.inout;
   sb_tag tag c mlen b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
+  fold (IO.inout c m pm (SZ.v mlen) w vm);
   Mem.wipe b0 64sz;
   Mem.wipe tn 8sz;
   Mem.wipe subk 32sz;
@@ -285,22 +297,20 @@ fn sb_open_detached (m: A.array S8.t) (c: A.array S8.t) (tag: A.array S8.t) (mle
                     (#pt: perm) (#vtag: erased (Seq.seq S8.t))
                     (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires A.pts_to m vm ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+requires IO.inout m c pc 0 vm vc ** A.pts_to tag #pt vtag **
          A.pts_to nonce #pn vnon ** A.pts_to key #pk vkey **
          pure (Seq.length vm == SZ.v mlen /\ Seq.length vc == SZ.v mlen /\
                Seq.length vc <= Spec.max_len /\ Seq.length vtag == 16 /\
                Seq.length vnon == 24 /\ Seq.length vkey == 32)
 returns ok: bool
-ensures exists* (w: Seq.seq S8.t).
-  A.pts_to m w ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+ensures exists* (pos: nat) (w: Seq.seq S8.t).
+  IO.inout m c pc pos w vc ** A.pts_to tag #pt vtag **
   A.pts_to nonce #pn vnon ** A.pts_to key #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 24 /\ Seq.length vtag == 16 /\
         Seq.length vc <= Spec.max_len /\ Seq.length w == SZ.v mlen /\
         (ok <==> Spec.secretbox_open_ok vkey vnon vc vtag) /\
         (ok ==> w == Spec.cipher vkey vnon vc))
 {
-  A.pts_to_len m;
-  A.pts_to_len c;
   A.pts_to_len tag;
   let z8 = S8.classify 0uy;
   let mut subk = [| z8; 32sz |];
@@ -320,7 +330,12 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len b0;
 
   derive subk tn b0 key nonce;
+  IO.borrow_in m c;
+  with q v. assert (A.pts_to c #q v);
+  A.pts_to_len c;
+  assert (pure (Seq.equal v vc));
   sb_tag tarr c mlen b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
+  IO.return_in m c;
   let ok = bytes_eq tarr tag 16sz;
   if ok {
     sb_cipher m c mlen subk tn b0 (G.hide (reveal vkey)) (G.hide (reveal vnon));
@@ -378,7 +393,9 @@ ensures exists* (w: Seq.seq S8.t).
   A.pts_to_len tarr;
 
   let cs = Sub.sub c 16sz clen;
+  IO.intro_disjoint cs m;
   sb_detached cs tarr m mlen nonce key;
+  IO.elim_disjoint cs m;
   Sub.unsub c 16 (SZ.v clen) cs;
   with tv. assert (A.pts_to tarr tv);
   copy_range c 0sz tarr 0sz 16sz;
@@ -432,7 +449,9 @@ ensures exists* (w: Seq.seq S8.t).
   Sub.unsub_id c 0 16 tw;
 
   let cw = Sub.sub c 16sz clen;
+  IO.intro_disjoint m cw;
   let ok = sb_open_detached m cw tarr mlen nonce key;
+  IO.elim_disjoint m cw;
   Sub.unsub_id c 16 (SZ.v clen) cw;
   Mem.wipe tarr 16sz;
   ok
@@ -500,14 +519,14 @@ fn crypto_secretbox_detached (c: A.array S8.t) (tag: A.array S8.t)
                              (#pm: perm) (#vm: erased (Seq.seq S8.t))
                              (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                              (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires A.pts_to c vc ** A.pts_to tag vtag ** A.pts_to m #pm vm **
+requires IO.inout c m pm 0 vc vm ** A.pts_to tag vtag **
          A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
          pure (Seq.length vc == SZ.v mlen /\ Seq.length vtag == 16 /\
                Seq.length vm == SZ.v mlen /\ Seq.length vm <= Spec.max_len /\
                Seq.length vnon == 24 /\ Seq.length vkey == 32)
 returns res: U32.t
 ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
-  A.pts_to c w ** A.pts_to tag wt ** A.pts_to m #pm vm **
+  IO.inout c m pm (SZ.v mlen) w vm ** A.pts_to tag wt **
   A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 24 /\
         Seq.length vm <= Spec.max_len /\
@@ -527,14 +546,14 @@ fn crypto_secretbox_open_detached (m: A.array S8.t) (c: A.array S8.t) (tag: A.ar
                                   (#pt: perm) (#vtag: erased (Seq.seq S8.t))
                                   (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                                   (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires A.pts_to m vm ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+requires IO.inout m c pc 0 vm vc ** A.pts_to tag #pt vtag **
          A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
          pure (Seq.length vm == SZ.v mlen /\ Seq.length vc == SZ.v mlen /\
                Seq.length vc <= Spec.max_len /\ Seq.length vtag == 16 /\
                Seq.length vnon == 24 /\ Seq.length vkey == 32)
 returns res: U32.t
-ensures exists* (w: Seq.seq S8.t).
-  A.pts_to m w ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+ensures exists* (pos: nat) (w: Seq.seq S8.t).
+  IO.inout m c pc pos w vc ** A.pts_to tag #pt vtag **
   A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 24 /\ Seq.length vtag == 16 /\
         Seq.length vc <= Spec.max_len /\ Seq.length w == SZ.v mlen /\
@@ -627,14 +646,14 @@ fn crypto_box_detached_afternm (c: A.array S8.t) (tag: A.array S8.t)
                                (#pm: perm) (#vm: erased (Seq.seq S8.t))
                                (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                                (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires A.pts_to c vc ** A.pts_to tag vtag ** A.pts_to m #pm vm **
+requires IO.inout c m pm 0 vc vm ** A.pts_to tag vtag **
          A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
          pure (Seq.length vc == SZ.v mlen /\ Seq.length vtag == 16 /\
                Seq.length vm == SZ.v mlen /\ Seq.length vm <= Spec.max_len /\
                Seq.length vnon == 24 /\ Seq.length vkey == 32)
 returns res: U32.t
 ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
-  A.pts_to c w ** A.pts_to tag wt ** A.pts_to m #pm vm **
+  IO.inout c m pm (SZ.v mlen) w vm ** A.pts_to tag wt **
   A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 24 /\
         Seq.length vm <= Spec.max_len /\
@@ -654,14 +673,14 @@ fn crypto_box_open_detached_afternm (m: A.array S8.t) (c: A.array S8.t)
                                     (#pt: perm) (#vtag: erased (Seq.seq S8.t))
                                     (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                                     (#pk: perm) (#vkey: erased (Seq.seq S8.t))
-requires A.pts_to m vm ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+requires IO.inout m c pc 0 vm vc ** A.pts_to tag #pt vtag **
          A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
          pure (Seq.length vm == SZ.v mlen /\ Seq.length vc == SZ.v mlen /\
                Seq.length vc <= Spec.max_len /\ Seq.length vtag == 16 /\
                Seq.length vnon == 24 /\ Seq.length vkey == 32)
 returns res: U32.t
-ensures exists* (w: Seq.seq S8.t).
-  A.pts_to m w ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+ensures exists* (pos: nat) (w: Seq.seq S8.t).
+  IO.inout m c pc pos w vc ** A.pts_to tag #pt vtag **
   A.pts_to n #pn vnon ** A.pts_to k #pk vkey **
   pure (Seq.length vkey == 32 /\ Seq.length vnon == 24 /\ Seq.length vtag == 16 /\
         Seq.length vc <= Spec.max_len /\ Seq.length w == SZ.v mlen /\
@@ -739,14 +758,14 @@ fn crypto_box_detached (c: A.array S8.t) (tag: A.array S8.t)
                        (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                        (#pp: perm) (#vpk: erased (Seq.lseq S8.t 32))
                        (#ps: perm) (#vsk: erased (Seq.lseq S8.t 32))
-requires A.pts_to c vc ** A.pts_to tag vtag ** A.pts_to m #pm vm **
+requires IO.inout c m pm 0 vc vm ** A.pts_to tag vtag **
          A.pts_to n #pn vnon ** A.pts_to pk #pp vpk ** A.pts_to sk #ps vsk **
          pure (Seq.length vc == SZ.v mlen /\ Seq.length vtag == 16 /\
                Seq.length vm == SZ.v mlen /\ Seq.length vm <= Spec.max_len /\
                Seq.length vnon == 24)
 returns res: U32.t
-ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
-  A.pts_to c w ** A.pts_to tag wt ** A.pts_to m #pm vm **
+ensures exists* (pos: nat) (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
+  IO.inout c m pm pos w vm ** A.pts_to tag wt **
   A.pts_to n #pn vnon ** A.pts_to pk #pp vpk ** A.pts_to sk #ps vsk **
   pure (Seq.length vnon == 24 /\ Seq.length vm <= Spec.max_len /\
         Seq.length w == SZ.v mlen /\ Seq.length wt == 16 /\
@@ -755,8 +774,8 @@ ensures exists* (w: Seq.seq S8.t) (wt: Seq.seq S8.t).
            w == fst (Spec.secretbox (fst (Spec.beforenm vpk vsk)) vnon vm) /\
            wt == snd (Spec.secretbox (fst (Spec.beforenm vpk vsk)) vnon vm)))
 {
-  A.pts_to_len c;
   A.pts_to_len tag;
+  IO.inout_len c m;
   let z8 = S8.classify 0uy;
   let mut kk = [| z8; 32sz |];
   Mem.track kk;
@@ -781,14 +800,14 @@ fn crypto_box_open_detached (m: A.array S8.t) (c: A.array S8.t) (tag: A.array S8
                             (#pn: perm) (#vnon: erased (Seq.seq S8.t))
                             (#pp: perm) (#vpk: erased (Seq.lseq S8.t 32))
                             (#ps: perm) (#vsk: erased (Seq.lseq S8.t 32))
-requires A.pts_to m vm ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+requires IO.inout m c pc 0 vm vc ** A.pts_to tag #pt vtag **
          A.pts_to n #pn vnon ** A.pts_to pk #pp vpk ** A.pts_to sk #ps vsk **
          pure (Seq.length vm == SZ.v mlen /\ Seq.length vc == SZ.v mlen /\
                Seq.length vc <= Spec.max_len /\ Seq.length vtag == 16 /\
                Seq.length vnon == 24)
 returns res: U32.t
-ensures exists* (w: Seq.seq S8.t).
-  A.pts_to m w ** A.pts_to c #pc vc ** A.pts_to tag #pt vtag **
+ensures exists* (pos: nat) (w: Seq.seq S8.t).
+  IO.inout m c pc pos w vc ** A.pts_to tag #pt vtag **
   A.pts_to n #pn vnon ** A.pts_to pk #pp vpk ** A.pts_to sk #ps vsk **
   pure (Seq.length vnon == 24 /\ Seq.length vtag == 16 /\
         Seq.length vc <= Spec.max_len /\ Seq.length w == SZ.v mlen /\
@@ -797,8 +816,7 @@ ensures exists* (w: Seq.seq S8.t).
             Spec.secretbox_open_ok (fst (Spec.beforenm vpk vsk)) vnon vc vtag)) /\
         (res == 0ul ==> w == Spec.cipher (fst (Spec.beforenm vpk vsk)) vnon vc))
 {
-  A.pts_to_len m;
-  A.pts_to_len c;
+  IO.inout_len m c;
   let z8 = S8.classify 0uy;
   let mut kk = [| z8; 32sz |];
   Mem.track kk;

@@ -61,6 +61,7 @@ module V = Hacl.Vec512
 module Sub = Hacl.Impl.Sub
 module Classical = FStar.Classical
 module Mem = Hacl.Mem
+module IO = Hacl.Impl.InOut
 
 (** {2 Looking down a lane} *)
 
@@ -700,9 +701,9 @@ let as64 (s: Seq.seq S8.t { Seq.length s == 64 })
 inline_for_extraction
 fn xor64 (out: A.array S8.t) (msg: A.array S8.t) (o: SZ.t) (x: V.t)
          (#vo: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
-requires A.pts_to out vo ** A.pts_to msg #pm vm **
+requires IO.inout out msg pm (SZ.v o) vo vm **
          pure (Seq.length vo == Seq.length vm /\ SZ.v o + 64 <= Seq.length vm)
-ensures exists* (vo': Seq.seq S8.t). A.pts_to out vo' ** A.pts_to msg #pm vm **
+ensures exists* (vo': Seq.seq S8.t). IO.inout out msg pm (SZ.v o + 64) vo' vm **
   pure (Seq.length vo == Seq.length vm /\ SZ.v o + 64 <= Seq.length vm /\
         Seq.length vo' == Seq.length vo /\
         (forall (p: nat). p < Seq.length vo ==>
@@ -711,17 +712,22 @@ ensures exists* (vo': Seq.seq S8.t). A.pts_to out vo' ** A.pts_to msg #pm vm **
               then S8.logxor (Seq.index vm p) (Seq.index (V.vv x) (p - SZ.v o))
               else Seq.index vo p)))
 {
-  A.pts_to_len out;
+  IO.borrow_in out msg;
+  with (q: perm) (v: Seq.seq S8.t). assert (A.pts_to msg #q v);
   A.pts_to_len msg;
   let o2 = SZ.add o 64sz;
   let mb = Sub.sub msg o o2;
-  let mv = V.load mb #(as64 (Seq.slice vm (SZ.v o) (SZ.v o2)));
+  let mv = V.load mb #(as64 (Seq.slice v (SZ.v o) (SZ.v o2)));
+  assert (pure (Seq.equal (Seq.slice v (SZ.v o) (SZ.v o2)) (Seq.slice vm (SZ.v o) (SZ.v o2))));
   Sub.unsub_id msg (SZ.v o) (SZ.v o2) mb;
+  IO.return_in out msg;
   let r = V.vxor mv x;
+  unfold IO.inout;
+  A.pts_to_len out;
   let ob = Sub.sub out o o2;
   V.store ob r #(as64 (Seq.slice vo (SZ.v o) (SZ.v o2)));
   Sub.unsub out (SZ.v o) (SZ.v o2) ob;
-  ()
+  IO.inout_advance out msg (SZ.v o + 64);
 }
 
 #pop-options
@@ -753,6 +759,20 @@ let chunk_byte (s0: state) (c: U32.t { U32.v c + 16 <= pow2 32 })
     assert ((64 * i + q) % 64 == q);
     assert (Seq.index (keystream s0 (lane_ctr c i)) q ==
             Seq.index (word_to_le #S32.t (Seq.index w (q / 4))) (q % 4))
+
+(** All of block [i]'s bytes, stated where the context is small. *)
+let chunk_bytes (s0: state) (c: U32.t { U32.v c + 16 <= pow2 32 })
+                (vk: vstate) (x: V.t) (i: nat { i < 16 })
+  : Lemma
+      (requires
+        (forall (j: nat). j < 16 ==> lane_state vk j == core s0 (lane_ctr c j)) /\
+        tr_ok vk x i)
+      (ensures forall (q: nat). q < 64 ==> Seq.index (V.vv x) q == chunk_ks s0 c (64 * i + q))
+  = let aux (q: nat)
+      : Lemma (q < 64 ==> Seq.index (V.vv x) q == chunk_ks s0 c (64 * i + q))
+      = if q < 64 then chunk_byte s0 c vk x i q
+    in
+    Classical.forall_intro aux
 
 #pop-options
 
@@ -800,6 +820,12 @@ let chunk_step (s0: state) (c: U32.t { U32.v c + 16 <= pow2 32 })
 
 #pop-options
 
+let chunk_off_fits (off: nat) (n: nat) (len: nat)
+  : Lemma (requires n < 16 /\ off + 1024 <= len /\ SZ.fits len)
+          (ensures SZ.fits (64 * n) /\ SZ.fits (off + 64 * n) /\ off + 64 * n + 64 <= len)
+  = SZ.fits_lte (64 * n) len;
+    SZ.fits_lte (off + 64 * n) len
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
 (** Exclusive-or [chunk_ks s0 c] into [msg[off .. off+1024]], writing [out]. *)
@@ -810,14 +836,14 @@ fn chunk_vec (out: A.array S8.t) (msg: A.array S8.t) (off: SZ.t)
              (#vo: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
              (#ps: perm) (#s0: erased (Seq.seq S32.t))
              (#vv0 #vk0 #vu0 #vt0: erased (Seq.seq V.t))
-requires A.pts_to out vo ** A.pts_to msg #pm vm ** A.pts_to st #ps s0 **
+requires IO.inout out msg pm (SZ.v off) vo vm ** A.pts_to st #ps s0 **
          A.pts_to vst vv0 ** A.pts_to ks vk0 ** A.pts_to u vu0 ** A.pts_to t vt0 **
          pure (Seq.length vo == Seq.length vm /\ SZ.v off + 1024 <= Seq.length vm /\
                Seq.length s0 == 16 /\ U32.v c + 16 <= pow2 32 /\
                Seq.length vv0 == 16 /\ Seq.length vk0 == 16 /\
                Seq.length vu0 == 16 /\ Seq.length vt0 == 16)
 ensures exists* (vo': Seq.seq S8.t) (vv1 vk1 vu1 vt1: Seq.seq V.t).
-  A.pts_to out vo' ** A.pts_to msg #pm vm ** A.pts_to st #ps s0 **
+  IO.inout out msg pm (SZ.v off + 1024) vo' vm ** A.pts_to st #ps s0 **
   A.pts_to vst vv1 ** A.pts_to ks vk1 ** A.pts_to u vu1 ** A.pts_to t vt1 **
   pure (Seq.length vo == Seq.length vm /\ SZ.v off + 1024 <= Seq.length vm /\
         Seq.length s0 == 16 /\ U32.v c + 16 <= pow2 32 /\
@@ -825,8 +851,7 @@ ensures exists* (vo': Seq.seq S8.t) (vv1 vk1 vu1 vt1: Seq.seq V.t).
         Seq.length vu1 == 16 /\ Seq.length vt1 == 16 /\
         chunk_inv s0 c vo vm vo' (SZ.v off) 16)
 {
-  A.pts_to_len out;
-  A.pts_to_len msg;
+  IO.inout_len out msg;
   init_vec vst st c;
   core_vec ks vst (G.hide (fun (j: nat { j < 16 }) -> with_counter s0 (lane_ctr c j)));
   with vk. assert (A.pts_to ks vk);
@@ -835,21 +860,27 @@ ensures exists* (vo': Seq.seq S8.t) (vv1 vk1 vu1 vt1: Seq.seq V.t).
   with vt. assert (A.pts_to t vt);
   let mut i = 0sz;
   while (let vi = !i; SZ.lt vi 16sz)
-  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t).
-    pts_to i vi ** A.pts_to out v ** A.pts_to msg #pm vm ** A.pts_to t vt **
-    pure (chunk_inv s0 c vo vm v (SZ.v off) (SZ.v vi))
+  invariant exists* (vi: SZ.t) (v: Seq.seq S8.t) (pos: nat).
+    pts_to i vi ** IO.inout out msg pm pos v vm ** A.pts_to t vt **
+    pure (chunk_inv s0 c vo vm v (SZ.v off) (SZ.v vi) /\ pos == SZ.v off + 64 * SZ.v vi)
   decreases (16 - SZ.v (!i))
   {
     let vi = !i;
     let x = A.(t.(vi));
+    chunk_off_fits (SZ.v off) (SZ.v vi) (Seq.length vm);
     let ob = SZ.add off (SZ.mul 64sz vi);
-    with v. assert (A.pts_to out v);
-    Classical.forall_intro (chunk_byte s0 c vk x (SZ.v vi));
+    with (pos: nat) v. assert (IO.inout out msg pm pos v vm);
+    assert pure (SZ.v ob == SZ.v off + 64 * SZ.v vi /\ SZ.v ob + 64 <= Seq.length vm /\
+                 Seq.length v == Seq.length vm);
+    rewrite IO.inout out msg pm pos v vm as IO.inout out msg pm (SZ.v ob) v vm;
+    chunk_bytes s0 c vk x (SZ.v vi);
     xor64 out msg ob x;
-    with v'. assert (A.pts_to out v');
+    with v'. assert (IO.inout out msg pm (SZ.v ob + 64) v' vm);
     chunk_step s0 c vo vm v v' (SZ.v off) (SZ.v vi) x;
     i := SZ.add vi 1sz;
   };
+  with (pos: nat) v. assert (IO.inout out msg pm pos v vm);
+  rewrite IO.inout out msg pm pos v vm as IO.inout out msg pm (SZ.v off + 1024) v vm;
 }
 
 #pop-options
@@ -935,18 +966,16 @@ fn encrypt_blocks16 (out: A.array S8.t) (msg: A.array S8.t) (mlen: SZ.t)
                     (st0: G.erased state)
                     (#vo: erased (Seq.seq S8.t)) (#pm: perm) (#vm: erased (Seq.seq S8.t))
                     (#ps: perm)
-requires A.pts_to out vo ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
+requires IO.inout out msg pm 0 vo vm ** A.pts_to st #ps (G.reveal st0) **
          pure (Seq.length vo == Seq.length vm /\ Seq.length vm == SZ.v mlen /\
                Seq.length vm <= max_len ctr0)
 returns n: SZ.t
 ensures exists* (vo': Seq.seq S8.t).
-  A.pts_to out vo' ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
+  IO.inout out msg pm (SZ.v n) vo' vm ** A.pts_to st #ps (G.reveal st0) **
   pure (Seq.length vm <= max_len ctr0 /\
         SZ.v n % 1024 == 0 /\ SZ.v n <= SZ.v mlen /\ SZ.v mlen - SZ.v n < 1024 /\
         encrypt_prefix st0 ctr0 vm vo' (SZ.v n))
 {
-  A.pts_to_len out;
-  A.pts_to_len msg;
   let z = V.zero ();
   let mut vst = [| z; 16sz |];
   Mem.track vst;
@@ -958,18 +987,19 @@ ensures exists* (vo': Seq.seq S8.t).
   Mem.track t;
   let mut base = 0sz;
   while (let b = !base; SZ.lte 1024sz (SZ.sub mlen b))
-  invariant exists* (b: SZ.t) (v: Seq.seq S8.t) (vv vk vu vt: Seq.seq V.t).
-    pts_to base b ** A.pts_to out v ** A.pts_to msg #pm vm ** A.pts_to st #ps (G.reveal st0) **
+  invariant exists* (b: SZ.t) (v: Seq.seq S8.t) (pos: nat) (vv vk vu vt: Seq.seq V.t).
+    pts_to base b ** IO.inout out msg pm pos v vm ** A.pts_to st #ps (G.reveal st0) **
     A.pts_to vst vv ** A.pts_to ks vk ** A.pts_to u vu ** A.pts_to t vt **
     pure (Seq.length vm <= max_len ctr0 /\ Seq.length vm == SZ.v mlen /\
           Seq.length vv == 16 /\ Seq.length vk == 16 /\
           Seq.length vu == 16 /\ Seq.length vt == 16 /\
-          SZ.v b % 1024 == 0 /\ SZ.v b <= SZ.v mlen /\
+          SZ.v b % 1024 == 0 /\ SZ.v b <= SZ.v mlen /\ pos == SZ.v b /\
           encrypt_prefix st0 ctr0 vm v (SZ.v b))
   decreases (SZ.v mlen - SZ.v (!base))
   {
     let b = !base;
-    with v. assert (A.pts_to out v);
+    with (pos: nat) v. assert (IO.inout out msg pm pos v vm);
+    rewrite IO.inout out msg pm pos v vm as IO.inout out msg pm (SZ.v b) v vm;
     chunk_ctr ctr0 (SZ.v mlen) (SZ.v b);
     let c = U32.add ctr0 (SZ.sizet_to_uint32 (SZ.div b 64sz));
     A.pts_to_len vst;
@@ -977,7 +1007,7 @@ ensures exists* (vo': Seq.seq S8.t).
     A.pts_to_len u;
     A.pts_to_len t;
     chunk_vec out msg b st c vst ks u t;
-    with v'. assert (A.pts_to out v');
+    with v'. assert (IO.inout out msg pm (SZ.v b + 1024) v' vm);
     Math.small_mod (SZ.v b / 64) (pow2 32);
     assert (pure (U32.v (SZ.sizet_to_uint32 (SZ.div b 64sz)) == SZ.v b / 64));
     assert (pure (U32.v c == U32.v ctr0 + SZ.v b / 64));
@@ -988,6 +1018,8 @@ ensures exists* (vo': Seq.seq S8.t).
     base := SZ.add b 1024sz;
   };
   let n = !base;
+  with (pos: nat) v. assert (IO.inout out msg pm pos v vm);
+  rewrite IO.inout out msg pm pos v vm as IO.inout out msg pm (SZ.v n) v vm;
   Mem.wipe t 16sz;
   Mem.wipe u 16sz;
   Mem.wipe ks 16sz;
