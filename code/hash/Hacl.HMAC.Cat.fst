@@ -71,7 +71,7 @@ let cat2 (a b: Seq.seq S8.t)
 
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
-fn hmac_cat (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn hmac_cat (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
             ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
             (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
             (key: A.array S8.t)
@@ -187,7 +187,7 @@ ensures exists* vout'.
 (** HMAC of one message over the block function [blocks]: what
     [Hacl.HMAC.Core.hmac_impl] computes, for callers (HMAC-DRBG) that want
     the SHA instructions without a specialized copy of their own. *)
-fn hmac_one (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn hmac_one (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
             ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
             (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
             (key: A.array S8.t) (lk: SZ.t) (msg: A.array S8.t) (lm: SZ.t)

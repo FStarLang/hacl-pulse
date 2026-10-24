@@ -451,7 +451,7 @@ let digest_inv_final (#t: Type0) {| w: word t |} (vst: Seq.lseq t 8) (vd: Seq.se
   = reveal_opaque (`%digest_inv) (digest_inv #t #w);
     Seq.lemma_eq_intro vd (words_to_be 8 vst)
 
-fn write_digest (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn write_digest (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                 (out: A.array S8.t) (st: A.array t)
                 (#vout: erased (Seq.seq S8.t)) (#pst: perm) (#vst: erased (Seq.lseq t 8))
 requires A.pts_to out vout ** A.pts_to st #pst vst **
@@ -547,7 +547,7 @@ let tail_blocks (#t: Type0) {| w: word t |} (ntail: nat)
   = if ntail = block_len #t then Math.multiple_division_lemma 1 (block_len #t)
     else Math.multiple_division_lemma 2 (block_len #t)
 
-fn tail_and_finish (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn tail_and_finish (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                    (kt: A.array t) (wsb: A.array t) (st: A.array t)
                    (out: A.array S8.t) (input: A.array S8.t)
                    (len: SZ.t) (nblocks: SZ.t) (base_in: SZ.t)
@@ -782,7 +782,7 @@ ensures exists* (vw: Seq.seq t) (vst: Seq.lseq t 8).
 }
 
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 0"
-fn hash_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn hash_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
              (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (input: A.array S8.t) (len: SZ.t)
              (#pk: perm) (#vk: erased (Seq.seq t))
              (#pi: perm) (#vi: erased (Seq.seq t))
@@ -873,7 +873,7 @@ let prefixed_arith (bl lin: nat)
     Math.multiply_fractions lin bl;
     Math.lemma_mult_le_left (lin / bl) 1 bl
 
-fn hash_prefixed (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn hash_prefixed (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                  (kt: A.array t) (ivt: A.array t) (out: A.array S8.t)
                  (blk: A.array S8.t) (input: A.array S8.t) (lin: SZ.t)
                  (#pk: perm) (#vk: erased (Seq.seq t))

@@ -46,12 +46,20 @@
 
     The wiping itself is in [c/Hacl_Mem.h]; it is trusted, and its
     postcondition (the contents are now unknown) is weaker than what it
-    does.  *)
+    does.  It cannot be a verified loop: gcc and clang delete stores to an
+    array that is about to die, and keeping them takes an optimization
+    barrier, which would be trusted all the same.
+
+    "Unknown" still means a sequence of [t]s, so [wipe] needs all-zero
+    bytes to be a [t]: see [Hacl.Zeroable].  [A.pts_to_uninit] would avoid
+    that, but [let mut x = [| v; n |]] must end its scope in [A.pts_to]
+    (FStarLang/FStar#4777).  [free] needs neither: nothing is read back. *)
 module Hacl.Mem
 
 #lang-pulse
 
 open Pulse.Lib.Pervasives
+open Hacl.Zeroable
 
 module A = Pulse.Lib.Array
 module SZ = FStar.SizeT
@@ -63,7 +71,7 @@ val must_wipe (#t: Type0) (a: A.array t) : slprop
 ghost fn track (#t: Type0) (a: A.array t)
   ensures must_wipe a
 
-fn wipe (#t: Type0) (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
+fn wipe (#t: Type0) {| zeroable t |} (a: A.array t) (n: SZ.t) (#s: erased (Seq.seq t))
   requires A.pts_to a s ** must_wipe a ** pure (SZ.v n == A.length a)
   ensures exists* s'. A.pts_to a s'
 

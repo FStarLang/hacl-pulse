@@ -77,7 +77,7 @@ let block_len_32 (_: unit)
 
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
-fn update_gen (#t: Type0) {| w: word t |}
+fn update_gen (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
               ([@@@FStar.Attributes.monomorphize] p: params t)
               (ivs: A.array t) (acc: A.array t) (buf: A.array S8.t)
               (tot: A.array SZ.t) (data: A.array S8.t) (data_len: SZ.t)
@@ -118,7 +118,7 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
 
 }
 
-fn digest_gen (#t: Type0) {| w: word t |}
+fn digest_gen (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
               ([@@@FStar.Attributes.monomorphize] p: params t)
               (ivs: A.array t) (acc: A.array t) (buf: A.array S8.t)
               (tot: A.array SZ.t) (out: A.array S8.t)

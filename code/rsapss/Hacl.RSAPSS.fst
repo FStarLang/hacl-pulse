@@ -463,7 +463,7 @@ let verify_reject (#t: Type0) {| word t |} (p: params t) (sLen: nat)
     [sgnt] receives [ceil(modBits/8)] bytes.  The result is [false] exactly
     when the key does not make sense, which a caller that got its key from
     somewhere trustworthy will never see. *)
-fn rsapss_sign (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn rsapss_sign (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: A.array t) (ivt: A.array t)
                (modBits: (m: U32.t { 1 < U32.v m }))
                (nb: A.array S8.t) (dLen: SZ.t) (db: A.array S8.t)
@@ -524,7 +524,7 @@ ensures exists* (vsg': Seq.seq S8.t).
 }
 
 (** RSASSA-PSS-VERIFY, RFC 8017 section 8.1.2. *)
-fn rsapss_verify (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn rsapss_verify (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                  (kt: A.array t) (ivt: A.array t)
                  (modBits: (m: U32.t { 1 < U32.v m }))
                  (nb: A.array S8.t) (eLen: SZ.t) (eb: A.array S8.t)

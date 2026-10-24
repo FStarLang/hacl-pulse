@@ -256,7 +256,7 @@ ensures exists* (vh: Seq.seq t). A.pts_to h vh ** A.pts_to ivs #pi vi **
     [Spec.Blake2.final]: the state serialized little-endian and truncated to
     the requested length.  The truncation is why the whole eight words are
     written to a scratch buffer first. *)
-fn write_digest_le (#t: Type0) {| w: word t |}
+fn write_digest_le (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                    ([@@@FStar.Attributes.monomorphize] p: params t)
                    (out: A.array S8.t) (st: A.array t)
                    (#vout: erased (Seq.seq S8.t)) (#pst: perm) (#vst: erased (Seq.lseq t 8))
@@ -373,7 +373,7 @@ let nblocks_sz (klen mlen bl: SZ.t)
 
     The counter passed with block [i] is [(i + 1) * block_len]: the number of
     bytes absorbed including this block. *)
-fn blake2_blocks (#t: Type0) {| w: word t |}
+fn blake2_blocks (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
                  (h: A.array t) (mw: A.array t) (blk: A.array S8.t)
                  (ivs: A.array t)
@@ -507,7 +507,7 @@ let msg_blocks_bound_opt (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) (nlast
 
     The initialization vector arrives as a slice, filled by the named layer;
     everything else is scratch this function allocates and gives back. *)
-fn blake2_impl (#t: Type0) {| w: word t |}
+fn blake2_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                ([@@@FStar.Attributes.monomorphize] iva: GA.static_array t)
                (out: A.array S8.t)

@@ -95,7 +95,7 @@ let round_eq (#t: Type0) {| word t |} (p: params t)
 
 (** [dg <- T(ci)], given [T(ci - 1)] in the first [lprev] bytes of [dg] --
     that is, all of it, or none of it in round one. *)
-fn round (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn round (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
          ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
          (kt: A.array t) (ivt: A.array t)
          (dg: A.array S8.t) (tmp: A.array S8.t) (ctr: A.array S8.t) (lprev: SZ.t)
@@ -170,7 +170,7 @@ ensures exists* (vdg': Seq.seq S8.t) (vtmp': Seq.seq S8.t) (vctr': Seq.seq S8.t)
 
 #push-options "--z3rlimit 600 --fuel 1 --ifuel 0"
 
-fn expand2_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn expand2_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                 ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
                 (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (len: SZ.t)
                 (prk: A.array S8.t) (plen: SZ.t)
@@ -306,7 +306,7 @@ ensures exists* vout'.
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 0"
 
-fn expand_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn expand_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                ([@@@FStar.Attributes.monomorphize] blocks: blocks_t p)
                (kt: A.array t) (ivt: A.array t) (out: A.array S8.t) (len: SZ.t)
                (prk: A.array S8.t) (plen: SZ.t) (info: A.array S8.t) (ilen: SZ.t)

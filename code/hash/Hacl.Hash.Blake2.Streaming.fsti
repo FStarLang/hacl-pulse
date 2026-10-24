@@ -77,7 +77,7 @@ val init_impl (#t: Type0) {| w: word t |}
 
 (** Absorb [dlen] more bytes.  [mw] and [blk] are scratch the caller
     owns; their contents on exit are unspecified beyond their lengths. *)
-val update_impl (#t: Type0) {| w: word t |}
+val update_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] p: params t)
                 (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                 (ivs: A.array t)
@@ -113,7 +113,7 @@ val update_impl (#t: Type0) {| w: word t |}
 (** Write the hash of what has been seen.  The state is left usable: the
     accumulator is copied and a copy of the buffer is padded, so digests
     and updates may be interleaved. *)
-val digest_impl (#t: Type0) {| w: word t |}
+val digest_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                 ([@@@FStar.Attributes.monomorphize] p: params t)
                 (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                 (ivs: A.array t)

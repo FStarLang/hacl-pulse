@@ -48,6 +48,9 @@ module UInt = FStar.UInt
 (** A coefficient in canonical form. *)
 let zqt = x: S16.t { S16.v x < q }
 
+instance zeroable_zqt : Hacl.Zeroable.zeroable zqt =
+  Hacl.Zeroable.zeroable_refine #_ #Hacl.Zeroable.zeroable_s16 (fun x -> S16.v x < q) ()
+
 inline_for_extraction
 let qw : w: S16.t { S16.v w == q } = S16.classify 3329us
 

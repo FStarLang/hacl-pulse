@@ -129,7 +129,7 @@ let absorb_step (#t: Type0) {| word t |} (p: params t) (h0: Seq.lseq t 8)
 
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
-fn absorb_blocks (#t: Type0) {| w: word t |}
+fn absorb_blocks (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                  ([@@@FStar.Attributes.monomorphize] p: params t)
                  (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                  (ivs: A.array t)
@@ -298,7 +298,7 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
 
 #push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
-fn update_full (#t: Type0) {| w: word t |}
+fn update_full (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t)
@@ -389,7 +389,7 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
 
 #push-options "--z3rlimit 800 --fuel 0 --ifuel 0"
 
-fn update_impl (#t: Type0) {| w: word t |}
+fn update_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t)
@@ -484,7 +484,7 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
 
 #push-options "--z3rlimit 100 --fuel 1 --ifuel 1"
 
-fn digest_impl (#t: Type0) {| w: word t |}
+fn digest_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t)

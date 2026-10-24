@@ -79,7 +79,7 @@ val init_state (#t: Type0) {| w: word t |}
     (ensures fun _ -> exists* (vh: Seq.seq t). A.pts_to h vh ** A.pts_to ivs #pi vi **
       pure (SZ.v klen <= max_key_len #t /\ Seq.length vh == 8 /\ vh == init p (SZ.v klen)))
 
-val write_digest_le (#t: Type0) {| w: word t |}
+val write_digest_le (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                    ([@@@FStar.Attributes.monomorphize] p: params t)
                    (out: A.array S8.t) (st: A.array t)
                    (#vout: erased (Seq.seq S8.t)) (#pst: perm) (#vst: erased (Seq.lseq t 8))
@@ -88,7 +88,7 @@ val write_digest_le (#t: Type0) {| w: word t |}
              pure (Seq.length vout == (hash_bytes p)))
     (ensures fun _ -> A.pts_to out (final p vst) ** A.pts_to st #pst vst)
 
-val blake2_impl (#t: Type0) {| w: word t |}
+val blake2_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                ([@@@FStar.Attributes.monomorphize] p: params t)
                ([@@@FStar.Attributes.monomorphize] iva: GA.static_array t)
                (out: A.array S8.t)

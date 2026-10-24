@@ -59,7 +59,7 @@ unfold let inv (#t: Type0) {| word t |} (p: params t)
 
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
-fn gen_full (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn gen_full (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (v1: A.array S8.t) (out: A.array S8.t)
@@ -111,7 +111,7 @@ ensures exists* vcur' vv1 vout'.
 
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
-fn gen_tail (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn gen_tail (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (v1: A.array S8.t) (out: A.array S8.t) (n: SZ.t)
@@ -166,7 +166,7 @@ ensures exists* vcur' vv1 vout'.
 
 #push-options "--z3rlimit 200 --fuel 0 --ifuel 0"
 
-fn gen_loop (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn gen_loop (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (out: A.array S8.t) (n: SZ.t)

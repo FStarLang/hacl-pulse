@@ -53,7 +53,7 @@ unfold let ctr_ok (vctr: Seq.seq SZ.t) (c: nat) : prop =
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
-fn instantiate (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn instantiate (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                (kt: A.array t) (ivt: A.array t)
                (k: A.array S8.t) (v: A.array S8.t) (ctr: A.array SZ.t)
@@ -98,7 +98,7 @@ ensures exists* vkey' vval' vctr'.
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
-fn reseed (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn reseed (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
           (kt: A.array t) (ivt: A.array t)
           (k: A.array S8.t) (v: A.array S8.t) (ctr: A.array SZ.t)
@@ -145,7 +145,7 @@ ensures exists* vkey' vval' vctr'.
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
-fn maybe_update (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn maybe_update (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
                 (kt: A.array t) (ivt: A.array t)
                 (k: A.array S8.t) (v: A.array S8.t)
@@ -186,7 +186,7 @@ ensures exists* vkey' vval'.
 
 #push-options "--z3rlimit 400 --fuel 1 --ifuel 1"
 
-fn generate (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn generate (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
     ([@@@FStar.Attributes.monomorphize] blocks: Hacl.Hash.SHA2.Core.blocks_t p)
             (kt: A.array t) (ivt: A.array t)
             (k: A.array S8.t) (v: A.array S8.t) (ctr: A.array SZ.t)

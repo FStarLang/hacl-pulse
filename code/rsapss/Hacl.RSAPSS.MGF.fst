@@ -81,7 +81,7 @@ let buf_is_block (seed: Seq.seq S8.t) (m: Seq.seq S8.t) (i: nat)
     FStar.Classical.forall_intro aux;
     Seq.lemma_eq_intro m r
 
-fn round (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn round (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
          (kt: A.array t) (ivt: A.array t)
          (dg: A.array S8.t) (m: A.array S8.t) (ml: SZ.t) (i: U32.t)
          (#seed: erased (seed_t t))
@@ -118,7 +118,7 @@ ensures exists* (vdg': Seq.seq S8.t) (vm': Seq.seq S8.t).
 
     [maskLen] is public -- it is derived from the modulus size -- so the
     number of rounds may and does depend on it. *)
-fn mgf_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn mgf_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
             (kt: A.array t) (ivt: A.array t)
             (res: A.array S8.t) (maskLen: SZ.t)
             (seed: A.array S8.t) (slen: SZ.t)

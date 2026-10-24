@@ -135,7 +135,7 @@ ensures exists* vd'. A.pts_to dst vd' ** A.pts_to src #ps vs **
 }
 
 (** [out] receives [Hash(0^8 | Hash(msg) | salt)], the [H] of EMSA-PSS. *)
-fn hash_m_prime (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn hash_m_prime (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                 (kt: A.array t) (ivt: A.array t)
                 (out: A.array S8.t)
                 (salt: A.array S8.t) (sLen: SZ.t)
@@ -221,7 +221,7 @@ let db_written (#t: Type0) {| word t |} (p: params t)
     [emLen] is passed as well as [emBits] because the caller has both -- it
     sized [em] with it -- and because deriving one from the other in two
     different integer types inside the proof is pure cost. *)
-fn pss_encode_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn pss_encode_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                    (kt: A.array t) (ivt: A.array t)
                    (em: A.array S8.t) (emBits: (e: U32.t { 0 < U32.v e })) (emLen: SZ.t)
                    (salt: A.array S8.t) (sLen: SZ.t)
@@ -386,7 +386,7 @@ ensures A.pts_to a #pa va ** A.pts_to b #pb vb **
     reject encodings an encoder would never produce, so the two directions
     are separate spec functions and this one proves itself equivalent to
     [Spec.RSAPSS.pss_valid]. *)
-fn pss_verify_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn pss_verify_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                    (kt: A.array t) (ivt: A.array t)
                    (em: A.array S8.t) (emBits: (e: U32.t { 0 < U32.v e })) (emLen: SZ.t)
                    (sLen: (n: SZ.t { pss_ok p (SZ.v n) (U32.v emBits) }))

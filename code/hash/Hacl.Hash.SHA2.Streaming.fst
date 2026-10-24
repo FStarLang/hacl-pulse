@@ -389,7 +389,7 @@ ensures exists* (vw: Seq.seq t) (vacc': Seq.seq t) (vbuf': Seq.seq S8.t)
 #push-options "--z3rlimit 600 --fuel 0 --ifuel 0"
 
 (** The digest of everything seen so far.  The state is left usable. *)
-fn digest_impl (#t: Type0) {| w: word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+fn digest_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |} ([@@@FStar.Attributes.monomorphize] p: params t)
                (kt: A.array t) (wsb: A.array t) (acc: A.array t)
                (buf: A.array S8.t) (tot: A.array SZ.t) (out: A.array S8.t)
                (seen: erased (Seq.seq S8.t))
