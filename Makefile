@@ -124,6 +124,13 @@ CUSTARD_ENTRIES += $(addprefix Hacl.P256.Sec1., \
 
 CUSTARD_ENTRIES += $(addprefix Hacl.P256.Ecdh., dh_initiator dh_responder)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.P384., ecdsa_sign_sha384 ecdsa_verify_sha384)
+
+CUSTARD_ENTRIES += Hacl.P384.Key.validate_private_key \
+                   Hacl.P384.Key.validate_public_key
+
+CUSTARD_ENTRIES += $(addprefix Hacl.P384.Ecdh., dh_initiator dh_responder)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.K256., \
   ecdsa_sign_hashed_msg ecdsa_sign_sha256 \
   ecdsa_verify_hashed_msg ecdsa_verify_sha256 \

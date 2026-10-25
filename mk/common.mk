@@ -104,6 +104,7 @@ SOURCE_DIRS += code/nacl
 SOURCE_DIRS += code/ed25519
 SOURCE_DIRS += code/field256
 SOURCE_DIRS += code/p256
+SOURCE_DIRS += code/p384
 SOURCE_DIRS += code/k256
 SOURCE_DIRS += code/drbg
 SOURCE_DIRS += code/aes
