@@ -20,7 +20,8 @@
     [dh_initiator sk] -- the public key of [sk], as the specification
     defines it -- returns some [pk], and [ecdsa_verify_msg_as_qelem] accepts
     [sg] against [pk] and [m] ({!verify_sign}).
-    The same then holds for the SHA-384 front end ({!verify_sign_sha384}).
+    The same then holds for the SHA-384 and SHA-256 front ends
+    ({!verify_sign_sha384}, {!verify_sign_sha256}).
 
     The proof is the textbook one, in two halves.
 
@@ -167,5 +168,11 @@ let verify_sign_sha384 (msg: Seq.seq S8.t { msg_ok msg }) (sk nonce: Seq.lseq S8
           (ensures Some? (dh_initiator sk) /\
                    verify_sha384 msg (Some?.v (dh_initiator sk)) (Some?.v (sign_sha384 msg sk nonce)))
   = verify_sign (sha384_as_qelem msg) sk nonce
+
+let verify_sign_sha256 (msg: Seq.seq S8.t { msg_ok msg }) (sk nonce: Seq.lseq S8.t 48)
+  : Lemma (requires Some? (sign_sha256 msg sk nonce))
+          (ensures Some? (dh_initiator sk) /\
+                   verify_sha256 msg (Some?.v (dh_initiator sk)) (Some?.v (sign_sha256 msg sk nonce)))
+  = verify_sign (sha256_as_qelem msg) sk nonce
 
 #pop-options
