@@ -29,7 +29,7 @@ intrinsics behind a narrow axiomatized interface and is chosen at run time.
 | MACs and KDFs | HMAC (SHA-1, SHA-2), Poly1305, HKDF, HMAC-DRBG |
 | ciphers and AEAD | ChaCha20, Salsa20, AES-128/256-GCM, ChaCha20-Poly1305, NaCl `box` and `secretbox` |
 | elliptic curves | X25519, Ed25519, P-256 ECDH and ECDSA, secp256k1 ECDH and ECDSA |
-| bignum | generic Montgomery arithmetic and modular exponentiation, RSA-PSS, FFDHE (RFC 7919 groups) |
+| bignum | generic Montgomery arithmetic and modular exponentiation, RSA-PSS, RSASSA-PKCS1-v1_5, FFDHE (RFC 7919 groups) |
 | post-quantum | ML-KEM (FIPS 203) and ML-DSA (FIPS 204), all three parameter sets each; FrodoKEM, all four parameter sets |
 | protocols | HPKE (RFC 9180), all four modes |
 
