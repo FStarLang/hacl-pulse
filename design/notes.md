@@ -901,6 +901,20 @@ MACs 15% slower.  On a Xeon Gold 6140, 256 KiB of Poly1305 went from 0.88 to
 ChaCha20-Poly1305 from 1.25 to 0.57; messages under 128 bytes do not reach
 the vector code.
 
+The streaming interface, `Hacl.Streaming.Poly1305`, is simpler than the
+hashes': a whole block can be absorbed as soon as it arrives, because only
+the final block is padded differently, so the state is just *r* (with its
+multiples by five), the accumulator, a copy of the key for *s*, a block
+buffer and a byte count kept modulo sixteen -- so there is no length limit.
+`update` tops up the buffer, absorbs it and then every whole block of the
+input in place with `absorb_blocks`, which keeps the AVX2 path, and buffers
+the rest; `digest` finishes a copy of the accumulator with `absorb_tail`, so
+the state survives it.  The one fact the proof adds,
+`Spec.Poly1305.Streaming.blocks_acc_extend`, says absorbing the first
+*n + k* blocks of a message is absorbing *n* and then *k* more from any
+sequence that agrees with it there.  `wipe` zeroes the whole state through
+`Hacl.Mem.wipe`, key copy included.
+
 ### ChaCha20-Poly1305, three segments and one accumulator
 
 The AEAD is not "encrypt, then MAC three buffers".  The authenticated input is

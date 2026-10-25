@@ -48,6 +48,7 @@ module Hash_Blake2 = Hacl.Hash.Blake2.Named
 module Streaming_Blake2 = Hacl.Streaming.Blake2
 module Chacha20 = Hacl.Chacha20
 module Poly1305 = Hacl.Poly1305
+module Streaming_Poly1305 = Hacl.Streaming.Poly1305
 module Chacha20Poly1305 = Hacl.Chacha20Poly1305
 module Salsa20 = Hacl.Salsa20
 module NaCl = Hacl.NaCl
