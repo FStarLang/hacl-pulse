@@ -68,6 +68,7 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.Blake2., \
 CUSTARD_ENTRIES += $(addprefix Hacl.Chacha20., encrypt decrypt)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Poly1305., mac)
+CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.Poly1305., poly1305_init poly1305_update poly1305_digest poly1305_wipe)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Chacha20Poly1305., encrypt decrypt)
 
