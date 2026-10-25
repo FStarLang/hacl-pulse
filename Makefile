@@ -99,6 +99,10 @@ CUSTARD_ENTRIES += $(addprefix Hacl.RSAPSS., \
   sign_sha256 sign_sha384 sign_sha512 \
   verify_sha256 verify_sha384 verify_sha512)
 
+CUSTARD_ENTRIES += $(addprefix Hacl.RSAPKCS1., \
+  sign_sha256 sign_sha384 sign_sha512 \
+  verify_sha256 verify_sha384 verify_sha512)
+
 CUSTARD_ENTRIES += $(addprefix Hacl.Curve25519., \
   scalarmult secret_to_public ecdh)
 

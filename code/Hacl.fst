@@ -78,6 +78,7 @@ module Bignum_Montgomery = Hacl.Bignum.Montgomery
 module Bignum_Exponentiation = Hacl.Bignum.Exponentiation
 module FFDHE = Hacl.FFDHE
 module RSAPSS = Hacl.RSAPSS
+module RSAPKCS1 = Hacl.RSAPKCS1
 module Frodo64 = Hacl.Frodo64
 module Frodo640 = Hacl.Frodo640
 module Frodo976 = Hacl.Frodo976
