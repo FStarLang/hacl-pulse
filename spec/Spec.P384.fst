@@ -346,3 +346,29 @@ let sign_sha384 (msg: Seq.seq S8.t { msg_ok msg }) (private_key nonce: Seq.lseq 
 let verify_sha384 (msg: Seq.seq S8.t { msg_ok msg }) (public_key: Seq.lseq S8.t 96)
                   (signature: Seq.lseq S8.t 96) : GTot bool
   = ecdsa_verify_msg_as_qelem (sha384_as_qelem msg) public_key signature
+
+(** SHA-256 with P-384 (RFC 5758; FIPS 186-4 §6.4): the 32-byte digest is
+    shorter than [n], so it is read big-endian whole, with no truncation,
+    and is already below [n]. *)
+let sha256_ok (msg: Seq.seq S8.t)
+  : Lemma (requires msg_ok msg)
+          (ensures Seq.length msg < Spec.SHA2.max_input #S32.t /\
+                   Spec.SHA2.hash_bytes Spec.SHA2.Constants.sha2_256 == 32)
+  = assert_norm (pow2 61 <= pow2 64);
+    assert_norm (Spec.SHA2.max_input #S32.t == pow2 61);
+    assert_norm (Spec.SHA2.hash_bytes Spec.SHA2.Constants.sha2_256 == 32)
+
+let sha256_as_qelem (msg: Seq.seq S8.t { msg_ok msg }) : GTot qelem =
+  sha256_ok msg;
+  let d = Spec.SHA2.hash Spec.SHA2.Constants.sha2_256 msg in
+  be_nat_bound d;
+  assert_norm (pow2 256 < order);
+  be_nat d
+
+let sign_sha256 (msg: Seq.seq S8.t { msg_ok msg }) (private_key nonce: Seq.lseq S8.t 48)
+  : GTot (option (Seq.lseq S8.t 96))
+  = ecdsa_sign_msg_as_qelem (sha256_as_qelem msg) private_key nonce
+
+let verify_sha256 (msg: Seq.seq S8.t { msg_ok msg }) (public_key: Seq.lseq S8.t 96)
+                  (signature: Seq.lseq S8.t 96) : GTot bool
+  = ecdsa_verify_msg_as_qelem (sha256_as_qelem msg) public_key signature
