@@ -28,7 +28,7 @@ intrinsics behind a narrow axiomatized interface and is chosen at run time.
 | hashes | MD5, SHA-1, SHA-224/256/384/512, SHA3-224/256/384/512, SHAKE128/256, BLAKE2s, BLAKE2b (one-shot and streaming) |
 | MACs and KDFs | HMAC (SHA-1, SHA-2), Poly1305, HKDF, HMAC-DRBG |
 | ciphers and AEAD | ChaCha20, Salsa20, AES-128/256-GCM, ChaCha20-Poly1305, NaCl `box` and `secretbox` |
-| elliptic curves | X25519, Ed25519, P-256 ECDH and ECDSA, secp256k1 ECDH and ECDSA |
+| elliptic curves | X25519, Ed25519, P-256 ECDH and ECDSA, P-384 ECDH and ECDSA (SHA-384), secp256k1 ECDH and ECDSA |
 | bignum | generic Montgomery arithmetic and modular exponentiation, RSA-PSS, FFDHE (RFC 7919 groups) |
 | post-quantum | ML-KEM (FIPS 203) and ML-DSA (FIPS 204), all three parameter sets each; FrodoKEM, all four parameter sets |
 | protocols | HPKE (RFC 9180), all four modes |

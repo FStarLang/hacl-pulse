@@ -1,7 +1,7 @@
 # Generators for the group-law proofs
 
 These scripts and computer-algebra inputs generated the machine-produced
-modules behind `Spec.{P256,K256,Ed25519}.Group.fst`. **Do not edit the
+modules behind `Spec.{P256,P384,K256,Ed25519}.Group.fst`. **Do not edit the
 generated `.fst` files by hand.** Change the generator instead and
 regenerate. Every script below reproduces its committed module
 byte-for-byte.
@@ -24,6 +24,10 @@ F* re-checks all of it with the verified polynomial normalizer in
 | `Spec.P256.GroupAssoc{1,2,3}` | `python3 p256/gen.py p256/assocN.py ../Spec.P256.GroupAssocN.fst` |
 | `Spec.K256.GroupChecks` | `python3 p256/gen.py k256/checks.py ../Spec.K256.GroupChecks.fst` |
 | `Spec.K256.GroupAssoc{1,2,3}` | `python3 p256/gen.py k256/assocN.py ../Spec.K256.GroupAssocN.fst` |
+| `Spec.P384.GroupSv`, `Spec.P384.GroupNR`, `p384/{checks,assoc1,2,3}.py` | `python3 p384/derive.py` (from the P-256 inputs, with `p384/nr.txt`) |
+| `Spec.P384.GroupChecks` | `python3 p256/gen.py p384/checks.py ../Spec.P384.GroupChecks.fst` |
+| `Spec.P384.GroupAssoc{1,2,3}` | `python3 p256/gen.py p384/assocN.py ../Spec.P384.GroupAssocN.fst` |
+| `Spec.P384.Primes` | `python3 p384/mkprimes.py` (from `p384/nodes.txt`) |
 | `Spec.Ed25519.GroupChecks` | `python3 ed25519/gen.py ed25519/checks.py ../Spec.Ed25519.GroupChecks.fst` |
 | `Spec.Ed25519.GroupAssoc{1,2}` | `python3 ed25519/gen.py ed25519/assocN.py ../Spec.Ed25519.GroupAssocN.fst` |
 | `Spec.Ed25519.Comb{B,T0..7,Table}`, `Hacl.Ed25519.CombData{,0..7}` | `python3 ed25519/comb.py ../..` (the fixed-base comb's tables) |
@@ -50,6 +54,10 @@ All other modules are written by hand:
   `ed25519/checks.py`.
 - `*-noroots.gp` (PARI/GP): shows that the relevant cubic has no root in
   𝔽ₚ, and computes the polynomial data in `NR.tmpl` / `k256/mknr.py`.
+  `gp -q cas/p384-noroots.gp > p384/nr.txt` writes the P-384 data.
+- The P-256 completeness cofactors keep `b` symbolic, so `p256/cof.txt`
+  also serves P-384, which shares `a = -3` and the formulas;
+  `p384/derive.py` only reduces them modulo the P-384 prime.
 - `*-assoc.sing`, `k256-formulas.py`, `p256/y3.py` (sympy): exploratory
   checks of the formulas and of associativity.
 
@@ -64,8 +72,16 @@ All other modules are written by hand:
 These nodes were transcribed into `Spec.Group.Primes.fst`, where
 `Spec.Group.Prime` checks them.
 
+`p384/pocklington.gp` does the same for the P-384 prime and group order,
+printing `p384/nodes.txt`; `p384/mkprimes.py` turns that into
+`Spec.P384.Primes.fst`.  PARI does not factor `n - 1` in reasonable time,
+so the script supplies its two large prime factors via `addprimes`; the
+90-bit one was found with GMP-ECM (`ecm -c 2000 1000000`), and PARI
+re-proves both before using them.
+
 ## Tools
 
 - `python3`; `sympy` is needed only for the exploratory scripts.
 - Singular.
 - PARI/GP.
+- GMP-ECM, only to rediscover the factor of the P-384 `n - 1` noted above.
