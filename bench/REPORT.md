@@ -9407,3 +9407,40 @@ precedes an addition needs; decompression of `A` and `R` is two
 square-root exponentiations (about 137k instructions); and a larger table
 for `G` (width 5 or more, a dedicated odd-multiple table) would cut the
 `S` additions roughly in half.
+
+## Part 91: Refresh on master `1109fa6`, and P-384
+
+All three harnesses were rerun on master after the RSASSA-PKCS1-v1_5,
+P-384, streaming Poly1305 and BLAKE2 parameter-block merges: `table.sh 2`
+under gcc and clang and `others.sh 3`.  The other-library run shared the
+machine with something else: at the default 2% canary tolerance only 17 of 72
+runs survived, so the README table uses 5% (51 of 72); every cell is still a
+minimum.
+
+P-384 is now in both harnesses: `bench.c` (hacl-pulse only, `BS_HAVE_P384`,
+since HACL\* has no P-384) and `others.c`, against OpenSSL and AWS-LC, with
+SHA-384 and 48-byte scalars.  Every OpenSSL and AWS-LC P-384 result is checked
+against hacl-pulse before it is timed: the ECDH secret byte for byte, and the
+signatures by cross-verification.
+
+| P-384 | gcc | clang | OpenSSL | AWS-LC | ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ECDH | 1.5 ms | 1.3 ms | 419 us | 152 us | 8.8x |
+| ECDSA sign | 1.5 ms | 1.4 ms | 250 us | 91 us | 15.0x |
+| ECDSA verify | 3.0 ms | 2.7 ms | 574 us | 208 us | 12.8x |
+
+That is by far the largest gap in the table.  The field multiplies through the
+generic `nn = 6` Montgomery layer.  The scalar multiplication is
+double-and-add over all 384 bits, with no window and no fixed-base table, and
+verification does two separate full multiplications.  On P-256 those three
+changes (a specialised field, a window and a comb, and Shamir's trick) were
+together worth about 5x.
+
+Elsewhere nothing moved by more than the noise.  Against the fastest other
+library the gaps are now P-256 (2.3x to 3.9x), RSA-PSS-2048 verify (3.0x),
+Ed25519 (about 2x), ML-DSA (about 1.8x to 2.1x, against AVX2 implementations),
+RSA-PSS sign and FFDHE (about 1.75x), ML-KEM (about 1.5x) and X25519 (1.43x).
+Against HACL\* the largest are X25519 (1.31x), MD5 (1.28x) and Ed25519
+verify (1.25x); `gapbest.py` also ranks secp256k1 verify (1.94x) and short
+AES-GCM messages (1.5x to 1.7x at 64 B) highest.
+

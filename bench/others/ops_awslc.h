@@ -164,6 +164,48 @@ static inline int bo_p256_verify(uint8_t *m, size_t n, uint8_t *sg) {
   return r == 1;
 }
 
+static EC_KEY *al_p384;
+static EC_POINT *al_p384_peer;
+#define BO_P384_ECDH
+#define BO_P384_SIGN
+#define BO_P384_VERIFY
+static inline void bo_p384_setup(uint8_t *sk, uint8_t *pk, uint8_t *peer) {
+  (void)pk;
+  al_p384 = EC_KEY_new_by_curve_name(NID_secp384r1);
+  const EC_GROUP *g = EC_KEY_get0_group(al_p384);
+  BIGNUM *d = BN_bin2bn(sk, 48, NULL);
+  EC_POINT *q = EC_POINT_new(g);
+  EC_POINT_mul(g, q, d, NULL, NULL, NULL);
+  if (!EC_KEY_set_private_key(al_p384, d) || !EC_KEY_set_public_key(al_p384, q)) al_die("p384 key");
+  uint8_t pt[97];
+  pt[0] = 4;
+  memcpy(pt + 1, peer, 96);
+  al_p384_peer = EC_POINT_new(g);
+  if (!EC_POINT_oct2point(g, al_p384_peer, pt, 97, NULL)) al_die("p384 point");
+}
+static inline int bo_p384_ecdh(uint8_t *ss) { return ECDH_compute_key(ss, 48, al_p384_peer, al_p384, NULL) == 48; }
+static inline int bo_p384_sign(uint8_t *sg, uint8_t *m, size_t n) {
+  uint8_t h[48];
+  SHA384(m, n, h);
+  ECDSA_SIG *s = ECDSA_do_sign(h, 48, al_p384);
+  if (!s) return 0;
+  const BIGNUM *r, *ss;
+  ECDSA_SIG_get0(s, &r, &ss);
+  BN_bn2bin_padded(sg, 48, r);
+  BN_bn2bin_padded(sg + 48, 48, ss);
+  ECDSA_SIG_free(s);
+  return 1;
+}
+static inline int bo_p384_verify(uint8_t *m, size_t n, uint8_t *sg) {
+  uint8_t h[48];
+  SHA384(m, n, h);
+  ECDSA_SIG *s = ECDSA_SIG_new();
+  ECDSA_SIG_set0(s, BN_bin2bn(sg, 48, NULL), BN_bin2bn(sg + 48, 48, NULL));
+  int r = ECDSA_do_verify(h, 48, s, al_p384);
+  ECDSA_SIG_free(s);
+  return r == 1;
+}
+
 static EC_KEY *al_k256;
 #define BO_K256_SIGN
 static inline void bo_k256_setup(uint8_t *sk) { al_k256 = al_ec_key(NID_secp256k1, sk); }

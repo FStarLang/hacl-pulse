@@ -235,6 +235,65 @@ static inline int bo_p256_verify(uint8_t *m, size_t n, uint8_t *sg) {
   return EVP_DigestVerify(os_p256_md, der, l, m, n) == 1;
 }
 
+static EVP_PKEY *os_ec_key384(uint8_t *sk, uint8_t *pk) {
+  uint8_t pt[97];
+  pt[0] = 4;
+  memcpy(pt + 1, pk, 96);
+  OSSL_PARAM_BLD *b = OSSL_PARAM_BLD_new();
+  OSSL_PARAM_BLD_push_utf8_string(b, OSSL_PKEY_PARAM_GROUP_NAME, "P-384", 0);
+  OSSL_PARAM_BLD_push_octet_string(b, OSSL_PKEY_PARAM_PUB_KEY, pt, 97);
+  BIGNUM *d = NULL;
+  if (sk) {
+    d = BN_bin2bn(sk, 48, NULL);
+    OSSL_PARAM_BLD_push_BN(b, OSSL_PKEY_PARAM_PRIV_KEY, d);
+  }
+  OSSL_PARAM *ps = OSSL_PARAM_BLD_to_param(b);
+  EVP_PKEY_CTX *c = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+  EVP_PKEY *k = NULL;
+  if (EVP_PKEY_fromdata_init(c) <= 0 ||
+      EVP_PKEY_fromdata(c, &k, sk ? EVP_PKEY_KEYPAIR : EVP_PKEY_PUBLIC_KEY, ps) <= 0) os_die("p384 key");
+  EVP_PKEY_CTX_free(c); OSSL_PARAM_free(ps); OSSL_PARAM_BLD_free(b); BN_free(d);
+  return k;
+}
+static EVP_PKEY *os_p384, *os_p384_pub;
+static EVP_PKEY_CTX *os_p384_dh;
+static EVP_MD_CTX *os_p384_md;
+#define BO_P384_ECDH
+#define BO_P384_SIGN
+#define BO_P384_VERIFY
+static inline void bo_p384_setup(uint8_t *sk, uint8_t *pk, uint8_t *peer) {
+  os_p384 = os_ec_key384(sk, pk);
+  os_p384_pub = os_ec_key384(NULL, pk);
+  EVP_PKEY *q = os_ec_key384(NULL, peer);
+  os_p384_dh = EVP_PKEY_CTX_new(os_p384, NULL);
+  if (EVP_PKEY_derive_init(os_p384_dh) <= 0 || EVP_PKEY_derive_set_peer(os_p384_dh, q) <= 0) os_die("p384 derive");
+  os_p384_md = EVP_MD_CTX_new();
+}
+static inline int bo_p384_ecdh(uint8_t *ss) { size_t l = 48; return EVP_PKEY_derive(os_p384_dh, ss, &l) == 1; }
+static inline int bo_p384_sign(uint8_t *sg, uint8_t *m, size_t n) {
+  uint8_t der[120];
+  size_t l = sizeof der;
+  EVP_DigestSignInit_ex(os_p384_md, NULL, "SHA384", NULL, NULL, os_p384, NULL);
+  if (EVP_DigestSign(os_p384_md, der, &l, m, n) != 1) return 0;
+  const uint8_t *p = der;
+  ECDSA_SIG *s = d2i_ECDSA_SIG(NULL, &p, (long)l);
+  if (!s) return 0;
+  BN_bn2binpad(ECDSA_SIG_get0_r(s), sg, 48);
+  BN_bn2binpad(ECDSA_SIG_get0_s(s), sg + 48, 48);
+  ECDSA_SIG_free(s);
+  return 1;
+}
+static inline int bo_p384_verify(uint8_t *m, size_t n, uint8_t *sg) {
+  uint8_t der[120];
+  ECDSA_SIG *s = ECDSA_SIG_new();
+  ECDSA_SIG_set0(s, BN_bin2bn(sg, 48, NULL), BN_bin2bn(sg + 48, 48, NULL));
+  uint8_t *p = der;
+  size_t l = (size_t)i2d_ECDSA_SIG(s, &p);
+  ECDSA_SIG_free(s);
+  EVP_DigestVerifyInit_ex(os_p384_md, NULL, "SHA384", NULL, NULL, os_p384_pub, NULL);
+  return EVP_DigestVerify(os_p384_md, der, l, m, n) == 1;
+}
+
 static EVP_PKEY_CTX *os_k256;
 #define BO_K256_SIGN
 static inline void bo_k256_setup(uint8_t *sk) {

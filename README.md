@@ -94,33 +94,36 @@ hacl-pulse is faster**.
 
 | primitive | size | hacl-pulse | HACL\* | ratio |
 | --- | ---: | ---: | ---: | ---: |
-| SHA-1 | 256 KiB | 184 us | 1.6 ms | 0.11x |
-| Salsa20 | 256 KiB | 105 us | 433 us | 0.24x |
-| NaCl secretbox | 256 KiB | 156 us | 616 us | 0.25x |
-| SHA-512 | 256 KiB | 519 us | 1.3 ms | 0.39x |
-| HMAC-SHA-512 | 256 KiB | 526 us | 1.3 ms | 0.39x |
-| RSA-PSS-2048 verify | -- | 56 us | 130 us | 0.43x |
-| P-256 ECDH | -- | 71 us | 151 us | 0.47x |
-| SHAKE128 | 256 KiB | 606 us | 1.3 ms | 0.48x |
-| SHA3-256 | 256 KiB | 751 us | 1.5 ms | 0.49x |
-| P-256 ECDSA sign | -- | 83 us | 164 us | 0.51x |
-| P-256 ECDSA verify | -- | 237 us | 414 us | 0.57x |
+| SHA-1 | 256 KiB | 163 us | 1.5 ms | 0.11x |
+| Salsa20 | 256 KiB | 95 us | 388 us | 0.25x |
+| NaCl secretbox | 256 KiB | 141 us | 548 us | 0.26x |
+| HMAC-SHA-512 | 256 KiB | 473 us | 1.2 ms | 0.39x |
+| SHA-512 | 256 KiB | 474 us | 1.2 ms | 0.40x |
+| RSA-PSS-2048 verify | -- | 50 us | 117 us | 0.43x |
+| P-256 ECDH | -- | 64 us | 136 us | 0.47x |
+| SHAKE128 | 256 KiB | 548 us | 1.1 ms | 0.49x |
+| SHA3-256 | 256 KiB | 686 us | 1.4 ms | 0.50x |
+| P-256 ECDSA sign | -- | 75 us | 149 us | 0.51x |
+| P-256 ECDSA verify | -- | 211 us | 371 us | 0.57x |
 | Ed25519 sign | -- | 32 us | 50 us | 0.65x |
-| BLAKE2b | 256 KiB | 369 us | 428 us | 0.86x |
-| BLAKE2s | 256 KiB | 577 us | 615 us | 0.94x |
-| FFDHE-2048 | -- | 4.1 ms | 4.2 ms | 0.96x |
-| RSA-PSS-2048 sign | -- | 4.1 ms | 4.3 ms | 0.96x |
-| Poly1305 | 256 KiB | 49 us | 51 us | 0.96x |
-| RSA-2048 modexp | -- | 4.1 ms | 4.2 ms | 0.98x |
-| ChaCha20-Poly1305 | 256 KiB | 152 us | 139 us | 1.10x |
-| secp256k1 ECDSA sign | -- | 69 us | 63 us | 1.11x |
-| AES-128-GCM | 256 KiB | 77 us | 67 us | 1.15x |
-| HMAC-SHA-256 | 256 KiB | 205 us | 174 us | 1.18x |
-| ChaCha20 | 256 KiB | 103 us | 88 us | 1.18x |
-| SHA-256 | 256 KiB | 204 us | 173 us | 1.18x |
-| Ed25519 verify | -- | 79 us | 64 us | 1.23x |
-| MD5 | 256 KiB | 557 us | 432 us | 1.29x |
-| X25519 | -- | 53 us | 40 us | 1.32x |
+| BLAKE2b | 256 KiB | 329 us | 389 us | 0.85x |
+| BLAKE2s | 256 KiB | 527 us | 557 us | 0.95x |
+| RSA-PSS-2048 sign | -- | 3.7 ms | 3.9 ms | 0.96x |
+| FFDHE-2048 | -- | 3.7 ms | 3.8 ms | 0.96x |
+| Poly1305 | 256 KiB | 44 us | 45 us | 0.96x |
+| RSA-2048 modexp | -- | 3.7 ms | 3.8 ms | 0.98x |
+| AES-128-GCM | 256 KiB | 66 us | 61 us | 1.08x |
+| ChaCha20-Poly1305 | 256 KiB | 136 us | 125 us | 1.09x |
+| secp256k1 ECDSA sign | -- | 61 us | 56 us | 1.09x |
+| HMAC-SHA-256 | 256 KiB | 182 us | 156 us | 1.16x |
+| SHA-256 | 256 KiB | 185 us | 157 us | 1.17x |
+| ChaCha20 | 256 KiB | 94 us | 79 us | 1.19x |
+| Ed25519 verify | -- | 79 us | 63 us | 1.25x |
+| MD5 | 256 KiB | 500 us | 392 us | 1.28x |
+| X25519 | -- | 48 us | 37 us | 1.31x |
+
+HACL\* has no P-384, so P-384 appears only in the comparison with other
+libraries below.
 
 ### ML-KEM and ML-DSA
 
@@ -129,15 +132,15 @@ HACL\* has neither, so these numbers are absolute (gcc 15.2.0, then clang
 
 | operation | ML-KEM-512 | ML-KEM-768 | ML-KEM-1024 |
 | --- | ---: | ---: | ---: |
-| keypair | 15 us / 12 us | 22 us / 19 us | 33 us / 27 us |
-| encapsulate | 17 us / 14 us | 26 us / 22 us | 36 us / 30 us |
-| decapsulate | 21 us / 17 us | 31 us / 26 us | 42 us / 36 us |
+| keypair | 13 us / 12 us | 20 us / 19 us | 29 us / 27 us |
+| encapsulate | 15 us / 14 us | 24 us / 22 us | 33 us / 29 us |
+| decapsulate | 19 us / 17 us | 28 us / 26 us | 38 us / 36 us |
 
 | operation | ML-DSA-44 | ML-DSA-65 | ML-DSA-87 |
 | --- | ---: | ---: | ---: |
-| keypair | 54 us / 41 us | 92 us / 70 us | 145 us / 107 us |
-| sign | 186 us / 132 us | 268 us / 192 us | 355 us / 244 us |
-| verify | 57 us / 43 us | 92 us / 68 us | 145 us / 107 us |
+| keypair | 48 us / 39 us | 83 us / 69 us | 128 us / 104 us |
+| sign | 170 us / 129 us | 241 us / 189 us | 319 us / 242 us |
+| verify | 50 us / 41 us | 83 us / 68 us | 129 us / 105 us |
 
 Against the ML-DSA implementations people deploy (the pq-crystals reference
 and AVX2 builds, OpenSSL 3.5, mldsa-native, AWS-LC and Cryspen's libcrux),
@@ -147,15 +150,15 @@ cross-verified instead):
 
 | operation | hacl-pulse (gcc) | hacl-pulse (clang) | pq-crystals ref | OpenSSL | pq-crystals avx2 | mldsa-native | AWS-LC | libcrux | hacl-pulse ÷ fastest other |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ML-DSA-44 keygen | 48 us | 40 us | 80 us | 108 us | 23 us | **21 us** | 31 us | 23 us | 1.87x |
-| ML-DSA-44 sign | 173 us | 133 us | 387 us | 673 us | **69 us** | 71 us | 93 us | 87 us | 1.92x |
-| ML-DSA-44 verify | 51 us | 43 us | 86 us | 121 us | 25 us | **22 us** | 30 us | 26 us | 1.91x |
-| ML-DSA-65 keygen | 83 us | 70 us | 145 us | 188 us | 40 us | **37 us** | 53 us | 41 us | 1.90x |
-| ML-DSA-65 sign | 275 us | 215 us | 617 us | 1,053 us | **106 us** | 110 us | 160 us | 134 us | 2.03x |
-| ML-DSA-65 verify | 84 us | 67 us | 139 us | 188 us | 40 us | **38 us** | 49 us | 41 us | 1.80x |
-| ML-DSA-87 keygen | 132 us | 105 us | 213 us | 267 us | 63 us | **57 us** | 86 us | 63 us | 1.83x |
-| ML-DSA-87 sign | 353 us | 272 us | 784 us | 1,303 us | 135 us | **131 us** | 184 us | 178 us | 2.07x |
-| ML-DSA-87 verify | 128 us | 106 us | 228 us | 292 us | 64 us | **57 us** | 81 us | 65 us | 1.86x |
+| ML-DSA-44 keygen | 49 us | 40 us | 79 us | 106 us | 23 us | **22 us** | 31 us | 23 us | 1.85x |
+| ML-DSA-44 sign | 171 us | 134 us | 390 us | 665 us | **68 us** | 70 us | 93 us | 86 us | 1.98x |
+| ML-DSA-44 verify | 50 us | 43 us | 86 us | 121 us | 24 us | **22 us** | 30 us | 25 us | 1.91x |
+| ML-DSA-65 keygen | 83 us | 69 us | 142 us | 188 us | 40 us | **37 us** | 53 us | 40 us | 1.87x |
+| ML-DSA-65 sign | 271 us | 214 us | 609 us | 1,043 us | **106 us** | 109 us | 137 us | 131 us | 2.02x |
+| ML-DSA-65 verify | 82 us | 68 us | 139 us | 189 us | 40 us | **38 us** | 51 us | 40 us | 1.81x |
+| ML-DSA-87 keygen | 127 us | 107 us | 215 us | 267 us | 63 us | **58 us** | 85 us | 62 us | 1.84x |
+| ML-DSA-87 sign | 350 us | 271 us | 775 us | 1,296 us | 134 us | **132 us** | 180 us | 176 us | 2.05x |
+| ML-DSA-87 verify | 127 us | 105 us | 224 us | 295 us | 64 us | **57 us** | 81 us | 64 us | 1.84x |
 
 ### Against other libraries
 
@@ -166,39 +169,42 @@ column is the better hacl-pulse build divided by the fastest other library:
 
 | primitive | size | hacl-pulse (gcc) | hacl-pulse (clang) | OpenSSL | AWS-LC | libsodium | libjade | Firedancer | dalek | hacl-pulse ÷ fastest other |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| secp256k1 ECDSA sign | -- | **63 us** | 83 us | 410 us | 292 us | -- | -- | -- | -- | 0.21x |
-| BLAKE2s | 256 KiB | 516 us | **496 us** | 540 us | -- | -- | -- | -- | -- | 0.92x |
-| Poly1305 | 256 KiB | 44 us | **36 us** | 38 us | 76 us | 72 us | 37 us | -- | -- | 0.97x |
-| Salsa20 | 256 KiB | 95 us | 95 us | -- | -- | 93 us | **90 us** | -- | -- | 1.05x |
-| NaCl secretbox | 256 KiB | 143 us | 136 us | -- | -- | 167 us | **129 us** | -- | -- | 1.06x |
-| BLAKE2b | 256 KiB | 333 us | 299 us | 331 us | -- | **273 us** | -- | -- | -- | 1.10x |
-| SHA-256 | 256 KiB | 185 us | 173 us | 160 us | 158 us | 797 us | 996 us | **156 us** | -- | 1.11x |
-| HMAC-SHA-256 | 256 KiB | 184 us | 175 us | 158 us | 159 us | 796 us | -- | **156 us** | -- | 1.13x |
-| SHA-1 | 256 KiB | 165 us | 169 us | 149 us | **146 us** | -- | -- | 808 us | -- | 1.13x |
-| SHA3-256 | 256 KiB | 680 us | 672 us | **576 us** | 581 us | -- | 714 us | -- | -- | 1.17x |
-| AES-256-GCM | 256 KiB | 79 us | 74 us | 63 us | **63 us** | 73 us | -- | 63 us | -- | 1.18x |
-| SHAKE128 | 256 KiB | 546 us | 560 us | 475 us | **463 us** | -- | 580 us | -- | -- | 1.18x |
-| AES-128-GCM | 256 KiB | 70 us | 67 us | 58 us | 59 us | -- | -- | **56 us** | -- | 1.19x |
-| ChaCha20 | 256 KiB | 93 us | 91 us | **74 us** | 75 us | 118 us | 77 us | -- | -- | 1.22x |
-| MD5 | 256 KiB | 503 us | 432 us | **351 us** | 353 us | -- | -- | -- | -- | 1.23x |
-| ChaCha20-Poly1305 | 256 KiB | 136 us | 133 us | 113 us | **104 us** | 193 us | -- | -- | -- | 1.28x |
-| ML-DSA-65 keygen | -- | 83 us | 70 us | 188 us | **53 us** | -- | -- | -- | -- | 1.32x |
-| ML-DSA-65 sign | -- | 275 us | 215 us | 1.1 ms | **160 us** | -- | -- | -- | -- | 1.34x |
-| HMAC-SHA-512 | 256 KiB | 481 us | 430 us | 330 us | 464 us | 498 us | -- | **321 us** | -- | 1.34x |
-| SHA-512 | 256 KiB | 472 us | 432 us | 330 us | 467 us | 498 us | 636 us | **321 us** | -- | 1.35x |
-| ML-DSA-65 verify | -- | 84 us | 67 us | 188 us | **49 us** | -- | -- | -- | -- | 1.36x |
-| X25519 | -- | 48 us | 36 us | 35 us | 27 us | 31 us | 29 us | **26 us** | 56 us | 1.38x |
-| ML-KEM-768 keygen | -- | 20 us | 19 us | 48 us | **13 us** | -- | -- | -- | -- | 1.44x |
-| ML-KEM-768 decaps | -- | 27 us | 26 us | 51 us | **17 us** | -- | -- | -- | -- | 1.52x |
-| ML-KEM-768 encaps | -- | 23 us | 22 us | 34 us | **14 us** | -- | -- | -- | -- | 1.53x |
-| FFDHE-2048 | -- | 3.7 ms | 4.5 ms | **2.2 ms** | 4.0 ms | -- | -- | -- | -- | 1.68x |
-| RSA-PSS-2048 sign | -- | 3.7 ms | 4.5 ms | 2.2 ms | **2.1 ms** | -- | -- | -- | -- | 1.71x |
-| Ed25519 sign | -- | 17 us | 20 us | 41 us | 8.9 us | 16 us | -- | **8.7 us** | 18 us | 1.92x |
-| Ed25519 verify | -- | 77 us | 89 us | 113 us | 39 us | 51 us | -- | 44 us | **37 us** | 2.08x |
-| P-256 ECDH | -- | 149 us | 111 us | 50 us | **48 us** | -- | -- | -- | -- | 2.31x |
-| RSA-PSS-2048 verify | -- | 51 us | 59 us | 22 us | **17 us** | -- | -- | -- | -- | 2.99x |
-| P-256 ECDSA verify | -- | 211 us | 162 us | 67 us | **54 us** | -- | -- | 62 us | -- | 3.00x |
-| P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.85x |
+| secp256k1 ECDSA sign | -- | **61 us** | 82 us | 426 us | 306 us | -- | -- | -- | -- | 0.20x |
+| BLAKE2s | 256 KiB | 525 us | **500 us** | 535 us | -- | -- | -- | -- | -- | 0.93x |
+| Poly1305 | 256 KiB | 44 us | **36 us** | 38 us | 76 us | 73 us | 37 us | -- | -- | 0.97x |
+| Salsa20 | 256 KiB | 95 us | 96 us | -- | -- | 93 us | **90 us** | -- | -- | 1.05x |
+| NaCl secretbox | 256 KiB | 142 us | 134 us | -- | -- | 166 us | **127 us** | -- | -- | 1.05x |
+| AES-128-GCM | 256 KiB | 66 us | 59 us | 59 us | 58 us | -- | -- | **55 us** | -- | 1.08x |
+| SHA-256 | 256 KiB | 182 us | 171 us | 159 us | 159 us | 802 us | 992 us | **157 us** | -- | 1.09x |
+| BLAKE2b | 256 KiB | 331 us | 299 us | 333 us | -- | **273 us** | -- | -- | -- | 1.09x |
+| SHA-1 | 256 KiB | 161 us | 160 us | 148 us | **146 us** | -- | -- | 799 us | -- | 1.10x |
+| HMAC-SHA-256 | 256 KiB | 185 us | 174 us | 156 us | 157 us | 788 us | -- | **156 us** | -- | 1.12x |
+| AES-256-GCM | 256 KiB | 75 us | 70 us | 63 us | 62 us | 73 us | -- | **62 us** | -- | 1.13x |
+| SHA3-256 | 256 KiB | 680 us | 661 us | 587 us | **575 us** | -- | 707 us | -- | -- | 1.15x |
+| SHAKE128 | 256 KiB | 541 us | 546 us | 481 us | **459 us** | -- | 572 us | -- | -- | 1.18x |
+| ChaCha20 | 256 KiB | 94 us | 90 us | 75 us | **75 us** | 120 us | 76 us | -- | -- | 1.20x |
+| MD5 | 256 KiB | 503 us | 430 us | 354 us | **354 us** | -- | -- | -- | -- | 1.22x |
+| ChaCha20-Poly1305 | 256 KiB | 138 us | 127 us | 113 us | **102 us** | 193 us | -- | -- | -- | 1.24x |
+| ML-DSA-65 keygen | -- | 83 us | 69 us | 188 us | **53 us** | -- | -- | -- | -- | 1.30x |
+| ML-DSA-65 verify | -- | 82 us | 68 us | 189 us | **51 us** | -- | -- | -- | -- | 1.34x |
+| HMAC-SHA-512 | 256 KiB | 471 us | 437 us | 325 us | 459 us | 491 us | -- | **321 us** | -- | 1.36x |
+| SHA-512 | 256 KiB | 473 us | 442 us | 325 us | 459 us | 504 us | 635 us | **315 us** | -- | 1.40x |
+| X25519 | -- | 47 us | 37 us | 35 us | **26 us** | 31 us | 29 us | 26 us | 55 us | 1.43x |
+| ML-KEM-768 keygen | -- | 20 us | 20 us | 49 us | **13 us** | -- | -- | -- | -- | 1.52x |
+| ML-KEM-768 decaps | -- | 28 us | 26 us | 50 us | **17 us** | -- | -- | -- | -- | 1.53x |
+| ML-DSA-65 sign | -- | 271 us | 214 us | 1.0 ms | **137 us** | -- | -- | -- | -- | 1.56x |
+| ML-KEM-768 encaps | -- | 24 us | 22 us | 34 us | **14 us** | -- | -- | -- | -- | 1.59x |
+| RSA-PSS-2048 sign | -- | 3.6 ms | 4.4 ms | 2.1 ms | **2.1 ms** | -- | -- | -- | -- | 1.73x |
+| FFDHE-2048 | -- | 3.6 ms | 4.5 ms | **2.1 ms** | 4.0 ms | -- | -- | -- | -- | 1.75x |
+| Ed25519 sign | -- | 17 us | 21 us | 40 us | 8.8 us | 16 us | -- | **8.6 us** | 18 us | 1.95x |
+| Ed25519 verify | -- | 79 us | 89 us | 114 us | 39 us | 50 us | -- | 44 us | **38 us** | 2.11x |
+| P-256 ECDH | -- | 148 us | 108 us | 49 us | **47 us** | -- | -- | -- | -- | 2.27x |
+| RSA-PSS-2048 verify | -- | 50 us | 58 us | 22 us | **17 us** | -- | -- | -- | -- | 2.95x |
+| P-256 ECDSA verify | -- | 209 us | 163 us | 67 us | **52 us** | -- | -- | 62 us | -- | 3.12x |
+| P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.87x |
+| P-384 ECDH | -- | 1.5 ms | 1.3 ms | 419 us | **152 us** | -- | -- | -- | -- | 8.82x |
+| P-384 ECDSA verify | -- | 3.0 ms | 2.7 ms | 574 us | **208 us** | -- | -- | -- | -- | 12.81x |
+| P-384 ECDSA sign | -- | 1.5 ms | 1.4 ms | 250 us | **91 us** | -- | -- | -- | -- | 15.04x |
 
 A dash means the library does not offer the operation through the API used.
 OpenSSL's and AWS-LC's ML-KEM and ECDSA draw from their DRBGs. The

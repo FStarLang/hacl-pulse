@@ -84,6 +84,27 @@ static inline int bo_p256_verify(uint8_t *m, size_t n, uint8_t *sg) {
   return Hacl_P256_ecdsa_verify_sha256(m, n, pl_p256_pk, sg, sg + 32);
 }
 
+static uint8_t pl_p384_sk[48], pl_p384_pk[96], pl_p384_peer[96], pl_p384_nonce[48];
+#define BO_P384_ECDH
+#define BO_P384_SIGN
+#define BO_P384_VERIFY
+static inline void bo_p384_setup(uint8_t *sk, uint8_t *pk, uint8_t *peer) {
+  memcpy(pl_p384_sk, sk, 48); memcpy(pl_p384_pk, pk, 96); memcpy(pl_p384_peer, peer, 96);
+  memset(pl_p384_nonce, 0x5a, 48);
+}
+static inline int bo_p384_ecdh(uint8_t *ss) {
+  uint8_t pt[96];
+  int r = Hacl_P384_Ecdh_dh_responder(pt, pl_p384_peer, pl_p384_sk);
+  memcpy(ss, pt, 48);
+  return r;
+}
+static inline int bo_p384_sign(uint8_t *sg, uint8_t *m, size_t n) {
+  return Hacl_P384_ecdsa_sign_sha384(sg, m, n, pl_p384_sk, pl_p384_nonce);
+}
+static inline int bo_p384_verify(uint8_t *m, size_t n, uint8_t *sg) {
+  return Hacl_P384_ecdsa_verify_sha384(m, n, pl_p384_pk, sg);
+}
+
 static uint8_t pl_k256_sk[32], pl_k256_nonce[32];
 #define BO_K256_SIGN
 static inline void bo_k256_setup(uint8_t *sk) { memcpy(pl_k256_sk, sk, 32); memset(pl_k256_nonce, 0x5a, 32); }
