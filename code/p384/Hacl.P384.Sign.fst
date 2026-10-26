@@ -104,6 +104,7 @@ ensures exists* (wo: Seq.seq S8.t).
   (* r = x([k] G) mod n *)
   point_mul_g rx ry rz k;
   with wx wy wz. assert (A.pts_to rx wx ** A.pts_to ry wy ** A.pts_to rz wz);
+  peq_out (pt wx wy wz) (P.point_mul_g (num vk));
   to_aff ax ay rx ry rz;
   with vax. assert (A.pts_to ax vax);
   assert (pure (num vax == fst (P.to_aff_point (P.point_mul_g (num vk)))));

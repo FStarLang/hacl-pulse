@@ -1357,6 +1357,9 @@ reaches the generic `Spec.P384` operations through `num_fv` (six words'
 `ev6` equals the bignum `num` of their `vals`) and three lemmas over plain
 `nat`s (`add_fv`, `sub_fv`, `mul_fv`).  Every P-384 operation got 1.9x
 faster under gcc and 2.2-2.3x under clang (`bench/REPORT.md` Part 92).
+Its scalar multiplications then moved to `Hacl.P384.PointWin`, the P-256
+four-bit window on six limbs, with `PointMul` stated up to `peq` and the
+callers bridging through `peq_out`/`add_out` (another 1.45x, Part 93).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

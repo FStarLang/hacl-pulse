@@ -50,6 +50,7 @@ module U64 = FStar.UInt64
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P384
+module GR = Spec.P384.Group
 module MA = Spec.ModArith
 module Math = FStar.Math.Lemmas
 module Mem = Hacl.Mem
@@ -68,6 +69,43 @@ let lp_ok (vp: Seq.seq S8.t) : GTot bool =
 
 let lp (vp: Seq.seq S8.t) : GTot P.proj_point =
   if lp_ok vp then Some?.v (P.load_point vp) else P.point_at_infinity
+
+(** {2 Leaving projective coordinates}
+
+    {!Hacl.P384.PointMul} returns a triple equivalent to the specification's,
+    not equal to it.  These are the places that difference is discharged:
+    equivalent points on the curve are at infinity together and have the
+    same affine coordinates, hence the same encoding. *)
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 50"
+let lp_on_curve (vp: Seq.seq S8.t)
+  : Lemma (requires lp_ok vp) (ensures GR.on_curve (lp vp))
+  = let xs = Seq.slice vp 0 48 in
+    let ys = Seq.slice vp 48 96 in
+    match P.load_felem xs, P.load_felem ys with
+    | Some x, Some y -> GR.on_curve_affine x y
+    | _ -> ()
+#pop-options
+
+let peq_out (p q: P.proj_point)
+  : Lemma (requires GR.on_curve p /\ GR.on_curve q /\ GR.peq p q)
+          (ensures P.is_point_at_infinity p == P.is_point_at_infinity q /\
+                   P.to_aff_point p == P.to_aff_point q /\
+                   P.store_point p == P.store_point q)
+  = GR.peq_is_point_at_infinity p q;
+    GR.peq_to_aff_point p q
+
+let add_out (a b c ga gb: P.proj_point)
+  : Lemma (requires GR.on_curve a /\ GR.on_curve b /\ GR.on_curve ga /\
+                    GR.on_curve gb /\ GR.peq a ga /\ GR.peq b gb /\
+                    c == P.point_add a b)
+          (ensures P.is_point_at_infinity c ==
+                     P.is_point_at_infinity (P.point_add ga gb) /\
+                   P.to_aff_point c == P.to_aff_point (P.point_add ga gb))
+  = GR.point_add_on_curve a b;
+    GR.point_add_on_curve ga gb;
+    GR.point_add_congr a ga b gb;
+    peq_out c (P.point_add ga gb)
 
 let core_spec (m r s: P.qelem) (q: P.proj_point) : GTot bool =
   let sinv = P.qinv s in
@@ -385,7 +423,7 @@ requires A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   A.pts_to qx #pq vqx ** A.pts_to qy #pq vqy ** A.pts_to qz #pq vqz **
   pure (Seq.length vm == 6 /\ Seq.length vr == 6 /\ Seq.length vs == 6 /\
         num vm < P.order /\ num vr < P.order /\ num vs < P.order /\
-        pt_ok vqx vqy vqz)
+        pt_ok vqx vqy vqz /\ GR.on_curve (pt vqx vqy vqz))
 returns b: bool
 ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   A.pts_to qx #pq vqx ** A.pts_to qy #pq vqy ** A.pts_to qz #pq vqz **
@@ -427,10 +465,15 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   (* [u1] G + [u2] Q *)
   point_mul_g ax ay az u1;
   point_mul bx by_ bz qx qy qz u2;
+  with wax way waz. assert (A.pts_to ax wax ** A.pts_to ay way ** A.pts_to az waz);
+  with wbx wby wbz. assert (A.pts_to bx wbx ** A.pts_to by_ wby ** A.pts_to bz wbz);
   point_add cx cy cz ax ay az bx by_ bz;
   with wcx wcy wcz. assert (A.pts_to cx wcx ** A.pts_to cy wcy ** A.pts_to cz wcz);
-  assert (pure (pt wcx wcy wcz ==
-                P.point_mul_double_g (num vu1) (num vu2) (pt vqx vqy vqz)));
+  add_out (pt wax way waz) (pt wbx wby wbz) (pt wcx wcy wcz)
+          (P.point_mul_g (num vu1)) (P.point_mul (num vu2) (pt vqx vqy vqz));
+  assert (pure (P.point_mul_double_g (num vu1) (num vu2) (pt vqx vqy vqz) ==
+                P.point_add (P.point_mul_g (num vu1))
+                            (P.point_mul (num vu2) (pt vqx vqy vqz))));
 
   let inf = fis_zero cz;
   let res = if inf { false } else { check_x cx cz r };
@@ -477,7 +520,10 @@ ensures A.pts_to m #pm vm ** A.pts_to pk #pp vp ** A.pts_to sg #ps vs **
   let okr = scalar_ok r;
   let oks = scalar_ok s;
   let okp = load_point qx qy qz pk;
-  let res = if (okr && oks && okp) { verify_core m r s qx qy qz } else { false };
+  let res = if (okr && oks && okp) {
+    lp_on_curve vp;
+    verify_core m r s qx qy qz
+  } else { false };
   Mem.wipe qz 6sz;
   Mem.wipe qy 6sz;
   Mem.wipe qx 6sz;

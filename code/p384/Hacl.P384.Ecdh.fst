@@ -75,6 +75,9 @@ ensures exists* (wo: Seq.seq S8.t).
   let ok = load_scalar k sk;
   if ok {
     point_mul_g px py pz k;
+    with wx wy wz. assert (A.pts_to px wx ** A.pts_to py wy ** A.pts_to pz wz);
+    with vk. assert (A.pts_to k vk);
+    peq_out (pt wx wy wz) (P.point_mul_g (num vk));
     store_point out px py pz;
     Mem.wipe pz 6sz;
     Mem.wipe py 6sz;
@@ -115,7 +118,12 @@ ensures exists* (wo: Seq.seq S8.t).
   let okq = load_point qx qy qz pk;
   let okk = load_scalar k sk;
   if (okq && okk) {
+    lp_on_curve vp;
     point_mul px py pz qx qy qz k;
+    with wx wy wz. assert (A.pts_to px wx ** A.pts_to py wy ** A.pts_to pz wz);
+    with vk. assert (A.pts_to k vk);
+    with q0 q1 q2. assert (A.pts_to qx q0 ** A.pts_to qy q1 ** A.pts_to qz q2);
+    peq_out (pt wx wy wz) (P.point_mul (num vk) (pt q0 q1 q2));
     let inf = fis_zero pz;
     if inf {
       Mem.wipe pz 6sz;

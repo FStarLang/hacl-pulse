@@ -9474,3 +9474,36 @@ What remains against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
 dedicated squaring, a windowed variable-base multiplication (the ladder
 does one addition per bit), a precomputed table for `G`, a double-scalar
 verify, and faster inversions.
+
+## Part 93: P-384's scalar multiplications as a four-bit window
+
+`Hacl.P384.PointWin` is `Hacl.P256.PointWin` on six limbs: sixteen
+multiples of the base built at run time, then ninety-six rungs of four
+doublings and one addition, the entry read by masking all sixteen
+(`table_select`), so the running time does not depend on the scalar.  It
+replaces the bit-at-a-time ladder (384 doublings and 384 additions) for
+both `point_mul` and `point_mul_g`.  The result is equivalent to the
+specification's triple rather than equal to it, so `PointMul`'s contracts
+are now stated up to `peq`, as P-256's are, and ECDH, signing and
+verification discharge that with `peq_out`/`add_out` in
+`Hacl.P384.Verify` (equivalent points on the curve are at infinity
+together and have the same affine coordinates).  The specification side,
+`Spec.P384.Group` and `Spec.P384.Smul`, was already there.
+
+Before (Part 92's field) and after, the same timing loop:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 702 us | 483 us | 596 us | 409 us |
+| ECDH | 707 us | 490 us | 604 us | 416 us |
+| sign | 767 us | 536 us | 660 us | 476 us |
+| verify | 1466 us | 1006 us | 1223 us | 847 us |
+
+1.45x under both compilers; against the generic-bignum version of Part 91
+that is 2.8x (gcc) and 3.4x (clang).  Tests, `make lint`, `make stack` and
+`make cross` pass.
+
+What remains against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
+precomputed table for `G` (keygen and signing still build sixteen
+multiples of `G` per call), a variable-time double-scalar verify, and a
+dedicated squaring.
