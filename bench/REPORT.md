@@ -9640,3 +9640,46 @@ under one `tab_ok` predicate.  The module checks in about three minutes.
 
 Next: the field multiply itself, which ECDH and verification spend most
 of their time in.
+
+## Part 97: P-384's reduction without multiplications
+
+`Hacl.P384.Field64.step` computed `u * p` as seven words from four
+`mul_wide`s (`prow`) and added them to the accumulator.  Because
+`2^384 - p = 2^128 + 2^96 - 2^32 + 1`, `u * p = 2^384 u - u (2^128 + 2^96 -
+2^32 + 1)`, and the subtrahend is three words plus a low word built from `u`,
+`u << 32` and `u >> 32` with one borrow chain.  Its low word equals the
+accumulator's (that is what `u` was chosen for), so the step adds `u` to
+word 6, subtracts three words from words 1..3 and drops word 0.  A field
+multiply goes from 60 `mul_wide`s to 36 and loses the `q` scratch array.
+
+Before the change, a latency-bound chain of field multiplies took 135 ticks
+per multiply under gcc and 103 under clang; with the C prototype it took
+120 and 92.  The prototype agreed with the old code on two million random
+and edge-case inputs.
+
+Instructions (callgrind, gcc):
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 1.96M | 1.70M |
+| ECDH | 2.72M | 2.32M |
+| sign | 2.09M | 1.84M |
+| verify | 6.68M | 5.82M |
+
+Time:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| ECDH | 495 us | 466 us | 403 us | 345 us |
+| sign | 204 us | 198 us | 178 us | 154 us |
+| verify | 688 us | 644 us | 564 us | 488 us |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+Proof: `kval` states the three-word subtrahend linearly, and `r0_eq` shows
+that its low word is the accumulator's.  `mu_ok`'s precondition proved in
+`step` took Z3 353 seconds.  Moved into a helper `mu` whose result type
+carries the cancellation fact, the module checks in 46 seconds.
+
+The remaining gcc/clang gap is mostly spills in gcc's code.  Next: fewer
+`fcopy`s in the point formulas, and possibly a dedicated squaring.

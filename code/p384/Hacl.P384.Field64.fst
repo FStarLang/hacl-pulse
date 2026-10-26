@@ -89,12 +89,6 @@ let mu_ok (s0 u: nat)
     Math.lemma_mod_plus_distr_r s0 (s0 * w - s0) w;
     Math.cancel_mul_mod s0 w
 
-let zero_low (t c x: nat)
-  : Lemma (requires t < w /\ t + w * c == x /\ x % pow2 64 == 0) (ensures t == 0)
-  = assert_norm (pow2 64 == w);
-    Math.lemma_mod_plus t c w;
-    Math.small_mod t w
-
 let step_mod (a' a xb u: nat)
   : Lemma (requires w * a' == a + xb + u * pp)
           (ensures (w * a') % pp == (a + xb) % pp)
@@ -191,30 +185,52 @@ let row7 (l0 l1 l2 l3 l4 l5 h0 h1 h2 h3 h4 h5 p0 p1 p2 p3 p4 p5: nat)
           (ensures ev7 l0 l1 l2 l3 l4 l5 0 + ev7 0 h0 h1 h2 h3 h4 h5 == ev6 p0 p1 p2 p3 p4 p5)
   = ()
 
-(** The words of [p] are [2^32 - 1], [2^64 - 2^32], [2^64 - 2] and three
-    times [2^64 - 1]. *)
-let prow_val (u q0 q1 q2 q3 g0 g1 g2 g3: nat)
-  : Lemma (requires q0 + w * g0 == u * 4294967295 /\
-                    q1 + w * g1 == u * 18446744069414584320 /\
-                    q2 + w * g2 == u * 18446744073709551614 /\
-                    q3 + w * g3 == u * 18446744073709551615)
-          (ensures ev7 q0 q1 q2 q3 q3 q3 0 + ev7 0 g0 g1 g2 g3 g3 g3 == u * pp)
+(** [u 2^32] split by the two shifts. *)
+let shift_val (u lo hi: nat)
+  : Lemma (requires u < w /\ lo == (u * pow2 32) % pow2 64 /\ hi == u / pow2 32)
+          (ensures u * 4294967296 == lo + w * hi /\ hi < 4294967296)
+  = assert_norm (pow2 32 == 4294967296);
+    assert_norm (pow2 64 == w);
+    Math.lemma_div_mod u 4294967296;
+    Math.lemma_mod_plus ((u % 4294967296) * 4294967296) hi w;
+    Math.small_mod ((u % 4294967296) * 4294967296) w
+
+(** [p = 2^384 - 2^128 - 2^96 + 2^32 - 1], so [2^384 u - u p] is
+    [u (2^128 + 2^96 - 2^32 + 1)]: three words and a bit, from [u], its
+    shifts and a borrow chain. *)
+let kval (u lo hi r0 e1 e2 k2 k3 bb0 bb1 bb2: nat)
+  : Lemma (requires u < w /\ lo < w /\ hi < 4294967296 /\ r0 < w /\ e1 < w /\ e2 < w /\
+                    k2 < w /\ bb0 <= 1 /\ bb1 <= 1 /\ bb2 <= 1 /\
+                    u * 4294967296 == lo + w * hi /\
+                    r0 - w * bb0 == u - lo /\ e1 - w * bb1 == lo - hi - bb0 /\
+                    e2 - w * bb2 == hi - 0 - bb1 /\ k2 + w * k3 == e2 + u + 0)
+          (ensures bb2 == 0 /\ r0 + w * ev7 e1 k2 k3 0 0 0 0 == u * w6 - u * pp)
   = ()
 
-let step_val (a xb s q u t1 t2 t3 t4 t5 t6 t7 s7 c7 c8: nat)
-  : Lemma (requires s + w7 * s7 == a + xb /\ q == u * pp /\
-                    ev7 0 t1 t2 t3 t4 t5 t6 + w7 * c7 == s + q /\
-                    t7 + w * c8 == s7 + c7 /\
+(** The low word of [2^384 u - u p] is [s0]: the reduction clears it. *)
+let r0_eq (s0 r0 m n: int)
+  : Lemma (requires 0 <= s0 /\ s0 < w /\ 0 <= r0 /\ r0 < w /\ r0 + m == w * n /\
+                    (s0 + m % pow2 64) % pow2 64 == 0)
+          (ensures r0 == s0)
+  = assert_norm (pow2 64 == w);
+    Math.lemma_mod_plus_distr_r s0 m w;
+    Math.lemma_mod_plus (s0 - r0) n w;
+    if s0 >= r0 then Math.small_mod (s0 - r0) w
+    else (Math.lemma_mod_plus (s0 - r0) 1 w; Math.small_mod (s0 - r0 + w) w)
+
+(** [(s + u p) / 2^64] where [s = a + x b]: [u] goes in at the top, the
+    three words [e1 k2 k3] (with [s0] below them) come off. *)
+let step_val (a xb s0 s1 s2 s3 s4 s5 s6 s7 u e1 k2 k3 g v6 s7' t1 t2 t3 t4 t5 t6 t7 d8: nat)
+  : Lemma (requires ev7 s0 s1 s2 s3 s4 s5 s6 + w7 * s7 == a + xb /\
+                    s0 + w * ev7 e1 k2 k3 0 0 0 0 == u * w6 - u * pp /\
+                    v6 + w * g == s6 + u /\ s7' == s7 + g /\
+                    ev7 t1 t2 t3 t4 t5 t6 t7 - w7 * d8 ==
+                      ev7 s1 s2 s3 s4 s5 v6 s7' - ev7 e1 k2 k3 0 0 0 0 /\
+                    t1 < w /\ t2 < w /\ t3 < w /\ t4 < w /\ t5 < w /\ t6 < w /\ t7 < w /\ d8 <= 1 /\
                     a < 2 * pp /\ xb <= (w - 1) * (pp - 1) /\ u < w)
-          (ensures c8 == 0 /\ w * ev7 t1 t2 t3 t4 t5 t6 t7 == a + xb + u * pp /\
+          (ensures d8 == 0 /\ w * ev7 t1 t2 t3 t4 t5 t6 t7 == a + xb + u * pp /\
                    ev7 t1 t2 t3 t4 t5 t6 t7 < 2 * pp)
   = ()
-
-let lo_eq (q g m: nat)
-  : Lemma (requires q + w * g == m /\ q < w) (ensures q == m % pow2 64)
-  = assert_norm (pow2 64 == w);
-    Math.lemma_mod_plus q g w;
-    Math.small_mod q w
 
 let row_bound (r x: nat) (c: nat)
   : Lemma (requires r + w7 * c == x /\ x < w7) (ensures c == 0) = ()
@@ -260,6 +276,13 @@ let fsub_ok (a b c e s q d: nat)
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100 --smtencoding.nl_arith_repr wrapped --smtencoding.l_arith_repr native --smtencoding.elim_box true"
 
 [@@ CInline; CPrologue "__attribute__((always_inline))"]
+inline_for_extraction noextract
+let mu (s0: S64.t)
+  : u:S64.t{(S64.v s0 + (S64.v u * 4294967295) % pow2 64) % pow2 64 == 0}
+  = let u = S64.mul_mod s0 (S64.classify 0x100000001uL) in
+    mu_ok (S64.v s0) (S64.v u);
+    u
+
 fn put6 (o: A.array S64.t) (x0 x1 x2 x3 x4 x5: S64.t) (#vo: erased (Seq.seq S64.t))
 requires A.pts_to o vo ** pure (Seq.length vo == 6)
 ensures exists* (vo': Seq.seq S64.t).
@@ -362,66 +385,6 @@ ensures exists* (vq': Seq.seq S64.t).
   put7 q l0 r1 r2 r3 r4 r5 r6;
 }
 
-(** [u p] as seven words. *)
-[@@ CInline; CPrologue "__attribute__((always_inline))"]
-fn prow (q: A.array S64.t) (u: S64.t) (#vq: erased (Seq.seq S64.t))
-requires A.pts_to q vq ** pure (Seq.length vq == 7)
-ensures exists* (vq': Seq.seq S64.t).
-  A.pts_to q vq' **
-  pure (Seq.length vq' == 7 /\ av vq' == S64.v u * pp /\
-        F64.ix vq' 0 == (S64.v u * 4294967295) % pow2 64)
-{
-  let z0 = S64.classify 0uL;
-  consts ();
-  let k0 = S64.classify 0xffffffffuL;
-  assert (pure (S64.v k0 == 4294967295));
-  let n0 = S128.mul_wide u k0;
-  let q0 = L.lo n0;
-  let g0 = L.hi n0;
-  L.lo_hi n0;
-  lo_eq (S64.v q0) (S64.v g0) (S64.v u * 4294967295);
-  let n1 = S128.mul_wide u (S64.classify 0xffffffff00000000uL);
-  let q1 = L.lo n1;
-  let g1 = L.hi n1;
-  L.lo_hi n1;
-  let n2 = S128.mul_wide u (S64.classify 0xfffffffffffffffeuL);
-  let q2 = L.lo n2;
-  let g2 = L.hi n2;
-  L.lo_hi n2;
-  let n3 = S128.mul_wide u (S64.classify 0xffffffffffffffffuL);
-  let q3 = L.lo n3;
-  let g3 = L.hi n3;
-  L.lo_hi n3;
-  let mut r = z0;
-  let c2 = K.addc z0 q1 g0 r;
-  let e1 = !r;
-  let c3 = K.addc c2 q2 g1 r;
-  let e2 = !r;
-  let c4 = K.addc c3 q3 g2 r;
-  let e3 = !r;
-  let c5 = K.addc c4 q3 g3 r;
-  let e4 = !r;
-  let c6 = K.addc c5 q3 g3 r;
-  let e5 = !r;
-  let c7 = K.addc c6 z0 g3 r;
-  let e6 = !r;
-  add7 (S64.v q0) (S64.v q1) (S64.v q2) (S64.v q3) (S64.v q3) (S64.v q3) 0
-       0 (S64.v g0) (S64.v g1) (S64.v g2) (S64.v g3) (S64.v g3) (S64.v g3)
-       (S64.v q0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4) (S64.v e5) (S64.v e6)
-       0 0 (S64.v c2) (S64.v c3) (S64.v c4) (S64.v c5) (S64.v c6) (S64.v c7);
-  prow_val (S64.v u) (S64.v q0) (S64.v q1) (S64.v q2) (S64.v q3)
-           (S64.v g0) (S64.v g1) (S64.v g2) (S64.v g3);
-  row_bound (ev7 (S64.v q0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4) (S64.v e5) (S64.v e6))
-            (S64.v u * pp) (S64.v c7);
-  assert (pure (ev7 (S64.v q0) (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4) (S64.v e5) (S64.v e6) ==
-                S64.v u * pp));
-  let uq : erased nat = (S64.v u * 4294967295) % pow2 64;
-  assert (pure (S64.v q0 == reveal uq));
-  put7 q q0 e1 e2 e3 e4 e5 e6;
-  with vq'. assert (A.pts_to q vq');
-  assert (pure (av vq' == S64.v u * pp));
-}
-
 #restart-solver
 
 (** [acc := (acc + x b + u p) / 2^64], with [u] chosen to make the
@@ -480,43 +443,49 @@ ensures exists* (va': Seq.seq S64.t).
        (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5) (S64.v x6)
        (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5) (S64.v s6)
        0 (S64.v c1) (S64.v c2) (S64.v c3) (S64.v c4) (S64.v c5) (S64.v c6) (S64.v s7);
-  let u = S64.mul_mod s0 (S64.classify 0x100000001uL);
-  prow q u;
-  with vp. assert (A.pts_to q vp);
-  let y0 = A.(q.(0sz));
-  let y1 = A.(q.(1sz));
-  let y2 = A.(q.(2sz));
-  let y3 = A.(q.(3sz));
-  let y4 = A.(q.(4sz));
-  let y5 = A.(q.(5sz));
-  let y6 = A.(q.(6sz));
-  mu_ok (S64.v s0) (S64.v u);
-  let d1 = K.addc z0 s0 y0 r;
-  let t0 = !r;
-  zero_low (S64.v t0) (S64.v d1) (S64.v s0 + S64.v y0);
-  let d2 = K.addc d1 s1 y1 r;
+  let u = mu s0;
+  let lo = S64.shift_left u 32ul;
+  let hi = S64.shift_right u 32ul;
+  shift_val (S64.v u) (S64.v lo) (S64.v hi);
+  let bb0 = K.subb z0 u lo r;
+  let r0 = !r;
+  let bb1 = K.subb bb0 lo hi r;
+  let e1 = !r;
+  let bb2 = K.subb bb1 hi z0 r;
+  let e2 = !r;
+  let k3 = K.addc z0 e2 u r;
+  let k2 = !r;
+  kval (S64.v u) (S64.v lo) (S64.v hi) (S64.v r0) (S64.v e1) (S64.v e2) (S64.v k2) (S64.v k3)
+       (S64.v bb0) (S64.v bb1) (S64.v bb2);
+  r0_eq (S64.v s0) (S64.v r0) (S64.v u * 4294967295)
+        (S64.v u * 18446744078004518912 - ev7 (S64.v e1) (S64.v k2) (S64.v k3) 0 0 0 0);
+  let g = K.addc z0 s6 u r;
+  let v6 = !r;
+  let g2 = K.addc g s7 z0 r;
+  let s7' = !r;
+  let d2 = K.subb z0 s1 e1 r;
   let t1 = !r;
-  let d3 = K.addc d2 s2 y2 r;
+  let d3 = K.subb d2 s2 k2 r;
   let t2 = !r;
-  let d4 = K.addc d3 s3 y3 r;
+  let d4 = K.subb d3 s3 k3 r;
   let t3 = !r;
-  let d5 = K.addc d4 s4 y4 r;
+  let d5 = K.subb d4 s4 z0 r;
   let t4 = !r;
-  let d6 = K.addc d5 s5 y5 r;
+  let d6 = K.subb d5 s5 z0 r;
   let t5 = !r;
-  let d7 = K.addc d6 s6 y6 r;
+  let d7 = K.subb d6 v6 z0 r;
   let t6 = !r;
-  let d8 = K.addc d7 s7 z0 r;
+  let d8 = K.subb d7 s7' z0 r;
   let t7 = !r;
-  add7 (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5) (S64.v s6)
-       (S64.v y0) (S64.v y1) (S64.v y2) (S64.v y3) (S64.v y4) (S64.v y5) (S64.v y6)
-       0 (S64.v t1) (S64.v t2) (S64.v t3) (S64.v t4) (S64.v t5) (S64.v t6)
-       0 (S64.v d1) (S64.v d2) (S64.v d3) (S64.v d4) (S64.v d5) (S64.v d6) (S64.v d7);
+  sub7 (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5) (S64.v v6) (S64.v s7')
+       (S64.v e1) (S64.v k2) (S64.v k3) 0 0 0 0
+       (S64.v t1) (S64.v t2) (S64.v t3) (S64.v t4) (S64.v t5) (S64.v t6) (S64.v t7)
+       (S64.v d2) (S64.v d3) (S64.v d4) (S64.v d5) (S64.v d6) (S64.v d7) (S64.v d8);
   step_val (av va) (av vq)
-           (ev7 (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5) (S64.v s6))
-           (av vp) (S64.v u)
+           (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5) (S64.v s6) (S64.v s7)
+           (S64.v u) (S64.v e1) (S64.v k2) (S64.v k3) (S64.v g) (S64.v v6) (S64.v s7')
            (S64.v t1) (S64.v t2) (S64.v t3) (S64.v t4) (S64.v t5) (S64.v t6) (S64.v t7)
-           (S64.v s7) (S64.v d7) (S64.v d8);
+           (S64.v d8);
   put7 acc t1 t2 t3 t4 t5 t6 t7;
   with va'. assert (A.pts_to acc va');
   step_mod (av va') (av va) (av vq) (S64.v u);

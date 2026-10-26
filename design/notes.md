@@ -1349,8 +1349,11 @@ their `target("bmi2")` for this -- none uses BMI2, and inlined into X25519's
 **P-384 followed the same path.**  `Hacl.P384.Field64` is a six-limb
 Montgomery field for `p = 2^384 - 2^128 - 2^96 + 2^32 - 1`, interleaved
 (CIOS): one verified `step`, `acc := (acc + x * b + u * p) / 2^64`, called
-six times, with `mu = 2^32 + 1` and `u * p` built from four multiplications
-because three of `p`'s words are all ones.  A conditional subtraction
+six times, with `mu = 2^32 + 1`.  `u * p` takes no multiplications: since
+`2^384 - p = 2^128 + 2^96 - 2^32 + 1`, the step adds `u` at the top word and
+subtracts `u (2^128 + 2^96 - 2^32 + 1)`, three words built from `u`, `u << 32`
+and `u >> 32` by a borrow chain, whose low word equals `acc`'s and cancels
+(Part 97; the first version spent four `mul_wide`s here).  A conditional subtraction
 finishes the product; addition and subtraction are straight-line carry
 chains with a masked correction.  `Hacl.P384.Field` keeps its interface and
 reaches the generic `Spec.P384` operations through `num_fv` (six words'
@@ -1376,7 +1379,10 @@ behind an `opaque_to_smt` wrapper: unfolded, Z3 5.3.0 could spend ten
 minutes on one query without hitting the rlimit.  The scalar inverse got
 the same treatment on a specialised multiply mod `n` (`Hacl.P384.Scalar64`,
 `QField`, `QInverse`: `x_192` by doubling, then a generated width-four
-window), used by signing and verification alike (Part 96).
+window), used by signing and verification alike (Part 96).  One proof
+detail of the shift-based step: proving `mu_ok`'s precondition inline took
+Z3 six minutes in `step`'s context, and a three-line helper `mu` that returns
+`u` refined by the cancellation fact brought the module back to 46 seconds.
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
