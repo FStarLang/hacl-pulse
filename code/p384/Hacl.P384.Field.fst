@@ -21,11 +21,12 @@
     in this module, and each operation says exactly what [Spec.P384] says
     it does.
 
-    Every operation is one call into the generic bignum layer
+    The ring operations are {!Hacl.P384.Field64}, which is specialised to
+    this prime; the rest is one call into the generic bignum layer
     ({!Hacl.Bignum.Base}, {!Hacl.Bignum.Montgomery}) with [nn = 6] and the
-    constant tables of {!Hacl.P384.Tables}, followed by the one lemma of
-    {!Hacl.P384.Lemmas} that turns the representation-level equation into
-    a statement about [fev]. *)
+    constant tables of {!Hacl.P384.Tables}.  Either way the call is
+    followed by the one lemma of {!Hacl.P384.Lemmas} that turns the
+    representation-level equation into a statement about [fev]. *)
 module Hacl.P384.Field
 
 #lang-pulse
@@ -51,6 +52,9 @@ module P = Spec.P384
 module Math = FStar.Math.Lemmas
 module Mem = Hacl.Mem
 module Declassify = Hacl.Secret.Declassify
+module F = Hacl.P384.Field64
+module F64 = Hacl.Curve25519.Field64
+module W = Spec.Curve25519.Field64
 
 (** {2 What a field element is} *)
 
@@ -82,6 +86,52 @@ let num_zero (v: Seq.seq S64.t)
           (ensures num v == 0)
   = num_zeros_above v 0; pre_zero v
 
+(** {!Hacl.P384.Field64} speaks of six words as [ev6] of numerals; this
+    module speaks of [num]. *)
+#push-options "--fuel 1 --ifuel 0 --z3rlimit 40"
+let num_fv (s: Seq.seq S64.t)
+  : Lemma (requires Seq.length s == 6) (ensures num s == F.fv s)
+  = let v = vals s in
+    let v1 = Seq.slice v 1 6 in
+    let v2 = Seq.slice v1 1 5 in
+    let v3 = Seq.slice v2 1 4 in
+    let v4 = Seq.slice v3 1 3 in
+    let v5 = Seq.slice v4 1 2 in
+    let v6 = Seq.slice v5 1 1 in
+    W.consts ();
+    eval_empty v6;
+    assert (eval v5 == Seq.index v5 0 + base * eval v6);
+    assert (eval v4 == Seq.index v4 0 + base * eval v5);
+    assert (eval v3 == Seq.index v3 0 + base * eval v4);
+    assert (eval v2 == Seq.index v2 0 + base * eval v3);
+    assert (eval v1 == Seq.index v1 0 + base * eval v2);
+    assert (eval v == Seq.index v 0 + base * eval v1)
+#pop-options
+
+let fv_facts (_: unit) : Lemma (P.prime == F.pp /\ pow2 384 == W.w6) =
+  assert_norm (P.prime == F.pp);
+  assert_norm (pow2 384 == W.w6)
+
+let add_fv (o a b: nat)
+  : Lemma (requires a < P.prime /\ b < P.prime /\ o == (a + b) % F.pp)
+          (ensures o < P.prime /\ o * rinv % P.prime == P.fadd (a * rinv % P.prime) (b * rinv % P.prime))
+  = fv_facts ();
+    add_lemma P.prime rinv a b
+
+let sub_fv (o a b: nat)
+  : Lemma (requires a < P.prime /\ b < P.prime /\ o == (a + F.pp - b) % F.pp)
+          (ensures o < P.prime /\ o * rinv % P.prime == P.fsub (a * rinv % P.prime) (b * rinv % P.prime))
+  = fv_facts ();
+    Math.lemma_mod_plus (a - b) 1 P.prime;
+    sub_lemma P.prime rinv a b
+
+let mul_fv (o a b: nat)
+  : Lemma (requires o < F.pp /\ (W.w6 * o) % F.pp == (a * b) % F.pp)
+          (ensures o < P.prime /\ o * rinv % P.prime == P.fmul (a * rinv % P.prime) (b * rinv % P.prime))
+  = fv_facts ();
+    assert_norm (pow2 384 * rinv % P.prime == 1);
+    mul_lemma P.prime (pow2 384) rinv o a b
+
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
 (** {2 The ring operations} *)
@@ -96,11 +146,15 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (felem vo' /\ fev vo' == P.fadd (fev va) (fev vb))
 {
-  let pm = pms ();
-  add_mod out a b pm 6sz;
+  A.pts_to_len a; A.pts_to_len b;
+  num_fv va; num_fv vb; fv_facts ();
+  F.fadd out a b;
   with vo'. assert (A.pts_to out vo');
-  add_lemma P.prime rinv (num va) (num vb);
-  drop_table pm;
+  num_fv vo';
+  add_fv (num vo') (num va) (num vb);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fadd (fev va) (fev vb)));
 }
 
 fn fsub (out a b: A.array S64.t)
@@ -113,11 +167,15 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (felem vo' /\ fev vo' == P.fsub (fev va) (fev vb))
 {
-  let pm = pms ();
-  sub_mod out a b pm 6sz;
+  A.pts_to_len a; A.pts_to_len b;
+  num_fv va; num_fv vb; fv_facts ();
+  F.fsub out a b;
   with vo'. assert (A.pts_to out vo');
-  sub_lemma P.prime rinv (num va) (num vb);
-  drop_table pm;
+  num_fv vo';
+  sub_fv (num vo') (num va) (num vb);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fsub (fev va) (fev vb)));
 }
 
 fn fmul (out a b: A.array S64.t)
@@ -130,16 +188,15 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
   pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev vb))
 {
-  facts ();
-  let pm = pms ();
-  let z = S64.zero;
-  let mut t = [| z; 12sz |];
-  Mem.track t; A.pts_to_len t;
-  mont_mul out a b t pm 6sz pmu;
+  A.pts_to_len a; A.pts_to_len b;
+  num_fv va; num_fv vb; fv_facts ();
+  F.fmul out a b;
   with vo'. assert (A.pts_to out vo');
-  mul_lemma P.prime (pow2 384) rinv (num vo') (num va) (num vb);
-  Mem.wipe t 12sz;
-  drop_table pm;
+  num_fv vo';
+  mul_fv (num vo') (num va) (num vb);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fmul (fev va) (fev vb)));
 }
 
 fn fsqr (out a: A.array S64.t)
@@ -151,16 +208,15 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va **
   pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev va))
 {
-  facts ();
-  let pm = pms ();
-  let z = S64.zero;
-  let mut t = [| z; 12sz |];
-  Mem.track t; A.pts_to_len t;
-  mont_sqr out a t pm 6sz pmu;
+  A.pts_to_len a;
+  num_fv va; fv_facts ();
+  F.fsqr out a;
   with vo'. assert (A.pts_to out vo');
-  mul_lemma P.prime (pow2 384) rinv (num vo') (num va) (num va);
-  Mem.wipe t 12sz;
-  drop_table pm;
+  num_fv vo';
+  mul_fv (num vo') (num va) (num va);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fmul (fev va) (fev va)));
 }
 
 (** {2 Constants and copies} *)

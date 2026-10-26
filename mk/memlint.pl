@@ -22,6 +22,8 @@ my %nowipe_ok = map { $_ => 1 } qw(
   code/curve25519/Hacl.Curve25519.Field64.fst:fsqr
   code/p256/Hacl.P256.Field64.fst:fmul
   code/p256/Hacl.P256.Field.fst:fsqr
+  code/p384/Hacl.P384.Field64.fst:step
+  code/p384/Hacl.P384.Field64.fst:mont
   code/hash/Hacl.Hash.SHA3.fst:keccak_impl
 );
 my %zeroable_assume_ok = map { $_ => 1 }

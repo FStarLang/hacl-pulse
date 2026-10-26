@@ -1346,6 +1346,18 @@ stayed on `Hacl.Impl.Mont4` until it got a faster multiplier of its own
 their `target("bmi2")` for this -- none uses BMI2, and inlined into X25519's
 `bmi2` field they compile exactly as before.
 
+**P-384 followed the same path.**  `Hacl.P384.Field64` is a six-limb
+Montgomery field for `p = 2^384 - 2^128 - 2^96 + 2^32 - 1`, interleaved
+(CIOS): one verified `step`, `acc := (acc + x * b + u * p) / 2^64`, called
+six times, with `mu = 2^32 + 1` and `u * p` built from four multiplications
+because three of `p`'s words are all ones.  A conditional subtraction
+finishes the product; addition and subtraction are straight-line carry
+chains with a masked correction.  `Hacl.P384.Field` keeps its interface and
+reaches the generic `Spec.P384` operations through `num_fv` (six words'
+`ev6` equals the bignum `num` of their `vals`) and three lemmas over plain
+`nat`s (`add_fv`, `sub_fv`, `mul_fv`).  Every P-384 operation got 1.9x
+faster under gcc and 2.2-2.3x under clang (`bench/REPORT.md` Part 92).
+
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
 mentions both takes minutes.  So `code/p256` is twenty-seven modules: the on-curve
@@ -4912,6 +4924,16 @@ Non-obvious things that cost time here, recorded so they cost less next time:
   `FStar.Math.Lemmas.{distributivity_add_left, lemma_mult_le_right,
   multiple_division_lemma, multiple_modulo_lemma, euclidean_division_definition}`
   before reaching for `--z3rlimit`.
+* **Keep carry-chain arithmetic out of the Pulse context.**  Under
+  `--smtencoding.nl_arith_repr wrapped`, a linear equality over a dozen
+  `S64.v` values and a `u * p`-sized numeral hung Z3 for minutes far past the
+  rlimit (`Hacl.P384.Field64`).  The same fact as a pure lemma over `nat`s,
+  called with the `S64.v`s and every carry named, proves in milliseconds.
+  Likewise, a postcondition such as `fev vo' == P.fadd (fev va) (fev vb)`
+  goes through instantly when restated with `assert (pure ...)` right after
+  the bridge lemma, and hangs otherwise; and a precondition like
+  `pow2 384 * rinv % p == 1` belongs inside the bridge lemma (by
+  `assert_norm`), not at the call site.
 * **A product or a quotient of two variables under a quantifier poisons the
   whole query.**  It does not merely fail to prove its own conjunct: every
   other fact in the same query becomes unprovable too, including goals as

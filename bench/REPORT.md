@@ -9444,3 +9444,33 @@ Against HACL\* the largest are X25519 (1.31x), MD5 (1.28x) and Ed25519
 verify (1.25x); `gapbest.py` also ranks secp256k1 verify (1.94x) and short
 AES-GCM messages (1.5x to 1.7x at 64 B) highest.
 
+## Part 92: P-384's field as a dedicated six-limb Montgomery multiplier
+
+P-384 arrived on the generic bignum layer: about 95% of a scalar
+multiplication was `Hacl.Bignum`'s row multiplier (49%), Montgomery
+reduction (18%) and modular addition (16%), and one `fmul` cost about 1.1k
+instructions.  `Hacl.P384.Field64` replaces it for `fadd`, `fsub`, `fmul` and
+`fsqr`: six interleaved Montgomery steps, each adding `x * b` and `u * p`
+into a seven-word accumulator, with `mu = 2^32 + 1` and `u * p` from four
+multiplications; a masked subtraction finishes it.  `Hacl.P384.Field` keeps
+its interface, so nothing above it changed.
+
+Before (`1109fa6`) and after, a direct timing loop (best of 5 x 200 calls,
+100 for verify, pinned to one core):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1378 us | 710 us | 1471 us | 628 us |
+| ECDH | 1392 us | 717 us | 1389 us | 619 us |
+| sign | 1506 us | 772 us | 1459 us | 695 us |
+| verify | 2824 us | 1451 us | 2825 us | 1268 us |
+
+1.9x under gcc and 2.2-2.3x under clang; callgrind counts 8.0M
+instructions for a keygen, down from 15M.  The test suite passes under gcc
+and clang, as do `make lint` (with `step` and `mont` added to the
+`nowipe` hot leaves, as P-256's `fmul` is), `make stack` and `make cross`.
+
+What remains against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
+dedicated squaring, a windowed variable-base multiplication (the ladder
+does one addition per bit), a precomputed table for `G`, a double-scalar
+verify, and faster inversions.
