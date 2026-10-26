@@ -77,6 +77,11 @@ static inline int bs_ed25519_verify(uint8_t *pk, uint8_t *m, size_t n, uint8_t *
 static inline int bs_p256_sign(uint8_t *sg, uint8_t *m, size_t n, uint8_t *sk, uint8_t *nonce) { return Hacl_P256_ecdsa_sign_sha256(sg, m, n, sk, nonce); }
 static inline int bs_p256_verify(uint8_t *m, size_t n, uint8_t *pk, uint8_t *r, uint8_t *s) { return Hacl_P256_ecdsa_verify_sha256(m, n, pk, r, s); }
 static inline int bs_p256_dh_i(uint8_t *pk, uint8_t *sk) { return Hacl_P256_Ecdh_dh_initiator(pk, sk); }
+#define BS_HAVE_P384
+static inline int bs_p384_sign(uint8_t *sg, uint8_t *m, size_t n, uint8_t *sk, uint8_t *nonce) { return Hacl_P384_ecdsa_sign_sha384(sg, m, n, sk, nonce); }
+static inline int bs_p384_verify(uint8_t *m, size_t n, uint8_t *pk, uint8_t *sg) { return Hacl_P384_ecdsa_verify_sha384(m, n, pk, sg); }
+static inline int bs_p384_dh_i(uint8_t *pk, uint8_t *sk) { return Hacl_P384_Ecdh_dh_initiator(pk, sk); }
+static inline int bs_p384_dh_r(uint8_t *ss, uint8_t *pk, uint8_t *sk) { return Hacl_P384_Ecdh_dh_responder(ss, pk, sk); }
 static inline int bs_p256_dh_r(uint8_t *ss, uint8_t *pk, uint8_t *sk) { return Hacl_P256_Ecdh_dh_responder(ss, pk, sk); }
 
 /* ---- K-256 ---- */

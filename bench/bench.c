@@ -200,6 +200,22 @@ int main(void) {
     TIME("p256-ecdsa-verify", 0, { sink += bs_p256_verify(msg, 64, pk, sg, sg + 32); });
   }
 
+  /* ---------------- P-384 ---------------- */
+#ifdef BS_HAVE_P384
+  {
+    uint8_t sk[48], pk[96], ss[96], sg[96], nonce[48];
+    fill(sk, 48, 31); sk[0] = 1;
+    fill(nonce, 48, 32); nonce[0] = 1;
+    if (!bs_p384_dh_i(pk, sk)) fprintf(stderr, "p384 keygen failed\n");
+    TIME("p384-dh-initiator", 0, { sink += bs_p384_dh_i(ss, sk); });
+    TIME("p384-dh-responder", 0, { sink += bs_p384_dh_r(ss, pk, sk); });
+    if (!bs_p384_sign(sg, msg, 64, sk, nonce)) fprintf(stderr, "p384 sign failed\n");
+    TIME("p384-ecdsa-sign", 0, { sink += bs_p384_sign(sg, msg, 64, sk, nonce); });
+    if (!bs_p384_verify(msg, 64, pk, sg)) fprintf(stderr, "p384 verify self-check failed\n");
+    TIME("p384-ecdsa-verify", 0, { sink += bs_p384_verify(msg, 64, pk, sg); });
+  }
+#endif
+
   /* ---------------- K-256 ---------------- */
   {
     uint8_t sk[32], pk[64], ss[64], sg[64], nonce[32], h[32];

@@ -294,6 +294,38 @@ int main(void) {
 #endif
   }
 
+  /* ---------------- P-384 ---------------- */
+  {
+    uint8_t sk[48], pk[96], sk2[48], pk2[96], nonce[48], rss[96], ss[48], sg[96], rsg[96];
+    fill(sk, 48, 31); sk[0] = 1;
+    fill(sk2, 48, 33); sk2[0] = 1;
+    fill(nonce, 48, 32); nonce[0] = 1;
+    Hacl_P384_Ecdh_dh_initiator(pk, sk);
+    Hacl_P384_Ecdh_dh_initiator(pk2, sk2);
+    Hacl_P384_Ecdh_dh_responder(rss, pk2, sk);
+    Hacl_P384_ecdsa_sign_sha384(rsg, msg, 64, sk, nonce);
+    (void)ss; (void)sg; (void)rss; (void)rsg;
+#if defined(BO_P384_ECDH) || defined(BO_P384_SIGN) || defined(BO_P384_VERIFY)
+    bo_p384_setup(sk, pk, pk2);
+#endif
+#ifdef BO_P384_ECDH
+    bo_p384_ecdh(ss); same("p384 ecdh", ss, rss, 48);
+    TIME("p384-ecdh", 0, { sink += bo_p384_ecdh(ss); });
+#endif
+#ifdef BO_P384_SIGN
+    if (!bo_p384_sign(sg, msg, 64)) fail("p384 sign");
+    if (!Hacl_P384_ecdsa_verify_sha384(msg, 64, pk, sg)) fail("p384 signature");
+    TIME("p384-ecdsa-sign", 0, { sink += bo_p384_sign(sg, msg, 64); });
+#endif
+#ifdef BO_P384_VERIFY
+    if (!bo_p384_verify(msg, 64, rsg)) fail("p384 verify (valid)");
+    rsg[60] ^= 1;
+    if (bo_p384_verify(msg, 64, rsg)) fail("p384 verify (forged)");
+    rsg[60] ^= 1;
+    TIME("p384-ecdsa-verify", 0, { sink += bo_p384_verify(msg, 64, rsg); });
+#endif
+  }
+
   /* ---------------- secp256k1 ---------------- */
 #ifdef BO_K256_SIGN
   {
