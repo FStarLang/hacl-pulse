@@ -9541,3 +9541,54 @@ its `u1 G` half.  Tests, `make lint`, `make stack` and `make cross` pass.
 Still left against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
 variable-time double-scalar verify, a dedicated squaring, and faster
 inversions.
+
+## Part 95: P-384's field inversion by an addition chain
+
+Every keygen, signature and ECDH result leaves the curve through
+`Encode.to_aff`, which inverted `z` with the generic constant-time
+Montgomery exponentiation (`Hacl.Bignum.Exponentiation.mod_exp_consttime`):
+a conversion out of the field, a table scan and a multiplication per window
+on top of 384 squarings, all on the generic six-limb multiply.  Under
+callgrind that was 656k instructions, 28% of a keygen.
+
+`Hacl.P384.Inverse.finv` raises to `p - 2` with a fixed chain on the
+field's own `fsqr` and `fmul`.  With `x_k = x^(2^k - 1)` it builds `x_2,
+x_3, x_6, x_12, x_15, x_30, x_60, x_120, x_240, x_255` and `x_32`, then
+`((x_255 * 2^33 + x_32) * 2^94 + x_30) * 2^2 + 1 = p - 2`: 385 squarings
+and 14 multiplications.  `to_aff` now stays in Montgomery form until two
+final `ffrom`s, and drops to 237k instructions (2.8x).  The exponent is
+public and the chain fixed, so it is constant-time.
+
+Instructions (callgrind, gcc), before and after:
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 2.38M | 1.96M |
+| sign | 2.90M | 2.48M |
+| verify | 7.85M | 7.85M |
+
+Time, best of two runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 212 us | 184 us | 198 us | 155 us |
+| ECDH | 516 us | 481 us | 431 us | 377 us |
+| sign | 254 us | 228 us | 269 us | 208 us |
+| verify | 751 us | 751 us | 691 us | 703 us |
+
+Verify never needs an affine point and does not change.  Tests,
+`make lint`, `make stack` and `make cross` pass.
+
+The proof is one lemma per chain step: `sqrn_mul` takes the exponents
+`e1`, `e2` and `e = e1 2^n + e2` as ghost arguments and returns `x^e`, so
+`finv` is fourteen calls and fourteen `assert_norm`s on constants.  Two
+things were needed for Z3 5.3.0, which otherwise sat in single queries for
+over ten minutes without honouring the rlimit: `ex` (`MA.exp` at `P.prime`)
+is `opaque_to_smt`, with the `pow2` bookkeeping in plain lemmas (`sq1`,
+`sq2`, `step_lem`), and the squaring count is passed as halves plus an odd
+bit rather than computed with `SZ.div`/`SZ.rem`.  The module checks in
+under a minute.
+
+Next: the scalar inverse in signing (`invmod_ct` mod `q`, about 0.8M
+instructions), which has no special form to exploit but would gain from a
+specialised Montgomery multiply and a chain.

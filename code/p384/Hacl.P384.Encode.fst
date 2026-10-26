@@ -17,8 +17,9 @@
 (** Leaving the curve: affine coordinates and bytes.
 
     Signing and ECDH convert points that depend on a secret scalar, so the
-    field inverse here is the constant-time exponentiation, unlike the one
-    {!Hacl.P384.Verify} uses on public values.  Everything else is
+    inverses here are constant-time: the field's is the fixed addition
+    chain of {!Hacl.P384.Inverse}, the scalar's ([invmod_ct]) the generic
+    constant-time exponentiation.  Everything else is
     straight-line code. *)
 module Hacl.P384.Encode
 
@@ -45,6 +46,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P384
 module Mem = Hacl.Mem
+module Inv = Hacl.P384.Inverse
 
 (** Forty-eight bytes that read back as [x] are [x]'s encoding. *)
 let to_be48 (v: Seq.seq S8.t) (x: nat)
@@ -121,31 +123,19 @@ ensures exists* (wx wy: Seq.seq S64.t).
         num wx < P.prime /\ num wy < P.prime /\
         (num wx, num wy) == aff vx vy vz)
 {
-  facts ();
   let z0 = S64.zero;
-  let mut xp = [| z0; 6sz |];
-  Mem.track xp; A.pts_to_len xp; let mut yp = [| z0; 6sz |];
-  Mem.track yp; A.pts_to_len yp; let mut zp = [| z0; 6sz |];
-  Mem.track zp; A.pts_to_len zp; let mut zi = [| z0; 6sz |];
-  Mem.track zi; A.pts_to_len zi;
-  ffrom xp x;
-  ffrom yp y;
-  ffrom zp z;
-  with vzp. assert (A.pts_to zp vzp);
-  let pm = pms ();
-  let p2 = pr2 ();
-  invmod_ct zi zp pm p2 pmu;
-  with vzi. assert (A.pts_to zi vzi);
-  pw_exp P.prime (num vzp) (P.prime - 2);
-  assert (pure (num vzi == P.finv (fev vz)));
-  mulmod ax xp zi pm p2 pmu;
-  mulmod ay yp zi pm p2 pmu;
-  drop_table p2;
-  drop_table pm;
+  let mut zi = [| z0; 6sz |];
+  Mem.track zi; A.pts_to_len zi; let mut tx = [| z0; 6sz |];
+  Mem.track tx; A.pts_to_len tx; let mut ty = [| z0; 6sz |];
+  Mem.track ty; A.pts_to_len ty;
+  Inv.finv zi z;
+  fmul tx x zi;
+  fmul ty y zi;
+  ffrom ax tx;
+  ffrom ay ty;
+  Mem.wipe ty 6sz;
+  Mem.wipe tx 6sz;
   Mem.wipe zi 6sz;
-  Mem.wipe zp 6sz;
-  Mem.wipe yp 6sz;
-  Mem.wipe xp 6sz;
   ()
 }
 
