@@ -25,7 +25,11 @@
     because the window does the additions in a different order from the
     specification's ladder and so arrives at a different projective
     representative of the same point.  The callers discharge that where
-    they leave projective coordinates. *)
+    they leave projective coordinates.
+
+    Multiplying the generator does not use the window: it goes through
+    {!Hacl.P384.PointMulG}, which splits the scalar six ways against
+    compiled-in tables and needs sixty doublings rather than 384. *)
 module Hacl.P384.PointMul
 
 #lang-pulse
@@ -85,25 +89,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
         GR.on_curve (P.point_mul_g (num vk)) /\
         GR.peq (pt wx wy wz) (P.point_mul_g (num vk)))
 {
-  let z = S64.zero;
-  let mut gx = [| z; 6sz |];
-  Mem.track gx; A.pts_to_len gx; let mut gy = [| z; 6sz |];
-  Mem.track gy; A.pts_to_len gy; let mut gz = [| z; 6sz |];
-  Mem.track gz; A.pts_to_len gz;
-  let cx = fgx ();
-  let cy = fgy ();
-  fcopy gx cx;
-  fcopy gy cy;
-  drop_table cx;
-  drop_table cy;
-  fone gz;
-  with wgx wgy wgz. assert (A.pts_to gx wgx ** A.pts_to gy wgy ** A.pts_to gz wgz);
-  assert (pure (pt wgx wgy wgz == P.g));
-  GR.g_on_curve ();
-  point_mul_win ox oy oz gx gy gz ks;
-  Mem.wipe gz 6sz;
-  Mem.wipe gy 6sz;
-  Mem.wipe gx 6sz;
+  Hacl.P384.PointMulG.point_mul_g_win ox oy oz ks;
   ()
 }
 

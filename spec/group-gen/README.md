@@ -28,6 +28,7 @@ F* re-checks all of it with the verified polynomial normalizer in
 | `Spec.P384.GroupChecks` | `python3 p256/gen.py p384/checks.py ../Spec.P384.GroupChecks.fst` |
 | `Spec.P384.GroupAssoc{1,2,3}` | `python3 p256/gen.py p384/assocN.py ../Spec.P384.GroupAssocN.fst` |
 | `Spec.P384.Primes` | `python3 p384/mkprimes.py` (from `p384/nodes.txt`) |
+| `Spec.P384.Base`, `Spec.P384.Win{0..5}`, `Hacl.P384.Win{0..5}` | `python3 p384/wintables.py` (fixed-base tables for `G`; F* re-checks every point) |
 | `Spec.Ed25519.GroupChecks` | `python3 ed25519/gen.py ed25519/checks.py ../Spec.Ed25519.GroupChecks.fst` |
 | `Spec.Ed25519.GroupAssoc{1,2}` | `python3 ed25519/gen.py ed25519/assocN.py ../Spec.Ed25519.GroupAssocN.fst` |
 | `Spec.Ed25519.Comb{B,T0..7,Table}`, `Hacl.Ed25519.CombData{,0..7}` | `python3 ed25519/comb.py ../..` (the fixed-base comb's tables) |

@@ -9507,3 +9507,37 @@ What remains against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
 precomputed table for `G` (keygen and signing still build sixteen
 multiples of `G` per call), a variable-time double-scalar verify, and a
 dedicated squaring.
+
+## Part 94: P-384's generator multiplication with compiled-in tables
+
+Keygen and signing multiply the generator, and Part 93 treated it like
+any other point: sixteen multiples built per call, then 384 doublings.
+`Hacl.P384.PointMulG` is `Hacl.P256.PointMulG` with six pieces instead of
+four.  The scalar splits into six 64-bit pieces against `G`, `2^64 G`, ...,
+`2^320 G` (`Spec.Group.Split6`), so sixteen rungs of four doublings and six
+masked table additions do the whole multiplication: 60 doublings and 96
+additions where the window paid 384, 96 and 15.
+
+The six tables, ninety-six affine points in Montgomery form (13.5 KiB), are
+constants.  `spec/group-gen/p384/wintables.py` writes `Spec.P384.Base` (the
+five base points, each checked by the normaliser as a chain of sixty-four
+doublings), `Spec.P384.Win0..5` (each entry on the curve and the previous
+one plus the base point) and `Hacl.P384.Win0..5` (the limbs, checked
+against those points); `Hacl.P384.WinTable` is the bridge.  The script is
+not trusted.  All of it verifies in about three minutes of CPU.
+
+Before (Part 93) and after:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 528 us | 200 us | 415 us | 185 us |
+| ECDH | 476 us | 482 us | 409 us | 414 us |
+| sign | 546 us | 249 us | 491 us | 251 us |
+| verify | 1029 us | 722 us | 868 us | 633 us |
+
+ECDH multiplies the peer's point and does not change.  Verify gains from
+its `u1 G` half.  Tests, `make lint`, `make stack` and `make cross` pass.
+
+Still left against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
+variable-time double-scalar verify, a dedicated squaring, and faster
+inversions.
