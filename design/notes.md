@@ -1373,7 +1373,10 @@ on the field's own operations (`Hacl.P384.Inverse`, 385 squarings and
 fourteen multiplications, 2.8x for the inversion, Part 95).  Its proof
 passes each step's exponents as ghost arguments and keeps `MA.exp`
 behind an `opaque_to_smt` wrapper: unfolded, Z3 5.3.0 could spend ten
-minutes on one query without hitting the rlimit.
+minutes on one query without hitting the rlimit.  The scalar inverse got
+the same treatment on a specialised multiply mod `n` (`Hacl.P384.Scalar64`,
+`QField`, `QInverse`: `x_192` by doubling, then a generated width-four
+window), used by signing and verification alike (Part 96).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

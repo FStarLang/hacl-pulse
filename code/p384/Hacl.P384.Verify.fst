@@ -17,12 +17,14 @@
 (** ECDSA verification on P-384.
 
     Nothing here is secret: the message, the signature and the public key
-    are all published.  Comparisons are therefore declassified to booleans
-    and the inverses are the variable-time ones.
+    are all published.  Comparisons are therefore declassified to booleans.
+    Both inverses -- of [s] mod [n] and of [z] for the final affine
+    coordinate -- are the fixed addition chains of {!Hacl.P384.QInverse}
+    and {!Hacl.P384.Inverse}, which are faster than any generic
+    exponentiation, variable-time or not.
 
-    The scalars mod [n] and the final affine coordinate are plain numbers
-    handled by the generic bignum layer; only the curve arithmetic is in
-    Montgomery form. *)
+    The scalars mod [n] are plain numbers handled by the generic bignum
+    layer; the curve arithmetic is in Montgomery form. *)
 module Hacl.P384.Verify
 
 #lang-pulse
@@ -35,7 +37,6 @@ open Hacl.Impl.Table
 open Hacl.Impl.Copy
 open Hacl.Bignum.Base
 open Hacl.Bignum.Montgomery
-open Hacl.Bignum.Exponentiation
 open Hacl.Bignum.Convert
 open Hacl.P384.Tables
 open Hacl.P384.Lemmas
@@ -54,6 +55,8 @@ module GR = Spec.P384.Group
 module MA = Spec.ModArith
 module Math = FStar.Math.Lemmas
 module Mem = Hacl.Mem
+module Inv = Hacl.P384.Inverse
+module QI = Hacl.P384.QInverse
 module Declassify = Hacl.Secret.Declassify
 
 (** {2 Total wrappers}
@@ -192,39 +195,6 @@ ensures exists* (v: Seq.seq S64.t).
   modulo res wide acc r2 nm 6sz mu;
   Mem.wipe acc 6sz;
   Mem.wipe wide 12sz;
-  ()
-}
-
-fn invmod (res a nm r2: A.array S64.t) (mu: S64.t)
-          (#vres: erased (Seq.seq S64.t))
-          (#pa #pn #pr: perm) (#va #vr2: erased (Seq.seq S64.t))
-          (#vn: erased (s: Seq.seq S64.t { 1 < num s /\ 0 < Seq.length s }))
-requires A.pts_to res vres ** A.pts_to a #pa va **
-         A.pts_to nm #pn vn ** A.pts_to r2 #pr vr2 **
-  pure (Seq.length vres == 6 /\ Seq.length va == 6 /\
-        Seq.length vn == 6 /\ Seq.length vr2 == 6 /\
-        num va < num vn /\
-        num vr2 == (wt 6 * wt 6) % num vn /\
-        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S64.t).
-  A.pts_to res v ** A.pts_to a #pa va **
-  A.pts_to nm #pn vn ** A.pts_to r2 #pr vr2 **
-  pure (Seq.length v == 6 /\ num v == pw (num va) (num vn - 2) % num vn)
-{
-  facts ();
-  let z = S64.zero;
-  let mut e = [| z; 6sz |];
-  Mem.track e; A.pts_to_len e; let mut am = [| z; 6sz |];
-  Mem.track am; A.pts_to_len am; let mut acc = [| z; 6sz |];
-  Mem.track acc; A.pts_to_len acc; let mut t = [| z; 6sz |];
-  Mem.track t; A.pts_to_len t; let mut wide = [| z; 12sz |];
-  Mem.track wide; A.pts_to_len wide;
-  mod_inv_prime_vartime res a r2 nm 6sz mu e am acc t wide;
-  Mem.wipe wide 12sz;
-  Mem.wipe t 6sz;
-  Mem.wipe acc 6sz;
-  Mem.wipe am 6sz;
-  Mem.wipe e 6sz;
   ()
 }
 
@@ -378,26 +348,16 @@ ensures A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
   let z = S64.zero;
   let qm = qms ();
   let q2 = qr2 ();
-  let mut xp = [| z; 6sz |];
-  Mem.track xp; A.pts_to_len xp; let mut zp = [| z; 6sz |];
-  Mem.track zp; A.pts_to_len zp; let mut zi = [| z; 6sz |];
-  Mem.track zi; A.pts_to_len zi; let mut xa = [| z; 6sz |];
+  let mut zi = [| z; 6sz |];
+  Mem.track zi; A.pts_to_len zi; let mut xm = [| z; 6sz |];
+  Mem.track xm; A.pts_to_len xm; let mut xa = [| z; 6sz |];
   Mem.track xa; A.pts_to_len xa; let mut xr = [| z; 6sz |];
   Mem.track xr; A.pts_to_len xr;
-  ffrom xp cx;
-  ffrom zp cz;
-  with vzp. assert (A.pts_to zp vzp);
-  let pm = pms ();
-  let p2 = pr2 ();
-  invmod zi zp pm p2 pmu;
-  with vzi. assert (A.pts_to zi vzi);
-  pw_exp P.prime (num vzp) (P.prime - 2);
-  assert (pure (num vzi == P.finv (fev vcz)));
-  mulmod xa xp zi pm p2 pmu;
+  Inv.finv zi cz;
+  fmul xm cx zi;
+  ffrom xa xm;
   with vxa. assert (A.pts_to xa vxa);
   assert (pure (num vxa == P.fmul (fev vcx) (P.finv (fev vcz))));
-  drop_table p2;
-  drop_table pm;
   reduce xr xa qm q2 qmu;
   with vxr. assert (A.pts_to xr vxr);
   assert (pure (num vxr == num vxa % P.order));
@@ -405,9 +365,8 @@ ensures A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
   let b = U64.eq (Declassify.u64 em) 18446744073709551615uL;
   Mem.wipe xr 6sz;
   Mem.wipe xa 6sz;
+  Mem.wipe xm 6sz;
   Mem.wipe zi 6sz;
-  Mem.wipe zp 6sz;
-  Mem.wipe xp 6sz;
   drop_table q2;
   drop_table qm;
   b
@@ -451,9 +410,8 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   (* u1 = m / s, u2 = r / s, mod n *)
   let qm = qms ();
   let q2 = qr2 ();
-  invmod si s qm q2 qmu;
+  QI.qinv_plain si s;
   with vsi. assert (A.pts_to si vsi);
-  pw_exp P.order (num vs) (P.order - 2);
   assert (pure (num vsi == P.qinv (num vs)));
   mulmod u1 si m qm q2 qmu;
   mulmod u2 si r qm q2 qmu;

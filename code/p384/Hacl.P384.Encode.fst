@@ -17,10 +17,8 @@
 (** Leaving the curve: affine coordinates and bytes.
 
     Signing and ECDH convert points that depend on a secret scalar, so the
-    inverses here are constant-time: the field's is the fixed addition
-    chain of {!Hacl.P384.Inverse}, the scalar's ([invmod_ct]) the generic
-    constant-time exponentiation.  Everything else is
-    straight-line code. *)
+    inverse here is constant-time: the fixed addition chain of
+    {!Hacl.P384.Inverse}.  Everything else is straight-line code. *)
 module Hacl.P384.Encode
 
 #lang-pulse
@@ -32,7 +30,6 @@ open Hacl.Impl.Limb64
 open Hacl.Impl.Table
 open Hacl.Impl.Copy
 open Hacl.Bignum.Base
-open Hacl.Bignum.Exponentiation
 open Hacl.Bignum.Convert
 open Hacl.P384.Tables
 open Hacl.P384.Lemmas
@@ -61,53 +58,6 @@ let aff (x y z: Seq.seq S64.t) : GTot (nat & nat) =
   let zi = P.finv (fev z) in (P.fmul (fev x) zi, P.fmul (fev y) zi)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
-
-(** [res = a^(n-2) mod n], in time independent of [a]. *)
-fn invmod_ct (res a nm r2: A.array S64.t) (mu: S64.t)
-             (#vres: erased (Seq.seq S64.t))
-             (#pa #pn #pr: perm) (#va #vr2: erased (Seq.seq S64.t))
-             (#vn: erased (s: Seq.seq S64.t { 1 < num s /\ 0 < Seq.length s }))
-requires A.pts_to res vres ** A.pts_to a #pa va **
-         A.pts_to nm #pn vn ** A.pts_to r2 #pr vr2 **
-  pure (Seq.length vres == 6 /\ Seq.length va == 6 /\
-        Seq.length vn == 6 /\ Seq.length vr2 == 6 /\
-        num va < num vn /\
-        num vr2 == (wt 6 * wt 6) % num vn /\
-        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S64.t).
-  A.pts_to res v ** A.pts_to a #pa va **
-  A.pts_to nm #pn vn ** A.pts_to r2 #pr vr2 **
-  pure (Seq.length v == 6 /\ num v == pw (num va) (num vn - 2) % num vn)
-{
-  facts ();
-  SZ.fits_at_least_16 96;
-  let z = S64.zero;
-  let mut e = [| z; 6sz |];
-  Mem.track e; A.pts_to_len e; let mut two = [| z; 6sz |];
-  Mem.track two; A.pts_to_len two; let mut am = [| z; 6sz |];
-  Mem.track am; A.pts_to_len am; let mut acc = [| z; 6sz |];
-  Mem.track acc; A.pts_to_len acc; let mut t = [| z; 6sz |];
-  Mem.track t; A.pts_to_len t; let mut wide = [| z; 12sz |];
-  Mem.track wide; A.pts_to_len wide;
-  zero two 6sz;
-  with v0. assert (A.pts_to two v0);
-  num_zeros_above v0 0;
-  pre_zero v0;
-  A.((two.(0sz) <- S64.classify 2uL));
-  num_upd v0 0 (S64.classify 2uL);
-  let c = sub e nm two 6sz;
-  with v2. assert (A.pts_to e v2);
-  six_bnd v2;
-  inv_exp (num vn) (num v2) (S64.v c) (wt 6);
-  mod_exp_consttime res a e 384sz r2 nm 6sz mu am acc t wide;
-  Mem.wipe wide 12sz;
-  Mem.wipe t 6sz;
-  Mem.wipe acc 6sz;
-  Mem.wipe am 6sz;
-  Mem.wipe two 6sz;
-  Mem.wipe e 6sz;
-  ()
-}
 
 (** The affine coordinates of [(x : y : z)], as plain numbers below [p]. *)
 fn to_aff (ax ay x y z: A.array S64.t)

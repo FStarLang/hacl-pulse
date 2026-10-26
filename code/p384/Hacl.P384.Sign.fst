@@ -23,7 +23,7 @@
     The private key and the nonce are secret, so everything that touches
     them is constant time: the ladder selects with masks, and both
     inverses -- of [z] for the affine coordinate and of the nonce -- are
-    the constant-time exponentiation.  What is declassified is only the
+    fixed addition chains ({!Hacl.P384.Inverse}, {!Hacl.P384.QInverse}).  What is declassified is only the
     validity of the inputs and whether [r] or [s] came out zero, which the
     return value reveals anyway. *)
 module Hacl.P384.Sign
@@ -51,6 +51,7 @@ module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P384
 module Mem = Hacl.Mem
+module QI = Hacl.P384.QInverse
 
 (** The signature on numbers, for keys already known to be in range. *)
 let core_sig (m d k: nat) : GTot (option (Seq.lseq S8.t 96)) =
@@ -114,9 +115,8 @@ ensures exists* (wo: Seq.seq S8.t).
   with vr. assert (A.pts_to r vr);
 
   (* s = (m + r d) / k mod n *)
-  invmod_ct ki k qm q2 qmu;
+  QI.qinv_plain ki k;
   with vki. assert (A.pts_to ki vki);
-  pw_exp P.order (num vk) (P.order - 2);
   assert (pure (num vki == P.qinv (num vk)));
   mulmod t1 r d qm q2 qmu;
   add_mod t2 mq t1 qm 6sz;
