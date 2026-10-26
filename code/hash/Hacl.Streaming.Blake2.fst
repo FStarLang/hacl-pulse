@@ -31,7 +31,14 @@
     last compression and gives it the message length as its counter, so the
     implementation cannot know a full block is not the last one until more
     data arrives.  The buffer therefore holds between one and [block_len]
-    bytes rather than between zero and [block_len - 1]. *)
+    bytes rather than between zero and [block_len - 1].
+
+    The [blake2b_params_*] and [blake2s_params_*] triples at the end of this
+    module take the full parameter block -- digest length, salt,
+    personalization and tree-hashing fields -- at [init].  The same three
+    pieces of memory hold their state, which does not record the digest
+    length, so [digest] takes it again and it must be the one given to
+    [init]. *)
 module Hacl.Streaming.Blake2
 
 #lang-pulse
@@ -54,6 +61,9 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module U64 = FStar.UInt64
 module G = FStar.Ghost
 module Mem = Hacl.Mem
 
@@ -82,6 +92,7 @@ fn update_gen (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
               (ivs: A.array t) (acc: A.array t) (buf: A.array S8.t)
               (tot: A.array SZ.t) (data: A.array S8.t) (data_len: SZ.t)
               (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+              (h0: erased (Seq.lseq t 8))
               (#pi: perm) (#vi: erased (Seq.seq t))
               (#vacc: erased (Seq.seq t)) (#vbuf: erased (Seq.seq S8.t))
               (#vtot: erased (Seq.seq SZ.t))
@@ -89,7 +100,7 @@ fn update_gen (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
 requires A.pts_to ivs #pi vi ** A.pts_to acc vacc ** A.pts_to buf vbuf **
          A.pts_to tot vtot ** A.pts_to data #pd vdata **
          pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
-               stream_ok p key seen vacc vbuf vtot /\
+               stream_ok_h p h0 key seen vacc vbuf vtot /\
                Seq.length (stream #t key seen) + Seq.length vdata +
                  2 * block_len #t < pow2 64 /\
                SZ.fits (Seq.length (stream #t key seen) + Seq.length vdata))
@@ -97,7 +108,7 @@ requires A.pts_to ivs #pi vi ** A.pts_to acc vacc ** A.pts_to buf vbuf **
 ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
   A.pts_to ivs #pi vi ** A.pts_to acc vacc' ** A.pts_to buf vbuf' **
   A.pts_to tot vtot' ** A.pts_to data #pd vdata **
-  pure (stream_ok p key (Seq.append seen vdata) vacc' vbuf' vtot')
+  pure (stream_ok_h p h0 key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   let z0: t = zero #t #w;
   let z8 = S8.classify 0uy;
@@ -112,7 +123,7 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
   A.pts_to_len marr;
   A.pts_to_len barr;
 
-  update_impl p acc marr barr ivs buf tot data data_len key seen;
+  update_impl p acc marr barr ivs buf tot data data_len key seen h0;
   Mem.wipe barr bl;
   Mem.wipe marr 16sz;
 
@@ -122,7 +133,9 @@ fn digest_gen (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
               ([@@@FStar.Attributes.monomorphize] p: params t)
               (ivs: A.array t) (acc: A.array t) (buf: A.array S8.t)
               (tot: A.array SZ.t) (out: A.array S8.t)
+              (nn: SZ.t { SZ.v nn <= 8 * bytes #t })
               (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+              (h0: erased (Seq.lseq t 8))
               (#pi: perm) (#vi: erased (Seq.seq t))
               (#pa: perm) (#vacc: erased (Seq.seq t))
               (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
@@ -131,12 +144,12 @@ fn digest_gen (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
 requires A.pts_to ivs #pi vi ** A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf **
          A.pts_to tot #pt vtot ** A.pts_to out vout **
          pure (Seq.length vi == 8 /\ reveal vi == G.reveal p.iv /\
-               Seq.length vout == hash_bytes p /\
-               stream_ok p key seen vacc vbuf vtot)
+               Seq.length vout == SZ.v nn /\
+               stream_ok_h p h0 key seen vacc vbuf vtot)
 ensures exists* (vout': Seq.seq S8.t).
   A.pts_to ivs #pi vi ** A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf **
   A.pts_to tot #pt vtot ** A.pts_to out vout' **
-  pure (Seq.length key <= max_key_len #t /\ vout' == blake2 p key seen)
+  pure (Seq.length key <= max_key_len #t /\ vout' == blake2_from p h0 (SZ.v nn) key seen)
 {
   let z0: t = zero #t #w;
   let z8 = S8.classify 0uy;
@@ -151,7 +164,7 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len marr;
   A.pts_to_len barr;
 
-  digest_impl p acc marr barr ivs buf tot out key seen;
+  digest_impl p acc marr barr ivs buf tot out nn key seen h0;
   Mem.wipe barr bl;
   Mem.wipe marr 16sz;
 
@@ -210,7 +223,8 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_512_p ivt acc buf tot data data_len key seen;
+  update_gen blake2b_512_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2b_512_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -232,7 +246,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  digest_gen blake2b_512_p ivt acc buf tot out key seen;
+  digest_gen blake2b_512_p ivt acc buf tot out 64sz key seen
+             (G.hide (init blake2b_512_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -280,7 +295,8 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_384_p ivt acc buf tot data data_len key seen;
+  update_gen blake2b_384_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2b_384_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -302,7 +318,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  digest_gen blake2b_384_p ivt acc buf tot out key seen;
+  digest_gen blake2b_384_p ivt acc buf tot out 48sz key seen
+             (G.hide (init blake2b_384_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -350,7 +367,8 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_256_p ivt acc buf tot data data_len key seen;
+  update_gen blake2b_256_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2b_256_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -372,7 +390,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  digest_gen blake2b_256_p ivt acc buf tot out key seen;
+  digest_gen blake2b_256_p ivt acc buf tot out 32sz key seen
+             (G.hide (init blake2b_256_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -420,7 +439,8 @@ ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  update_gen blake2b_160_p ivt acc buf tot data data_len key seen;
+  update_gen blake2b_160_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2b_160_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -442,7 +462,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_64 ();
   table_lens ();
   let ivt = table iv64_arr 8sz;
-  digest_gen blake2b_160_p ivt acc buf tot out key seen;
+  digest_gen blake2b_160_p ivt acc buf tot out 20sz key seen
+             (G.hide (init blake2b_160_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -490,7 +511,8 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_256_p ivt acc buf tot data data_len key seen;
+  update_gen blake2s_256_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2s_256_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -512,7 +534,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  digest_gen blake2s_256_p ivt acc buf tot out key seen;
+  digest_gen blake2s_256_p ivt acc buf tot out 32sz key seen
+             (G.hide (init blake2s_256_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -560,7 +583,8 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_224_p ivt acc buf tot data data_len key seen;
+  update_gen blake2s_224_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2s_224_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -582,7 +606,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  digest_gen blake2s_224_p ivt acc buf tot out key seen;
+  digest_gen blake2s_224_p ivt acc buf tot out 28sz key seen
+             (G.hide (init blake2s_224_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -630,7 +655,8 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_160_p ivt acc buf tot data data_len key seen;
+  update_gen blake2s_160_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2s_160_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -652,7 +678,8 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  digest_gen blake2s_160_p ivt acc buf tot out key seen;
+  digest_gen blake2s_160_p ivt acc buf tot out 20sz key seen
+             (G.hide (init blake2s_160_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -700,7 +727,8 @@ ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  update_gen blake2s_128_p ivt acc buf tot data data_len key seen;
+  update_gen blake2s_128_p ivt acc buf tot data data_len key seen
+             (G.hide (init blake2s_128_p (Seq.length key)));
   drop_table ivt;
 }
 
@@ -722,7 +750,190 @@ ensures exists* (vout': Seq.seq S8.t).
   block_len_32 ();
   table_lens ();
   let ivt = table iv32_arr 8sz;
-  digest_gen blake2s_128_p ivt acc buf tot out key seen;
+  digest_gen blake2s_128_p ivt acc buf tot out 16sz key seen
+             (G.hide (init blake2s_128_p (Seq.length key)));
+  drop_table ivt;
+}
+
+(** {3 BLAKE2B under a full parameter block}
+
+    [digest_len] is the digest length, from 1 to 64; [salt] and [personal]
+    are 16 bytes each; the last six arguments are the tree-hashing fields
+    of the parameter block (fanout 1, depth 1 and the rest zero for a
+    sequential hash).  [digest] must be given an output of exactly
+    [digest_len] bytes: the length is part of the initial state, and the
+    state does not record it. *)
+
+fn blake2b_params_init (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t) (digest_len: SZ.t)
+                    (salt: A.array S8.t) (personal: A.array S8.t)
+                    (fanout: U8.t) (depth: U8.t) (leaf_length: U32.t)
+                    (node_offset: U64.t) (node_depth: U8.t) (inner_length: U8.t)
+                    (bp: erased (blake2_params S64.t))
+                    (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+                    (#vtot: erased (Seq.seq SZ.t))
+                    (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+                    (#ps: perm) (#vs: erased (Seq.seq S8.t))
+                    (#pp: perm) (#vp: erased (Seq.seq S8.t))
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey ** A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+         pure (Seq.length vacc == 8 /\ Seq.length vbuf == 128 /\
+               Seq.length vtot == 1 /\ Seq.length vkey <= 64 /\
+               params_match bp digest_len fanout depth leaf_length node_offset
+                            node_depth inner_length vs vp)
+         ** pure (SZ.v key_len == Seq.length vkey)
+ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey ** A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+  pure (stream_ok_params blake2b_512_p bp vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
+{
+  block_len_64 ();
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
+  init_params_impl blake2b_512_p acc buf tot ivt key key_len digest_len salt personal
+                   fanout depth leaf_length node_offset node_depth inner_length bp;
+  drop_table ivt;
+}
+
+fn blake2b_params_update (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
+                      (bp: erased (blake2_params S64.t))
+                      (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+                      (#vacc: erased (Seq.seq S64.t)) (#vbuf: erased (Seq.seq S8.t))
+                      (#vtot: erased (Seq.seq SZ.t))
+                      (#pd: perm) (#vdata: erased (Seq.seq S8.t))
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
+         pure (stream_ok_params blake2b_512_p bp key seen vacc vbuf vtot /\
+               Seq.length (stream #S64.t key seen) + Seq.length vdata + 256 < pow2 64 /\
+               SZ.fits (Seq.length (stream #S64.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
+ensures exists* (vacc': Seq.seq S64.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
+  pure (stream_ok_params blake2b_512_p bp key (Seq.append seen vdata) vacc' vbuf' vtot')
+{
+  block_len_64 ();
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
+  update_gen blake2b_512_p ivt acc buf tot data data_len key seen
+             (G.hide (init_with blake2b_512_p bp (Seq.length key)));
+  drop_table ivt;
+}
+
+fn blake2b_params_digest (acc: A.array S64.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t) (out_len: SZ.t)
+                      (bp: erased (blake2_params S64.t))
+                      (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+                      (#pa: perm) (#vacc: erased (Seq.seq S64.t))
+                      (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
+                      (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
+                      (#vout: erased (Seq.seq S8.t))
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
+         pure (stream_ok_params blake2b_512_p bp key seen vacc vbuf vtot /\
+               Seq.length vout == SZ.v out_len /\ SZ.v out_len == bp.digest_length)
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
+  pure (Seq.length key <= 64 /\ vout' == blake2_with_params blake2b_512_p bp key seen)
+{
+  block_len_64 ();
+  table_lens ();
+  let ivt = table iv64_arr 8sz;
+  digest_gen blake2b_512_p ivt acc buf tot out out_len key seen
+             (G.hide (init_with blake2b_512_p bp (Seq.length key)));
+  drop_table ivt;
+}
+
+(** {3 BLAKE2S under a full parameter block}
+
+    [digest_len] is the digest length, from 1 to 32; [salt] and [personal]
+    are 8 bytes each; the last six arguments are the tree-hashing fields
+    of the parameter block (fanout 1, depth 1 and the rest zero for a
+    sequential hash).  [digest] must be given an output of exactly
+    [digest_len] bytes: the length is part of the initial state, and the
+    state does not record it. *)
+
+fn blake2s_params_init (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (key: A.array S8.t) (key_len: SZ.t) (digest_len: SZ.t)
+                    (salt: A.array S8.t) (personal: A.array S8.t)
+                    (fanout: U8.t) (depth: U8.t) (leaf_length: U32.t)
+                    (node_offset: U64.t) (node_depth: U8.t) (inner_length: U8.t)
+                    (bp: erased (blake2_params S32.t))
+                    (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
+                    (#vtot: erased (Seq.seq SZ.t))
+                    (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+                    (#ps: perm) (#vs: erased (Seq.seq S8.t))
+                    (#pp: perm) (#vp: erased (Seq.seq S8.t))
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to key #pk vkey ** A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+         pure (Seq.length vacc == 8 /\ Seq.length vbuf == 64 /\
+               Seq.length vtot == 1 /\ Seq.length vkey <= 32 /\
+               params_match bp digest_len fanout depth leaf_length node_offset
+                            node_depth inner_length vs vp)
+         ** pure (SZ.v key_len == Seq.length vkey)
+ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey ** A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+  pure (stream_ok_params blake2s_256_p bp vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
+{
+  block_len_32 ();
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
+  init_params_impl blake2s_256_p acc buf tot ivt key key_len digest_len salt personal
+                   fanout depth leaf_length node_offset node_depth inner_length bp;
+  drop_table ivt;
+}
+
+fn blake2s_params_update (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (data: A.array S8.t) (data_len: SZ.t)
+                      (bp: erased (blake2_params S32.t))
+                      (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+                      (#vacc: erased (Seq.seq S32.t)) (#vbuf: erased (Seq.seq S8.t))
+                      (#vtot: erased (Seq.seq SZ.t))
+                      (#pd: perm) (#vdata: erased (Seq.seq S8.t))
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to data #pd vdata **
+         pure (stream_ok_params blake2s_256_p bp key seen vacc vbuf vtot /\
+               Seq.length (stream #S32.t key seen) + Seq.length vdata + 128 < pow2 64 /\
+               SZ.fits (Seq.length (stream #S32.t key seen) + Seq.length vdata))
+         ** pure (SZ.v data_len == Seq.length vdata)
+ensures exists* (vacc': Seq.seq S32.t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to data #pd vdata **
+  pure (stream_ok_params blake2s_256_p bp key (Seq.append seen vdata) vacc' vbuf' vtot')
+{
+  block_len_32 ();
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
+  update_gen blake2s_256_p ivt acc buf tot data data_len key seen
+             (G.hide (init_with blake2s_256_p bp (Seq.length key)));
+  drop_table ivt;
+}
+
+fn blake2s_params_digest (acc: A.array S32.t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                      (out: A.array S8.t) (out_len: SZ.t)
+                      (bp: erased (blake2_params S32.t))
+                      (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+                      (#pa: perm) (#vacc: erased (Seq.seq S32.t))
+                      (#pb: perm) (#vbuf: erased (Seq.seq S8.t))
+                      (#pt: perm) (#vtot: erased (Seq.seq SZ.t))
+                      (#vout: erased (Seq.seq S8.t))
+requires A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+         A.pts_to out vout **
+         pure (stream_ok_params blake2s_256_p bp key seen vacc vbuf vtot /\
+               Seq.length vout == SZ.v out_len /\ SZ.v out_len == bp.digest_length)
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to acc #pa vacc ** A.pts_to buf #pb vbuf ** A.pts_to tot #pt vtot **
+  A.pts_to out vout' **
+  pure (Seq.length key <= 32 /\ vout' == blake2_with_params blake2s_256_p bp key seen)
+{
+  block_len_32 ();
+  table_lens ();
+  let ivt = table iv32_arr 8sz;
+  digest_gen blake2s_256_p ivt acc buf tot out out_len key seen
+             (G.hide (init_with blake2s_256_p bp (Seq.length key)));
   drop_table ivt;
 }
 

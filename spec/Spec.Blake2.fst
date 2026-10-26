@@ -263,22 +263,107 @@ let block_at_shift (#t: Type0) {| word t |} (s: Seq.seq S8.t) (a: nat) (b: nat) 
           (ensures block_at #t (Seq.slice s a (a + b)) off == block_at #t s (a + off))
   = Seq.slice_slice s a (a + b) off (off + block_len #t)
 
-(** The parameter word xored into the first state word: digest length in the
-    low byte, key length in the next, then the fanout and depth of the
-    unbranched tree, both one.  The three fields do not overlap, so the xor of
-    RFC 7693 is a sum. *)
-let param_word (nn kk: nat { nn < 256 /\ kk < 256 }) : n: nat { n < pow2 32 } =
-  0x01010000 + kk * 256 + nn
+(** {2 The parameter block}
 
-let small_word (#t: Type0) {| word t |} (n: nat { n < pow2 32 }) : GTot t =
-  Math.pow2_le_compat (bits #t) 32;
-  of_v n
+    The initial state is the initialization vector xored with an eight-word
+    parameter block (the BLAKE2 paper, section 2.8; RFC 7693 section 2.5 uses
+    only its first word).  As bytes, in the paper's layout:
 
+    {v
+      offset   BLAKE2b              BLAKE2s
+       0       digest length        digest length
+       1       key length           key length
+       2       fanout               fanout
+       3       depth                depth
+       4..7    leaf length          leaf length
+       8..     node offset (8)      node offset (6)
+               node depth           node depth
+               inner length         inner length
+               reserved (14 zero)   --
+      4w..6w   salt (16)            salt (8)
+      6w..8w   personal (16)        personal (8)
+    v}
+
+    where [w] is the word size in bytes.  The node offset is the one field
+    whose width is not a function of [w] alone: eight bytes for BLAKE2b, six
+    for BLAKE2s, so that BLAKE2s's head is exactly sixteen bytes.
+
+    The key length is not a field of [blake2_params]: it is always the length
+    of the key actually supplied, so the two cannot disagree. *)
+
+let node_offset_len (#t: Type0) {| word t |} : n: nat { 10 + n <= 4 * bytes #t } =
+  if bytes #t = 4 then 6 else 8
+
+let salt_len (#t: Type0) {| word t |} : pos = 2 * bytes #t
+
+noeq
+type blake2_params (t: Type0) {| word t |} = {
+  digest_length: n: nat { 0 < n /\ n <= 8 * bytes #t };
+  fanout: n: nat { n < 256 };
+  depth: n: nat { n < 256 };
+  leaf_length: n: nat { n < pow2 32 };
+  node_offset: n: nat { n < pow2 (8 * node_offset_len #t) };
+  node_depth: n: nat { n < 256 };
+  inner_length: n: nat { n < 256 };
+  salt: Seq.lseq S8.t (salt_len #t);
+  personal: Seq.lseq S8.t (salt_len #t);
+}
+
+(** The parameters RFC 7693 fixes: a sequential hash (fanout and depth one),
+    no salt, no personalization. *)
+let default_params (#t: Type0) {| word t |} (nn: nat { 0 < nn /\ nn <= 8 * bytes #t })
+  : blake2_params t
+  = { digest_length = nn; fanout = 1; depth = 1; leaf_length = 0; node_offset = 0;
+      node_depth = 0; inner_length = 0;
+      salt = Seq.create (salt_len #t) (S8.classify 0uy);
+      personal = Seq.create (salt_len #t) (S8.classify 0uy) }
+
+(** Byte [k] of [x], little-endian. *)
+let le_byte (x: nat) (k: nat) : n: nat { n < 256 } = (x / pow2 (8 * k)) % 256
+
+(** Byte [i] of the first half of the parameter block: everything but the salt
+    and the personalization.  Zero past the last field, which includes all of
+    the reserved bytes. *)
+let head_byte (#t: Type0) {| word t |}
+              (nn kk fanout depth: (n: nat { n < 256 })) (leaf: nat) (off: nat)
+              (nd il: (n: nat { n < 256 })) (i: nat)
+  : n: nat { n < 256 }
+  = let ol = node_offset_len #t in
+    if i = 0 then nn
+    else if i = 1 then kk
+    else if i = 2 then fanout
+    else if i = 3 then depth
+    else if i < 8 then le_byte leaf (i - 4)
+    else if i < 8 + ol then le_byte off (i - 8)
+    else if i = 8 + ol then nd
+    else if i = 9 + ol then il
+    else 0
+
+let param_block (#t: Type0) {| word t |} (bp: blake2_params t) (kk: nat { kk <= max_key_len #t })
+  : Seq.lseq S8.t (8 * bytes #t)
+  = let w = bytes #t in
+    Seq.init (8 * w) (fun (i: nat { i < 8 * w }) ->
+      if i < 4 * w
+      then S8.classify (FStar.UInt8.uint_to_t
+             (head_byte #t bp.digest_length kk bp.fanout bp.depth bp.leaf_length
+                           bp.node_offset bp.node_depth bp.inner_length i))
+      else if i < 6 * w then Seq.index bp.salt (i - 4 * w)
+      else Seq.index bp.personal (i - 6 * w))
+
+let xor_words (#t: Type0) {| word t |} (a b: Seq.lseq t 8) : Seq.lseq t 8 =
+  Seq.init 8 (fun i -> logxor #t (Seq.index a i) (Seq.index b i))
+
+let init_with (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
+              (bp: blake2_params t) (kk: nat { kk <= max_key_len #t })
+  : GTot (Seq.lseq t 8)
+  = xor_words (G.reveal p.iv) (words_from_le 8 (param_block bp kk))
+
+(** The RFC 7693 initial state: the default parameters at the digest length
+    [p] names. *)
 let init (#t: Type0) {| word t |} ([@@@FStar.Attributes.monomorphize] p: params t)
          (kk: nat { kk <= max_key_len #t })
   : GTot (Seq.lseq t 8)
-  = let iv = G.reveal p.iv in
-    Seq.upd iv 0 (logxor #t (Seq.index iv 0) (small_word #t (param_word (hash_bytes p) kk)))
+  = init_with p (default_params (hash_bytes p)) kk
 
 (** Compression number [i], of a block that is not the last one, at counter
     [(i + 1) * block_len]: the number of bytes absorbed so far, including this
@@ -291,9 +376,13 @@ let compress_at (#t: Type0) {| word t |} (p: params t) (d: Seq.seq S8.t)
                     ((i + 1) * block_len #t) false
     else h
 
+let final_n (#t: Type0) {| word t |} (nn: nat { nn <= 8 * bytes #t }) (h: Seq.lseq t 8)
+  : GTot (Seq.lseq S8.t nn)
+  = Seq.slice (words_to_le 8 h) 0 nn
+
 let final (#t: Type0) {| word t |} (p: params t) (h: Seq.lseq t 8)
   : GTot (Seq.lseq S8.t (hash_bytes p))
-  = Seq.slice (words_to_le 8 h) 0 (hash_bytes p)
+  = final_n (hash_bytes p) h
 
 (** The counter of the last compression: the message length, plus a block if a
     key was prepended.  Note it is the length of the *message*, not of the
@@ -302,18 +391,36 @@ let final (#t: Type0) {| word t |} (p: params t) (h: Seq.lseq t 8)
 let last_counter (#t: Type0) {| word t |} (key msg: Seq.seq S8.t) : nat =
   if Seq.length key = 0 then Seq.length msg else Seq.length msg + block_len #t
 
-let blake2 (#t: Type0) {| word t |} (p: params t)
-           (key: Seq.seq S8.t { Seq.length key <= max_key_len #t })
-           (msg: Seq.seq S8.t)
-  : GTot (Seq.lseq S8.t (hash_bytes p))
+(** The hash from a given initial state, truncated to [nn] bytes.  The
+    initial state and the digest length are the only places the parameter
+    block enters; everything else is the same for every choice of it. *)
+let blake2_from (#t: Type0) {| word t |} (p: params t) (h0: Seq.lseq t 8)
+                (nn: nat { nn <= 8 * bytes #t })
+                (key: Seq.seq S8.t) (msg: Seq.seq S8.t)
+  : GTot (Seq.lseq S8.t nn)
   = let d = data #t key msg in
     let nb = Seq.length d / block_len #t in
     (* [nb] is always at least one; taking the predecessor this way keeps the
        definition total without a lemma. *)
     let nlast : nat = if nb = 0 then 0 else nb - 1 in
-    let h = repeati_g nlast (compress_at p d) (init p (Seq.length key)) in
-    final p (compress p h (words_from_le block_words (block_at #t d (nlast * block_len #t)))
-                        (last_counter #t key msg) true)
+    let h = repeati_g nlast (compress_at p d) h0 in
+    final_n nn (compress p h (words_from_le block_words (block_at #t d (nlast * block_len #t)))
+                         (last_counter #t key msg) true)
+
+let blake2 (#t: Type0) {| word t |} (p: params t)
+           (key: Seq.seq S8.t { Seq.length key <= max_key_len #t })
+           (msg: Seq.seq S8.t)
+  : GTot (Seq.lseq S8.t (hash_bytes p))
+  = blake2_from p (init p (Seq.length key)) (hash_bytes p) key msg
+
+(** BLAKE2 under an arbitrary parameter block: digest length, salt,
+    personalization and the tree-hashing fields.  [blake2 p] is this at
+    [default_params (hash_bytes p)]. *)
+let blake2_with_params (#t: Type0) {| word t |} (p: params t) (bp: blake2_params t)
+                       (key: Seq.seq S8.t { Seq.length key <= max_key_len #t })
+                       (msg: Seq.seq S8.t)
+  : GTot (Seq.lseq S8.t bp.digest_length)
+  = blake2_from p (init_with p bp (Seq.length key)) bp.digest_length key msg
 
 (** {2 The two algorithms}
 

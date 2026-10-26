@@ -25,7 +25,7 @@ intrinsics behind a narrow axiomatized interface and is chosen at run time.
 
 | family | algorithms |
 | --- | --- |
-| hashes | MD5, SHA-1, SHA-224/256/384/512, SHA3-224/256/384/512, SHAKE128/256, BLAKE2s, BLAKE2b (one-shot and streaming) |
+| hashes | MD5, SHA-1, SHA-224/256/384/512, SHA3-224/256/384/512, SHAKE128/256, BLAKE2s, BLAKE2b (one-shot and streaming, with salt, personalization and tree parameters) |
 | MACs and KDFs | HMAC (SHA-1, SHA-2) and Poly1305 (one-shot and streaming), HKDF, HMAC-DRBG |
 | ciphers and AEAD | ChaCha20, Salsa20, AES-128/256-GCM, ChaCha20-Poly1305, NaCl `box` and `secretbox` |
 | elliptic curves | X25519, Ed25519, P-256 ECDH and ECDSA, P-384 ECDH and ECDSA (SHA-384, SHA-256), secp256k1 ECDH and ECDSA |
