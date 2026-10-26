@@ -53,7 +53,8 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.SHA3., \
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Hash.Blake2.Named., \
   blake2b_512 blake2b_384 blake2b_256 blake2b_160 \
-  blake2s_256 blake2s_224 blake2s_160 blake2s_128)
+  blake2s_256 blake2s_224 blake2s_160 blake2s_128 \
+  blake2b_params blake2s_params)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.Blake2., \
   blake2b_512_init blake2b_512_update blake2b_512_digest \
@@ -63,7 +64,9 @@ CUSTARD_ENTRIES += $(addprefix Hacl.Streaming.Blake2., \
   blake2s_256_init blake2s_256_update blake2s_256_digest \
   blake2s_224_init blake2s_224_update blake2s_224_digest \
   blake2s_160_init blake2s_160_update blake2s_160_digest \
-  blake2s_128_init blake2s_128_update blake2s_128_digest)
+  blake2s_128_init blake2s_128_update blake2s_128_digest \
+  blake2b_params_init blake2b_params_update blake2b_params_digest \
+  blake2s_params_init blake2s_params_update blake2s_params_digest)
 
 CUSTARD_ENTRIES += $(addprefix Hacl.Chacha20., encrypt decrypt)
 

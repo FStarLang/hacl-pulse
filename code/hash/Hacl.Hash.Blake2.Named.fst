@@ -22,7 +22,10 @@
     what makes the whole record a compile-time constant, which is what lets
     Custard fold the round count and the four rotation distances into
     literals.  The eight lengths here are the ones RFC 7693 and the common
-    profiles name; another is four lines.
+    profiles name; another is four lines.  For any other length, or for a
+    salt, a personalization or tree-hashing parameters, use [blake2b_params]
+    and [blake2s_params] at the end of this module, which take the whole
+    parameter block at run time.
 
     Every entry point takes a key, which may be empty.  An empty key is an
     unkeyed hash; a nonempty one is prepended as a whole block and counted. *)
@@ -44,6 +47,9 @@ module Seq = FStar.Seq
 module S8 = Hacl.Secret.UInt8
 module S32 = Hacl.Secret.UInt32
 module S64 = Hacl.Secret.UInt64
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module U64 = FStar.UInt64
 module G = Pulse.Lib.GlobalArray
 
 (** The two initialization vectors, as [static const] arrays in the program
@@ -250,4 +256,81 @@ ensures exists* (vout': Seq.seq S8.t).
   A.pts_to_len msg;
   table_lens ();
   blake2_impl blake2s_128_p iv32_arr out key key_len msg msg_len;
+}
+
+(** {2 Under a full parameter block}
+
+    BLAKE2b and BLAKE2s with every field of the parameter block a runtime
+    argument: a digest length [out_len] from 1 to the state size, a key, a
+    salt and a personalization (each two words: 16 or 8 bytes), and the
+    tree-hashing fields.  For a sequential hash the tree fields are fanout 1,
+    depth 1 and the rest zero, and with an all-zero salt and personalization
+    the result is the named hash of the same length. *)
+
+fn blake2b_params (out: A.array S8.t) (out_len: SZ.t)
+              (key: A.array S8.t) (key_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t)
+              (salt: A.array S8.t) (personal: A.array S8.t)
+              (fanout: U8.t) (depth: U8.t) (leaf_length: U32.t)
+              (node_offset: U64.t) (node_depth: U8.t) (inner_length: U8.t)
+              (bp: erased (blake2_params S64.t))
+              (#vout: erased (Seq.seq S8.t))
+              (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+              (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
+              (#ps: perm) (#vs: erased (Seq.seq S8.t))
+              (#pp: perm) (#vp: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
+         A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+         pure (Seq.length vout == SZ.v out_len /\ Seq.length vkey <= 64 /\
+               params_match bp out_len fanout depth leaf_length node_offset
+                            node_depth inner_length vs vp /\
+               Seq.length vmsg + 256 < pow2 64 /\
+               SZ.fits (Seq.length vmsg + 256))
+         ** pure (SZ.v key_len == Seq.length vkey)
+         ** pure (SZ.v msg_len == Seq.length vmsg)
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to out vout' ** A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
+  A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+  pure (Seq.length vkey <= 64 /\
+        vout' == blake2_with_params blake2b_512_p bp (reveal vkey) (reveal vmsg))
+{
+  A.pts_to_len out;
+  A.pts_to_len key;
+  A.pts_to_len msg;
+  table_lens ();
+  blake2_params_impl blake2b_512_p iv64_arr out out_len key key_len msg msg_len salt personal
+                     fanout depth leaf_length node_offset node_depth inner_length bp;
+}
+
+fn blake2s_params (out: A.array S8.t) (out_len: SZ.t)
+              (key: A.array S8.t) (key_len: SZ.t) (msg: A.array S8.t) (msg_len: SZ.t)
+              (salt: A.array S8.t) (personal: A.array S8.t)
+              (fanout: U8.t) (depth: U8.t) (leaf_length: U32.t)
+              (node_offset: U64.t) (node_depth: U8.t) (inner_length: U8.t)
+              (bp: erased (blake2_params S32.t))
+              (#vout: erased (Seq.seq S8.t))
+              (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+              (#pm: perm) (#vmsg: erased (Seq.seq S8.t))
+              (#ps: perm) (#vs: erased (Seq.seq S8.t))
+              (#pp: perm) (#vp: erased (Seq.seq S8.t))
+requires A.pts_to out vout ** A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
+         A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+         pure (Seq.length vout == SZ.v out_len /\ Seq.length vkey <= 32 /\
+               params_match bp out_len fanout depth leaf_length node_offset
+                            node_depth inner_length vs vp /\
+               Seq.length vmsg + 128 < pow2 64 /\
+               SZ.fits (Seq.length vmsg + 128))
+         ** pure (SZ.v key_len == Seq.length vkey)
+         ** pure (SZ.v msg_len == Seq.length vmsg)
+ensures exists* (vout': Seq.seq S8.t).
+  A.pts_to out vout' ** A.pts_to key #pk vkey ** A.pts_to msg #pm vmsg **
+  A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+  pure (Seq.length vkey <= 32 /\
+        vout' == blake2_with_params blake2s_256_p bp (reveal vkey) (reveal vmsg))
+{
+  A.pts_to_len out;
+  A.pts_to_len key;
+  A.pts_to_len msg;
+  table_lens ();
+  blake2_params_impl blake2s_256_p iv32_arr out out_len key key_len msg msg_len salt personal
+                     fanout depth leaf_length node_offset node_depth inner_length bp;
 }

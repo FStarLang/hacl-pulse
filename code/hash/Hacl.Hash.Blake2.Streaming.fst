@@ -51,6 +51,9 @@ open Hacl.Impl.Copy
 module A = Pulse.Lib.Array
 module Sub = Hacl.Impl.Sub
 module SZ = FStar.SizeT
+module U8 = FStar.UInt8
+module U32 = FStar.UInt32
+module U64 = FStar.UInt64
 module Seq = FStar.Seq
 module Math = FStar.Math.Lemmas
 module S8 = Hacl.Secret.UInt8
@@ -220,43 +223,41 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
 
 #push-options "--z3rlimit 200 --fuel 1 --ifuel 1"
 
-(** Reset to the empty message under [key].  A nonempty key goes straight into
-    the buffer as a full block and the stored length starts at one block; an
+(** Reset to the empty message under [key], with the accumulator already
+    holding the initial state [h0].  A nonempty key goes straight into the
+    buffer as a full block and the stored length starts at one block; an
     empty key leaves both at zero. *)
-fn init_impl (#t: Type0) {| w: word t |}
-             ([@@@FStar.Attributes.monomorphize] p: params t)
-             (acc: A.array t) (buf: A.array S8.t) (tot: A.array SZ.t)
-             (ivs: A.array t) (key: A.array S8.t) (klen: SZ.t)
-             (#vacc: erased (Seq.seq t)) (#vbuf: erased (Seq.seq S8.t))
-             (#vtot: erased (Seq.seq SZ.t))
-             (#pi: perm) (#vi: erased (Seq.seq t))
-             (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+fn init_buf_impl (#t: Type0) {| w: word t |}
+                 ([@@@FStar.Attributes.monomorphize] p: params t)
+                 (acc: A.array t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                 (key: A.array S8.t) (klen: SZ.t) (h0: erased (Seq.lseq t 8))
+                 (#vacc: erased (Seq.seq t)) (#vbuf: erased (Seq.seq S8.t))
+                 (#vtot: erased (Seq.seq SZ.t))
+                 (#pk: perm) (#vkey: erased (Seq.seq S8.t))
 requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
-         A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
-         pure (Seq.length vacc == 8 /\ Seq.length vbuf == block_len #t /\
-               Seq.length vtot == 1 /\ Seq.length vi == 8 /\
-               reveal vi == G.reveal p.iv /\
+         A.pts_to key #pk vkey **
+         pure (Seq.length vacc == 8 /\ reveal vacc == reveal h0 /\
+               Seq.length vbuf == block_len #t /\
+               Seq.length vtot == 1 /\
                Seq.length vkey <= max_key_len #t /\
                3 * block_len #t < pow2 64)
          ** pure (SZ.v klen == Seq.length vkey)
-ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
-  A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
+ensures exists* (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to key #pk vkey **
   pure (Seq.length vkey <= max_key_len #t /\
-        stream_ok p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
+        stream_ok_h p h0 vkey (Seq.empty #S8.t) vacc vbuf' vtot')
 {
   A.pts_to_len acc;
   A.pts_to_len buf;
   A.pts_to_len tot;
   A.pts_to_len key;
   let bl = block_len_sz #t #w;
-  init_state p acc ivs klen;
-  with vacc1. assert (A.pts_to acc vacc1);
 
   if SZ.gt klen 0sz
   ensures exists* (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
-    A.pts_to acc vacc1 ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
-    A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
+    A.pts_to acc vacc ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+    A.pts_to key #pk vkey **
     pure (Seq.length vbuf' == block_len #t /\ Seq.length vtot' == 1 /\
           Seq.length vkey <= max_key_len #t /\
           SZ.v (Seq.index vtot' 0) == Seq.length (stream #t vkey (Seq.empty #S8.t)) /\
@@ -282,7 +283,71 @@ ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
 
   stream_len #t (reveal vkey) (Seq.empty #S8.t);
   brem_bounds #t (Seq.length (stream #t (reveal vkey) (Seq.empty #S8.t)));
-  sabsorb_zero p (init p (Seq.length vkey)) (stream #t (reveal vkey) (Seq.empty #S8.t));
+  sabsorb_zero p h0 (stream #t (reveal vkey) (Seq.empty #S8.t));
+}
+
+(** [init_buf_impl] at [Spec.Blake2.init]. *)
+fn init_impl (#t: Type0) {| w: word t |}
+             ([@@@FStar.Attributes.monomorphize] p: params t)
+             (acc: A.array t) (buf: A.array S8.t) (tot: A.array SZ.t)
+             (ivs: A.array t) (key: A.array S8.t) (klen: SZ.t)
+             (#vacc: erased (Seq.seq t)) (#vbuf: erased (Seq.seq S8.t))
+             (#vtot: erased (Seq.seq SZ.t))
+             (#pi: perm) (#vi: erased (Seq.seq t))
+             (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
+         pure (Seq.length vacc == 8 /\ Seq.length vbuf == block_len #t /\
+               Seq.length vtot == 1 /\ Seq.length vi == 8 /\
+               reveal vi == G.reveal p.iv /\
+               Seq.length vkey <= max_key_len #t /\
+               3 * block_len #t < pow2 64)
+         ** pure (SZ.v klen == Seq.length vkey)
+ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
+  pure (Seq.length vkey <= max_key_len #t /\
+        stream_ok p vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
+{
+  A.pts_to_len key;
+  init_state p acc ivs klen;
+  init_buf_impl p acc buf tot key klen (G.hide (init p (SZ.v klen)));
+}
+
+(** [init_buf_impl] at [Spec.Blake2.init_with]. *)
+fn init_params_impl (#t: Type0) {| w: word t |}
+                    ([@@@FStar.Attributes.monomorphize] p: params t)
+                    (acc: A.array t) (buf: A.array S8.t) (tot: A.array SZ.t)
+                    (ivs: A.array t) (key: A.array S8.t) (klen: SZ.t) (nn: SZ.t)
+                    (salt: A.array S8.t) (personal: A.array S8.t)
+                    (fanout depth: U8.t) (leaf: U32.t) (off: U64.t) (nd il: U8.t)
+                    (bp: erased (blake2_params t))
+                    (#vacc: erased (Seq.seq t)) (#vbuf: erased (Seq.seq S8.t))
+                    (#vtot: erased (Seq.seq SZ.t))
+                    (#pi: perm) (#vi: erased (Seq.seq t))
+                    (#pk: perm) (#vkey: erased (Seq.seq S8.t))
+                    (#ps: perm) (#vs: erased (Seq.seq S8.t))
+                    (#pp: perm) (#vp: erased (Seq.seq S8.t))
+requires A.pts_to acc vacc ** A.pts_to buf vbuf ** A.pts_to tot vtot **
+         A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
+         A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+         pure (Seq.length vacc == 8 /\ Seq.length vbuf == block_len #t /\
+               Seq.length vtot == 1 /\ Seq.length vi == 8 /\
+               reveal vi == G.reveal p.iv /\
+               Seq.length vkey <= max_key_len #t /\
+               params_match bp nn fanout depth leaf off nd il vs vp /\
+               3 * block_len #t < pow2 64)
+         ** pure (SZ.v klen == Seq.length vkey)
+ensures exists* (vacc': Seq.seq t) (vbuf': Seq.seq S8.t) (vtot': Seq.seq SZ.t).
+  A.pts_to acc vacc' ** A.pts_to buf vbuf' ** A.pts_to tot vtot' **
+  A.pts_to ivs #pi vi ** A.pts_to key #pk vkey **
+  A.pts_to salt #ps vs ** A.pts_to personal #pp vp **
+  pure (Seq.length vkey <= max_key_len #t /\
+        stream_ok_params p bp vkey (Seq.empty #S8.t) vacc' vbuf' vtot')
+{
+  A.pts_to_len key;
+  init_state_params p acc ivs nn klen fanout depth leaf off nd il salt personal bp;
+  init_buf_impl p acc buf tot key klen (G.hide (init_with p bp (SZ.v klen)));
 }
 
 #pop-options
@@ -395,6 +460,7 @@ fn update_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                (ivs: A.array t)
                (buf: A.array S8.t) (tot: A.array SZ.t) (data: A.array S8.t) (dlen: SZ.t)
                (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+                (h0: erased (Seq.lseq t 8))
                (#vacc: erased (Seq.seq t))
                (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                (#pi: perm) (#vi: erased (Seq.seq t))
@@ -406,7 +472,7 @@ requires A.pts_to acc vacc ** A.pts_to mw vm0 **
          pure (Seq.length vm0 == 16 /\
                Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\
-               stream_ok p key seen vacc vbuf vtot /\
+               stream_ok_h p h0 key seen vacc vbuf vtot /\
                Seq.length (stream #t key seen) + Seq.length vdata + 2 * block_len #t < pow2 64 /\
                SZ.fits (Seq.length (stream #t key seen) + Seq.length vdata))
          ** pure (SZ.v dlen == Seq.length vdata)
@@ -417,7 +483,7 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
   A.pts_to buf vbuf' ** A.pts_to tot vtot' ** A.pts_to data #pd vdata **
   pure (Seq.length vm1 == 16 /\
         Seq.length vblk1 == block_len #t /\
-        stream_ok p key (Seq.append seen vdata) vacc' vbuf' vtot')
+        stream_ok_h p h0 key (Seq.append seen vdata) vacc' vbuf' vtot')
 {
   A.pts_to_len acc;
   A.pts_to_len buf;
@@ -449,13 +515,13 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
           Seq.length vblk1 == block_len #t /\ Seq.length vbuf' == block_len #t /\
           brem_of #t (Seq.length s1) <= block_len #t /\
           Seq.length key <= max_key_len #t /\
-          vacc' == sabsorb p (init p (Seq.length key)) s1 (nlast_of #t (Seq.length s1)) /\
+          vacc' == sabsorb p h0 s1 (nlast_of #t (Seq.length s1)) /\
           (forall (k: nat). k < brem_of #t (Seq.length s1) ==>
              Seq.index vbuf' k ==
                Seq.index s1 (nlast_of #t (Seq.length s1) * block_len #t + k)))
   {
     update_full p acc mw blk ivs buf data dlen nlast blen
-                (G.hide (init p (Seq.length key))) s s1;
+                h0 s s1;
   }
   else
   {
@@ -465,7 +531,7 @@ ensures exists* (vacc': Seq.seq t) (vm1: Seq.seq t)
     buf_agrees (block_len #t) (reveal s) (reveal vdata) (reveal vbuf) (reveal vbuf1)
                (SZ.v nlast) (SZ.v blen) (SZ.v dlen);
     nlast_of_step0 #t (SZ.v nlast) (SZ.v blen + SZ.v dlen);
-    update_small p (init p (Seq.length key)) (reveal s) (reveal vdata)
+    update_small p h0 (reveal s) (reveal vdata)
                  (reveal vbuf1) (SZ.v nlast) (SZ.v blen);
     ()
   };
@@ -489,7 +555,9 @@ fn digest_impl (#t: Type0) {| w: word t |} {| Hacl.Zeroable.zeroable t |}
                (acc: A.array t) (mw: A.array t) (blk: A.array S8.t)
                (ivs: A.array t)
                (buf: A.array S8.t) (tot: A.array SZ.t) (out: A.array S8.t)
+                (nn: SZ.t { SZ.v nn <= 8 * bytes #t })
                (key: erased (Seq.seq S8.t)) (seen: erased (Seq.seq S8.t))
+                (h0: erased (Seq.lseq t 8))
                (#pa: perm) (#vacc: erased (Seq.seq t))
                (#vm0: erased (Seq.seq t)) (#vblk0: erased (Seq.seq S8.t))
                (#pi: perm) (#vi: erased (Seq.seq t))
@@ -502,8 +570,8 @@ requires A.pts_to acc #pa vacc ** A.pts_to mw vm0 **
          pure (Seq.length vm0 == 16 /\
                Seq.length vblk0 == block_len #t /\ Seq.length vi == 8 /\
                reveal vi == G.reveal p.iv /\
-               Seq.length vout == hash_bytes p /\
-               stream_ok p key seen vacc vbuf vtot)
+               Seq.length vout == SZ.v nn /\
+               stream_ok_h p h0 key seen vacc vbuf vtot)
 ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
                 (vout': Seq.seq S8.t).
   A.pts_to acc #pa vacc ** A.pts_to mw vm1 **
@@ -512,7 +580,7 @@ ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
   pure (Seq.length vm1 == 16 /\
         Seq.length vblk1 == block_len #t /\
         Seq.length key <= max_key_len #t /\
-        vout' == blake2 p key seen)
+        vout' == blake2_from p h0 (SZ.v nn) key seen)
 {
   A.pts_to_len acc;
   A.pts_to_len buf;
@@ -543,8 +611,8 @@ ensures exists* (vm1: Seq.seq t) (vblk1: Seq.seq S8.t)
   last_block_is_buf #t (reveal s) (reveal vsub) (SZ.v nlast) (SZ.v blen);
   load_block #t mw blk;
   compress_impl p starr mw ivs tlen true;
-  blake2_stream p (reveal key) (reveal seen);
-  write_digest_le p out starr;
+  blake2_stream_from p h0 (SZ.v nn) (reveal key) (reveal seen);
+  write_digest_n #t nn out starr;
 
   Sub.unsub_id buf 0 (SZ.v blen) sub;
   Mem.wipe starr 8sz;

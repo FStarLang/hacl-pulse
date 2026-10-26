@@ -37,7 +37,7 @@
     nose, and every lemma below is stated once.
 
     [sabsorb] is the fold an implementation can run -- one step per block,
-    reading blocks straight out of the stream -- and [blake2_stream] is the
+    reading blocks straight out of the stream -- and [blake2_stream_from] is the
     proof that it computes [Spec.Blake2.blake2]. *)
 module Spec.Blake2.Streaming
 
@@ -307,26 +307,43 @@ let last_block_is_buf (#t: Type0) {| word t |} (s vsub: Seq.seq S8.t) (n blen: n
 
 (** {2 The state relation} *)
 
-(** [acc] has absorbed all but the last block of the stream, and [buf] holds
-    the rest. *)
-unfold let acc_ok (#t: Type0) {| word t |} (p: params t)
-                  (key: Seq.seq S8.t) (seen: Seq.seq S8.t)
-                  (vacc: Seq.seq t) (vbuf: Seq.seq S8.t) =
+(** [acc] has absorbed all but the last block of the stream, starting from
+    the initial state [h0], and [buf] holds the rest.  [h0] is
+    [Spec.Blake2.init] for the RFC 7693 hashes and [Spec.Blake2.init_with]
+    under a full parameter block; nothing past initialization cares which. *)
+unfold let acc_ok_h (#t: Type0) {| word t |} (p: params t) (h0: Seq.lseq t 8)
+                    (key: Seq.seq S8.t) (seen: Seq.seq S8.t)
+                    (vacc: Seq.seq t) (vbuf: Seq.seq S8.t) =
   Seq.length key <= max_key_len #t /\
   Seq.length vacc == 8 /\ Seq.length vbuf == block_len #t /\
   (let s = stream #t key seen in
    let n = nlast_of #t (Seq.length s) in
-   vacc == sabsorb p (init p (Seq.length key)) s n /\
+   vacc == sabsorb p h0 s n /\
    (forall (k: nat). k < brem_of #t (Seq.length s) ==>
       Seq.index vbuf k == Seq.index s (n * block_len #t + k)))
 
-unfold let stream_ok (#t: Type0) {| word t |} (p: params t)
-                     (key: Seq.seq S8.t) (seen: Seq.seq S8.t)
-                     (vacc: Seq.seq t) (vbuf: Seq.seq S8.t) (vtot: Seq.seq FStar.SizeT.t) =
+unfold let stream_ok_h (#t: Type0) {| word t |} (p: params t) (h0: Seq.lseq t 8)
+                       (key: Seq.seq S8.t) (seen: Seq.seq S8.t)
+                       (vacc: Seq.seq t) (vbuf: Seq.seq S8.t) (vtot: Seq.seq FStar.SizeT.t) =
   Seq.length vtot == 1 /\
   FStar.SizeT.v (Seq.index vtot 0) == Seq.length (stream #t key seen) /\
   Seq.length (stream #t key seen) + 2 * block_len #t < pow2 64 /\
-  acc_ok p key seen vacc vbuf
+  acc_ok_h p h0 key seen vacc vbuf
+
+(** The state of one of the RFC 7693 hashes [p] names. *)
+unfold let stream_ok (#t: Type0) {| word t |} (p: params t)
+                     (key: Seq.seq S8.t) (seen: Seq.seq S8.t)
+                     (vacc: Seq.seq t) (vbuf: Seq.seq S8.t) (vtot: Seq.seq FStar.SizeT.t) =
+  Seq.length key <= max_key_len #t /\
+  stream_ok_h p (init p (Seq.length key)) key seen vacc vbuf vtot
+
+(** The state of a hash under the parameter block [bp]. *)
+unfold let stream_ok_params (#t: Type0) {| word t |} (p: params t) (bp: blake2_params t)
+                            (key: Seq.seq S8.t) (seen: Seq.seq S8.t)
+                            (vacc: Seq.seq t) (vbuf: Seq.seq S8.t)
+                            (vtot: Seq.seq FStar.SizeT.t) =
+  Seq.length key <= max_key_len #t /\
+  stream_ok_h p (init_with p bp (Seq.length key)) key seen vacc vbuf vtot
 
 (** {2 The digest}
 
@@ -401,15 +418,16 @@ let stream_shape (#t: Type0) {| word t |} (key seen: Seq.seq S8.t)
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 150"
 
 (** The whole point: the streaming fold, plus one flagged compression of the
-    buffered tail, is [Spec.Blake2.blake2]. *)
-let blake2_stream (#t: Type0) {| word t |} (p: params t) (key seen: Seq.seq S8.t)
+    buffered tail, is [Spec.Blake2.blake2_from], whatever the initial state. *)
+let blake2_stream_from (#t: Type0) {| word t |} (p: params t) (h0: Seq.lseq t 8)
+                       (nn: nat { nn <= 8 * bytes #t }) (key seen: Seq.seq S8.t)
   : Lemma (requires Seq.length key <= max_key_len #t)
           (ensures (let s = stream #t key seen in
                     let n = nlast_of #t (Seq.length s) in
-                    blake2 p key seen ==
-                    final p (compress p (sabsorb p (init p (Seq.length key)) s n)
-                              (words_from_le block_words (pad_block #t s (n * block_len #t)))
-                              (Seq.length s) true)))
+                    blake2_from p h0 nn key seen ==
+                    final_n nn (compress p (sabsorb p h0 s n)
+                                 (words_from_le block_words (pad_block #t s (n * block_len #t)))
+                                 (Seq.length s) true)))
   = let bl = block_len #t in
     let s = stream #t key seen in
     let d = data #t key seen in
@@ -426,7 +444,7 @@ let blake2_stream (#t: Type0) {| word t |} (p: params t) (key seen: Seq.seq S8.t
         end
     in
     Classical.forall_intro_2 aux;
-    repeati_g_ext n (compress_at p d) (sstep p s) (init p (Seq.length key));
+    repeati_g_ext n (compress_at p d) (sstep p s) h0;
     block_at_data #t key seen n;
     block_of_stream #t key seen n
 
