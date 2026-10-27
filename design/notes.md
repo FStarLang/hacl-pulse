@@ -1383,6 +1383,12 @@ window), used by signing and verification alike (Part 96).  One proof
 detail of the shift-based step: proving `mu_ok`'s precondition inline took
 Z3 six minutes in `step`'s context, and a three-line helper `mu` that returns
 `u` refined by the cancellation fact brought the module back to 46 seconds.
+The point formulas then lost their 57 copies: `fadd`, `fsub` and the
+multiply became word-level cores (`addw`, `subw`, `mont`) that read their
+operands as values, so `Field` offers in-place forms (`fadd1 o b` is
+`o := o + b`, `fmul2 o a` is `o := a * o`), and doubling and squaring read
+one element twice under one permission (`fdbl`, `fdbl1`, `fsqr`).  The two
+scratch elements went with them (3.4% fewer instructions in ECDH, Part 98).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

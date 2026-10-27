@@ -21,13 +21,13 @@
     no record, no aliasing conventions, just three slices the caller has
     already had to keep apart.
 
-    The specification writes the formulas in place, reusing names; Pulse
-    cannot, because a slice that is written needs full permission and one
-    that is read needs a fraction, and the same slice cannot supply both.
-    Each in-place step therefore goes through the scratch element [w], and
-    each step whose two operands are the same element goes through [u].
-    That is the whole difference between the listing below and the one in
-    the paper, and it is why the two can be compared line by line. *)
+    The specification writes the formulas in place, reusing names.  A slice
+    that is written needs full permission and one that is read needs a
+    fraction, so the same slice cannot be passed as both; the in-place
+    steps call {!Hacl.P384.Field}'s [fadd1], [fmul2], ... instead (the digit
+    names the operand the result replaces), and the steps whose two operands
+    are the same element call [fdbl], [fdbl1] and [fsqr].  The listing below
+    can therefore be compared with the paper line by line. *)
 module Hacl.P384.Point
 
 #lang-pulse
@@ -77,81 +77,54 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 6sz |];
   Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 6sz |];
   Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 6sz |];
-  Mem.track a5; A.pts_to_len a5; let mut aw = [| z; 6sz |];
-  Mem.track aw; A.pts_to_len aw; let mut au = [| z; 6sz |];
-  Mem.track au; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len aw; A.pts_to_len au;
+  Mem.track a5; A.pts_to_len a5;
+  A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  A.pts_to_len a4; A.pts_to_len a5;
   let bc = fb ();
   fmul a0 x1 x2;
   fmul a1 y1 y2;
   fmul a2 z1 z2;
   fadd a3 x1 y1;
   fadd a4 x2 y2;
-  fmul aw a3 a4;
-  fcopy a3 aw;
+  fmul1 a3 a4;
   fadd a4 a0 a1;
-  fsub aw a3 a4;
-  fcopy a3 aw;
+  fsub1 a3 a4;
   fadd a4 y1 z1;
   fadd a5 y2 z2;
-  fmul aw a4 a5;
-  fcopy a4 aw;
+  fmul1 a4 a5;
   fadd a5 a1 a2;
-  fsub aw a4 a5;
-  fcopy a4 aw;
+  fsub1 a4 a5;
   fadd ox x1 z1;
   fadd oy x2 z2;
-  fmul aw ox oy;
-  fcopy ox aw;
+  fmul1 ox oy;
   fadd oy a0 a2;
-  fsub aw ox oy;
-  fcopy oy aw;
+  fsub2 oy ox;
   fmul oz bc a2;
   fsub ox oy oz;
-  fcopy au ox;
-  fadd oz ox au;
-  fadd aw ox oz;
-  fcopy ox aw;
+  fdbl oz ox;
+  fadd1 ox oz;
   fsub oz a1 ox;
-  fadd aw a1 ox;
-  fcopy ox aw;
-  fmul aw bc oy;
-  fcopy oy aw;
-  fcopy au a2;
-  fadd a1 a2 au;
-  fadd aw a1 a2;
-  fcopy a2 aw;
-  fsub aw oy a2;
-  fcopy oy aw;
-  fsub aw oy a0;
-  fcopy oy aw;
-  fcopy au oy;
-  fadd a1 oy au;
-  fadd aw a1 oy;
-  fcopy oy aw;
-  fcopy au a0;
-  fadd a1 a0 au;
-  fadd aw a1 a0;
-  fcopy a0 aw;
-  fsub aw a0 a2;
-  fcopy a0 aw;
+  fadd2 ox a1;
+  fmul2 oy bc;
+  fdbl a1 a2;
+  fadd2 a2 a1;
+  fsub1 oy a2;
+  fsub1 oy a0;
+  fdbl a1 oy;
+  fadd2 oy a1;
+  fdbl a1 a0;
+  fadd2 a0 a1;
+  fsub1 a0 a2;
   fmul a1 a4 oy;
   fmul a2 a0 oy;
   fmul oy ox oz;
-  fadd aw oy a2;
-  fcopy oy aw;
-  fmul aw a3 ox;
-  fcopy ox aw;
-  fsub aw ox a1;
-  fcopy ox aw;
-  fmul aw a4 oz;
-  fcopy oz aw;
+  fadd1 oy a2;
+  fmul2 ox a3;
+  fsub1 ox a1;
+  fmul2 oz a4;
   fmul a1 a3 a0;
-  fadd aw oz a1;
-  fcopy oz aw;
+  fadd1 oz a1;
   drop_table bc;
-  Mem.wipe au 6sz;
-  Mem.wipe aw 6sz;
   Mem.wipe a5 6sz;
   Mem.wipe a4 6sz;
   Mem.wipe a3 6sz;
@@ -183,81 +156,45 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Mem.track a0; A.pts_to_len a0; let mut a1 = [| zz; 6sz |];
   Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 6sz |];
   Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 6sz |];
-  Mem.track a3; A.pts_to_len a3; let mut aw = [| zz; 6sz |];
-  Mem.track aw; A.pts_to_len aw; let mut au = [| zz; 6sz |];
-  Mem.track au; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len aw; A.pts_to_len au;
+  Mem.track a3; A.pts_to_len a3;
+  A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+ 
   let bc = fb ();
-  fcopy au x;
-  fmul a0 x au;
-  fcopy au y;
-  fmul a1 y au;
-  fcopy au z;
-  fmul a2 z au;
+  fsqr a0 x;
+  fsqr a1 y;
+  fsqr a2 z;
   fmul a3 x y;
-  fcopy au a3;
-  fadd aw a3 au;
-  fcopy a3 aw;
+  fdbl1 a3;
   fmul oz x z;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
+  fdbl1 oz;
   fmul oy bc a2;
-  fsub aw oy oz;
-  fcopy oy aw;
-  fcopy au oy;
-  fadd ox oy au;
-  fadd aw ox oy;
-  fcopy oy aw;
+  fsub1 oy oz;
+  fdbl ox oy;
+  fadd2 oy ox;
   fsub ox a1 oy;
-  fadd aw a1 oy;
-  fcopy oy aw;
-  fmul aw ox oy;
-  fcopy oy aw;
-  fmul aw ox a3;
-  fcopy ox aw;
-  fcopy au a2;
-  fadd a3 a2 au;
-  fadd aw a2 a3;
-  fcopy a2 aw;
-  fmul aw bc oz;
-  fcopy oz aw;
-  fsub aw oz a2;
-  fcopy oz aw;
-  fsub aw oz a0;
-  fcopy oz aw;
-  fcopy au oz;
-  fadd a3 oz au;
-  fadd aw oz a3;
-  fcopy oz aw;
-  fcopy au a0;
-  fadd a3 a0 au;
-  fadd aw a3 a0;
-  fcopy a0 aw;
-  fsub aw a0 a2;
-  fcopy a0 aw;
-  fmul aw a0 oz;
-  fcopy a0 aw;
-  fadd aw oy a0;
-  fcopy oy aw;
+  fadd2 oy a1;
+  fmul2 oy ox;
+  fmul1 ox a3;
+  fdbl a3 a2;
+  fadd1 a2 a3;
+  fmul2 oz bc;
+  fsub1 oz a2;
+  fsub1 oz a0;
+  fdbl a3 oz;
+  fadd1 oz a3;
+  fdbl a3 a0;
+  fadd2 a0 a3;
+  fsub1 a0 a2;
+  fmul1 a0 oz;
+  fadd1 oy a0;
   fmul a0 y z;
-  fcopy au a0;
-  fadd aw a0 au;
-  fcopy a0 aw;
-  fmul aw a0 oz;
-  fcopy oz aw;
-  fsub aw ox oz;
-  fcopy ox aw;
+  fdbl1 a0;
+  fmul2 oz a0;
+  fsub1 ox oz;
   fmul oz a0 a1;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
+  fdbl1 oz;
+  fdbl1 oz;
   drop_table bc;
-  Mem.wipe au 6sz;
-  Mem.wipe aw 6sz;
   Mem.wipe a3 6sz;
   Mem.wipe a2 6sz;
   Mem.wipe a1 6sz;

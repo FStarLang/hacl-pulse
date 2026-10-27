@@ -219,6 +219,193 @@ ensures exists* (vo': Seq.seq S64.t).
   assert (pure (fev vo' == P.fmul (fev va) (fev va)));
 }
 
+(** {2 In place}
+
+    [fadd1 o b] is [o := o + b] and [fadd2 o a] is [o := a + o], and so on:
+    the digit says which operand the result replaces.  They read their
+    operands into words before writing, so the point formulas need no
+    scratch copy for a step that reuses a name.  [fdbl] and [fsqr] read one
+    element twice under one permission. *)
+
+fn fdbl (out a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va **
+  pure (Seq.length vo == 6 /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fadd (fev va) (fev va))
+{
+  A.pts_to_len a;
+  num_fv va; fv_facts ();
+  F.fdbl out a;
+  with vo'. assert (A.pts_to out vo');
+  num_fv vo';
+  add_fv (num vo') (num va) (num va);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fadd (fev va) (fev va)));
+}
+
+fn fadd1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fadd (fev vo) (fev vb))
+{
+  A.pts_to_len o; A.pts_to_len b;
+  num_fv vo; num_fv vb; fv_facts ();
+  F.fadd1 o b;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  add_fv (num vo') (num vo) (num vb);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fadd (fev vo) (fev vb)));
+}
+
+fn fadd2 (o a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fadd (fev va) (fev vo))
+{
+  A.pts_to_len o; A.pts_to_len a;
+  num_fv vo; num_fv va; fv_facts ();
+  F.fadd1 o a;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  add_fv (num vo') (num va) (num vo);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fadd (fev va) (fev vo)));
+}
+
+fn fdbl1 (o: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+requires A.pts_to o vo **
+  pure (felem vo)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' **
+  pure (felem vo' /\ fev vo' == P.fadd (fev vo) (fev vo))
+{
+  A.pts_to_len o;
+  num_fv vo; fv_facts ();
+  F.fdbl1 o;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  add_fv (num vo') (num vo) (num vo);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fadd (fev vo) (fev vo)));
+}
+
+fn fsub1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fsub (fev vo) (fev vb))
+{
+  A.pts_to_len o; A.pts_to_len b;
+  num_fv vo; num_fv vb; fv_facts ();
+  F.fsub1 o b;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  sub_fv (num vo') (num vo) (num vb);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fsub (fev vo) (fev vb)));
+}
+
+fn fsub2 (o a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fsub (fev va) (fev vo))
+{
+  A.pts_to_len o; A.pts_to_len a;
+  num_fv vo; num_fv va; fv_facts ();
+  F.fsub2 o a;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  sub_fv (num vo') (num va) (num vo);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fsub (fev va) (fev vo)));
+}
+
+fn fmul1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fmul (fev vo) (fev vb))
+{
+  A.pts_to_len o; A.pts_to_len b;
+  num_fv vo; num_fv vb; fv_facts ();
+  F.fmul1 o b;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  mul_fv (num vo') (num vo) (num vb);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fmul (fev vo) (fev vb)));
+}
+
+fn fmul2 (o a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev vo))
+{
+  A.pts_to_len o; A.pts_to_len a;
+  num_fv vo; num_fv va; fv_facts ();
+  F.fmul1 o a;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  Math.swap_mul (num vo) (num va);
+  mul_fv (num vo') (num va) (num vo);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fmul (fev va) (fev vo)));
+}
+
+fn fsqr1 (o: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+requires A.pts_to o vo **
+  pure (felem vo)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' **
+  pure (felem vo' /\ fev vo' == P.fmul (fev vo) (fev vo))
+{
+  A.pts_to_len o;
+  num_fv vo; fv_facts ();
+  F.fsqr1 o;
+  with vo'. assert (A.pts_to o vo');
+  num_fv vo';
+  mul_fv (num vo') (num vo) (num vo);
+  assert (pure (num vo' < P.prime));
+  assert (pure (felem vo'));
+  assert (pure (fev vo' == P.fmul (fev vo) (fev vo)));
+}
+
 (** {2 Constants and copies} *)
 
 fn fcopy (dst src: A.array S64.t)

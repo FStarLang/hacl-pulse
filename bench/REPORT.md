@@ -9683,3 +9683,38 @@ carries the cancellation fact, the module checks in 46 seconds.
 
 The remaining gcc/clang gap is mostly spills in gcc's code.  Next: fewer
 `fcopy`s in the point formulas, and possibly a dedicated squaring.
+
+## Part 98: P-384's point formulas without copies
+
+The complete addition and doubling formulas went through a scratch element
+for every step that overwrites one of its own operands, and through a second
+one for every step whose operands coincide: 57 `fcopy`s in all.
+`Hacl.P384.Field64`'s `fadd` and `fsub` are now word-level cores (`addw`,
+`subw`) like `mont`, taking twelve words, so the field offers in-place forms
+that read before they write (`fadd1`, `fadd2`, `fsub1`, `fsub2`, `fmul1`,
+`fmul2`, with the digit naming the operand the result replaces), as well as
+`fdbl`, `fdbl1` and `fsqr1`.  A script rewrote the formulas mechanically.
+They now have no copies and no `w`/`u` scratch, and the proofs went through
+unchanged.
+
+Instructions (callgrind, gcc):
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 1.70M | 1.68M |
+| ECDH | 2.32M | 2.24M |
+| sign | 1.84M | 1.82M |
+| verify | 5.82M | 5.70M |
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 169 us | 151 us | 131 us | 125 us |
+| ECDH | 422 us | 400 us | 315 us | 315 us |
+| sign | 183 us | 179 us | 142 us | 140 us |
+| verify | 598 us | 569 us | 452 us | 433 us |
+
+Under gcc everything is 2-11% faster, and under clang verification is 4%
+faster with the rest within noise.  Tests, `make lint`, `make stack` and
+`make cross` pass.

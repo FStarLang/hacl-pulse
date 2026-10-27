@@ -645,34 +645,17 @@ ensures exists* (vo': Seq.seq S64.t).
 #restart-solver
 
 [@@ CInline; CPrologue "__attribute__((always_inline))"]
-fn fadd (out a b: A.array S64.t)
+fn addw (out: A.array S64.t) (a0 a1 a2 a3 a4 a5 x0 x1 x2 x3 x4 x5: S64.t)
         (#vo: erased (Seq.seq S64.t))
-        (#pa: perm) (#va: erased (Seq.seq S64.t))
-        (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vo == 6 /\ Seq.length va == 6 /\ Seq.length vb == 6 /\
-        fv va < pp /\ fv vb < pp)
+requires A.pts_to out vo **
+  pure (Seq.length vo == 6 /\ ev6 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4) (S64.v a5) < pp /\ ev6 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5) < pp)
 ensures exists* (vo': Seq.seq S64.t).
-  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vo' == 6 /\ fv vo' == (fv va + fv vb) % pp)
+  A.pts_to out vo' **
+  pure (Seq.length vo' == 6 /\ fv vo' == (ev6 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4) (S64.v a5) + ev6 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5)) % pp)
 {
   let z0 = S64.classify 0uL;
-  A.pts_to_len a;
-  A.pts_to_len b;
   consts ();
   let ones = S64.classify 0xffffffffffffffffuL;
-  let a0 = A.(a.(0sz));
-  let a1 = A.(a.(1sz));
-  let a2 = A.(a.(2sz));
-  let a3 = A.(a.(3sz));
-  let a4 = A.(a.(4sz));
-  let a5 = A.(a.(5sz));
-  let x0 = A.(b.(0sz));
-  let x1 = A.(b.(1sz));
-  let x2 = A.(b.(2sz));
-  let x3 = A.(b.(3sz));
-  let x4 = A.(b.(4sz));
-  let x5 = A.(b.(5sz));
   let mut r = z0;
   let c1 = K.addc z0 a0 x0 r;
   let s0 = !r;
@@ -720,7 +703,7 @@ ensures exists* (vo': Seq.seq S64.t).
   add_sel (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5)
           (S64.v d0) (S64.v d1) (S64.v d2) (S64.v d3) (S64.v d4) (S64.v d5)
           (S64.v o0) (S64.v o1) (S64.v o2) (S64.v o3) (S64.v o4) (S64.v o5) (S64.v d);
-  csub_ok (fv va + fv vb) (S64.v c) (S64.v d6) (S64.v d)
+  csub_ok ((ev6 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4) (S64.v a5)) + (ev6 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5))) (S64.v c) (S64.v d6) (S64.v d)
           (ev6 (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5))
           (ev6 (S64.v d0) (S64.v d1) (S64.v d2) (S64.v d3) (S64.v d4) (S64.v d5))
           (ev6 (S64.v o0) (S64.v o1) (S64.v o2) (S64.v o3) (S64.v o4) (S64.v o5));
@@ -730,33 +713,16 @@ ensures exists* (vo': Seq.seq S64.t).
 #restart-solver
 
 [@@ CInline; CPrologue "__attribute__((always_inline))"]
-fn fsub (out a b: A.array S64.t)
+fn subw (out: A.array S64.t) (a0 a1 a2 a3 a4 a5 x0 x1 x2 x3 x4 x5: S64.t)
         (#vo: erased (Seq.seq S64.t))
-        (#pa: perm) (#va: erased (Seq.seq S64.t))
-        (#pb: perm) (#vb: erased (Seq.seq S64.t))
-requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vo == 6 /\ Seq.length va == 6 /\ Seq.length vb == 6 /\
-        fv va < pp /\ fv vb < pp)
+requires A.pts_to out vo **
+  pure (Seq.length vo == 6 /\ ev6 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4) (S64.v a5) < pp /\ ev6 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5) < pp)
 ensures exists* (vo': Seq.seq S64.t).
-  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
-  pure (Seq.length vo' == 6 /\ fv vo' == (fv va + pp - fv vb) % pp)
+  A.pts_to out vo' **
+  pure (Seq.length vo' == 6 /\ fv vo' == (ev6 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4) (S64.v a5) + pp - ev6 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5)) % pp)
 {
   let z0 = S64.classify 0uL;
-  A.pts_to_len a;
-  A.pts_to_len b;
   consts ();
-  let a0 = A.(a.(0sz));
-  let a1 = A.(a.(1sz));
-  let a2 = A.(a.(2sz));
-  let a3 = A.(a.(3sz));
-  let a4 = A.(a.(4sz));
-  let a5 = A.(a.(5sz));
-  let x0 = A.(b.(0sz));
-  let x1 = A.(b.(1sz));
-  let x2 = A.(b.(2sz));
-  let x3 = A.(b.(3sz));
-  let x4 = A.(b.(4sz));
-  let x5 = A.(b.(5sz));
   let mut r = z0;
   let c1 = K.subb z0 a0 x0 r;
   let s0 = !r;
@@ -797,11 +763,134 @@ ensures exists* (vo': Seq.seq S64.t).
        (S64.v q0) (S64.v q1) (S64.v q2) (S64.v q3) (S64.v q3) (S64.v q3)
        (S64.v d0) (S64.v d1) (S64.v d2) (S64.v d3) (S64.v d4) (S64.v d5)
        0 (S64.v e1) (S64.v e2) (S64.v e3) (S64.v e4) (S64.v e5) (S64.v d);
-  fsub_ok (fv va) (fv vb) (S64.v c) (S64.v d)
+  fsub_ok ((ev6 (S64.v a0) (S64.v a1) (S64.v a2) (S64.v a3) (S64.v a4) (S64.v a5))) ((ev6 (S64.v x0) (S64.v x1) (S64.v x2) (S64.v x3) (S64.v x4) (S64.v x5))) (S64.v c) (S64.v d)
           (ev6 (S64.v s0) (S64.v s1) (S64.v s2) (S64.v s3) (S64.v s4) (S64.v s5))
           (ev6 (S64.v q0) (S64.v q1) (S64.v q2) (S64.v q3) (S64.v q3) (S64.v q3))
           (ev6 (S64.v d0) (S64.v d1) (S64.v d2) (S64.v d3) (S64.v d4) (S64.v d5));
   put6 out d0 d1 d2 d3 d4 d5;
+}
+
+fn fadd (out a b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo == 6 /\ Seq.length va == 6 /\ fv va < pp /\ Seq.length vb == 6 /\ fv vb < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv va + fv vb) % pp)
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  addw out A.(a.(0sz)) A.(a.(1sz)) A.(a.(2sz)) A.(a.(3sz)) A.(a.(4sz)) A.(a.(5sz)) A.(b.(0sz)) A.(b.(1sz)) A.(b.(2sz)) A.(b.(3sz)) A.(b.(4sz)) A.(b.(5sz));
+}
+
+fn fsub (out a b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo == 6 /\ Seq.length va == 6 /\ fv va < pp /\ Seq.length vb == 6 /\ fv vb < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va ** A.pts_to b #pb vb **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv va + pp - fv vb) % pp)
+{
+  A.pts_to_len a;
+  A.pts_to_len b;
+  subw out A.(a.(0sz)) A.(a.(1sz)) A.(a.(2sz)) A.(a.(3sz)) A.(a.(4sz)) A.(a.(5sz)) A.(b.(0sz)) A.(b.(1sz)) A.(b.(2sz)) A.(b.(3sz)) A.(b.(4sz)) A.(b.(5sz));
+}
+
+fn fdbl (out a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va **
+  pure (Seq.length vo == 6 /\ Seq.length va == 6 /\ fv va < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv va + fv va) % pp)
+{
+  A.pts_to_len a;
+  addw out A.(a.(0sz)) A.(a.(1sz)) A.(a.(2sz)) A.(a.(3sz)) A.(a.(4sz)) A.(a.(5sz)) A.(a.(0sz)) A.(a.(1sz)) A.(a.(2sz)) A.(a.(3sz)) A.(a.(4sz)) A.(a.(5sz));
+}
+
+fn fadd1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == 6 /\ fv vo < pp /\ Seq.length vb == 6 /\ fv vb < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv vo + fv vb) % pp)
+{
+  A.pts_to_len o;
+  A.pts_to_len b;
+  addw o A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz)) A.(b.(0sz)) A.(b.(1sz)) A.(b.(2sz)) A.(b.(3sz)) A.(b.(4sz)) A.(b.(5sz));
+}
+
+fn fdbl1 (o: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+requires A.pts_to o vo **
+  pure (Seq.length vo == 6 /\ fv vo < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv vo + fv vo) % pp)
+{
+  A.pts_to_len o;
+  addw o A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz)) A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz));
+}
+
+fn fsub1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == 6 /\ fv vo < pp /\ Seq.length vb == 6 /\ fv vb < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv vo + pp - fv vb) % pp)
+{
+  A.pts_to_len o;
+  A.pts_to_len b;
+  subw o A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz)) A.(b.(0sz)) A.(b.(1sz)) A.(b.(2sz)) A.(b.(3sz)) A.(b.(4sz)) A.(b.(5sz));
+}
+
+fn fsub2 (o a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (Seq.length vo == 6 /\ fv vo < pp /\ Seq.length va == 6 /\ fv va < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (Seq.length vo' == 6 /\ fv vo' == (fv va + pp - fv vo) % pp)
+{
+  A.pts_to_len o;
+  A.pts_to_len a;
+  subw o A.(a.(0sz)) A.(a.(1sz)) A.(a.(2sz)) A.(a.(3sz)) A.(a.(4sz)) A.(a.(5sz)) A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz));
+}
+
+fn fmul1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (Seq.length vo == 6 /\ fv vo < pp /\ Seq.length vb == 6 /\ fv vb < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (Seq.length vo' == 6 /\ fv vo' < pp /\ (w6 * fv vo') % pp == (fv vo * fv vb) % pp)
+{
+  A.pts_to_len o;
+  A.pts_to_len b;
+  mont o A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz)) A.(b.(0sz)) A.(b.(1sz)) A.(b.(2sz)) A.(b.(3sz)) A.(b.(4sz)) A.(b.(5sz));
+}
+
+fn fsqr1 (o: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+requires A.pts_to o vo **
+  pure (Seq.length vo == 6 /\ fv vo < pp)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' **
+  pure (Seq.length vo' == 6 /\ fv vo' < pp /\ (w6 * fv vo') % pp == (fv vo * fv vo) % pp)
+{
+  A.pts_to_len o;
+  mont o A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz)) A.(o.(0sz)) A.(o.(1sz)) A.(o.(2sz)) A.(o.(3sz)) A.(o.(4sz)) A.(o.(5sz));
 }
 
 #pop-options
