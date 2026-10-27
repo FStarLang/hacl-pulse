@@ -10042,3 +10042,18 @@ Time (clang), the median of three interleaved runs:
 | verify | 295 us | 268 us | 214 us | 1.25x |
 
 Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 106: README P-384 rows after Parts 92-105
+
+`others.sh 3` was rerun on `c8a4ed7` (rebased onto master).  The machine
+was noisy again, so as in Part 91 the table uses a 5% canary tolerance
+(35 of 72 runs survive), and every cell is a minimum.  Only the P-384
+rows of the README were replaced; nothing else changed in the code.
+
+| P-384 | gcc | clang | OpenSSL | AWS-LC | ratio before | ratio after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECDH | 249 us | 216 us | 417 us | 153 us | 8.82x | 1.41x |
+| ECDSA sign | 119 us | 108 us | 249 us | 90 us | 15.04x | 1.20x |
+| ECDSA verify | 310 us | 275 us | 565 us | 204 us | 12.81x | 1.35x |
+
+hacl-pulse now beats OpenSSL on every P-384 operation by 1.9-2.3x.

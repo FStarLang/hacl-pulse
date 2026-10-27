@@ -183,12 +183,15 @@ column is the better hacl-pulse build divided by the fastest other library:
 | SHA3-256 | 256 KiB | 680 us | 661 us | 587 us | **575 us** | -- | 707 us | -- | -- | 1.15x |
 | SHAKE128 | 256 KiB | 541 us | 546 us | 481 us | **459 us** | -- | 572 us | -- | -- | 1.18x |
 | ChaCha20 | 256 KiB | 94 us | 90 us | 75 us | **75 us** | 120 us | 76 us | -- | -- | 1.20x |
+| P-384 ECDSA sign | -- | 119 us | 108 us | 249 us | **90 us** | -- | -- | -- | -- | 1.20x |
 | MD5 | 256 KiB | 503 us | 430 us | 354 us | **354 us** | -- | -- | -- | -- | 1.22x |
 | ChaCha20-Poly1305 | 256 KiB | 138 us | 127 us | 113 us | **102 us** | 193 us | -- | -- | -- | 1.24x |
 | ML-DSA-65 keygen | -- | 83 us | 69 us | 188 us | **53 us** | -- | -- | -- | -- | 1.30x |
 | ML-DSA-65 verify | -- | 82 us | 68 us | 189 us | **51 us** | -- | -- | -- | -- | 1.34x |
+| P-384 ECDSA verify | -- | 310 us | 275 us | 565 us | **204 us** | -- | -- | -- | -- | 1.35x |
 | HMAC-SHA-512 | 256 KiB | 471 us | 437 us | 325 us | 459 us | 491 us | -- | **321 us** | -- | 1.36x |
 | SHA-512 | 256 KiB | 473 us | 442 us | 325 us | 459 us | 504 us | 635 us | **315 us** | -- | 1.40x |
+| P-384 ECDH | -- | 249 us | 216 us | 417 us | **153 us** | -- | -- | -- | -- | 1.41x |
 | X25519 | -- | 47 us | 37 us | 35 us | **26 us** | 31 us | 29 us | 26 us | 55 us | 1.43x |
 | ML-KEM-768 keygen | -- | 20 us | 20 us | 49 us | **13 us** | -- | -- | -- | -- | 1.52x |
 | ML-KEM-768 decaps | -- | 28 us | 26 us | 50 us | **17 us** | -- | -- | -- | -- | 1.53x |
@@ -202,9 +205,6 @@ column is the better hacl-pulse build divided by the fastest other library:
 | RSA-PSS-2048 verify | -- | 50 us | 58 us | 22 us | **17 us** | -- | -- | -- | -- | 2.95x |
 | P-256 ECDSA verify | -- | 209 us | 163 us | 67 us | **52 us** | -- | -- | 62 us | -- | 3.12x |
 | P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.87x |
-| P-384 ECDH | -- | 1.5 ms | 1.3 ms | 419 us | **152 us** | -- | -- | -- | -- | 8.82x |
-| P-384 ECDSA verify | -- | 3.0 ms | 2.7 ms | 574 us | **208 us** | -- | -- | -- | -- | 12.81x |
-| P-384 ECDSA sign | -- | 1.5 ms | 1.4 ms | 250 us | **91 us** | -- | -- | -- | -- | 15.04x |
 
 A dash means the library does not offer the operation through the API used.
 OpenSSL's and AWS-LC's ML-KEM and ECDSA draw from their DRBGs. The
