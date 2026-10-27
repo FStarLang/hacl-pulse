@@ -290,3 +290,46 @@ let j5 (x y z: P.felem)
     sv_eq (hz) (sz);
     ()
 #pop-options
+
+(** Mixed addition is the addition law at [Z2 = 1]: an exact identity. *)
+let j6_chk (o': fops m0) (env: list (elem m0)) : bool =
+  let c0 = base m0 fl o' 5 env in
+  let c = c0 in
+  let b = kc c bl in
+  let p = var3 #c 0 1 2 in
+  let (mx, my, mz) = madd_sv b p (svar c 3) (svar c 4) in
+  let (ax, ay, az) = point_add_sv b p ((svar c 3), (svar c 4), kc c 1) in
+  Nil? (fst (ssub (mx) (ax))) &&
+  Nil? (fst (ssub (my) (ay))) &&
+  Nil? (fst (ssub (mz) (az)))
+
+let j6_ok (o': fops m0) (env: list (elem m0)) : Lemma (j6_chk o' env == true) =
+  assert (j6_chk o' env == true) by (poly_tac ())
+
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 50"
+let j6 (x1 y1 z1 x2 y2: P.felem)
+  : Lemma (ensures madd (x1, y1, z1) x2 y2 == P.point_add (x1, y1, z1) (x2, y2, P.fone))
+  = let env = [fromf x1; fromf y1; fromf z1; fromf x2; fromf y2] in
+    j6_ok o env;
+    let c0 = base m0 fl o 5 env in
+    o_ok (); base_ok m0 fl o 5 env;
+    let c = c0 in
+    envf5 c x1 y1 z1 x2 y2;
+    o_eqs (); m0_lem (); bl_lem (); cst_lem (); fneg_lem ();
+    let b = kc c bl in
+    assert_norm (bl % m0 == bl);
+    let p = var3 #c 0 1 2 in
+    let (mx, my, mz) = madd_sv b p (svar c 3) (svar c 4) in
+    let (ax, ay, az) = point_add_sv b p ((svar c 3), (svar c 4), kc c 1) in
+    var3_val c 0 1 2;
+    madd_val c b p (svar c 3) (svar c 4);
+    point_add_val c b p ((svar c 3), (svar c 4), kc c 1);
+    kc_val c 1;
+    assert (Nil? (fst (ssub (mx) (ax))));
+    sv_eq (mx) (ax);
+    assert (Nil? (fst (ssub (my) (ay))));
+    sv_eq (my) (ay);
+    assert (Nil? (fst (ssub (mz) (az))));
+    sv_eq (mz) (az);
+    ()
+#pop-options

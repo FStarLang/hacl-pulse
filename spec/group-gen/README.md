@@ -27,7 +27,7 @@ F* re-checks all of it with the verified polynomial normalizer in
 | `Spec.P384.GroupSv`, `Spec.P384.GroupNR`, `p384/{checks,assoc1,2,3}.py` | `python3 p384/derive.py` (from the P-256 inputs, with `p384/nr.txt`) |
 | `Spec.P384.GroupChecks` | `python3 p256/gen.py p384/checks.py ../Spec.P384.GroupChecks.fst` |
 | `Spec.P384.GroupAssoc{1,2,3}` | `python3 p256/gen.py p384/assocN.py ../Spec.P384.GroupAssocN.fst` |
-| `Spec.P384.JacChecks` | `python3 p256/gen.py p384/jac.py ../Spec.P384.JacChecks.fst` (Jacobian doubling; `Spec.P384.JacSv` is written by hand) |
+| `Spec.P384.JacChecks` | `python3 p256/gen.py p384/jac.py ../Spec.P384.JacChecks.fst` (Jacobian doubling and mixed addition; `Spec.P384.JacSv` is written by hand) |
 | `Spec.P384.Primes` | `python3 p384/mkprimes.py` (from `p384/nodes.txt`) |
 | `Spec.P384.Base`, `Spec.P384.Win{0..5}`, `Hacl.P384.Win{0..5}` | `python3 p384/wintables.py` (fixed-base tables for `G`; F* re-checks every point) |
 | `Spec.Ed25519.GroupChecks` | `python3 ed25519/gen.py ed25519/checks.py ../Spec.Ed25519.GroupChecks.fst` |

@@ -67,6 +67,51 @@ let tj (p: P.proj_point) : P.proj_point =
 let jeq (p: P.proj_point) : prop =
   let (x, y, z) = p in P.fmul y y == eqn_r (x, y, P.fmul z z)
 
+(** Mixed addition: the second point is affine, [(x2, y2, 1)].  This is
+    Renes--Costello--Batina 2016, Algorithm 5, for [a = -3]: Algorithm 4
+    with [Z2 = 1] substituted and simplified, one multiplication cheaper.
+    {!Spec.P384.JacChecks.j6} proves it is {!P.point_add} at [Z2 = 1]. *)
+[@@"opaque_to_smt"]
+let madd (p: P.proj_point) (x2 y2: P.felem) : P.proj_point =
+  let (x1, y1, z1) = p in
+  let t0 = P.fmul x1 x2 in
+  let t1 = P.fmul y1 y2 in
+  let t3 = P.fadd x2 y2 in
+  let t4 = P.fadd x1 y1 in
+  let t3 = P.fmul t3 t4 in
+  let t4 = P.fadd t0 t1 in
+  let t3 = P.fsub t3 t4 in
+  let t4 = P.fmul y2 z1 in
+  let t4 = P.fadd t4 y1 in
+  let y3 = P.fmul x2 z1 in
+  let y3 = P.fadd y3 x1 in
+  let z3 = P.fmul P.b_coeff z1 in
+  let x3 = P.fsub y3 z3 in
+  let z3 = P.fadd x3 x3 in
+  let x3 = P.fadd x3 z3 in
+  let z3 = P.fsub t1 x3 in
+  let x3 = P.fadd t1 x3 in
+  let y3 = P.fmul P.b_coeff y3 in
+  let t1 = P.fadd z1 z1 in
+  let t2 = P.fadd t1 z1 in
+  let y3 = P.fsub y3 t2 in
+  let y3 = P.fsub y3 t0 in
+  let t1 = P.fadd y3 y3 in
+  let y3 = P.fadd t1 y3 in
+  let t1 = P.fadd t0 t0 in
+  let t0 = P.fadd t1 t0 in
+  let t0 = P.fsub t0 t2 in
+  let t1 = P.fmul t4 y3 in
+  let t2 = P.fmul t0 y3 in
+  let y3 = P.fmul x3 z3 in
+  let y3 = P.fadd y3 t2 in
+  let x3 = P.fmul t3 x3 in
+  let x3 = P.fsub x3 t1 in
+  let z3 = P.fmul t4 z3 in
+  let t1 = P.fmul t3 t0 in
+  let z3 = P.fadd z3 t1 in
+  (x3, y3, z3)
+
 (** {2 The same as polynomial computations} *)
 
 let sdbl (#c: ctx) (a: sv c) : sv c = sadd a a
@@ -94,6 +139,47 @@ let to_h_sv (#c: ctx) (p: sp c) : sp c =
 let tj_sv (#c: ctx) (p: sp c) : sp c =
   let (x, y, z) = p in (smul x z, smul y (smul z z), z)
 
+[@@"opaque_to_smt"]
+let madd_sv (#c: ctx) (b: sv c) (p: sp c) (x2 y2: sv c) : sp c =
+  let (x1, y1, z1) = p in
+  let t0 = smul x1 x2 in
+  let t1 = smul y1 y2 in
+  let t3 = sadd x2 y2 in
+  let t4 = sadd x1 y1 in
+  let t3 = smul t3 t4 in
+  let t4 = sadd t0 t1 in
+  let t3 = ssub t3 t4 in
+  let t4 = smul y2 z1 in
+  let t4 = sadd t4 y1 in
+  let y3 = smul x2 z1 in
+  let y3 = sadd y3 x1 in
+  let z3 = smul b z1 in
+  let x3 = ssub y3 z3 in
+  let z3 = sadd x3 x3 in
+  let x3 = sadd x3 z3 in
+  let z3 = ssub t1 x3 in
+  let x3 = sadd t1 x3 in
+  let y3 = smul b y3 in
+  let t1 = sadd z1 z1 in
+  let t2 = sadd t1 z1 in
+  let y3 = ssub y3 t2 in
+  let y3 = ssub y3 t0 in
+  let t1 = sadd y3 y3 in
+  let y3 = sadd t1 y3 in
+  let t1 = sadd t0 t0 in
+  let t0 = sadd t1 t0 in
+  let t0 = ssub t0 t2 in
+  let t1 = smul t4 y3 in
+  let t2 = smul t0 y3 in
+  let y3 = smul x3 z3 in
+  let y3 = sadd y3 t2 in
+  let x3 = smul t3 x3 in
+  let x3 = ssub x3 t1 in
+  let z3 = smul t4 z3 in
+  let t1 = smul t3 t0 in
+  let z3 = sadd z3 t1 in
+  (x3, y3, z3)
+
 (** [Y^2 -> X^3 - 3 X Z^4 + b Z^6]: the Jacobian equation as a rewrite. *)
 [@@"opaque_to_smt"]
 let jac_hyp (c: ctx) (i j k: (k: nat { k < c.nv })) : hyp c =
@@ -107,6 +193,13 @@ let jdouble_val (c: ctx { c.m == m0 }) (p: sp c)
   = m0_lem (); o_eqs ();
     FStar.Pervasives.reveal_opaque (`%jdouble) jdouble;
     FStar.Pervasives.reveal_opaque (`%jdouble_sv) (jdouble_sv #c)
+
+let madd_val (c: ctx { c.m == m0 }) (b: sv c) (p: sp c) (x2 y2: sv c)
+  : Lemma (requires ok c /\ c.o == o /\ vl b == bl)
+          (ensures tof3 (madd_sv b p x2 y2) == madd (tof3 p) (tof (vl x2)) (tof (vl y2)))
+  = m0_lem (); bl_lem (); o_eqs ();
+    FStar.Pervasives.reveal_opaque (`%madd) madd;
+    FStar.Pervasives.reveal_opaque (`%madd_sv) (madd_sv #c)
 
 let to_h_val (c: ctx { c.m == m0 }) (p: sp c)
   : Lemma (requires ok c /\ c.o == o)

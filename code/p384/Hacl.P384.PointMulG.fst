@@ -113,35 +113,35 @@ let n0 (_: unit) : Lemma (pow2 (64 * 0) == 1) = assert_norm (pow2 0 == 1)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-fn piece_add (ox oy oz ux uy uz sx sy sz: A.array S64.t)
+fn piece_add (ox oy oz ux uy uz sx sy: A.array S64.t)
              (tx ty: A.array S64.t) (ks: A.array S64.t)
              (i: U32.t { U32.v i <= 12 }) (j: SZ.t { SZ.v j < 6 })
              (#vox #voy #voz: erased (Seq.seq S64.t))
              (#vux #vuy #vuz: erased (Seq.seq S64.t))
-             (#vsx #vsy #vsz: erased (Seq.seq S64.t))
+             (#vsx #vsy: erased (Seq.seq S64.t))
              (#ptx #pty: perm) (#vtx #vty: erased (Seq.seq S64.t))
              (#pk: perm) (#vk: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
-  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
+  A.pts_to sx vsx ** A.pts_to sy vsy **
   A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty **
   A.pts_to ks #pk vk **
   pure (Seq.length vux == 6 /\ Seq.length vuy == 6 /\ Seq.length vuz == 6 /\
-        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\ Seq.length vsz == 6 /\
+        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\
         Seq.length vtx == 96 /\ Seq.length vty == 96 /\
         Seq.length vk == 6 /\
         W.oc P.g /\ W.pok vox voy voz /\
         W.rep vox voy voz (B.rv (W.kv vk) (U32.v i) (SZ.v j)) P.g /\
         atok vtx vty P.g (pow2 (64 * SZ.v j)))
-ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
+ensures exists* (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
-  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
+  A.pts_to sx wsx ** A.pts_to sy wsy **
   A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty **
   A.pts_to ks #pk vk **
   pure (Seq.length wux == 6 /\ Seq.length wuy == 6 /\ Seq.length wuz == 6 /\
-        Seq.length wsx == 6 /\ Seq.length wsy == 6 /\ Seq.length wsz == 6 /\
+        Seq.length wsx == 6 /\ Seq.length wsy == 6 /\
         W.pok wx wy wz /\
         W.rep wx wy wz (B.rv (W.kv vk) (U32.v i) (SZ.v j + 1)) P.g)
 {
@@ -152,7 +152,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   let sm = bsgn w;
   let mg = bmag w;
   digit_ok (W.kv vk) (U32.v i) (SZ.v j) (S64.v w) (S64.v mg) (S64.v sm);
-  win_sadd ox oy oz ux uy uz sx sy sz tx ty mg sm
+  win_sadd ox oy oz ux uy uz sx sy tx ty mg sm
            (hide P.g) (hide (pow2 (64 * SZ.v j)))
            (hide (B.rv (W.kv vk) (U32.v i) (SZ.v j)))
            (hide (B.rv (W.kv vk) (U32.v i) (SZ.v j + 1)));
@@ -165,12 +165,12 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn rung (ox oy oz ux uy uz sx sy sz: A.array S64.t)
+fn rung (ox oy oz ux uy uz sx sy: A.array S64.t)
         (t0x t0y t1x t1y t2x t2y t3x t3y t4x t4y t5x t5y: A.array S64.t)
         (ks: A.array S64.t) (i: U32.t { U32.v i <= 12 })
         (#vox #voy #voz: erased (Seq.seq S64.t))
         (#vux #vuy #vuz: erased (Seq.seq S64.t))
-        (#vsx #vsy #vsz: erased (Seq.seq S64.t))
+        (#vsx #vsy: erased (Seq.seq S64.t))
         (#v0x #v0y #v1x #v1y #v2x #v2y: erased (Seq.seq S64.t))
         (#v3x #v3y #v4x #v4y #v5x #v5y: erased (Seq.seq S64.t))
         (#p0x #p0y #p1x #p1y #p2x #p2y #p3x #p3y #p4x #p4y #p5x #p5y: perm)
@@ -178,7 +178,7 @@ fn rung (ox oy oz ux uy uz sx sy sz: A.array S64.t)
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
-  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
+  A.pts_to sx vsx ** A.pts_to sy vsy **
   A.pts_to t0x #p0x v0x ** A.pts_to t0y #p0y v0y **
   A.pts_to t1x #p1x v1x ** A.pts_to t1y #p1y v1y **
   A.pts_to t2x #p2x v2x ** A.pts_to t2y #p2y v2y **
@@ -187,7 +187,7 @@ requires
   A.pts_to t5x #p5x v5x ** A.pts_to t5y #p5y v5y **
   A.pts_to ks #pk vk **
   pure (Seq.length vux == 6 /\ Seq.length vuy == 6 /\ Seq.length vuz == 6 /\
-        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\ Seq.length vsz == 6 /\
+        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\
         Seq.length v0x == 96 /\ Seq.length v0y == 96 /\
         Seq.length v1x == 96 /\ Seq.length v1y == 96 /\
         Seq.length v2x == 96 /\ Seq.length v2y == 96 /\
@@ -203,10 +203,10 @@ requires
         atok v3x v3y P.g (pow2 (64 * 3)) /\
         atok v4x v4y P.g (pow2 (64 * 4)) /\
         atok v5x v5y P.g (pow2 (64 * 5)))
-ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
+ensures exists* (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
-  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
+  A.pts_to sx wsx ** A.pts_to sy wsy **
   A.pts_to t0x #p0x v0x ** A.pts_to t0y #p0y v0y **
   A.pts_to t1x #p1x v1x ** A.pts_to t1y #p1y v1y **
   A.pts_to t2x #p2x v2x ** A.pts_to t2y #p2y v2y **
@@ -215,7 +215,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   A.pts_to t5x #p5x v5x ** A.pts_to t5y #p5y v5y **
   A.pts_to ks #pk vk **
   pure (Seq.length wux == 6 /\ Seq.length wuy == 6 /\ Seq.length wuz == 6 /\
-        Seq.length wsx == 6 /\ Seq.length wsy == 6 /\ Seq.length wsz == 6 /\
+        Seq.length wsx == 6 /\ Seq.length wsy == 6 /\
         W.pok wx wy wz /\ W.rep wx wy wz (B.h (W.kv vk) (U32.v i)) P.g)
 {
   win_dbl5 ox oy oz ux uy uz (hide P.g) (hide (B.h (W.kv vk) (U32.v i + 1)));
@@ -223,12 +223,12 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   B.rv_start (W.kv vk) (U32.v i);
   W.rep_cong ax ay az (32 * B.h (W.kv vk) (U32.v i + 1))
              (B.rv (W.kv vk) (U32.v i) 0) P.g;
-  piece_add ox oy oz ux uy uz sx sy sz t0x t0y ks i 0sz;
-  piece_add ox oy oz ux uy uz sx sy sz t1x t1y ks i 1sz;
-  piece_add ox oy oz ux uy uz sx sy sz t2x t2y ks i 2sz;
-  piece_add ox oy oz ux uy uz sx sy sz t3x t3y ks i 3sz;
-  piece_add ox oy oz ux uy uz sx sy sz t4x t4y ks i 4sz;
-  piece_add ox oy oz ux uy uz sx sy sz t5x t5y ks i 5sz;
+  piece_add ox oy oz ux uy uz sx sy t0x t0y ks i 0sz;
+  piece_add ox oy oz ux uy uz sx sy t1x t1y ks i 1sz;
+  piece_add ox oy oz ux uy uz sx sy t2x t2y ks i 2sz;
+  piece_add ox oy oz ux uy uz sx sy t3x t3y ks i 3sz;
+  piece_add ox oy oz ux uy uz sx sy t4x t4y ks i 4sz;
+  piece_add ox oy oz ux uy uz sx sy t5x t5y ks i 5sz;
   with wx wy wz. assert (A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz);
   B.rv_end (W.kv vk) (U32.v i);
   W.rep_cong wx wy wz (B.rv (W.kv vk) (U32.v i) 6) (B.h (W.kv vk) (U32.v i)) P.g;
@@ -245,12 +245,12 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
-fn win_loop (ox oy oz ux uy uz sx sy sz: A.array S64.t)
+fn win_loop (ox oy oz ux uy uz sx sy: A.array S64.t)
             (t0x t0y t1x t1y t2x t2y t3x t3y t4x t4y t5x t5y: A.array S64.t)
             (ks: A.array S64.t)
             (#vox #voy #voz: erased (Seq.seq S64.t))
             (#vux #vuy #vuz: erased (Seq.seq S64.t))
-            (#vsx #vsy #vsz: erased (Seq.seq S64.t))
+            (#vsx #vsy: erased (Seq.seq S64.t))
             (#c0x #c0y #c1x #c1y #c2x #c2y: erased (Seq.seq S64.t))
             (#c3x #c3y #c4x #c4y #c5x #c5y: erased (Seq.seq S64.t))
             (#p0x #p0y #p1x #p1y #p2x #p2y #p3x #p3y #p4x #p4y #p5x #p5y: perm)
@@ -258,7 +258,7 @@ fn win_loop (ox oy oz ux uy uz sx sy sz: A.array S64.t)
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
-  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
+  A.pts_to sx vsx ** A.pts_to sy vsy **
   A.pts_to t0x #p0x c0x ** A.pts_to t0y #p0y c0y **
   A.pts_to t1x #p1x c1x ** A.pts_to t1y #p1y c1y **
   A.pts_to t2x #p2x c2x ** A.pts_to t2y #p2y c2y **
@@ -268,7 +268,7 @@ requires
   A.pts_to ks #pk vk **
   pure (Seq.length vox == 6 /\ Seq.length voy == 6 /\ Seq.length voz == 6 /\
         Seq.length vux == 6 /\ Seq.length vuy == 6 /\ Seq.length vuz == 6 /\
-        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\ Seq.length vsz == 6 /\
+        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\
         Seq.length c0x == 96 /\ Seq.length c0y == 96 /\
         Seq.length c1x == 96 /\ Seq.length c1y == 96 /\
         Seq.length c2x == 96 /\ Seq.length c2y == 96 /\
@@ -282,10 +282,10 @@ requires
         atok c4x c4y P.g (pow2 (64 * 4)) /\
         atok c5x c5y P.g (pow2 (64 * 5)) /\
         Seq.length vk == 6)
-ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
+ensures exists* (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
-  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
+  A.pts_to sx wsx ** A.pts_to sy wsy **
   A.pts_to t0x #p0x c0x ** A.pts_to t0y #p0y c0y **
   A.pts_to t1x #p1x c1x ** A.pts_to t1y #p1y c1y **
   A.pts_to t2x #p2x c2x ** A.pts_to t2y #p2y c2y **
@@ -311,11 +311,11 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   let mut i = 13ul;
   while (let vi = !i; U32.gt vi 0ul)
   invariant exists* (vi: U32.t)
-                    (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
+                    (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
     pts_to i vi **
     A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
     A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
-    A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
+    A.pts_to sx wsx ** A.pts_to sy wsy **
     A.pts_to t0x #p0x c0x ** A.pts_to t0y #p0y c0y **
     A.pts_to t1x #p1x c1x ** A.pts_to t1y #p1y c1y **
     A.pts_to t2x #p2x c2x ** A.pts_to t2y #p2y c2y **
@@ -325,14 +325,14 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
     A.pts_to ks #pk vk **
     pure (U32.v vi <= 13 /\
           Seq.length wux == 6 /\ Seq.length wuy == 6 /\ Seq.length wuz == 6 /\
-          Seq.length wsx == 6 /\ Seq.length wsy == 6 /\ Seq.length wsz == 6 /\
+          Seq.length wsx == 6 /\ Seq.length wsy == 6 /\
           W.pok wx wy wz /\
           W.rep wx wy wz (B.h (W.kv vk) (U32.v vi)) P.g)
   decreases (U32.v (!i))
   {
     let vi = !i;
     let i2 = U32.sub vi 1ul;
-    rung ox oy oz ux uy uz sx sy sz
+    rung ox oy oz ux uy uz sx sy
          t0x t0y t1x t1y t2x t2y t3x t3y t4x t4y t5x t5y ks i2;
     i := i2;
   };
@@ -378,8 +378,6 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Mem.track sx; A.pts_to_len sx;
   let mut sy = [| z; 6sz |];
   Mem.track sy; A.pts_to_len sy;
-  let mut sz = [| z; 6sz |];
-  Mem.track sz; A.pts_to_len sz;
 
   T0.tbl_ok (); T1.tbl_ok (); T2.tbl_ok (); T3.tbl_ok (); T4.tbl_ok (); T5.tbl_ok ();
   n0 ();
@@ -397,7 +395,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   let t5x = Tbl.table T5.tx_arr 96sz;
   let t5y = Tbl.table T5.ty_arr 96sz;
 
-  win_loop ox oy oz ux uy uz sx sy sz
+  win_loop ox oy oz ux uy uz sx sy
            t0x t0y t1x t1y t2x t2y t3x t3y t4x t4y t5x t5y ks;
 
   Tbl.drop_table t0x; Tbl.drop_table t0y;
@@ -406,7 +404,6 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Tbl.drop_table t3x; Tbl.drop_table t3y;
   Tbl.drop_table t4x; Tbl.drop_table t4y;
   Tbl.drop_table t5x; Tbl.drop_table t5y;
-  Mem.wipe sz 6sz;
   Mem.wipe sy 6sz;
   Mem.wipe sx 6sz;
   Mem.wipe uz 6sz;

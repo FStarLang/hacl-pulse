@@ -1409,7 +1409,11 @@ fixed-base comb then switched to signed five-bit digits
 digit negates `y` under a mask, and a zero digit adds entry 16 and
 discards the result.  The invariant states a negative step as
 `e = e' + m n`, so `rep` only ever names natural multiples.  Keygen and
-signing run 11-14% fewer instructions (Part 102).
+signing run 11-14% fewer instructions (Part 102).  Because the entries
+are affine, the comb adds them with `point_madd`, RCB Algorithm 5.  It is
+Algorithm 4 at `Z2 = 1` as an exact polynomial identity
+(`Spec.P384.JacChecks.j6`), so completeness carries over and keygen
+loses another 4.8% (Part 103).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

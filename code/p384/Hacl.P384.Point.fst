@@ -45,6 +45,7 @@ module P = Spec.P384
 module Mem = Hacl.Mem
 module JS = Spec.P384.JacSv
 module J = Spec.P384.Jac
+module JK = Spec.P384.JacChecks
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
 
@@ -128,6 +129,85 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   fadd1 oz a1;
   drop_table bc;
   Mem.wipe a5 6sz;
+  Mem.wipe a4 6sz;
+  Mem.wipe a3 6sz;
+  Mem.wipe a2 6sz;
+  Mem.wipe a1 6sz;
+  Mem.wipe a0 6sz;
+  ()
+}
+
+(** Mixed addition, [(x2, y2)] affine: Algorithm 5, one multiplication and
+    one temporary fewer than {!point_add}.  {!Spec.P384.JacChecks.j6}
+    says it is {!point_add} with [Z2 = 1], so it is complete as well. *)
+fn point_madd (ox oy oz: A.array S64.t)
+              (x1 y1 z1: A.array S64.t) (x2 y2: A.array S64.t)
+              (#vox #voy #voz: erased (Seq.seq S64.t))
+              (#p1: perm) (#vx1 #vy1 #vz1: erased (Seq.seq S64.t))
+              (#p2: perm) (#vx2 #vy2: erased (Seq.seq S64.t))
+requires
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 **
+  A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+  pure (Seq.length vox == 6 /\ Seq.length voy == 6 /\ Seq.length voz == 6 /\
+        pt_ok vx1 vy1 vz1 /\ felem vx2 /\ felem vy2)
+ensures exists* (wx wy wz: Seq.seq S64.t).
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 **
+  A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+  pure (pt_ok wx wy wz /\
+        pt wx wy wz == P.point_add (pt vx1 vy1 vz1) (fev vx2, fev vy2, P.fone))
+{
+  JK.j6 (fev vx1) (fev vy1) (fev vz1) (fev vx2) (fev vy2);
+  reveal_opaque (`%JS.madd) JS.madd;
+  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
+  let z = S64.zero;
+  let mut a0 = [| z; 6sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 6sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 6sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 6sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 6sz |];
+  Mem.track a4; A.pts_to_len a4;
+  A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  A.pts_to_len a4;
+  let bc = fb ();
+  fmul a0 x1 x2;
+  fmul a1 y1 y2;
+  fadd a3 x2 y2;
+  fadd a4 x1 y1;
+  fmul1 a3 a4;
+  fadd a4 a0 a1;
+  fsub1 a3 a4;
+  fmul a4 y2 z1;
+  fadd1 a4 y1;
+  fmul oy x2 z1;
+  fadd1 oy x1;
+  fmul oz bc z1;
+  fsub ox oy oz;
+  fdbl oz ox;
+  fadd1 ox oz;
+  fsub oz a1 ox;
+  fadd2 ox a1;
+  fmul2 oy bc;
+  fdbl a1 z1;
+  fadd a2 a1 z1;
+  fsub1 oy a2;
+  fsub1 oy a0;
+  fdbl a1 oy;
+  fadd2 oy a1;
+  fdbl a1 a0;
+  fadd2 a0 a1;
+  fsub1 a0 a2;
+  fmul a1 a4 oy;
+  fmul a2 a0 oy;
+  fmul oy ox oz;
+  fadd1 oy a2;
+  fmul2 ox a3;
+  fsub1 ox a1;
+  fmul2 oz a4;
+  fmul a1 a3 a0;
+  fadd1 oz a1;
+  drop_table bc;
   Mem.wipe a4 6sz;
   Mem.wipe a3 6sz;
   Mem.wipe a2 6sz;

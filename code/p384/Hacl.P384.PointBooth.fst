@@ -76,14 +76,14 @@ let aent_intro (tx ty: Seq.seq S64.t) (p: P.proj_point) (n d: nat)
           (ensures aent tx ty p n d)
   = reveal_opaque (`%aent) aent
 
-(** Reading an entry back, with any [z] that reads as one. *)
-let atok_get (tx ty z: Seq.seq S64.t) (p: P.proj_point) (n d: nat)
-  : Lemma (requires atok tx ty p n /\ d < 16 /\ felem z /\ fev z == P.fone)
-          (ensures pok (entry tx d) (entry ty d) z /\
-                   rep (entry tx d) (entry ty d) z ((d + 1) * n) p)
-  = reveal_opaque (`%aent) aent;
-    reveal_opaque (`%pok) pok;
-    reveal_opaque (`%rep) rep
+(** Reading an entry back: an affine point, as a triple with [z = 1]. *)
+let atok_get (tx ty: Seq.seq S64.t) (p: P.proj_point) (n d: nat)
+  : Lemma (requires atok tx ty p n /\ d < 16)
+          (ensures felem (entry tx d) /\ felem (entry ty d) /\
+                   GR.on_curve (fev (entry tx d), fev (entry ty d), P.fone) /\
+                   GR.peq (fev (entry tx d), fev (entry ty d), P.fone)
+                          (SM.smul ((d + 1) * n) p))
+  = reveal_opaque (`%aent) aent
 
 (** {2 Subtracting a multiple} *)
 
@@ -130,35 +130,37 @@ let fsub_zero (y: P.felem) : Lemma (P.fsub P.fzero y == P.fneg y) = ()
 
 (** The selected entry is [(idx + 1) n]; when the digit is not zero that
     is its magnitude, and the sum is the next partial value. *)
-let sadd_pos (ox oy oz ex ey ez sy ux uy uz: Seq.seq S64.t) (p: P.proj_point)
+let sadd_pos (ox oy oz ex ey sy ux uy uz: Seq.seq S64.t) (p: P.proj_point)
             (e e' m n: nat) (neg: bool)
   : Lemma (requires
-             oc p /\ rep ox oy oz e p /\ rep ex ey ez (m * n) p /\
+             oc p /\ rep ox oy oz e p /\
+             GR.on_curve (fev ex, fev ey, P.fone) /\
+             GR.peq (fev ex, fev ey, P.fone) (SM.smul (m * n) p) /\
              fev sy == (if neg then P.fsub P.fzero (fev ey) else fev ey) /\
-             pt ux uy uz == P.point_add (pt ox oy oz) (pt ex sy ez) /\
+             pt ux uy uz == P.point_add (pt ox oy oz) (fev ex, fev sy, P.fone) /\
              (not neg ==> e' == e + m * n) /\ (neg ==> e == e' + m * n))
           (ensures rep ux uy uz e' p)
   = reveal_opaque (`%oc) oc;
     reveal_opaque (`%rep) rep;
     fsub_zero (fev ey);
     if neg then
-      neg_add p (pt ox oy oz) (pt ex ey ez) e' (m * n)
+      neg_add p (pt ox oy oz) (fev ex, fev ey, P.fone) e' (m * n)
     else
-      SM.smul_add_congr e (m * n) p (pt ox oy oz) (pt ex sy ez)
+      SM.smul_add_congr e (m * n) p (pt ox oy oz) (fev ex, fev sy, P.fone)
 
-let sadd_ok (ox oy oz ex ey ez sy ux uy uz: Seq.seq S64.t) (p: P.proj_point)
+let sadd_ok (ox oy oz ex ey sy ux uy uz: Seq.seq S64.t) (p: P.proj_point)
             (e e' m n d: nat) (neg: bool)
   : Lemma (requires
-             oc p /\ rep ox oy oz e p /\ rep ex ey ez ((d + 1) * n) p /\
+             oc p /\ rep ox oy oz e p /\
+             GR.on_curve (fev ex, fev ey, P.fone) /\
+             GR.peq (fev ex, fev ey, P.fone) (SM.smul ((d + 1) * n) p) /\
              (m <> 0 ==> d + 1 == m) /\
              fev sy == (if neg then P.fsub P.fzero (fev ey) else fev ey) /\
-             pt ux uy uz == P.point_add (pt ox oy oz) (pt ex sy ez) /\
+             pt ux uy uz == P.point_add (pt ox oy oz) (fev ex, fev sy, P.fone) /\
              (not neg ==> e' == e + m * n) /\ (neg ==> e == e' + m * n))
           (ensures m <> 0 ==> rep ux uy uz e' p)
-  = if m <> 0 then begin
-      rep_cong ex ey ez ((d + 1) * n) (m * n) p;
-      sadd_pos ox oy oz ex ey ez sy ux uy uz p e e' m n neg
-    end
+  = if m <> 0 then
+      sadd_pos ox oy oz ex ey sy ux uy uz p e e' m n neg
 
 (** And a zero digit keeps what was there. *)
 let keep_ok (ox oy oz ux uy uz wx wy wz: Seq.seq S64.t) (p: P.proj_point)
@@ -281,21 +283,21 @@ ensures exists* (wx wy wz wux wuy wuz: Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-fn win_sadd (ox oy oz ux uy uz sx sy sz: A.array S64.t)
+fn win_sadd (ox oy oz ux uy uz sx sy: A.array S64.t)
             (tx ty: A.array S64.t) (mag sm: S64.t)
             (p: erased P.proj_point) (n: erased nat)
             (e e': erased nat)
             (#vox #voy #voz: erased (Seq.seq S64.t))
             (#vux #vuy #vuz: erased (Seq.seq S64.t))
-            (#vsx #vsy #vsz: erased (Seq.seq S64.t))
+            (#vsx #vsy: erased (Seq.seq S64.t))
             (#ptx #pty: perm) (#vtx #vty: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
-  A.pts_to sx vsx ** A.pts_to sy vsy ** A.pts_to sz vsz **
+  A.pts_to sx vsx ** A.pts_to sy vsy **
   A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty **
   pure (Seq.length vux == 6 /\ Seq.length vuy == 6 /\ Seq.length vuz == 6 /\
-        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\ Seq.length vsz == 6 /\
+        Seq.length vsx == 6 /\ Seq.length vsy == 6 /\
         Seq.length vtx == 96 /\ Seq.length vty == 96 /\
         pok vox voy voz /\ oc (reveal p) /\
         rep vox voy voz e (reveal p) /\
@@ -303,18 +305,18 @@ requires
         S64.v mag <= 16 /\ is_mask sm /\
         (S64.v sm == 0 ==> reveal e' == reveal e + S64.v mag * reveal n) /\
         (S64.v sm <> 0 ==> reveal e == reveal e' + S64.v mag * reveal n))
-ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
+ensures exists* (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
-  A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz **
+  A.pts_to sx wsx ** A.pts_to sy wsy **
   A.pts_to tx #ptx vtx ** A.pts_to ty #pty vty **
   pure (Seq.length wux == 6 /\ Seq.length wuy == 6 /\ Seq.length wuz == 6 /\
-        Seq.length wsx == 6 /\ Seq.length wsy == 6 /\ Seq.length wsz == 6 /\
+        Seq.length wsx == 6 /\ Seq.length wsy == 6 /\
         pok wx wy wz /\ rep wx wy wz (reveal e') (reveal p))
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
   A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz;
-  A.pts_to_len sx; A.pts_to_len sy; A.pts_to_len sz;
+  A.pts_to_len sx; A.pts_to_len sy;
   A.pts_to_len tx; A.pts_to_len ty;
   pok_elim vox voy voz;
   let m1 = S64.sub_mod mag (S64.classify 1uL);
@@ -325,18 +327,16 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy wsz: Seq.seq S64.t).
   entry_fits (reveal d);
   table_select sx tx 6sz idx d;
   table_select sy ty 6sz idx d;
-  fone sz;
   entry_def vtx (reveal d); entry_def vty (reveal d);
-  with wsx wsy wsz. assert (A.pts_to sx wsx ** A.pts_to sy wsy ** A.pts_to sz wsz);
-  atok_get vtx vty wsz (reveal p) (reveal n) (reveal d);
-  pok_elim wsx wsy wsz;
+  with wsx wsy. assert (A.pts_to sx wsx ** A.pts_to sy wsy);
+  atok_get vtx vty (reveal p) (reveal n) (reveal d);
   fzero ux;
   fsub uy ux sy;
   fcsel sy uy sm;
   with nsy. assert (A.pts_to sy nsy);
-  point_add ux uy uz ox oy oz sx sy sz;
+  point_madd ux uy uz ox oy oz sx sy;
   with u1x u1y u1z. assert (A.pts_to ux u1x ** A.pts_to uy u1y ** A.pts_to uz u1z);
-  sadd_ok vox voy voz wsx wsy wsz nsy u1x u1y u1z (reveal p)
+  sadd_ok vox voy voz wsx wsy nsy u1x u1y u1z (reveal p)
           (reveal e) (reveal e') (S64.v mag) (reveal n) (reveal d) (S64.v sm <> 0);
   let zm = S64.eq_mask mag S64.zero;
   let nz = S64.eq_mask zm S64.zero;

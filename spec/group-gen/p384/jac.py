@@ -35,4 +35,9 @@ dict(name="j5", doc="Converting in and back out scales by [z^2]: an exact identi
   pairs=[("hx","sx"),("hy","sy"),("hz","sz")],
   proof=["var3_val c 0 1 2","tj_val c p","to_h_val c (tj_sv p)",f"ksc_val c (smul {V(2)} {V(2)}) p"],
   ens="to_h (tj (x, y, z)) == Pj.scale #P.prime (P.fmul z z) (x, y, z)"),
+dict(name="j6", doc="Mixed addition is the addition law at [Z2 = 1]: an exact identity.", n=5, vars=["x1","y1","z1","x2","y2"],
+  lets=["let p = var3 #c 0 1 2",f"let (mx, my, mz) = madd_sv b p {V(3)} {V(4)}",f"let (ax, ay, az) = point_add_sv b p ({V(3)}, {V(4)}, kc c 1)"],
+  pairs=[("mx","ax"),("my","ay"),("mz","az")],
+  proof=["var3_val c 0 1 2",f"madd_val c b p {V(3)} {V(4)}",f"point_add_val c b p ({V(3)}, {V(4)}, kc c 1)","kc_val c 1"],
+  ens="madd (x1, y1, z1) x2 y2 == P.point_add (x1, y1, z1) (x2, y2, P.fone)"),
 ]

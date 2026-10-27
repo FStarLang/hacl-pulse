@@ -9919,3 +9919,55 @@ ECDH does not use the fixed base; its change is noise.  Against AWS-LC
 Next is a mixed addition for the affine table entries, with `Z2 = 1`;
 it saves a multiplication and some additions per call.  Tests,
 `make lint`, `make stack` and `make cross` pass.
+
+## Part 103: P-384 mixed addition
+
+The fixed-base comb's table entries are affine, so every addition there
+has `Z2 = 1`.  `Hacl.P384.Point.point_madd` is Renes-Costello-Batina
+Algorithm 5 for `a = -3`: Algorithm 4 with `Z2 = 1` substituted.  It
+needs one multiplication and one temporary fewer than `point_add`.  The
+`z` buffer that `win_sadd` filled with Montgomery one before each
+addition is gone.
+
+The two formulas agree as polynomials, not only projectively: Algorithm
+4's `(Y1 + Z1)(Y2 + 1) - (Y1 Y2 + Z1)` is `Y2 Z1 + Y1`, and so on.
+`Spec.P384.JacSv.madd` writes Algorithm 5 in the implementation's order,
+and the generated check `Spec.P384.JacChecks.j6` (from
+`group-gen/p384/jac.py`) proves `madd p x2 y2 == P.point_add p (x2, y2,
+1)` exactly.  Completeness carries over unchanged.  `atok_get` and
+`sadd_ok` now state the entry as the triple `(x, y, P.fone)` rather than
+through a third limb sequence.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.355M | 1.289M | 1.101M | 1.048M |
+| sign | 1.490M | 1.425M | 1.170M | 1.117M |
+| verify | 4.299M | 4.234M | 3.375M | 3.323M |
+| ECDH | 3.152M | 3.152M | 2.457M | 2.457M |
+
+That is 4.8% off keygen and 4.4% off signing.  Verify saves the same
+absolute amount through its `u1 G`.
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 119 us | 113 us | 100 us | 86 us |
+| ECDH | 317 us | 306 us | 230 us | 235 us |
+| sign | 143 us | 133 us | 111 us | 104 us |
+| verify | 402 us | 393 us | 323 us | 311 us |
+
+The clang keygen drop is larger than the instruction count supports;
+part of it is noise (one "before" run measured 88 us).  ECDH's code is
+unchanged.  Against AWS-LC (clang):
+
+| operation | AWS-LC | ours | ratio |
+| --- | ---: | ---: | ---: |
+| keygen | 61 us | 86-94 us | 1.4-1.5x |
+| sign | 99 us | 104 us | 1.05x |
+| verify | 214 us | 311 us | 1.45x |
+| ECDH | 161 us | 235 us | 1.46x |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
