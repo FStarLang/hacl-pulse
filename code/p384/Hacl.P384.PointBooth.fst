@@ -128,39 +128,39 @@ let neg_add (p o s: P.proj_point) (e d: nat)
 
 let fsub_zero (y: P.felem) : Lemma (P.fsub P.fzero y == P.fneg y) = ()
 
-(** The selected entry is [(idx + 1) n]; when the digit is not zero that
+(** The selected entry, [(x, y, ez)], is [(idx + 1) n]; when the digit is not zero that
     is its magnitude, and the sum is the next partial value. *)
-let sadd_pos (ox oy oz ex ey sy ux uy uz: Seq.seq S64.t) (p: P.proj_point)
+let sadd_pos (ox oy oz ex ey sy ux uy uz: Seq.seq S64.t) (ez: P.felem) (p: P.proj_point)
             (e e' m n: nat) (neg: bool)
   : Lemma (requires
              oc p /\ rep ox oy oz e p /\
-             GR.on_curve (fev ex, fev ey, P.fone) /\
-             GR.peq (fev ex, fev ey, P.fone) (SM.smul (m * n) p) /\
+             GR.on_curve (fev ex, fev ey, ez) /\
+             GR.peq (fev ex, fev ey, ez) (SM.smul (m * n) p) /\
              fev sy == (if neg then P.fsub P.fzero (fev ey) else fev ey) /\
-             pt ux uy uz == P.point_add (pt ox oy oz) (fev ex, fev sy, P.fone) /\
+             pt ux uy uz == P.point_add (pt ox oy oz) (fev ex, fev sy, ez) /\
              (not neg ==> e' == e + m * n) /\ (neg ==> e == e' + m * n))
           (ensures rep ux uy uz e' p)
   = reveal_opaque (`%oc) oc;
     reveal_opaque (`%rep) rep;
     fsub_zero (fev ey);
     if neg then
-      neg_add p (pt ox oy oz) (fev ex, fev ey, P.fone) e' (m * n)
+      neg_add p (pt ox oy oz) (fev ex, fev ey, ez) e' (m * n)
     else
-      SM.smul_add_congr e (m * n) p (pt ox oy oz) (fev ex, fev sy, P.fone)
+      SM.smul_add_congr e (m * n) p (pt ox oy oz) (fev ex, fev sy, ez)
 
-let sadd_ok (ox oy oz ex ey sy ux uy uz: Seq.seq S64.t) (p: P.proj_point)
+let sadd_ok (ox oy oz ex ey sy ux uy uz: Seq.seq S64.t) (ez: P.felem) (p: P.proj_point)
             (e e' m n d: nat) (neg: bool)
   : Lemma (requires
              oc p /\ rep ox oy oz e p /\
-             GR.on_curve (fev ex, fev ey, P.fone) /\
-             GR.peq (fev ex, fev ey, P.fone) (SM.smul ((d + 1) * n) p) /\
+             GR.on_curve (fev ex, fev ey, ez) /\
+             GR.peq (fev ex, fev ey, ez) (SM.smul ((d + 1) * n) p) /\
              (m <> 0 ==> d + 1 == m) /\
              fev sy == (if neg then P.fsub P.fzero (fev ey) else fev ey) /\
-             pt ux uy uz == P.point_add (pt ox oy oz) (fev ex, fev sy, P.fone) /\
+             pt ux uy uz == P.point_add (pt ox oy oz) (fev ex, fev sy, ez) /\
              (not neg ==> e' == e + m * n) /\ (neg ==> e == e' + m * n))
           (ensures m <> 0 ==> rep ux uy uz e' p)
   = if m <> 0 then
-      sadd_pos ox oy oz ex ey sy ux uy uz p e e' m n neg
+      sadd_pos ox oy oz ex ey sy ux uy uz ez p e e' m n neg
 
 (** And a zero digit keeps what was there. *)
 let keep_ok (ox oy oz ux uy uz wx wy wz: Seq.seq S64.t) (p: P.proj_point)
@@ -336,7 +336,7 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
   with nsy. assert (A.pts_to sy nsy);
   point_madd ux uy uz ox oy oz sx sy;
   with u1x u1y u1z. assert (A.pts_to ux u1x ** A.pts_to uy u1y ** A.pts_to uz u1z);
-  sadd_ok vox voy voz wsx wsy nsy u1x u1y u1z (reveal p)
+  sadd_ok vox voy voz wsx wsy nsy u1x u1y u1z P.fone (reveal p)
           (reveal e) (reveal e') (S64.v mag) (reveal n) (reveal d) (S64.v sm <> 0);
   let zm = S64.eq_mask mag S64.zero;
   let nz = S64.eq_mask zm S64.zero;

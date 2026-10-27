@@ -1413,7 +1413,16 @@ signing run 11-14% fewer instructions (Part 102).  Because the entries
 are affine, the comb adds them with `point_madd`, RCB Algorithm 5.  It is
 Algorithm 4 at `Z2 = 1` as an exact polynomial identity
 (`Spec.P384.JacChecks.j6`), so completeness carries over and keygen
-loses another 4.8% (Part 103).
+loses another 4.8% (Part 103).  The variable-base window then took the
+same digits over the whole scalar (`Hacl.P384.PointMulV`): seventy-seven
+signed digits against projective multiples `1..16` of `Q`, the top one
+added into infinity with no doublings, so 77 additions and 380 doublings
+replace 96 and 384.  A digit's six-bit window starts at bit `5i - 1` and
+can straddle two limbs (`vwin`); its proof lives in three lemmas over
+`nat` (`vwin_zero`, `win_in`, `win_cross`).  With the reasoning inline in
+`vwin`, Z3 hung on the straddle case.  The four-bit `point_mul_win` and
+its table were removed.  ECDH runs 7-8% fewer instructions and verify
+5-6% fewer (Part 104).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

@@ -16,8 +16,8 @@
 
 (** Scalar multiplication on P-384.
 
-    The work is in {!Hacl.P384.PointWin}, a four-bit fixed window: four
-    doublings and one addition per four bits of the scalar, with the table
+    The work is in {!Hacl.P384.PointMulV}, a signed five-bit window: five
+    doublings and one addition per five bits of the scalar, with the table
     entry read by masking all sixteen, so the running time does not depend
     on the scalar.  This module is the face the rest of the library sees.
 
@@ -71,7 +71,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
         GR.on_curve (P.point_mul (num vk) (pt vqx vqy vqz)) /\
         GR.peq (pt wx wy wz) (P.point_mul (num vk) (pt vqx vqy vqz)))
 {
-  point_mul_win ox oy oz qx qy qz ks;
+  Hacl.P384.PointMulV.point_mul_vb ox oy oz qx qy qz ks;
   ()
 }
 

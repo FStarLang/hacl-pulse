@@ -9971,3 +9971,41 @@ unchanged.  Against AWS-LC (clang):
 | ECDH | 161 us | 235 us | 1.46x |
 
 Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 104: P-384 variable-base signed window
+
+`Hacl.P384.PointMulV.point_mul_vb` replaces the four-bit window
+(`PointWin.point_mul_win`) in `PointMul.point_mul`.  It reads the scalar
+as 77 signed five-bit Booth digits (`Spec.Group.Booth6.hb` at `a = k`)
+against a table of the projective multiples `1..16` of `Q`.  The top
+digit is added into the point at infinity with no doublings in front of
+it.  That gives 77 additions and 380 doublings, against 96 and 384.  The
+signed addition is `PointBooth`'s with the entry's `z` selected, and
+`sadd_ok` now takes the entry's `z` as a field element.  A digit's window
+can straddle two limbs; `vwin` reads both.  The four-bit `point_mul_win`,
+`build_table`, `win_add` and `win_dbl4` are gone.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.289M | 1.289M | 1.048M | 1.048M |
+| sign | 1.425M | 1.425M | 1.117M | 1.117M |
+| verify | 4.234M | 4.002M | 3.323M | 3.121M |
+| ECDH | 3.152M | 2.920M | 2.457M | 2.255M |
+
+ECDH runs 7.3% (gcc) and 8.2% (clang) fewer instructions; verify saves
+the same absolute amount through its `u2 Q`.
+
+Time (clang), the median of three interleaved runs:
+
+| operation | before | after | AWS-LC | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 85 us | 86 us | 61 us | 1.4x |
+| sign | 105 us | 108 us | 99 us | 1.1x |
+| verify | 310 us | 294 us | 214 us | 1.37x |
+| ECDH | 237 us | 213 us | 161 us | 1.32x |
+
+Keygen and signing code is unchanged; their differences are noise.
+
+Tests, `make lint`, `make stack` and `make cross` pass.
