@@ -55,7 +55,7 @@ module GR = Spec.P384.Group
 module MA = Spec.ModArith
 module Math = FStar.Math.Lemmas
 module Mem = Hacl.Mem
-module Inv = Hacl.P384.Inverse
+module SGF = Spec.Group.Field
 module QI = Hacl.P384.QInverse
 module Declassify = Hacl.Secret.Declassify
 
@@ -333,43 +333,68 @@ ensures A.pts_to a #pa va ** pure (r == (0 < num va && num va < P.order))
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 300"
 
-(** Whether the affine [x] of [(cx : _ : cz)], reduced mod [n], is [r]. *)
+(** [x = X / Z] is below [p < 2 n], so [x mod n = r] for [r < n] says
+    [x] is [r] or [r + n]; and [x = c] is [X = c Z].  So the affine [x]
+    needs no inversion. *)
+let xcheck (x z r: P.felem)
+  : Lemma (requires z <> 0 /\ r < P.order)
+          (ensures (P.fmul x (P.finv z) % P.order = r) ==
+                   (P.fmul r z = x || (r + P.order < P.prime && P.fmul (r + P.order) z = x)))
+  = Spec.P384.GroupSv.m0_lem (); Spec.P384.GroupSv.prime_m0 ();
+    assert_norm (P.order < P.prime /\ P.prime < 2 * P.order);
+    let xa = P.fmul x (P.finv z) in
+    SGF.div_mul #P.prime x z;
+    let one (c: P.felem)
+      : Lemma ((xa = c) == (P.fmul c z = x))
+      = if P.fmul c z = x then SGF.cancel #P.prime xa c z
+    in
+    one r;
+    if r + P.order < P.prime then one (r + P.order);
+    if xa < P.order then Math.small_mod xa P.order
+    else Math.lemma_mod_sub xa P.order 1
+
+(** Whether the affine [x] of [(cx : _ : cz)], reduced mod [n], is [r]:
+    whether [cx] is [r cz] or, if [r + n < p], [(r + n) cz].  Everything
+    here is public. *)
 fn check_x (cx cz r: A.array S64.t)
            (#px: perm) (#vcx: erased (Seq.seq S64.t))
            (#pz: perm) (#vcz: erased (Seq.seq S64.t))
            (#pr: perm) (#vr: erased (Seq.seq S64.t))
 requires A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
-  pure (felem vcx /\ felem vcz /\ Seq.length vr == 6)
+  pure (felem vcx /\ felem vcz /\ Seq.length vr == 6 /\ num vr < P.order /\ fev vcz <> 0)
 returns b: bool
 ensures A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
   pure (b == (P.fmul (fev vcx) (P.finv (fev vcz)) % P.order = num vr))
 {
   facts ();
+  assert_norm (P.order < P.prime /\ P.prime < pow2 384);
   let z = S64.zero;
   let qm = qms ();
-  let q2 = qr2 ();
-  let mut zi = [| z; 6sz |];
-  Mem.track zi; A.pts_to_len zi; let mut xm = [| z; 6sz |];
-  Mem.track xm; A.pts_to_len xm; let mut xa = [| z; 6sz |];
-  Mem.track xa; A.pts_to_len xa; let mut xr = [| z; 6sz |];
-  Mem.track xr; A.pts_to_len xr;
-  Inv.finv zi cz;
-  fmul xm cx zi;
-  ffrom xa xm;
-  with vxa. assert (A.pts_to xa vxa);
-  assert (pure (num vxa == P.fmul (fev vcx) (P.finv (fev vcz))));
-  reduce xr xa qm q2 qmu;
-  with vxr. assert (A.pts_to xr vxr);
-  assert (pure (num vxr == num vxa % P.order));
-  let em = eq_mask xr r 6sz;
-  let b = U64.eq (Declassify.u64 em) 18446744073709551615uL;
-  Mem.wipe xr 6sz;
-  Mem.wipe xa 6sz;
-  Mem.wipe xm 6sz;
-  Mem.wipe zi 6sz;
-  drop_table q2;
+  let pm = pms ();
+  let mut rm = [| z; 6sz |];
+  Mem.track rm; A.pts_to_len rm; let mut t = [| z; 6sz |];
+  Mem.track t; A.pts_to_len t; let mut rn = [| z; 6sz |];
+  Mem.track rn; A.pts_to_len rn;
+  fto rm r;
+  fmul t rm cz;
+  let e1 = feq t cx;
+  let c = add rn r qm 6sz;
+  with vrn. assert (A.pts_to rn vrn);
+  let lt = lt_mask rn pm 6sz;
+  let small = U64.eq (Declassify.u64 c) 0uL && U64.eq (Declassify.u64 lt) 18446744073709551615uL;
+  assert (pure (small == (num vr + P.order < P.prime)));
+  let e2 = if small {
+    fto rm rn;
+    fmul t rm cz;
+    feq t cx
+  } else { false };
+  xcheck (fev vcx) (fev vcz) (num vr);
+  Mem.wipe rn 6sz;
+  Mem.wipe t 6sz;
+  Mem.wipe rm 6sz;
+  drop_table pm;
   drop_table qm;
-  b
+  (e1 || e2)
 }
 
 
