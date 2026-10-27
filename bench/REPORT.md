@@ -9444,3 +9444,616 @@ Against HACL\* the largest are X25519 (1.31x), MD5 (1.28x) and Ed25519
 verify (1.25x); `gapbest.py` also ranks secp256k1 verify (1.94x) and short
 AES-GCM messages (1.5x to 1.7x at 64 B) highest.
 
+## Part 92: P-384's field as a dedicated six-limb Montgomery multiplier
+
+P-384 arrived on the generic bignum layer: about 95% of a scalar
+multiplication was `Hacl.Bignum`'s row multiplier (49%), Montgomery
+reduction (18%) and modular addition (16%), and one `fmul` cost about 1.1k
+instructions.  `Hacl.P384.Field64` replaces it for `fadd`, `fsub`, `fmul` and
+`fsqr`: six interleaved Montgomery steps, each adding `x * b` and `u * p`
+into a seven-word accumulator, with `mu = 2^32 + 1` and `u * p` from four
+multiplications; a masked subtraction finishes it.  `Hacl.P384.Field` keeps
+its interface, so nothing above it changed.
+
+Before (`1109fa6`) and after, a direct timing loop (best of 5 x 200 calls,
+100 for verify, pinned to one core):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1378 us | 710 us | 1471 us | 628 us |
+| ECDH | 1392 us | 717 us | 1389 us | 619 us |
+| sign | 1506 us | 772 us | 1459 us | 695 us |
+| verify | 2824 us | 1451 us | 2825 us | 1268 us |
+
+1.9x under gcc and 2.2-2.3x under clang; callgrind counts 8.0M
+instructions for a keygen, down from 15M.  The test suite passes under gcc
+and clang, as do `make lint` (with `step` and `mont` added to the
+`nowipe` hot leaves, as P-256's `fmul` is), `make stack` and `make cross`.
+
+What remains against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
+dedicated squaring, a windowed variable-base multiplication (the ladder
+does one addition per bit), a precomputed table for `G`, a double-scalar
+verify, and faster inversions.
+
+## Part 93: P-384's scalar multiplications as a four-bit window
+
+`Hacl.P384.PointWin` is `Hacl.P256.PointWin` on six limbs: sixteen
+multiples of the base built at run time, then ninety-six rungs of four
+doublings and one addition, the entry read by masking all sixteen
+(`table_select`), so the running time does not depend on the scalar.  It
+replaces the bit-at-a-time ladder (384 doublings and 384 additions) for
+both `point_mul` and `point_mul_g`.  The result is equivalent to the
+specification's triple rather than equal to it, so `PointMul`'s contracts
+are now stated up to `peq`, as P-256's are, and ECDH, signing and
+verification discharge that with `peq_out`/`add_out` in
+`Hacl.P384.Verify` (equivalent points on the curve are at infinity
+together and have the same affine coordinates).  The specification side,
+`Spec.P384.Group` and `Spec.P384.Smul`, was already there.
+
+Before (Part 92's field) and after, the same timing loop:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 702 us | 483 us | 596 us | 409 us |
+| ECDH | 707 us | 490 us | 604 us | 416 us |
+| sign | 767 us | 536 us | 660 us | 476 us |
+| verify | 1466 us | 1006 us | 1223 us | 847 us |
+
+1.45x under both compilers; against the generic-bignum version of Part 91
+that is 2.8x (gcc) and 3.4x (clang).  Tests, `make lint`, `make stack` and
+`make cross` pass.
+
+What remains against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
+precomputed table for `G` (keygen and signing still build sixteen
+multiples of `G` per call), a variable-time double-scalar verify, and a
+dedicated squaring.
+
+## Part 94: P-384's generator multiplication with compiled-in tables
+
+Keygen and signing multiply the generator, and Part 93 treated it like
+any other point: sixteen multiples built per call, then 384 doublings.
+`Hacl.P384.PointMulG` is `Hacl.P256.PointMulG` with six pieces instead of
+four.  The scalar splits into six 64-bit pieces against `G`, `2^64 G`, ...,
+`2^320 G` (`Spec.Group.Split6`), so sixteen rungs of four doublings and six
+masked table additions do the whole multiplication: 60 doublings and 96
+additions where the window paid 384, 96 and 15.
+
+The six tables, ninety-six affine points in Montgomery form (13.5 KiB), are
+constants.  `spec/group-gen/p384/wintables.py` writes `Spec.P384.Base` (the
+five base points, each checked by the normaliser as a chain of sixty-four
+doublings), `Spec.P384.Win0..5` (each entry on the curve and the previous
+one plus the base point) and `Hacl.P384.Win0..5` (the limbs, checked
+against those points); `Hacl.P384.WinTable` is the bridge.  The script is
+not trusted.  All of it verifies in about three minutes of CPU.
+
+Before (Part 93) and after:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 528 us | 200 us | 415 us | 185 us |
+| ECDH | 476 us | 482 us | 409 us | 414 us |
+| sign | 546 us | 249 us | 491 us | 251 us |
+| verify | 1029 us | 722 us | 868 us | 633 us |
+
+ECDH multiplies the peer's point and does not change.  Verify gains from
+its `u1 G` half.  Tests, `make lint`, `make stack` and `make cross` pass.
+
+Still left against AWS-LC (152 us ECDH, 91 us sign, 208 us verify): a
+variable-time double-scalar verify, a dedicated squaring, and faster
+inversions.
+
+## Part 95: P-384's field inversion by an addition chain
+
+Every keygen, signature and ECDH result leaves the curve through
+`Encode.to_aff`, which inverted `z` with the generic constant-time
+Montgomery exponentiation (`Hacl.Bignum.Exponentiation.mod_exp_consttime`):
+a conversion out of the field, a table scan and a multiplication per window
+on top of 384 squarings, all on the generic six-limb multiply.  Under
+callgrind that was 656k instructions, 28% of a keygen.
+
+`Hacl.P384.Inverse.finv` raises to `p - 2` with a fixed chain on the
+field's own `fsqr` and `fmul`.  With `x_k = x^(2^k - 1)` it builds `x_2,
+x_3, x_6, x_12, x_15, x_30, x_60, x_120, x_240, x_255` and `x_32`, then
+`((x_255 * 2^33 + x_32) * 2^94 + x_30) * 2^2 + 1 = p - 2`: 385 squarings
+and 14 multiplications.  `to_aff` now stays in Montgomery form until two
+final `ffrom`s, and drops to 237k instructions (2.8x).  The exponent is
+public and the chain fixed, so it is constant-time.
+
+Instructions (callgrind, gcc), before and after:
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 2.38M | 1.96M |
+| sign | 2.90M | 2.48M |
+| verify | 7.85M | 7.85M |
+
+Time, best of two runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 212 us | 184 us | 198 us | 155 us |
+| ECDH | 516 us | 481 us | 431 us | 377 us |
+| sign | 254 us | 228 us | 269 us | 208 us |
+| verify | 751 us | 751 us | 691 us | 703 us |
+
+Verify never needs an affine point and does not change.  Tests,
+`make lint`, `make stack` and `make cross` pass.
+
+The proof is one lemma per chain step: `sqrn_mul` takes the exponents
+`e1`, `e2` and `e = e1 2^n + e2` as ghost arguments and returns `x^e`, so
+`finv` is fourteen calls and fourteen `assert_norm`s on constants.  Two
+things were needed for Z3 5.3.0, which otherwise sat in single queries for
+over ten minutes without honouring the rlimit: `ex` (`MA.exp` at `P.prime`)
+is `opaque_to_smt`, with the `pow2` bookkeeping in plain lemmas (`sq1`,
+`sq2`, `step_lem`), and the squaring count is passed as halves plus an odd
+bit rather than computed with `SZ.div`/`SZ.rem`.  The module checks in
+under a minute.
+
+Next: the scalar inverse in signing (`invmod_ct` mod `q`, about 0.8M
+instructions), which has no special form to exploit but would gain from a
+specialised Montgomery multiply and a chain.
+
+## Part 96: P-384's scalar inversion by an addition chain
+
+Callgrind after Part 95 put the remaining generic exponentiations on top:
+signing inverted the nonce with `mod_exp_consttime` mod `n`, and
+verification called `mod_inv_prime_vartime` twice, for `s` mod `n` and for
+`z` mod `p` in the final `x` check, at about 830k instructions each.
+
+The `z` inverse in `Verify.check_x` is now `Hacl.P384.Inverse.finv`, as in
+`to_aff`.  For `n` there is a new specialised Montgomery multiply,
+`Hacl.P384.Scalar64` (a scripted copy of `Field64` with `n`'s limbs and
+`mu`), its wrapper `Hacl.P384.QField` (`qev`, `qmul`, `qsqr`, `qto`,
+`qfrom`), and `Hacl.P384.QInverse`.  The order has no special form below its
+top 192 one bits, so the chain builds `x_192` by doubling (`x_2, x_4, ...,
+x_128, x_192`) and finishes with a width-four sliding window over the odd
+powers `x, x^3, ..., x^15`: 384 squarings and 54 multiplications,
+generated by a script, each step an `sqrn_mul` with literal ghost
+exponents and an `assert_norm`.  `qinv_plain` (enter, chain, leave) is
+258k instructions.  The exponent is public, so it is constant-time and
+serves both signing and verification; `Encode.invmod_ct` and
+`Verify.invmod` are gone.
+
+Instructions (callgrind, gcc), before and after:
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 1.96M | 1.96M |
+| sign | 2.48M | 2.09M |
+| verify | 7.85M | 6.68M |
+
+Time:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 181 us | 183 us | 152 us | 155 us |
+| ECDH | 476 us | 468 us | 401 us | 385 us |
+| sign | 239 us | 190 us | 218 us | 160 us |
+| verify | 738 us | 627 us | 645 us | 505 us |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+One proof detail: with all 39 window steps in one function the context
+grew until Z3 timed out around step 30, so the window is five generated
+functions `win0..win4` of eight steps, each taking the odd-power table
+under one `tab_ok` predicate.  The module checks in about three minutes.
+
+Next: the field multiply itself, which ECDH and verification spend most
+of their time in.
+
+## Part 97: P-384's reduction without multiplications
+
+`Hacl.P384.Field64.step` computed `u * p` as seven words from four
+`mul_wide`s (`prow`) and added them to the accumulator.  Because
+`2^384 - p = 2^128 + 2^96 - 2^32 + 1`, `u * p = 2^384 u - u (2^128 + 2^96 -
+2^32 + 1)`, and the subtrahend is three words plus a low word built from `u`,
+`u << 32` and `u >> 32` with one borrow chain.  Its low word equals the
+accumulator's (that is what `u` was chosen for), so the step adds `u` to
+word 6, subtracts three words from words 1..3 and drops word 0.  A field
+multiply goes from 60 `mul_wide`s to 36 and loses the `q` scratch array.
+
+Before the change, a latency-bound chain of field multiplies took 135 ticks
+per multiply under gcc and 103 under clang; with the C prototype it took
+120 and 92.  The prototype agreed with the old code on two million random
+and edge-case inputs.
+
+Instructions (callgrind, gcc):
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 1.96M | 1.70M |
+| ECDH | 4.81M | 4.16M |
+| sign | 2.09M | 1.84M |
+| verify | 6.68M | 5.82M |
+
+Time:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| ECDH | 495 us | 466 us | 403 us | 345 us |
+| sign | 204 us | 198 us | 178 us | 154 us |
+| verify | 688 us | 644 us | 564 us | 488 us |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+Proof: `kval` states the three-word subtrahend linearly, and `r0_eq` shows
+that its low word is the accumulator's.  `mu_ok`'s precondition proved in
+`step` took Z3 353 seconds.  Moved into a helper `mu` whose result type
+carries the cancellation fact, the module checks in 46 seconds.
+
+The remaining gcc/clang gap is mostly spills in gcc's code.  Next: fewer
+`fcopy`s in the point formulas, and possibly a dedicated squaring.
+
+## Part 98: P-384's point formulas without copies
+
+The complete addition and doubling formulas went through a scratch element
+for every step that overwrites one of its own operands, and through a second
+one for every step whose operands coincide: 57 `fcopy`s in all.
+`Hacl.P384.Field64`'s `fadd` and `fsub` are now word-level cores (`addw`,
+`subw`) like `mont`, taking twelve words, so the field offers in-place forms
+that read before they write (`fadd1`, `fadd2`, `fsub1`, `fsub2`, `fmul1`,
+`fmul2`, with the digit naming the operand the result replaces), as well as
+`fdbl`, `fdbl1` and `fsqr1`.  A script rewrote the formulas mechanically.
+They now have no copies and no `w`/`u` scratch, and the proofs went through
+unchanged.
+
+Instructions (callgrind, gcc):
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 1.70M | 1.68M |
+| ECDH | 4.16M | 4.06M |
+| sign | 1.84M | 1.82M |
+| verify | 5.82M | 5.70M |
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 169 us | 151 us | 131 us | 125 us |
+| ECDH | 422 us | 400 us | 315 us | 315 us |
+| sign | 183 us | 179 us | 142 us | 140 us |
+| verify | 598 us | 569 us | 452 us | 433 us |
+
+Under gcc everything is 2-11% faster, and under clang verification is 4%
+faster with the rest within noise.  Tests, `make lint`, `make stack` and
+`make cross` pass.
+
+## Part 99: P-384's doublings in Jacobian coordinates
+
+Profiling after Part 98 put the field multiply at parity with AWS-LC's
+s2n-bignum `bignum_montmul_p384` under clang (88 against 88 ticks in a
+microbenchmark), with multiplications at 79% of instructions and doubling at
+58%.  The remaining 2x is therefore algorithmic: AWS-LC's scalar
+multiplication works in Jacobian coordinates.
+
+Each rung of the variable-base window now converts the accumulator into
+Jacobian coordinates (3 multiplications), doubles four times there with
+`dbl-2001-b` for `a = -3` (4M + 4S, against 11 multiplications for the
+complete homogeneous formula), and converts back (3 multiplications).  The
+table addition is unchanged.  Infinity has no Jacobian representative with
+`Z <> 0`, so it is carried as the fixed point `(1, 1, 0)` of the doubling.
+The conversion picks it with a masked select (`Field.fzero_mask`,
+`Field.fcsel`) because whether the accumulator is at infinity is secret.
+The doublings work in place and use the rung's existing scratch triple as
+their temporaries.
+
+The proof follows the existing group-law machinery:
+
+- `Spec.P384.JacSv` (hand-written) has the formulas in code order and their
+  polynomial forms.
+- `Spec.P384.JacChecks` is generated by `gen.py`, which gains a `jac`
+  hypothesis kind, `Y^2 -> X^3 - 3XZ^4 + bZ^6`.  It checks five identities:
+  - doubling preserves the Jacobian equation;
+  - doubling agrees projectively with `P.point_double`;
+  - the conversions are sound.
+
+  The normalizer checks the five identities in four seconds.
+- `Spec.P384.Jac` adds the nonzero argument: `Z <> 0` forces `Y <> 0`
+  because the curve has no point of order two (`GroupNR.no_root_f`).  It
+  also handles infinity and the invariant `jr` that `win_dbl4` threads
+  through its four doublings.
+
+Instructions (callgrind, gcc):
+
+| operation | before | after |
+| --- | ---: | ---: |
+| keygen | 1.68M | 1.55M |
+| ECDH | 4.06M | 3.25M |
+| sign | 1.82M | 1.68M |
+| verify | 5.70M | 4.75M |
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 163 us | 142 us | 131 us | 119 us |
+| ECDH | 401 us | 319 us | 318 us | 252 us |
+| sign | 186 us | 175 us | 143 us | 141 us |
+| verify | 568 us | 495 us | 466 us | 354 us |
+
+ECDH executes 20% fewer instructions and is 20% faster under both compilers.
+Verification is 13% faster under gcc and 24% faster under clang.  Keygen and
+sign gain less because their fixed-base comb does fewer doublings.  Tests,
+`make lint`, `make stack` and `make cross` pass.
+
+Correction: the ECDH instruction counts in Parts 97 and 98 were ECDH minus
+sign.  The driver swaps sign for ECDH and the difference was taken against a
+run that signs.  They are corrected above, measured as keygen plus ECDH minus
+keygen.  The time rows were unaffected.
+
+## Part 100: P-384 verification without an inversion
+
+Verification ended by converting `u1 G + u2 Q` to affine form, a Fermat
+inversion of about 400 multiplications, only to compare `x mod n` with `r`.
+`Hacl.P384.Verify.check_x` now compares projectively:
+- `X == r Z`;
+- or, when `r + n < p`, `X == (r + n) Z`.
+
+That is two multiplications and no inversion.  The lemma `xcheck` proves
+the two tests equivalent to the affine one for `Z <> 0`; `p` is prime, so
+`Z` cancels.  The `r + n < p` test runs on public values and is declassified.
+
+Instructions (callgrind, gcc): verify drops from 4.75M to 4.57M (-3.9%).
+Median time for verify: 477 to 429 us under gcc and 356 to 336 us under
+clang.  The other operations are unchanged.
+
+## Part 101: P-384 dedicated squaring
+
+`fsqr` was `mont(a, a)`, 36 products.  `Hacl.P384.Field64.msqr` does 15
+cross products, doubles them, and adds the 6 squares: 21 `mul_wide`s
+into twelve words (`sq_cross`, `sq_diag` and their carry lemmas
+`sqx0`..`sqx4` and `sqd`, generated by `spec/group-gen/p384/sqr.py`).
+`mred` then reduces the twelve words:
+- six reduction-only steps (`rstep`) take the low half `L` to
+  `(L + U p) / 2^384 <= p`;
+- the high half `H < p` is added;
+- one conditional subtraction finishes.
+
+`sq_expand` proves the polynomial identity with `CanonCommSemiring`.  At
+first `msqr` was one function, and Z3 ran for twenty minutes on its
+verification condition without reaching the rlimit.  Split into `msq12`,
+`mred` and a closing lemma `msq_fin` over plain `nat`s, the module checks
+with no query above rlimit 13.
+
+Under clang the square drops from 371 instructions to 307.  Under gcc it
+gains less: its multiply-heavy code is already longer than clang's.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.55M | 1.53M | 1.33M | 1.28M |
+| ECDH | 3.25M | 3.17M | 2.59M | 2.46M |
+| sign | 1.68M | 1.66M | 1.40M | 1.35M |
+| verify | 4.57M | 4.49M | 3.68M | 3.56M |
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 138 us | 133 us | 115 us | 105 us |
+| ECDH | 304 us | 303 us | 237 us | 230 us |
+| sign | 161 us | 158 us | 129 us | 128 us |
+| verify | 429 us | 422 us | 336 us | 329 us |
+
+Against AWS-LC (clang, same core; AWS-LC uses s2n-bignum's mulx/adx
+assembly and a divstep inversion), P-384 now stands at:
+
+| operation | AWS-LC | ours | ratio |
+| --- | ---: | ---: | ---: |
+| keygen | 61 us | 105 us | 1.71x |
+| sign | 99 us | 128 us | 1.29x |
+| verify | 214 us | 329 us | 1.54x |
+| ECDH | 161 us | 230 us | 1.43x |
+
+Keygen and sign spend most of their time in the fixed-base comb's 96
+complete additions, which is the next target.  Tests, `make lint`,
+`make stack` and `make cross` pass.
+
+## Part 102: P-384 fixed base with signed digits
+
+The fixed-base comb read each 64-bit piece of the scalar as sixteen
+unsigned 4-bit digits: 16 rungs of 4 doublings and 6 additions, 96
+additions in all, each preceded by a constant-time select from a
+16-entry table of projective points.  It now reads each piece as
+thirteen signed 5-bit digits in -16..16 (Booth recoding, as in AWS-LC
+and OpenSSL): 13 rungs of 5 doublings and 6 additions, so 78 additions
+and 65 doublings.
+
+A signed digit needs only the multiples 1..16 of each base point:
+- the magnitude selects entry `m - 1`;
+- the sign mask negates `y` (`fsub` from zero, then `fcsel`);
+- a zero digit selects entry 15, adds it, and `fcsel` keeps the old
+  accumulator.  This replaces the copy that `win_add` already did.
+
+The tables are now affine: two arrays of 96 limbs per base point, not
+three.  `z` is set to Montgomery one before each addition.  This makes
+selects a third cheaper and prepares for a mixed addition.
+
+Proof pieces:
+- `Spec.Group.Booth6` defines the digits and `hb a i`, the piece above
+  digit `i` rounded to nearest.  `hb a 13 = 0`, `hb a 0 = a`, and one
+  step is `32 hb(i+1) +- m`.  `rv k i j`, the accumulator after `j` of a
+  rung's six additions, is always a natural number.  A negative digit is
+  stated as `e = e' + m n` rather than `e' = e - m n`, so the window's
+  `rep` never needs a negative multiple.  `rv_step` timed out until each
+  piece's weighted term (`hw`) was made opaque and the proof split on `j`.
+- `Hacl.P384.PointBooth.neg_add` proves that adding `-(d P)` to
+  `(e + d) P` gives `e P`, from associativity, commutativity,
+  `point_add_negate` and the identity.
+- `win_sadd` is a single signed addition with no secret branches.
+  Whether the digit was zero is settled inside the lemma `sadd_ok`, not
+  by a branch in Pulse.
+- `wintables.py` now emits the chain up to `e16` and the affine tables.
+  `WinTable.aent_lit`/`atok_all` replace `ent_lit`/`tok_all`.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.53M | 1.35M | 1.28M | 1.10M |
+| sign | 1.66M | 1.49M | 1.35M | 1.17M |
+| verify | 4.49M | 4.30M | 3.56M | 3.38M |
+| ECDH | 3.17M | 3.15M | 2.46M | 2.46M |
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 131 us | 118 us | 112 us | 98 us |
+| ECDH | 302 us | 294 us | 240 us | 238 us |
+| sign | 158 us | 139 us | 127 us | 111 us |
+| verify | 430 us | 407 us | 334 us | 318 us |
+
+ECDH does not use the fixed base; its change is noise.  Against AWS-LC
+(clang):
+
+| operation | AWS-LC | ours | ratio |
+| --- | ---: | ---: | ---: |
+| keygen | 61 us | 98 us | 1.61x |
+| sign | 99 us | 111 us | 1.12x |
+| verify | 214 us | 318 us | 1.49x |
+| ECDH | 161 us | 238 us | 1.48x |
+
+Next is a mixed addition for the affine table entries, with `Z2 = 1`;
+it saves a multiplication and some additions per call.  Tests,
+`make lint`, `make stack` and `make cross` pass.
+
+## Part 103: P-384 mixed addition
+
+The fixed-base comb's table entries are affine, so every addition there
+has `Z2 = 1`.  `Hacl.P384.Point.point_madd` is Renes-Costello-Batina
+Algorithm 5 for `a = -3`: Algorithm 4 with `Z2 = 1` substituted.  It
+needs one multiplication and one temporary fewer than `point_add`.  The
+`z` buffer that `win_sadd` filled with Montgomery one before each
+addition is gone.
+
+The two formulas agree as polynomials, not only projectively: Algorithm
+4's `(Y1 + Z1)(Y2 + 1) - (Y1 Y2 + Z1)` is `Y2 Z1 + Y1`, and so on.
+`Spec.P384.JacSv.madd` writes Algorithm 5 in the implementation's order,
+and the generated check `Spec.P384.JacChecks.j6` (from
+`group-gen/p384/jac.py`) proves `madd p x2 y2 == P.point_add p (x2, y2,
+1)` exactly.  Completeness carries over unchanged.  `atok_get` and
+`sadd_ok` now state the entry as the triple `(x, y, P.fone)` rather than
+through a third limb sequence.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.355M | 1.289M | 1.101M | 1.048M |
+| sign | 1.490M | 1.425M | 1.170M | 1.117M |
+| verify | 4.299M | 4.234M | 3.375M | 3.323M |
+| ECDH | 3.152M | 3.152M | 2.457M | 2.457M |
+
+That is 4.8% off keygen and 4.4% off signing.  Verify saves the same
+absolute amount through its `u1 G`.
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 119 us | 113 us | 100 us | 86 us |
+| ECDH | 317 us | 306 us | 230 us | 235 us |
+| sign | 143 us | 133 us | 111 us | 104 us |
+| verify | 402 us | 393 us | 323 us | 311 us |
+
+The clang keygen drop is larger than the instruction count supports;
+part of it is noise (one "before" run measured 88 us).  ECDH's code is
+unchanged.  Against AWS-LC (clang):
+
+| operation | AWS-LC | ours | ratio |
+| --- | ---: | ---: | ---: |
+| keygen | 61 us | 86-94 us | 1.4-1.5x |
+| sign | 99 us | 104 us | 1.05x |
+| verify | 214 us | 311 us | 1.45x |
+| ECDH | 161 us | 235 us | 1.46x |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 104: P-384 variable-base signed window
+
+`Hacl.P384.PointMulV.point_mul_vb` replaces the four-bit window
+(`PointWin.point_mul_win`) in `PointMul.point_mul`.  It reads the scalar
+as 77 signed five-bit Booth digits (`Spec.Group.Booth6.hb` at `a = k`)
+against a table of the projective multiples `1..16` of `Q`.  The top
+digit is added into the point at infinity with no doublings in front of
+it.  That gives 77 additions and 380 doublings, against 96 and 384.  The
+signed addition is `PointBooth`'s with the entry's `z` selected, and
+`sadd_ok` now takes the entry's `z` as a field element.  A digit's window
+can straddle two limbs; `vwin` reads both.  The four-bit `point_mul_win`,
+`build_table`, `win_add` and `win_dbl4` are gone.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.289M | 1.289M | 1.048M | 1.048M |
+| sign | 1.425M | 1.425M | 1.117M | 1.117M |
+| verify | 4.234M | 4.002M | 3.323M | 3.121M |
+| ECDH | 3.152M | 2.920M | 2.457M | 2.255M |
+
+ECDH runs 7.3% (gcc) and 8.2% (clang) fewer instructions; verify saves
+the same absolute amount through its `u2 Q`.
+
+Time (clang), the median of three interleaved runs:
+
+| operation | before | after | AWS-LC | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 85 us | 86 us | 61 us | 1.4x |
+| sign | 105 us | 108 us | 99 us | 1.1x |
+| verify | 310 us | 294 us | 214 us | 1.37x |
+| ECDH | 237 us | 213 us | 161 us | 1.32x |
+
+Keygen and signing code is unchanged; their differences are noise.
+
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 105: P-384 verification on one doubling chain
+
+`[u1] G + [u2] Q` was computed as two separate multiplications plus one
+addition: the comb for `u1 G` (65 doublings, 78 mixed additions) and
+the variable-base window for `u2 Q` (380 doublings, 77 additions).
+`Hacl.P384.Straus.point_mul2` reads both scalars as the same 77 signed
+five-bit digits and shares one chain. Each rung does five doublings, a
+mixed addition against the comb's table 0 (affine `1G..16G`) and a
+projective addition against the table of `Q`. That saves 65 doublings
+and the final addition. The code stays constant time; nothing about it
+relies on the inputs being public.
+
+The invariant states that the accumulator is `lin2 a b G Q`. The
+doublings are `win_dbl5`, run with the current target as its base.
+
+Instructions (callgrind), verify only:
+
+| compiler | before | after | change |
+| --- | ---: | ---: | ---: |
+| gcc | 4.002M | 3.653M | -8.7% |
+| clang | 3.121M | 2.871M | -8.0% |
+
+Keygen, sign and ECDH instruction counts are unchanged; ECDH differs by
+less than 0.03%.
+
+Time (clang), the median of three interleaved runs:
+
+| operation | before | after | AWS-LC | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| verify | 295 us | 268 us | 214 us | 1.25x |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 106: README P-384 rows after Parts 92-105
+
+`others.sh 3` was rerun on `c8a4ed7` (rebased onto master).  The machine
+was noisy again, so as in Part 91 the table uses a 5% canary tolerance
+(35 of 72 runs survive), and every cell is a minimum.  Only the P-384
+rows of the README were replaced; nothing else changed in the code.
+
+| P-384 | gcc | clang | OpenSSL | AWS-LC | ratio before | ratio after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECDH | 249 us | 216 us | 417 us | 153 us | 8.82x | 1.41x |
+| ECDSA sign | 119 us | 108 us | 249 us | 90 us | 15.04x | 1.20x |
+| ECDSA verify | 310 us | 275 us | 565 us | 204 us | 12.81x | 1.35x |
+
+hacl-pulse now beats OpenSSL on every P-384 operation by 1.9-2.3x.

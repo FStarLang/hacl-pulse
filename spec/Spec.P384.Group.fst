@@ -448,3 +448,8 @@ let point_double_is_add p =
   oc_heq p;
   let (x, y, z) = p in
   K.k10 x y z
+
+let peq_inf_z p =
+  inf_shape_of p;
+  let (x, y, z) = p in
+  peq_inf x y z

@@ -17,12 +17,14 @@
 (** ECDSA verification on P-384.
 
     Nothing here is secret: the message, the signature and the public key
-    are all published.  Comparisons are therefore declassified to booleans
-    and the inverses are the variable-time ones.
+    are all published.  Comparisons are therefore declassified to booleans.
+    Both inverses -- of [s] mod [n] and of [z] for the final affine
+    coordinate -- are the fixed addition chains of {!Hacl.P384.QInverse}
+    and {!Hacl.P384.Inverse}, which are faster than any generic
+    exponentiation, variable-time or not.
 
-    The scalars mod [n] and the final affine coordinate are plain numbers
-    handled by the generic bignum layer; only the curve arithmetic is in
-    Montgomery form. *)
+    The scalars mod [n] are plain numbers handled by the generic bignum
+    layer; the curve arithmetic is in Montgomery form. *)
 module Hacl.P384.Verify
 
 #lang-pulse
@@ -35,7 +37,6 @@ open Hacl.Impl.Table
 open Hacl.Impl.Copy
 open Hacl.Bignum.Base
 open Hacl.Bignum.Montgomery
-open Hacl.Bignum.Exponentiation
 open Hacl.Bignum.Convert
 open Hacl.P384.Tables
 open Hacl.P384.Lemmas
@@ -50,9 +51,12 @@ module U64 = FStar.UInt64
 module S8 = Hacl.Secret.UInt8
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P384
+module GR = Spec.P384.Group
 module MA = Spec.ModArith
 module Math = FStar.Math.Lemmas
 module Mem = Hacl.Mem
+module SGF = Spec.Group.Field
+module QI = Hacl.P384.QInverse
 module Declassify = Hacl.Secret.Declassify
 
 (** {2 Total wrappers}
@@ -68,6 +72,31 @@ let lp_ok (vp: Seq.seq S8.t) : GTot bool =
 
 let lp (vp: Seq.seq S8.t) : GTot P.proj_point =
   if lp_ok vp then Some?.v (P.load_point vp) else P.point_at_infinity
+
+(** {2 Leaving projective coordinates}
+
+    {!Hacl.P384.PointMul} returns a triple equivalent to the specification's,
+    not equal to it.  These are the places that difference is discharged:
+    equivalent points on the curve are at infinity together and have the
+    same affine coordinates, hence the same encoding. *)
+
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 50"
+let lp_on_curve (vp: Seq.seq S8.t)
+  : Lemma (requires lp_ok vp) (ensures GR.on_curve (lp vp))
+  = let xs = Seq.slice vp 0 48 in
+    let ys = Seq.slice vp 48 96 in
+    match P.load_felem xs, P.load_felem ys with
+    | Some x, Some y -> GR.on_curve_affine x y
+    | _ -> ()
+#pop-options
+
+let peq_out (p q: P.proj_point)
+  : Lemma (requires GR.on_curve p /\ GR.on_curve q /\ GR.peq p q)
+          (ensures P.is_point_at_infinity p == P.is_point_at_infinity q /\
+                   P.to_aff_point p == P.to_aff_point q /\
+                   P.store_point p == P.store_point q)
+  = GR.peq_is_point_at_infinity p q;
+    GR.peq_to_aff_point p q
 
 let core_spec (m r s: P.qelem) (q: P.proj_point) : GTot bool =
   let sinv = P.qinv s in
@@ -154,39 +183,6 @@ ensures exists* (v: Seq.seq S64.t).
   modulo res wide acc r2 nm 6sz mu;
   Mem.wipe acc 6sz;
   Mem.wipe wide 12sz;
-  ()
-}
-
-fn invmod (res a nm r2: A.array S64.t) (mu: S64.t)
-          (#vres: erased (Seq.seq S64.t))
-          (#pa #pn #pr: perm) (#va #vr2: erased (Seq.seq S64.t))
-          (#vn: erased (s: Seq.seq S64.t { 1 < num s /\ 0 < Seq.length s }))
-requires A.pts_to res vres ** A.pts_to a #pa va **
-         A.pts_to nm #pn vn ** A.pts_to r2 #pr vr2 **
-  pure (Seq.length vres == 6 /\ Seq.length va == 6 /\
-        Seq.length vn == 6 /\ Seq.length vr2 == 6 /\
-        num va < num vn /\
-        num vr2 == (wt 6 * wt 6) % num vn /\
-        (S64.v mu * S64.v (Seq.index vn 0) + 1) % base == 0)
-ensures exists* (v: Seq.seq S64.t).
-  A.pts_to res v ** A.pts_to a #pa va **
-  A.pts_to nm #pn vn ** A.pts_to r2 #pr vr2 **
-  pure (Seq.length v == 6 /\ num v == pw (num va) (num vn - 2) % num vn)
-{
-  facts ();
-  let z = S64.zero;
-  let mut e = [| z; 6sz |];
-  Mem.track e; A.pts_to_len e; let mut am = [| z; 6sz |];
-  Mem.track am; A.pts_to_len am; let mut acc = [| z; 6sz |];
-  Mem.track acc; A.pts_to_len acc; let mut t = [| z; 6sz |];
-  Mem.track t; A.pts_to_len t; let mut wide = [| z; 12sz |];
-  Mem.track wide; A.pts_to_len wide;
-  mod_inv_prime_vartime res a r2 nm 6sz mu e am acc t wide;
-  Mem.wipe wide 12sz;
-  Mem.wipe t 6sz;
-  Mem.wipe acc 6sz;
-  Mem.wipe am 6sz;
-  Mem.wipe e 6sz;
   ()
 }
 
@@ -325,54 +321,68 @@ ensures A.pts_to a #pa va ** pure (r == (0 < num va && num va < P.order))
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 300"
 
-(** Whether the affine [x] of [(cx : _ : cz)], reduced mod [n], is [r]. *)
+(** [x = X / Z] is below [p < 2 n], so [x mod n = r] for [r < n] says
+    [x] is [r] or [r + n]; and [x = c] is [X = c Z].  So the affine [x]
+    needs no inversion. *)
+let xcheck (x z r: P.felem)
+  : Lemma (requires z <> 0 /\ r < P.order)
+          (ensures (P.fmul x (P.finv z) % P.order = r) ==
+                   (P.fmul r z = x || (r + P.order < P.prime && P.fmul (r + P.order) z = x)))
+  = Spec.P384.GroupSv.m0_lem (); Spec.P384.GroupSv.prime_m0 ();
+    assert_norm (P.order < P.prime /\ P.prime < 2 * P.order);
+    let xa = P.fmul x (P.finv z) in
+    SGF.div_mul #P.prime x z;
+    let one (c: P.felem)
+      : Lemma ((xa = c) == (P.fmul c z = x))
+      = if P.fmul c z = x then SGF.cancel #P.prime xa c z
+    in
+    one r;
+    if r + P.order < P.prime then one (r + P.order);
+    if xa < P.order then Math.small_mod xa P.order
+    else Math.lemma_mod_sub xa P.order 1
+
+(** Whether the affine [x] of [(cx : _ : cz)], reduced mod [n], is [r]:
+    whether [cx] is [r cz] or, if [r + n < p], [(r + n) cz].  Everything
+    here is public. *)
 fn check_x (cx cz r: A.array S64.t)
            (#px: perm) (#vcx: erased (Seq.seq S64.t))
            (#pz: perm) (#vcz: erased (Seq.seq S64.t))
            (#pr: perm) (#vr: erased (Seq.seq S64.t))
 requires A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
-  pure (felem vcx /\ felem vcz /\ Seq.length vr == 6)
+  pure (felem vcx /\ felem vcz /\ Seq.length vr == 6 /\ num vr < P.order /\ fev vcz <> 0)
 returns b: bool
 ensures A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
   pure (b == (P.fmul (fev vcx) (P.finv (fev vcz)) % P.order = num vr))
 {
   facts ();
+  assert_norm (P.order < P.prime /\ P.prime < pow2 384);
   let z = S64.zero;
   let qm = qms ();
-  let q2 = qr2 ();
-  let mut xp = [| z; 6sz |];
-  Mem.track xp; A.pts_to_len xp; let mut zp = [| z; 6sz |];
-  Mem.track zp; A.pts_to_len zp; let mut zi = [| z; 6sz |];
-  Mem.track zi; A.pts_to_len zi; let mut xa = [| z; 6sz |];
-  Mem.track xa; A.pts_to_len xa; let mut xr = [| z; 6sz |];
-  Mem.track xr; A.pts_to_len xr;
-  ffrom xp cx;
-  ffrom zp cz;
-  with vzp. assert (A.pts_to zp vzp);
   let pm = pms ();
-  let p2 = pr2 ();
-  invmod zi zp pm p2 pmu;
-  with vzi. assert (A.pts_to zi vzi);
-  pw_exp P.prime (num vzp) (P.prime - 2);
-  assert (pure (num vzi == P.finv (fev vcz)));
-  mulmod xa xp zi pm p2 pmu;
-  with vxa. assert (A.pts_to xa vxa);
-  assert (pure (num vxa == P.fmul (fev vcx) (P.finv (fev vcz))));
-  drop_table p2;
+  let mut rm = [| z; 6sz |];
+  Mem.track rm; A.pts_to_len rm; let mut t = [| z; 6sz |];
+  Mem.track t; A.pts_to_len t; let mut rn = [| z; 6sz |];
+  Mem.track rn; A.pts_to_len rn;
+  fto rm r;
+  fmul t rm cz;
+  let e1 = feq t cx;
+  let c = add rn r qm 6sz;
+  with vrn. assert (A.pts_to rn vrn);
+  let lt = lt_mask rn pm 6sz;
+  let small = U64.eq (Declassify.u64 c) 0uL && U64.eq (Declassify.u64 lt) 18446744073709551615uL;
+  assert (pure (small == (num vr + P.order < P.prime)));
+  let e2 = if small {
+    fto rm rn;
+    fmul t rm cz;
+    feq t cx
+  } else { false };
+  xcheck (fev vcx) (fev vcz) (num vr);
+  Mem.wipe rn 6sz;
+  Mem.wipe t 6sz;
+  Mem.wipe rm 6sz;
   drop_table pm;
-  reduce xr xa qm q2 qmu;
-  with vxr. assert (A.pts_to xr vxr);
-  assert (pure (num vxr == num vxa % P.order));
-  let em = eq_mask xr r 6sz;
-  let b = U64.eq (Declassify.u64 em) 18446744073709551615uL;
-  Mem.wipe xr 6sz;
-  Mem.wipe xa 6sz;
-  Mem.wipe zi 6sz;
-  Mem.wipe zp 6sz;
-  Mem.wipe xp 6sz;
-  drop_table q2;
   drop_table qm;
-  b
+  (e1 || e2)
 }
 
 
@@ -385,7 +395,7 @@ requires A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   A.pts_to qx #pq vqx ** A.pts_to qy #pq vqy ** A.pts_to qz #pq vqz **
   pure (Seq.length vm == 6 /\ Seq.length vr == 6 /\ Seq.length vs == 6 /\
         num vm < P.order /\ num vr < P.order /\ num vs < P.order /\
-        pt_ok vqx vqy vqz)
+        pt_ok vqx vqy vqz /\ GR.on_curve (pt vqx vqy vqz))
 returns b: bool
 ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   A.pts_to qx #pq vqx ** A.pts_to qy #pq vqy ** A.pts_to qz #pq vqz **
@@ -397,14 +407,6 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   Mem.track si; A.pts_to_len si; let mut u1 = [| z; 6sz |];
   Mem.track u1; A.pts_to_len u1; let mut u2 = [| z; 6sz |];
   Mem.track u2; A.pts_to_len u2;
-  let mut ax = [| z; 6sz |];
-  Mem.track ax; A.pts_to_len ax; let mut ay = [| z; 6sz |];
-  Mem.track ay; A.pts_to_len ay; let mut az = [| z; 6sz |];
-  Mem.track az; A.pts_to_len az;
-  let mut bx = [| z; 6sz |];
-  Mem.track bx; A.pts_to_len bx; let mut by_ = [| z; 6sz |];
-  Mem.track by_; A.pts_to_len by_; let mut bz = [| z; 6sz |];
-  Mem.track bz; A.pts_to_len bz;
   let mut cx = [| z; 6sz |];
   Mem.track cx; A.pts_to_len cx; let mut cy = [| z; 6sz |];
   Mem.track cy; A.pts_to_len cy; let mut cz = [| z; 6sz |];
@@ -413,9 +415,8 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   (* u1 = m / s, u2 = r / s, mod n *)
   let qm = qms ();
   let q2 = qr2 ();
-  invmod si s qm q2 qmu;
+  QI.qinv_plain si s;
   with vsi. assert (A.pts_to si vsi);
-  pw_exp P.order (num vs) (P.order - 2);
   assert (pure (num vsi == P.qinv (num vs)));
   mulmod u1 si m qm q2 qmu;
   mulmod u2 si r qm q2 qmu;
@@ -424,13 +425,11 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   assert (pure (num vu1 == P.qmul (P.qinv (num vs)) (num vm)));
   assert (pure (num vu2 == P.qmul (P.qinv (num vs)) (num vr)));
 
-  (* [u1] G + [u2] Q *)
-  point_mul_g ax ay az u1;
-  point_mul bx by_ bz qx qy qz u2;
-  point_add cx cy cz ax ay az bx by_ bz;
+  (* [u1] G + [u2] Q, on one doubling chain *)
+  Hacl.P384.Straus.point_mul2 cx cy cz qx qy qz u1 u2;
   with wcx wcy wcz. assert (A.pts_to cx wcx ** A.pts_to cy wcy ** A.pts_to cz wcz);
-  assert (pure (pt wcx wcy wcz ==
-                P.point_mul_double_g (num vu1) (num vu2) (pt vqx vqy vqz)));
+  peq_out (pt wcx wcy wcz)
+          (P.point_mul_double_g (num vu1) (num vu2) (pt vqx vqy vqz));
 
   let inf = fis_zero cz;
   let res = if inf { false } else { check_x cx cz r };
@@ -439,12 +438,6 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   Mem.wipe cz 6sz;
   Mem.wipe cy 6sz;
   Mem.wipe cx 6sz;
-  Mem.wipe bz 6sz;
-  Mem.wipe by_ 6sz;
-  Mem.wipe bx 6sz;
-  Mem.wipe az 6sz;
-  Mem.wipe ay 6sz;
-  Mem.wipe ax 6sz;
   Mem.wipe u2 6sz;
   Mem.wipe u1 6sz;
   Mem.wipe si 6sz;
@@ -477,7 +470,10 @@ ensures A.pts_to m #pm vm ** A.pts_to pk #pp vp ** A.pts_to sg #ps vs **
   let okr = scalar_ok r;
   let oks = scalar_ok s;
   let okp = load_point qx qy qz pk;
-  let res = if (okr && oks && okp) { verify_core m r s qx qy qz } else { false };
+  let res = if (okr && oks && okp) {
+    lp_on_curve vp;
+    verify_core m r s qx qy qz
+  } else { false };
   Mem.wipe qz 6sz;
   Mem.wipe qy 6sz;
   Mem.wipe qx 6sz;
