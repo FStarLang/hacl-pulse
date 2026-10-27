@@ -1402,7 +1402,14 @@ projectively (`xcheck`, Part 100).  Squaring got its own routine,
 `msqr`, with 21 products instead of 36.  The generated cross-product and
 doubling chains are linear in named products, and `sq_expand` proves the
 polynomial identity by `CanonCommSemiring`.  The reduction is a separate
-`mred`: as a single function, Z3 spent twenty minutes on `msqr` (Part 101).
+`mred`: as a single function, Z3 spent twenty minutes on `msqr` (Part 101).  The
+fixed-base comb then switched to signed five-bit digits
+(`Spec.Group.Booth6`, `Hacl.P384.PointBooth`).  It has thirteen rungs of
+78 additions, against tables of the affine multiples `1..16`.  A negative
+digit negates `y` under a mask, and a zero digit adds entry 16 and
+discards the result.  The invariant states a negative step as
+`e = e' + m n`, so `rep` only ever names natural multiples.  Keygen and
+signing run 11-14% fewer instructions (Part 102).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

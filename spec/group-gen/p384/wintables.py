@@ -4,7 +4,7 @@
 Writes, relative to the repository root:
 
   spec/Spec.P384.Base.fst          the five extra base points 2^{64j} G
-  spec/Spec.P384.Win{0..5}.fst     the sixteen multiples of each, affine
+  spec/Spec.P384.Win{0..5}.fst     the multiples 0 .. 16 of each, affine
   code/p384/Hacl.P384.Win{0..5}.fst  their Montgomery limbs
 
 Run from spec/group-gen:  python3 p384/wintables.py
@@ -167,7 +167,7 @@ let g_ok (_: unit) : Lemma (on_curve g /\\ peq g (G.smul SM.pg 1 g))
 
 def entries(j):
     es = [None, BASES[j]]
-    for d in range(2, 16):
+    for d in range(2, 17):
         es.append(add(es[-1], BASES[j]))
     for e in es[1:]:
         assert e is not None and on_curve(e)
@@ -180,7 +180,7 @@ def gen_spec_win(j):
     baseok = 'Base.g_ok' if j == 0 else 'Base.q%d_ok' % j
     what = '[G]' if j == 0 else '[2^%d G]' % (W * j)
     s = HEADER + GENERATED
-    s += '''(** The fixed-base window's %s table: the sixteen multiples of
+    s += '''(** The fixed-base window's %s table: the multiples [0 .. 16] of
     %s.  Each entry is affine and settled by two [assert_norm]s -- on the
     curve, and the previous entry plus the base point -- and one
     application of {!Spec.P384.Smul.smul_add_congr}. *)
@@ -230,7 +230,7 @@ let double (_: unit) : Lemma (n + n == 2 * n) = ()
 (** {2 The chain} *)
 
 ''' % (ORD[j], what, j, scale(j), base, baseok, baseok)
-    for d in range(2, 16):
+    for d in range(2, 17):
         x, y = es[d]
         s += felem_def('e%dx' % d, x)
         s += felem_def('e%dy' % d, y)
@@ -271,23 +271,24 @@ def lit_list(name, vals):
 
 def gen_hacl_win(j):
     es = entries(j)
-    pts = [(0, 1, 0)] + [(x, y, 1) for (x, y) in es[1:]]
-    cols = [[], [], []]
-    for (x, y, z) in pts:
-        for c, v in zip(cols, (x, y, z)):
+    cols = [[], []]
+    for (x, y) in es[1:]:
+        for c, v in zip(cols, (x, y)):
             c.extend(limbs(v * R % P))
     s = HEADER + GENERATED
     s += '''(** The fixed-base window's %s table, compiled in.
 
-    Sixteen multiples of %s, three arrays of ninety-six limbs laid out
-    the way {!Hacl.P384.PointWin.entry} reads them: entry [d] is limbs
-    [6d] through [6d + 5], in Montgomery form.  {!Spec.P384.Win%d} says
+    The multiples [1 .. 16] of %s, affine: two arrays of ninety-six
+    limbs laid out the way {!Hacl.P384.PointWin.entry} reads them, entry
+    [d] (the [(d + 1)]-th multiple) is limbs [6d] through [6d + 5], in
+    Montgomery form.  {!Spec.P384.Win%d} says
     what the points are and {!Hacl.P384.WinTable} turns a list of limbs
     into one of them. *)
 module Hacl.P384.Win%d
 
 open Hacl.P384.Tables
 open Hacl.P384.PointWin
+open Hacl.P384.PointBooth
 open Hacl.P384.WinTable
 
 module Seq = FStar.Seq
@@ -299,10 +300,10 @@ module W = Spec.P384.Win%d
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-(** {2 The three arrays} *)
+(** {2 The two arrays} *)
 
 ''' % (ORD[j], '[G]' if j == 0 else '[2^%d G]' % (W * j), j, j, j)
-    for c, vals in zip('xyz', cols):
+    for c, vals in zip('xy', cols):
         s += lit_list('t%s_list' % c, vals)
         s += '''[@@"opaque_to_smt"; FStar.Custard.no_specialize]
 let t%s_seq : Seq.seq S64.t = Seq.seq_of_list t%s_list
@@ -316,44 +317,40 @@ let t%s_arr : (a: G.static_array S64.t
 
 ''' % ((c,) * 8)
     s += '''let shape (_: unit)
-  : Lemma (L.length tx_list == 96 /\\ L.length ty_list == 96 /\\
-           L.length tz_list == 96)
+  : Lemma (L.length tx_list == 96 /\\ L.length ty_list == 96)
   = assert_norm (L.length tx_list == 96);
-    assert_norm (L.length ty_list == 96);
-    assert_norm (L.length tz_list == 96)
+    assert_norm (L.length ty_list == 96)
 
 (** {2 The sixteen entries} *)
 
 '''
     for d in range(16):
         s += 'let ent_%d (_: unit)\n' % d
-        s += '  : Lemma (ent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)\n'
-        s += '               (Seq.seq_of_list tz_list) P.g W.n %d)\n' % d
+        s += '  : Lemma (aent (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)\n'
+        s += '                P.g W.n %d)\n' % d
         s += '  = shape ();\n'
-        for c in 'xyz':
+        for c in 'xy':
             s += '    assert_norm (L.length (chunk t%s_list %d) == 6 /\\\n' % (c, d)
-            s += '                 leval (chunk t%s_list %d) == q%s W.e%d * pow2 384 %% P.prime);\n' % (c, d, c, d)
-        s += '    W.e%d_ok ();\n' % d
-        s += '    ent_lit tx_list ty_list tz_list %d P.g W.n W.e%d\n\n' % (d, d)
+            s += '                 leval (chunk t%s_list %d) == q%s W.e%d * pow2 384 %% P.prime);\n' % (c, d, c, d + 1)
+        s += '    assert_norm (qz W.e%d == P.fone);\n' % (d + 1)
+        s += '    W.e%d_ok ();\n' % (d + 1)
+        s += '    aent_lit tx_list ty_list %d P.g W.n W.e%d\n\n' % (d, d + 1)
     s += '''(** {2 The table} *)
 
 let reveal_seqs (_: unit)
   : Lemma (tx_seq == Seq.seq_of_list tx_list /\\
-           ty_seq == Seq.seq_of_list ty_list /\\
-           tz_seq == Seq.seq_of_list tz_list)
+           ty_seq == Seq.seq_of_list ty_list)
   = reveal_opaque (`%%tx_seq) tx_seq;
-    reveal_opaque (`%%ty_seq) ty_seq;
-    reveal_opaque (`%%tz_seq) tz_seq
+    reveal_opaque (`%%ty_seq) ty_seq
 
 let tbl_ok (_: unit)
-  : Lemma (tok tx_seq ty_seq tz_seq P.g (%s) 16)
+  : Lemma (atok tx_seq ty_seq P.g (%s))
   = reveal_seqs ();
     ent_0 (); ent_1 (); ent_2 (); ent_3 ();
     ent_4 (); ent_5 (); ent_6 (); ent_7 ();
     ent_8 (); ent_9 (); ent_10 (); ent_11 ();
     ent_12 (); ent_13 (); ent_14 (); ent_15 ();
-    tok_all (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list)
-            (Seq.seq_of_list tz_list) P.g W.n
+    atok_all (Seq.seq_of_list tx_list) (Seq.seq_of_list ty_list) P.g W.n
 
 #pop-options
 ''' % scale(j)

@@ -9850,3 +9850,72 @@ assembly and a divstep inversion), P-384 now stands at:
 Keygen and sign spend most of their time in the fixed-base comb's 96
 complete additions, which is the next target.  Tests, `make lint`,
 `make stack` and `make cross` pass.
+
+## Part 102: P-384 fixed base with signed digits
+
+The fixed-base comb read each 64-bit piece of the scalar as sixteen
+unsigned 4-bit digits: 16 rungs of 4 doublings and 6 additions, 96
+additions in all, each preceded by a constant-time select from a
+16-entry table of projective points.  It now reads each piece as
+thirteen signed 5-bit digits in -16..16 (Booth recoding, as in AWS-LC
+and OpenSSL): 13 rungs of 5 doublings and 6 additions, so 78 additions
+and 65 doublings.
+
+A signed digit needs only the multiples 1..16 of each base point:
+- the magnitude selects entry `m - 1`;
+- the sign mask negates `y` (`fsub` from zero, then `fcsel`);
+- a zero digit selects entry 15, adds it, and `fcsel` keeps the old
+  accumulator.  This replaces the copy that `win_add` already did.
+
+The tables are now affine: two arrays of 96 limbs per base point, not
+three.  `z` is set to Montgomery one before each addition.  This makes
+selects a third cheaper and prepares for a mixed addition.
+
+Proof pieces:
+- `Spec.Group.Booth6` defines the digits and `hb a i`, the piece above
+  digit `i` rounded to nearest.  `hb a 13 = 0`, `hb a 0 = a`, and one
+  step is `32 hb(i+1) +- m`.  `rv k i j`, the accumulator after `j` of a
+  rung's six additions, is always a natural number.  A negative digit is
+  stated as `e = e' + m n` rather than `e' = e - m n`, so the window's
+  `rep` never needs a negative multiple.  `rv_step` timed out until each
+  piece's weighted term (`hw`) was made opaque and the proof split on `j`.
+- `Hacl.P384.PointBooth.neg_add` proves that adding `-(d P)` to
+  `(e + d) P` gives `e P`, from associativity, commutativity,
+  `point_add_negate` and the identity.
+- `win_sadd` is a single signed addition with no secret branches.
+  Whether the digit was zero is settled inside the lemma `sadd_ok`, not
+  by a branch in Pulse.
+- `wintables.py` now emits the chain up to `e16` and the affine tables.
+  `WinTable.aent_lit`/`atok_all` replace `ent_lit`/`tok_all`.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 1.53M | 1.35M | 1.28M | 1.10M |
+| sign | 1.66M | 1.49M | 1.35M | 1.17M |
+| verify | 4.49M | 4.30M | 3.56M | 3.38M |
+| ECDH | 3.17M | 3.15M | 2.46M | 2.46M |
+
+Time, the median of three interleaved runs:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 131 us | 118 us | 112 us | 98 us |
+| ECDH | 302 us | 294 us | 240 us | 238 us |
+| sign | 158 us | 139 us | 127 us | 111 us |
+| verify | 430 us | 407 us | 334 us | 318 us |
+
+ECDH does not use the fixed base; its change is noise.  Against AWS-LC
+(clang):
+
+| operation | AWS-LC | ours | ratio |
+| --- | ---: | ---: | ---: |
+| keygen | 61 us | 98 us | 1.61x |
+| sign | 99 us | 111 us | 1.12x |
+| verify | 214 us | 318 us | 1.49x |
+| ECDH | 161 us | 238 us | 1.48x |
+
+Next is a mixed addition for the affine table entries, with `Z2 = 1`;
+it saves a multiplication and some additions per call.  Tests,
+`make lint`, `make stack` and `make cross` pass.
