@@ -98,18 +98,6 @@ let peq_out (p q: P.proj_point)
   = GR.peq_is_point_at_infinity p q;
     GR.peq_to_aff_point p q
 
-let add_out (a b c ga gb: P.proj_point)
-  : Lemma (requires GR.on_curve a /\ GR.on_curve b /\ GR.on_curve ga /\
-                    GR.on_curve gb /\ GR.peq a ga /\ GR.peq b gb /\
-                    c == P.point_add a b)
-          (ensures P.is_point_at_infinity c ==
-                     P.is_point_at_infinity (P.point_add ga gb) /\
-                   P.to_aff_point c == P.to_aff_point (P.point_add ga gb))
-  = GR.point_add_on_curve a b;
-    GR.point_add_on_curve ga gb;
-    GR.point_add_congr a ga b gb;
-    peq_out c (P.point_add ga gb)
-
 let core_spec (m r s: P.qelem) (q: P.proj_point) : GTot bool =
   let sinv = P.qinv s in
   let u1 = P.qmul sinv m in
@@ -419,14 +407,6 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   Mem.track si; A.pts_to_len si; let mut u1 = [| z; 6sz |];
   Mem.track u1; A.pts_to_len u1; let mut u2 = [| z; 6sz |];
   Mem.track u2; A.pts_to_len u2;
-  let mut ax = [| z; 6sz |];
-  Mem.track ax; A.pts_to_len ax; let mut ay = [| z; 6sz |];
-  Mem.track ay; A.pts_to_len ay; let mut az = [| z; 6sz |];
-  Mem.track az; A.pts_to_len az;
-  let mut bx = [| z; 6sz |];
-  Mem.track bx; A.pts_to_len bx; let mut by_ = [| z; 6sz |];
-  Mem.track by_; A.pts_to_len by_; let mut bz = [| z; 6sz |];
-  Mem.track bz; A.pts_to_len bz;
   let mut cx = [| z; 6sz |];
   Mem.track cx; A.pts_to_len cx; let mut cy = [| z; 6sz |];
   Mem.track cy; A.pts_to_len cy; let mut cz = [| z; 6sz |];
@@ -445,18 +425,11 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   assert (pure (num vu1 == P.qmul (P.qinv (num vs)) (num vm)));
   assert (pure (num vu2 == P.qmul (P.qinv (num vs)) (num vr)));
 
-  (* [u1] G + [u2] Q *)
-  point_mul_g ax ay az u1;
-  point_mul bx by_ bz qx qy qz u2;
-  with wax way waz. assert (A.pts_to ax wax ** A.pts_to ay way ** A.pts_to az waz);
-  with wbx wby wbz. assert (A.pts_to bx wbx ** A.pts_to by_ wby ** A.pts_to bz wbz);
-  point_add cx cy cz ax ay az bx by_ bz;
+  (* [u1] G + [u2] Q, on one doubling chain *)
+  Hacl.P384.Straus.point_mul2 cx cy cz qx qy qz u1 u2;
   with wcx wcy wcz. assert (A.pts_to cx wcx ** A.pts_to cy wcy ** A.pts_to cz wcz);
-  add_out (pt wax way waz) (pt wbx wby wbz) (pt wcx wcy wcz)
-          (P.point_mul_g (num vu1)) (P.point_mul (num vu2) (pt vqx vqy vqz));
-  assert (pure (P.point_mul_double_g (num vu1) (num vu2) (pt vqx vqy vqz) ==
-                P.point_add (P.point_mul_g (num vu1))
-                            (P.point_mul (num vu2) (pt vqx vqy vqz))));
+  peq_out (pt wcx wcy wcz)
+          (P.point_mul_double_g (num vu1) (num vu2) (pt vqx vqy vqz));
 
   let inf = fis_zero cz;
   let res = if inf { false } else { check_x cx cz r };
@@ -465,12 +438,6 @@ ensures A.pts_to m #pm vm ** A.pts_to r #pr vr ** A.pts_to s #ps vs **
   Mem.wipe cz 6sz;
   Mem.wipe cy 6sz;
   Mem.wipe cx 6sz;
-  Mem.wipe bz 6sz;
-  Mem.wipe by_ 6sz;
-  Mem.wipe bx 6sz;
-  Mem.wipe az 6sz;
-  Mem.wipe ay 6sz;
-  Mem.wipe ax 6sz;
   Mem.wipe u2 6sz;
   Mem.wipe u1 6sz;
   Mem.wipe si 6sz;

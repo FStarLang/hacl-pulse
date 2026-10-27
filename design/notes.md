@@ -1422,7 +1422,24 @@ can straddle two limbs (`vwin`); its proof lives in three lemmas over
 `nat` (`vwin_zero`, `win_in`, `win_cross`).  With the reasoning inline in
 `vwin`, Z3 hung on the straddle case.  The four-bit `point_mul_win` and
 its table were removed.  ECDH runs 7-8% fewer instructions and verify
-5-6% fewer (Part 104).
+5-6% fewer (Part 104).  Verification then put `[u1] G + [u2] Q` on one
+doubling chain (`Hacl.P384.Straus`).  Each of the 77 rungs does five
+doublings, a mixed addition from the comb's table 0 (`1G..16G`), and a
+projective addition from the table of `Q`, which saves the comb's 65
+doublings.  The invariant is `srep a b`: the accumulator is
+`lin2 a b G Q` (`Spec.Group.Smul`).  The doublings reuse `win_dbl5`
+against the current target `T` as its base, turning `1 T` into `32 T`,
+which `lin_32` rewrites to `lin2 (32a) (32b)`.  Three Z3 lessons came
+out of it:
+- `lin` is opaque, and every use of the `pg` record sits in a one-line
+  wrapper (`lin_dbl`, `lin_addl`, `lin_addr`).  With it visible, even
+  `1 * a == a` took minutes.
+- The recursive `pow2 k` form of the scaling lemma hung, so the proof
+  uses five explicit doubling steps instead.
+- The ladder lives in its own `fn` (`sloop`) so that its context is
+  small.
+
+Verify runs 8-9% fewer instructions (Part 105).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that

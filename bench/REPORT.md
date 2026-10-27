@@ -10009,3 +10009,36 @@ Time (clang), the median of three interleaved runs:
 Keygen and signing code is unchanged; their differences are noise.
 
 Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 105: P-384 verification on one doubling chain
+
+`[u1] G + [u2] Q` was computed as two separate multiplications plus one
+addition: the comb for `u1 G` (65 doublings, 78 mixed additions) and
+the variable-base window for `u2 Q` (380 doublings, 77 additions).
+`Hacl.P384.Straus.point_mul2` reads both scalars as the same 77 signed
+five-bit digits and shares one chain. Each rung does five doublings, a
+mixed addition against the comb's table 0 (affine `1G..16G`) and a
+projective addition against the table of `Q`. That saves 65 doublings
+and the final addition. The code stays constant time; nothing about it
+relies on the inputs being public.
+
+The invariant states that the accumulator is `lin2 a b G Q`. The
+doublings are `win_dbl5`, run with the current target as its base.
+
+Instructions (callgrind), verify only:
+
+| compiler | before | after | change |
+| --- | ---: | ---: | ---: |
+| gcc | 4.002M | 3.653M | -8.7% |
+| clang | 3.121M | 2.871M | -8.0% |
+
+Keygen, sign and ECDH instruction counts are unchanged; ECDH differs by
+less than 0.03%.
+
+Time (clang), the median of three interleaved runs:
+
+| operation | before | after | AWS-LC | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| verify | 295 us | 268 us | 214 us | 1.25x |
+
+Tests, `make lint`, `make stack` and `make cross` pass.
