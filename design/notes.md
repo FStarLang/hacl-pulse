@@ -1396,7 +1396,13 @@ doubling's fixed point `(1, 1, 0)`, chosen by a masked select because it is
 secret.  The conversions sit behind their own small contracts
 (`win_jin`, `win_jout`).  Inlined into `win_dbl4`, their `pt` equations
 made `2 * (2 * e) == 4 * e` time out, which is the hazard the `rep` comment
-describes.  ECDH executes 20% fewer instructions and runs 20% faster (Part 99).
+describes.  ECDH executes 20% fewer instructions and runs 20% faster (Part 99).  Verification
+then stopped inverting `Z`: `check_x` tests `X == r Z` or `X == (r + n) Z`
+projectively (`xcheck`, Part 100).  Squaring got its own routine,
+`msqr`, with 21 products instead of 36.  The generated cross-product and
+doubling chains are linear in named products, and `sq_expand` proves the
+polynomial identity by `CanonCommSemiring`.  The reduction is a separate
+`mred`: as a single function, Z3 spent twenty minutes on `msqr` (Part 101).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
