@@ -6,10 +6,12 @@ HEAD = open(os.path.join(HERE, 'hdr.txt')).read()
 
 def hyp_sv(h, cv):
     if h[0]=='aff': return f"aff_hyp {cv} {h[1]} {h[2]}"
+    if h[0]=='jac': return f"jac_hyp {cv} {h[1]} {h[2]} {h[3]}"
     return f"hom_hyp {cv} {h[1]} {h[2]} {h[3]}"
 
 def hyp_ok(h):
     if h[0]=='aff': return f"aff_hyp_ok c0 {h[1]} {h[2]}"
+    if h[0]=='jac': return f"jac_hyp_ok c0 {h[1]} {h[2]} {h[3]}"
     return f"hom_hyp_ok c0 {h[1]} {h[2]} {h[3]}"
 
 def gen(k):
@@ -85,7 +87,7 @@ def gen(k):
     return "\n".join(out)
 
 if __name__=="__main__":
-    BL="bl"; CURVE="P256"; CNAME="P-256"
+    BL="bl"; CURVE="P256"; CNAME="P-256"; OPENS=""
     exec(open(sys.argv[1]).read())
-    s=HEAD.replace("%MOD%",MOD).replace("%CURVE%",CURVE).replace("%CNAME%",CNAME)+"\n"+"\n".join(gen(k) for k in CHECKS)
+    s=HEAD.replace("%MOD%",MOD).replace("%CURVE%",CURVE).replace("%CNAME%",CNAME)+OPENS+"\n"+"\n".join(gen(k) for k in CHECKS)
     open(sys.argv[2],'w').write(s)

@@ -148,3 +148,11 @@ val point_add_negate (p: proj_point)
 val point_double_is_add (p: proj_point)
   : Lemma (requires on_curve p)
           (ensures peq (point_double p) (point_add p p))
+
+(** {2 At infinity}
+
+    A point with [Z = 0] is the point at infinity.  The Jacobian doubling
+    in {!Spec.P384.Jac} has to say so when it converts in. *)
+val peq_inf_z (p: proj_point)
+  : Lemma (requires on_curve p /\ (let (_, _, z) = p in z == fzero))
+          (ensures peq point_at_infinity p)

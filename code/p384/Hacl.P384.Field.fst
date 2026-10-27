@@ -527,6 +527,43 @@ ensures A.pts_to a #pa va ** pure (r == (fev va = P.fzero))
   r
 }
 
+(** [fzero_mask a t] is all ones if [a] is zero and all zeroes otherwise,
+    in the same time either way; [t] is scratch.  {!fis_zero} answers with
+    a public [bool], which is wrong for a secret point at infinity. *)
+fn fzero_mask (a t: A.array S64.t)
+              (#pa: perm) (#va: erased (Seq.seq S64.t))
+              (#vt: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** A.pts_to t vt **
+  pure (felem va /\ Seq.length vt == 6)
+returns m: S64.t
+ensures exists* (vt': Seq.seq S64.t).
+  A.pts_to a #pa va ** A.pts_to t vt' **
+  pure (Seq.length vt' == 6 /\ is_mask m /\
+        (S64.v m == pow2 64 - 1 <==> fev va == P.fzero))
+{
+  facts ();
+  fzero t;
+  with vt'. assert (A.pts_to t vt');
+  let m = eq_mask a t 6sz;
+  Classical.move_requires (inj_lemma P.prime (pow2 384) rinv (num va)) (num vt');
+  m
+}
+
+(** [fcsel o a m] is [o := a] under an all-ones mask and nothing under a
+    zero one, in the same time either way. *)
+fn fcsel (o a: A.array S64.t) (m: S64.t)
+         (#vo: erased (Seq.seq S64.t))
+         (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va /\ is_mask m)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == (if S64.v m = 0 then fev vo else fev va))
+{
+  mask_bit_ok m;
+  cselect o a 6sz m (hide (mask_bit m));
+}
+
 (** {2 Curve constants}
 
     Stored in Montgomery form, so reading one is just reading the table. *)

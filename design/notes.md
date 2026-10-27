@@ -1388,7 +1388,15 @@ multiply became word-level cores (`addw`, `subw`, `mont`) that read their
 operands as values, so `Field` offers in-place forms (`fadd1 o b` is
 `o := o + b`, `fmul2 o a` is `o := a * o`), and doubling and squaring read
 one element twice under one permission (`fdbl`, `fdbl1`, `fsqr`).  The two
-scratch elements went with them (3.4% fewer instructions in ECDH, Part 98).
+scratch elements went with them (2.4% fewer instructions in ECDH, Part 98).  The
+variable-base rung then moved its four doublings into Jacobian coordinates
+(`Spec.P384.JacSv`, `JacChecks`, `Jac`): one conversion in and one out,
+8 multiplications per doubling instead of 11.  Infinity is carried as the
+doubling's fixed point `(1, 1, 0)`, chosen by a masked select because it is
+secret.  The conversions sit behind their own small contracts
+(`win_jin`, `win_jout`).  Inlined into `win_dbl4`, their `pt` equations
+made `2 * (2 * e) == 4 * e` time out, which is the hazard the `rep` comment
+describes.  ECDH executes 20% fewer instructions and runs 20% faster (Part 99).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
