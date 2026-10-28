@@ -10271,3 +10271,33 @@ loops does.
 That is 0.1-0.4% fewer instructions; clang timings are within noise.  The
 module is 64 lines shorter and each formula uses two fewer stack elements.
 Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 114: README P-256 rows after Parts 107-113
+
+`table.sh 2` (gcc and clang) and `others.sh 3` were rerun on `cea9aa9`.
+Only the P-256 rows of the README were replaced; nothing else changed in
+the code.  As in Parts 91 and 106 the other-library table uses a 5% canary
+tolerance (43 of 72 runs survive; at 2% only 10 do), and every cell is a
+minimum.
+
+Against HACL\* (gcc):
+
+| P-256 | hacl-pulse | HACL\* | ratio before | ratio after |
+| --- | ---: | ---: | ---: | ---: |
+| ECDH | 47 us | 135 us | 0.47x | 0.34x |
+| ECDSA sign | 57 us | 148 us | 0.51x | 0.38x |
+| ECDSA verify | 129 us | 376 us | 0.57x | 0.34x |
+
+Under clang, against clang-built HACL\*, the three rows are 0.75x-0.79x.
+
+Against other libraries:
+
+| P-256 | gcc | clang | OpenSSL | AWS-LC | ratio before | ratio after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECDH | 105 us | 83 us | 49 us | 47 us | 2.27x | 1.75x |
+| ECDSA sign | 57 us | 48 us | 24 us | 16 us | 3.87x | 3.03x |
+| ECDSA verify | 129 us | 103 us | 69 us | 53 us | 3.12x | 1.94x |
+
+Both libraries use dedicated x86-64 assembly for P-256 (`ecp_nistz256`
+and s2n-bignum); how much of the remaining gap that accounts for has not
+been measured.

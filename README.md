@@ -97,14 +97,14 @@ hacl-pulse is faster**.
 | SHA-1 | 256 KiB | 163 us | 1.5 ms | 0.11x |
 | Salsa20 | 256 KiB | 95 us | 388 us | 0.25x |
 | NaCl secretbox | 256 KiB | 141 us | 548 us | 0.26x |
+| P-256 ECDSA verify | -- | 129 us | 376 us | 0.34x |
+| P-256 ECDH | -- | 47 us | 135 us | 0.34x |
+| P-256 ECDSA sign | -- | 57 us | 148 us | 0.38x |
 | HMAC-SHA-512 | 256 KiB | 473 us | 1.2 ms | 0.39x |
 | SHA-512 | 256 KiB | 474 us | 1.2 ms | 0.40x |
 | RSA-PSS-2048 verify | -- | 50 us | 117 us | 0.43x |
-| P-256 ECDH | -- | 64 us | 136 us | 0.47x |
 | SHAKE128 | 256 KiB | 548 us | 1.1 ms | 0.49x |
 | SHA3-256 | 256 KiB | 686 us | 1.4 ms | 0.50x |
-| P-256 ECDSA sign | -- | 75 us | 149 us | 0.51x |
-| P-256 ECDSA verify | -- | 211 us | 371 us | 0.57x |
 | Ed25519 sign | -- | 32 us | 50 us | 0.65x |
 | BLAKE2b | 256 KiB | 329 us | 389 us | 0.85x |
 | BLAKE2s | 256 KiB | 527 us | 557 us | 0.95x |
@@ -199,12 +199,12 @@ column is the better hacl-pulse build divided by the fastest other library:
 | ML-KEM-768 encaps | -- | 24 us | 22 us | 34 us | **14 us** | -- | -- | -- | -- | 1.59x |
 | RSA-PSS-2048 sign | -- | 3.6 ms | 4.4 ms | 2.1 ms | **2.1 ms** | -- | -- | -- | -- | 1.73x |
 | FFDHE-2048 | -- | 3.6 ms | 4.5 ms | **2.1 ms** | 4.0 ms | -- | -- | -- | -- | 1.75x |
+| P-256 ECDH | -- | 105 us | 83 us | 49 us | **47 us** | -- | -- | -- | -- | 1.75x |
+| P-256 ECDSA verify | -- | 129 us | 103 us | 69 us | **53 us** | -- | -- | 62 us | -- | 1.94x |
 | Ed25519 sign | -- | 17 us | 21 us | 40 us | 8.8 us | 16 us | -- | **8.6 us** | 18 us | 1.95x |
 | Ed25519 verify | -- | 79 us | 89 us | 114 us | 39 us | 50 us | -- | 44 us | **38 us** | 2.11x |
-| P-256 ECDH | -- | 148 us | 108 us | 49 us | **47 us** | -- | -- | -- | -- | 2.27x |
 | RSA-PSS-2048 verify | -- | 50 us | 58 us | 22 us | **17 us** | -- | -- | -- | -- | 2.95x |
-| P-256 ECDSA verify | -- | 209 us | 163 us | 67 us | **52 us** | -- | -- | 62 us | -- | 3.12x |
-| P-256 ECDSA sign | -- | 75 us | 61 us | 24 us | **16 us** | -- | -- | -- | -- | 3.87x |
+| P-256 ECDSA sign | -- | 57 us | 48 us | 24 us | **16 us** | -- | -- | -- | -- | 3.03x |
 
 A dash means the library does not offer the operation through the API used.
 OpenSSL's and AWS-LC's ML-KEM and ECDSA draw from their DRBGs. The
