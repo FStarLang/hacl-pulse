@@ -10230,3 +10230,25 @@ ECDH runs 7% fewer instructions and verify 5% fewer.  Keygen and sign use
 the comb and are unchanged.  Clang timings: ECDH 89-91 us to 84-86, and
 verify 124-130 to 117-122.  Tests, `make lint`, `make stack` and
 `make cross` pass.
+
+## Part 112: P-256 Straus shared-chain verify
+
+P-256's verify now computes `[u1] G + [u2] Q` as P-384's does (Part 106).
+`Hacl.P256.Straus` reads both scalars as fifty-two Booth digits and runs
+one 255-doubling chain.  On each rung it adds the comb's affine table-0
+entry for `G` with mixed addition, and the run-time table entry for `Q`.
+Computing the two products separately also paid the comb's sixty-five
+doublings and a final addition.  The module is P-384's at four limbs and
+verified as it was, with no extra lemmas.  `PointMulD.point_mul_double_g`
+keeps its name and contract and now just calls `Straus.point_mul2`.
+
+Instructions (callgrind, per verify):
+
+| compiler | before | after |
+| --- | ---: | ---: |
+| gcc | 1.634M | 1.451M |
+| clang | 1.458M | 1.301M |
+
+Verify runs 11% fewer instructions under both compilers.  Clang time went
+from 127-128 us to 112-114.  Tests, `make lint`, `make stack` and
+`make cross` pass.

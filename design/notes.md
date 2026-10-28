@@ -1475,7 +1475,9 @@ multiples `1..16` of `Q`, 255 doublings and 52 additions in place of 256
 and 64.  Its digit lemmas are P-384's, stated over `Hacl.Bignum.Base.num`;
 `kv_num` bridges P-256's `Spec.Bignum4.eval`, which has the same
 definition.  The four-bit `point_mul_win` and its table were removed.
-ECDH runs 7% fewer instructions and verify 5% fewer (Part 111).
+ECDH runs 7% fewer instructions and verify 5% fewer (Part 111).  Verify
+then shares one doubling chain between `G` and `Q`, as P-384 does, for 11%
+fewer instructions (Part 112).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
@@ -1578,9 +1580,11 @@ whole operations only 1-3%, and fiat-crypto's `p256_64.h` multiplier is
 slower than `Hacl.P256.Field64` under both compilers.
 
 **Verification is not constant time and need not be.**
-`point_mul_double_g u1 u2 Q` is two independent multiplications and one
-addition rather than Shamir's trick, because nothing in verification is
-secret and the simpler code is the one that verifies.
+`point_mul_double_g u1 u2 Q` was first two independent multiplications and
+one addition rather than Shamir's trick, because nothing in verification is
+secret and the simpler code was the one that verified.  It now calls
+`Hacl.P256.Straus`, which shares one doubling chain between the two scalars
+(Part 112).
 
 **`r` travels field -> bytes -> scalar.**  The specification says
 `r = x mod q` where `x` is a field element; the implementation stores `x` to
