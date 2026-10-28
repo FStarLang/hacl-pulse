@@ -10057,3 +10057,247 @@ rows of the README were replaced; nothing else changed in the code.
 | ECDSA verify | 310 us | 275 us | 565 us | 204 us | 12.81x | 1.35x |
 
 hacl-pulse now beats OpenSSL on every P-384 operation by 1.9-2.3x.
+
+## Part 107: P-256's doublings in Jacobian coordinates
+
+Part 106 left P-384 at 1.2-1.4x AWS-LC and P-256 at 2.3-3.9x.  The P-384
+work therefore moves to P-256, starting with Part 99's Jacobian doublings.
+
+`Hacl.P256.Field64` was first split the way P-384's was in Part 98.
+Addition and subtraction became word cores (`addw`, `subw`), the
+reduction became its own `mred`, and `Field` gained the in-place forms
+`fadd1`, `fsub1`, `fsub2`, `fdbl`, `fdbl1`, `fmul1` and `fsqr1`, along
+with `fzero_mask` and `fcsel` for the secret select.  The Jacobian
+specification and its generated checks (`Spec.P256.JacSv`, `JacChecks`,
+`Jac`) are P-384's with the curve renamed.  `Point.jdouble`, `to_j` and
+`to_h`, and the `PointWin` change to `win_dbl4`, are P-384's code with
+six limbs replaced by four.  `win_dbl4` serves both ECDH's variable-base
+window and the generator's four-piece comb, so keygen and sign gain too.
+Verification still runs two separate multiplications, and each uses
+`win_dbl4`.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 834k | 757k | 775k | 712k |
+| ECDH | 1.57M | 1.26M | 1.37M | 1.12M |
+| sign | 832k | 755k | 757k | 694k |
+| verify | 2.30M | 1.91M | 2.05M | 1.73M |
+
+ECDH, sign and verify are measured as differences between driver runs
+(keygen plus the operation, minus keygen), so they include no startup.
+The keygen row includes about 125k instructions of process startup.
+
+Time, the best of seven runs of 2000 operations, two interleaved rounds:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 70 us | 57-60 us | 52-56 us | 49 us |
+| ECDH | 156 us | 121-124 us | 117-119 us | 93-95 us |
+| sign | 77-82 us | 69-72 us | 63-68 us | 57-59 us |
+| verify | 226-235 us | 179-188 us | 171-180 us | 144-146 us |
+
+ECDH executes 18-20% fewer instructions and is about 20% faster under
+both compilers.  Verification executes 15-17% fewer instructions and is
+15-20% faster.  Keygen and sign gain 5-15%.  Tests, `make lint`, `make stack`
+and `make cross` pass.  `mk/memlint.pl` lists the new hot leaves (`mred`,
+`fmul1`, `fsqr1`), which skip wiping their scratch, as the existing
+`fmul` and `fsqr` already do.
+
+## Part 108: P-256 verification without a field inversion
+
+This is Part 100 for P-256.  Verification used to compute the affine `x`
+(one Fermat inversion), serialize it and reduce it mod `n`.  `Verify.check_x`
+now compares projectively: `X == r Z`, or, when `r + n < p`, `X == (r + n) Z`.
+The lemma `xcheck` is P-384's with the curve renamed.  The `r + n < p`
+test is `Hacl.Impl.Mont4.ageq` of `r` against a new table `p - n` in
+`Hacl.P256.Tables`; both operands are residues mod `n`, which is what
+`ageq` requires.
+
+Instructions (callgrind, verify only):
+
+| compiler | before | after |
+| --- | ---: | ---: |
+| gcc | 1.91M | 1.80M |
+| clang | 1.73M | 1.64M |
+
+Time, verify, best of seven runs of 2000 operations, two interleaved rounds:
+
+| compiler | before | after |
+| --- | ---: | ---: |
+| gcc | 181-185 us | 171-173 us |
+| clang | 141-142 us | 135 us |
+
+Verification executes 5-6% fewer instructions and is 4-7% faster.  The
+other operations are unchanged; their timings moved within noise.  Tests,
+`make lint`, `make stack` and `make cross` pass.
+
+## Part 109: P-256 inversion by an addition chain
+
+P-256's `finv` was `Exp.fexp` with `p - 2`: about 255 squarings and 128
+multiplications.  `Hacl.P256.FInv` now uses a fixed chain.  It builds
+`x_k = x^(2^k - 1)` for k = 2, 3, 6, 12, 15, 30, 32, then forms
+`p - 2 = ((((x_32 2^32 + 1) 2^128 + x_32) 2^32 + x_32) 2^30 + x_30) 2^2 + 1`.
+That is 255 squarings and 12 multiplications.  The helpers (`sqrn`,
+`sqrn_mul` and the exponent lemmas) are P-384's.
+
+The proof timed out when the chain lived in `Inverse`, and still timed out in
+a module of its own: P-256's `felem` is `Spec.Field4.res` and is transparent,
+so Z3 unfolded it everywhere.  `FInv` therefore hides `felem`, `fev`,
+`Spec.Field4` and `Hacl.Impl.Limb4` with `--using_facts_from` and keeps one
+`SMTPat` lemma, `felem v ==> length v == 4`.  The module then verifies in
+about 5 seconds.
+
+Instructions (callgrind, per operation):
+
+| compiler | operation | before | after |
+| --- | --- | ---: | ---: |
+| gcc | keygen | 757k | 719k |
+| gcc | ECDH | 1.264M | 1.226M |
+| gcc | sign | 755k | 717k |
+| clang | keygen | 712k | 683k |
+| clang | ECDH | 1.123M | 1.094M |
+| clang | sign | 694k | 665k |
+
+Keygen includes about 125k instructions of startup.  Each inversion costs
+about 38k fewer instructions under gcc and 29k fewer under clang.  Sign runs
+4-5% fewer instructions, keygen (excluding startup) 5-6% and ECDH 3%.
+Verify does not invert and is unchanged.  Timings (best of seven runs of 2000
+operations) moved by 2-4%, which is near the noise.  Tests, `make lint`,
+`make stack` and `make cross` pass.
+
+## Part 110: P-256 Booth comb with mixed addition
+
+P-256's fixed-base comb now matches P-384's (Parts 101-102).  The scalar
+is split into four 64-bit pieces, and each piece becomes thirteen signed
+five-bit digits (`Spec.Group.Booth4`, which is `Booth6` with four pieces).
+The comb runs thirteen rungs, each of five doublings and four signed
+additions: 65 doublings and 52 additions, where the old comb did 60
+doublings and 64 additions.  The tables in `Win0` .. `Win3` now hold the
+affine multiples `1 .. 16` of each base point, so a signed addition is a
+mixed addition (`point_madd`, eight multiplications and three squarings)
+that negates `y` when the digit is negative.  `spec/group-gen/p256/wintables.py`
+generates the tables.  `Hacl.P256.PointBooth` and `WinTable`'s
+`aent_lit`/`atok_all` are P-384's at four limbs.
+
+Instructions (callgrind, per operation):
+
+| compiler | operation | before | after |
+| --- | --- | ---: | ---: |
+| gcc | keygen | 719k | 633k |
+| gcc | ECDH | 1.226M | 1.226M |
+| gcc | sign | 717k | 631k |
+| gcc | verify | 1.803M | 1.717M |
+| clang | keygen | 683k | 577k |
+| clang | ECDH | 1.094M | 1.092M |
+| clang | sign | 665k | 559k |
+| clang | verify | 1.643M | 1.535M |
+
+Keygen includes about 125k instructions of startup; excluding it, keygen
+runs 14% fewer instructions under gcc and 19% fewer under clang.  Sign runs
+12-16% fewer and verify 5-7% fewer.  ECDH does not use the comb and is
+unchanged.  Clang timings: keygen 46-49 us to 37-41, sign 56-58 to 48-49,
+verify 135-136 to 126-127.  Tests, `make lint`, `make stack` and
+`make cross` pass.
+
+## Part 111: P-256 signed five-bit variable-base window
+
+P-256's variable-base multiplication now matches P-384's (Part 104).
+`Hacl.P256.PointMulV` reads the 256-bit scalar as fifty-two Booth digits
+in `[-16, 16]` and uses a run-time table of the projective multiples
+`1 .. 16` of `Q`.  The top digit goes straight into the point at
+infinity, so the multiplication costs 255 doublings and 52 additions
+instead of the four-bit window's 256 and 64.  A digit's six-bit window
+can straddle two limbs; `vwin` and its three lemmas are P-384's.  They are
+stated over `Hacl.Bignum.Base.num`, and a small `kv_num` lemma equates
+that with P-256's `Spec.Bignum4.eval`.  Two obligations that P-384
+discharged implicitly needed explicit one-line lemmas here (`zero_keep`
+and a `rep_cong`), because P-256's transparent field fills the context.
+The old four-bit window (`build_table`, `win_dbl4`, `win_add`,
+`point_mul_win`, the `ent`/`tok` invariant) is gone from `PointWin`.
+
+Instructions (callgrind, per operation):
+
+| compiler | operation | before | after |
+| --- | --- | ---: | ---: |
+| gcc | ECDH | 1.226M | 1.143M |
+| gcc | verify | 1.717M | 1.634M |
+| clang | ECDH | 1.092M | 1.014M |
+| clang | verify | 1.535M | 1.458M |
+
+ECDH runs 7% fewer instructions and verify 5% fewer.  Keygen and sign use
+the comb and are unchanged.  Clang timings: ECDH 89-91 us to 84-86, and
+verify 124-130 to 117-122.  Tests, `make lint`, `make stack` and
+`make cross` pass.
+
+## Part 112: P-256 Straus shared-chain verify
+
+P-256's verify now computes `[u1] G + [u2] Q` as P-384's does (Part 106).
+`Hacl.P256.Straus` reads both scalars as fifty-two Booth digits and runs
+one 255-doubling chain.  On each rung it adds the comb's affine table-0
+entry for `G` with mixed addition, and the run-time table entry for `Q`.
+Computing the two products separately also paid the comb's sixty-five
+doublings and a final addition.  The module is P-384's at four limbs and
+verified as it was, with no extra lemmas.  `PointMulD.point_mul_double_g`
+keeps its name and contract and now just calls `Straus.point_mul2`.
+
+Instructions (callgrind, per verify):
+
+| compiler | before | after |
+| --- | ---: | ---: |
+| gcc | 1.634M | 1.451M |
+| clang | 1.458M | 1.301M |
+
+Verify runs 11% fewer instructions under both compilers.  Clang time went
+from 127-128 us to 112-114.  Tests, `make lint`, `make stack` and
+`make cross` pass.
+
+## Part 113: P-256 point formulas without copies
+
+P-256's `Point.fst` now uses the in-place field operations as P-384's does
+(Part 98).  The same script rewrote all 57 `fcopy`s into `fadd1`, `fmul2`,
+`fdbl1`, `fsqr` and the like, and removed the scratch elements `aw` and
+`au`.  The proofs went through unchanged.  The gain is small because the
+hot paths (Jacobian doublings and mixed additions) never used these
+formulas.  Only the complete addition in the variable-base and Straus
+loops does.
+
+| compiler | ECDH before | ECDH after | verify before | verify after |
+| --- | ---: | ---: | ---: | ---: |
+| gcc | 1.141M | 1.136M | 1.451M | 1.446M |
+| clang | 1.014M | 1.013M | 1.301M | 1.299M |
+
+That is 0.1-0.4% fewer instructions; clang timings are within noise.  The
+module is 64 lines shorter and each formula uses two fewer stack elements.
+Tests, `make lint`, `make stack` and `make cross` pass.
+
+## Part 114: README P-256 rows after Parts 107-113
+
+`table.sh 2` (gcc and clang) and `others.sh 3` were rerun on `cea9aa9`.
+Only the P-256 rows of the README were replaced; nothing else changed in
+the code.  As in Parts 91 and 106 the other-library table uses a 5% canary
+tolerance (43 of 72 runs survive; at 2% only 10 do), and every cell is a
+minimum.
+
+Against HACL\* (gcc):
+
+| P-256 | hacl-pulse | HACL\* | ratio before | ratio after |
+| --- | ---: | ---: | ---: | ---: |
+| ECDH | 47 us | 135 us | 0.47x | 0.34x |
+| ECDSA sign | 57 us | 148 us | 0.51x | 0.38x |
+| ECDSA verify | 129 us | 376 us | 0.57x | 0.34x |
+
+Under clang, against clang-built HACL\*, the three rows are 0.75x-0.79x.
+
+Against other libraries:
+
+| P-256 | gcc | clang | OpenSSL | AWS-LC | ratio before | ratio after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECDH | 105 us | 83 us | 49 us | 47 us | 2.27x | 1.75x |
+| ECDSA sign | 57 us | 48 us | 24 us | 16 us | 3.87x | 3.03x |
+| ECDSA verify | 129 us | 103 us | 69 us | 53 us | 3.12x | 1.94x |
+
+Both libraries use dedicated x86-64 assembly for P-256 (`ecp_nistz256`
+and s2n-bignum); how much of the remaining gap that accounts for has not
+been measured.

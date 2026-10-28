@@ -21,13 +21,13 @@
     no record, no aliasing conventions, just three slices the caller has
     already had to keep apart.
 
-    The specification writes the formulas in place, reusing names; Pulse
-    cannot, because a slice that is written needs full permission and one
-    that is read needs a fraction, and the same slice cannot supply both.
-    Each in-place step therefore goes through the scratch element [w], and
-    each step whose two operands are the same element goes through [u].
-    That is the whole difference between the listing below and the one in
-    the paper, and it is why the two can be compared line by line. *)
+    The specification writes the formulas in place, reusing names.  A slice
+    that is written needs full permission and one that is read needs a
+    fraction, so the same slice cannot be passed as both; the in-place
+    steps call {!Hacl.P256.Field}'s [fadd1], [fmul2], ... instead (the digit
+    names the operand the result replaces), and the steps whose two operands
+    are the same element call [fdbl], [fdbl1] and [fsqr].  The listing below
+    can therefore be compared with the paper line by line. *)
 module Hacl.P256.Point
 
 #lang-pulse
@@ -45,6 +45,9 @@ module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module Mem = Hacl.Mem
+module JS = Spec.P256.JacSv
+module J = Spec.P256.Jac
+module JK = Spec.P256.JacChecks
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
 
@@ -79,82 +82,134 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 4sz |];
   Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 4sz |];
   Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 4sz |];
-  Mem.track a5; A.pts_to_len a5; let mut aw = [| z; 4sz |];
-  Mem.track aw; A.pts_to_len aw; let mut au = [| z; 4sz |];
-  Mem.track au; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len a4; A.pts_to_len a5; A.pts_to_len aw; A.pts_to_len au;
+  Mem.track a5; A.pts_to_len a5;
+  A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  A.pts_to_len a4; A.pts_to_len a5;
   let bc = fb ();
   fmul a0 x1 x2;
   fmul a1 y1 y2;
   fmul a2 z1 z2;
   fadd a3 x1 y1;
   fadd a4 x2 y2;
-  fmul aw a3 a4;
-  fcopy a3 aw;
+  fmul1 a3 a4;
   fadd a4 a0 a1;
-  fsub aw a3 a4;
-  fcopy a3 aw;
+  fsub1 a3 a4;
   fadd a4 y1 z1;
   fadd a5 y2 z2;
-  fmul aw a4 a5;
-  fcopy a4 aw;
+  fmul1 a4 a5;
   fadd a5 a1 a2;
-  fsub aw a4 a5;
-  fcopy a4 aw;
+  fsub1 a4 a5;
   fadd ox x1 z1;
   fadd oy x2 z2;
-  fmul aw ox oy;
-  fcopy ox aw;
+  fmul1 ox oy;
   fadd oy a0 a2;
-  fsub aw ox oy;
-  fcopy oy aw;
+  fsub2 oy ox;
   fmul oz bc a2;
   fsub ox oy oz;
-  fcopy au ox;
-  fadd oz ox au;
-  fadd aw ox oz;
-  fcopy ox aw;
+  fdbl oz ox;
+  fadd1 ox oz;
   fsub oz a1 ox;
-  fadd aw a1 ox;
-  fcopy ox aw;
-  fmul aw bc oy;
-  fcopy oy aw;
-  fcopy au a2;
-  fadd a1 a2 au;
-  fadd aw a1 a2;
-  fcopy a2 aw;
-  fsub aw oy a2;
-  fcopy oy aw;
-  fsub aw oy a0;
-  fcopy oy aw;
-  fcopy au oy;
-  fadd a1 oy au;
-  fadd aw a1 oy;
-  fcopy oy aw;
-  fcopy au a0;
-  fadd a1 a0 au;
-  fadd aw a1 a0;
-  fcopy a0 aw;
-  fsub aw a0 a2;
-  fcopy a0 aw;
+  fadd2 ox a1;
+  fmul2 oy bc;
+  fdbl a1 a2;
+  fadd2 a2 a1;
+  fsub1 oy a2;
+  fsub1 oy a0;
+  fdbl a1 oy;
+  fadd2 oy a1;
+  fdbl a1 a0;
+  fadd2 a0 a1;
+  fsub1 a0 a2;
   fmul a1 a4 oy;
   fmul a2 a0 oy;
   fmul oy ox oz;
-  fadd aw oy a2;
-  fcopy oy aw;
-  fmul aw a3 ox;
-  fcopy ox aw;
-  fsub aw ox a1;
-  fcopy ox aw;
-  fmul aw a4 oz;
-  fcopy oz aw;
+  fadd1 oy a2;
+  fmul2 ox a3;
+  fsub1 ox a1;
+  fmul2 oz a4;
   fmul a1 a3 a0;
-  fadd aw oz a1;
-  fcopy oz aw;
+  fadd1 oz a1;
   drop_table bc;
-  Mem.wipe au 4sz;
-  Mem.wipe aw 4sz;
   Mem.wipe a5 4sz;
+  Mem.wipe a4 4sz;
+  Mem.wipe a3 4sz;
+  Mem.wipe a2 4sz;
+  Mem.wipe a1 4sz;
+  Mem.wipe a0 4sz;
+  ()
+}
+
+(** Mixed addition, [(x2, y2)] affine: Algorithm 5, one multiplication and
+    one temporary fewer than {!point_add}.  {!Spec.P256.JacChecks.j6}
+    says it is {!point_add} with [Z2 = 1], so it is complete as well. *)
+fn point_madd (ox oy oz: A.array S64.t)
+              (x1 y1 z1: A.array S64.t) (x2 y2: A.array S64.t)
+              (#vox #voy #voz: erased (Seq.seq S64.t))
+              (#p1: perm) (#vx1 #vy1 #vz1: erased (Seq.seq S64.t))
+              (#p2: perm) (#vx2 #vy2: erased (Seq.seq S64.t))
+requires
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 **
+  A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+  pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
+        pt_ok vx1 vy1 vz1 /\ felem vx2 /\ felem vy2)
+ensures exists* (wx wy wz: Seq.seq S64.t).
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
+  A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 **
+  A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+  pure (pt_ok wx wy wz /\
+        pt wx wy wz == P.point_add (pt vx1 vy1 vz1) (fev vx2, fev vy2, P.fone))
+{
+  JK.j6 (fev vx1) (fev vy1) (fev vz1) (fev vx2) (fev vy2);
+  reveal_opaque (`%JS.madd) JS.madd;
+  A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
+  let z = S64.zero;
+  let mut a0 = [| z; 4sz |];
+  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 4sz |];
+  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
+  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 4sz |];
+  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 4sz |];
+  Mem.track a4; A.pts_to_len a4;
+  A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
+  A.pts_to_len a4;
+  let bc = fb ();
+  fmul a0 x1 x2;
+  fmul a1 y1 y2;
+  fadd a3 x2 y2;
+  fadd a4 x1 y1;
+  fmul1 a3 a4;
+  fadd a4 a0 a1;
+  fsub1 a3 a4;
+  fmul a4 y2 z1;
+  fadd1 a4 y1;
+  fmul oy x2 z1;
+  fadd1 oy x1;
+  fmul oz bc z1;
+  fsub ox oy oz;
+  fdbl oz ox;
+  fadd1 ox oz;
+  fsub oz a1 ox;
+  fadd2 ox a1;
+  fmul2 oy bc;
+  fdbl a1 z1;
+  fadd a2 a1 z1;
+  fsub1 oy a2;
+  fsub1 oy a0;
+  fdbl a1 oy;
+  fadd2 oy a1;
+  fdbl a1 a0;
+  fadd2 a0 a1;
+  fsub1 a0 a2;
+  fmul a1 a4 oy;
+  fmul a2 a0 oy;
+  fmul oy ox oz;
+  fadd1 oy a2;
+  fmul2 ox a3;
+  fsub1 ox a1;
+  fmul2 oz a4;
+  fmul a1 a3 a0;
+  fadd1 oz a1;
+  drop_table bc;
   Mem.wipe a4 4sz;
   Mem.wipe a3 4sz;
   Mem.wipe a2 4sz;
@@ -185,85 +240,160 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Mem.track a0; A.pts_to_len a0; let mut a1 = [| zz; 4sz |];
   Mem.track a1; A.pts_to_len a1; let mut a2 = [| zz; 4sz |];
   Mem.track a2; A.pts_to_len a2; let mut a3 = [| zz; 4sz |];
-  Mem.track a3; A.pts_to_len a3; let mut aw = [| zz; 4sz |];
-  Mem.track aw; A.pts_to_len aw; let mut au = [| zz; 4sz |];
-  Mem.track au; A.pts_to_len au; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
-  A.pts_to_len aw; A.pts_to_len au;
+  Mem.track a3; A.pts_to_len a3;
+  A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2; A.pts_to_len a3;
   let bc = fb ();
-  fcopy au x;
-  fmul a0 x au;
-  fcopy au y;
-  fmul a1 y au;
-  fcopy au z;
-  fmul a2 z au;
+  fsqr a0 x;
+  fsqr a1 y;
+  fsqr a2 z;
   fmul a3 x y;
-  fcopy au a3;
-  fadd aw a3 au;
-  fcopy a3 aw;
+  fdbl1 a3;
   fmul oz x z;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
+  fdbl1 oz;
   fmul oy bc a2;
-  fsub aw oy oz;
-  fcopy oy aw;
-  fcopy au oy;
-  fadd ox oy au;
-  fadd aw ox oy;
-  fcopy oy aw;
+  fsub1 oy oz;
+  fdbl ox oy;
+  fadd2 oy ox;
   fsub ox a1 oy;
-  fadd aw a1 oy;
-  fcopy oy aw;
-  fmul aw ox oy;
-  fcopy oy aw;
-  fmul aw ox a3;
-  fcopy ox aw;
-  fcopy au a2;
-  fadd a3 a2 au;
-  fadd aw a2 a3;
-  fcopy a2 aw;
-  fmul aw bc oz;
-  fcopy oz aw;
-  fsub aw oz a2;
-  fcopy oz aw;
-  fsub aw oz a0;
-  fcopy oz aw;
-  fcopy au oz;
-  fadd a3 oz au;
-  fadd aw oz a3;
-  fcopy oz aw;
-  fcopy au a0;
-  fadd a3 a0 au;
-  fadd aw a3 a0;
-  fcopy a0 aw;
-  fsub aw a0 a2;
-  fcopy a0 aw;
-  fmul aw a0 oz;
-  fcopy a0 aw;
-  fadd aw oy a0;
-  fcopy oy aw;
+  fadd2 oy a1;
+  fmul2 oy ox;
+  fmul1 ox a3;
+  fdbl a3 a2;
+  fadd1 a2 a3;
+  fmul2 oz bc;
+  fsub1 oz a2;
+  fsub1 oz a0;
+  fdbl a3 oz;
+  fadd1 oz a3;
+  fdbl a3 a0;
+  fadd2 a0 a3;
+  fsub1 a0 a2;
+  fmul1 a0 oz;
+  fadd1 oy a0;
   fmul a0 y z;
-  fcopy au a0;
-  fadd aw a0 au;
-  fcopy a0 aw;
-  fmul aw a0 oz;
-  fcopy oz aw;
-  fsub aw ox oz;
-  fcopy ox aw;
+  fdbl1 a0;
+  fmul2 oz a0;
+  fsub1 ox oz;
   fmul oz a0 a1;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
-  fcopy au oz;
-  fadd aw oz au;
-  fcopy oz aw;
+  fdbl1 oz;
+  fdbl1 oz;
   drop_table bc;
-  Mem.wipe au 4sz;
-  Mem.wipe aw 4sz;
   Mem.wipe a3 4sz;
   Mem.wipe a2 4sz;
   Mem.wipe a1 4sz;
   Mem.wipe a0 4sz;
+  ()
+}
+
+#pop-options
+
+(** {2 Jacobian coordinates}
+
+    A run of doublings is cheaper in Jacobian coordinates
+    ({!Spec.P256.JacSv}): eight multiplications to the complete formula's
+    eleven.  These work in place and borrow their scratch from the caller,
+    so a run of them allocates nothing; the specifications are written in
+    the same order, which makes each proof a chain of equalities. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
+
+fn jdouble (x y z t0 t1 t2: A.array S64.t)
+           (#vx #vy #vz: erased (Seq.seq S64.t))
+           (#v0 #v1 #v2: erased (Seq.seq S64.t))
+requires
+  A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz **
+  A.pts_to t0 v0 ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
+  pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
+        pt_ok vx vy vz)
+ensures exists* (wx wy wz w0 w1 w2: Seq.seq S64.t).
+  A.pts_to x wx ** A.pts_to y wy ** A.pts_to z wz **
+  A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
+  pure (Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
+        pt_ok wx wy wz /\ pt wx wy wz == JS.jdouble (pt vx vy vz))
+{
+  reveal_opaque (`%JS.jdouble) JS.jdouble;
+  fsqr t0 z;
+  fsqr t1 y;
+  fmul1 z y;
+  fdbl1 z;
+  fsub t2 x t0;
+  fadd1 t0 x;
+  fmul1 t0 t2;
+  fdbl t2 t0;
+  fadd1 t0 t2;
+  fmul y x t1;
+  fdbl1 y;
+  fdbl1 y;
+  fsqr1 t1;
+  fdbl1 t1;
+  fdbl1 t1;
+  fdbl1 t1;
+  fsqr x t0;
+  fdbl t2 y;
+  fsub1 x t2;
+  fsub1 y x;
+  fmul1 y t0;
+  fsub1 y t1;
+  A.pts_to_len t0; A.pts_to_len t1; A.pts_to_len t2;
+  ()
+}
+
+let to_j_eq (x y z xs ys x' y': P.felem) (m: S64.t)
+  : Lemma (requires (S64.v m == 0 \/ S64.v m == pow2 64 - 1) /\
+                    (S64.v m == pow2 64 - 1 <==> z == P.fzero) /\
+                    xs == P.fmul x z /\ ys == P.fmul y (P.fmul z z) /\
+                    x' == (if S64.v m = 0 then xs else P.fone) /\
+                    y' == (if S64.v m = 0 then ys else P.fone))
+          (ensures (x', y', z) == J.to_j (x, y, z))
+  = reveal_opaque (`%JS.tj) JS.tj
+
+(** Homogeneous to Jacobian.  Infinity, [Z = 0], becomes {!Spec.P256.Jac.jinf}
+    by a masked select, since whether the point is at infinity is secret. *)
+fn to_j (x y z t0 t1: A.array S64.t)
+        (#vx #vy #vz: erased (Seq.seq S64.t))
+        (#v0 #v1: erased (Seq.seq S64.t))
+requires
+  A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz **
+  A.pts_to t0 v0 ** A.pts_to t1 v1 **
+  pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ pt_ok vx vy vz)
+ensures exists* (wx wy w0 w1: Seq.seq S64.t).
+  A.pts_to x wx ** A.pts_to y wy ** A.pts_to z vz **
+  A.pts_to t0 w0 ** A.pts_to t1 w1 **
+  pure (Seq.length w0 == nl /\ Seq.length w1 == nl /\
+        pt_ok wx wy vz /\ pt wx wy vz == J.to_j (pt vx vy vz))
+{
+  fmul1 x z;
+  with sx. assert (A.pts_to x sx);
+  fsqr t0 z;
+  fmul1 y t0;
+  with sy. assert (A.pts_to y sy);
+  let m = fzero_mask z;
+  fone t1;
+  fcsel x t1 m;
+  fcsel y t1 m;
+  with wx wy. assert (A.pts_to x wx ** A.pts_to y wy);
+  to_j_eq (fev vx) (fev vy) (fev vz) (fev sx) (fev sy) (fev wx) (fev wy) m;
+  A.pts_to_len t0; A.pts_to_len t1;
+  ()
+}
+
+(** Jacobian to homogeneous. *)
+fn to_h (x y z t0: A.array S64.t)
+        (#vx #vy #vz: erased (Seq.seq S64.t))
+        (#v0: erased (Seq.seq S64.t))
+requires
+  A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz ** A.pts_to t0 v0 **
+  pure (Seq.length v0 == nl /\ pt_ok vx vy vz)
+ensures exists* (wx wz w0: Seq.seq S64.t).
+  A.pts_to x wx ** A.pts_to y vy ** A.pts_to z wz ** A.pts_to t0 w0 **
+  pure (Seq.length w0 == nl /\ pt_ok wx vy wz /\
+        pt wx vy wz == JS.to_h (pt vx vy vz))
+{
+  reveal_opaque (`%JS.to_h) JS.to_h;
+  fmul1 x z;
+  fsqr t0 z;
+  fmul1 z t0;
+  A.pts_to_len t0;
   ()
 }
 

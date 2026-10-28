@@ -16,8 +16,8 @@
 
 (** Scalar multiplication.
 
-    Four bits of the scalar at a time, with the table lookup done by
-    reading every entry: the scalar is secret in signing and in key
+    Signed five-bit digits, with the table lookup done by reading every
+    entry: the scalar is secret in signing and in key
     agreement, and the complete addition law means no case has to be
     special-cased, so the work is the same whatever the scalar is.
 
@@ -50,7 +50,7 @@ module Loops = Hacl.Spec.Loops
 
 (** {2 The window}
 
-    The work is in {!Hacl.P256.PointWin}; this module is the face the rest
+    The work is in {!Hacl.P256.PointMulV}; this module is the face the rest
     of the library sees.  Both entry points are stated up to [peq] rather
     than up to equality, because the window does the additions in a
     different order from the specification's ladder and so arrives at a
@@ -80,7 +80,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
         GR.peq (pt wx wy wz)
                (P.point_mul (eval (vals vk)) (pt vqx vqy vqz)))
 {
-  point_mul_win ox oy oz qx qy qz ks;
+  Hacl.P256.PointMulV.point_mul_vb ox oy oz qx qy qz ks;
   ()
 }
 
@@ -89,8 +89,9 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
     The generator is known at compile time, so this does not go through
     the variable-base window above: {!Hacl.P256.PointMulG} splits the
     scalar into four sixty-four-bit pieces and walks them together against
-    [G], [2^64 G], [2^128 G] and [2^192 G], which is a hundred and
-    eighty-four point operations against three hundred and thirty-five. *)
+    precomputed multiples of [G], [2^64 G], [2^128 G] and [2^192 G], which
+    is a hundred and seventeen point operations against three hundred and
+    seven. *)
 fn point_mul_g (ox oy oz: A.array S64.t) (ks: A.array S64.t)
                (#vox #voy #voz: erased (Seq.seq S64.t))
                (#pk: perm) (#vk: erased (Seq.seq S64.t))

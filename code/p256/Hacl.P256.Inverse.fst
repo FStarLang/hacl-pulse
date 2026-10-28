@@ -16,8 +16,9 @@
 
 (** Inversion and square roots in [F_p].
 
-    Both are {!Hacl.P256.Exp.fexp} with a table from [Spec.P256]: [p - 2]
-    by Fermat, and [(p + 1) / 4] because [p] is [3 mod 4].  The square root also squares
+    Inversion is {!Hacl.P256.FInv}'s addition chain.  The square root is
+    {!Hacl.P256.Exp.fexp} with [(p + 1) / 4] from [Spec.P256], because [p]
+    is [3 mod 4].  The square root also squares
     its candidate back and compares, which is what makes [P.fsqrt] an
     [option]. *)
 module Hacl.P256.Inverse
@@ -45,10 +46,12 @@ module P = Spec.P256
 module MA = Spec.ModArith
 module E = Hacl.P256.Exp
 module Mem = Hacl.Mem
+module FI = Hacl.P256.FInv
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-(** [out := a^-1].  Zero inverts to zero, as [Spec.ModArith.inv] says. *)
+(** [out := a^-1], by {!Hacl.P256.FInv}'s addition chain.  Zero inverts to
+    zero, as [Spec.ModArith.inv] says. *)
 fn finv (out a: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pa: perm) (#va: erased (Seq.seq S64.t))
@@ -58,11 +61,7 @@ ensures exists* (vo': Seq.seq S64.t).
   A.pts_to out vo' ** A.pts_to a #pa va **
   pure (felem vo' /\ fev vo' == P.finv (fev va))
 {
-  assert_norm (P.prime - 2 < pow2 256);
-  let e = finv_e ();
-  limbs_ok (P.prime - 2);
-  E.fexp out a e (hide (P.prime - 2));
-  drop_table e;
+  FI.finv out a
 }
 
 (** [out := sqrt a] when [a] is a square, and [false] otherwise.  The

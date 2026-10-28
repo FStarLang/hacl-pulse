@@ -16,11 +16,9 @@
 
 (** [u1 G + u2 Q], the combination signature verification needs.
 
-    Computing it as two independent multiplications wastes the doubling
-    chain the two could share -- Shamir's trick would halve the work.  But
-    verification handles no secrets and is not on anybody's critical path,
-    and a table-driven combined ladder is a great deal of code to get
-    right; this stays simple on purpose. *)
+    Both products share one doubling chain: {!Hacl.P256.Straus} reads the
+    two scalars as signed five-bit digits and adds one entry of each per
+    rung.  This module keeps the name the verifier calls. *)
 module Hacl.P256.PointMulD
 
 #lang-pulse
@@ -30,7 +28,6 @@ open Spec.Bignum4
 open Spec.P256.Field
 open Hacl.Impl.Limb4
 open Hacl.P256.Point
-open Hacl.P256.PointMul
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
@@ -39,28 +36,6 @@ module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
 module Mem = Hacl.Mem
-
-#push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
-
-(** Each half is only equivalent to the specification's multiple, so the
-    sum is only equivalent to the specification's sum; that is what
-    {!Spec.P256.Group.point_add_congr} says.  Stated as a lemma so that the
-    Pulse function's own query never sees [peq] unfolded. *)
-let sum_ok (a b: P.proj_point) (u1 u2: nat) (q: P.proj_point)
-  : Lemma (requires GR.on_curve a /\ GR.on_curve b /\
-                    GR.on_curve (P.point_mul_g u1) /\
-                    GR.on_curve (P.point_mul u2 q) /\
-                    GR.peq a (P.point_mul_g u1) /\
-                    GR.peq b (P.point_mul u2 q))
-          (ensures GR.on_curve (P.point_add a b) /\
-                   GR.on_curve (P.point_mul_double_g u1 u2 q) /\
-                   GR.peq (P.point_add a b)
-                          (P.point_mul_double_g u1 u2 q))
-  = GR.point_add_congr a (P.point_mul_g u1) b (P.point_mul u2 q);
-    GR.point_add_on_curve a b;
-    GR.point_add_on_curve (P.point_mul_g u1) (P.point_mul u2 q)
-
-#pop-options
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 200"
 
@@ -91,29 +66,7 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
                (P.point_mul_double_g (eval (vals v1))
                   (eval (vals v2)) (pt vqx vqy vqz)))
 {
-  let z = S64.zero;
-  let mut a0 = [| z; 4sz |];
-  Mem.track a0; A.pts_to_len a0; let mut a1 = [| z; 4sz |];
-  Mem.track a1; A.pts_to_len a1; let mut a2 = [| z; 4sz |];
-  Mem.track a2; A.pts_to_len a2; let mut a3 = [| z; 4sz |];
-  Mem.track a3; A.pts_to_len a3; let mut a4 = [| z; 4sz |];
-  Mem.track a4; A.pts_to_len a4; let mut a5 = [| z; 4sz |];
-  Mem.track a5; A.pts_to_len a5; A.pts_to_len a0; A.pts_to_len a1; A.pts_to_len a2;
-  A.pts_to_len a3; A.pts_to_len a4; A.pts_to_len a5;
-
-  point_mul_g a0 a1 a2 u1;
-  with g0 g1 g2. assert (A.pts_to a0 g0 ** A.pts_to a1 g1 ** A.pts_to a2 g2);
-  point_mul a3 a4 a5 qx qy qz u2;
-  with h0 h1 h2. assert (A.pts_to a3 h0 ** A.pts_to a4 h1 ** A.pts_to a5 h2);
-  point_add ox oy oz a0 a1 a2 a3 a4 a5;
-  sum_ok (pt g0 g1 g2) (pt h0 h1 h2) (eval (vals v1))
-         (eval (vals v2)) (pt vqx vqy vqz);
-  Mem.wipe a5 4sz;
-  Mem.wipe a4 4sz;
-  Mem.wipe a3 4sz;
-  Mem.wipe a2 4sz;
-  Mem.wipe a1 4sz;
-  Mem.wipe a0 4sz;
+  Hacl.P256.Straus.point_mul2 ox oy oz qx qy qz u1 u2;
   ()
 }
 

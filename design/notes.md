@@ -1441,6 +1441,46 @@ out of it:
 
 Verify runs 8-9% fewer instructions (Part 105).
 
+**P-256 is now taking the same path.**  `Hacl.P256.Field64` was split the
+way P-384's was.  Addition and subtraction became word cores (`addw`,
+`subw`), and the shift-based reduction became its own `mred`, so `fmul` is
+`mul8` followed by `mred`.  `Field` gained the in-place forms (`fadd1`,
+`fsub1`, `fsub2`, `fdbl`, `fdbl1`, `fmul1`, `fsqr1`) and the secret
+`fzero_mask` and `fcsel`.  The Jacobian specification (`Spec.P256.JacSv`,
+`JacChecks`, `Jac`) is P-384's with the curve renamed, and the code in
+`Point` (`jdouble`, `to_j`, `to_h`) and `PointWin` (`win_jin`, `win_jdbl`,
+`win_jout`) is P-384's patch with six limbs replaced by four.  It verified
+unchanged, apart from one point: Pulse cannot branch on the secret mask
+inside `fcsel`'s proof, so a pure lemma (`csel_eq`) does the case split
+instead.  `win_dbl4` serves both ECDH's window and the generator's
+four-piece comb.  ECDH runs 18-20% fewer instructions, verify 15-17%, and
+keygen 8-9% (Part 107).  Verification then stopped inverting `Z`, as
+P-384's did: `check_x` tests `X == r Z` or `X == (r + n) Z`.  The
+`r + n < p` guard is `Mont4.ageq` against a `p - n` table, since this
+field has no limb comparison of its own.  Verify runs 5-6% fewer
+instructions (Part 108).  Inversion is now P-384's addition chain
+(255 squarings and 12 multiplications) in its own module, `FInv`.  Its
+proof needed `felem` and `fev` hidden from Z3 with `--using_facts_from`:
+P-256's `felem` is the transparent `Spec.Field4.res`, and unfolding it
+timed out even `nb 0sz true == 1`.  Sign runs 4-5% fewer instructions and
+ECDH 3% (Part 109).  The generator's comb is now P-384's: signed
+five-bit Booth digits, thirteen rungs of five doublings and four mixed
+additions against affine tables of `1 .. 16` times each base point, so 65
+doublings and 52 additions instead of 60 and 64.  The mixed addition is
+`point_madd`, whose formulas `Spec.P256.JacChecks` already checked.  Keygen
+runs 14-19% fewer instructions (excluding startup), sign 12-16% and verify
+5-7% (Part 110).  The variable-base window followed P-384's too
+(`Hacl.P256.PointMulV`): fifty-two signed digits against projective
+multiples `1..16` of `Q`, 255 doublings and 52 additions in place of 256
+and 64.  Its digit lemmas are P-384's, stated over `Hacl.Bignum.Base.num`;
+`kv_num` bridges P-256's `Spec.Bignum4.eval`, which has the same
+definition.  The four-bit `point_mul_win` and its table were removed.
+ECDH runs 7% fewer instructions and verify 5% fewer (Part 111).  Verify
+then shares one doubling chain between `G` and `Q`, as P-384 does, for 11%
+fewer instructions (Part 112).  The
+complete formulas then lost their 57 scratch copies, as P-384's did; that
+saves under 0.5% because the hot paths no longer use them (Part 113).
+
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
 mentions both takes minutes.  So `code/p256` is twenty-seven modules: the on-curve
@@ -1502,7 +1542,8 @@ arrays and `Hacl.P256.WinTable` turns four limb facts into the window's
 takes one permission per coordinate array, as on the other two curves.
 This took ECDH as initiator from 97 us to 69 under gcc and from 77 to 59
 under clang, and signing and verification by similar absolute amounts
-(`bench/REPORT.md` Part 63).
+(`bench/REPORT.md` Part 63).  The tables now hold affine multiples `1 .. 16` for the signed-digit
+comb, and `spec/group-gen/p256/wintables.py` generates them (Part 110).
 
 **Inversion is an exponentiation on the specialised field.**  `finv` and
 `fsqrt` were the generic four-limb `mexp`, which multiplies with the general
@@ -1541,9 +1582,11 @@ whole operations only 1-3%, and fiat-crypto's `p256_64.h` multiplier is
 slower than `Hacl.P256.Field64` under both compilers.
 
 **Verification is not constant time and need not be.**
-`point_mul_double_g u1 u2 Q` is two independent multiplications and one
-addition rather than Shamir's trick, because nothing in verification is
-secret and the simpler code is the one that verifies.
+`point_mul_double_g u1 u2 Q` was first two independent multiplications and
+one addition rather than Shamir's trick, because nothing in verification is
+secret and the simpler code was the one that verified.  It now calls
+`Hacl.P256.Straus`, which shares one doubling chain between the two scalars
+(Part 112).
 
 **`r` travels field -> bytes -> scalar.**  The specification says
 `r = x mod q` where `x` is a field element; the implementation stores `x` to

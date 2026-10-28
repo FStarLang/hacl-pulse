@@ -16,13 +16,13 @@
 
 (** A window table that is a constant rather than a computation.
 
-    {!Hacl.P256.PointMulG} reads four sixteen-entry tables, of multiples
+    {!Hacl.P256.PointMulG} reads four sixteen-entry affine tables, of multiples
     of [G], [2^64 G], [2^128 G] and [2^192 G], and used to build them on
     entry: sixty point additions on every signature and every key
     agreement.  {!Hacl.P256.Win0} .. {!Hacl.P256.Win3} hold them as
-    constants instead, and this is the bridge: one lemma that turns three
-    lists of sixty-four limbs and a point into one [ent], and one that
-    collects sixteen [ent]s into a [tok].
+    constants instead, and this is the bridge: one lemma that turns two
+    lists of sixty-four limbs and a point into one [aent], and one that
+    collects sixteen [aent]s into an [atok].
 
     This is {!Hacl.K256.WinTable} with two differences.  An entry is four
     sixty-four-bit limbs rather than five fifty-two-bit ones, so the list
@@ -41,6 +41,7 @@ open Hacl.Impl.Lit4
 open Hacl.P256.Field
 open Hacl.P256.Point
 open Hacl.P256.PointWin
+open Hacl.P256.PointBooth
 
 module Seq = FStar.Seq
 module L = FStar.List.Tot
@@ -150,40 +151,30 @@ let qz (q: P.proj_point) : P.felem = let (_, _, c) = q in c
 
 let pt_eta (q: P.proj_point) : Lemma (q == (qx q, qy q, qz q)) = ()
 
-(** One entry of a constant table.  The hypotheses are three [leval]s,
-    which the normaliser settles on literals, and the two facts the chain
-    in [Spec.P256.Win{i}] proved about the point. *)
-let ent_lit (lx ly lz: list S64.t) (d: nat)
-            (p: P.proj_point) (n: nat) (q: P.proj_point)
+(** One entry of a constant table: two [leval]s, which the normaliser
+    settles on literals, and the two facts the chain in
+    [Spec.P256.Win{i}] proved about the point -- entry [d] is the
+    [(d + 1)]-th multiple, affine, so its [z] is one and not stored. *)
+let aent_lit (lx ly: list S64.t) (d: nat)
+             (p: P.proj_point) (n: nat) (q: P.proj_point)
   : Lemma (requires
-             L.length lx == 64 /\ L.length ly == 64 /\ L.length lz == 64 /\
+             L.length lx == 64 /\ L.length ly == 64 /\
              d < 16 /\
              L.length (chunk lx d) == nl /\ lbnd (chunk lx d) /\
              leval (chunk lx d) == qx q * pow2 256 % P.prime /\
              L.length (chunk ly d) == nl /\ lbnd (chunk ly d) /\
              leval (chunk ly d) == qy q * pow2 256 % P.prime /\
-             L.length (chunk lz d) == nl /\ lbnd (chunk lz d) /\
-             leval (chunk lz d) == qz q * pow2 256 % P.prime /\
-             GR.on_curve q /\ GR.peq q (SM.smul (d * n) p))
-          (ensures ent (Seq.seq_of_list lx) (Seq.seq_of_list ly)
-                       (Seq.seq_of_list lz) p n d)
+             qz q == P.fone /\
+             GR.on_curve q /\ GR.peq q (SM.smul ((d + 1) * n) p))
+          (ensures aent (Seq.seq_of_list lx) (Seq.seq_of_list ly) p n d)
   = entry_felem lx d (qx q);
     entry_felem ly d (qy q);
-    entry_felem lz d (qz q);
     let vx : Seq.seq S64.t = Seq.seq_of_list lx in
     let vy : Seq.seq S64.t = Seq.seq_of_list ly in
-    let vz : Seq.seq S64.t = Seq.seq_of_list lz in
     entry_fits d;
-    entry_def vx d; entry_def vy d; entry_def vz d;
+    entry_def vx d; entry_def vy d;
     pt_eta q;
-    let ex = entry vx d in
-    let ey = entry vy d in
-    let ez = entry vz d in
-    assert (pt_ok ex ey ez);
-    assert (pt ex ey ez == q);
-    pok_intro ex ey ez;
-    reveal_opaque (`%rep) rep;
-    ent_intro vx vy vz ex ey ez p n d
+    aent_intro vx vy p n d
 
 #pop-options
 
@@ -201,18 +192,18 @@ let lt16 (d: nat)
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 400"
 
 (** Sixteen entries make a table. *)
-let tok_all (tx ty tz: Seq.seq S64.t) (p: P.proj_point) (n: nat)
+let atok_all (tx ty: Seq.seq S64.t) (p: P.proj_point) (n: nat)
   : Lemma (requires
-             ent tx ty tz p n 0 /\ ent tx ty tz p n 1 /\
-             ent tx ty tz p n 2 /\ ent tx ty tz p n 3 /\
-             ent tx ty tz p n 4 /\ ent tx ty tz p n 5 /\
-             ent tx ty tz p n 6 /\ ent tx ty tz p n 7 /\
-             ent tx ty tz p n 8 /\ ent tx ty tz p n 9 /\
-             ent tx ty tz p n 10 /\ ent tx ty tz p n 11 /\
-             ent tx ty tz p n 12 /\ ent tx ty tz p n 13 /\
-             ent tx ty tz p n 14 /\ ent tx ty tz p n 15)
-          (ensures tok tx ty tz p n 16)
-  = introduce forall (d: nat). d < 16 ==> ent tx ty tz p n d
+             aent tx ty p n 0 /\ aent tx ty p n 1 /\
+             aent tx ty p n 2 /\ aent tx ty p n 3 /\
+             aent tx ty p n 4 /\ aent tx ty p n 5 /\
+             aent tx ty p n 6 /\ aent tx ty p n 7 /\
+             aent tx ty p n 8 /\ aent tx ty p n 9 /\
+             aent tx ty p n 10 /\ aent tx ty p n 11 /\
+             aent tx ty p n 12 /\ aent tx ty p n 13 /\
+             aent tx ty p n 14 /\ aent tx ty p n 15)
+          (ensures atok tx ty p n)
+  = introduce forall (d: nat). d < 16 ==> aent tx ty p n d
     with introduce _ ==> _
     with lt16 d
 
