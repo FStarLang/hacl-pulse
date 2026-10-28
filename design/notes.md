@@ -1441,6 +1441,21 @@ out of it:
 
 Verify runs 8-9% fewer instructions (Part 105).
 
+**P-256 is now taking the same path.**  `Hacl.P256.Field64` was split the
+way P-384's was.  Addition and subtraction became word cores (`addw`,
+`subw`), and the shift-based reduction became its own `mred`, so `fmul` is
+`mul8` followed by `mred`.  `Field` gained the in-place forms (`fadd1`,
+`fsub1`, `fsub2`, `fdbl`, `fdbl1`, `fmul1`, `fsqr1`) and the secret
+`fzero_mask` and `fcsel`.  The Jacobian specification (`Spec.P256.JacSv`,
+`JacChecks`, `Jac`) is P-384's with the curve renamed, and the code in
+`Point` (`jdouble`, `to_j`, `to_h`) and `PointWin` (`win_jin`, `win_jdbl`,
+`win_jout`) is P-384's patch with six limbs replaced by four.  It verified
+unchanged, apart from one point: Pulse cannot branch on the secret mask
+inside `fcsel`'s proof, so a pure lemma (`csel_eq`) does the case split
+instead.  `win_dbl4` serves both ECDH's window and the generator's
+four-piece comb.  ECDH runs 18-20% fewer instructions, verify 15-17%, and
+keygen 8-9% (Part 107).
+
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
 mentions both takes minutes.  So `code/p256` is twenty-seven modules: the on-curve

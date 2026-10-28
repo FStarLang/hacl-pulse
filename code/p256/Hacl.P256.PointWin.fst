@@ -55,6 +55,8 @@ module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
 module SM = Spec.P256.Smul
+module J = Spec.P256.Jac
+module JS = Spec.P256.JacSv
 module Math = FStar.Math.Lemmas
 module Classical = FStar.Classical
 module B4 = Spec.Bignum4
@@ -295,13 +297,40 @@ let rep_fcopy (x y z x' y' z': Seq.seq S64.t) (n: nat) (p: P.proj_point)
           (ensures rep x' y' z' n p)
   = reveal_opaque (`%rep) rep
 
-let dbl_ok (ox oy oz wx wy wz: Seq.seq S64.t) (p: P.proj_point) (e: nat)
-  : Lemma (requires oc p /\ rep ox oy oz e p /\
-                    pt wx wy wz == P.point_double (pt ox oy oz))
-          (ensures rep wx wy wz (2 * e) p)
+(** The Jacobian run's invariant, over sequences for the same reason as
+    {!rep}: "[x], [y], [z] read as a Jacobian triple equivalent to [n]
+    copies of [p]" ({!Spec.P256.Jac.jr}). *)
+[@@"opaque_to_smt"]
+let jrs (x y z: Seq.seq S64.t) (n: nat) (p: P.proj_point) : prop =
+  J.jr (pt x y z) n p
+
+let jrs_cong (x y z: Seq.seq S64.t) (a b: nat) (p: P.proj_point)
+  : Lemma (requires jrs x y z a p /\ a == b) (ensures jrs x y z b p) = ()
+
+let jin_ok (hx hy hz jx jy: Seq.seq S64.t) (p: P.proj_point) (e: nat)
+  : Lemma (requires oc p /\ rep hx hy hz e p /\
+                    pt jx jy hz == J.to_j (pt hx hy hz))
+          (ensures jrs jx jy hz e p)
   = reveal_opaque (`%oc) oc;
     reveal_opaque (`%rep) rep;
-    SM.smul_dbl_congr e p (pt ox oy oz)
+    reveal_opaque (`%jrs) jrs;
+    J.jr_in (pt hx hy hz) e p
+
+let jdbl_ok (ox oy oz wx wy wz: Seq.seq S64.t) (p: P.proj_point) (e: nat)
+  : Lemma (requires oc p /\ jrs ox oy oz e p /\
+                    pt wx wy wz == JS.jdouble (pt ox oy oz))
+          (ensures jrs wx wy wz (2 * e) p)
+  = reveal_opaque (`%oc) oc;
+    reveal_opaque (`%jrs) jrs;
+    J.jr_dbl (pt ox oy oz) e p
+
+let jout_ok (ox oy oz wx wz: Seq.seq S64.t) (p: P.proj_point) (e: nat)
+  : Lemma (requires jrs ox oy oz e p /\
+                    pt wx oy wz == JS.to_h (pt ox oy oz))
+          (ensures rep wx oy wz e p)
+  = reveal_opaque (`%jrs) jrs;
+    reveal_opaque (`%rep) rep;
+    J.jr_out (pt ox oy oz) e p
 
 let add_ok (ox oy oz sx sy sz wx wy wz: Seq.seq S64.t) (p: P.proj_point)
            (e d: nat)
@@ -561,12 +590,39 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
-(** One doubling, in place: through the scratch triple and back. *)
+(** One Jacobian doubling, in place, with the scratch triple as its
+    temporaries. *)
 inline_for_extraction
-fn win_dbl (ox oy oz ux uy uz: A.array S64.t)
-           (p: erased P.proj_point) (e: erased nat)
-           (#vox #voy #voz: erased (Seq.seq S64.t))
-           (#vux #vuy #vuz: erased (Seq.seq S64.t))
+fn win_jdbl (ox oy oz ux uy uz: A.array S64.t)
+            (p: erased P.proj_point) (e: erased nat)
+            (#vox #voy #voz: erased (Seq.seq S64.t))
+            (#vux #vuy #vuz: erased (Seq.seq S64.t))
+requires
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
+  A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
+  pure (Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
+        pok vox voy voz /\ oc (reveal p) /\
+        jrs vox voy voz e (reveal p))
+ensures exists* (wx wy wz wux wuy wuz: Seq.seq S64.t).
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
+  A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
+  pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
+        pok wx wy wz /\ jrs wx wy wz (2 * reveal e) (reveal p))
+{
+  pok_elim vox voy voz;
+  jdouble ox oy oz ux uy uz;
+  with wx wy wz. assert (A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz);
+  jdbl_ok vox voy voz wx wy wz p (reveal e);
+  pok_intro wx wy wz;
+  ()
+}
+
+(** Into Jacobian coordinates, and back out. *)
+inline_for_extraction
+fn win_jin (ox oy oz ux uy uz: A.array S64.t)
+            (p: erased P.proj_point) (e: erased nat)
+            (#vox #voy #voz: erased (Seq.seq S64.t))
+            (#vux #vuy #vuz: erased (Seq.seq S64.t))
 requires
   A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
   A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
@@ -577,22 +633,44 @@ ensures exists* (wx wy wz wux wuy wuz: Seq.seq S64.t).
   A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
   A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
   pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
-        pok wx wy wz /\ rep wx wy wz (2 * reveal e) (reveal p))
+        pok wx wy wz /\ jrs wx wy wz (reveal e) (reveal p))
 {
   A.pts_to_len ox; A.pts_to_len oy; A.pts_to_len oz;
-  A.pts_to_len ux; A.pts_to_len uy; A.pts_to_len uz;
   pok_elim vox voy voz;
-  point_double ux uy uz ox oy oz;
-  with u1x u1y u1z. assert (A.pts_to ux u1x ** A.pts_to uy u1y ** A.pts_to uz u1z);
-  dbl_ok vox voy voz u1x u1y u1z p (reveal e);
-  fcopy ox ux; fcopy oy uy; fcopy oz uz;
-  with w1x w1y w1z. assert (A.pts_to ox w1x ** A.pts_to oy w1y ** A.pts_to oz w1z);
-  pok_intro w1x w1y w1z;
-  rep_fcopy u1x u1y u1z w1x w1y w1z (2 * reveal e) p;
+  to_j ox oy oz ux uy;
+  with jx jy. assert (A.pts_to ox jx ** A.pts_to oy jy);
+  jin_ok vox voy voz jx jy p (reveal e);
+  pok_intro jx jy voz;
   ()
 }
 
-(** Four of them, which is the doubling half of a rung. *)
+inline_for_extraction
+fn win_jout (ox oy oz ux uy uz: A.array S64.t)
+            (p: erased P.proj_point) (e: erased nat)
+            (#vox #voy #voz: erased (Seq.seq S64.t))
+            (#vux #vuy #vuz: erased (Seq.seq S64.t))
+requires
+  A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
+  A.pts_to ux vux ** A.pts_to uy vuy ** A.pts_to uz vuz **
+  pure (Seq.length vux == nl /\ Seq.length vuy == nl /\ Seq.length vuz == nl /\
+        pok vox voy voz /\ oc (reveal p) /\
+        jrs vox voy voz e (reveal p))
+ensures exists* (wx wy wz wux wuy wuz: Seq.seq S64.t).
+  A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
+  A.pts_to ux wux ** A.pts_to uy wuy ** A.pts_to uz wuz **
+  pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
+        pok wx wy wz /\ rep wx wy wz (reveal e) (reveal p))
+{
+  pok_elim vox voy voz;
+  to_h ox oy oz ux;
+  with wx wz. assert (A.pts_to ox wx ** A.pts_to oz wz);
+  jout_ok vox voy voz wx wz p (reveal e);
+  pok_intro wx voy wz;
+  ()
+}
+
+(** Four of them, which is the doubling half of a rung: into Jacobian
+    coordinates, four doublings there, and back. *)
 fn win_dbl4 (ox oy oz ux uy uz: A.array S64.t)
             (p: erased P.proj_point) (e: erased nat)
             (#vox #voy #voz: erased (Seq.seq S64.t))
@@ -609,18 +687,21 @@ ensures exists* (wx wy wz wux wuy wuz: Seq.seq S64.t).
   pure (Seq.length wux == nl /\ Seq.length wuy == nl /\ Seq.length wuz == nl /\
         pok wx wy wz /\ rep wx wy wz (16 * reveal e) (reveal p))
 {
-  win_dbl ox oy oz ux uy uz p e;
+  win_jin ox oy oz ux uy uz p e;
+  with a0x a0y a0z. assert (A.pts_to ox a0x ** A.pts_to oy a0y ** A.pts_to oz a0z);
+  win_jdbl ox oy oz ux uy uz p e;
   with a1x a1y a1z. assert (A.pts_to ox a1x ** A.pts_to oy a1y ** A.pts_to oz a1z);
-  rep_cong a1x a1y a1z (2 * reveal e) (2 * reveal e) p;
-  win_dbl ox oy oz ux uy uz p (hide (2 * reveal e));
+  jrs_cong a1x a1y a1z (2 * reveal e) (2 * reveal e) p;
+  win_jdbl ox oy oz ux uy uz p (hide (2 * reveal e));
   with a2x a2y a2z. assert (A.pts_to ox a2x ** A.pts_to oy a2y ** A.pts_to oz a2z);
-  rep_cong a2x a2y a2z (2 * (2 * reveal e)) (4 * reveal e) p;
-  win_dbl ox oy oz ux uy uz p (hide (4 * reveal e));
+  jrs_cong a2x a2y a2z (2 * (2 * reveal e)) (4 * reveal e) p;
+  win_jdbl ox oy oz ux uy uz p (hide (4 * reveal e));
   with a3x a3y a3z. assert (A.pts_to ox a3x ** A.pts_to oy a3y ** A.pts_to oz a3z);
-  rep_cong a3x a3y a3z (2 * (4 * reveal e)) (8 * reveal e) p;
-  win_dbl ox oy oz ux uy uz p (hide (8 * reveal e));
+  jrs_cong a3x a3y a3z (2 * (4 * reveal e)) (8 * reveal e) p;
+  win_jdbl ox oy oz ux uy uz p (hide (8 * reveal e));
   with a4x a4y a4z. assert (A.pts_to ox a4x ** A.pts_to oy a4y ** A.pts_to oz a4z);
-  rep_cong a4x a4y a4z (2 * (8 * reveal e)) (16 * reveal e) p;
+  jrs_cong a4x a4y a4z (2 * (8 * reveal e)) (16 * reveal e) p;
+  win_jout ox oy oz ux uy uz p (hide (16 * reveal e));
   ()
 }
 

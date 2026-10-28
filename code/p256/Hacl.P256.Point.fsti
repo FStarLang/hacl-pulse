@@ -35,6 +35,8 @@ module Seq = FStar.Seq
 module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
+module JS = Spec.P256.JacSv
+module J = Spec.P256.Jac
 
 (** A triple of limb sequences read as a projective point, and what it takes
     for that reading to be meaningful.  Clients state both in their own
@@ -74,3 +76,42 @@ val point_double (ox oy oz: A.array S64.t) (x y z: A.array S64.t)
       A.pts_to x #p1 vx ** A.pts_to y #p1 vy ** A.pts_to z #p1 vz **
       pure (pt_ok wx wy wz /\ pt wx wy wz == P.point_double (pt vx vy vz)))
 
+(** {2 Jacobian coordinates} *)
+
+val jdouble (x y z t0 t1 t2: A.array S64.t)
+           (#vx #vy #vz: erased (Seq.seq S64.t))
+           (#v0 #v1 #v2: erased (Seq.seq S64.t))
+  : stt unit
+    (requires A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz **
+      A.pts_to t0 v0 ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
+      pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
+            pt_ok vx vy vz))
+    (ensures fun _ -> exists* (wx wy wz w0 w1 w2: Seq.seq S64.t).
+      A.pts_to x wx ** A.pts_to y wy ** A.pts_to z wz **
+      A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
+      pure (Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
+            pt_ok wx wy wz /\ pt wx wy wz == JS.jdouble (pt vx vy vz)))
+
+val to_j (x y z t0 t1: A.array S64.t)
+        (#vx #vy #vz: erased (Seq.seq S64.t))
+        (#v0 #v1: erased (Seq.seq S64.t))
+  : stt unit
+    (requires A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz **
+      A.pts_to t0 v0 ** A.pts_to t1 v1 **
+      pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ pt_ok vx vy vz))
+    (ensures fun _ -> exists* (wx wy w0 w1: Seq.seq S64.t).
+      A.pts_to x wx ** A.pts_to y wy ** A.pts_to z vz **
+      A.pts_to t0 w0 ** A.pts_to t1 w1 **
+      pure (Seq.length w0 == nl /\ Seq.length w1 == nl /\
+            pt_ok wx wy vz /\ pt wx wy vz == J.to_j (pt vx vy vz)))
+
+val to_h (x y z t0: A.array S64.t)
+        (#vx #vy #vz: erased (Seq.seq S64.t))
+        (#v0: erased (Seq.seq S64.t))
+  : stt unit
+    (requires A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz ** A.pts_to t0 v0 **
+      pure (Seq.length v0 == nl /\ pt_ok vx vy vz))
+    (ensures fun _ -> exists* (wx wz w0: Seq.seq S64.t).
+      A.pts_to x wx ** A.pts_to y vy ** A.pts_to z wz ** A.pts_to t0 w0 **
+      pure (Seq.length w0 == nl /\ pt_ok wx vy wz /\
+            pt wx vy wz == JS.to_h (pt vx vy vz)))

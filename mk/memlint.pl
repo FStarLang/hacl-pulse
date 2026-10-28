@@ -21,7 +21,10 @@ my %nowipe_ok = map { $_ => 1 } qw(
   code/curve25519/Hacl.Curve25519.Field64.fst:fmul
   code/curve25519/Hacl.Curve25519.Field64.fst:fsqr
   code/p256/Hacl.P256.Field64.fst:fmul
+  code/p256/Hacl.P256.Field64.fst:mred
+  code/p256/Hacl.P256.Field64.fst:fmul1
   code/p256/Hacl.P256.Field.fst:fsqr
+  code/p256/Hacl.P256.Field.fst:fsqr1
   code/p384/Hacl.P384.Field64.fst:step
   code/p384/Hacl.P384.Field64.fst:mont
   code/p384/Hacl.P384.Field64.fst:mred

@@ -214,6 +214,143 @@ ensures exists* (vo': Seq.seq S64.t).
   ()
 }
 
+(** {2 In place}
+
+    [fadd1 o b] is [o := o + b], [fsub2 o b] is [o := b - o], and so on:
+    the digit names the operand the result replaces. *)
+
+fn fdbl (out a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to out vo ** A.pts_to a #pa va **
+  pure (Seq.length vo == nl /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to out vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fadd (fev va) (fev va))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len a; A.pts_to_len out;
+  eval_ev va;
+  mev_add fmod (vals va) (vals va);
+  madd_ok fmod (vals va) (vals va);
+  F.fdbl out a;
+  with vo'. assert (A.pts_to out vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (madd fmod (vals va) (vals va));
+}
+
+fn fadd1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fadd (fev vo) (fev vb))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len o; A.pts_to_len b;
+  eval_ev vo; eval_ev vb;
+  mev_add fmod (vals vo) (vals vb);
+  madd_ok fmod (vals vo) (vals vb);
+  F.fadd1 o b;
+  with vo'. assert (A.pts_to o vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (madd fmod (vals vo) (vals vb));
+}
+
+fn fsub1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fsub (fev vo) (fev vb))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len o; A.pts_to_len b;
+  eval_ev vo; eval_ev vb;
+  mev_sub fmod (vals vo) (vals vb);
+  msub_ok fmod (vals vo) (vals vb);
+  F.fsub1 o b;
+  with vo'. assert (A.pts_to o vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (msub fmod (vals vo) (vals vb));
+}
+
+fn fsub2 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fsub (fev vb) (fev vo))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len o; A.pts_to_len b;
+  eval_ev vb; eval_ev vo;
+  mev_sub fmod (vals vb) (vals vo);
+  msub_ok fmod (vals vb) (vals vo);
+  F.fsub2 o b;
+  with vo'. assert (A.pts_to o vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (msub fmod (vals vb) (vals vo));
+}
+
+fn fdbl1 (o: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** pure (felem vo)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** pure (felem vo' /\ fev vo' == P.fadd (fev vo) (fev vo))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len o;
+  eval_ev vo;
+  mev_add fmod (vals vo) (vals vo);
+  madd_ok fmod (vals vo) (vals vo);
+  F.fdbl1 o;
+  with vo'. assert (A.pts_to o vo');
+  felem_of vo';
+  mev_eq_of (vals vo') (madd fmod (vals vo) (vals vo));
+}
+
+fn fmul1 (o b: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pb: perm) (#vb: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to b #pb vb **
+  pure (felem vo /\ felem vb)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to b #pb vb **
+  pure (felem vo' /\ fev vo' == P.fmul (fev vo) (fev vb))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len o; A.pts_to_len b;
+  eval_ev vo; eval_ev vb;
+  mev_mul fmod (vals vo) (vals vb);
+  F.fmul1 o b;
+  with vo'. assert (A.pts_to o vo');
+  felem_of vo';
+  mmul_eq (vals vo) (vals vb) (vals vo');
+  mev_eq_of (vals vo') (mmul fmod (vals vo) (vals vb));
+}
+
+fn fsqr1 (o: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** pure (felem vo)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** pure (felem vo' /\ fev vo' == P.fmul (fev vo) (fev vo))
+{
+  let z = S64.zero;
+  let mut ac = [| z; 4sz |];
+  Mem.track ac; A.pts_to_len ac; A.pts_to_len o;
+  acopy ac o;
+  fmul1 o ac;
+  Mem.nowipe ac;
+  ()
+}
+
 (** {2 Constants and copies} *)
 
 fn fcopy (dst src: A.array S64.t)
@@ -331,6 +468,49 @@ ensures A.pts_to a #pa va ** pure (r == (fev va = P.fzero))
   let r = aeq a az;
   Mem.wipe az 4sz;
   r
+}
+
+(** [fzero_mask a] is all ones if [a] is zero and all zeroes otherwise,
+    in the same time either way.  {!fis_zero} answers with a public
+    [bool], which is wrong for a secret point at infinity. *)
+fn fzero_mask (a: A.array S64.t) (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to a #pa va ** pure (felem va)
+returns m: S64.t
+ensures A.pts_to a #pa va **
+  pure ((S64.v m == 0 \/ S64.v m == pow2 64 - 1) /\
+        (S64.v m == pow2 64 - 1 <==> fev va == P.fzero))
+{
+  fmod_ok (); fmod_m ();
+  A.pts_to_len a;
+  eval_ev va;
+  mev_iszero fmod (vals va);
+  mzero_ok ();
+  F.fzero_mask a
+}
+
+let csel_eq (vo' vo va: Seq.seq S64.t) (b: bool)
+  : Lemma (requires eval (vals vo') == (if b then eval (vals vo) else eval (vals va)))
+          (ensures mev fmod (vals vo') == (if b then mev fmod (vals vo) else mev fmod (vals va)))
+  = ()
+
+(** [fcsel o a m] is [o := a] under an all-ones mask and nothing under a
+    zero one, in the same time either way. *)
+fn fcsel (o a: A.array S64.t) (m: S64.t)
+         (#vo: erased (Seq.seq S64.t))
+         (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va /\ (S64.v m == 0 \/ S64.v m == pow2 64 - 1))
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == (if S64.v m = 0 then fev vo else fev va))
+{
+  fmod_ok (); fmod_m (); fmod_pp ();
+  A.pts_to_len o; A.pts_to_len a;
+  eval_ev vo; eval_ev va;
+  F.fcsel o a m;
+  with vo'. assert (A.pts_to o vo');
+  felem_of vo';
+  csel_eq vo' vo va (S64.v m = 0);
 }
 
 (** {2 Curve constants}

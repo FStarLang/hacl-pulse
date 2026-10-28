@@ -22,6 +22,7 @@ F* re-checks all of it with the verified polynomial normalizer in
 | `Spec.K256.GroupNR` | `python3 k256/mknr.py` (derived from the P256 GroupNR) |
 | `Spec.P256.GroupChecks` | `python3 p256/gen.py p256/checks.py ../Spec.P256.GroupChecks.fst` |
 | `Spec.P256.GroupAssoc{1,2,3}` | `python3 p256/gen.py p256/assocN.py ../Spec.P256.GroupAssocN.fst` |
+| `Spec.P256.JacChecks` | `python3 p256/gen.py p256/jac.py ../Spec.P256.JacChecks.fst` (Jacobian doubling; `Spec.P256.JacSv` is written by hand) |
 | `Spec.K256.GroupChecks` | `python3 p256/gen.py k256/checks.py ../Spec.K256.GroupChecks.fst` |
 | `Spec.K256.GroupAssoc{1,2,3}` | `python3 p256/gen.py k256/assocN.py ../Spec.K256.GroupAssocN.fst` |
 | `Spec.P384.GroupSv`, `Spec.P384.GroupNR`, `p384/{checks,assoc1,2,3}.py` | `python3 p384/derive.py` (from the P-256 inputs, with `p384/nr.txt`) |

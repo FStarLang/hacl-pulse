@@ -45,6 +45,8 @@ module SZ = FStar.SizeT
 module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module Mem = Hacl.Mem
+module JS = Spec.P256.JacSv
+module J = Spec.P256.Jac
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
 
@@ -264,6 +266,118 @@ ensures exists* (wx wy wz: Seq.seq S64.t).
   Mem.wipe a2 4sz;
   Mem.wipe a1 4sz;
   Mem.wipe a0 4sz;
+  ()
+}
+
+#pop-options
+
+(** {2 Jacobian coordinates}
+
+    A run of doublings is cheaper in Jacobian coordinates
+    ({!Spec.P256.JacSv}): eight multiplications to the complete formula's
+    eleven.  These work in place and borrow their scratch from the caller,
+    so a run of them allocates nothing; the specifications are written in
+    the same order, which makes each proof a chain of equalities. *)
+
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 400"
+
+fn jdouble (x y z t0 t1 t2: A.array S64.t)
+           (#vx #vy #vz: erased (Seq.seq S64.t))
+           (#v0 #v1 #v2: erased (Seq.seq S64.t))
+requires
+  A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz **
+  A.pts_to t0 v0 ** A.pts_to t1 v1 ** A.pts_to t2 v2 **
+  pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ Seq.length v2 == nl /\
+        pt_ok vx vy vz)
+ensures exists* (wx wy wz w0 w1 w2: Seq.seq S64.t).
+  A.pts_to x wx ** A.pts_to y wy ** A.pts_to z wz **
+  A.pts_to t0 w0 ** A.pts_to t1 w1 ** A.pts_to t2 w2 **
+  pure (Seq.length w0 == nl /\ Seq.length w1 == nl /\ Seq.length w2 == nl /\
+        pt_ok wx wy wz /\ pt wx wy wz == JS.jdouble (pt vx vy vz))
+{
+  reveal_opaque (`%JS.jdouble) JS.jdouble;
+  fsqr t0 z;
+  fsqr t1 y;
+  fmul1 z y;
+  fdbl1 z;
+  fsub t2 x t0;
+  fadd1 t0 x;
+  fmul1 t0 t2;
+  fdbl t2 t0;
+  fadd1 t0 t2;
+  fmul y x t1;
+  fdbl1 y;
+  fdbl1 y;
+  fsqr1 t1;
+  fdbl1 t1;
+  fdbl1 t1;
+  fdbl1 t1;
+  fsqr x t0;
+  fdbl t2 y;
+  fsub1 x t2;
+  fsub1 y x;
+  fmul1 y t0;
+  fsub1 y t1;
+  A.pts_to_len t0; A.pts_to_len t1; A.pts_to_len t2;
+  ()
+}
+
+let to_j_eq (x y z xs ys x' y': P.felem) (m: S64.t)
+  : Lemma (requires (S64.v m == 0 \/ S64.v m == pow2 64 - 1) /\
+                    (S64.v m == pow2 64 - 1 <==> z == P.fzero) /\
+                    xs == P.fmul x z /\ ys == P.fmul y (P.fmul z z) /\
+                    x' == (if S64.v m = 0 then xs else P.fone) /\
+                    y' == (if S64.v m = 0 then ys else P.fone))
+          (ensures (x', y', z) == J.to_j (x, y, z))
+  = reveal_opaque (`%JS.tj) JS.tj
+
+(** Homogeneous to Jacobian.  Infinity, [Z = 0], becomes {!Spec.P256.Jac.jinf}
+    by a masked select, since whether the point is at infinity is secret. *)
+fn to_j (x y z t0 t1: A.array S64.t)
+        (#vx #vy #vz: erased (Seq.seq S64.t))
+        (#v0 #v1: erased (Seq.seq S64.t))
+requires
+  A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz **
+  A.pts_to t0 v0 ** A.pts_to t1 v1 **
+  pure (Seq.length v0 == nl /\ Seq.length v1 == nl /\ pt_ok vx vy vz)
+ensures exists* (wx wy w0 w1: Seq.seq S64.t).
+  A.pts_to x wx ** A.pts_to y wy ** A.pts_to z vz **
+  A.pts_to t0 w0 ** A.pts_to t1 w1 **
+  pure (Seq.length w0 == nl /\ Seq.length w1 == nl /\
+        pt_ok wx wy vz /\ pt wx wy vz == J.to_j (pt vx vy vz))
+{
+  fmul1 x z;
+  with sx. assert (A.pts_to x sx);
+  fsqr t0 z;
+  fmul1 y t0;
+  with sy. assert (A.pts_to y sy);
+  let m = fzero_mask z;
+  fone t1;
+  fcsel x t1 m;
+  fcsel y t1 m;
+  with wx wy. assert (A.pts_to x wx ** A.pts_to y wy);
+  to_j_eq (fev vx) (fev vy) (fev vz) (fev sx) (fev sy) (fev wx) (fev wy) m;
+  A.pts_to_len t0; A.pts_to_len t1;
+  ()
+}
+
+(** Jacobian to homogeneous. *)
+fn to_h (x y z t0: A.array S64.t)
+        (#vx #vy #vz: erased (Seq.seq S64.t))
+        (#v0: erased (Seq.seq S64.t))
+requires
+  A.pts_to x vx ** A.pts_to y vy ** A.pts_to z vz ** A.pts_to t0 v0 **
+  pure (Seq.length v0 == nl /\ pt_ok vx vy vz)
+ensures exists* (wx wz w0: Seq.seq S64.t).
+  A.pts_to x wx ** A.pts_to y vy ** A.pts_to z wz ** A.pts_to t0 w0 **
+  pure (Seq.length w0 == nl /\ pt_ok wx vy wz /\
+        pt wx vy wz == JS.to_h (pt vx vy vz))
+{
+  reveal_opaque (`%JS.to_h) JS.to_h;
+  fmul1 x z;
+  fsqr t0 z;
+  fmul1 z t0;
+  A.pts_to_len t0;
   ()
 }
 

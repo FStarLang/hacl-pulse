@@ -10057,3 +10057,50 @@ rows of the README were replaced; nothing else changed in the code.
 | ECDSA verify | 310 us | 275 us | 565 us | 204 us | 12.81x | 1.35x |
 
 hacl-pulse now beats OpenSSL on every P-384 operation by 1.9-2.3x.
+
+## Part 107: P-256's doublings in Jacobian coordinates
+
+Part 106 left P-384 at 1.2-1.4x AWS-LC and P-256 at 2.3-3.9x.  The P-384
+work therefore moves to P-256, starting with Part 99's Jacobian doublings.
+
+`Hacl.P256.Field64` was first split the way P-384's was in Part 98.
+Addition and subtraction became word cores (`addw`, `subw`), the
+reduction became its own `mred`, and `Field` gained the in-place forms
+`fadd1`, `fsub1`, `fsub2`, `fdbl`, `fdbl1`, `fmul1` and `fsqr1`, along
+with `fzero_mask` and `fcsel` for the secret select.  The Jacobian
+specification and its generated checks (`Spec.P256.JacSv`, `JacChecks`,
+`Jac`) are P-384's with the curve renamed.  `Point.jdouble`, `to_j` and
+`to_h`, and the `PointWin` change to `win_dbl4`, are P-384's code with
+six limbs replaced by four.  `win_dbl4` serves both ECDH's variable-base
+window and the generator's four-piece comb, so keygen and sign gain too.
+Verification still runs two separate multiplications, and each uses
+`win_dbl4`.
+
+Instructions (callgrind):
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 834k | 757k | 775k | 712k |
+| ECDH | 1.57M | 1.26M | 1.37M | 1.12M |
+| sign | 832k | 755k | 757k | 694k |
+| verify | 2.30M | 1.91M | 2.05M | 1.73M |
+
+ECDH, sign and verify are measured as differences between driver runs
+(keygen plus the operation, minus keygen), so they include no startup.
+The keygen row includes about 125k instructions of process startup.
+
+Time, the best of seven runs of 2000 operations, two interleaved rounds:
+
+| operation | gcc before | gcc after | clang before | clang after |
+| --- | ---: | ---: | ---: | ---: |
+| keygen | 70 us | 57-60 us | 52-56 us | 49 us |
+| ECDH | 156 us | 121-124 us | 117-119 us | 93-95 us |
+| sign | 77-82 us | 69-72 us | 63-68 us | 57-59 us |
+| verify | 226-235 us | 179-188 us | 171-180 us | 144-146 us |
+
+ECDH executes 18-20% fewer instructions and is about 20% faster under
+both compilers.  Verification executes 15-17% fewer instructions and is
+15-20% faster.  Keygen and sign gain 5-15%.  Tests, `make lint`, `make stack`
+and `make cross` pass.  `mk/memlint.pl` lists the new hot leaves (`mred`,
+`fmul1`, `fsqr1`), which skip wiping their scratch, as the existing
+`fmul` and `fsqr` already do.
