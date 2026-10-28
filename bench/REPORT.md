@@ -10104,3 +10104,31 @@ both compilers.  Verification executes 15-17% fewer instructions and is
 and `make cross` pass.  `mk/memlint.pl` lists the new hot leaves (`mred`,
 `fmul1`, `fsqr1`), which skip wiping their scratch, as the existing
 `fmul` and `fsqr` already do.
+
+## Part 108: P-256 verification without a field inversion
+
+This is Part 100 for P-256.  Verification used to compute the affine `x`
+(one Fermat inversion), serialize it and reduce it mod `n`.  `Verify.check_x`
+now compares projectively: `X == r Z`, or, when `r + n < p`, `X == (r + n) Z`.
+The lemma `xcheck` is P-384's with the curve renamed.  The `r + n < p`
+test is `Hacl.Impl.Mont4.ageq` of `r` against a new table `p - n` in
+`Hacl.P256.Tables`; both operands are residues mod `n`, which is what
+`ageq` requires.
+
+Instructions (callgrind, verify only):
+
+| compiler | before | after |
+| --- | ---: | ---: |
+| gcc | 1.91M | 1.80M |
+| clang | 1.73M | 1.64M |
+
+Time, verify, best of seven runs of 2000 operations, two interleaved rounds:
+
+| compiler | before | after |
+| --- | ---: | ---: |
+| gcc | 181-185 us | 171-173 us |
+| clang | 141-142 us | 135 us |
+
+Verification executes 5-6% fewer instructions and is 4-7% faster.  The
+other operations are unchanged; their timings moved within noise.  Tests,
+`make lint`, `make stack` and `make cross` pass.

@@ -34,6 +34,10 @@ open Hacl.P256.Scalar
 open Hacl.P256.Point
 open Hacl.P256.PointMulD
 open Hacl.P256.Encode
+open Spec.Mont4
+open Hacl.Impl.Table
+open Hacl.Impl.Mont4
+open Hacl.P256.Tables
 
 module A = Pulse.Lib.Array
 module Seq = FStar.Seq
@@ -43,8 +47,86 @@ module S64 = Hacl.Secret.UInt64
 module P = Spec.P256
 module GR = Spec.P256.Group
 module Mem = Hacl.Mem
+module SGF = Spec.Group.Field
+module Math = FStar.Math.Lemmas
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 300"
+
+(** [x = X / Z] is below [p < 2 n], so [x mod n = r] for [r < n] says
+    [x] is [r] or [r + n]; and [x = c] is [X = c Z].  So the affine [x]
+    needs no inversion. *)
+let xcheck (x z r: P.felem)
+  : Lemma (requires z <> 0 /\ r < P.order)
+          (ensures (P.fmul x (P.finv z) % P.order = r) ==
+                   (P.fmul r z = x || (r + P.order < P.prime && P.fmul (r + P.order) z = x)))
+  = Spec.P256.GroupSv.m0_lem (); Spec.P256.GroupSv.prime_m0 ();
+    assert_norm (P.order < P.prime /\ P.prime < 2 * P.order);
+    let xa = P.fmul x (P.finv z) in
+    SGF.div_mul #P.prime x z;
+    let one (c: P.felem)
+      : Lemma ((xa = c) == (P.fmul c z = x))
+      = if P.fmul c z = x then SGF.cancel #P.prime xa c z
+    in
+    one r;
+    if r + P.order < P.prime then one (r + P.order);
+    if xa < P.order then Math.small_mod xa P.order
+    else Math.lemma_mod_sub xa P.order 1
+
+let cx_facts (_: unit)
+  : Lemma (modulus_ok fmod /\ fmod.m == P.prime /\ modulus_ok qmod /\ qmod.m == P.order /\
+           P.order < P.prime /\ res fmod (limbs P.order) /\ qmod.ms == limbs P.order /\
+           res qmod (limbs pmn_v) /\
+           eval (limbs pmn_v) == P.prime - P.order /\ pmn_v == P.prime - P.order /\
+           eval (limbs P.order) == P.order)
+  = fmod_ok (); qmod_ok ();
+    assert_norm (P.order < P.prime /\ P.prime < pow2 256);
+    assert_norm (pmn_v == P.prime - P.order /\ pmn_v < P.order);
+    limbs_ok P.order; limbs_ok pmn_v
+
+(** Whether the affine [x] of [(cx : _ : cz)], reduced mod [n], is [r]:
+    whether [cx] is [r cz] or, if [r + n < p], [(r + n) cz].  [r] arrives
+    as plain limbs.  Everything here is public. *)
+fn check_x (cx cz r: A.array S64.t)
+           (#px: perm) (#vcx: erased (Seq.seq S64.t))
+           (#pz: perm) (#vcz: erased (Seq.seq S64.t))
+           (#pr: perm) (#vr: erased (Seq.seq S64.t))
+requires A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
+  pure (felem vcx /\ felem vcz /\ res qmod (vals vr) /\ fev vcz <> 0)
+returns b: bool
+ensures A.pts_to cx #px vcx ** A.pts_to cz #pz vcz ** A.pts_to r #pr vr **
+  pure (b == (P.fmul (fev vcx) (P.finv (fev vcz)) % P.order = eval (vals vr)))
+{
+  cx_facts ();
+  let z = S64.zero;
+  let mut rm = [| z; 4sz |];
+  Mem.track rm; A.pts_to_len rm; let mut t = [| z; 4sz |];
+  Mem.track t; A.pts_to_len t; let mut nf = [| z; 4sz |];
+  Mem.track nf; A.pts_to_len nf;
+  A.pts_to_len rm; A.pts_to_len t; A.pts_to_len nf;
+  fto rm r;
+  with vrm. assert (A.pts_to rm vrm);
+  fmul t rm cz;
+  let e1 = feq t cx;
+  let pn = pmn ();
+  let big = ageq r pn qmod;
+  drop_table pn;
+  let e2 = if big { false } else {
+    let qm = qms ();
+    fto nf qm;
+    drop_table qm;
+    fadd1 rm nf;
+    with vrn. assert (A.pts_to rm vrn);
+    Math.small_mod (eval (vals vr) + P.order) P.prime;
+    assert (pure (fev vrn == eval (vals vr) + P.order));
+    fmul t rm cz;
+    feq t cx
+  };
+  xcheck (fev vcx) (fev vcz) (eval (vals vr));
+  Mem.wipe nf 4sz;
+  Mem.wipe t 4sz;
+  Mem.wipe rm 4sz;
+  (e1 || e2)
+}
 
 (** As elsewhere, an [ensures] cannot assume the [requires], so the lengths
     travel in a total wrapper. *)
@@ -133,13 +215,8 @@ ensures
       Mem.wipe c0 4sz;
       false
     } else {
-      to_aff_point cd ce ca cb cc;
-      with wax. assert (A.pts_to cd wax);
-      fstore d0 cd;
-      assert_norm (P.prime < pow2 256);
-      be_nat_to_be 32 (fev wax);
-      qload_mod cf d0;
-      let eq = qeq cf c0;
+      qfrom cf c0;
+      let eq = check_x ca cc cf;
       Mem.wipe d0 32sz;
       Mem.wipe cf 4sz;
       Mem.wipe ce 4sz;

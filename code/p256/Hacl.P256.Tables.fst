@@ -205,6 +205,23 @@ let one_arr : (a: G.static_array S64.t
     lit_limbs one_list 1;
     G.mk_static_array one_list
 
+(** [p - n]: verification's [r + n < p] is [r < p - n]. *)
+let pmn_v : nat = 89188191154553853111372247798585809582
+
+let pmn_list : list S64.t = [
+  S64.classify 884452912994769582uL; S64.classify 4834901530490986875uL;
+  S64.classify 0uL; S64.classify 0uL
+]
+
+let pmn_arr : (a: G.static_array S64.t
+                  { vals (G.static_array_elems a) == limbs pmn_v })
+  = assert_norm (L.length pmn_list == nl);
+    assert_norm (lbnd pmn_list);
+    assert_norm (leval pmn_list == 89188191154553853111372247798585809582);
+    assert_norm (89188191154553853111372247798585809582 < pow2 256);
+    lit_limbs pmn_list pmn_v;
+    G.mk_static_array pmn_list
+
 (** {2 The exponents} *)
 
 (** [p - 2], the inversion exponent. *)
@@ -349,6 +366,12 @@ fn qinv_e () requires emp returns s: A.array U64.t
 ensures exists* (p: perm) (v: Seq.seq U64.t).
   A.pts_to s #p v ** pure (Seq.length v == nl /\ pvals v == limbs (P.order - 2))
 { table qinv_e_arr 4sz }
+
+inline_for_extraction
+fn pmn () requires emp returns s: A.array S64.t
+ensures exists* (p: perm) (v: Seq.seq S64.t).
+  A.pts_to s #p v ** pure (Seq.length v == nl /\ vals v == limbs pmn_v)
+{ table pmn_arr 4sz }
 
 inline_for_extraction
 fn mone () requires emp returns s: A.array S64.t

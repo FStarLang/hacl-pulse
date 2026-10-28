@@ -1454,7 +1454,11 @@ unchanged, apart from one point: Pulse cannot branch on the secret mask
 inside `fcsel`'s proof, so a pure lemma (`csel_eq`) does the case split
 instead.  `win_dbl4` serves both ECDH's window and the generator's
 four-piece comb.  ECDH runs 18-20% fewer instructions, verify 15-17%, and
-keygen 8-9% (Part 107).
+keygen 8-9% (Part 107).  Verification then stopped inverting `Z`, as
+P-384's did: `check_x` tests `X == r Z` or `X == (r + n) Z`.  The
+`r + n < p` guard is `Mont4.ageq` against a `p - n` table, since this
+field has no limb comparison of its own.  Verify runs 5-6% fewer
+instructions (Part 108).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
