@@ -10252,3 +10252,22 @@ Instructions (callgrind, per verify):
 Verify runs 11% fewer instructions under both compilers.  Clang time went
 from 127-128 us to 112-114.  Tests, `make lint`, `make stack` and
 `make cross` pass.
+
+## Part 113: P-256 point formulas without copies
+
+P-256's `Point.fst` now uses the in-place field operations as P-384's does
+(Part 98).  The same script rewrote all 57 `fcopy`s into `fadd1`, `fmul2`,
+`fdbl1`, `fsqr` and the like, and removed the scratch elements `aw` and
+`au`.  The proofs went through unchanged.  The gain is small because the
+hot paths (Jacobian doublings and mixed additions) never used these
+formulas.  Only the complete addition in the variable-base and Straus
+loops does.
+
+| compiler | ECDH before | ECDH after | verify before | verify after |
+| --- | ---: | ---: | ---: | ---: |
+| gcc | 1.141M | 1.136M | 1.451M | 1.446M |
+| clang | 1.014M | 1.013M | 1.301M | 1.299M |
+
+That is 0.1-0.4% fewer instructions; clang timings are within noise.  The
+module is 64 lines shorter and each formula uses two fewer stack elements.
+Tests, `make lint`, `make stack` and `make cross` pass.

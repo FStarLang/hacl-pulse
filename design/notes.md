@@ -1477,7 +1477,9 @@ and 64.  Its digit lemmas are P-384's, stated over `Hacl.Bignum.Base.num`;
 definition.  The four-bit `point_mul_win` and its table were removed.
 ECDH runs 7% fewer instructions and verify 5% fewer (Part 111).  Verify
 then shares one doubling chain between `G` and `Q`, as P-384 does, for 11%
-fewer instructions (Part 112).
+fewer instructions (Part 112).  The
+complete formulas then lost their 57 scratch copies, as P-384's did; that
+saves under 0.5% because the hot paths no longer use them (Part 113).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
