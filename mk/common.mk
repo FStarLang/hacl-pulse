@@ -25,12 +25,13 @@ DIST_DIR  ?= $(HACL_ROOT)/dist
 # installed, new enough to have Custard, where the extraction pipeline lives.
 # A nightly tarball from FStarLang/FStar-nightly is one -- it ships Pulse --
 # and so is a checkout of master built through stage3.  The tree tracks
-# master; past releases are not supported.
+# master; past releases are not supported.  CI uses the nightly named in
+# .fstar-nightly.
 #
 # Point FSTAR_EXE at the binary, or FSTAR_ROOT at either kind of tree:
 #
-#   make FSTAR_ROOT=$HOME/tools/fstar-nightly-2026-10-21   # unpacked nightly
-#   make FSTAR_ROOT=$HOME/tools/fstar                      # source checkout
+#   make FSTAR_ROOT=$HOME/tools/fstar-nightly   # unpacked nightly
+#   make FSTAR_ROOT=$HOME/tools/fstar           # source checkout
 #
 # A nightly has bin/fstar.exe; a checkout has stage3/out/bin/fstar.exe, and
 # the stage3 one wins if somehow both are there, because a checkout being

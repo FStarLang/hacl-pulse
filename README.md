@@ -47,11 +47,12 @@ to the portable code alone.
 
 You need an F\* that includes Pulse and Custard. The tree tracks F\*
 `master` and is checked against the
-[`nightly-2026-10-21`](https://github.com/FStarLang/FStar-nightly/releases/tag/nightly-2026-10-21)
-build. Older releases are not supported. To install the nightly:
+[nightly build](https://github.com/FStarLang/FStar-nightly/releases) named in
+[`.fstar-nightly`](.fstar-nightly). Older releases are not supported. To
+install that nightly:
 
 ```
-curl -L https://github.com/FStarLang/FStar-nightly/releases/download/nightly-2026-10-21/fstar-Linux-x86_64.tar.gz | tar xz
+curl -L https://github.com/FStarLang/FStar-nightly/releases/download/$(cat .fstar-nightly)/fstar-Linux-x86_64.tar.gz | tar xz
 make -j$(nproc) FSTAR_ROOT=$PWD/fstar
 ```
 
