@@ -63,6 +63,26 @@ val point_add (ox oy oz: A.array S64.t)
       pure (pt_ok wx wy wz /\
             pt wx wy wz == P.point_add (pt vx1 vy1 vz1) (pt vx2 vy2 vz2)))
 
+(** Mixed addition, the second point affine: {!point_add} at [Z2 = 1],
+    one multiplication cheaper. *)
+val point_madd (ox oy oz: A.array S64.t)
+               (x1 y1 z1: A.array S64.t) (x2 y2: A.array S64.t)
+               (#vox #voy #voz: erased (Seq.seq S64.t))
+               (#p1: perm) (#vx1 #vy1 #vz1: erased (Seq.seq S64.t))
+               (#p2: perm) (#vx2 #vy2: erased (Seq.seq S64.t))
+  : stt unit
+    (requires A.pts_to ox vox ** A.pts_to oy voy ** A.pts_to oz voz **
+      A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 **
+      A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+      pure (Seq.length vox == nl /\ Seq.length voy == nl /\ Seq.length voz == nl /\
+            pt_ok vx1 vy1 vz1 /\ felem vx2 /\ felem vy2))
+    (ensures fun _ -> exists* (wx wy wz: Seq.seq S64.t).
+      A.pts_to ox wx ** A.pts_to oy wy ** A.pts_to oz wz **
+      A.pts_to x1 #p1 vx1 ** A.pts_to y1 #p1 vy1 ** A.pts_to z1 #p1 vz1 **
+      A.pts_to x2 #p2 vx2 ** A.pts_to y2 #p2 vy2 **
+      pure (pt_ok wx wy wz /\
+            pt wx wy wz == P.point_add (pt vx1 vy1 vz1) (fev vx2, fev vy2, P.fone)))
+
 val point_double (ox oy oz: A.array S64.t) (x y z: A.array S64.t)
                 (#vox #voy #voz: erased (Seq.seq S64.t))
                 (#p1: perm) (#vx #vy #vz: erased (Seq.seq S64.t))

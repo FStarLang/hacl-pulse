@@ -1463,7 +1463,13 @@ instructions (Part 108).  Inversion is now P-384's addition chain
 proof needed `felem` and `fev` hidden from Z3 with `--using_facts_from`:
 P-256's `felem` is the transparent `Spec.Field4.res`, and unfolding it
 timed out even `nb 0sz true == 1`.  Sign runs 4-5% fewer instructions and
-ECDH 3% (Part 109).
+ECDH 3% (Part 109).  The generator's comb is now P-384's: signed
+five-bit Booth digits, thirteen rungs of five doublings and four mixed
+additions against affine tables of `1 .. 16` times each base point, so 65
+doublings and 52 additions instead of 60 and 64.  The mixed addition is
+`point_madd`, whose formulas `Spec.P256.JacChecks` already checked.  Keygen
+runs 14-19% fewer instructions (excluding startup), sign 12-16% and verify
+5-7% (Part 110).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
@@ -1526,7 +1532,8 @@ arrays and `Hacl.P256.WinTable` turns four limb facts into the window's
 takes one permission per coordinate array, as on the other two curves.
 This took ECDH as initiator from 97 us to 69 under gcc and from 77 to 59
 under clang, and signing and verification by similar absolute amounts
-(`bench/REPORT.md` Part 63).
+(`bench/REPORT.md` Part 63).  The tables now hold affine multiples `1 .. 16` for the signed-digit
+comb, and `spec/group-gen/p256/wintables.py` generates them (Part 110).
 
 **Inversion is an exponentiation on the specialised field.**  `finv` and
 `fsqrt` were the generic four-limb `mexp`, which multiplies with the general

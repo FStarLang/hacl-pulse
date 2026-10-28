@@ -10166,3 +10166,37 @@ about 38k fewer instructions under gcc and 29k fewer under clang.  Sign runs
 Verify does not invert and is unchanged.  Timings (best of seven runs of 2000
 operations) moved by 2-4%, which is near the noise.  Tests, `make lint`,
 `make stack` and `make cross` pass.
+
+## Part 110: P-256 Booth comb with mixed addition
+
+P-256's fixed-base comb now matches P-384's (Parts 101-102).  The scalar
+is split into four 64-bit pieces, and each piece becomes thirteen signed
+five-bit digits (`Spec.Group.Booth4`, which is `Booth6` with four pieces).
+The comb runs thirteen rungs, each of five doublings and four signed
+additions: 65 doublings and 52 additions, where the old comb did 60
+doublings and 64 additions.  The tables in `Win0` .. `Win3` now hold the
+affine multiples `1 .. 16` of each base point, so a signed addition is a
+mixed addition (`point_madd`, eight multiplications and three squarings)
+that negates `y` when the digit is negative.  `spec/group-gen/p256/wintables.py`
+generates the tables.  `Hacl.P256.PointBooth` and `WinTable`'s
+`aent_lit`/`atok_all` are P-384's at four limbs.
+
+Instructions (callgrind, per operation):
+
+| compiler | operation | before | after |
+| --- | --- | ---: | ---: |
+| gcc | keygen | 719k | 633k |
+| gcc | ECDH | 1.226M | 1.226M |
+| gcc | sign | 717k | 631k |
+| gcc | verify | 1.803M | 1.717M |
+| clang | keygen | 683k | 577k |
+| clang | ECDH | 1.094M | 1.092M |
+| clang | sign | 665k | 559k |
+| clang | verify | 1.643M | 1.535M |
+
+Keygen includes about 125k instructions of startup; excluding it, keygen
+runs 14% fewer instructions under gcc and 19% fewer under clang.  Sign runs
+12-16% fewer and verify 5-7% fewer.  ECDH does not use the comb and is
+unchanged.  Clang timings: keygen 46-49 us to 37-41, sign 56-58 to 48-49,
+verify 135-136 to 126-127.  Tests, `make lint`, `make stack` and
+`make cross` pass.

@@ -259,6 +259,19 @@ ensures exists* (vo': Seq.seq S64.t).
   mev_eq_of (vals vo') (madd fmod (vals vo) (vals vb));
 }
 
+fn fadd2 (o a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fadd (fev va) (fev vo))
+{
+  fadd1 o a;
+  Spec.ModArith.add_comm #P.prime (fev vo) (fev va);
+}
+
 fn fsub1 (o b: A.array S64.t)
         (#vo: erased (Seq.seq S64.t))
         (#pb: perm) (#vb: erased (Seq.seq S64.t))
@@ -334,6 +347,19 @@ ensures exists* (vo': Seq.seq S64.t).
   felem_of vo';
   mmul_eq (vals vo) (vals vb) (vals vo');
   mev_eq_of (vals vo') (mmul fmod (vals vo) (vals vb));
+}
+
+fn fmul2 (o a: A.array S64.t)
+        (#vo: erased (Seq.seq S64.t))
+        (#pa: perm) (#va: erased (Seq.seq S64.t))
+requires A.pts_to o vo ** A.pts_to a #pa va **
+  pure (felem vo /\ felem va)
+ensures exists* (vo': Seq.seq S64.t).
+  A.pts_to o vo' ** A.pts_to a #pa va **
+  pure (felem vo' /\ fev vo' == P.fmul (fev va) (fev vo))
+{
+  fmul1 o a;
+  Spec.ModArith.mul_comm #P.prime (fev vo) (fev va);
 }
 
 fn fsqr1 (o: A.array S64.t)
