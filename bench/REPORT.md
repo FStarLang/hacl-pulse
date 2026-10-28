@@ -10132,3 +10132,37 @@ Time, verify, best of seven runs of 2000 operations, two interleaved rounds:
 Verification executes 5-6% fewer instructions and is 4-7% faster.  The
 other operations are unchanged; their timings moved within noise.  Tests,
 `make lint`, `make stack` and `make cross` pass.
+
+## Part 109: P-256 inversion by an addition chain
+
+P-256's `finv` was `Exp.fexp` with `p - 2`: about 255 squarings and 128
+multiplications.  `Hacl.P256.FInv` now uses a fixed chain.  It builds
+`x_k = x^(2^k - 1)` for k = 2, 3, 6, 12, 15, 30, 32, then forms
+`p - 2 = ((((x_32 2^32 + 1) 2^128 + x_32) 2^32 + x_32) 2^30 + x_30) 2^2 + 1`.
+That is 255 squarings and 12 multiplications.  The helpers (`sqrn`,
+`sqrn_mul` and the exponent lemmas) are P-384's.
+
+The proof timed out when the chain lived in `Inverse`, and still timed out in
+a module of its own: P-256's `felem` is `Spec.Field4.res` and is transparent,
+so Z3 unfolded it everywhere.  `FInv` therefore hides `felem`, `fev`,
+`Spec.Field4` and `Hacl.Impl.Limb4` with `--using_facts_from` and keeps one
+`SMTPat` lemma, `felem v ==> length v == 4`.  The module then verifies in
+about 5 seconds.
+
+Instructions (callgrind, per operation):
+
+| compiler | operation | before | after |
+| --- | --- | ---: | ---: |
+| gcc | keygen | 757k | 719k |
+| gcc | ECDH | 1.264M | 1.226M |
+| gcc | sign | 755k | 717k |
+| clang | keygen | 712k | 683k |
+| clang | ECDH | 1.123M | 1.094M |
+| clang | sign | 694k | 665k |
+
+Keygen includes about 125k instructions of startup.  Each inversion costs
+about 38k fewer instructions under gcc and 29k fewer under clang.  Sign runs
+4-5% fewer instructions, keygen (excluding startup) 5-6% and ECDH 3%.
+Verify does not invert and is unchanged.  Timings (best of seven runs of 2000
+operations) moved by 2-4%, which is near the noise.  Tests, `make lint`,
+`make stack` and `make cross` pass.

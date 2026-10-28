@@ -1458,7 +1458,12 @@ keygen 8-9% (Part 107).  Verification then stopped inverting `Z`, as
 P-384's did: `check_x` tests `X == r Z` or `X == (r + n) Z`.  The
 `r + n < p` guard is `Mont4.ageq` against a `p - n` table, since this
 field has no limb comparison of its own.  Verify runs 5-6% fewer
-instructions (Part 108).
+instructions (Part 108).  Inversion is now P-384's addition chain
+(255 squarings and 12 multiplications) in its own module, `FInv`.  Its
+proof needed `felem` and `fev` hidden from Z3 with `--using_facts_from`:
+P-256's `felem` is the transparent `Spec.Field4.res`, and unfolding it
+timed out even `nb 0sz true == 1`.  Sign runs 4-5% fewer instructions and
+ECDH 3% (Part 109).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
