@@ -10200,3 +10200,33 @@ runs 14% fewer instructions under gcc and 19% fewer under clang.  Sign runs
 unchanged.  Clang timings: keygen 46-49 us to 37-41, sign 56-58 to 48-49,
 verify 135-136 to 126-127.  Tests, `make lint`, `make stack` and
 `make cross` pass.
+
+## Part 111: P-256 signed five-bit variable-base window
+
+P-256's variable-base multiplication now matches P-384's (Part 104).
+`Hacl.P256.PointMulV` reads the 256-bit scalar as fifty-two Booth digits
+in `[-16, 16]` and uses a run-time table of the projective multiples
+`1 .. 16` of `Q`.  The top digit goes straight into the point at
+infinity, so the multiplication costs 255 doublings and 52 additions
+instead of the four-bit window's 256 and 64.  A digit's six-bit window
+can straddle two limbs; `vwin` and its three lemmas are P-384's.  They are
+stated over `Hacl.Bignum.Base.num`, and a small `kv_num` lemma equates
+that with P-256's `Spec.Bignum4.eval`.  Two obligations that P-384
+discharged implicitly needed explicit one-line lemmas here (`zero_keep`
+and a `rep_cong`), because P-256's transparent field fills the context.
+The old four-bit window (`build_table`, `win_dbl4`, `win_add`,
+`point_mul_win`, the `ent`/`tok` invariant) is gone from `PointWin`.
+
+Instructions (callgrind, per operation):
+
+| compiler | operation | before | after |
+| --- | --- | ---: | ---: |
+| gcc | ECDH | 1.226M | 1.143M |
+| gcc | verify | 1.717M | 1.634M |
+| clang | ECDH | 1.092M | 1.014M |
+| clang | verify | 1.535M | 1.458M |
+
+ECDH runs 7% fewer instructions and verify 5% fewer.  Keygen and sign use
+the comb and are unchanged.  Clang timings: ECDH 89-91 us to 84-86, and
+verify 124-130 to 117-122.  Tests, `make lint`, `make stack` and
+`make cross` pass.

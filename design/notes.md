@@ -1469,7 +1469,13 @@ additions against affine tables of `1 .. 16` times each base point, so 65
 doublings and 52 additions instead of 60 and 64.  The mixed addition is
 `point_madd`, whose formulas `Spec.P256.JacChecks` already checked.  Keygen
 runs 14-19% fewer instructions (excluding startup), sign 12-16% and verify
-5-7% (Part 110).
+5-7% (Part 110).  The variable-base window followed P-384's too
+(`Hacl.P256.PointMulV`): fifty-two signed digits against projective
+multiples `1..16` of `Q`, 255 doublings and 52 additions in place of 256
+and 64.  Its digit lemmas are P-384's, stated over `Hacl.Bignum.Base.num`;
+`kv_num` bridges P-256's `Spec.Bignum4.eval`, which has the same
+definition.  The four-bit `point_mul_win` and its table were removed.
+ECDH runs 7% fewer instructions and verify 5% fewer (Part 111).
 
 **Keeping them apart is a performance decision, not a taste one.**  The field
 modulus `p` and the order `q` are both 78-digit literals, and a goal that
