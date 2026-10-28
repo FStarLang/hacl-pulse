@@ -14,10 +14,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # The F* nightly the tree is verified against; see README.md.
-  FSTAR_NIGHTLY: nightly-2026-10-21
-
 jobs:
   verify:
     name: Verify, extract, test (gcc, x86-64)
@@ -26,8 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # .fstar-nightly pins the F* nightly the tree is verified against.
       - name: Install F*
         run: |
+          FSTAR_NIGHTLY=$(tr -d '[:space:]' < .fstar-nightly)
+          echo "FSTAR_NIGHTLY=$FSTAR_NIGHTLY" >> "$GITHUB_ENV"
           curl -fsSL "https://github.com/FStarLang/FStar-nightly/releases/download/$FSTAR_NIGHTLY/fstar-Linux-x86_64.tar.gz" \
             | tar -xz -C "$RUNNER_TEMP"
           echo "FSTAR_ROOT=$RUNNER_TEMP/fstar" >> "$GITHUB_ENV"
