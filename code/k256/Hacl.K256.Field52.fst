@@ -1318,7 +1318,12 @@ let feq_limbs (va vb: Seq.seq nat) (a0 a1 a2 a3 a4 b0 b1 b2 b3 b4: nat)
     freeze_ok va; freeze_ok vb;
     let x = freeze_spec va in
     let y = freeze_spec vb in
-    Classical.move_requires (Seq.lemma_eq_intro x) y;
+    let same () : Lemma (requires a0 == b0 /\ a1 == b1 /\ a2 == b2 /\ a3 == b3 /\ a4 == b4)
+                        (ensures x == y)
+      = assert (forall (i: nat). i < nl ==> i == 0 \/ i == 1 \/ i == 2 \/ i == 3 \/ i == 4);
+        Seq.lemma_eq_intro x y
+    in
+    Classical.move_requires same ();
     Classical.move_requires (proper_uniq x) y
 
 (** Two field elements are equal when their canonical forms are equal limb

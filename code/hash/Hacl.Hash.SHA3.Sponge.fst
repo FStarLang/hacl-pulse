@@ -567,6 +567,7 @@ ensures exists* (vout: Seq.seq S8.t).
   {
     let vl = !l;
     let x = A.(st.(vl));
+    assert (pure (8 * SZ.v vl + 8 <= SZ.v cnt));
     squeeze_lane_byte out base vl 0sz x vst vout0 (SZ.v cnt);
     squeeze_lane_byte out base vl 1sz x vst vout0 (SZ.v cnt);
     squeeze_lane_byte out base vl 2sz x vst vout0 (SZ.v cnt);
