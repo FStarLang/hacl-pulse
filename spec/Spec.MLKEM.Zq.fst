@@ -152,7 +152,8 @@ let rec pow_add (a: zq) (j k: nat)
   = if j = 0 then (mul_comm (pow a 0) (pow a k); mul_one (pow a k))
     else begin
       pow_add a (j - 1) k;
-      mul_assoc a (pow a (j - 1)) (pow a k)
+      mul_assoc a (pow a (j - 1)) (pow a k);
+      assert (pow a (j + k) == mul a (pow a (j - 1 + k)))
     end
 
 (** {2 The 256th root of unity}

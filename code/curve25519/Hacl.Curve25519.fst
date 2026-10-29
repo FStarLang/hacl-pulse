@@ -590,6 +590,7 @@ ensures exists* (vout': Seq.seq S8.t).
     let w = Cast.u8_to_u64 byte;
     assert_norm (255 * 32 + 255 < pow2 64);
     Math.small_mod (S64.v a + S64.v w) (pow2 64);
+    assert (pure (S64.v (S64.add_mod a w) == S64.v a + S8.v byte));
     acc := S64.add_mod a w;
     i := SZ.add vi 1sz;
   };

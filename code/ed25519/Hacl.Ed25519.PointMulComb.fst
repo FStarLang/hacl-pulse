@@ -684,6 +684,8 @@ ensures exists* (wx wy wz wt: Seq.seq S64.t).
       (reveal n0 + hsum k (SZ.v par) (SZ.v vj + 1));
     j := SZ.add vj 1sz;
   };
+  with vj. assert (pts_to j vj);
+  assert (pure (SZ.v vj == 32));
   ()
 }
 
