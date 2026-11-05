@@ -404,11 +404,18 @@ let low_lt_done (p: params) (k: pos) (s: Seq.seq zqt { Seq.length s == k * n }) 
   : Lemma (all_lt (vec_low_bits p #k (as_zqs s)) b <==> low_lt_upto p s (k * n) b)
   = all_lt_spec (vec_low_bits p #k (as_zqs s)) b
 
+(** One more element of a bounded prefix, for an arbitrary function: kept
+    apart so that the solver does not see what [f] is. *)
+let upto_step_gen (n: nat) (f: (u: nat { u < n }) -> GTot int) (m: nat { m < n }) (b: int)
+  : Lemma ((forall (u: nat). u < m + 1 ==> f u < b) <==>
+           ((forall (u: nat). u < m ==> f u < b) /\ f m < b))
+  = ()
+
 let low_lt_upto_step (p: params) (s: Seq.seq zqt) (m: nat) (b: nat)
   : Lemma (requires m < Seq.length s)
           (ensures low_lt_upto p s (m + 1) b <==>
                    low_lt_upto p s m b /\ not (norm (low_bits p (S32.v (Seq.index s m))) >= b))
-  = ()
+  = upto_step_gen (Seq.length s) (fun u -> norm (low_bits p (S32.v (Seq.index s u)))) m b
 
 (** [true] iff every coefficient of [LowBits(r)] has norm below [b]. *)
 fn low_lt_impl (r: A.array zqt) (p: erased params) (gd: U32.t { g2_div_ok p gd })

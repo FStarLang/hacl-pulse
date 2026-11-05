@@ -363,6 +363,9 @@ let shl_inv_step (v0 vv: Seq.seq S8.t) (i: nat) (r: S8.t)
     Math.lemma_div_lt nxt 8 7;
     Math.small_mod (nxt / 128) 2;
     let carry : elem = nxt / pow2 7 in
+    assert (nxt / 128 < 2);
+    assert (carry == nxt / 128);
+    assert (carry == 0 \/ carry == 1);
     or_low carry rest;
     assert (S8.v r == Poly.shl_byte (vals v0) i);
     vals_upd vv i r

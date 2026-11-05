@@ -122,8 +122,10 @@ let low_step (k: nat) (j: nat)
 
 let hi_bot (k: nat { k < pow2 384 }) : Lemma (hi k 0 == k) =
   assert_norm (pow2 0 == 1);
+  assert (k % pow2 0 == 0);
   low_step k 0; low_step k 1; low_step k 2;
   low_step k 3; low_step k 4; low_step k 5;
-  Math.small_mod k (pow2 384)
+  Math.small_mod k (pow2 384);
+  assert (k % pow2 384 == hi k 0)
 
 #pop-options

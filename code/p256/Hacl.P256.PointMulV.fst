@@ -271,10 +271,11 @@ let vtok_get (tx ty tz: Seq.seq S64.t) (p: P.proj_point) (d: nat)
                    GR.on_curve (fev (entry tx d), fev (entry ty d), fev (entry tz d)) /\
                    GR.peq (fev (entry tx d), fev (entry ty d), fev (entry tz d))
                           (SM.smul ((d + 1) * 1) p))
-  = assert (vent tx ty tz p d);
+  = Math.mul_one_right_is_same (d + 1);
+    smul_cong (d + 1) ((d + 1) * 1) p;
+    assert (vent tx ty tz p d);
     reveal_opaque (`%vent) vent;
-    rep_elim (entry tx d) (entry ty d) (entry tz d) (d + 1) p;
-    smul_cong (d + 1) ((d + 1) * 1) p
+    rep_elim (entry tx d) (entry ty d) (entry tz d) (d + 1) p
 
 #push-options "--ifuel 1 --z3rlimit 100"
 let vtok_extend (tx ty tz tx' ty' tz': Seq.seq S64.t) (p: P.proj_point) (e: nat)

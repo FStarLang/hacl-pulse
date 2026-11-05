@@ -168,6 +168,11 @@ let rec eval_windows (v: nat) (s: Seq.seq nat)
       assert (v' < pow2 (rad * (n - 1)));
       Classical.forall_intro (eval_windows_index v s);
       eval_windows v' t;
+      (* The low limb is the low window of [v]. *)
+      assert (rad * 0 == 0);
+      assert_norm (pow2 0 == 1);
+      assert (Seq.index s 0 == v % base);
+      assert (eval s == Seq.index s 0 + base * v');
       Math.euclidean_division_definition v base
     end
 

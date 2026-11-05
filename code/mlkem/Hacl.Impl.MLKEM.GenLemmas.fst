@@ -68,7 +68,7 @@ let gen_entry_step (k: pos { k <= 4 }) (rho: Seq.lseq S8.t 32) (tr: bool)
                             then Seq.index b (t - c * n) else Seq.index w0 t)) /\
       (forall (t: nat). t < c * n ==>
          S16.v (Seq.index w0 t) == Seq.index (gen_matrix k rho tr) t) /\
-      (div_lt c k k;
+      (div_lt c k k; Math.nat_over_pos_is_nat c k;
        sd == matrix_seed rho (if tr then c % k else c / k)
                              (if tr then c / k else c % k)) /\
       as_poly b == sample_ntt sd)

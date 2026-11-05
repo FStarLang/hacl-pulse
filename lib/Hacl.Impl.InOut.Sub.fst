@@ -185,7 +185,7 @@ requires inout os is pi (j - i) vo' (Seq.slice vi i j) **
                Seq.length vo' == j - i)
 ensures exists* (w: Seq.seq t).
   inout out inp pi j w vi **
-  pure (Seq.length w == Seq.length vo /\
+  pure (Seq.length w == Seq.length vo /\ Seq.length vo' == j - i /\
         (forall (k: nat). k < Seq.length w ==>
            Seq.index w k == (if i <= k && k < j then Seq.index vo' (k - i)
                              else Seq.index vo k)))

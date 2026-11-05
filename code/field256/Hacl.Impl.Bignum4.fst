@@ -153,7 +153,8 @@ ensures exists* (vt': Seq.seq S128.t).
     j := SZ.add vj 1sz;
     assert pure (SZ.v (SZ.add vj 1sz) == SZ.v vj + 1);
   };
-  with v. assert (A.pts_to t v);
+  with vj v. assert (pts_to j vj ** A.pts_to t v);
+  assert (pure (SZ.v vj == nl));
   addw_srow_ble (vals128 vt) (vals vms) (Seq.length vt) (S64.v u) (SZ.v i) nl c;
   assert (pure (vals128 v ==
                   addw (vals128 vt)

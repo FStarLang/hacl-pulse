@@ -215,6 +215,22 @@ let head_byte_impl (#t: Type0) {| w: word t |}
 
 #push-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 
+(** One byte of each tail of the block, apart from the quantified context of
+    {!param_block_intro}. *)
+let param_block_tail (#t: Type0) {| word t |} (bp: blake2_params t)
+                     (kk: nat { kk <= max_key_len #t }) (i: nat { 4 * bytes #t <= i /\ i < 8 * bytes #t })
+  : Lemma (Seq.index (param_block bp kk) i ==
+             (if i < 6 * bytes #t then Seq.index bp.salt (i - 4 * bytes #t)
+              else Seq.index bp.personal (i - 6 * bytes #t)))
+  = ()
+
+(** One instance of a tail's quantified description. *)
+let tail_at (vpb s: Seq.seq S8.t) (off len i: nat)
+  : Lemma (requires off <= i /\ i < off + len /\ off + len <= Seq.length vpb /\ len <= Seq.length s /\
+                    (forall (j: nat). j < len ==> Seq.index vpb (off + j) == Seq.index s j))
+          (ensures Seq.index vpb i == Seq.index s (i - off))
+  = assert (Seq.index vpb (off + (i - off)) == Seq.index s (i - off))
+
 (** The block, given its head and its two tails index by index. *)
 let param_block_intro (#t: Type0) {| word t |} (bp: blake2_params t)
                       (kk: nat { kk <= max_key_len #t }) (vpb: Seq.seq S8.t)
@@ -233,8 +249,12 @@ let param_block_intro (#t: Type0) {| word t |} (bp: blake2_params t)
   = let w = bytes #t in
     let aux (i: nat { i < 8 * w }) : Lemma (Seq.index vpb i == Seq.index (param_block bp kk) i)
       = if i < 4 * w then ()
-        else if i < 6 * w then assert (Seq.index vpb (4 * w + (i - 4 * w)) == Seq.index bp.salt (i - 4 * w))
-        else assert (Seq.index vpb (6 * w + (i - 6 * w)) == Seq.index bp.personal (i - 6 * w))
+        else if i < 6 * w then (
+          param_block_tail bp kk i;
+          tail_at vpb bp.salt (4 * w) (salt_len #t) i)
+        else (
+          param_block_tail bp kk i;
+          tail_at vpb bp.personal (6 * w) (salt_len #t) i)
     in
     Classical.forall_intro aux;
     Seq.lemma_eq_intro vpb (param_block bp kk);

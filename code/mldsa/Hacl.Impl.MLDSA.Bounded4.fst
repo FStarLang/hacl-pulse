@@ -162,6 +162,7 @@ ensures exists* (v: Seq.seq zqt) (vk: Seq.seq S8.t).
   with vk. assert (A.pts_to blk vk);
   bstream_bytes vk vst vs (SZ.v j);
   let x = S.block256_bounded_impl dst blk c eta vs (hide (SZ.v j * 136));
+  Math.distributivity_add_left (SZ.v j) 1 136;
   assert (pure (SZ.v j * 136 + 136 == (SZ.v j + 1) * 136));
   with v. assert (A.pts_to dst v);
   bstream_ok_intro (SZ.v eta) v vst vs (SZ.v x) (SZ.v j) (SZ.v j + 1);

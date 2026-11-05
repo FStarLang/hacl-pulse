@@ -233,6 +233,17 @@ let idx_ok (m: nat) (x: nat)
     if m = 0 then Math.lemma_mod_plus (pow2 64 - 1) (-1) (pow2 64) else ();
     if m = 0 then Math.modulo_modulo_lemma (pow2 64 - 1) 16 (pow2 60) else ()
 
+(** The entry a magnitude selects (see {!idx_ok}), apart from the context
+    of {!win_sadd}. *)
+inline_for_extraction
+let entry_idx (mag: S64.t { S64.v mag <= 16 })
+  : idx: S64.t { if S64.v mag = 0 then S64.v idx == 15 else S64.v idx == S64.v mag - 1 }
+  = let m1 = S64.sub_mod mag (S64.classify 1uL) in
+    S64.logand_mask_low m1 4ul;
+    let idx = S64.logand m1 (S64.mask_low 4ul) in
+    idx_ok (S64.v mag) (S64.v idx);
+    idx
+
 #pop-options
 
 (** {2 Five doublings} *)
@@ -321,11 +332,10 @@ ensures exists* (wx wy wz wux wuy wuz wsx wsy: Seq.seq S64.t).
   A.pts_to_len sx; A.pts_to_len sy;
   A.pts_to_len tx; A.pts_to_len ty;
   pok_elim vox voy voz;
-  let m1 = S64.sub_mod mag (S64.classify 1uL);
-  S64.logand_mask_low m1 4ul;
-  let idx = S64.logand m1 (S64.mask_low 4ul);
-  idx_ok (S64.v mag) (S64.v idx);
+  assert (pure (S64.v mag == 0 ==> reveal e' == reveal e));
+  let idx = entry_idx mag;
   let d : erased nat = hide (S64.v idx);
+  assert (pure (S64.v mag <> 0 ==> reveal d + 1 == S64.v mag));
   entry_fits (reveal d);
   table_select sx tx 4sz idx d;
   table_select sy ty 4sz idx d;
