@@ -298,6 +298,13 @@ let vmul (a: V.t { vlt a q }) (b: V.t { vlt b q })
     Classical.forall_intro aux2;
     r
 
+(** What {!vmul} computes, as a fact about a named result. *)
+let vmul_lanes (a b r: V.t)
+  : Lemma (requires vlt a q /\ vlt b q /\ r == vmul a b)
+          (ensures forall (i: nat). i < 8 ==>
+                     S32.v (V.lane r i) == mul (S32.v (V.lane a i)) (S32.v (V.lane b i)))
+  = ()
+
 (** {2 Eight coefficients of a polynomial} *)
 
 (** Lane [j] of [x] is coefficient [k + j] of [p]. *)
@@ -331,6 +338,35 @@ let stored (v v': Seq.seq zqt) (i: nat) (x: V.t) : prop =
 
 (** {2 The pointwise product} *)
 
+(** Instances of the hypotheses of {!prod_step8}, each proved apart from the
+    others: in one context, [S32.v_extensional]'s pattern makes too many. *)
+let lane_at (x: V.t) (s: Seq.seq zqt) (i k: nat)
+  : Lemma (requires i <= k /\ k < i + 8 /\ i + 8 <= Seq.length s /\
+                    (forall (j: nat). j < 8 ==> V.lane x j == Seq.index s (i + j)))
+          (ensures V.lane x (k - i) == Seq.index s k)
+  = ()
+
+let mul_at (va vb: Seq.seq zqt) (i: nat) (x y r: V.t) (j: nat)
+  : Lemma (requires j < 8 /\ Seq.length va == n /\ Seq.length vb == n /\ i + 8 <= n /\
+                    (forall (j: nat). j < 8 ==> V.lane x j == Seq.index va (i + j)) /\
+                    (forall (j: nat). j < 8 ==> V.lane y j == Seq.index vb (i + j)) /\
+                    (forall (j: nat). j < 8 ==>
+                       S32.v (V.lane r j) == mul (S32.v (V.lane x j)) (S32.v (V.lane y j))))
+          (ensures S32.v (V.lane r j) == mul (S32.v (V.lane x j)) (S32.v (V.lane y j)))
+  = ()
+
+let stored_at (v v': Seq.seq zqt) (i: nat) (r: V.t) (k: nat)
+  : Lemma (requires stored v v' i r /\ i <= k /\ k < i + 8 /\ k < Seq.length v)
+          (ensures Seq.index v' k == V.lane r (k - i))
+  = ()
+
+(** One lane of {!prod_step8}, on plain values. *)
+let prod_one (a b: zqt) (xl yl rl vk: S32.t)
+  : Lemma (requires xl == a /\ yl == b /\ vk == rl /\
+                    S32.v rl == mul (S32.v xl) (S32.v yl))
+          (ensures S32.v vk == prod_val a b)
+  = reveal_opaque (`%prod_val) prod_val
+
 let prod_step8 (va vb v v': Seq.seq zqt) (i: nat) (x y r: V.t)
   : Lemma (requires Seq.length va == n /\ Seq.length vb == n /\ Seq.length v == n /\ i + 8 <= n /\
                     (forall (k: nat). k < i ==>
@@ -343,14 +379,15 @@ let prod_step8 (va vb v v': Seq.seq zqt) (i: nat) (x y r: V.t)
           (ensures Seq.length v' == n /\
                    (forall (k: nat). k < i + 8 ==>
                       S32.v (Seq.index v' k) == prod_val (Seq.index va k) (Seq.index vb k)))
-  = reveal_opaque (`%prod_val) prod_val;
-    let aux (k: nat { k < i + 8 })
+  = let aux (k: nat { k < i + 8 })
       : Lemma (S32.v (Seq.index v' k) == prod_val (Seq.index va k) (Seq.index vb k))
       = if k >= i then begin
-          assert (V.lane x (k - i) == Seq.index va (i + (k - i)));
-          assert (V.lane y (k - i) == Seq.index vb (i + (k - i)));
-          assert (S32.v (V.lane r (k - i)) ==
-                    mul (S32.v (V.lane x (k - i))) (S32.v (V.lane y (k - i))))
+          lane_at x va i k;
+          lane_at y vb i k;
+          mul_at va vb i x y r (k - i);
+          stored_at v v' i r k;
+          prod_one (Seq.index va k) (Seq.index vb k) (V.lane x (k - i)) (V.lane y (k - i))
+                   (V.lane r (k - i)) (Seq.index v' k)
         end in
     Classical.forall_intro aux
 
@@ -394,6 +431,7 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
     let x = L.load_at a vi;
     let y = L.load_at b vi;
     let r = vmul x y;
+    vmul_lanes x y r;
     assert pure (forall (j: nat). j < 8 ==>
                    S32.v (V.lane r j) == mul (S32.v (V.lane x j)) (S32.v (V.lane y j)));
     L.store_at dst vi r;
@@ -409,6 +447,21 @@ ensures exists* v. A.pts_to dst v ** A.pts_to a #pa va ** A.pts_to b #pb vb **
 
 (** {2 The scaling by [256^-1]} *)
 
+(** Instances of the hypotheses of {!scale_step8}, as for {!prod_step8}. *)
+let scale_lane_at (v: Seq.seq zqt) (i: nat) (x c r: V.t) (j: nat)
+  : Lemma (requires j < 8 /\ Seq.length v == n /\ i + 8 <= n /\
+                    (forall (j: nat). j < 8 ==> V.lane x j == Seq.index v (i + j)) /\
+                    (forall (j: nat). j < 8 ==> S32.v (V.lane c j) == inv_256) /\
+                    (forall (j: nat). j < 8 ==>
+                       S32.v (V.lane r j) == mul (S32.v (V.lane c j)) (S32.v (V.lane x j))))
+          (ensures S32.v (V.lane r j) == mul inv_256 (S32.v (V.lane x j)))
+  = ()
+
+let scale_one (wk: zqt) (xl rl vk: S32.t)
+  : Lemma (requires xl == wk /\ vk == rl /\ S32.v rl == mul inv_256 (S32.v xl))
+          (ensures S32.v vk == scale_val wk)
+  = reveal_opaque (`%scale_val) scale_val
+
 let scale_step8 (w v v': Seq.seq zqt) (i: nat) (x c r: V.t)
   : Lemma (requires Seq.length w == n /\ Seq.length v == n /\ i + 8 <= n /\
                     (forall (k: nat). k < i ==> S32.v (Seq.index v k) == scale_val (Seq.index w k)) /\
@@ -421,15 +474,16 @@ let scale_step8 (w v v': Seq.seq zqt) (i: nat) (x c r: V.t)
           (ensures Seq.length v' == n /\
                    (forall (k: nat). k < i + 8 ==> S32.v (Seq.index v' k) == scale_val (Seq.index w k)) /\
                    (forall (k: nat). i + 8 <= k /\ k < n ==> Seq.index v' k == Seq.index w k))
-  = reveal_opaque (`%scale_val) scale_val;
-    let aux (k: nat { k < i + 8 })
+  = let aux (k: nat { k < i + 8 })
       : Lemma (S32.v (Seq.index v' k) == scale_val (Seq.index w k))
       = if k >= i then begin
-          assert (V.lane x (k - i) == Seq.index v (i + (k - i)));
-          assert (S32.v (V.lane c (k - i)) == inv_256);
-          assert (S32.v (V.lane r (k - i)) ==
-                    mul (S32.v (V.lane c (k - i))) (S32.v (V.lane x (k - i))))
-        end in
+          lane_at x v i k;
+          assert (Seq.index v k == Seq.index w k);
+          scale_lane_at v i x c r (k - i);
+          stored_at v v' i r k;
+          scale_one (Seq.index w k) (V.lane x (k - i)) (V.lane r (k - i)) (Seq.index v' k)
+        end
+        else assert (Seq.index v' k == Seq.index v k) in
     Classical.forall_intro aux
 
 inline_for_extraction
@@ -552,6 +606,43 @@ let intt_pair_at (e: nat { e <= 7 }) (f: poly) (b lo len c i k: nat) (z: zq)
                    Seq.index (intt_layer e f) k == mul z (sub (Seq.index f k) (Seq.index f i)))
   = reveal_opaque (`%blk) (blk e b lo); reveal_opaque (`%root_inv) (root_inv e lo z); intt_pair e f b c
 
+(** One lane of {!ntt_lanes}, on plain values: apart from the lane
+    quantifiers, in whose presence the solver does not find it. *)
+let ntt_lane (e: nat { e <= 7 }) (vs: Seq.seq zqt) (b c lo len: nat) (zv: zq) (j: nat)
+             (xj yj zj tj aj dj: int)
+  : Lemma (requires Seq.length vs == n /\ blk e b lo /\ len == pow2 e /\ root e lo zv /\
+                    j < 8 /\ c + 8 <= len /\ lo + 2 * len <= n /\
+                    xj == S32.v (Seq.index vs (lo + c + j)) /\
+                    yj == S32.v (Seq.index vs (lo + len + c + j)) /\
+                    zj == zv /\ tj == mul zj yj /\ aj == add xj tj /\ dj == sub xj tj)
+          (ensures lo + len + c + j < n /\
+                   aj == Seq.index (ntt_layer e (as_poly vs)) (lo + c + j) /\
+                   dj == Seq.index (ntt_layer e (as_poly vs)) (lo + len + c + j))
+  = let f = as_poly vs in
+    let i = lo + c + j in
+    let k = lo + len + c + j in
+    ntt_pair_at e f b lo len (c + j) i k zv;
+    as_poly_index vs i;
+    as_poly_index vs k
+
+(** One lane of {!intt_lanes}, likewise. *)
+let intt_lane (e: nat { e <= 7 }) (vs: Seq.seq zqt) (b c lo len: nat) (zv: zq) (j: nat)
+              (xj yj zj sj aj dj: int)
+  : Lemma (requires Seq.length vs == n /\ blk e b lo /\ len == pow2 e /\ root_inv e lo zv /\
+                    j < 8 /\ c + 8 <= len /\ lo + 2 * len <= n /\
+                    xj == S32.v (Seq.index vs (lo + c + j)) /\
+                    yj == S32.v (Seq.index vs (lo + len + c + j)) /\
+                    zj == zv /\ aj == add xj yj /\ sj == sub yj xj /\ dj == mul zj sj)
+          (ensures lo + len + c + j < n /\
+                   aj == Seq.index (intt_layer e (as_poly vs)) (lo + c + j) /\
+                   dj == Seq.index (intt_layer e (as_poly vs)) (lo + len + c + j))
+  = let f = as_poly vs in
+    let i = lo + c + j in
+    let k = lo + len + c + j in
+    intt_pair_at e f b lo len (c + j) i k zv;
+    as_poly_index vs i;
+    as_poly_index vs k
+
 let ntt_lanes (e: nat { e <= 7 }) (vs: Seq.seq zqt) (b c lo len: nat) (zv: zq) (x y z t a d: V.t)
   : Lemma (requires Seq.length vs == n /\ blk e b lo /\ len == pow2 e /\ root e lo zv /\
                     c + 8 <= len /\ lo + 2 * len <= n /\
@@ -574,22 +665,9 @@ let ntt_lanes (e: nat { e <= 7 }) (vs: Seq.seq zqt) (b c lo len: nat) (zv: zq) (
   = let aux (j: nat { j < 8 })
       : Lemma (S32.v (V.lane a j) == Seq.index (ntt_layer e (as_poly vs)) (lo + c + j) /\
                S32.v (V.lane d j) == Seq.index (ntt_layer e (as_poly vs)) (lo + len + c + j))
-      = let f = as_poly vs in
-        let i = lo + c + j in
-        let k = lo + len + c + j in
-        ntt_pair_at e f b lo len (c + j) i k zv;
-        as_poly_index vs i;
-        as_poly_index vs k;
-        let zj = S32.v (V.lane z j) in
-        let yj = S32.v (V.lane y j) in
-        let tj = S32.v (V.lane t j) in
-        let xj = S32.v (V.lane x j) in
-        assert (xj == S32.v (Seq.index vs i));
-        assert (yj == S32.v (Seq.index vs k));
-        assert (zj == zv);
-        assert (tj == mul zj yj);
-        assert (S32.v (V.lane a j) == add xj tj);
-        assert (S32.v (V.lane d j) == sub xj tj)
+      = ntt_lane e vs b c lo len zv j
+          (S32.v (V.lane x j)) (S32.v (V.lane y j)) (S32.v (V.lane z j))
+          (S32.v (V.lane t j)) (S32.v (V.lane a j)) (S32.v (V.lane d j))
     in
     Classical.forall_intro aux
 
@@ -615,22 +693,9 @@ let intt_lanes (e: nat { e <= 7 }) (vs: Seq.seq zqt) (b c lo len: nat) (zv: zq) 
   = let aux (j: nat { j < 8 })
       : Lemma (S32.v (V.lane a j) == Seq.index (intt_layer e (as_poly vs)) (lo + c + j) /\
                S32.v (V.lane d j) == Seq.index (intt_layer e (as_poly vs)) (lo + len + c + j))
-      = let f = as_poly vs in
-        let i = lo + c + j in
-        let k = lo + len + c + j in
-        intt_pair_at e f b lo len (c + j) i k zv;
-        as_poly_index vs i;
-        as_poly_index vs k;
-        let zj = S32.v (V.lane z j) in
-        let yj = S32.v (V.lane y j) in
-        let sj = S32.v (V.lane s j) in
-        let xj = S32.v (V.lane x j) in
-        assert (xj == S32.v (Seq.index vs i));
-        assert (yj == S32.v (Seq.index vs k));
-        assert (zj == zv);
-        assert (sj == sub yj xj);
-        assert (S32.v (V.lane a j) == add xj yj);
-        assert (S32.v (V.lane d j) == mul zj sj)
+      = intt_lane e vs b c lo len zv j
+          (S32.v (V.lane x j)) (S32.v (V.lane y j)) (S32.v (V.lane z j))
+          (S32.v (V.lane s j)) (S32.v (V.lane a j)) (S32.v (V.lane d j))
     in
     Classical.forall_intro aux
 
@@ -1536,6 +1601,42 @@ ensures exists* v2. A.pts_to f v2 **
   assert pure (gdone res vs v2 (SZ.v lo + 16) /\ Seq.length v2 == n);
 }
 
+(** One group of sixteen coefficients of {!ntt_small}: the loop body, apart
+    from the loop, so that its proof does not share the loop's context. *)
+inline_for_extraction
+fn ntt_group (f: A.array zqt) (zt: A.array zqt) (zst: A.array S32.t) (vlo vg: SZ.t)
+            (res: erased poly) (#vs #v: erased (Seq.seq zqt)) (#pz #ps: perm)
+requires A.pts_to f v ** A.pts_to zt #pz zeta_table ** A.pts_to zst #ps zeta_shoup_table **
+         pure (Seq.length vs == n /\ Seq.length v == n /\ SZ.v vlo < n /\
+               SZ.v vlo == 16 * SZ.v vg /\ gdone res vs v (SZ.v vlo) /\
+               reveal res == ntt_layer 0 (ntt_layer 1 (ntt_layer 2 (as_poly vs))))
+ensures exists* v2. A.pts_to f v2 ** A.pts_to zt #pz zeta_table ** A.pts_to zst #ps zeta_shoup_table **
+        pure (Seq.length v2 == n /\ gdone res vs v2 (SZ.v vlo + 16))
+{
+  HSZ.fits32 ();
+  SZ.fits_u32_implies_fits 256;
+  grp_step (SZ.v vlo) (SZ.v vg);
+  let g2 = SZ.add vg vg;
+  let g4 = SZ.add g2 g2;
+  let g8 = SZ.add g4 g4;
+  let i2 = SZ.add 32sz g2;
+  let i1 = SZ.add 64sz g4;
+  let i0 = SZ.add 128sz g8;
+  assert pure (SZ.v i2 == 32 + SZ.v vlo / 8 /\ SZ.v i1 == 64 + SZ.v vlo / 4 /\
+               SZ.v i0 == 128 + SZ.v vlo / 2 /\ SZ.v i0 + 8 <= 256);
+  let t2 = load_tab zt zst i2 (32 + SZ.v vlo / 8);
+  let t1 = load_tab zt zst i1 (64 + SZ.v vlo / 4);
+  let t0 = load_tab zt zst i0 (128 + SZ.v vlo / 2);
+  let p0 : erased poly = hide (as_poly vs);
+  let p1 : erased poly = hide (ntt_layer 2 p0);
+  let p2 : erased poly = hide (ntt_layer 1 p1);
+  let r = load_grp f vlo res #vs;
+  let r2 = ntt_s2 (fst r) (snd r) (fst t2) (snd t2) p0 (SZ.v vlo);
+  let r1 = ntt_s1 (fst r2) (snd r2) (fst t1) (snd t1) p1 (SZ.v vlo);
+  let r0 = ntt_s0 (fst r1) (snd r1) (fst t0) (snd t0) p2 (SZ.v vlo);
+  store_grp f vlo res r0 #vs;
+}
+
 (** [f <- ntt_layer 0 (ntt_layer 1 (ntt_layer 2 f))], sixteen coefficients
     at a time. *)
 inline_for_extraction
@@ -1567,28 +1668,10 @@ ensures exists* v. A.pts_to f v **
     let vlo = !lo;
     let vg = !g;
     grp_step (SZ.v vlo) (SZ.v vg);
+    ntt_group f zt zst vlo vg res #vs;
     let nlo = SZ.add vlo 16sz;
     let ng = SZ.add vg 1sz;
     assert pure (SZ.v nlo == 16 * SZ.v ng /\ SZ.v nlo <= n /\ SZ.v nlo == SZ.v vlo + 16);
-    let g2 = SZ.add vg vg;
-    let g4 = SZ.add g2 g2;
-    let g8 = SZ.add g4 g4;
-    let i2 = SZ.add 32sz g2;
-    let i1 = SZ.add 64sz g4;
-    let i0 = SZ.add 128sz g8;
-    assert pure (SZ.v i2 == 32 + SZ.v vlo / 8 /\ SZ.v i1 == 64 + SZ.v vlo / 4 /\
-                 SZ.v i0 == 128 + SZ.v vlo / 2 /\ SZ.v i0 + 8 <= 256);
-    let t2 = load_tab zt zst i2 (32 + SZ.v vlo / 8);
-    let t1 = load_tab zt zst i1 (64 + SZ.v vlo / 4);
-    let t0 = load_tab zt zst i0 (128 + SZ.v vlo / 2);
-    let p0 : erased poly = hide (as_poly vs);
-    let p1 : erased poly = hide (ntt_layer 2 p0);
-    let p2 : erased poly = hide (ntt_layer 1 p1);
-    let r = load_grp f vlo res #vs;
-    let r2 = ntt_s2 (fst r) (snd r) (fst t2) (snd t2) p0 (SZ.v vlo);
-    let r1 = ntt_s1 (fst r2) (snd r2) (fst t1) (snd t1) p1 (SZ.v vlo);
-    let r0 = ntt_s0 (fst r1) (snd r1) (fst t0) (snd t0) p2 (SZ.v vlo);
-    store_grp f vlo res r0 #vs;
     lo := nlo;
     g := ng;
   };
@@ -1596,6 +1679,42 @@ ensures exists* v. A.pts_to f v **
   gdone_done res vs v (SZ.v vlo);
   T.drop_table zst;
   T.drop_table zt;
+}
+
+(** One group of sixteen coefficients of {!intt_small}: the loop body, apart
+    from the loop, so that its proof does not share the loop's context. *)
+inline_for_extraction
+fn intt_group (f: A.array zqt) (zt: A.array zqt) (zst: A.array S32.t) (vlo vg: SZ.t)
+            (res: erased poly) (#vs #v: erased (Seq.seq zqt)) (#pz #ps: perm)
+requires A.pts_to f v ** A.pts_to zt #pz zeta_table ** A.pts_to zst #ps zeta_shoup_table **
+         pure (Seq.length vs == n /\ Seq.length v == n /\ SZ.v vlo < n /\
+               SZ.v vlo == 16 * SZ.v vg /\ gdone res vs v (SZ.v vlo) /\
+               reveal res == intt_layer 2 (intt_layer 1 (intt_layer 0 (as_poly vs))))
+ensures exists* v2. A.pts_to f v2 ** A.pts_to zt #pz zeta_table ** A.pts_to zst #ps zeta_shoup_table **
+        pure (Seq.length v2 == n /\ gdone res vs v2 (SZ.v vlo + 16))
+{
+  HSZ.fits32 ();
+  SZ.fits_u32_implies_fits 256;
+  grp_step (SZ.v vlo) (SZ.v vg);
+  let g2 = SZ.add vg vg;
+  let g4 = SZ.add g2 g2;
+  let g8 = SZ.add g4 g4;
+  let i0 = SZ.sub 248sz g8;
+  let i1 = SZ.sub 124sz g4;
+  let i2 = SZ.sub 62sz g2;
+  assert pure (SZ.v i2 == 62 - SZ.v vlo / 8 /\ SZ.v i1 == 124 - SZ.v vlo / 4 /\
+               SZ.v i0 == 248 - SZ.v vlo / 2 /\ SZ.v i2 >= 32);
+  let t0 = load_tab zt zst i0 (248 - SZ.v vlo / 2);
+  let t1 = load_tab zt zst i1 (124 - SZ.v vlo / 4);
+  let t2 = load_tab zt zst i2 (62 - SZ.v vlo / 8);
+  let p0 : erased poly = hide (as_poly vs);
+  let p1 : erased poly = hide (intt_layer 0 p0);
+  let p2 : erased poly = hide (intt_layer 1 p1);
+  let r = load_grp f vlo res #vs;
+  let r0 = intt_s0 (fst r) (snd r) (fst t0) (snd t0) p0 (SZ.v vlo);
+  let r1 = intt_s1 (fst r0) (snd r0) (fst t1) (snd t1) p1 (SZ.v vlo);
+  let r2 = intt_s2 (fst r1) (snd r1) (fst t2) (snd t2) p2 (SZ.v vlo);
+  store_grp f vlo res r2 #vs;
 }
 
 (** [f <- intt_layer 2 (intt_layer 1 (intt_layer 0 f))], sixteen
@@ -1629,28 +1748,10 @@ ensures exists* v. A.pts_to f v **
     let vlo = !lo;
     let vg = !g;
     grp_step (SZ.v vlo) (SZ.v vg);
+    intt_group f zt zst vlo vg res #vs;
     let nlo = SZ.add vlo 16sz;
     let ng = SZ.add vg 1sz;
     assert pure (SZ.v nlo == 16 * SZ.v ng /\ SZ.v nlo <= n /\ SZ.v nlo == SZ.v vlo + 16);
-    let g2 = SZ.add vg vg;
-    let g4 = SZ.add g2 g2;
-    let g8 = SZ.add g4 g4;
-    let i0 = SZ.sub 248sz g8;
-    let i1 = SZ.sub 124sz g4;
-    let i2 = SZ.sub 62sz g2;
-    assert pure (SZ.v i2 == 62 - SZ.v vlo / 8 /\ SZ.v i1 == 124 - SZ.v vlo / 4 /\
-                 SZ.v i0 == 248 - SZ.v vlo / 2 /\ SZ.v i2 >= 32);
-    let t0 = load_tab zt zst i0 (248 - SZ.v vlo / 2);
-    let t1 = load_tab zt zst i1 (124 - SZ.v vlo / 4);
-    let t2 = load_tab zt zst i2 (62 - SZ.v vlo / 8);
-    let p0 : erased poly = hide (as_poly vs);
-    let p1 : erased poly = hide (intt_layer 0 p0);
-    let p2 : erased poly = hide (intt_layer 1 p1);
-    let r = load_grp f vlo res #vs;
-    let r0 = intt_s0 (fst r) (snd r) (fst t0) (snd t0) p0 (SZ.v vlo);
-    let r1 = intt_s1 (fst r0) (snd r0) (fst t1) (snd t1) p1 (SZ.v vlo);
-    let r2 = intt_s2 (fst r1) (snd r1) (fst t2) (snd t2) p2 (SZ.v vlo);
-    store_grp f vlo res r2 #vs;
     lo := nlo;
     g := ng;
   };

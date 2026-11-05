@@ -342,6 +342,18 @@ let mod_step (k: nat) (j: nat)
     Math.modulo_modulo_lemma k a 16;
     Math.modulo_division_lemma k a 16
 
+(** The arithmetic of {!psum_inv}'s step, on plain integers. *)
+let psum_arith (a c n p kp t d cr: int)
+  : Lemma (requires a + c * p == kp /\ t == n + c + 8 /\ d == t % 16 - 8 /\ cr == t / 16)
+          (ensures a + d * p + cr * (p * 16) == kp + n * p)
+  = Math.euclidean_division_definition t 16;
+    assert (d + 16 * cr == n + c);
+    Math.paren_mul_right cr p 16;
+    Math.swap_mul p 16;
+    Math.paren_mul_right cr 16 p;
+    Math.distributivity_add_left d (16 * cr) p;
+    Math.distributivity_add_left n c p
+
 let rec psum_inv (k: nat) (j: nat)
   : Lemma (ensures psum k j + carry k j * pow2 (4 * j) == k % pow2 (4 * j))
           (decreases j)
@@ -350,13 +362,13 @@ let rec psum_inv (k: nat) (j: nat)
       let i = j - 1 in
       psum_inv k i;
       mod_step k i;
-      let t = nib k i + carry k i + 8 in
-      Math.euclidean_division_definition t 16;
+      carry_succ k i;
       Math.pow2_plus (4 * i) 4;
       assert_norm (pow2 4 == 16);
       assert (pow2 (4 * j) == pow2 (4 * i) * 16);
-      Math.distributivity_add_left (t % 16 - 8) (16 * (t / 16)) (pow2 (4 * i));
-      Math.paren_mul_right (t / 16) 16 (pow2 (4 * i))
+      assert (psum k j == psum k i + dig k i * pow2 (4 * i));
+      psum_arith (psum k i) (carry k i) (nib k i) (pow2 (4 * i)) (k % pow2 (4 * i))
+                 (nib k i + carry k i + 8) (dig k i) (carry k j)
     end
 
 let psum_succ (k: nat) (j: nat)

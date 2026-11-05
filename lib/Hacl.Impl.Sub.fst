@@ -106,7 +106,7 @@ requires rest a p i j v ** A.pts_to b #p v' **
          pure (Seq.length v == A.length a /\ Seq.length v' == j - i)
 ensures exists* (w: Seq.seq t).
   A.pts_to a #p w **
-  pure (Seq.length w == Seq.length v /\
+  pure (Seq.length w == Seq.length v /\ Seq.length v' == j - i /\
         (forall (k: nat). k < Seq.length w ==>
            Seq.index w k == (if i <= k && k < j
                              then Seq.index v' (k - i)

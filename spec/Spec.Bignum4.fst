@@ -633,6 +633,23 @@ let addw_srow_zero (x: Seq.seq nat) (n: nat) (u: nat) (b: Seq.seq nat) (i: nat)
   = srow_zero n u b i;
     Seq.lemma_eq_intro (addw x (srow n u b i 0)) x
 
+(** Adding two consecutive column updates into an accumulator is updating
+    the sum at those columns.  Stated over an arbitrary sequence so that the
+    proof does not see the definition of [srow]. *)
+let addw_upd2 (x s: Seq.seq nat) (p: nat) (lo hi: nat)
+  : Lemma (requires Seq.length s == Seq.length x /\ p + 1 < Seq.length x)
+          (ensures (let y = addw x s in
+                    addw x (Seq.upd (Seq.upd s p (Seq.index s p + lo))
+                                    (p + 1) (Seq.index s (p + 1) + hi)) ==
+                    Seq.upd (Seq.upd y p (Seq.index y p + lo))
+                            (p + 1) (Seq.index y (p + 1) + hi)))
+  = let y = addw x s in
+    Seq.lemma_eq_intro
+      (addw x (Seq.upd (Seq.upd s p (Seq.index s p + lo))
+                       (p + 1) (Seq.index s (p + 1) + hi)))
+      (Seq.upd (Seq.upd y p (Seq.index y p + lo))
+               (p + 1) (Seq.index y (p + 1) + hi))
+
 let addw_srow_step (x: Seq.seq nat) (n: nat) (u: nat) (b: Seq.seq nat)
                    (i: nat) (j: nat { i + j + 1 < n })
   : Lemma (requires Seq.length x == n)
@@ -642,10 +659,8 @@ let addw_srow_step (x: Seq.seq nat) (n: nat) (u: nat) (b: Seq.seq nat)
                                (Seq.index y (i + j) + plo (u * vat b j)))
                             (i + j + 1)
                             (Seq.index y (i + j + 1) + phi (u * vat b j))))
-  = let y = addw x (srow n u b i j) in
-    Seq.lemma_eq_intro (addw x (srow n u b i (j + 1)))
-      (Seq.upd (Seq.upd y (i + j) (Seq.index y (i + j) + plo (u * vat b j)))
-               (i + j + 1) (Seq.index y (i + j + 1) + phi (u * vat b j)))
+  = srow_step n u b i j;
+    addw_upd2 x (srow n u b i j) (i + j) (plo (u * vat b j)) (phi (u * vat b j))
 
 let addw_srow_ble (x b: Seq.seq nat) (n u i j c: nat)
   : Lemma (requires Seq.length x == n /\ ble x c /\ u <= base - 1 /\ ble b (base - 1))

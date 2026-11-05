@@ -114,6 +114,7 @@ ensures exists* (vo': Seq.seq S64.t) (w1': Seq.seq S64.t).
   with v. assert (A.pts_to out v);
   fcopy t1 out;
   fsqr out t1;
+  E4.idx_of bi;
   let k = SZ.div bi 64sz;
   assert (pure (SZ.v k == SZ.v bi / 64));
   assert (pure (SZ.v k < B4.nl));

@@ -176,7 +176,10 @@ let from_le_body (vb: Seq.seq S8.t) (vr: Seq.seq S64.t) (n: nat) (i: nat { i < n
   = w64 w;
     pre_upd vr i w i;
     pre_snoc (Seq.upd vr i w) i;
-    from_le_step vb n i
+    from_le_step vb n i;
+    assert (Seq.index (Seq.upd vr i w) i == w);
+    assert (S64.v w == le_nat (Seq.slice vb (8 * i) (8 * i + 8)));
+    assert (8 * (i + 1) == 8 * i + 8)
 
 let to_be_body (v0 v1: Seq.seq S8.t) (va: Seq.seq S64.t) (n: nat) (i: nat { i < n })
                (off: nat) (x: S64.t)

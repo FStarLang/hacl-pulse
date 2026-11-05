@@ -133,6 +133,8 @@ let crt (p q: int) (x y: nat)
     end else begin
       Math.euclidean_division_definition k q;
       let j = k / q in
+      assert (k == q * j);
+      Math.paren_mul_right p q j;
       assert (x == y + (p * q) * j);
       Math.lemma_mod_plus y j (p * q)
     end

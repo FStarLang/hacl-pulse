@@ -220,7 +220,8 @@ let sacc (msg: Seq.seq S8.t) (r acc: nat) (n: nat) : GTot nat =
 let one_step (msg: Seq.seq S8.t) (r acc: nat) (n: nat)
   : Lemma (requires 16 * n + 16 <= Seq.length msg)
           (ensures sacc msg r acc (n + 1) == ((sacc msg r acc n + bv msg n) * r) % prime)
-  = unfold_repeati_g n (Spec.bstep msg 0 r) acc
+  = unfold_repeati_g n (Spec.bstep msg 0 r) acc;
+    assert (Spec.block16 msg (0 + 16 * n) == Seq.slice msg (16 * n) (16 * n + 16))
 
 let step_mod (x y r: int)
   : Lemma (((x % prime + y) * r) % prime == ((x + y) * r) % prime)
@@ -238,12 +239,17 @@ let horner_ring (s b0 b1 b2 b3 r: int)
 
 #push-options "--fuel 0 --ifuel 0 --z3rlimit 100"
 
+(** Rewriting under [% prime], with the two sides abstract. *)
+let mod_congr (a x h: int)
+  : Lemma (requires a == x % prime /\ x == h) (ensures a == h % prime) = ()
+
 (** The last step of [four_steps], apart from the [sacc] facts that keep Z3
     from finding it in place. *)
 let horner_ring_mod (a s b0 b1 b2 b3 r: int)
   : Lemma (requires a == (((((s + b0) * r + b1) * r + b2) * r + b3) * r) % prime)
           (ensures a == horner4 r (s + b0) b1 b2 b3 % prime)
-  = horner_ring s b0 b1 b2 b3 r
+  = horner_ring s b0 b1 b2 b3 r;
+    mod_congr a ((((((s + b0) * r + b1) * r + b2) * r + b3) * r)) (horner4 r (s + b0) b1 b2 b3)
 
 let four_steps (msg: Seq.seq S8.t) (r acc: nat) (n: nat)
   : Lemma (requires 16 * n + 64 <= Seq.length msg)
@@ -283,6 +289,10 @@ let horner_lin (r x0 x1 x2 x3 m0 m1 m2 m3 q: int)
             q * horner4 r x0 x1 x2 x3 + horner4 r m0 m1 m2 m3)
       by (norm [delta_only [`%horner4; `%r2; `%r3; `%r4]]; canon_semiring int_cr)
 
+(** [cong] of equals, with the sides abstract. *)
+let cong_rw (a b a' b': int)
+  : Lemma (requires cong a b /\ a == a' /\ b == b') (ensures cong a' b') = ()
+
 let horner_cong (r x0 x1 x2 x3 y0 y1 y2 y3: int)
   : Lemma (requires cong x0 y0 /\ cong x1 y1 /\ cong x2 y2 /\ cong x3 y3)
           (ensures cong (horner4 r x0 x1 x2 x3) (horner4 r y0 y1 y2 y3))
@@ -293,7 +303,10 @@ let horner_cong (r x0 x1 x2 x3 y0 y1 y2 y3: int)
     cong_add (x0 * r4 r) (y0 * r4 r) (x1 * r3 r) (y1 * r3 r);
     cong_add (x0 * r4 r + x1 * r3 r) (y0 * r4 r + y1 * r3 r) (x2 * r2 r) (y2 * r2 r);
     cong_add (x0 * r4 r + x1 * r3 r + x2 * r2 r) (y0 * r4 r + y1 * r3 r + y2 * r2 r)
-             (x3 * r) (y3 * r)
+             (x3 * r) (y3 * r);
+    cong_rw (x0 * r4 r + x1 * r3 r + x2 * r2 r + x3 * r)
+            (y0 * r4 r + y1 * r3 r + y2 * r2 r + y3 * r)
+            (horner4 r x0 x1 x2 x3) (horner4 r y0 y1 y2 y3)
 
 #pop-options
 

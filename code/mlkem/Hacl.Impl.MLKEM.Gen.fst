@@ -453,6 +453,10 @@ let lane_byte (start: U8.t) (j: nat { j < 4 }) (k: nat)
           (ensures j < k ==> U8.v (U8.add_mod start (U8.uint_to_t j)) == U8.v start + j)
   = if j < k then Math.small_mod (U8.v start + j) 256
 
+(** Below [k], the next prefix is one longer. *)
+let next_prefix (i k: nat)
+  : Lemma (requires i < k) (ensures (if i + 1 < k then i + 1 else k) == i + 1) = ()
+
 let noise_entry_skip (i k: nat)
   : Lemma (requires ~(i < k))
           (ensures (if i + 1 < k then i + 1 else k) == k /\
@@ -507,6 +511,8 @@ ensures exists* (w: Seq.seq zqt). A.pts_to dst w ** A.pts_to p vp **
     Sub.unsub_id p 0 (SZ.v el) pb;
     assert (pure (as_poly b1 == sample_poly_cbd (SZ.v eta) vs (U8.uint_to_t (U8.v start + SZ.v i))));
     noise_entry_step (SZ.v k) (SZ.v eta) vs (U8.v start) (SZ.v i) vd w1 b1;
+    next_prefix (SZ.v i) (SZ.v k);
+    assert (pure ((if SZ.v i + 1 < SZ.v k then SZ.v i + 1 else SZ.v k) == SZ.v i + 1));
   } else {
     noise_entry_skip (SZ.v i) (SZ.v k);
     ()
