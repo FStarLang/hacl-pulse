@@ -118,10 +118,11 @@ ensures exists* (vo': Seq.seq S8.t).
   {
     let vt = !t;
     let i = SZ.add idx vt;
+    with (p1: nat) (vo1: Seq.seq S8.t). assert IO.inout out inp pi p1 vo1 vi;
+    rewrite IO.inout out inp pi p1 vo1 vi as IO.inout out inp pi (SZ.v i) vo1 vi;
     let a = IO.read_in out inp i;
     let b = A.(ka.(vt));
     let y = bxor a b;
-    with (p1: nat) (vo1: Seq.seq S8.t). assert IO.inout out inp pi p1 vo1 vi;
     vals_upd vo1 (SZ.v i) y;
     IO.write_out out inp i y;
     t := SZ.add vt 1sz;

@@ -351,10 +351,11 @@ ensures exists* (vo1 vc1 vk1: Seq.seq S8.t).
     {
       let vt = !t;
       let idx = SZ.add j vt;
+      with (q: nat) (vo1: Seq.seq S8.t). assert IO.inout out inp pi q vo1 vm0;
+      rewrite IO.inout out inp pi q vo1 vm0 as IO.inout out inp pi (SZ.v idx) vo1 vm0;
       let a = IO.read_in out inp idx;
       let b = A.(ka.(vt));
       let y = bxor a b;
-      with (q: nat) (vo1: Seq.seq S8.t). assert IO.inout out inp pi q vo1 vm0;
       vals_upd vo1 (SZ.v idx) y;
       ctr_byte_step_inv p.pv (vals vw) b0 (vals vm0) (vals vo1)
                         (vals (Seq.upd vo1 (SZ.v idx) y))

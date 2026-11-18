@@ -206,10 +206,10 @@ ensures exists* (w: Seq.seq S8.t).
   decreases (SZ.v n0 - SZ.v (!i))
   {
     let vi = !i;
-    let x = IO.read_in c m vi;
+    let x = IO.read_in c m vi #pm #(SZ.v vi);
     let y = A.(b0.(SZ.add 32sz vi));
     Spec.cipher_head gk gn vm (SZ.v vi);
-    IO.write_out c m vi (S8.logxor x y);
+    IO.write_out c m vi (S8.logxor x y) #pm #(SZ.v vi);
     i := SZ.add vi 1sz;
     with (w: Seq.seq S8.t). assert (IO.inout c m pm (SZ.v vi + 1) w vm);
     rewrite IO.inout c m pm (SZ.v vi + 1) w vm as IO.inout c m pm (SZ.v (SZ.add vi 1sz)) w vm;
